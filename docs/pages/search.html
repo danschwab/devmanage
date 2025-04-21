@@ -3,11 +3,16 @@
     <div id="formContainer"></div>
 </div>
 
-<script>
+<script type="module">
+    import { FormBuilder } from './js/FormBuilder.js';
+    import { buildTable } from './js/tableUtils.js';
+
     (async () => {
+        const spreadsheetId = '1OQo4X-ZJRhpsUrkspfHv6nIemiZdcISl-slNaL-AWgM';
+        const tabName = 'INVENTORY';
         const form = new FormBuilder('formContainer');
         await form
-            .addDropdownFromSheet('Select Column', 'columnName', 'INVENTORY', 1, {
+            .addDropdownFromSheet('Select Column', 'columnName', spreadsheetId, tabName, 1, {
                 defaultOption: 'Choose a column...',
                 required: true
             })
@@ -16,18 +21,25 @@
                 placeholder: 'Enter search value...'
             })
             .addSubmitButton('Search', {
-                endpoint: '/getDataFromColumnSearchString',
+                spreadsheetId: spreadsheetId,
+                tabName: tabName,
                 validate: (data) => {
-                    console.log('Form data:', data);
                     const hasSearchValue = data.searchValue?.trim();
-                    const hasColumnName = data.columnTitle;
+                    const hasColumnName = data.columnName;
                     return hasSearchValue && hasColumnName;
                 },
                 errorMessage: 'Please enter a search value and select a column.',
                 onSuccess: (result, container) => {
-                    const headers = Array.from(form.form.querySelector('select').options).map(opt => opt.value);
-                    const table = buildTable(result.data, headers);
-                    container.appendChild(table);
+                    if (result.data && result.data.length > 0) {
+                        const headers = Array.from(form.form.querySelector('select').options)
+                            .map(opt => opt.value)
+                            .filter(v => v);
+                        const table = buildTable(result.data, headers);
+                        container.innerHTML = '';
+                        container.appendChild(table);
+                    } else {
+                        container.textContent = 'No matching data found.';
+                    }
                 }
             })
             .render();
