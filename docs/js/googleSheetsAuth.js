@@ -1,7 +1,7 @@
 // Google Sheets API configuration
 const API_KEY = 'AIzaSyAJGO-PZtaREfAJx5wycTul3B9S13JXoEw';
 const CLIENT_ID = '381868581846-a5hdjs5520u9u1jve5rdalm3kua2iqpf.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 let tokenClient;
 let gapiInited = false;
