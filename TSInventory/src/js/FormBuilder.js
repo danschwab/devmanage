@@ -1,0 +1,250 @@
+export class FormBuilder {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.loadingMessage = document.createElement('div');
+        this.loadingMessage.textContent = 'Loading form...';
+        this.loadingMessage.className = 'loading-message';
+        this.container.appendChild(this.loadingMessage);
+        
+        this.form = document.createElement('form');
+        this.form.className = 'submission-form';
+        this.operations = []; // Queue of operations to perform
+    }
+
+    // Helper method to add operation to queue
+    addOperation(operation) {
+        this.operations.push(operation);
+        return this;
+    }
+
+    addField(labelText, inputType, name, options = {}) {
+        return this.addOperation(() => {
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'form-group';
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            fieldDiv.appendChild(label);
+
+            const input = document.createElement('input');
+            input.type = inputType;
+            input.name = name;
+            input.id = name;
+            input.dataset.fieldName = name; // Add data attribute
+            input.required = options.required || false;
+            
+            if (options.placeholder) {
+                input.placeholder = options.placeholder;
+            }
+            if (options.className) {
+                input.className = options.className;
+            }
+
+            fieldDiv.appendChild(input);
+            this.form.appendChild(fieldDiv);
+        });
+    }
+
+    addSubmitButton(text = 'Submit', options = {}) {
+        return this.addOperation(() => {
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'button-container';
+
+            const button = document.createElement('button');
+            button.type = 'submit';
+            button.className = 'submit-button';
+            button.textContent = text;
+            buttonContainer.appendChild(button);
+
+            // Add result containers
+            const resultMessage = document.createElement('div');
+            resultMessage.id = 'resultMessage';
+            buttonContainer.appendChild(resultMessage);
+
+            const resultData = document.createElement('div');
+            resultData.id = 'resultData';
+            buttonContainer.appendChild(resultData);
+
+            this.form.appendChild(buttonContainer);
+
+            let isSubmitting = false; // Flag to track submission state
+
+            // Add submit handler
+            this.form.onsubmit = async (e) => {
+                e.preventDefault();
+                
+                // Prevent multiple submissions
+                if (isSubmitting) return;
+                isSubmitting = true;
+                button.disabled = true;
+                
+                resultMessage.textContent = 'Loading...';
+                resultData.innerHTML = '';
+
+                const data = {
+                    sheetName: 'INVENTORY',
+                    columnTitle: this.form.querySelector('[data-field-name="columnName"]')?.value || '',
+                    searchValue: this.form.querySelector('[data-field-name="searchValue"]')?.value || ''
+                };
+
+                if (options.validate && !options.validate(data)) {
+                    resultMessage.textContent = options.errorMessage || 'Please check your input.';
+                    isSubmitting = false;
+                    button.disabled = false;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(options.endpoint || '/getDataFromColumnSearchString', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        resultMessage.textContent = 'Data retrieved successfully:';
+                        
+                        if (options.onSuccess) {
+                            options.onSuccess(result, resultData);
+                        } else {
+                            // Default handling: create table with dropdown data as headers
+                            const dropdown = this.form.querySelector('select');
+                            if (dropdown) {
+                                const headers = Array.from(dropdown.options).map(opt => opt.value);
+                                const table = buildTable(result.data, headers);
+                                resultData.innerHTML = ''; // Clear previous results
+                                resultData.appendChild(table);
+                            }
+                        }
+                    } else {
+                        const error = await response.text();
+                        resultMessage.textContent = `Failed to retrieve data. Error: ${error}`;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    resultMessage.textContent = 'An error occurred while processing your request.';
+                } finally {
+                    isSubmitting = false;
+                    button.disabled = false;
+                }
+            };
+        });
+    }
+
+    addDropdown(labelText, name, options = [], defaultOption = '') {
+        return this.addOperation(() => {
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'form-group';
+
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            fieldDiv.appendChild(label);
+
+            const select = document.createElement('select');
+            select.name = name;
+            select.id = name;
+            select.dataset.fieldName = name; // Add data attribute
+
+            if (defaultOption) {
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = defaultOption;
+                select.appendChild(defaultOpt);
+            }
+
+            options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt;
+                option.textContent = opt;
+                select.appendChild(option);
+            });
+
+            fieldDiv.appendChild(select);
+            this.form.appendChild(fieldDiv);
+        });
+    }
+
+    addDropdownFromSheet(labelText, name, sheetName, rowIndex, options = {}) {
+        return this.addOperation(async () => {
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'form-group';
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            fieldDiv.appendChild(label);
+
+            const select = document.createElement('select');
+            select.name = name;
+            select.id = name;
+            select.dataset.fieldName = name; // Add data attribute
+            select.required = options.required || false;
+            select.innerHTML = '<option value="">Loading...</option>';
+
+            try {
+                const requestParams = { 
+                    sheetName: sheetName, 
+                    index: rowIndex,
+                    isRow: true 
+                };
+                
+                const response = await fetch('/getNonEmptyValues', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestParams)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    select.innerHTML = '';
+                    
+                    if (options.defaultOption) {
+                        const defaultOpt = document.createElement('option');
+                        defaultOpt.value = '';
+                        defaultOpt.textContent = options.defaultOption;
+                        select.appendChild(defaultOpt);
+                    }
+
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.textContent = item;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">Error loading data</option>';
+                }
+            } catch (error) {
+                console.error('Error loading dropdown data:', error);
+                select.innerHTML = '<option value="">Error loading data</option>';
+            }
+
+            fieldDiv.appendChild(select);
+            this.form.appendChild(fieldDiv);
+        });
+    }
+
+    onSubmit(callback) {
+        return this.addOperation(() => {
+            this.form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(this.form);
+                const data = Object.fromEntries(formData.entries());
+                await callback(data);
+            });
+        });
+    }
+
+    async render() {
+        try {
+            for (const operation of this.operations) {
+                await operation();
+            }
+            // Remove loading message and show form
+            this.container.removeChild(this.loadingMessage);
+            this.container.appendChild(this.form);
+            return this;
+        } catch (error) {
+            this.loadingMessage.textContent = 'Error loading form';
+            throw error;
+        }
+    }
+}

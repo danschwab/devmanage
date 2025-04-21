@@ -1,0 +1,35 @@
+<div>
+    <h1>Search Inventory</h1>
+    <div id="formContainer"></div>
+</div>
+
+<script>
+    (async () => {
+        const form = new FormBuilder('formContainer');
+        await form
+            .addDropdownFromSheet('Select Column', 'columnName', 'INVENTORY', 1, {
+                defaultOption: 'Choose a column...',
+                required: true
+            })
+            .addField('Search Value', 'text', 'searchValue', { 
+                required: true,
+                placeholder: 'Enter search value...'
+            })
+            .addSubmitButton('Search', {
+                endpoint: '/getDataFromColumnSearchString',
+                validate: (data) => {
+                    console.log('Form data:', data);
+                    const hasSearchValue = data.searchValue?.trim();
+                    const hasColumnName = data.columnTitle;
+                    return hasSearchValue && hasColumnName;
+                },
+                errorMessage: 'Please enter a search value and select a column.',
+                onSuccess: (result, container) => {
+                    const headers = Array.from(form.form.querySelector('select').options).map(opt => opt.value);
+                    const table = buildTable(result.data, headers);
+                    container.appendChild(table);
+                }
+            })
+            .render();
+    })();
+</script>
