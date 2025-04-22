@@ -265,9 +265,12 @@ export class GoogleSheetsAuth {
 
     static async getDataFromTableSearch(spreadsheetId, tabName, headerName, searchValue) {
         try {
+            console.debug('[TableSearch] Starting search:', { headerName, searchValue });
+            
             // Get first row to find headers
             const range = `${tabName}!1:1`;
             const headerResponse = await this.getSheetData(spreadsheetId, range);
+            console.debug('[TableSearch] Headers:', headerResponse);
             
             if (!headerResponse || !headerResponse[0]) {
                 throw new Error('No headers found in first row');
@@ -278,6 +281,7 @@ export class GoogleSheetsAuth {
             const headerIndex = headers.findIndex(h => 
                 h && h.toString().toLowerCase() === headerName.toString().toLowerCase()
             );
+            console.debug('[TableSearch] Header index:', { headerName, headerIndex });
             
             if (headerIndex === -1) {
                 throw new Error(`Header "${headerName}" not found`);
@@ -288,8 +292,10 @@ export class GoogleSheetsAuth {
             
             // Search in the specific column
             const searchResults = await this.findIndices(spreadsheetId, tabName, searchValue, columnLetter, false);
+            console.debug('[TableSearch] Search results:', searchResults);
 
             if (!searchResults.matches || !searchResults.matches.length) {
+                console.debug('[TableSearch] No matches found');
                 return {
                     headers: headers,
                     data: []
@@ -301,6 +307,7 @@ export class GoogleSheetsAuth {
             const rowIndices = searchResults.matches.map(match => match.index);
 
             const result = await this.getDataFromIndices(spreadsheetId, tabName, rowIndices, columnIndices);
+            console.debug('[TableSearch] Final result:', result);
 
             return {
                 headers: headers,
@@ -308,13 +315,15 @@ export class GoogleSheetsAuth {
             };
 
         } catch (err) {
-            console.error('Error in getDataFromTableSearch:', err);
+            console.error('[TableSearch] Error:', err);
             throw new Error('Error in table search: ' + err.message);
         }
     }
 
     static async getDataFromIndices(spreadsheetId, tabName, rowIndices, columnIndices) {
         try {
+            console.debug('[GetData] Fetching data for:', { rowIndices, columnIndices });
+            
             // Handle empty input arrays
             if (!rowIndices.length || !columnIndices.length) {
                 return [];
@@ -332,12 +341,14 @@ export class GoogleSheetsAuth {
             // Create range string for the request
             // Example: "Sheet1!A1:C3" for multiple cells
             const range = `${tabName}!${colLetters[0]}${sortedRows[0]}:${colLetters[colLetters.length-1]}${sortedRows[sortedRows.length-1]}`;
+            console.debug('[GetData] Constructed range:', range);
 
             // Get the data
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: spreadsheetId,
                 range: range
             });
+            console.debug('[GetData] API response:', response);
 
             // Extract requested cells from the response
             const fullData = response.result.values || [];
@@ -362,13 +373,14 @@ export class GoogleSheetsAuth {
                 }
             });
 
+            console.debug('[GetData] Processed result:', { range, data: result });
             return {
                 range: range,
                 data: result
             };
 
         } catch (err) {
-            console.error('Error getting data from indices:', err);
+            console.error('[GetData] Error:', err);
             throw new Error('Error getting data from indices: ' + err.message);
         }
     }

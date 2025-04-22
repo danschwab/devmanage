@@ -85,6 +85,8 @@ export class FormBuilder {
                 try {
                     const columnName = this.form.querySelector('[data-field-name="columnName"]')?.value;
                     const searchValue = this.form.querySelector('[data-field-name="searchValue"]')?.value;
+                    
+                    console.debug('[Form] Submission values:', { columnName, searchValue });
 
                     if (!columnName || !searchValue) {
                         throw new Error('Missing required fields');
@@ -95,6 +97,7 @@ export class FormBuilder {
                     const headers = dropdown 
                         ? Array.from(dropdown.options).map(opt => opt.value).filter(v => v)
                         : null;
+                    console.debug('[Form] Available headers:', headers);
 
                     const result = await GoogleSheetsAuth.getDataFromTableSearch(
                         options.spreadsheetId,
@@ -103,6 +106,7 @@ export class FormBuilder {
                         searchValue,
                         headers
                     );
+                    console.debug('[Form] Search result:', result);
 
                     if (!result.data.length) {
                         resultMessage.textContent = 'No matching data found';
@@ -118,7 +122,7 @@ export class FormBuilder {
                         resultData.appendChild(table);
                     }
                 } catch (error) {
-                    console.error('Error:', error);
+                    console.error('[Form] Error:', error);
                     resultMessage.textContent = error.message || 'An error occurred while processing your request.';
                 } finally {
                     isSubmitting = false;
