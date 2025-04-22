@@ -18,7 +18,6 @@ function generateLoginButton() {
     loginButton.textContent = 'Log in';
     loginButton.onclick = async () => {
         try {
-            await GoogleSheetsAuth.initialize();
             generateNavigation();
             loadContent('pages/home.html');
         } catch (error) {
@@ -49,6 +48,8 @@ function generateNavigation() {
 document.addEventListener('DOMContentLoaded', async () => {
     const contentDiv = document.getElementById('content');
     contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
+    
+    await GoogleSheetsAuth.initialize();
 
     try {
         const isAuthenticated = await GoogleSheetsAuth.checkAuth();

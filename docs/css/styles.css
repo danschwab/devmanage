@@ -136,7 +136,7 @@ th {
 }
 
 /* Submit Button */
-.submit-button {
+.submit-button, button {
     background-color: #0d6efd;
     color: white;
     border: none;
