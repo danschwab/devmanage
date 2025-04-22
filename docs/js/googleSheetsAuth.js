@@ -68,22 +68,36 @@ export class GoogleSheetsAuth {
         if (!gapiInited || !gisInited) {
             throw new Error('Google API not properly initialized');
         }
-
+    
         try {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // defined in the promise
+                ux_mode: 'redirect',
+                redirect_uri: 'https://dschwabdesign.com/TopShelfLiveInventory/'
             });
-
+    
             return new Promise((resolve, reject) => {
-                tokenClient.callback = (resp) => {
+                tokenClient.callback = async (resp) => {
                     if (resp.error !== undefined) {
                         console.error('Authentication error:', resp);
                         reject(resp);
+                        return;
                     }
+                    
+                    // Verify we have access token
+                    if (!gapi.client.getToken()) {
+                        console.error('No access token obtained');
+                        reject(new Error('Authentication failed - no token obtained'));
+                        return;
+                    }
+                    
+                    console.log('Authentication successful, token obtained');
                     resolve(resp);
                 };
+                
+                // Force consent prompt to ensure we get fresh tokens
                 tokenClient.requestAccessToken({prompt: 'consent'});
             });
         } catch (error) {
@@ -92,8 +106,16 @@ export class GoogleSheetsAuth {
         }
     }
 
+    static async checkAuth() {
+        if (!gapi.client.getToken()) {
+            console.error('No valid token found, attempting to re-authenticate');
+            await this.authenticate();
+        }
+    }
+    
     static async getSheetData(spreadsheetId, range) {
         try {
+            await this.checkAuth(); // Add this line
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: spreadsheetId,
                 range: range,
