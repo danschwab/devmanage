@@ -2,28 +2,6 @@ import { FormBuilder } from './index.js';
 import { buildTable } from './index.js';
 import { GoogleSheetsAuth } from './index.js';
 
-// Functions and logic that must run during document load
-document.addEventListener('DOMContentLoaded', async () => {
-    const contentDiv = document.getElementById('content');
-    contentDiv.innerHTML = '<div class="loading">Initializing Google Sheets...</div>';
-
-    try {
-        console.debug('Starting initialization...');
-        await GoogleSheetsAuth.initialize();
-        console.debug('Initialization complete');
-        
-        generateNavigation();
-        loadContent('pages/home.html');
-    } catch (error) {
-        console.error('Failed to initialize:', error);
-        contentDiv.innerHTML = `
-            <div class="error">
-                Failed to initialize application: ${error.message}
-                <button onclick="location.reload()">Retry</button>
-            </div>`;
-    }
-});
-
 // Define navigation items
 const navigationItems = [
     { title: 'Home', file: 'home.html' },
@@ -31,9 +9,29 @@ const navigationItems = [
     { title: 'About', file: 'about.html' }
 ];
 
+// Function to generate the login button
+function generateLoginButton() {
+    const nav = document.getElementById('navbar');
+    nav.innerHTML = ''; // Clear existing navigation
+    
+    const loginButton = document.createElement('button');
+    loginButton.textContent = 'Log in';
+    loginButton.onclick = async () => {
+        try {
+            await GoogleSheetsAuth.initialize();
+            generateNavigation();
+            loadContent('pages/home.html');
+        } catch (error) {
+            console.error('Login failed:', error);
+        }
+    };
+    nav.appendChild(loginButton);
+}
+
 // Function to generate the navigation menu
 function generateNavigation() {
     const nav = document.getElementById('navbar');
+    nav.innerHTML = ''; // Clear existing content
     
     navigationItems.forEach(item => {
         const link = document.createElement('a');
@@ -46,6 +44,30 @@ function generateNavigation() {
         nav.appendChild(link);
     });
 }
+
+// Update the DOMContentLoaded handler
+document.addEventListener('DOMContentLoaded', async () => {
+    const contentDiv = document.getElementById('content');
+    contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
+
+    try {
+        const isAuthenticated = await GoogleSheetsAuth.checkAuth();
+        if (isAuthenticated) {
+            generateNavigation();
+            loadContent('pages/home.html');
+        } else {
+            generateLoginButton();
+            contentDiv.innerHTML = '<div>Please log in to access the application.</div>';
+        }
+    } catch (error) {
+        console.error('Failed to check authentication:', error);
+        generateLoginButton();
+        contentDiv.innerHTML = `
+            <div class="error">
+                Failed to check authentication: ${error.message}
+            </div>`;
+    }
+});
 
 // Function to load content dynamically into the #content div
 async function loadContent(page) {
