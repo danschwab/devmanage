@@ -51,8 +51,17 @@ export class FormBuilder {
     addSubmitButton(text = 'Submit', options = {}) {
         return this.addOperation(() => {
             const buttonContainer = document.createElement('div');
-            
             buttonContainer.className = 'button-container';
+
+            // Create result message div
+            const resultMessage = document.createElement('div');
+            resultMessage.id = 'resultMessage';
+            this.resultContainer.appendChild(resultMessage);
+
+            // Create result data div
+            const resultData = document.createElement('div');
+            resultData.id = 'resultData';
+            this.resultContainer.appendChild(resultData);
 
             // Add save button if editColumns are specified
             let saveButton;
@@ -74,119 +83,109 @@ export class FormBuilder {
             button.textContent = text;
             buttonContainer.appendChild(button);
 
-            const resultData = document.createElement('div');
-            resultData.id = 'resultData';
-            this.resultContainer.appendChild(resultData);
-
             this.form.appendChild(buttonContainer);
 
-            let isSubmitting = false; // Flag to track submission state
+            let isSubmitting = false;
 
-            // Add submit handler
             this.form.onsubmit = async (e) => {
                 e.preventDefault();
                 if (isSubmitting) return;
                 
                 isSubmitting = true;
                 button.disabled = true;
-                this.resultContainer.textContent = 'Loading...';
+                resultMessage.textContent = 'Loading...';
                 resultData.innerHTML = '';
 
                 try {
-                    const columnName = this.form.querySelector('[data-field-name="columnName"]')?.value;
-                    const searchValue = this.form.querySelector('[data-field-name="searchValue"]')?.value;
+                    const formData = new FormData(this.form);
+                    const searchData = Object.fromEntries(formData.entries());
                     
-                    console.debug('[Form] Searching:', { columnName, searchValue });
-
                     const result = await GoogleSheetsService.searchTable(
                         options.spreadsheetId,
                         options.tabName,
-                        columnName,
-                        searchValue
+                        searchData.columnName,
+                        searchData.searchValue
                     );
 
-                    if (!result.data.length) {
-                        this.resultContainer.textContent = 'No matching data found';
+                    if (!result || !result.data || !result.data.length) {
+                        resultMessage.textContent = 'No matching data found';
                         return;
                     }
 
-                    this.resultContainer.textContent = `Found ${result.data.length} matches:`;
+                    resultMessage.textContent = `Found ${result.data.length} matches:`;
                     
-                    if (options.onSuccess) {
-                        options.onSuccess(result, resultData);
-                    } else {
-                        const table = buildTable(result.data, result.headers, [], options.editColumns);
-                        if (saveButton) {
-                            table.id = saveButton.dataset.tableId;
-                        }
-                        this.resultContainer.appendChild(table);
-                    }
+                    const table = buildTable(
+                        result.data, 
+                        result.headers, 
+                        [], 
+                        options.editColumns
+                    );
 
                     if (saveButton) {
-                        const tableId = saveButton.dataset.tableId;
-                        // Monitor specific table for changes
-                        const checkDirtyState = () => {
-                            const dirtyInputs = document.querySelector(`#${tableId}`)
-                                ?.querySelectorAll('input[data-dirty="true"]') || [];
-                            saveButton.disabled = dirtyInputs.length === 0;
-                        };
-
-                        // Add save handler for specific table
-                        saveButton.onclick = async () => {
-                            const table = document.querySelector(`#${tableId}`);
-                            if (!table) return;
-
-                            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
-                            const updates = Array.from(dirtyInputs).map(input => ({
-                                row: parseInt(input.dataset.rowIndex) + 1, // +1 to skip header row
-                                col: parseInt(input.dataset.colIndex),
-                                value: input.value
-                            }));
-
-                            try {
-                                saveButton.disabled = true;
-                                await GoogleSheetsService.setSheetData(
-                                    options.spreadsheetId,
-                                    options.tabName,
-                                    updates
-                                );
-
-                                // Update original values and clear dirty flags
-                                dirtyInputs.forEach(input => {
-                                    input.dataset.originalValue = input.value;
-                                    input.dataset.dirty = 'false';
-                                });
-
-                                this.resultContainer.textContent = 'Changes saved successfully';
-                            } catch (error) {
-                                console.error('Save error:', error);
-                                this.resultContainer.textContent = 'Error saving changes';
-                                saveButton.disabled = false;
-                            }
-                        };
-
-                        // Add mutation observer for specific table
-                        const observer = new MutationObserver(() => {
-                            setTimeout(checkDirtyState, 0);
-                        });
-
-                        const table = document.querySelector(`#${tableId}`);
-                        if (table) {
-                            observer.observe(table, {
-                                subtree: true,
-                                attributes: true,
-                                attributeFilter: ['data-dirty']
-                            });
-                        }
+                        table.id = saveButton.dataset.tableId;
+                        this.setupTableSaveHandler(table, saveButton, options);
                     }
+
+                    resultData.innerHTML = '';
+                    resultData.appendChild(table);
+
                 } catch (error) {
-                    console.error('[Form] Error:', error);
-                    this.resultContainer.textContent = error.message;
+                    console.error('Submit error:', error);
+                    resultMessage.textContent = `Error: ${error.message}`;
                 } finally {
                     isSubmitting = false;
                     button.disabled = false;
                 }
             };
+        });
+    }
+
+    setupTableSaveHandler(table, saveButton, options) {
+        const checkDirtyState = () => {
+            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
+            saveButton.disabled = dirtyInputs.length === 0;
+        };
+
+        saveButton.onclick = async () => {
+            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
+            if (!dirtyInputs.length) return;
+
+            try {
+                saveButton.disabled = true;
+                const updates = Array.from(dirtyInputs).map(input => ({
+                    row: parseInt(input.dataset.rowIndex) + 1,
+                    col: parseInt(input.dataset.colIndex),
+                    value: input.value
+                }));
+
+                await GoogleSheetsService.setSheetData(
+                    options.spreadsheetId,
+                    options.tabName,
+                    updates
+                );
+
+                dirtyInputs.forEach(input => {
+                    input.dataset.originalValue = input.value;
+                    input.dataset.dirty = 'false';
+                });
+
+                const resultMessage = document.getElementById('resultMessage');
+                resultMessage.textContent = 'Changes saved successfully';
+            } catch (error) {
+                console.error('Save error:', error);
+                const resultMessage = document.getElementById('resultMessage');
+                resultMessage.textContent = `Error saving changes: ${error.message}`;
+            } finally {
+                checkDirtyState();
+            }
+        };
+
+        // Set up mutation observer for dirty state tracking
+        const observer = new MutationObserver(checkDirtyState);
+        observer.observe(table, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-dirty']
         });
     }
 
