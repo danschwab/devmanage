@@ -61,6 +61,11 @@ export class FormBuilder {
             // Create result data div
             const resultData = document.createElement('div');
             resultData.id = 'resultData';
+            
+            // Ensure resultData doesn't have its own scroll
+            resultData.style.width = '100%';
+            resultData.style.overflow = 'hidden';
+            
             this.resultContainer.appendChild(resultData);
 
             // Add save button if editColumns are specified
@@ -114,20 +119,18 @@ export class FormBuilder {
 
                     resultMessage.textContent = `Found ${result.data.length} matches:`;
                     
-                    const table = buildTable(
-                        result.data, 
-                        result.headers, 
-                        [], 
-                        options.editColumns
-                    );
+                    if (options.onSuccess) {
+                        options.onSuccess(result, resultData);
+                    } else {
+                        const table = buildTable(result.data, result.headers, [], options.editColumns);
+                        // buildTable now returns a wrapped table, so we can directly append it
+                        resultData.appendChild(table);
+                    }
 
                     if (saveButton) {
                         table.id = saveButton.dataset.tableId;
                         this.setupTableSaveHandler(table, saveButton, options);
                     }
-
-                    resultData.innerHTML = '';
-                    resultData.appendChild(table);
 
                 } catch (error) {
                     console.error('Submit error:', error);
