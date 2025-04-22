@@ -2,14 +2,26 @@ import { FormBuilder } from './FormBuilder.js';
 import { buildTable } from './tableUtils.js';
 import { GoogleSheetsAuth } from './googleSheetsAuth.js';
 
-// Functions and logic that must run during document load
+// Initialize auth and app
 document.addEventListener('DOMContentLoaded', async () => {
+    const contentDiv = document.getElementById('content');
+    contentDiv.innerHTML = '<div class="loading">Initializing application...</div>';
+
     try {
+        // Initialize and authenticate with Google Sheets
         await GoogleSheetsAuth.initialize();
+        await GoogleSheetsAuth.authenticate();
+        
+        // Once authenticated, proceed with app initialization
         generateNavigation();
         loadContent('pages/home.html');
     } catch (error) {
-        console.error('Failed to initialize Google Sheets:', error);
+        console.error('Failed to initialize:', error);
+        contentDiv.innerHTML = `
+            <div class="error">
+                Failed to initialize application: ${error.message}
+                <button onclick="location.reload()">Retry</button>
+            </div>`;
     }
 });
 
@@ -39,8 +51,11 @@ function generateNavigation() {
 // Function to load content dynamically into the #content div
 async function loadContent(page) {
     const contentDiv = document.getElementById('content');
-    const cacheBuster = `?v=${new Date().getTime()}`; // Unique query parameter
     try {
+        // Check authentication before loading content
+        await GoogleSheetsAuth.checkAuth();
+        
+        const cacheBuster = `?v=${new Date().getTime()}`; // Unique query parameter
         const response = await fetch(page + cacheBuster); // Append cache buster
         if (response.ok) {
             const html = await response.text();
@@ -75,7 +90,14 @@ async function loadContent(page) {
         }
     } catch (error) {
         console.error('Error:', error);
-        contentDiv.innerHTML = '<p>Error loading content.</p>';
+        if (error.message.includes('auth')) {
+            contentDiv.innerHTML = `
+                <div class="error">
+                    Authentication error. Please <button onclick="location.reload()">reload</button> to re-authenticate.
+                </div>`;
+        } else {
+            contentDiv.innerHTML = '<p>Error loading content.</p>';
+        }
     }
 }
 
@@ -86,6 +108,7 @@ function initializeDynamicHandlers() {
     if (dropdown) {
         (async () => {
             try {
+                await GoogleSheetsAuth.checkAuth();
                 const response = await fetch('/getNonEmptyValues', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -112,7 +135,7 @@ function initializeDynamicHandlers() {
                 }
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
-                dropdown.innerHTML = '<option value="">Error loading data</option>';
+                dropdown.innerHTML = '<option value="">Authentication error</option>';
             }
         })();
     }
@@ -121,50 +144,59 @@ function initializeDynamicHandlers() {
     const submitButton = document.getElementById('submitButton');
     if (submitButton) {
         submitButton.addEventListener('click', async () => {
-            const dataInput = document.getElementById('dataInput').value;
-            const rowHeading = document.getElementById('dropdown').value;
-            const resultMessage = document.getElementById('resultMessage');
-            const resultData = document.getElementById('resultData');
-
-            // Clear previous results
-            resultMessage.textContent = '';
-            resultData.innerHTML = '';
-
-            if (!dataInput) {
-                resultMessage.textContent = 'Please enter some data to submit.';
-                return;
-            }
-
             try {
-                const requestData = { 
-                    sheetName: 'INVENTORY', 
-                    columnTitle: rowHeading,
-                    searchValue: dataInput 
-                };
-                
-                const response = await fetch('/getDataFromColumnSearchString', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestData)
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    resultMessage.textContent = 'Data retrieved successfully:';
+                await GoogleSheetsAuth.checkAuth();
+                const dataInput = document.getElementById('dataInput').value;
+                const rowHeading = document.getElementById('dropdown').value;
+                const resultMessage = document.getElementById('resultMessage');
+                const resultData = document.getElementById('resultData');
+
+                // Clear previous results
+                resultMessage.textContent = '';
+                resultData.innerHTML = '';
+
+                if (!dataInput) {
+                    resultMessage.textContent = 'Please enter some data to submit.';
+                    return;
+                }
+
+                try {
+                    const requestData = { 
+                        sheetName: 'INVENTORY', 
+                        columnTitle: rowHeading,
+                        searchValue: dataInput 
+                    };
                     
-                    // Get headers from the dropdown to use as table headers
-                    const headers = Array.from(document.getElementById('dropdown').options).map(opt => opt.value);
+                    const response = await fetch('/getDataFromColumnSearchString', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestData)
+                    });
                     
-                    // Build and display the table
-                    const table = buildTable(result.data, headers);
-                    resultData.appendChild(table);
-                } else {
-                    const error = await response.text();
-                    resultMessage.textContent = `Failed to retrieve data. Error: ${error}`;
+                    if (response.ok) {
+                        const result = await response.json();
+                        resultMessage.textContent = 'Data retrieved successfully:';
+                        
+                        // Get headers from the dropdown to use as table headers
+                        const headers = Array.from(document.getElementById('dropdown').options).map(opt => opt.value);
+                        
+                        // Build and display the table
+                        const table = buildTable(result.data, headers);
+                        resultData.appendChild(table);
+                    } else {
+                        const error = await response.text();
+                        resultMessage.textContent = `Failed to retrieve data. Error: ${error}`;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    resultMessage.textContent = 'An error occurred while retrieving data.';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                resultMessage.textContent = 'An error occurred while retrieving data.';
+                const resultMessage = document.getElementById('resultMessage');
+                resultMessage.textContent = error.message.includes('auth') 
+                    ? 'Authentication error. Please reload the page.'
+                    : 'An error occurred while retrieving data.';
             }
         });
     }
