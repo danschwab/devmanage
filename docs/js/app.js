@@ -9,8 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         // Initialize and authenticate with Google Sheets
-        await GoogleSheetsAuth.initialize();
-        await GoogleSheetsAuth.authenticate();
+        await GoogleSheetsAuth.checkAuth();
         
         // Once authenticated, proceed with app initialization
         generateNavigation();

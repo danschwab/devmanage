@@ -129,6 +129,7 @@ export class GoogleSheetsAuth {
 
     static async getDataFromTableSearch(spreadsheetId, tabName, headerName, searchValue) {
         try {
+            await this.checkAuth();
             console.debug('[TableSearch] Starting search:', { headerName, searchValue });
             
             // Get sheet metadata to find the full data range
