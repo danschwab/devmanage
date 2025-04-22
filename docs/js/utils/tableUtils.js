@@ -1,10 +1,12 @@
-export function buildTable(data, headers) {
+export function buildTable(data, headers, showColumns = [], editColumns = []) {
     const tableData = data.data || data;
     const table = document.createElement('table');
 
-    // Filter out empty headers
-    const validHeaders = headers.filter(header => header);
-    
+    // Filter headers based on showColumns (show all if showColumns is empty)
+    const validHeaders = headers.filter((header, index) => 
+        header && (showColumns.length === 0 || showColumns.includes(index))
+    );
+
     // Create header row
     if (validHeaders.length > 0) {
         const thead = document.createElement('thead');
@@ -21,15 +23,33 @@ export function buildTable(data, headers) {
     // Create data rows
     const tbody = document.createElement('tbody');
     if (Array.isArray(tableData) && tableData.length > 0) {
-        tableData.forEach(row => {
+        tableData.forEach((row, rowIndex) => {
             if (!Array.isArray(row)) return;
             const tr = document.createElement('tr');
-            // Always create exactly the same number of cells as headers
-            for (let i = 0; i < validHeaders.length; i++) {
-                const td = document.createElement('td');
-                td.textContent = row[i] || '';
-                tr.appendChild(td);
-            }
+            row.forEach((cell, colIndex) => {
+                if (showColumns.length === 0 || showColumns.includes(colIndex)) {
+                    const td = document.createElement('td');
+                    if (editColumns.includes(colIndex)) {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = cell || '';
+                        input.dataset.originalValue = cell || '';
+                        input.dataset.rowIndex = rowIndex;
+                        input.dataset.colIndex = colIndex;
+                        input.dataset.dirty = 'false';
+                        
+                        input.addEventListener('input', (e) => {
+                            const target = e.target;
+                            target.dataset.dirty = (target.value !== target.dataset.originalValue).toString();
+                        });
+                        
+                        td.appendChild(input);
+                    } else {
+                        td.textContent = cell || '';
+                    }
+                    tr.appendChild(td);
+                }
+            });
             tbody.appendChild(tr);
         });
     } else {

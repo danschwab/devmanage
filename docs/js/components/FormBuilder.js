@@ -52,6 +52,20 @@ export class FormBuilder {
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'button-container';
 
+            // Add save button if editColumns are specified
+            let saveButton;
+            if (options.editColumns?.length > 0) {
+                const tableId = `table-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                saveButton = document.createElement('button');
+                saveButton.type = 'button';
+                saveButton.className = 'save-button';
+                saveButton.textContent = 'Save Changes';
+                saveButton.disabled = true;
+                saveButton.style.marginRight = '10px';
+                saveButton.dataset.tableId = tableId;
+                buttonContainer.appendChild(saveButton);
+            }
+
             const button = document.createElement('button');
             button.type = 'submit';
             button.className = 'submit-button';
@@ -104,8 +118,69 @@ export class FormBuilder {
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
                     } else {
-                        const table = buildTable(result.data, result.headers);
+                        const table = buildTable(result.data, result.headers, [], options.editColumns);
+                        if (saveButton) {
+                            table.id = saveButton.dataset.tableId;
+                        }
                         resultData.appendChild(table);
+                    }
+
+                    if (saveButton) {
+                        const tableId = saveButton.dataset.tableId;
+                        // Monitor specific table for changes
+                        const checkDirtyState = () => {
+                            const dirtyInputs = document.querySelector(`#${tableId}`)
+                                ?.querySelectorAll('input[data-dirty="true"]') || [];
+                            saveButton.disabled = dirtyInputs.length === 0;
+                        };
+
+                        // Add save handler for specific table
+                        saveButton.onclick = async () => {
+                            const table = document.querySelector(`#${tableId}`);
+                            if (!table) return;
+
+                            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
+                            const updates = Array.from(dirtyInputs).map(input => ({
+                                row: parseInt(input.dataset.rowIndex) + 1, // +1 to skip header row
+                                col: parseInt(input.dataset.colIndex),
+                                value: input.value
+                            }));
+
+                            try {
+                                saveButton.disabled = true;
+                                await GoogleSheetsService.setSheetData(
+                                    options.spreadsheetId,
+                                    options.tabName,
+                                    updates
+                                );
+
+                                // Update original values and clear dirty flags
+                                dirtyInputs.forEach(input => {
+                                    input.dataset.originalValue = input.value;
+                                    input.dataset.dirty = 'false';
+                                });
+
+                                resultMessage.textContent = 'Changes saved successfully';
+                            } catch (error) {
+                                console.error('Save error:', error);
+                                resultMessage.textContent = 'Error saving changes';
+                                saveButton.disabled = false;
+                            }
+                        };
+
+                        // Add mutation observer for specific table
+                        const observer = new MutationObserver(() => {
+                            setTimeout(checkDirtyState, 0);
+                        });
+
+                        const table = document.querySelector(`#${tableId}`);
+                        if (table) {
+                            observer.observe(table, {
+                                subtree: true,
+                                attributes: true,
+                                attributeFilter: ['data-dirty']
+                            });
+                        }
                     }
                 } catch (error) {
                     console.error('[Form] Error:', error);

@@ -53,4 +53,30 @@ export class GoogleSheetsService {
             data: filteredData
         };
     }
+
+    static async setSheetData(spreadsheetId, tabName, updates) {
+        await GoogleSheetsAuth.checkAuth();
+        
+        // Convert array indices to A1 notation
+        const data = updates.map(({row, col, value}) => ({
+            range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
+            values: [[value]]
+        }));
+
+        const request = {
+            spreadsheetId,
+            resource: {
+                data: data,
+                valueInputOption: 'USER_ENTERED'
+            }
+        };
+
+        try {
+            await gapi.client.sheets.spreadsheets.values.batchUpdate(request);
+            return true;
+        } catch (error) {
+            console.error('Error updating sheet:', error);
+            throw error;
+        }
+    }
 }
