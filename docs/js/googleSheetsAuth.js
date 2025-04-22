@@ -112,10 +112,22 @@ export class GoogleSheetsAuth {
             await this.authenticate();
         }
     }
+
+    static async checkAuthStatus() {
+        const token = gapi.client.getToken();
+        console.log('Current auth status:', {
+            hasToken: !!token,
+            gapiInitialized: gapiInited,
+            gisInitialized: gisInited,
+            tokenDetails: token
+        });
+        checkAuthStatus();
+        return !!token;
+    }
     
     static async getSheetData(spreadsheetId, range) {
         try {
-            await this.checkAuth(); // Add this line
+            await this.checkAuth();
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: spreadsheetId,
                 range: range,
@@ -129,6 +141,7 @@ export class GoogleSheetsAuth {
 
     static async getNonEmptyRange(spreadsheetId, tabName, index, isRow = true) {
         try {
+            await this.checkAuth();
             // Get either the entire row or column
             const range = isRow 
                 ? `${tabName}!${index}:${index}`      // row format
@@ -194,6 +207,7 @@ export class GoogleSheetsAuth {
 
     static async findIndices(spreadsheetId, tabName, searchString, searchIndex, isRow = true) {
         try {
+            await this.checkAuth();
             // First get the non-empty range
             const nonEmptyRange = await this.getNonEmptyRange(spreadsheetId, tabName, searchIndex, isRow);
             if (!nonEmptyRange) {
