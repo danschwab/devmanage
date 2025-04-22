@@ -13,6 +13,14 @@ export class GoogleSheetsAuth {
             await this.loadGAPIScript();
             await this.loadGISScript();
             await this.initializeGAPI();
+            
+            // Try to restore previous session
+            const savedToken = this.getStoredToken();
+            if (savedToken && !this.isTokenExpired(savedToken)) {
+                gapi.client.setToken(savedToken);
+                return true;
+            }
+            
             return true;
         } catch (error) {
             console.error('Failed to initialize Google Sheets API:', error);
@@ -86,18 +94,19 @@ export class GoogleSheetsAuth {
                         return;
                     }
                     
-                    // Verify we have access token
-                    if (!gapi.client.getToken()) {
+                    // Store the token after successful authentication
+                    const token = gapi.client.getToken();
+                    if (!token) {
                         console.error('No access token obtained');
                         reject(new Error('Authentication failed - no token obtained'));
                         return;
                     }
                     
-                    console.log('Authentication successful, token obtained');
+                    this.storeToken(token);
+                    console.log('Authentication successful, token stored');
                     resolve(resp);
                 };
                 
-                // Force consent prompt to ensure we get fresh tokens
                 tokenClient.requestAccessToken({prompt: 'consent'});
             });
         } catch (error) {
@@ -107,9 +116,39 @@ export class GoogleSheetsAuth {
     }
 
     static async checkAuth() {
-        if (!gapi.client.getToken()) {
+        const token = gapi.client.getToken();
+        if (!token) {
+            const savedToken = this.getStoredToken();
+            if (savedToken && !this.isTokenExpired(savedToken)) {
+                gapi.client.setToken(savedToken);
+                return true;
+            }
             await this.authenticate();
         }
+        return true;
+    }
+
+    // Token storage methods
+    static storeToken(token) {
+        if (!token) return;
+        token.timestamp = new Date().getTime();
+        localStorage.setItem('gapi_token', JSON.stringify(token));
+    }
+
+    static getStoredToken() {
+        const tokenStr = localStorage.getItem('gapi_token');
+        return tokenStr ? JSON.parse(tokenStr) : null;
+    }
+
+    static isTokenExpired(token) {
+        if (!token || !token.timestamp) return true;
+        const tokenAge = (new Date().getTime() - token.timestamp) / 1000;
+        // Tokens typically expire after 1 hour (3600 seconds)
+        return tokenAge > 3500; // Check slightly before actual expiration
+    }
+
+    static clearStoredToken() {
+        localStorage.removeItem('gapi_token');
     }
 
     static isAuthenticated() {
