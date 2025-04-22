@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await GoogleSheetsAuth.initialize();
         contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
         
-        const isAuthenticated = await GoogleSheetsAuth.checkAuth();
+        const isAuthenticated = (gapi.client.getToken())
         if (isAuthenticated) {
             await GoogleSheetsAuth.refreshToken();  // Refresh token if needed
             generateNavigation();
