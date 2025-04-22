@@ -1,17 +1,17 @@
-import { FormBuilder } from './FormBuilder.js';
-import { buildTable } from './tableUtils.js';
-import { GoogleSheetsAuth } from './googleSheetsAuth.js';
+import { FormBuilder } from './index.js';
+import { buildTable } from './index.js';
+import { GoogleSheetsAuth } from './index.js';
 
-// Initialize auth and app
+// Functions and logic that must run during document load
 document.addEventListener('DOMContentLoaded', async () => {
     const contentDiv = document.getElementById('content');
-    contentDiv.innerHTML = '<div class="loading">Initializing application...</div>';
+    contentDiv.innerHTML = '<div class="loading">Initializing Google Sheets...</div>';
 
     try {
-        // Initialize and authenticate with Google Sheets
-        await GoogleSheetsAuth.checkAuth();
+        console.debug('Starting initialization...');
+        await GoogleSheetsAuth.initialize();
+        console.debug('Initialization complete');
         
-        // Once authenticated, proceed with app initialization
         generateNavigation();
         loadContent('pages/home.html');
     } catch (error) {

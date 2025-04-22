@@ -1,4 +1,5 @@
-import { GoogleSheetsAuth } from './googleSheetsAuth.js';
+import { GoogleSheetsService } from '../index.js';
+import { buildTable } from '../index.js';
 
 export class FormBuilder {
     constructor(containerId) {
@@ -86,7 +87,7 @@ export class FormBuilder {
                     
                     console.debug('[Form] Searching:', { columnName, searchValue });
 
-                    const result = await GoogleSheetsAuth.getDataFromTableSearch(
+                    const result = await GoogleSheetsService.searchTable(
                         options.spreadsheetId,
                         options.tabName,
                         columnName,
@@ -166,13 +167,7 @@ export class FormBuilder {
             select.innerHTML = '<option value="">Loading...</option>';
 
             try {
-                const response = await gapi.client.sheets.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetId,
-                    range: `${tabName}!1:1`,
-                    majorDimension: 'ROWS'
-                });
-                
-                const headers = response.result.values?.[0] || [];
+                const headers = await GoogleSheetsService.getTableHeaders(spreadsheetId, tabName);
                 select.innerHTML = '';
                 
                 if (options.defaultOption) {

@@ -1,0 +1,56 @@
+import { GoogleSheetsAuth } from '../index.js';
+
+export class GoogleSheetsService {
+    static async getSheetData(spreadsheetId, range) {
+        await GoogleSheetsAuth.checkAuth();
+        const response = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+        return response.result.values;
+    }
+
+    static async getTableHeaders(spreadsheetId, tabName) {
+        await GoogleSheetsAuth.checkAuth();
+        const response = await gapi.client.sheets.spreadsheets.get({
+            spreadsheetId,
+            ranges: [`${tabName}!1:1`],
+            includeGridData: true
+        });
+        
+        return response.result.sheets[0].data[0].rowData[0].values
+            .map(cell => cell.formattedValue)
+            .filter(value => value);
+    }
+
+    static async searchTable(spreadsheetId, tabName, headerName, searchValue) {
+        await GoogleSheetsAuth.checkAuth();
+        const headers = await this.getTableHeaders(spreadsheetId, tabName);
+        const headerIndex = headers.findIndex(h => 
+            h?.toString().toLowerCase() === headerName.toString().toLowerCase()
+        );
+
+        if (headerIndex === -1) {
+            throw new Error(`Header "${headerName}" not found`);
+        }
+
+        const lastCol = String.fromCharCode(65 + headers.length - 1);
+        const range = `${tabName}!A1:${lastCol}`;
+        
+        const searchResponse = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+            majorDimension: 'ROWS'
+        });
+
+        const allData = searchResponse.result.values || [];
+        const filteredData = allData.slice(1).filter(row => 
+            row[headerIndex]?.toString().toLowerCase().includes(searchValue.toLowerCase())
+        );
+
+        return {
+            headers,
+            data: filteredData
+        };
+    }
+}
