@@ -62,10 +62,6 @@ export class FormBuilder {
             const resultData = document.createElement('div');
             resultData.id = 'resultData';
             
-            // Ensure resultData doesn't have its own scroll
-            resultData.style.width = '100%';
-            resultData.style.overflow = 'hidden';
-            
             this.resultContainer.appendChild(resultData);
 
             // Add save button if editColumns are specified
