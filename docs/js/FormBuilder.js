@@ -73,12 +73,10 @@ export class FormBuilder {
             // Add submit handler
             this.form.onsubmit = async (e) => {
                 e.preventDefault();
-                
-                // Prevent multiple submissions
                 if (isSubmitting) return;
+                
                 isSubmitting = true;
                 button.disabled = true;
-                
                 resultMessage.textContent = 'Loading...';
                 resultData.innerHTML = '';
 
@@ -86,44 +84,31 @@ export class FormBuilder {
                     const columnName = this.form.querySelector('[data-field-name="columnName"]')?.value;
                     const searchValue = this.form.querySelector('[data-field-name="searchValue"]')?.value;
                     
-                    console.debug('[Form] Submission values:', { columnName, searchValue });
-
-                    if (!columnName || !searchValue) {
-                        throw new Error('Missing required fields');
-                    }
-
-                    // Get headers from dropdown if available
-                    const dropdown = this.form.querySelector('select');
-                    const headers = dropdown 
-                        ? Array.from(dropdown.options).map(opt => opt.value).filter(v => v)
-                        : null;
-                    console.debug('[Form] Available headers:', headers);
+                    console.debug('[Form] Searching:', { columnName, searchValue });
 
                     const result = await GoogleSheetsAuth.getDataFromTableSearch(
                         options.spreadsheetId,
                         options.tabName,
                         columnName,
-                        searchValue,
-                        headers
+                        searchValue
                     );
-                    console.debug('[Form] Search result:', result);
 
                     if (!result.data.length) {
                         resultMessage.textContent = 'No matching data found';
                         return;
                     }
 
-                    resultMessage.textContent = 'Data retrieved successfully:';
+                    resultMessage.textContent = `Found ${result.data.length} matches:`;
                     
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
-                    } else if (result.data.length > 0) {
-                        const table = buildTable(result.data, headers || result.data[0]);
+                    } else {
+                        const table = buildTable(result.data, result.headers);
                         resultData.appendChild(table);
                     }
                 } catch (error) {
                     console.error('[Form] Error:', error);
-                    resultMessage.textContent = error.message || 'An error occurred while processing your request.';
+                    resultMessage.textContent = error.message;
                 } finally {
                     isSubmitting = false;
                     button.disabled = false;
@@ -181,9 +166,13 @@ export class FormBuilder {
             select.innerHTML = '<option value="">Loading...</option>';
 
             try {
-                const range = await GoogleSheetsAuth.getNonEmptyRange(spreadsheetId, tabName, rowIndex, true);
-                const values = await GoogleSheetsAuth.getSheetData(spreadsheetId, range.range);
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: `${tabName}!1:1`,
+                    majorDimension: 'ROWS'
+                });
                 
+                const headers = response.result.values?.[0] || [];
                 select.innerHTML = '';
                 
                 if (options.defaultOption) {
@@ -193,19 +182,17 @@ export class FormBuilder {
                     select.appendChild(defaultOpt);
                 }
 
-                if (values && values[0]) {
-                    values[0].forEach(item => {
-                        if (item) { // Only add non-empty values
-                            const option = document.createElement('option');
-                            option.value = item;
-                            option.textContent = item;
-                            select.appendChild(option);
-                        }
-                    });
-                }
+                headers.forEach(header => {
+                    if (header) {
+                        const option = document.createElement('option');
+                        option.value = header;
+                        option.textContent = header;
+                        select.appendChild(option);
+                    }
+                });
             } catch (error) {
-                console.error('Error loading dropdown data:', error);
-                select.innerHTML = '<option value="">Error loading data</option>';
+                console.error('Error loading headers:', error);
+                select.innerHTML = '<option value="">Error loading headers</option>';
             }
 
             fieldDiv.appendChild(select);
