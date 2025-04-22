@@ -90,55 +90,24 @@ export class FormBuilder {
                         throw new Error('Missing required fields');
                     }
 
-                    // First find the column index using the column name
-                    const headerIndices = await GoogleSheetsAuth.findIndices(
-                        options.spreadsheetId,
-                        options.tabName,
-                        columnName,
-                        1, // First row contains headers
-                        true
-                    );
-
-                    if (!headerIndices.matches.length) {
-                        throw new Error('Column not found');
-                    }
-
-                    // Then find matching rows in that column
-                    const matchingRows = await GoogleSheetsAuth.findIndices(
-                        options.spreadsheetId,
-                        options.tabName,
-                        searchValue,
-                        headerIndices.matches[0].index,
-                        false
-                    );
-
-                    if (!matchingRows.matches.length) {
-                        resultMessage.textContent = 'No matching data found';
-                        return;
-                    }
-
                     // Get headers from dropdown if available
                     const dropdown = this.form.querySelector('select');
                     const headers = dropdown 
                         ? Array.from(dropdown.options).map(opt => opt.value).filter(v => v)
                         : null;
 
-                    // Get full row data for matches
-                    const rowIndices = matchingRows.matches.map(m => m.index);
-                    const headerRange = await GoogleSheetsAuth.getNonEmptyRange(
+                    const result = await GoogleSheetsAuth.getDataFromTableSearch(
                         options.spreadsheetId,
                         options.tabName,
-                        1,
-                        true
+                        columnName,
+                        searchValue,
+                        headers
                     );
 
-                    const result = await GoogleSheetsAuth.getDataFromIndices(
-                        options.spreadsheetId,
-                        options.tabName,
-                        rowIndices,
-                        headers || Array.from({ length: headerRange.endColumn.charCodeAt(0) - headerRange.startColumn.charCodeAt(0) + 1 }, 
-                            (_, i) => String.fromCharCode(headerRange.startColumn.charCodeAt(0) + i))
-                    );
+                    if (!result.data.length) {
+                        resultMessage.textContent = 'No matching data found';
+                        return;
+                    }
 
                     resultMessage.textContent = 'Data retrieved successfully:';
                     
