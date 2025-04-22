@@ -74,14 +74,9 @@ export class FormBuilder {
             button.textContent = text;
             buttonContainer.appendChild(button);
 
-            // Add result containers
-            const resultMessage = document.createElement('div');
-            resultMessage.id = 'resultMessage';
-            buttonContainer.appendChild(resultMessage);
-
             const resultData = document.createElement('div');
             resultData.id = 'resultData';
-            resultContainer.appendChild(resultData);
+            this.resultContainer.appendChild(resultData);
 
             this.form.appendChild(buttonContainer);
 
@@ -94,7 +89,7 @@ export class FormBuilder {
                 
                 isSubmitting = true;
                 button.disabled = true;
-                resultMessage.textContent = 'Loading...';
+                this.resultContainer.textContent = 'Loading...';
                 resultData.innerHTML = '';
 
                 try {
@@ -111,11 +106,11 @@ export class FormBuilder {
                     );
 
                     if (!result.data.length) {
-                        resultMessage.textContent = 'No matching data found';
+                        this.resultContainer.textContent = 'No matching data found';
                         return;
                     }
 
-                    resultMessage.textContent = `Found ${result.data.length} matches:`;
+                    this.resultContainer.textContent = `Found ${result.data.length} matches:`;
                     
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
@@ -124,7 +119,7 @@ export class FormBuilder {
                         if (saveButton) {
                             table.id = saveButton.dataset.tableId;
                         }
-                        resultData.appendChild(table);
+                        this.resultContainer.appendChild(table);
                     }
 
                     if (saveButton) {
@@ -162,10 +157,10 @@ export class FormBuilder {
                                     input.dataset.dirty = 'false';
                                 });
 
-                                resultMessage.textContent = 'Changes saved successfully';
+                                this.resultContainer.textContent = 'Changes saved successfully';
                             } catch (error) {
                                 console.error('Save error:', error);
-                                resultMessage.textContent = 'Error saving changes';
+                                this.resultContainer.textContent = 'Error saving changes';
                                 saveButton.disabled = false;
                             }
                         };
@@ -186,7 +181,7 @@ export class FormBuilder {
                     }
                 } catch (error) {
                     console.error('[Form] Error:', error);
-                    resultMessage.textContent = error.message;
+                    this.resultContainer.textContent = error.message;
                 } finally {
                     isSubmitting = false;
                     button.disabled = false;
