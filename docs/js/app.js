@@ -18,10 +18,20 @@ function generateLoginButton() {
     loginButton.textContent = 'Log in';
     loginButton.onclick = async () => {
         try {
-            generateNavigation();
-            loadContent('pages/home.html');
+            const success = await GoogleSheetsAuth.authenticate();
+            if (success) {
+                generateNavigation();
+                loadContent('pages/home.html');
+            } else {
+                throw new Error('Authentication failed');
+            }
         } catch (error) {
             console.error('Login failed:', error);
+            const contentDiv = document.getElementById('content');
+            contentDiv.innerHTML = `
+                <div class="error">
+                    Login failed: ${error.message}. Please try again.
+                </div>`;
         }
     };
     nav.appendChild(loginButton);
@@ -47,13 +57,14 @@ function generateNavigation() {
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {
     const contentDiv = document.getElementById('content');
-    contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
     
-    await GoogleSheetsAuth.initialize();
-
     try {
+        await GoogleSheetsAuth.initialize();
+        contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
+        
         const isAuthenticated = await GoogleSheetsAuth.checkAuth();
         if (isAuthenticated) {
+            await GoogleSheetsAuth.refreshToken();  // Refresh token if needed
             generateNavigation();
             loadContent('pages/home.html');
         } else {
@@ -61,11 +72,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             contentDiv.innerHTML = '<div>Please log in to access the application.</div>';
         }
     } catch (error) {
-        console.error('Failed to check authentication:', error);
+        console.error('Failed to initialize authentication:', error);
         generateLoginButton();
         contentDiv.innerHTML = `
             <div class="error">
-                Failed to check authentication: ${error.message}
+                Failed to initialize: ${error.message}
             </div>`;
     }
 });
