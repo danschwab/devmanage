@@ -2,8 +2,9 @@ import { GoogleSheetsService } from '../index.js';
 import { buildTable } from '../index.js';
 
 export class FormBuilder {
-    constructor(containerId) {
+    constructor(containerId, resultContainerId) {
         this.container = document.getElementById(containerId);
+        this.resultContainer = document.getElementById(resultContainerId);
         this.loadingMessage = document.createElement('div');
         this.loadingMessage.textContent = 'Loading form...';
         this.loadingMessage.className = 'loading-message';
@@ -50,6 +51,7 @@ export class FormBuilder {
     addSubmitButton(text = 'Submit', options = {}) {
         return this.addOperation(() => {
             const buttonContainer = document.createElement('div');
+            
             buttonContainer.className = 'button-container';
 
             // Add save button if editColumns are specified
@@ -79,7 +81,7 @@ export class FormBuilder {
 
             const resultData = document.createElement('div');
             resultData.id = 'resultData';
-            buttonContainer.appendChild(resultData);
+            resultContainer.appendChild(resultData);
 
             this.form.appendChild(buttonContainer);
 

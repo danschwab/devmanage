@@ -156,7 +156,30 @@ th {
 
 #resultData {
     width: 100%;
-    overflow-x: auto;
+    overflow-x: scroll;
+    scrollbar-gutter: stable both-edges;
+}
+
+#resultData::-webkit-scrollbar {
+    height: 10px;
+    -webkit-appearance: none;
+}
+
+#resultData::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#resultData::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 5px;
+}
+
+#resultData::before,
+#resultData::after {
+    content: '';
+    display: block;
+    height: 10px;
+    overflow-x: scroll;
 }
 
 /* Table Styling */

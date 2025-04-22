@@ -1,6 +1,7 @@
 <div>
     <h1>Search Inventory</h1>
     <div id="formContainer"></div>
+    <div id="resultContainer"></div>
 </div>
 
 <script type="module">
@@ -10,7 +11,7 @@
     (async () => {
         const spreadsheetId = '1OQo4X-ZJRhpsUrkspfHv6nIemiZdcISl-slNaL-AWgM';
         const tabName = 'INVENTORY';
-        const form = new FormBuilder('formContainer');
+        const form = new FormBuilder('formContainer', 'resultContainer');
         await form
             .addDropdownFromSheet('Select Column', 'columnName', spreadsheetId, tabName, 1, {
                 defaultOption: 'Choose a column...',
