@@ -265,44 +265,45 @@ export class GoogleSheetsAuth {
 
     static async getDataFromTableSearch(spreadsheetId, tabName, headerName, searchValue) {
         try {
-            // First get headers from row 1
-            const headerResponse = await this.getNonEmptyRange(spreadsheetId, tabName, '1', true);
-            const headers = await this.getSheetData(spreadsheetId, headerResponse.range);
+            // Get first row to find headers
+            const range = `${tabName}!1:1`;
+            const headerResponse = await this.getSheetData(spreadsheetId, range);
             
-            if (!headers || !headers[0]) {
+            if (!headerResponse || !headerResponse[0]) {
                 throw new Error('No headers found in first row');
             }
 
+            const headers = headerResponse[0];
             // Find the column index for the header
-            const headerIndex = headers[0].findIndex(h => h.toString().toLowerCase() === headerName.toLowerCase());
+            const headerIndex = headers.findIndex(h => 
+                h && h.toString().toLowerCase() === headerName.toString().toLowerCase()
+            );
+            
             if (headerIndex === -1) {
                 throw new Error(`Header "${headerName}" not found`);
             }
 
             // Convert header index to column letter
             const columnLetter = this.toColumnLetter(headerIndex);
-
-            // Search for matches in the identified column
+            
+            // Search in the specific column
             const searchResults = await this.findIndices(spreadsheetId, tabName, searchValue, columnLetter, false);
 
-            if (!searchResults.matches.length) {
+            if (!searchResults.matches || !searchResults.matches.length) {
                 return {
-                    headers: headers[0],
+                    headers: headers,
                     data: []
                 };
             }
 
-            // Get all column letters from headers
-            const columnIndices = headers[0].map((_, index) => this.toColumnLetter(index));
-            
-            // Get row indices from matches
+            // Get data for all columns
+            const columnIndices = headers.map((_, index) => this.toColumnLetter(index));
             const rowIndices = searchResults.matches.map(match => match.index);
 
-            // Get the full data for matching rows
             const result = await this.getDataFromIndices(spreadsheetId, tabName, rowIndices, columnIndices);
 
             return {
-                headers: headers[0],
+                headers: headers,
                 data: result.data
             };
 
