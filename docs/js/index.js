@@ -3,4 +3,5 @@ export { GoogleSheetsService } from './services/GoogleSheetsService.js';
 
 export { buildTable } from './utils/tableUtils.js';
 
-export { FormBuilder } from './components/FormBuilder.js';
+export { FormBuilder } from './components/formBuilder.js';
+export { PageBuilder } from './components/pageBuilder.js';

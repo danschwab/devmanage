@@ -82,11 +82,19 @@ export class GoogleSheetsAuth {
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // defined in the promise
-                ux_mode: 'redirect',
-                redirect_uri: 'https://dschwabdesign.com/TopShelfLiveInventory/'
+                ux_mode: 'popup',  // Changed from 'redirect' to 'popup'
+                prompt: 'consent'
             });
     
             return new Promise((resolve, reject) => {
+                // Create or get the auth container
+                let authContainer = document.getElementById('google-auth-container');
+                if (!authContainer) {
+                    authContainer = document.createElement('div');
+                    authContainer.id = 'google-auth-container';
+                    document.getElementById('content').appendChild(authContainer);
+                }
+
                 tokenClient.callback = async (resp) => {
                     if (resp.error !== undefined) {
                         console.error('Authentication error:', resp);
@@ -94,7 +102,6 @@ export class GoogleSheetsAuth {
                         return;
                     }
                     
-                    // Store the token after successful authentication
                     const token = gapi.client.getToken();
                     if (!token) {
                         console.error('No access token obtained');
@@ -107,7 +114,7 @@ export class GoogleSheetsAuth {
                     resolve(resp);
                 };
                 
-                tokenClient.requestAccessToken({prompt: 'consent'});
+                tokenClient.requestAccessToken();
             });
         } catch (error) {
             console.error('Authentication error:', error);
