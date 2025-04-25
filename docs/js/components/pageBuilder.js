@@ -4,7 +4,6 @@ export class PageBuilder {
     
     // Function to load content dynamically into the #content div
     static async loadContent(page) {
-        const contentDiv = document.getElementById('content');
         try {
             await GoogleSheetsAuth.checkAuth();
             
@@ -12,27 +11,24 @@ export class PageBuilder {
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
-                await buildPage(contentDiv, html);
-                initializeDynamicHandlers();
+                await buildPage(html);
             } else {
-                contentDiv.innerHTML = '<p>Error loading content.</p>';
+                buildPage('<p>Error loading content.</p>');
             }
         } catch (error) {
             console.error('Error:', error);
             if (error.message.includes('auth')) {
-                contentDiv.innerHTML = `
-                    <div class="error">
-                        Authentication error. Please <button onclick="location.reload()">reload</button> to re-authenticate.
-                    </div>`;
+                generateLoginButton();
             } else {
-                contentDiv.innerHTML = '<p>Error loading content.</p>';
+                buildPage('<p>Error loading content.</p>');
             }
         }
     }
     
     
     
-    static async buildPage(contentDiv, html) {
+    static async buildPage(html) {
+        const contentDiv = document.getElementById('content');
         contentDiv.innerHTML = html;
 
         // Handle scripts in the loaded content
@@ -56,6 +52,7 @@ export class PageBuilder {
         }
     }
 
+
     // Function to generate the login button
     static async generateLoginButton() {
         const nav = document.getElementById('navbar');
@@ -65,13 +62,11 @@ export class PageBuilder {
         loginButton.textContent = 'Log in';
         loginButton.onclick = async () => {
             try {
-                // Create auth container
-                const contentDiv = document.getElementById('content');
-                contentDiv.innerHTML = `
+                this.buildPage(`
                     <div id="google-auth-container" class="auth-container">
                         <h2>Sign in with Google</h2>
                         <p>Please wait while we initialize the sign-in process...</p>
-                    </div>`;
+                    </div>`);
 
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
@@ -82,11 +77,10 @@ export class PageBuilder {
                 }
             } catch (error) {
                 console.error('Login failed:', error);
-                const contentDiv = document.getElementById('content');
-                contentDiv.innerHTML = `
+                this.buildPage(`
                     <div class="error">
                         Login failed: ${error.message}. Please try again.
-                    </div>`;
+                    </div>`);
             }
         };
         nav.appendChild(loginButton);

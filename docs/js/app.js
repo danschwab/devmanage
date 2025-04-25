@@ -10,27 +10,20 @@ const navigationItems = [
 
 
 // Update the DOMContentLoaded handler
-document.addEventListener('DOMContentLoaded', async () => {
-    const contentDiv = document.getElementById('content');
-    
+document.addEventListener('DOMContentLoaded', async () => {    
     try {
         await GoogleSheetsAuth.initialize();
-        contentDiv.innerHTML = '<div class="loading">Checking authentication...</div>';
-        
+        PageBuilder.buildPage('<div class="loading">Checking authentication...</div>');
+
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
             await PageBuilder.generateNavigation();
             await PageBuilder.loadContent('pages/home.html');
         } else {
-            generateLoginButton();
-            contentDiv.innerHTML = '<div>Please log in to access the application.</div>';
+            await PageBuilder.generateLoginButton();
         }
     } catch (error) {
         console.error('Failed to initialize authentication:', error);
-        generateLoginButton();
-        contentDiv.innerHTML = `
-            <div class="error">
-                Failed to initialize: ${error.message}
-            </div>`;
+        await PageBuilder.generateLoginButton();
     }
 });

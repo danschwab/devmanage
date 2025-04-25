@@ -78,43 +78,52 @@ export class GoogleSheetsAuth {
         }
     
         try {
-            tokenClient = google.accounts.oauth2.initTokenClient({
+            // Create an invisible iframe for auth
+            const authFrame = document.createElement('iframe');
+            authFrame.style.display = 'none';
+            document.body.appendChild(authFrame);
+            
+            // Initialize token client with iframe target
+            tokenClient = google.accounts.oauth2.initCodeClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: '', // defined in the promise
-                ux_mode: 'popup',  // Changed from 'redirect' to 'popup'
-                prompt: 'consent'
+                callback: '', // Will be set in the promise
+                error_callback: '', // Will be set in the promise
+                ux_mode: 'redirect',
+                hosted_domain: window.location.origin,
+                iframe: authFrame
             });
     
             return new Promise((resolve, reject) => {
-                // Create or get the auth container
-                let authContainer = document.getElementById('google-auth-container');
-                if (!authContainer) {
-                    authContainer = document.createElement('div');
-                    authContainer.id = 'google-auth-container';
-                    document.getElementById('content').appendChild(authContainer);
-                }
+                tokenClient.callback = async (response) => {
+                    if (response.error !== undefined) {
+                        reject(new Error(response.error));
+                        return;
+                    }
+                    
+                    try {
+                        await gapi.client.init({
+                            apiKey: API_KEY,
+                            clientId: CLIENT_ID,
+                            scope: SCOPES
+                        });
+                        
+                        const token = gapi.client.getToken();
+                        this.storeToken(token);
+                        resolve(true);
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        document.body.removeChild(authFrame);
+                    }
+                };
 
-                tokenClient.callback = async (resp) => {
-                    if (resp.error !== undefined) {
-                        console.error('Authentication error:', resp);
-                        reject(resp);
-                        return;
-                    }
-                    
-                    const token = gapi.client.getToken();
-                    if (!token) {
-                        console.error('No access token obtained');
-                        reject(new Error('Authentication failed - no token obtained'));
-                        return;
-                    }
-                    
-                    this.storeToken(token);
-                    console.log('Authentication successful, token stored');
-                    resolve(resp);
+                tokenClient.error_callback = (error) => {
+                    document.body.removeChild(authFrame);
+                    reject(error);
                 };
                 
-                tokenClient.requestAccessToken();
+                tokenClient.requestCode();
             });
         } catch (error) {
             console.error('Authentication error:', error);
