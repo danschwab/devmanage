@@ -173,38 +173,8 @@ button:hover,
 }
 
 #resultData {
-    width: 100%;
-    overflow-x: scroll;
-    overflow-y: hidden;
-}
-
-/* Add top scrollbar by using pseudo-element */
-#resultData::before {
-    content: '';
-    display: block;
-    height: 15px;
-    width: 100%;
-    margin-bottom: 5px;
-    overflow-x: scroll;
-    overflow-y: hidden;
-    pointer-events: none;
-}
-
-/* Synchronize the pseudo-element's scrolling with the main content */
-#resultData::-webkit-scrollbar,
-#resultData::before::-webkit-scrollbar {
-    height: 10px;
-}
-
-#resultData::-webkit-scrollbar-track,
-#resultData::before::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-#resultData::-webkit-scrollbar-thumb,
-#resultData::before::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 5px;
+    width: 100%; 
+    overflow-x: auto;
 }
 
 #resultContainer {
