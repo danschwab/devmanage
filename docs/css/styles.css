@@ -146,11 +146,13 @@ button,
     max-width: 200px;
     height: 38px;
     padding: 0.375rem 0.75rem;
-    margin: 0 1rem;
     font-size: 1rem;
     line-height: 1.5;
     border-radius: 0.25rem;
     transition: background-color 0.15s ease-in-out;
+}
+#navbar button {
+    margin: 0 1rem;
 }
 
 .submit-button:hover, 
