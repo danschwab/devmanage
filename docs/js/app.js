@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await PageBuilder.loadContent('pages/home.html');
         } else {
             await PageBuilder.generateLoginButton();
+            PageBuilder.buildPage('<div class="info-message">Please log in.</div>');
         }
     } catch (error) {
         await PageBuilder.generateLoginButton();
