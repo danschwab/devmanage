@@ -1,4 +1,5 @@
 import { GoogleSheetsAuth } from '../index.js';
+import { navigationItems } from '../app.js';
 
 export class PageBuilder {
     
@@ -24,7 +25,6 @@ export class PageBuilder {
             }
         }
     }
-    
     
     
     static async buildPage(html) {

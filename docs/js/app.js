@@ -1,7 +1,7 @@
 import { GoogleSheetsAuth, PageBuilder, FormBuilder, buildTable } from './index.js';
 
 // Define navigation items
-const navigationItems = [
+export let navigationItems = [
     { title: 'Home', file: 'home.html' },
     { title: 'Search', file: 'search.html' },
     { title: 'About', file: 'about.html' }
