@@ -13,7 +13,7 @@ const navigationItems = [
 document.addEventListener('DOMContentLoaded', async () => {    
     try {
         await GoogleSheetsAuth.initialize();
-        PageBuilder.buildPage('<div class="loading">Checking authentication...</div>');
+        PageBuilder.buildPage('<div class="loading-message">Checking authentication...</div>');
 
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await PageBuilder.generateLoginButton();
         }
     } catch (error) {
-        console.error('Failed to initialize authentication:', error);
         await PageBuilder.generateLoginButton();
+        PageBuilder.buildPage('<div class="error-message">Authentication error. Please try again.</div>');
     }
 });

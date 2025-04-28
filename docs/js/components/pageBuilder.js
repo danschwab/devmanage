@@ -13,14 +13,14 @@ export class PageBuilder {
                 const html = await response.text();
                 await buildPage(html);
             } else {
-                buildPage('<p>Error loading content.</p>');
+                buildPage('<div class="loading-message">Error loading content.</div>');
             }
         } catch (error) {
             console.error('Error:', error);
             if (error.message.includes('auth')) {
                 generateLoginButton();
             } else {
-                buildPage('<p>Error loading content.</p>');
+                buildPage('<div class="loading-message">Error loading content.</div>');
             }
         }
     }
@@ -62,23 +62,19 @@ export class PageBuilder {
         loginButton.textContent = 'Log in';
         loginButton.onclick = async () => {
             try {
-                this.buildPage(`
-                    <div id="google-auth-container" class="auth-container">
-                        <h2>Sign in with Google</h2>
-                        <p>Please wait while we initialize the sign-in process...</p>
-                    </div>`);
+                this.buildPage(`<div class="loading-message">Loading authentication...</div>`);
 
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
-                    await this.generateNavigation();
-                    await this.loadContent('pages/home.html');
+                    this.generateNavigation();
+                    this.loadContent('pages/home.html');
                 } else {
                     throw new Error('Authentication failed');
                 }
             } catch (error) {
                 console.error('Login failed:', error);
                 this.buildPage(`
-                    <div class="error">
+                    <div class="error-message">
                         Login failed: ${error.message}. Please try again.
                     </div>`);
             }
@@ -97,9 +93,25 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
                 e.preventDefault();
-                loadContent(`pages/${item.file}`);
+                this.loadContent(`pages/${item.file}`);
             };
             nav.appendChild(link);
         });
+
+        // Add logout button
+        const logoutButton = document.createElement('button');
+        logoutButton.textContent = 'Logout';
+        logoutButton.className = 'logout-button';
+        logoutButton.onclick = async () => {
+            try {
+                await GoogleSheetsAuth.logout();
+                this.buildPage('<div class="info-message">Successfully logged out.</div>');
+                await this.generateLoginButton();
+            } catch (error) {
+                console.error('Logout failed:', error);
+                this.buildPage('<div class="error-message">Logout failed. Please try again.</div>');
+            }
+        };
+        nav.appendChild(logoutButton);
     }
 }

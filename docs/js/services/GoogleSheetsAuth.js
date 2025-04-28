@@ -170,4 +170,24 @@ export class GoogleSheetsAuth {
     static isAuthenticated() {
         return !!gapi.client?.getToken();
     }
+
+    static async logout() {
+        const token = gapi.client.getToken();
+        if (token) {
+            try {
+                // Revoke the token
+                await fetch(`https://oauth2.googleapis.com/revoke?token=${token.access_token}`, {
+                    method: 'POST'
+                });
+            } catch (error) {
+                console.warn('Token revocation failed:', error);
+            }
+            
+            // Clear token from gapi client
+            gapi.client.setToken(null);
+            
+            // Clear stored token
+            this.clearStoredToken();
+        }
+    }
 }
