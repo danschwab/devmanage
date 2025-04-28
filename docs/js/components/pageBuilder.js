@@ -12,16 +12,16 @@ export class PageBuilder {
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
-                await buildPage(html);
+                await this.buildPage(html);
             } else {
-                buildPage('<div class="loading-message">Error loading content.</div>');
+                this.buildPage('<div class="loading-message">Error loading content.</div>');
             }
         } catch (error) {
             console.error('Error:', error);
             if (error.message.includes('auth')) {
-                generateLoginButton();
+                this.generateLoginButton();
             } else {
-                buildPage('<div class="loading-message">Error loading content.</div>');
+                this.buildPage('<div class="loading-message">Error loading content.</div>');
             }
         }
     }
@@ -72,10 +72,10 @@ export class PageBuilder {
                     throw new Error('Authentication failed');
                 }
             } catch (error) {
-                console.error('Login failed:', error);
+                console.error('Application error:', error);
                 this.buildPage(`
                     <div class="error-message">
-                        Login failed: ${error.message}. Please try again.
+                        Application error: ${error.message}.
                     </div>`);
             }
         };
@@ -100,7 +100,7 @@ export class PageBuilder {
 
         // Add logout button
         const logoutButton = document.createElement('button');
-        logoutButton.textContent = 'Logout';
+        logoutButton.textContent = 'Log out';
         logoutButton.className = 'logout-button';
         logoutButton.onclick = async () => {
             try {
