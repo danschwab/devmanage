@@ -222,7 +222,6 @@ th {
 
 .error-message {
     padding: 1rem;
-    color: hsl(0, 100%, 25%);
+    color: hsl(0, 100%, 35%);
     font-style: italic;
-    font-weight: bold;
 }

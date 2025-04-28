@@ -62,12 +62,12 @@ export class PageBuilder {
         loginButton.textContent = 'Log in';
         loginButton.onclick = async () => {
             try {
-                this.buildPage(`<div class="loading-message">Loading authentication...</div>`);
+                this.buildPage(`<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`);
 
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
-                    this.generateNavigation();
-                    this.loadContent('pages/home.html');
+                    await this.generateNavigation();
+                    await this.loadContent('pages/home.html');
                 } else {
                     throw new Error('Authentication failed');
                 }
