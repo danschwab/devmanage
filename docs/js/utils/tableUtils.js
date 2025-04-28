@@ -23,12 +23,16 @@ export function buildTable(data, headers, showColumns = [], editColumns = []) {
     // Create data rows
     const tbody = document.createElement('tbody');
     if (Array.isArray(tableData) && tableData.length > 0) {
+        const numColumns = validHeaders.length || Math.max(...tableData.map(row => row.length));
         tableData.forEach((row, rowIndex) => {
             if (!Array.isArray(row)) return;
             const tr = document.createElement('tr');
-            row.forEach((cell, colIndex) => {
+            
+            // Iterate through all possible columns
+            for (let colIndex = 0; colIndex < numColumns; colIndex++) {
                 if (showColumns.length === 0 || showColumns.includes(colIndex)) {
                     const td = document.createElement('td');
+                    const cell = row[colIndex];
                     if (editColumns.includes(colIndex)) {
                         const input = document.createElement('input');
                         input.type = 'text';
@@ -49,7 +53,7 @@ export function buildTable(data, headers, showColumns = [], editColumns = []) {
                     }
                     tr.appendChild(td);
                 }
-            });
+            }
             tbody.appendChild(tr);
         });
     } else {
