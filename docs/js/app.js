@@ -3,7 +3,8 @@ import { GoogleSheetsAuth, PageBuilder, FormBuilder, buildTable } from './index.
 // Define navigation items
 export let navigationItems = [
     { title: 'Home', file: 'home.html' },
-    { title: 'Search', file: 'search.html' },
+    { title: 'Prod Sched', file: 'prod.html' },
+    { title: 'Pack Lists', file: 'packlist.html' },
     { title: 'About', file: 'about.html' }
 ];
 
@@ -28,3 +29,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         PageBuilder.buildPage('<div class="error-message">Authentication error. Please try again.</div>');
     }
 });
+
+
+
+// Add global function for console access
+window.loadPage = async (pageName) => {
+    try {
+        await PageBuilder.loadContent(`pages/${pageName}.html`);
+    } catch (error) {
+        console.error(`Failed to load page ${pageName}:`, error);
+    }
+};

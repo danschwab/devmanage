@@ -5,3 +5,4 @@ export { buildTable } from './utils/tableUtils.js';
 
 export { FormBuilder } from './components/formBuilder.js';
 export { PageBuilder } from './components/pageBuilder.js';
+export { TabManager } from './components/tabManager.js';
