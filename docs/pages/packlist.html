@@ -45,7 +45,7 @@ EXAMPLE OF A MODAL
             <div class="modal-content">
                 <div class="modal-header"><span class="modal-close">&times;</span></div>
                 <div id="tabs-list">
-
+                    <p class="loading-message">Loading tabs...</p>
                 </div>
             </div>
         `;
@@ -57,6 +57,7 @@ EXAMPLE OF A MODAL
 
         try {
             const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_ID).then((sheetTabs) => {
+                modal.querySelector('#tabs-list').innerHTML = ''; // Clear loading message
                 for (const tabName of sheetTabs) {
                     // if the tab name is TEMPLATE then skip it
                     if (tabName === 'TEMPLATE') continue;

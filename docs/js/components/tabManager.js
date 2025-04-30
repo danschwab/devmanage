@@ -111,7 +111,7 @@ export class TabManager {
             // Check if the tab already exists
             const existingTab = document.getElementById(tabName);
             if (existingTab) {
-                this.openTab(existingTab, tabName, false);
+                this.openTab(existingTab, tabName + '-button', false);
                 return;
             }
         }
@@ -122,7 +122,8 @@ export class TabManager {
         tabButton.className = 'tab-button';
         tabButton.setAttribute('data-tab', tabName);
         tabButton.innerHTML = `${tabTitle}${allowClose ? ' <span class="tab-close">×</span>' : ''}`;
-        
+        tabButton.id = tabName + '-button';
+
         newTabButton.parentNode.insertBefore(tabButton, newTabButton);
         
         const tabContent = document.createElement('div');
