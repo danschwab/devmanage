@@ -1,5 +1,17 @@
 <div id="tabSystem">
 </div>
+<!--
+EXAMPLE OF A MODAL
+<div class="modal"> 
+    <div class="modal-content">
+        <div class="modal-header">Open Pack List:<span class="modal-close">&times;</span></div>
+        <h2>New Tab</h2>
+        <p>Content for the new tab goes here.</p>
+    </div>
+</div>
+-->
+
+
 <script type="module">
     import { TabManager, GoogleSheetsService } from './js/index.js';
     
@@ -11,7 +23,7 @@
         try {
             const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
             for (const tabName of sheetTabs) {
-                TabManager.addNewTab(tabName, `Content for ${tabName}`, false);
+                TabManager.addNewTab(tabName, `Content for ${tabName}`, true);
             }
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
@@ -22,6 +34,43 @@
     initializeTabs();
 
     document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {
-        TabManager.addNewTab('New Tab', 'new-tab-content', true);
+        
+        // Generate a new modal for creating a new tab
+        const modal = document.createElement('div');
+        modal.classList.add('modal');
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header"><span class="modal-close">&times;</span></div>
+                <div id="tabs-list">
+
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.querySelector('.modal-close')?.addEventListener('click', () => {
+            // Close the modal when the close button is clicked
+            modal.remove();
+        });
+
+        try {
+            const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
+            for (const tabName of sheetTabs) {
+                const tabButton = document.createElement('button');
+                tabButton.classList.add('tab-button');
+                tabButton.textContent = tabName;
+                modal.querySelector('#tabs-list').appendChild(tabButton);
+                tabButton.addEventListener('click', () => {
+                    TabManager.addNewTab(tabName, `Content for ${tabName}`, true);
+                    modal.remove();
+                });
+            }
+        } catch (error) {
+            console.error('Error loading sheet tabs:', error);
+            const errorMessage = document.createElement('p');
+            errorMessage.textContent = 'Failed to load spreadsheet tabs';
+            modal.querySelector('#tabs-list').appendChild(errorMessage);
+        }
+        
+        //TabManager.addNewTab('New Tab', 'new-tab-content', true);
     });
 </script>
