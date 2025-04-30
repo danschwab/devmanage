@@ -20,6 +20,7 @@ EXAMPLE OF A MODAL
     async function initializeTabs() {
         TabManager.addTabNavigation('tabSystem', true);
         
+        /*
         try {
             const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
             for (const tabName of sheetTabs) {
@@ -29,6 +30,7 @@ EXAMPLE OF A MODAL
             console.error('Error loading sheet tabs:', error);
             TabManager.addNewTab('Error', 'Failed to load spreadsheet tabs', false);
         }
+        */
     }
 
     await initializeTabs();
