@@ -33,7 +33,7 @@ EXAMPLE OF A MODAL
 
     initializeTabs();
 
-    document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {
+    document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => async function() {
         
         // Generate a new modal for creating a new tab
         const modal = document.createElement('div');
@@ -53,9 +53,8 @@ EXAMPLE OF A MODAL
         });
 
         try {
-            const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
-            const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
-            sheetTabs.forEach((tabName) => {
+            const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
+            for (const tabName of sheetTabs) {
                 const tabButton = document.createElement('button');
                 tabButton.classList.add('tab-button');
                 tabButton.textContent = tabName;
@@ -64,7 +63,7 @@ EXAMPLE OF A MODAL
                     TabManager.addNewTab(tabName, `Content for ${tabName}`, true);
                     modal.remove();
                 });
-            });
+            }
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
             const errorMessage = document.createElement('p');
