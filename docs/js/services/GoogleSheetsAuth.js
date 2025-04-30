@@ -82,7 +82,9 @@ export class GoogleSheetsAuth {
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // defined in the promise
-                ux_mode: 'popup'  // Changed from 'redirect' to 'popup'
+                ux_mode: 'popup',
+                enable_serial_consent: true, // Enable multiple account handling
+                prompt: 'select_account' // Always show account selector
             });
     
             return new Promise((resolve, reject) => {
@@ -106,7 +108,10 @@ export class GoogleSheetsAuth {
                 };
                 
                 try {
-                    tokenClient.requestAccessToken({prompt: 'consent'});
+                    tokenClient.requestAccessToken({
+                        prompt: 'select_account', // Force account selection
+                        login_hint: '' // Clear any previous login hint
+                    });
                 } catch (error) {
                     console.error('Token request error:', error);
                     reject(error);
