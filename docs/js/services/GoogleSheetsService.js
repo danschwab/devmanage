@@ -79,4 +79,13 @@ export class GoogleSheetsService {
             throw error;
         }
     }
+
+    static async getSheetTabs(spreadsheetId) {
+        await GoogleSheetsAuth.checkAuth();
+        const response = await gapi.client.sheets.spreadsheets.get({
+            spreadsheetId
+        });
+        
+        return response.result.sheets.map(sheet => sheet.properties.title);
+    }
 }

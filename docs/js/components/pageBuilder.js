@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, TabManager } from '../index.js';
+import { GoogleSheetsAuth } from '../index.js';
 import { navigationItems } from '../app.js';
 
 export class PageBuilder {
@@ -30,11 +30,6 @@ export class PageBuilder {
     static async buildPage(html) {
         const contentDiv = document.getElementById('content');
         contentDiv.innerHTML = html;
-
-        // Initialize TabManager if page contains tabs
-        if (contentDiv.querySelector('.tabs')) {
-            TabManager.init();
-        }
 
         // Handle scripts in the loaded content
         const scripts = contentDiv.querySelectorAll('script');

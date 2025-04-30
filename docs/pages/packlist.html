@@ -1,19 +1,27 @@
-<div>
-    <!-- Tab Navigation -->
-    <div class="tabs">
-        <button class="hamburger-menu"><span></span><span></span><span></span></button>
-        <button class="tab-button active" data-tab="filters">
-            Filters
-        </button>
-        <button class="new-tab-button">+</button>
-    </div>
-
-    <!-- Tab Content -->
-    <div class="tab-container">
-        <div id="filters" class="tab-content active">
-            <div id="formContainer">
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-            </div>
-        </div>
-    </div>
+<div id="tabSystem">
 </div>
+<script type="module">
+    import { TabManager, GoogleSheetsService } from './js/index.js';
+    
+    const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
+
+    async function initializeTabs() {
+        TabManager.addTabNavigation('tabSystem', true);
+        
+        try {
+            const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_ID);
+            for (const tabName of sheetTabs) {
+                TabManager.addNewTab(tabName, `Content for ${tabName}`, false);
+            }
+        } catch (error) {
+            console.error('Error loading sheet tabs:', error);
+            TabManager.addNewTab('Error', 'Failed to load spreadsheet tabs', false);
+        }
+    }
+
+    initializeTabs();
+
+    document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {
+        TabManager.addNewTab('New Tab', 'new-tab-content', true);
+    });
+</script>

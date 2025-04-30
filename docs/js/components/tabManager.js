@@ -29,9 +29,6 @@ export class TabManager {
                 const tabName = target.parentElement.getAttribute('data-tab');
                 if (tabName) this.closeTab(target, tabName);
             }
-            else if (target.matches('.new-tab-button')) {
-                this.addNewTab();
-            }
             else if (target.matches('.hamburger-menu, .hamburger-menu span')) {
                 const menuButton = target.closest('.hamburger-menu');
                 if (menuButton) {
@@ -104,25 +101,44 @@ export class TabManager {
         this.checkOverflow();
     }
     
-    static addNewTab() {
+    static addNewTab(tabTitle, content, allowClose = true) {
         const tabName = `tab${this.tabCounter++}`;
         const newTabButton = document.querySelector('.new-tab-button');
         
         const tabButton = document.createElement('button');
         tabButton.className = 'tab-button';
         tabButton.setAttribute('data-tab', tabName);
-        tabButton.innerHTML = `New Tab <span class="tab-close">×</span>`;
+        tabButton.innerHTML = `${tabTitle}${allowClose ? ' <span class="tab-close">×</span>' : ''}`;
         
         newTabButton.parentNode.insertBefore(tabButton, newTabButton);
         
         const tabContent = document.createElement('div');
         tabContent.id = tabName;
         tabContent.className = 'tab-content';
-        tabContent.innerHTML = '<div>New tab content</div>';
+        tabContent.innerHTML = content;
         document.querySelector('.tab-container').appendChild(tabContent);
         
         this.checkOverflow(true);
 
         this.openTab(tabButton, tabName, false);
+        
+        return { tabName, tabButton, tabContent };
+    }
+
+    static addTabNavigation(elementId, allowNewTabs = true) {
+        const container = document.getElementById(elementId);
+        if (!container) return null;
+        
+        const structure = `
+            <div class="tabs">
+                <button class="hamburger-menu"><span></span><span></span><span></span></button>
+                ${allowNewTabs ? '<button class="new-tab-button">+</button>' : ''}
+            </div>
+            <div class="tab-container"></div>
+        `;
+        
+        container.innerHTML = structure;
+        this.init();
+        return container;
     }
 }
