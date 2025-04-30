@@ -190,13 +190,13 @@ button:hover,
     max-width: 500px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     border-radius: 4px;
-    padding: 20px;
     overflow: hidden;
 }
 .modal-content button.tab-button {
-    border-radius: none;
+    border-radius: 0;
     width: 100%;
     max-width: none;
+    margin:0;
 }
 .modal-content:has(.modal-header) {
     padding-top: 0px;

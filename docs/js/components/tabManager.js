@@ -101,8 +101,19 @@ export class TabManager {
         this.checkOverflow();
     }
     
-    static addNewTab(tabTitle, content, allowClose = true) {
-        const tabName = `tab${this.tabCounter++}`;
+    static addNewTab(tabTitle, content, allowClose = true, tabName = null) {
+        // Remember: if multiple tab navigations are in one dom, passing tab names into this function may yeild unexpected results.
+        if (!tabName) {
+            tabName = `tab${this.tabCounter++}`;
+        } else {
+            // Check if the tab already exists
+            const existingTab = document.getElementById(tabTitle);
+            if (existingTab) {
+                this.openTab(existingTab, tabTitle, false);
+                return;
+            }
+        }
+        
         const newTabButton = document.querySelector('.new-tab-button');
         
         const tabButton = document.createElement('button');
