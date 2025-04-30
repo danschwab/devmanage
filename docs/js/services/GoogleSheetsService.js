@@ -1,20 +1,31 @@
-import { GoogleSheetsAuth } from '../index.js';
+import { GoogleSheetsAuth, buildTable } from '../index.js';
 
 export class GoogleSheetsService {
     
-    static async getSheetContent(spreadsheetId, tabName) {
-        await GoogleSheetsAuth.checkAuth();
+    static async getPackListContent(spreadsheetId, tabName) {
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId,
-            ranges: [tabName],
+            ranges: [`${tabName}`],
             includeGridData: true
         });
-        return response.result.sheets[0].data[0].rowData[0].values
-            .map(cell => cell.formattedValue)
-            .filter(value => value);
+        const sheetData = response.result.sheets[0].data[0].rowData;
+        // Extract the header row: row 3.
+        const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
+        // The sheet data exists between the header row and the last row.
+        const dataRows = sheetData.slice(3).map(row => {
+            return row.values.map(cell => cell.formattedValue);
+        });
+        // Use buildTable to generate the dom content to return.
+        const headerRowFiltered = headerRow.filter((header, index) => {
+            return header !== 'Pack' && header !== 'Check';
+        });
+        const table = buildTable(dataRows, headerRow, headerRowFiltered, []);
+
+        return table
     }
     
     
+
     
     static async getSheetData(spreadsheetId, range) {
         await GoogleSheetsAuth.checkAuth();
@@ -25,11 +36,11 @@ export class GoogleSheetsService {
         return response.result.values;
     }
 
-    static async getTableHeaders(spreadsheetId, tabName) {
+    static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
         await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId,
-            ranges: [`${tabName}!1:1`],
+            ranges: [`${tabName}!${headerRow}:${headerRow}`],
             includeGridData: true
         });
         
