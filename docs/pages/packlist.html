@@ -67,11 +67,10 @@ EXAMPLE OF A MODAL
                     tabButton.textContent = tabName;
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', () => {
-                        const tabBody = '';
                         // Get the content of the tab from the Google Sheets API
-                        GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName).then((tabBody) => {
+                        GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName).then((tabElement) => {
                             // Add the new tab with the content
-                            TabManager.addNewTab(tabName, tabBody, true, tabName);
+                            TabManager.addNewTab(tabName, tabElement.outerHTML, true, tabName);
 
                         }).catch((error) => {
                             console.error('Error loading sheet content:', error);
