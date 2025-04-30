@@ -106,6 +106,8 @@ export class TabManager {
         if (!tabName) {
             tabName = `tab${this.tabCounter++}`;
         } else {
+            // Ensure the tab name is a valid id string
+            tabName = tabName.replace(/[^a-zA-Z0-9-_]/g, '_');
             // Check if the tab already exists
             const existingTab = document.getElementById(tabName);
             if (existingTab) {
