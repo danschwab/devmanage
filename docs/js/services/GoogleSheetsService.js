@@ -1,6 +1,21 @@
 import { GoogleSheetsAuth } from '../index.js';
 
 export class GoogleSheetsService {
+    
+    static async getSheetContent(spreadsheetId, tabName) {
+        await GoogleSheetsAuth.checkAuth();
+        const response = await gapi.client.sheets.spreadsheets.get({
+            spreadsheetId,
+            ranges: [tabName],
+            includeGridData: true
+        });
+        return response.result.sheets[0].data[0].rowData[0].values
+            .map(cell => cell.formattedValue)
+            .filter(value => value);
+    }
+    
+    
+    
     static async getSheetData(spreadsheetId, range) {
         await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.values.get({

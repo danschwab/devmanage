@@ -67,7 +67,19 @@ EXAMPLE OF A MODAL
                     tabButton.textContent = tabName;
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', () => {
-                        TabManager.addNewTab(tabName, `Content for ${tabName}`, true, tabName);
+                        const tabBody = '';
+                        // Get the content of the tab from the Google Sheets API
+                        GoogleSheetsService.getSheetContent(SPREADSHEET_ID, tabName).then((tabBody) => {
+                            // Add the new tab with the content
+                            TabManager.addNewTab(tabName, tabBody, true, tabName);
+                            
+                        }).catch((error) => {
+                            console.error('Error loading sheet content:', error);
+                            const errorMessage = document.createElement('p');
+                            errorMessage.textContent = 'Failed to load spreadsheet content';
+                            TabManager.addNewTab(tabName, errorMessage, true, tabName);
+                        });
+                        
                         modal.remove();
                     });
                 }
