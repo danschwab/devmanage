@@ -179,18 +179,25 @@ button:hover,
     overflow: auto; /* Enable scroll if needed */
     background-color: rgb(0,0,0); /* Fallback color */
     background: linear-gradient(to bottom, #156accaa, #2baaff);
+    overflow: auto;
 }
 .modal-content {
     background-color: #fefefe;
     margin: 15% auto; /* 15% from the top and centered */
-    padding: 20px;
     border: 1px solid #888;
-    width: 80%; /* Could be more or less, depending on screen size */
+    width: 50%; /* Could be more or less, depending on screen size */
+    min-width: 300px;
+    max-width: 500px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     border-radius: 4px;
     padding: 20px;
+    overflow: hidden;
 }
-
+.modal-content button.tab-button {
+    border-radius: none;
+    width: 100%;
+    max-width: none;
+}
 .modal-content:has(.modal-header) {
     padding-top: 0px;
 }
@@ -200,10 +207,10 @@ button:hover,
     /*border-bottom: 1px solid #dee2e6;*/
     margin-bottom: 5px;
     justify-content: space-between;
-    padding: 5px 0;
+    padding: 5px;
 }
 .modal-close {
-    transform: translateX(80%);
+    /*transform: translateX(80%);*/
     width: 16px;
     height: 16px;
     line-height: 18px;

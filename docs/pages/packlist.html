@@ -56,12 +56,24 @@ EXAMPLE OF A MODAL
         try {
             const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_ID).then((sheetTabs) => {
                 for (const tabName of sheetTabs) {
+                    // if the tab name is TEMPLATE then skip it
+                    if (tabName === 'TEMPLATE') continue;
+                    
                     const tabButton = document.createElement('button');
                     tabButton.classList.add('tab-button');
                     tabButton.textContent = tabName;
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', () => {
-                        TabManager.addNewTab(tabName, `Content for ${tabName}`, true);
+                        const existingTab = document.querySelector(`.tab[data-tab-name="${tabName}"]`);
+                        if (existingTab) {
+                            // if a tab already exists in the document, then instead of creating a new one, activate the open tab
+                            TabManager.activateTab(existingTab);
+                            modal.remove();
+                            return;
+                        } else {
+                            // Create a new tab if it doesn't exist
+                            TabManager.addNewTab(tabName, `Content for ${tabName}`, true);
+                        }
                         modal.remove();
                     });
                 }
