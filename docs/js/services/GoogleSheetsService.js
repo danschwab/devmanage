@@ -82,10 +82,15 @@ export class GoogleSheetsService {
 
     static async getSheetTabs(spreadsheetId) {
         await GoogleSheetsAuth.checkAuth();
-        const response = await gapi.client.sheets.spreadsheets.get({
-            spreadsheetId
-        });
-        
-        return response.result.sheets.map(sheet => sheet.properties.title);
+        try {
+            const response = await gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                includeGridData: false
+            });
+            return response.result.sheets.map(sheet => sheet.properties.title);
+        } catch (error) {
+            console.error('Error fetching sheet tabs:', error);
+            throw error;
+        }
     }
 }
