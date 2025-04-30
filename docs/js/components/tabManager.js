@@ -107,9 +107,9 @@ export class TabManager {
             tabName = `tab${this.tabCounter++}`;
         } else {
             // Check if the tab already exists
-            const existingTab = document.getElementById(tabTitle);
+            const existingTab = document.getElementById(tabName);
             if (existingTab) {
-                this.openTab(existingTab, tabTitle, false);
+                this.openTab(existingTab, tabName, false);
                 return;
             }
         }
