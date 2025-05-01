@@ -27,9 +27,27 @@ export class PageBuilder {
     }
     
     
-    static async buildPage(html) {
-        const contentDiv = document.getElementById('content');
-        contentDiv.innerHTML = html;
+    static async buildPage(content, contentDiv = null, overwrite = true) {
+        // if no contentDiv passed, assume the primary page content div
+        if (!contentDiv) contentDiv = document.getElementById('content');
+
+        if (content instanceof HTMLElement) {
+            // if content is a dom element add as a child to the tab content div.
+            if (overwrite) contentDiv.innerHTML = ''; // Clear existing content
+            contentDiv.appendChild(content);            
+        } else if (typeof content == 'string') {
+            if (!overwrite) {
+                // if not overwriting, append the new content to the existing content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = content;
+                contentDiv.appendChild(tempDiv);
+            } else {
+                contentDiv.innerHTML = content;
+            }
+        } else {
+            console.error('Content must be a string or a DOM element');
+            return null;
+        }
 
         // Handle scripts in the loaded content
         const scripts = contentDiv.querySelectorAll('script');
