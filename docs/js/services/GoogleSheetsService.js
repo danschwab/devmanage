@@ -19,13 +19,7 @@ export class GoogleSheetsService {
             return row.values.map(cell => cell.formattedValue);
         });
         // Use buildTable to generate the dom content to return.
-        const headerRowFiltered = headerRow.filter((header) => {
-            return header !== 'Pack' && header !== 'Check';
-        });
-        console.log('headerRowFiltered', headerRowFiltered);
-        console.log('dataRows', dataRows);
-        console.log('headerRow', headerRow);
-        const table = buildTable(dataRows, headerRow, headerRowFiltered, []);
+        const table = buildTable(dataRows, headerRow, ["Pack","Check"], []);
 
         return table
     }

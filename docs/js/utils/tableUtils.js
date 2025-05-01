@@ -1,12 +1,11 @@
-export function buildTable(data, headers, showColumns = [], editColumns = []) {
+export function buildTable(data, headers, hideColumns = [], editColumns = []) {
     const tableData = data.data || data;
     const table = document.createElement('table');
 
-    // Filter headers based on showColumns (show all if showColumns is empty)
-    const validHeaders = headers.filter((header, index) => 
-        header && (showColumns.length === 0 || showColumns.includes(index))
-    );
-
+    // Filter out empty headers and hidden columns
+    const validHeaders = headers.filter((header, index) => header && !hideColumns.includes(index));
+    const visibleIndexes = headers.map((_, index) => !hideColumns.includes(index));
+    
     // Create header row
     if (validHeaders.length > 0) {
         const thead = document.createElement('thead');
@@ -23,16 +22,13 @@ export function buildTable(data, headers, showColumns = [], editColumns = []) {
     // Create data rows
     const tbody = document.createElement('tbody');
     if (Array.isArray(tableData) && tableData.length > 0) {
-        const numColumns = validHeaders.length || Math.max(...tableData.map(row => row.length));
-        tableData.forEach((row, rowIndex) => {
+        tableData.forEach(row => {
             if (!Array.isArray(row)) return;
             const tr = document.createElement('tr');
-            
-            // Iterate through all possible columns
-            for (let colIndex = 0; colIndex < numColumns; colIndex++) {
-                if (showColumns.length === 0 || showColumns.includes(colIndex)) {
+            // Only create cells for visible columns
+            row.forEach((cell, index) => {
+                if (!hideColumns.includes(index)) {
                     const td = document.createElement('td');
-                    const cell = row[colIndex];
                     if (editColumns.includes(colIndex)) {
                         const input = document.createElement('input');
                         input.type = 'text';
@@ -53,7 +49,7 @@ export function buildTable(data, headers, showColumns = [], editColumns = []) {
                     }
                     tr.appendChild(td);
                 }
-            }
+            });
             tbody.appendChild(tr);
         });
     } else {
