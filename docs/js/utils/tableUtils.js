@@ -26,8 +26,8 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
             if (!Array.isArray(row)) return;
             const tr = document.createElement('tr');
             // Only create cells for visible columns
-            row.forEach((cell, index) => {
-                if (!hideColumns.includes(index)) {
+            row.forEach((cell, colIndex) => {
+                if (!hideColumns.includes(colIndex)) {
                     const td = document.createElement('td');
                     if (editColumns.includes(colIndex)) {
                         const input = document.createElement('input');
