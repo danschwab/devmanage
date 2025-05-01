@@ -3,6 +3,9 @@ import { GoogleSheetsAuth, buildTable } from '../index.js';
 export class GoogleSheetsService {
     
     static async getPackListContent(spreadsheetId, tabName) {
+
+        // THIS IS CURRENTLY RETURNING AN EMPTY TABLE WITH NO DATA. POSSIBLE CAUSES: ARE WE PASSING THE WRONG TYPE OF DATA INTO THE TABLEBUILDER?
+
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId,
             ranges: [`${tabName}`],
@@ -16,9 +19,12 @@ export class GoogleSheetsService {
             return row.values.map(cell => cell.formattedValue);
         });
         // Use buildTable to generate the dom content to return.
-        const headerRowFiltered = headerRow.filter((header, index) => {
+        const headerRowFiltered = headerRow.filter((header) => {
             return header !== 'Pack' && header !== 'Check';
         });
+        console.log('headerRowFiltered', headerRowFiltered);
+        console.log('dataRows', dataRows);
+        console.log('headerRow', headerRow);
         const table = buildTable(dataRows, headerRow, headerRowFiltered, []);
 
         return table
