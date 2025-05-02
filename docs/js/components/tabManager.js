@@ -3,8 +3,13 @@ import { PageBuilder } from '../index.js';
 export class TabManager {
     static tabCounter = 1;
     
-    static init() {
-        const tabsContainer = document.querySelector('.tabs');
+    static init(tabNavigationWrapper) {
+        // get the element if a string was passed in
+        if (typeof tabNavigationWrapper == 'string') {
+            tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
+        }
+
+        const tabsContainer = tabNavigationWrapper.querySelector('.tabs');
         if (!tabsContainer) return;
 
         // Add click handler to close menu when clicking outside
@@ -41,6 +46,7 @@ export class TabManager {
     }
     
     static checkOverflow(openMenu = false) {
+        // this may behave strangely if there is more than one tab container in the document
         const tabsContainer = document.querySelector('.tabs');
         if (!tabsContainer) return;
 
@@ -103,20 +109,19 @@ export class TabManager {
         this.checkOverflow();
     }
     
-    static addNewTab(tabTitle, content, allowClose = true, tabName = null) {
-        // Remember: if multiple tab navigations are in one dom, passing tab names into this function may yeild unexpected results.
-        
-        if (!tabName) {
-            tabName = `tab${this.tabCounter++}`;
-        } else {
+    static addNewTab(tabNavigationWrapper, tabTitle, content, allowClose = true, tabTitleIsName = false) {
+        let tabName = '';
+        if (tabTitleIsName) {
             // Ensure the tab name is a valid id string
-            tabName = tabName.replace(/[^a-zA-Z0-9-_]/g, '_');
+            tabName = tabTitle.replace(/[^a-zA-Z0-9-_]/g, '_');
             // Check if the tab already exists
             const existingTab = document.getElementById(tabName);
             if (existingTab) {
                 this.openTab(existingTab, tabName + '-button', false);
                 return;
             }
+        } else {
+            tabName = `tab${this.tabCounter++}`;
         }
         
         // add the new tab button to the tab navigation
@@ -133,8 +138,9 @@ export class TabManager {
         const tabContent = document.createElement('div');
         tabContent.id = tabName;
         tabContent.className = 'tab-content';
-        
-        PageBuilder.buildPage(content, document.querySelector('.tab-container'));
+
+        PageBuilder.buildPage(tabContent, tabNavigationWrapper);
+        PageBuilder.buildPage(content, tabContent);
         
         this.checkOverflow(true);
 
@@ -143,7 +149,7 @@ export class TabManager {
         return { tabName, tabButton, tabContent };
     }
 
-    static addTabNavigation(elementId, allowNewTabs = true) {
+    static addTabNavigation(tabNavigationWrapper, allowNewTabs = true) {
         const structure = `
         <div class="tabs">
         <button class="hamburger-menu"><span></span><span></span><span></span></button>
@@ -152,8 +158,8 @@ export class TabManager {
         <div class="tab-container"></div>
         `;
 
-        PageBuilder.buildPage(structure, elementId, false);
+        PageBuilder.buildPage(structure, tabNavigationWrapper, false);
 
-        this.init();
+        this.init(tabNavigationWrapper);
     }
 }

@@ -54,13 +54,13 @@ EXAMPLE OF A MODAL
                         // Get the content of the tab from the Google Sheets API
                         GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName).then((tabElement) => {
                             // Add the new tab with the content
-                            TabManager.addNewTab(tabName, tabElement, true, tabName);
+                            TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
 
                         }).catch((error) => {
                             console.error('Error loading sheet content:', error);
                             const errorMessage = document.createElement('p');
                             errorMessage.textContent = 'Failed to load spreadsheet content';
-                            TabManager.addNewTab(tabName, errorMessage, true, tabName);
+                            TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
                         });
                         
                         modal.remove();
