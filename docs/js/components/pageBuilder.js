@@ -61,12 +61,12 @@ export class PageBuilder {
                     } else {
                         newScript.textContent = script.textContent;
                     }
-                    document.body.appendChild(newScript);
+                    contentDiv.appendChild(newScript);
                 } else {
                     const newScript = document.createElement('script');
                     newScript.textContent = script.textContent;
-                    document.body.appendChild(newScript);
-                    document.body.removeChild(newScript);
+                    contentDiv.appendChild(newScript);
+                    contentDiv.removeChild(newScript);
                 }
             }
         } else {
