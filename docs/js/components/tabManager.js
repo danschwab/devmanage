@@ -110,6 +110,10 @@ export class TabManager {
     }
     
     static addNewTab(tabNavigationWrapper, tabTitle, content, allowClose = true, tabTitleIsName = false) {
+        if (typeof tabNavigationWrapper == 'string') {
+            tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
+        }
+        
         let tabName = '';
         if (tabTitleIsName) {
             // Ensure the tab name is a valid id string
@@ -125,7 +129,7 @@ export class TabManager {
         }
         
         // add the new tab button to the tab navigation
-        const newTabButton = document.querySelector('.new-tab-button');
+        const newTabButton = tabNavigationWrapper.querySelector('.new-tab-button');
         
         const tabButton = document.createElement('button');
         tabButton.className = 'tab-button';
@@ -139,7 +143,8 @@ export class TabManager {
         tabContent.id = tabName;
         tabContent.className = 'tab-content';
 
-        PageBuilder.buildPage(tabContent, tabNavigationWrapper);
+        
+        PageBuilder.buildPage(tabContent, tabNavigationWrapper.querySelector('.tab-container'), false);
         PageBuilder.buildPage(content, tabContent);
         
         this.checkOverflow(true);
