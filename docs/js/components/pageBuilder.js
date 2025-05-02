@@ -41,33 +41,35 @@ export class PageBuilder {
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = content;
                 contentDiv.appendChild(tempDiv);
+                // Set contentDiv to the new div to handle scripts
+                contentDiv = tempDiv;
             } else {
                 contentDiv.innerHTML = content;
+            }
+            // Handle scripts in the loaded content
+            const scripts = contentDiv.querySelectorAll('script');
+            for (const script of scripts) {
+                if (script.type === 'module') {
+                    const newScript = document.createElement('script');
+                    newScript.type = 'module';
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.body.appendChild(newScript);
+                } else {
+                    const newScript = document.createElement('script');
+                    newScript.textContent = script.textContent;
+                    document.body.appendChild(newScript);
+                    document.body.removeChild(newScript);
+                }
             }
         } else {
             console.error('Content must be a string or a DOM element');
             return null;
         }
 
-        // Handle scripts in the loaded content
-        const scripts = contentDiv.querySelectorAll('script');
-        for (const script of scripts) {
-            if (script.type === 'module') {
-                const newScript = document.createElement('script');
-                newScript.type = 'module';
-                if (script.src) {
-                    newScript.src = script.src;
-                } else {
-                    newScript.textContent = script.textContent;
-                }
-                document.body.appendChild(newScript);
-            } else {
-                const newScript = document.createElement('script');
-                newScript.textContent = script.textContent;
-                document.body.appendChild(newScript);
-                document.body.removeChild(newScript);
-            }
-        }
     }
 
 
