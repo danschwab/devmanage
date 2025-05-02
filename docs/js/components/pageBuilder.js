@@ -30,6 +30,10 @@ export class PageBuilder {
     static async buildPage(content, contentDiv = null, overwrite = true) {
         // if no contentDiv passed, assume the primary page content div
         if (!contentDiv) contentDiv = document.getElementById('content');
+        // allow contentDiv to be a string id value
+        if (typeof contentDiv == 'string') {
+            contentDiv = document.getElementById(contentDiv);
+        }
 
         if (content instanceof HTMLElement) {
             // if content is a dom element add as a child to the tab content div.
