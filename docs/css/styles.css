@@ -149,6 +149,7 @@ button,
     font-size: 1rem;
     line-height: 1.5;
     border-radius: 0.25rem;
+    box-shadow: 2px 2px 8px -4px rgba(5, 0, 50, .6);
     transition: background-color 0.15s ease-in-out;
 }
 #navbar button {
@@ -455,6 +456,10 @@ table {
     border-collapse: collapse;
     margin: 0; /* Remove table margins since wrapper handles spacing */
     white-space: nowrap;
+    background-color:white;
+    box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 th, td {
@@ -465,7 +470,7 @@ th, td {
 }
 
 th {
-    background-color: #f8f9fa;
+    background-color: #00000011;
     font-weight: 600;
     position: sticky;
     top: 0;
