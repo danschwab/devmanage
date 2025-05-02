@@ -54,7 +54,7 @@ EXAMPLE OF A MODAL
                         // Get the content of the tab from the Google Sheets API
                         GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName).then((tabElement) => {
                             // Add the new tab with the content
-                            TabManager.addNewTab(tabName, tabElement.outerHTML, true, tabName);
+                            TabManager.addNewTab(tabName, tabElement, true, tabName);
 
                         }).catch((error) => {
                             console.error('Error loading sheet content:', error);

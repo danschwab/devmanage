@@ -458,7 +458,7 @@ table {
     white-space: nowrap;
     background-color:white;
     box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
-    border-radius: 8px;
+    border-radius: 5px;
     overflow: hidden;
 }
 
