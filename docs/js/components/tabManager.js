@@ -155,6 +155,5 @@ export class TabManager {
         PageBuilder.buildPage(structure, elementId, false);
 
         this.init();
-        return container;
     }
 }
