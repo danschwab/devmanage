@@ -119,9 +119,9 @@ export class TabManager {
             // Ensure the tab name is a valid id string
             tabName = tabTitle.replace(/[^a-zA-Z0-9-_]/g, '_');
             // Check if the tab already exists
-            const existingTab = document.getElementById(tabName);
+            const existingTab = document.getElementById(tabName + '-button');
             if (existingTab) {
-                this.openTab(existingTab, tabName + '-button', false);
+                this.openTab(existingTab, tabName, false);
                 return;
             }
         } else {
