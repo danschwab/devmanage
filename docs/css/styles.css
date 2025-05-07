@@ -327,6 +327,7 @@ button:hover,
 
 .tab-container {
     padding: 20px 0 0 0;
+    overflow-x:auto;
     flex: 1;
     width: 100%;
     min-height: 100px;
@@ -442,7 +443,7 @@ button:hover,
 }
 
 /* Table Wrapper */
-.table-wrapper .tab-content{
+.table-wrapper{
     width: 100%;
     overflow-x: auto;
     margin-top: 1rem;
