@@ -1,6 +1,7 @@
 export function buildTable(data, headers, hideColumns = [], editColumns = []) {
     const tableData = data.data || data;
     const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
 
     // Filter out empty headers and hidden columns
     const visibleIndexes = headers
@@ -37,7 +38,6 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
         }
 
         // Create data rows
-        const tbody = document.createElement('tbody');
         if (Array.isArray(tableData) && tableData.length > 0) {
             tableData.forEach(row => {
                 if (!Array.isArray(row)) return;
