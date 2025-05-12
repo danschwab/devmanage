@@ -12,7 +12,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
         .filter(index => index !== null);
     
     // Are there any visible indexes?
-    if (visibleIndexes.length = 0) {
+    if (visibleIndexes.length === 0) {  // Fixed comparison operator from = to ===
         const tr = document.createElement('tr');
         const td = document.createElement('td');
         td.colSpan = visibleIndexes.length || 1;
@@ -39,7 +39,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
 
         // Create data rows
         if (Array.isArray(tableData) && tableData.length > 0) {
-            tableData.forEach(row => {
+            tableData.forEach((row, rowIndex) => {  // Added rowIndex parameter
                 if (!Array.isArray(row)) return;
                 const tr = document.createElement('tr');
                 // Only create cells for visible columns
