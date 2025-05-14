@@ -1,6 +1,9 @@
-export function buildTable(data, headers, hideColumns = [], editColumns = []) {
+export function buildTable(data, headers, hideColumns = [], editColumns = [], dragId = null) {
     const tableData = data.data || data;
     const table = document.createElement('table');
+    if (dragId) {
+        table.classList.add(`drag-id-${dragId}`);
+    }
     const tbody = document.createElement('tbody');
 
     // Filter out empty headers and hidden columns
@@ -20,6 +23,17 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
         if (headers.length > 0) { 
             const thead = document.createElement('thead');
             const headerRow = document.createElement('tr');
+            
+            // Only add drag handle header if dragId provided
+            if (dragId) {
+                const dragHandleTh = document.createElement('th');
+                dragHandleTh.style.padding = '0';
+                dragHandleTh.style.minWidth = '0';
+                dragHandleTh.style.border = 'none';
+                dragHandleTh.style.backgroundColor = 'transparent';
+                headerRow.appendChild(dragHandleTh);
+            }
+
             headers.forEach((header, colIndex) => {
                 if (visibleIndexes.includes(colIndex)) {
                     const th = document.createElement('th');
@@ -27,13 +41,6 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
                     headerRow.appendChild(th);
                 }
             });
-            // Add header for drag handle column
-            const dragHandleTh = document.createElement('th');
-            dragHandleTh.style.padding = '0';
-            dragHandleTh.style.minWidth = '0';
-            dragHandleTh.style.border = 'none';
-            dragHandleTh.style.backgroundColor = 'transparent';
-            headerRow.insertBefore(dragHandleTh, headerRow.firstChild);
             
             thead.appendChild(headerRow);
             table.appendChild(thead);
@@ -44,53 +51,57 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
             tableData.forEach((row, rowIndex) => {
                 if (!Array.isArray(row)) return;
                 const tr = document.createElement('tr');
-                tr.classList.add('draggable');
                 
-                // Add drag handle
-                const dragHandle = document.createElement('td');
-                dragHandle.className = 'row-drag-handle';
-                tr.appendChild(dragHandle);
-                
-                let isDragging = false;
-                let startX = 0;
-                let startY = 0;
-                let dragClone = null;
-                
-                dragHandle.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    isDragging = true;
-                    startX = e.clientX;
-                    startY = e.clientY;
+                // Only add drag functionality if dragId provided
+                if (dragId) {
+                    tr.classList.add('draggable');
                     
-                    // Create floating clone
-                    dragClone = tr.cloneNode(true);
-                    dragClone.classList.add('row-clone');
-                    dragClone.style.position = 'fixed';
-                    dragClone.style.width = `${tr.offsetWidth}px`;
-                    dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
-                    dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
-                    document.body.appendChild(dragClone);
+                    // Add drag handle
+                    const dragHandle = document.createElement('td');
+                    dragHandle.className = 'row-drag-handle';
+                    tr.appendChild(dragHandle);
                     
-                    tr.classList.add('dragging');
-                });
-                
-                document.addEventListener('mousemove', (e) => {
-                    if (!isDragging || !dragClone) return;
-                    const deltaX = e.clientX - startX;
-                    const deltaY = e.clientY - startY;
-                    dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                });
-                
-                document.addEventListener('mouseup', () => {
-                    if (!isDragging) return;
-                    isDragging = false;
-                    tr.classList.remove('dragging');
-                    if (dragClone) {
-                        dragClone.remove();
-                        dragClone = null;
-                    }
-                });
+                    let isDragging = false;
+                    let startX = 0;
+                    let startY = 0;
+                    let dragClone = null;
+                    
+                    dragHandle.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        isDragging = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        
+                        // Create floating clone
+                        dragClone = tr.cloneNode(true);
+                        dragClone.classList.add('row-clone');
+                        dragClone.style.position = 'fixed';
+                        dragClone.style.width = `${tr.offsetWidth}px`;
+                        dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
+                        dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
+                        document.body.appendChild(dragClone);
+                        
+                        tr.classList.add('dragging');
+                    });
+                    
+                    document.addEventListener('mousemove', (e) => {
+                        if (!isDragging || !dragClone) return;
+                        const deltaX = e.clientX - startX;
+                        const deltaY = e.clientY - startY;
+                        dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    });
+                    
+                    document.addEventListener('mouseup', () => {
+                        if (!isDragging) return;
+                        isDragging = false;
+                        tr.classList.remove('dragging');
+                        if (dragClone) {
+                            dragClone.remove();
+                            dragClone = null;
+                        }
+                    });
+                }
 
                 // Only create cells for visible columns
                 row.forEach((cell, colIndex) => {

@@ -41,7 +41,9 @@ export class GoogleSheetsService {
                         const itemTable = buildTable(
                             currentCrateContents,
                             headerRow.slice(itemStartIndex),
-                            ['Pack', 'Check']
+                            ['Pack', 'Check'],
+                            [],
+                            'pack-list-items'
                         );
                         itemData.appendChild(itemTable);
                     }
@@ -67,7 +69,9 @@ export class GoogleSheetsService {
                 const itemTable = buildTable(
                     currentCrateContents,
                     headerRow.slice(itemStartIndex),
-                    ['Pack', 'Check']
+                    ['Pack', 'Check'],
+                    [],
+                    'pack-list-items'
                 );
                 itemData.appendChild(itemTable);
             }
@@ -76,7 +80,7 @@ export class GoogleSheetsService {
         }
 
         // Use buildTable to generate the DOM content to return.
-        const table = buildTable(mainTableData, filteredHeaderRow);
+        const table = buildTable(mainTableData, filteredHeaderRow, [], [], 'pack-list');
 
         return table;
     }
