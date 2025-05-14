@@ -467,16 +467,19 @@ table {
     background-color: #eee;
 }
 
-tr.dragging .row-drag-handle {
-    cursor: grabbing;
-}
-
 .row-clone {
+    cursor: grabbing !important;
     pointer-events: none;
-    opacity: 0.9;
+    opacity: 0.95;
     background: white;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
     z-index: 1000;
+    max-height: 100px;
+    overflow: hidden;
+}
+.row-clone .row-drag-handle {
+    background-color: #eee;
+    color: #333;
 }
 
 tr.draggable {
@@ -485,7 +488,8 @@ tr.draggable {
 }
 
 tr.dragging {
-    opacity: .2;
+    opacity: .3;
+    background-color:#666;
 }
 
 /* Messages */

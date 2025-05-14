@@ -67,21 +67,24 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     let dragClone = null;
                     
                     const findDropTarget = (e) => {
+                        const sourceTable = tr.closest(`table.drag-id-${dragId}`);
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
-                        const targetRow = elements.find(el => 
-                            el.tagName === 'TR' && 
-                            el !== tr &&
-                            el.closest(`table.drag-id-${dragId}`)
-                        );
                         
-                        if (!targetRow) return null;
-                        
-                        const rect = targetRow.getBoundingClientRect();
-                        const midpoint = rect.top + rect.height / 2;
-                        return {
-                            row: targetRow,
-                            position: e.clientY < midpoint ? 'before' : 'after'
-                        };
+                        for (const el of elements) {
+                            if (el.tagName === 'TR') {
+                                const targetTable = el.closest(`table.drag-id-${dragId}`);
+                                // Only allow drops in the same table
+                                if (targetTable === sourceTable && el !== tr) {
+                                    const rect = el.getBoundingClientRect();
+                                    const midpoint = rect.top + rect.height / 2;
+                                    return {
+                                        row: el,
+                                        position: e.clientY < midpoint ? 'before' : 'after'
+                                    };
+                                }
+                            }
+                        }
+                        return null;
                     };
 
                     dragHandle.addEventListener('mousedown', (e) => {
