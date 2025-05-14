@@ -8,7 +8,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
         .map((header, index) => hideColumns.includes(header) ? null : index)
         .filter(index => index !== null);
     const editIndexes = headers
-        .map((header, index) => editColumns.includes(header) ? null : index)
+        .map((header, index) => editColumns.includes(header) ? index : null)
         .filter(index => index !== null);
     
     // Are there any visible indexes?
