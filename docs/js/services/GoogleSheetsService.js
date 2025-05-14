@@ -2,10 +2,8 @@ import { GoogleSheetsAuth, buildTable } from '../index.js';
 
 export class GoogleSheetsService {
     
-    static async getPackListContent(spreadsheetId, tabName) {
-
-        // THIS IS CURRENTLY RETURNING AN EMPTY TABLE WITH NO DATA. POSSIBLE CAUSES: ARE WE PASSING THE WRONG TYPE OF DATA INTO THE TABLEBUILDER?
-
+    static async getPackListContent(spreadsheetId, tabName, itemColumnsStart = "Pack") {
+        await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId,
             ranges: [`${tabName}`],
@@ -14,14 +12,30 @@ export class GoogleSheetsService {
         const sheetData = response.result.sheets[0].data[0].rowData;
         // Extract the header row: row 3.
         const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
-        // The sheet data exists between the header row and the last row.
+        // Find the index of the itemColumnsStart header.
+        const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
+        if (itemStartIndex === -1) {
+            throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
+        }
+        // Extract only the columns to the left of itemColumnsStart.
+        const filteredHeaderRow = headerRow.slice(0, itemStartIndex);
         const dataRows = sheetData.slice(3).map(row => {
-            return row.values.map(cell => cell.formattedValue);
+            return row.values.slice(0, itemStartIndex).map(cell => cell.formattedValue);
+        });
+        // Filter out empty rows
+        const filteredDataRows = dataRows.filter(row => row.some(cell => cell));
+        // Add a single column to the end called "Items" for the item data. Add a special flag to the data rows to indicate that this is the item data.
+        filteredHeaderRow.push("Items");
+        filteredDataRows.forEach(row => {
+            // Item data div added into the last column of the row.
+            const itemData = document.createElement('div');
+            itemData.classList.add('pack-list-item-data');
+            row.push(itemData);
         });
         // Use buildTable to generate the dom content to return.
-        const table = buildTable(dataRows, headerRow, ["Pack","Check"], []);
-
-        return table
+        const table = buildTable(filteredDataRows, filteredHeaderRow);
+        
+        return table;
     }
     
     
