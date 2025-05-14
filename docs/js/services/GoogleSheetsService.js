@@ -36,11 +36,12 @@ export class GoogleSheetsService {
                 // If we encounter a new crate row, finalize the previous crate row.
                 if (currentCrateRow) {
                     const itemData = document.createElement('div');
-                    itemData.classList.add('pack-list-item-data');
+                    itemData.classList.add('table-wrapper');
                     if (currentCrateContents.length > 0) {
                         const itemTable = buildTable(
                             currentCrateContents,
-                            [headerRow.slice(itemStartIndex)]
+                            headerRow.slice(itemStartIndex),
+                            ['Pack', 'Check']
                         );
                         itemData.appendChild(itemTable);
                     }
@@ -61,11 +62,12 @@ export class GoogleSheetsService {
         // Finalize the last crate row if it exists.
         if (currentCrateRow) {
             const itemData = document.createElement('div');
-            itemData.classList.add('pack-list-item-data');
+            itemData.classList.add('table-wrapper');
             if (currentCrateContents.length > 0) {
                 const itemTable = buildTable(
                     currentCrateContents,
-                    [headerRow.slice(itemStartIndex)]
+                    headerRow.slice(itemStartIndex),
+                    ['Pack', 'Check']
                 );
                 itemData.appendChild(itemTable);
             }

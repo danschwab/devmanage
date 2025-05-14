@@ -446,10 +446,13 @@ button:hover,
 .table-wrapper{
     width: 100%;
     overflow-x: auto;
-    margin-top: 1rem;
-    border-radius: 0.25rem;
+    /*margin-top: 1rem;*/
+    /*border-radius: 0.25rem;*/
     /*box-shadow: 0 0 0 1px #dee2e6;*/
     box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
+}
+td:has(.table-wrapper) {
+    padding: 0;
 }
 
 /* Table Styling */
