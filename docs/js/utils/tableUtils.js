@@ -27,6 +27,11 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
                     headerRow.appendChild(th);
                 }
             });
+            // Add header for drag handle column
+            const dragHandleTh = document.createElement('th');
+            dragHandleTh.style.width = '20px';
+            headerRow.insertBefore(dragHandleTh, headerRow.firstChild);
+            
             thead.appendChild(headerRow);
             table.appendChild(thead);
         }
@@ -36,23 +41,22 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
             tableData.forEach((row, rowIndex) => {
                 if (!Array.isArray(row)) return;
                 const tr = document.createElement('tr');
-                tr.draggable = true;
                 tr.classList.add('draggable');
+                
+                // Add drag handle
+                const dragHandle = document.createElement('td');
+                dragHandle.className = 'row-drag-handle';
+                tr.appendChild(dragHandle);
                 
                 let isDragging = false;
                 let startY = 0;
-                let startScroll = 0;
                 
-                tr.addEventListener('mousedown', (e) => {
-                    e.preventDefault();  // Prevent default drag behavior
+                dragHandle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     isDragging = true;
                     startY = e.clientY;
-                    startScroll = tbody.scrollTop;
                     tr.classList.add('dragging');
-                });
-
-                tr.addEventListener('dragstart', (e) => {
-                    e.preventDefault();  // Prevent Chrome's drag ghost image
                 });
                 
                 document.addEventListener('mousemove', (e) => {
