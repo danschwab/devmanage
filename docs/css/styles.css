@@ -63,22 +63,40 @@ nav a:hover {
     }
 }
 
+/* Table Styling */
 table {
-    margin: 20px auto;
+    width: 100%;
     border-collapse: collapse;
-    min-width: 80%;
+    margin: 0;
+    background-color: white;
+    overflow: hidden;
+}
+
+tr {
+    transition: background-color 0.3s ease;
+}
+tr:hover {
+    background-color: #ffe;
+}
+thead tr:hover {
+    background-color: transparent;
 }
 
 th, td {
-    border: 1px solid black;
-    padding: 8px;
-    min-width: 100px;
-    min-height: 30px;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
     text-align: left;
+    vertical-align: top;
+    min-width: 30px;
+    min-height: 30px;
+    max-width: 300px; /* Set maximum width for cells */
+    white-space: normal; /* Allow text wrapping */
+    word-wrap: break-word; /* Break long words if needed */
 }
 
 th {
-    background-color: #f2f2f2;
+    background-color: #a5a5a5;
+    color: #fff;
 }
 
 /* Form Layout */
@@ -459,11 +477,8 @@ td:has(.table-wrapper) {
 table {
     width: 100%;
     border-collapse: collapse;
-    margin: 0; /* Remove table margins since wrapper handles spacing */
-    white-space: nowrap;
-    background-color:white;
-    /*box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
-    border-radius: 5px;*/
+    margin: 0;
+    background-color: white;
     overflow: hidden;
 }
 
@@ -471,7 +486,9 @@ th, td {
     padding: 0.5rem;
     border: 1px solid #dee2e6;
     text-align: left;
-    /*min-width: 100px; /* Ensure minimal column width */
+    max-width: 300px; /* Set maximum width for cells */
+    white-space: normal; /* Allow text wrapping */
+    word-wrap: break-word; /* Break long words if needed */
 }
 
 th {
@@ -493,6 +510,21 @@ th {
     padding: 1rem;
     color: hsl(0, 100%, 35%);
     font-style: italic;
+}
+
+/* Draggable Table Rows */
+tr.draggable {
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+tr.dragging {
+    cursor: grabbing;
+    position: relative;
+    z-index: 1000;
+    background-color: #f8f8f8;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 @media (max-width: 600px) {

@@ -33,9 +33,36 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
 
         // Create data rows
         if (Array.isArray(tableData) && tableData.length > 0) {
-            tableData.forEach((row, rowIndex) => {  // Added rowIndex parameter
+            tableData.forEach((row, rowIndex) => {
                 if (!Array.isArray(row)) return;
                 const tr = document.createElement('tr');
+                tr.draggable = true;
+                tr.classList.add('draggable');
+                
+                let isDragging = false;
+                let startY = 0;
+                let startScroll = 0;
+                
+                tr.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startY = e.clientY;
+                    startScroll = tbody.scrollTop;
+                    tr.classList.add('dragging');
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const deltaY = e.clientY - startY;
+                    tr.style.transform = `translateY(${deltaY}px)`;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    tr.classList.remove('dragging');
+                    tr.style.transform = '';
+                });
+
                 // Only create cells for visible columns
                 row.forEach((cell, colIndex) => {
                     if (visibleIndexes.includes(colIndex)) {
