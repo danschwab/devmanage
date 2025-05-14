@@ -69,22 +69,41 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     const findDropTarget = (e) => {
                         const sourceTable = tr.closest(`table.drag-id-${dragId}`);
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                        console.log('Elements under cursor:', elements.map(el => `${el.tagName}${el.className ? '.' + el.className : ''}`));
                         
+                        // First check if we're near a tbody
+                        const tbody = elements.find(el => el.tagName === 'TBODY' && el.closest(`table.drag-id-${dragId}`));
+                        if (tbody && (!tbody.children.length || e.clientY > tbody.lastElementChild?.getBoundingClientRect().bottom)) {
+                            return { row: tbody.lastElementChild || tbody, position: 'after' };
+                        }
+
+                        // Then check individual rows
                         for (const el of elements) {
-                            if (el.tagName == 'TR' && el !== tr) {
-                                const targetTable = el.closest(`table.drag-id-${dragId}`);
-                                if (targetTable && targetTable.classList.contains(`drag-id-${dragId}`)) {
-                                    const rect = el.getBoundingClientRect();
+                            const elementTable = el.closest(`table.drag-id-${dragId}`);
+                            if (!elementTable) continue;
+                            
+                            if (el.tagName === 'TR' && el !== tr) {
+                                const rect = el.getBoundingClientRect();
+                                const midpoint = rect.top + rect.height / 2;
+                                console.log('Found TR:', el, 'midpoint:', midpoint, 'mouseY:', e.clientY);
+                                return {
+                                    row: el,
+                                    position: e.clientY >= midpoint ? 'after' : 'before'
+                                };
+                            }
+                            // Also check TD elements as they might be what we're actually hovering
+                            if (el.tagName === 'TD') {
+                                const parentRow = el.closest('tr');
+                                if (parentRow && parentRow !== tr) {
+                                    const rect = parentRow.getBoundingClientRect();
                                     const midpoint = rect.top + rect.height / 2;
-                                    console.log('Found drop target:', el, 'Position:', e.clientY >= midpoint ? 'after' : 'before');
                                     return {
-                                        row: el,
+                                        row: parentRow,
                                         position: e.clientY >= midpoint ? 'after' : 'before'
                                     };
                                 }
                             }
                         }
-                        console.log('No valid drop target found');
                         return null;
                     };
 
@@ -101,7 +120,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.style.position = 'fixed';
                         dragClone.style.width = `${tr.offsetWidth}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
-                        dragClone.style.top = `${e.clientY - dragClone.offsetHeight/2}px`;
+                        dragClone.style.top = `${e.clientY - dragClone.height/2}px`;
                         document.body.appendChild(dragClone);
                         
                         tr.classList.add('dragging');

@@ -485,7 +485,7 @@ table {
 
 tr.draggable {
     user-select: none;
-    transition: transform 0.05s, box-shadow 0.1s;
+    transition: transform 0.1s, box-shadow 0.1s;
 }
 
 tr.dragging {
