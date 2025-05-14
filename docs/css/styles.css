@@ -412,7 +412,7 @@ button:hover,
     box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
 }
 td:has(.table-wrapper) {
-    padding: 0;
+    padding: 3px 3px 8px 8px;
 }
 
 th, td {
@@ -428,9 +428,9 @@ th, td {
 }
 
 th {
-    background-color: #7a7a7a;
+    background-color: #aaa;
     color: #fff;
-    font-weight: 600;
+    font-weight: 400;
     position: sticky;
     top: 0;
     z-index: 1;
@@ -486,10 +486,7 @@ tr.draggable {
 }
 
 tr.dragging {
-    position: relative;
-    z-index: 1000;
-    background-color: #f8f8f8;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    opacity: .2;
 }
 
 /* Messages */
