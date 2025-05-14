@@ -13,13 +13,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
     
     // Are there any visible indexes?
     if (visibleIndexes.length === 0) {  // Fixed comparison operator from = to ===
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = visibleIndexes.length || 1;
-        td.textContent = 'No columns visible';
-        td.style.textAlign = 'center';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
+        return formatError('<div class="error-message">No columns visible</div>');
     } else {
 
         // Create header row
@@ -46,23 +40,27 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
                 row.forEach((cell, colIndex) => {
                     if (visibleIndexes.includes(colIndex)) {
                         const td = document.createElement('td');
-                        if (editIndexes.includes(colIndex)) {
-                            const input = document.createElement('input');
-                            input.type = 'text';
-                            input.value = cell || '';
-                            input.dataset.originalValue = cell || '';
-                            input.dataset.rowIndex = rowIndex;
-                            input.dataset.colIndex = colIndex;
-                            input.dataset.dirty = 'false';
-                            
-                            input.addEventListener('input', (e) => {
-                                const target = e.target;
-                                target.dataset.dirty = (target.value !== target.dataset.originalValue).toString();
-                            });
-                            
-                            td.appendChild(input);
+                        if (cell instanceof HTMLElement) {
+                            td.appendChild(cell);
                         } else {
-                            td.textContent = cell || '';
+                            if (editIndexes.includes(colIndex)) {
+                                const input = document.createElement('input');
+                                input.type = 'text';
+                                input.value = cell || '';
+                                input.dataset.originalValue = cell || '';
+                                input.dataset.rowIndex = rowIndex;
+                                input.dataset.colIndex = colIndex;
+                                input.dataset.dirty = 'false';
+                                
+                                input.addEventListener('input', (e) => {
+                                    const target = e.target;
+                                    target.dataset.dirty = (target.value !== target.dataset.originalValue).toString();
+                                });
+                                
+                                td.appendChild(input);
+                            } else {
+                                td.textContent = cell || '';
+                            }
                         }
                         tr.appendChild(td);
                     }
@@ -70,13 +68,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
                 tbody.appendChild(tr);
             });
         } else {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = visibleIndexes.length || 1;
-            td.textContent = 'No data available';
-            td.style.textAlign = 'center';
-            tr.appendChild(td);
-            tbody.appendChild(tr);
+            return formatError('<div class="error-message">No data available</div>');
         }
     }
     table.appendChild(tbody);
