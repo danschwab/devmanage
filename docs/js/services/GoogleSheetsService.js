@@ -19,22 +19,63 @@ export class GoogleSheetsService {
         }
         // Extract only the columns to the left of itemColumnsStart.
         const filteredHeaderRow = headerRow.slice(0, itemStartIndex);
-        const dataRows = sheetData.slice(3).map(row => {
-            return row.values.slice(0, itemStartIndex).map(cell => cell.formattedValue);
-        });
-        // Filter out empty rows
-        const filteredDataRows = dataRows.filter(row => row.some(cell => cell));
-        // Add a single column to the end called "Items" for the item data. Add a special flag to the data rows to indicate that this is the item data.
         filteredHeaderRow.push("Items");
-        filteredDataRows.forEach(row => {
-            // Item data div added into the last column of the row.
+
+        const mainTableData = [];
+        let currentCrateRow = null;
+        let currentCrateContents = [];
+
+        // Iterate through rows starting from row 4 (index 3).
+        for (let i = 3; i < sheetData.length; i++) {
+            const row = sheetData[i];
+            const rowValues = row.values.map(cell => cell?.formattedValue || null);
+            const crateInfo = rowValues.slice(0, itemStartIndex);
+            const crateContents = rowValues.slice(itemStartIndex);
+
+            if (crateInfo.some(cell => cell)) {
+                // If we encounter a new crate row, finalize the previous crate row.
+                if (currentCrateRow) {
+                    const itemData = document.createElement('div');
+                    itemData.classList.add('pack-list-item-data');
+                    if (currentCrateContents.length > 0) {
+                        const itemTable = buildTable(
+                            currentCrateContents,
+                            [headerRow.slice(itemStartIndex)]
+                        );
+                        itemData.appendChild(itemTable);
+                    }
+                    currentCrateRow.push(itemData);
+                    mainTableData.push(currentCrateRow);
+                }
+                // Start a new crate row.
+                currentCrateRow = [...crateInfo];
+                currentCrateContents = [];
+            }
+
+            // Add crate contents if any.
+            if (crateContents.some(cell => cell)) {
+                currentCrateContents.push(crateContents);
+            }
+        }
+
+        // Finalize the last crate row if it exists.
+        if (currentCrateRow) {
             const itemData = document.createElement('div');
             itemData.classList.add('pack-list-item-data');
-            row.push(itemData);
-        });
-        // Use buildTable to generate the dom content to return.
-        const table = buildTable(filteredDataRows, filteredHeaderRow);
-        
+            if (currentCrateContents.length > 0) {
+                const itemTable = buildTable(
+                    currentCrateContents,
+                    [headerRow.slice(itemStartIndex)]
+                );
+                itemData.appendChild(itemTable);
+            }
+            currentCrateRow.push(itemData);
+            mainTableData.push(currentCrateRow);
+        }
+
+        // Use buildTable to generate the DOM content to return.
+        const table = buildTable(mainTableData, filteredHeaderRow);
+
         return table;
     }
     
