@@ -66,6 +66,24 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     let startY = 0;
                     let dragClone = null;
                     
+                    const findDropTarget = (e) => {
+                        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                        const targetRow = elements.find(el => 
+                            el.tagName === 'TR' && 
+                            el !== tr &&
+                            el.closest(`table.drag-id-${dragId}`)
+                        );
+                        
+                        if (!targetRow) return null;
+                        
+                        const rect = targetRow.getBoundingClientRect();
+                        const midpoint = rect.top + rect.height / 2;
+                        return {
+                            row: targetRow,
+                            position: e.clientY < midpoint ? 'before' : 'after'
+                        };
+                    };
+
                     dragHandle.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -90,6 +108,16 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         const deltaX = e.clientX - startX;
                         const deltaY = e.clientY - startY;
                         dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                        
+                        const dropTarget = findDropTarget(e);
+                        if (dropTarget) {
+                            const { row, position } = dropTarget;
+                            if (position === 'before') {
+                                row.parentNode.insertBefore(tr, row);
+                            } else {
+                                row.parentNode.insertBefore(tr, row.nextSibling);
+                            }
+                        }
                     });
                     
                     document.addEventListener('mouseup', () => {
