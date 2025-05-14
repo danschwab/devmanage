@@ -63,42 +63,6 @@ nav a:hover {
     }
 }
 
-/* Table Styling */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0;
-    background-color: white;
-    overflow: hidden;
-}
-
-tr {
-    transition: background-color 0.3s ease;
-}
-tr:hover {
-    background-color: #ffe;
-}
-thead tr:hover {
-    background-color: transparent;
-}
-
-th, td {
-    padding: 0.5rem;
-    border: 1px solid #dee2e6;
-    text-align: left;
-    vertical-align: top;
-    min-width: 30px;
-    min-height: 30px;
-    max-width: 300px; /* Set maximum width for cells */
-    white-space: normal; /* Allow text wrapping */
-    word-wrap: break-word; /* Break long words if needed */
-}
-
-th {
-    background-color: #a5a5a5;
-    color: #fff;
-}
-
 /* Form Layout */
 .submission-form {
     display: flex;
@@ -460,7 +424,9 @@ button:hover,
     width: 100%;
 }
 
-/* Table Wrapper */
+
+/* Table Styling */
+
 .table-wrapper{
     width: 100%;
     overflow-x: auto;
@@ -473,7 +439,36 @@ td:has(.table-wrapper) {
     padding: 0;
 }
 
-/* Table Styling */
+th, td {
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    text-align: left;
+    vertical-align: top;
+    min-width: 30px;
+    min-height: 30px;
+    max-width: 300px; /* Set maximum width for cells */
+    white-space: normal; /* Allow text wrapping */
+    word-wrap: break-word; /* Break long words if needed */
+}
+
+th {
+    background-color: #57575711;
+    color: #fff;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+tr {
+    transition: background-color 0.3s ease;
+}
+tr:hover {
+    background-color: #ffe;
+}
+thead tr:hover {
+    background-color: transparent;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -482,37 +477,6 @@ table {
     overflow: hidden;
 }
 
-th, td {
-    padding: 0.5rem;
-    border: 1px solid #dee2e6;
-    text-align: left;
-    max-width: 300px; /* Set maximum width for cells */
-    white-space: normal; /* Allow text wrapping */
-    word-wrap: break-word; /* Break long words if needed */
-}
-
-th {
-    background-color: #00000011;
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-/* Messages */
-.loading-message {
-    padding: 1rem;
-    color: #666;
-    font-style: italic;
-}
-
-.error-message {
-    padding: 1rem;
-    color: hsl(0, 100%, 35%);
-    font-style: italic;
-}
-
-/* Draggable Table Rows */
 .row-drag-handle {
     width: 20px;
     cursor: grab;
@@ -545,11 +509,23 @@ tr.draggable {
 }
 
 tr.dragging {
-    cursor: grabbing;
     position: relative;
     z-index: 1000;
     background-color: #f8f8f8;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Messages */
+.loading-message {
+    padding: 1rem;
+    color: #666;
+    font-style: italic;
+}
+
+.error-message {
+    padding: 1rem;
+    color: hsl(0, 100%, 35%);
+    font-style: italic;
 }
 
 @media (max-width: 600px) {
