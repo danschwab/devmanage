@@ -44,10 +44,15 @@ export function buildTable(data, headers, hideColumns = [], editColumns = []) {
                 let startScroll = 0;
                 
                 tr.addEventListener('mousedown', (e) => {
+                    e.preventDefault();  // Prevent default drag behavior
                     isDragging = true;
                     startY = e.clientY;
                     startScroll = tbody.scrollTop;
                     tr.classList.add('dragging');
+                });
+
+                tr.addEventListener('dragstart', (e) => {
+                    e.preventDefault();  // Prevent Chrome's drag ghost image
                 });
                 
                 document.addEventListener('mousemove', (e) => {
