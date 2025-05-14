@@ -120,7 +120,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.style.position = 'fixed';
                         dragClone.style.width = `${tr.offsetWidth}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
-                        dragClone.style.top = `${e.clientY - dragClone.height/2}px`;
+                        dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
                         document.body.appendChild(dragClone);
                         
                         tr.classList.add('dragging');
