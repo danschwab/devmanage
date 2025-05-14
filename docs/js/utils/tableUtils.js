@@ -71,19 +71,20 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
                         
                         for (const el of elements) {
-                            if (el.tagName === 'TR') {
+                            if (el.tagName == 'TR' && el !== tr) {
                                 const targetTable = el.closest(`table.drag-id-${dragId}`);
-                                // Only allow drops in the same table
-                                if (targetTable === sourceTable && el !== tr) {
+                                if (targetTable && targetTable.classList.contains(`drag-id-${dragId}`)) {
                                     const rect = el.getBoundingClientRect();
                                     const midpoint = rect.top + rect.height / 2;
+                                    console.log('Found drop target:', el, 'Position:', e.clientY >= midpoint ? 'after' : 'before');
                                     return {
                                         row: el,
-                                        position: e.clientY < midpoint ? 'before' : 'after'
+                                        position: e.clientY >= midpoint ? 'after' : 'before'
                                     };
                                 }
                             }
                         }
+                        console.log('No valid drop target found');
                         return null;
                     };
 
@@ -100,7 +101,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.style.position = 'fixed';
                         dragClone.style.width = `${tr.offsetWidth}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
-                        dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
+                        dragClone.style.top = `${e.clientY - dragClone.offsetHeight/2}px`;
                         document.body.appendChild(dragClone);
                         
                         tr.classList.add('dragging');
