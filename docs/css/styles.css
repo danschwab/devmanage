@@ -411,6 +411,27 @@ button:hover,
     /*box-shadow: 0 0 0 1px #dee2e6;*/
     box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
 }
+
+tbody:empty {
+    position: relative;
+    min-height: 50px;
+    display: block;
+}
+
+tbody:empty::after {
+    content: "No content";
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    padding: 1rem;
+    color: #666;
+    font-style: italic;
+    background: #f8f8f8;
+    border: 1px solid #dee2e6;
+    border-top: none;
+}
+
 td:has(.table-wrapper) {
     padding: 3px 3px 8px 8px;
 }
