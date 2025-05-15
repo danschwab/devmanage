@@ -69,12 +69,18 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     const findDropTarget = (e) => {
                         const sourceTable = tr.closest(`table.drag-id-${dragId}`);
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
-                        console.log('Elements under cursor:', elements.map(el => `${el.tagName}${el.className ? '.' + el.className : ''}`));
                         
-                        // First check if we're near a tbody
-                        const tbody = elements.find(el => el.tagName === 'TBODY' && el.closest(`table.drag-id-${dragId}`));
-                        if (tbody && (!tbody.children.length || e.clientY > tbody.lastElementChild?.getBoundingClientRect().bottom)) {
-                            return { row: tbody.lastElementChild || tbody, position: 'after' };
+                        // Check for header proximity first
+                        const thead = elements.find(el => 
+                            el.tagName === 'THEAD' && 
+                            el.closest(`table.drag-id-${dragId}`)
+                        );
+                        if (thead) {
+                            const tbody = thead.closest('table').querySelector('tbody');
+                            return {
+                                row: tbody.firstElementChild,
+                                position: 'before'
+                            };
                         }
 
                         // Then check individual rows
@@ -85,13 +91,11 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             if (el.tagName === 'TR' && el !== tr) {
                                 const rect = el.getBoundingClientRect();
                                 const midpoint = rect.top + rect.height / 2;
-                                console.log('Found TR:', el, 'midpoint:', midpoint, 'mouseY:', e.clientY);
                                 return {
                                     row: el,
                                     position: e.clientY >= midpoint ? 'after' : 'before'
                                 };
                             }
-                            // Also check TD elements as they might be what we're actually hovering
                             if (el.tagName === 'TD') {
                                 const parentRow = el.closest('tr');
                                 if (parentRow && parentRow !== tr) {
@@ -104,6 +108,19 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                                 }
                             }
                         }
+
+                        // Check for empty tbody or below last row
+                        const tbody = elements.find(el => 
+                            el.tagName === 'TBODY' && 
+                            el.closest(`table.drag-id-${dragId}`)
+                        );
+                        if (tbody) {
+                            return {
+                                row: tbody.lastElementChild || tbody,
+                                position: 'after'
+                            };
+                        }
+                        
                         return null;
                     };
 
@@ -121,6 +138,18 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.style.width = `${tr.offsetWidth}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
                         dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
+
+                        // Respect max-height if set in CSS
+                        const computedMaxHeight = window.getComputedStyle(dragClone).maxHeight;
+                        if (computedMaxHeight && computedMaxHeight !== 'none') {
+                            dragClone.style.maxHeight = computedMaxHeight;
+                            dragClone.style.overflowY = 'auto';
+                            // Optionally, set height if original row is taller than max-height
+                            if (tr.offsetHeight > parseInt(computedMaxHeight)) {
+                                dragClone.style.height = computedMaxHeight;
+                            }
+                        }
+
                         document.body.appendChild(dragClone);
                         
                         tr.classList.add('dragging');
