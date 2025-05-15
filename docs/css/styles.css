@@ -412,24 +412,18 @@ button:hover,
     box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
 }
 
-tbody:empty {
-    position: relative;
-    min-height: 50px;
-    display: block;
-}
-
-tbody:empty::after {
+.table-wrapper:has(tbody:empty)::after {
     content: "No content";
-    position: absolute;
-    left: 0;
+    display: block;
     right: 0;
     text-align: center;
-    padding: 1rem;
+    padding: .25rem;
     color: #666;
     font-style: italic;
     background: #f8f8f8;
     border: 1px solid #dee2e6;
-    border-top: none;
+    box-sizing: border-box;
+    border-top: 0;
 }
 
 td:has(.table-wrapper) {
@@ -489,8 +483,7 @@ table {
 }
 
 .row-clone {
-    cursor: grabbing !important;
-    /*pointer-events: none;*/
+    pointer-events: none;
     opacity: 0.95;
     background: white;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
@@ -532,6 +525,11 @@ tr.dragging::after {
     padding: 1rem;
     color: hsl(0, 100%, 35%);
     font-style: italic;
+}
+
+/* When dragging is happening anywhere, change all cursors */
+:has(.dragging) * {
+    cursor: grabbing !important;
 }
 
 @media (max-width: 600px) {
