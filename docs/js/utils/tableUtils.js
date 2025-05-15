@@ -78,11 +78,11 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             if (!targetTable) continue;
 
                             // Check for header proximity
-                            if (el.tagName === 'THEAD' || el.tagName === 'TH') {
+                            if (el.tagName === 'TH') {
                                 const tbody = targetTable.querySelector('tbody');
                                 return {
                                     tbody,
-                                    position: 'inside'
+                                    position: 'into'
                                 };
                             }
 
@@ -155,6 +155,9 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
 
                         document.body.appendChild(dragClone);
                         tr.classList.add('dragging');
+
+                        dragClone.style.maxHeight = '100px';
+                        dragClone.style.top = `${e.clientY - 50}px`; // Center 100px height on cursor
                     });
                     
                     document.addEventListener('mousemove', (e) => {
@@ -184,7 +187,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                                 row.parentNode.insertBefore(tr, row);
                             } else if (position === 'after') {
                                 row.parentNode.insertBefore(tr, row.nextSibling);
-                            } else if (position === 'inside') {
+                            } else if (position === 'into') {
                                 dropTarget.appendChild(tr);
                             }
                         }
