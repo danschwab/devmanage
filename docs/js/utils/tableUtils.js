@@ -70,17 +70,16 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         const sourceTable = tr.closest(`table.drag-id-${dragId}`);
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
                         
-                        // Check for header or empty table first
+                        // Check for header proximity first
                         const thead = elements.find(el => 
-                            (el.tagName === 'THEAD' || el.tagName === 'TABLE') && 
+                            el.tagName === 'THEAD' && 
                             el.closest(`table.drag-id-${dragId}`)
                         );
                         if (thead) {
-                            const targetTable = thead.closest(`table.drag-id-${dragId}`);
-                            const tbody = targetTable.querySelector('tbody');
+                            const tbody = thead.closest('table').querySelector('tbody');
                             return {
-                                row: tbody,
-                                position: 'after'
+                                row: tbody.firstElementChild,
+                                position: 'before'
                             };
                         }
 
