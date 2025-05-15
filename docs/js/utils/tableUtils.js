@@ -78,11 +78,11 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             if (!targetTable) continue;
 
                             // Check for header proximity
-                            if (el.tagName === 'THEAD') {
+                            if (el.tagName === 'THEAD' || el.tagName === 'TH') {
                                 const tbody = targetTable.querySelector('tbody');
                                 return {
-                                    row: tbody.firstElementChild || tbody,
-                                    position: 'before'
+                                    tbody,
+                                    position: 'inside'
                                 };
                             }
 
@@ -182,8 +182,10 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             const { row, position } = dropTarget;
                             if (position === 'before') {
                                 row.parentNode.insertBefore(tr, row);
-                            } else {
+                            } else if (position === 'after') {
                                 row.parentNode.insertBefore(tr, row.nextSibling);
+                            } else if (position === 'inside') {
+                                dropTarget.appendChild(tr);
                             }
                         }
                     });
