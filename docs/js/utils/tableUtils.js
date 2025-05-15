@@ -67,27 +67,24 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     let dragClone = null;
                     
                     const findDropTarget = (e) => {
-                        const sourceTable = tr.closest(`table.drag-id-${dragId}`);
+                        // Look for any visible table with matching drag-id
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
                         
-                        // Check for header proximity first
-                        const thead = elements.find(el => 
-                            el.tagName === 'THEAD' && 
-                            el.closest(`table.drag-id-${dragId}`)
-                        );
-                        if (thead) {
-                            const tbody = thead.closest('table').querySelector('tbody');
-                            return {
-                                row: tbody.firstElementChild,
-                                position: 'before'
-                            };
-                        }
-
-                        // Then check individual rows
                         for (const el of elements) {
-                            const elementTable = el.closest(`table.drag-id-${dragId}`);
-                            if (!elementTable) continue;
-                            
+                            // Check if element belongs to any valid target table
+                            const targetTable = el.closest(`table.drag-id-${dragId}`);
+                            if (!targetTable) continue;
+
+                            // Check for header proximity
+                            if (el.tagName === 'THEAD') {
+                                const tbody = targetTable.querySelector('tbody');
+                                return {
+                                    row: tbody.firstElementChild || tbody,
+                                    position: 'before'
+                                };
+                            }
+
+                            // Check for row targets
                             if (el.tagName === 'TR' && el !== tr) {
                                 const rect = el.getBoundingClientRect();
                                 const midpoint = rect.top + rect.height / 2;
@@ -96,6 +93,8 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                                     position: e.clientY >= midpoint ? 'after' : 'before'
                                 };
                             }
+
+                            // Check cells
                             if (el.tagName === 'TD') {
                                 const parentRow = el.closest('tr');
                                 if (parentRow && parentRow !== tr) {
@@ -108,19 +107,6 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                                 }
                             }
                         }
-
-                        // Check for empty tbody or below last row
-                        const tbody = elements.find(el => 
-                            el.tagName === 'TBODY' && 
-                            el.closest(`table.drag-id-${dragId}`)
-                        );
-                        if (tbody) {
-                            return {
-                                row: tbody.lastElementChild || tbody,
-                                position: 'after'
-                            };
-                        }
-                        
                         return null;
                     };
 
@@ -136,22 +122,23 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.classList.add('row-clone');
                         dragClone.style.position = 'fixed';
                         dragClone.style.width = `${tr.offsetWidth}px`;
+                        
+                        // Calculate effective height considering max-height
+                        const computedMaxHeight = parseInt(window.getComputedStyle(dragClone).maxHeight);
+                        const actualHeight = Math.min(tr.offsetHeight, computedMaxHeight || Infinity);
+                        
+                        // Calculate click position relative to row
+                        const rowRect = tr.getBoundingClientRect();
+                        const clickOffset = e.clientY - rowRect.top;
+                        const offsetRatio = clickOffset / rowRect.height;
+                        
+                        // Position clone with cursor at same relative point
+                        dragClone.style.top = `${e.clientY - (actualHeight * offsetRatio)}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
-                        dragClone.style.top = `${e.clientY - tr.offsetHeight/2}px`;
-
-                        // Respect max-height if set in CSS
-                        const computedMaxHeight = window.getComputedStyle(dragClone).maxHeight;
-                        if (computedMaxHeight && computedMaxHeight !== 'none') {
-                            dragClone.style.maxHeight = computedMaxHeight;
-                            dragClone.style.overflowY = 'auto';
-                            // Optionally, set height if original row is taller than max-height
-                            if (tr.offsetHeight > parseInt(computedMaxHeight)) {
-                                dragClone.style.height = computedMaxHeight;
-                            }
-                        }
+                        dragClone.style.maxHeight = `${computedMaxHeight}px`;
+                        dragClone.style.overflowY = 'hidden';
 
                         document.body.appendChild(dragClone);
-                        
                         tr.classList.add('dragging');
                     });
                     
