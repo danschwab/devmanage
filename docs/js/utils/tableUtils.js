@@ -65,6 +65,8 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     let startX = 0;
                     let startY = 0;
                     let dragClone = null;
+                    let hoverTimer = null;
+                    let lastHoveredElement = null;
                     
                     const findDropTarget = (e) => {
                         // Look for any visible table with matching drag-id
@@ -110,6 +112,19 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         return null;
                     };
 
+                    const simulateClickAfterDelay = (element) => {
+                        if (lastHoveredElement === element) return;
+                        
+                        if (hoverTimer) {
+                            clearTimeout(hoverTimer);
+                        }
+                        
+                        lastHoveredElement = element;
+                        hoverTimer = setTimeout(() => {
+                            element.click();
+                        }, 1000);
+                    };
+
                     dragHandle.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -148,6 +163,20 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         const deltaY = e.clientY - startY;
                         dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
                         
+                        // Check for tab navigation elements
+                        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                        const navElement = elements.find(el => 
+                            el.matches('.tab-button, .hamburger-menu')
+                        );
+                        
+                        if (navElement) {
+                            simulateClickAfterDelay(navElement);
+                        } else if (hoverTimer) {
+                            clearTimeout(hoverTimer);
+                            hoverTimer = null;
+                            lastHoveredElement = null;
+                        }
+                        
                         const dropTarget = findDropTarget(e);
                         if (dropTarget) {
                             const { row, position } = dropTarget;
@@ -162,6 +191,11 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                     document.addEventListener('mouseup', () => {
                         if (!isDragging) return;
                         isDragging = false;
+                        if (hoverTimer) {
+                            clearTimeout(hoverTimer);
+                            hoverTimer = null;
+                        }
+                        lastHoveredElement = null;
                         tr.classList.remove('dragging');
                         if (dragClone) {
                             dragClone.remove();

@@ -2,8 +2,6 @@ import { PageBuilder } from '../index.js';
 
 export class TabManager {
     static tabCounter = 1;
-    static isMouseDown = false;
-    static hoverTimer = null;
     
     static init(tabNavigationWrapper) {
         // get the element if a string was passed in
@@ -43,36 +41,6 @@ export class TabManager {
                 if (menuButton) {
                     tabsContainer.classList.toggle('menu-open');
                 }
-            }
-        });
-
-        // Track mouse button state
-        document.addEventListener('mousedown', () => this.isMouseDown = true);
-        document.addEventListener('mouseup', () => {
-            this.isMouseDown = false;
-            if (this.hoverTimer) {
-                clearTimeout(this.hoverTimer);
-                this.hoverTimer = null;
-            }
-        });
-
-        // Add hover handling for tabs
-        document.addEventListener('mouseover', (e) => {
-            if (!this.isMouseDown) return;
-            
-            const tabButton = e.target.closest('.tab-button');
-            if (!tabButton) return;
-
-            this.hoverTimer = setTimeout(() => {
-                const tabName = tabButton.getAttribute('data-tab');
-                if (tabName) this.openTab(tabButton, tabName);
-            }, 1000); // 1 second delay
-        });
-
-        document.addEventListener('mouseout', () => {
-            if (this.hoverTimer) {
-                clearTimeout(this.hoverTimer);
-                this.hoverTimer = null;
             }
         });
     }
