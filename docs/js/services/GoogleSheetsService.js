@@ -2,6 +2,69 @@ import { GoogleSheetsAuth, buildTable } from '../index.js';
 
 export class GoogleSheetsService {
     
+    static async getOverlappingShows(spreadsheetId, tabName, parameters) {
+        // Parameters can either be a project identifier string or a start and end date range
+
+    }
+
+    static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
+        // Normalize input to arrays
+        const itemNames = Array.isArray(itemName) ? itemName : [itemName];
+        const infoFields = Array.isArray(retreiveInformation) ? retreiveInformation : [retreiveInformation];
+
+        // Step 1: Get INDEX tab data (prefix -> tab name)
+        const indexTab = 'INDEX';
+        const indexData = await this.getSheetData(spreadsheetId, `${indexTab}!A2:B`);
+        const prefixToTab = {};
+        indexData.forEach(row => {
+            if (row[0] && row[1]) prefixToTab[row[0]] = row[1];
+        });
+
+        // Step 2: Group itemNames by prefix
+        const itemsByTab = {};
+        itemNames.forEach(item => {
+            let [prefix] = item.split('-');
+            let tab = prefixToTab[prefix];
+            if (!tab && prefix && prefix.length > 0) {
+            // Try using just the first character as prefix
+            prefix = prefix[0];
+            tab = prefixToTab[prefix];
+            }
+            if (!tab) return; // skip if prefix not found
+            if (!itemsByTab[tab]) itemsByTab[tab] = [];
+            itemsByTab[tab].push(item);
+        });
+
+        // Step 3: For each tab, get headers and data, then find requested info
+        const results = [];
+        for (const [tab, items] of Object.entries(itemsByTab)) {
+            const headers = await this.getTableHeaders(spreadsheetId, tab);
+            const itemColIdx = 0; // 'Item' is always the first column
+            const infoIdxs = infoFields.map(field =>
+                headers.findIndex(h => h.toLowerCase() === field.toLowerCase())
+            );
+            // Get all data from tab
+            const data = await this.getSheetData(spreadsheetId, `${tab}!A2:${String.fromCharCode(65 + headers.length - 1)}`);
+            items.forEach(item => {
+                const row = data.find(r => r[itemColIdx] === item);
+                if (row) {
+                    const obj = { itemName: item };
+                    infoFields.forEach((field, i) => {
+                        obj[field] = row[infoIdxs[i]] ?? null;
+                    });
+                    results.push(obj);
+                } else {
+                    // Item not found, return nulls
+                    const obj = { itemName: item };
+                    infoFields.forEach(field => obj[field] = null);
+                    results.push(obj);
+                }
+            });
+        }
+        return results;
+    }
+
+
     static async getPackListContent(spreadsheetId, tabName, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.get({

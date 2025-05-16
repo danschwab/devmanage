@@ -1,7 +1,7 @@
 **Ideas:**
 
 Allow multiple workspaces?
-
+Inject the sheet ids and the api-key via github soas not to expose them
 
 
 
