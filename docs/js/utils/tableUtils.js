@@ -151,7 +151,6 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         dragClone.style.top = `${e.clientY - (actualHeight * offsetRatio)}px`;
                         dragClone.style.left = `${tr.getBoundingClientRect().left}px`;
                         dragClone.style.maxHeight = `${computedMaxHeight}px`;
-                        dragClone.style.overflowY = 'hidden';
 
                         document.body.appendChild(dragClone);
                         tr.classList.add('dragging');

@@ -488,8 +488,9 @@ table {
     background: white;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
     z-index: 1000;
-    /*max-height: 100px;*/
+    max-height: 100px;
     overflow: hidden;
+    transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out; 
 }
 .row-clone .row-drag-handle {
     background-color: #bbb;
@@ -497,10 +498,10 @@ table {
     max-height: 100%;
 }
 
-tr.draggable {
+/*tr.draggable {
     user-select: none;
     transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out;
-}
+}*/
 
 tr.dragging {
     position: relative;
