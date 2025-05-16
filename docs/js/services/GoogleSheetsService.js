@@ -2,15 +2,78 @@ import { GoogleSheetsAuth } from '../index.js';
 
 export class GoogleSheetsService {
     
-    static async checkItemQuantities(projectIdentifier) {
-        // get the items in the project pack list. 
-        // get all the other projects that overlap with the given project
+    static async checkItemQuantities(spreadsheetId, projectIdentifier) {
+        // 1. Get the items in the project pack list
+        const packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
+        const itemHeaders = packList.headers.items;
+        const itemRows = packList.crates.flatMap(crate => crate.items);
 
-        // Use this regex to get the quantities and item ids from the "description" columns: "(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?"
+        // 2. Extract item IDs and quantities from description columns using regex
+        // Regex: (?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?
+        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
+        const itemMap = {}; // { itemId: totalQty }
+        for (const row of itemRows) {
+            for (const cell of row) {
+                if (!cell) continue;
+                const match = cell.match(itemRegex);
+                if (match && match[2]) {
+                    const qty = parseInt(match[1] || "1", 10);
+                    const id = match[2];
+                    itemMap[id] = (itemMap[id] || 0) + qty;
+                }
+            }
+        }
+        const itemIds = Object.keys(itemMap);
 
-        // Get the inventory quantities for all the items in the project pack list
+        // 3. Get all other projects that overlap with the given project
+        const overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
+        const otherProjects = overlappingIds.filter(id => id !== projectIdentifier);
 
-        // subtract the total quantities in all overlapping shows from the inventory quantities and return the remainders
+        // 4. For each overlapping project, get their pack list and sum up item quantities
+        const overlapItemTotals = {};
+        for (const otherId of otherProjects) {
+            try {
+                const otherPack = await this.getPackListContent(spreadsheetId, otherId);
+                const otherRows = otherPack.crates.flatMap(crate => crate.items);
+                for (const row of otherRows) {
+                    for (const cell of row) {
+                        if (!cell) continue;
+                        const match = cell.match(itemRegex);
+                        if (match && match[2]) {
+                            const qty = parseInt(match[1] || "1", 10);
+                            const id = match[2];
+                            if (itemIds.includes(id)) {
+                                overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore missing/invalid pack lists
+            }
+        }
+
+        // 5. Get inventory quantities for all items
+        const inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
+        const inventoryMap = {};
+        inventoryInfo.forEach(obj => {
+            inventoryMap[obj.itemName] = parseInt(obj.Quantity || "0", 10);
+        });
+
+        // 6. Subtract total quantities in all overlapping shows from inventory quantities
+        const result = {};
+        for (const id of itemIds) {
+            const inventoryQty = inventoryMap[id] || 0;
+            const overlapQty = overlapItemTotals[id] || 0;
+            const projectQty = itemMap[id] || 0;
+            result[id] = {
+                inventory: inventoryQty,
+                requested: projectQty,
+                overlapping: overlapQty,
+                available: inventoryQty - overlapQty
+            };
+        }
+        return result;
     }
 
     static async getOverlappingShows(spreadsheetId, parameters) {
