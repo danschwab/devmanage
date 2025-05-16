@@ -292,6 +292,16 @@ button:hover,
     box-shadow: 0 -12px 14px -18px rgba(5, 0, 50, 0.7);
 }
 
+.tab-container:empty:after {
+    content: "Open a tab to see content. It may take a second to load.";
+    display: block;
+    right: 0;
+    text-align: center;
+    padding: .25rem;
+    color: #666;
+    font-style: italic;
+}
+
 .tab-content {
     display: none;
     padding: none;
