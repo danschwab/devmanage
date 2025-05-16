@@ -2,16 +2,97 @@ import { GoogleSheetsAuth } from '../index.js';
 
 export class GoogleSheetsService {
     
+    static async checkItemQuantities(projectIdentifier) {
+        // get the items in the project pack list. 
+        // get all the other projects that overlap with the given project
+
+        // Use this regex to get the quantities and item ids from the "description" columns: "(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?"
+
+        // Get the inventory quantities for all the items in the project pack list
+
+        // subtract the total quantities in all overlapping shows from the inventory quantities and return the remainders
+    }
+
     static async getOverlappingShows(spreadsheetId, parameters) {
-        // Parameters can either be a project identifier string or a start and end date range
-        // project identifier strings are in the "Identifier" column
+        // parameters: { year, startDate, endDate } OR { identifier }
+        await GoogleSheetsAuth.checkAuth();
+        const tabName = "ProductionSchedule";
+        const headers = await this.getTableHeaders(spreadsheetId, tabName);
 
-        // the tabName is "ProductionSchedule"
-        // Only use the year from the "Year" column, and only search shows with matching year.
-        // Use the columns "Ship", and "Expected Return Date" to find the range of days.
-        // If one or both of those values are empty, revert to "S. Start" - 10 days instead of "Ship" and/or "S. End" + 10 days instead of "Expected Return Date"
+        // Get all data
+        const lastCol = String.fromCharCode(65 + headers.length - 1);
+        const range = `${tabName}!A2:${lastCol}`;
+        const data = await this.getSheetData(spreadsheetId, range);
 
-        // Return an array of project identifiers that overlap with the given date range
+        // Helper to parse date or return null
+        const parseDate = (val) => {
+            if (!val) return null;
+            const d = new Date(val);
+            return isNaN(d) ? null : d;
+        };
+
+        // Find header indices
+        const idx = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        const idxIdentifier = idx("Identifier");
+        const idxYear = idx("Year");
+        const idxShip = idx("Ship");
+        const idxReturn = idx("Expected Return Date");
+        const idxSStart = idx("S. Start");
+        const idxSEnd = idx("S. End");
+
+        let year, startDate, endDate;
+
+        if (typeof parameters === "string" || parameters.identifier) {
+            // Find the row for the identifier
+            const identifier = parameters.identifier || parameters;
+            const row = data.find(r => r[idxIdentifier] === identifier);
+            if (!row) return [];
+            year = row[idxYear];
+            // Try Ship/Return, fallback to S. Start/S. End +/- 10 days
+            let ship = parseDate(row[idxShip]);
+            let ret = parseDate(row[idxReturn]);
+            if (!ship) {
+                let sStart = parseDate(row[idxSStart]);
+                ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+            }
+            if (!ret) {
+                let sEnd = parseDate(row[idxSEnd]);
+                ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+            }
+            startDate = ship;
+            endDate = ret;
+        } else {
+            year = parameters.year;
+            startDate = parseDate(parameters.startDate);
+            endDate = parseDate(parameters.endDate);
+        }
+
+        if (!year || !startDate || !endDate) return [];
+
+        // Find overlapping shows
+        const overlaps = [];
+        for (const row of data) {
+            if (!row[idxIdentifier] || row[idxYear] != year) continue;
+
+            // Get this row's date range
+            let ship = parseDate(row[idxShip]);
+            let ret = parseDate(row[idxReturn]);
+            if (!ship) {
+                let sStart = parseDate(row[idxSStart]);
+                ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+            }
+            if (!ret) {
+                let sEnd = parseDate(row[idxSEnd]);
+                ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+            }
+            if (!ship || !ret) continue;
+
+            // Check overlap
+            if (ret >= startDate && ship <= endDate) {
+                overlaps.push(row[idxIdentifier]);
+            }
+        }
+        return overlaps;
     }
 
     static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
@@ -71,12 +152,11 @@ export class GoogleSheetsService {
         return results;
     }
 
-
-    static async getPackListContent(spreadsheetId, tabName, itemColumnsStart = "Pack") {
+    static async getPackListContent(spreadsheetId, projectIdentifier, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId,
-            ranges: [`${tabName}`],
+            ranges: [`${projectIdentifier}`],
             includeGridData: true
         });
         
