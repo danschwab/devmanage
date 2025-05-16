@@ -43,7 +43,7 @@
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', () => {
                         // Get the content of the tab from the Google Sheets API
-                        GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName).then((tabElement) => {
+                        GoogleSheetsService.getPackListTable(SPREADSHEET_ID, tabName).then((tabElement) => {
                             // Add the new tab with the content
                             TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
 

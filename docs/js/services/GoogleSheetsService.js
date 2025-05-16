@@ -72,23 +72,26 @@ export class GoogleSheetsService {
             ranges: [`${tabName}`],
             includeGridData: true
         });
+        
         const sheetData = response.result.sheets[0].data[0].rowData;
-        // Extract the header row: row 3.
         const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
-        // Find the index of the itemColumnsStart header.
         const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
+        
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
         }
-        // Extract only the columns to the left of itemColumnsStart.
-        const filteredHeaderRow = headerRow.slice(0, itemStartIndex);
-        filteredHeaderRow.push("Items");
+        
+        const result = {
+            headers: {
+                main: headerRow.slice(0, itemStartIndex),
+                items: headerRow.slice(itemStartIndex)
+            },
+            crates: []
+        };
 
-        const mainTableData = [];
-        let currentCrateRow = null;
-        let currentCrateContents = [];
+        let currentCrate = null;
 
-        // Iterate through rows starting from row 4 (index 3).
+        // Process rows starting from row 4 (index 3)
         for (let i = 3; i < sheetData.length; i++) {
             const row = sheetData[i];
             const rowValues = row.values.map(cell => cell?.formattedValue || null);
@@ -96,56 +99,48 @@ export class GoogleSheetsService {
             const crateContents = rowValues.slice(itemStartIndex);
 
             if (crateInfo.some(cell => cell)) {
-                // If we encounter a new crate row, finalize the previous crate row.
-                if (currentCrateRow) {
-                    const itemData = document.createElement('div');
-                    itemData.classList.add('table-wrapper');
-                    if (currentCrateContents.length > 0) {
-                        const itemTable = buildTable(
-                            currentCrateContents,
-                            headerRow.slice(itemStartIndex),
-                            ['Pack', 'Check'],
-                            [],
-                            'pack-list-items'
-                        );
-                        itemData.appendChild(itemTable);
-                    }
-                    currentCrateRow.push(itemData);
-                    mainTableData.push(currentCrateRow);
+                if (currentCrate) {
+                    result.crates.push(currentCrate);
                 }
-                // Start a new crate row.
-                currentCrateRow = [...crateInfo];
-                currentCrateContents = [];
+                currentCrate = {
+                    info: crateInfo,
+                    items: []
+                };
             }
 
-            // Add crate contents if any.
             if (crateContents.some(cell => cell)) {
-                currentCrateContents.push(crateContents);
+                currentCrate.items.push(crateContents);
             }
         }
 
-        // Finalize the last crate row if it exists.
-        if (currentCrateRow) {
+        if (currentCrate) {
+            result.crates.push(currentCrate);
+        }
+
+        return result;
+    }
+
+    static async getPackListTable(spreadsheetId, tabName, itemColumnsStart = "Pack") {
+        const content = await this.getPackListContent(spreadsheetId, tabName, itemColumnsStart);
+        
+        const mainTableData = content.crates.map(crate => {
             const itemData = document.createElement('div');
             itemData.classList.add('table-wrapper');
-            if (currentCrateContents.length > 0) {
+            if (crate.items.length > 0) {
                 const itemTable = buildTable(
-                    currentCrateContents,
-                    headerRow.slice(itemStartIndex),
+                    crate.items,
+                    content.headers.items,
                     ['Pack', 'Check'],
                     [],
                     'pack-list-items'
                 );
                 itemData.appendChild(itemTable);
             }
-            currentCrateRow.push(itemData);
-            mainTableData.push(currentCrateRow);
-        }
+            return [...crate.info, itemData];
+        });
 
-        // Use buildTable to generate the DOM content to return.
-        const table = buildTable(mainTableData, filteredHeaderRow, [], [], 'pack-list');
-
-        return table;
+        const headers = [...content.headers.main, 'Items'];
+        return buildTable(mainTableData, headers, [], [], 'pack-list');
     }
     
     
