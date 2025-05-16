@@ -2,9 +2,16 @@ import { GoogleSheetsAuth } from '../index.js';
 
 export class GoogleSheetsService {
     
-    static async getOverlappingShows(spreadsheetId, tabName, parameters) {
+    static async getOverlappingShows(spreadsheetId, parameters) {
         // Parameters can either be a project identifier string or a start and end date range
+        // project identifier strings are in the "Identifier" column
 
+        // the tabName is "ProductionSchedule"
+        // Only use the year from the "Year" column, and only search shows with matching year.
+        // Use the columns "Ship", and "Expected Return Date" to find the range of days.
+        // If one or both of those values are empty, revert to "S. Start" - 10 days instead of "Ship" and/or "S. End" + 10 days instead of "Expected Return Date"
+
+        // Return an array of project identifiers that overlap with the given date range
     }
 
     static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
