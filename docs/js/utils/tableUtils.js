@@ -78,7 +78,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             if (!targetTable) continue;
 
                             // Check for header proximity
-                            if (el.tagName === 'TH') {
+                            if (el.tagName === 'TH' || el.tagName === 'THEAD' || el.tagName === 'TABLE') {
                                 const tbody = targetTable.querySelector('tbody');
                                 return {
                                     tbody,
