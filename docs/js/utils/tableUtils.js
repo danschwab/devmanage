@@ -78,10 +78,10 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             if (!targetTable) continue;
 
                             // Check for header proximity
-                            if (el.tagName === 'TH' || el.tagName === 'THEAD' || el.tagName === 'TABLE') {
+                            if (el.tagName === 'TH' || el.tagName === 'THEAD') {
                                 const tbody = targetTable.querySelector('tbody');
                                 return {
-                                    tbody,
+                                    row: tbody,
                                     position: 'into'
                                 };
                             }
