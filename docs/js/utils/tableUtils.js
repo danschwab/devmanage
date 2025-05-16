@@ -73,39 +73,65 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                         const elements = document.elementsFromPoint(e.clientX, e.clientY);
                         
                         for (const el of elements) {
-                            // Check if element belongs to any valid target table
-                            const targetTable = el.closest(`table.drag-id-${dragId}`);
-                            if (!targetTable) continue;
-
-                            // Check for header proximity
-                            if (el.tagName === 'TH' || el.tagName === 'THEAD') {
-                                const tbody = targetTable.querySelector('tbody');
-                                return {
-                                    row: tbody,
-                                    position: 'into'
-                                };
-                            }
+                            // Get the closest table and only continue if it has the correct tag
+                            const targetTable = el.closest('table');
+                            if (!targetTable || !targetTable.classList.contains(`drag-id-${dragId}`)) continue;
 
                             // Check for row targets
                             if (el.tagName === 'TR' && el !== tr) {
-                                const rect = el.getBoundingClientRect();
-                                const midpoint = rect.top + rect.height / 2;
-                                return {
-                                    row: el,
-                                    position: e.clientY >= midpoint ? 'after' : 'before'
-                                };
+                                // If this TR is in the THEAD, drop into TBODY
+                                if (el.parentElement && el.parentElement.tagName === 'THEAD') {
+                                    const tableEl = el.closest('table');
+                                    const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                                    if (tbodyEl) {
+                                        return {
+                                            row: tbodyEl,
+                                            position: 'into'
+                                        };
+                                    }
+                                } else {
+                                    const rect = el.getBoundingClientRect();
+                                    const midpoint = rect.top + rect.height / 2;
+                                    return {
+                                        row: el,
+                                        position: e.clientY >= midpoint ? 'after' : 'before'
+                                    };
+                                }
                             }
 
                             // Check cells
-                            if (el.tagName === 'TD') {
+                            if (el.tagName === 'TD' || el.tagName === 'TH') {
+                                // If this TH is in the THEAD, drop into TBODY
+                                if (el.tagName === 'TH' && el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.tagName === 'THEAD') {
+                                    const tableEl = el.closest('table');
+                                    const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                                    if (tbodyEl) {
+                                        return {
+                                            row: tbodyEl,
+                                            position: 'into'
+                                        };
+                                    }
+                                }
                                 const parentRow = el.closest('tr');
                                 if (parentRow && parentRow !== tr) {
-                                    const rect = parentRow.getBoundingClientRect();
-                                    const midpoint = rect.top + rect.height / 2;
-                                    return {
-                                        row: parentRow,
-                                        position: e.clientY >= midpoint ? 'after' : 'before'
-                                    };
+                                    // If parentRow is in THEAD, drop into TBODY
+                                    if (parentRow.parentElement && parentRow.parentElement.tagName === 'THEAD') {
+                                        const tableEl = el.closest('table');
+                                        const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                                        if (tbodyEl) {
+                                            return {
+                                                row: tbodyEl,
+                                                position: 'into'
+                                            };
+                                        }
+                                    } else {
+                                        const rect = parentRow.getBoundingClientRect();
+                                        const midpoint = rect.top + rect.height / 2;
+                                        return {
+                                            row: parentRow,
+                                            position: e.clientY >= midpoint ? 'after' : 'before'
+                                        };
+                                    }
                                 }
                             }
                         }
@@ -187,7 +213,7 @@ export function buildTable(data, headers, hideColumns = [], editColumns = [], dr
                             } else if (position === 'after') {
                                 row.parentNode.insertBefore(tr, row.nextSibling);
                             } else if (position === 'into') {
-                                dropTarget.appendChild(tr);
+                                row.appendChild(tr);
                             }
                         }
                     });
