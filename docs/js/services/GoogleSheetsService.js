@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, buildTable } from '../index.js';
+import { GoogleSheetsAuth } from '../index.js';
 
 export class GoogleSheetsService {
     
@@ -119,32 +119,6 @@ export class GoogleSheetsService {
 
         return result;
     }
-
-    static async getPackListTable(spreadsheetId, tabName, itemColumnsStart = "Pack") {
-        const content = await this.getPackListContent(spreadsheetId, tabName, itemColumnsStart);
-        
-        const mainTableData = content.crates.map(crate => {
-            const itemData = document.createElement('div');
-            itemData.classList.add('table-wrapper');
-            if (crate.items.length > 0) {
-                const itemTable = buildTable(
-                    crate.items,
-                    content.headers.items,
-                    ['Pack', 'Check'],
-                    [],
-                    'pack-list-items'
-                );
-                itemData.appendChild(itemTable);
-            }
-            return [...crate.info, itemData];
-        });
-
-        const headers = [...content.headers.main, 'Items'];
-        return buildTable(mainTableData, headers, [], [], 'pack-list');
-    }
-    
-    
-
     
     static async getSheetData(spreadsheetId, range) {
         await GoogleSheetsAuth.checkAuth();

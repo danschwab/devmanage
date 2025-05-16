@@ -4,9 +4,30 @@
 
 
 <script type="module">
-    import { TabManager, GoogleSheetsService } from './js/index.js';
+    import { TabManager, GoogleSheetsService, buildTable } from './js/index.js';
     
     const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
+    
+    function buildPackListTable(content) {
+        const mainTableData = content.crates.map(crate => {
+            const itemData = document.createElement('div');
+            itemData.classList.add('table-wrapper');
+            if (crate.items.length > 0) {
+                const itemTable = buildTable(
+                    crate.items,
+                    content.headers.items,
+                    ['Pack', 'Check'],
+                    [],
+                    'pack-list-items'
+                );
+                itemData.appendChild(itemTable);
+            }
+            return [...crate.info, itemData];
+        });
+
+        const headers = [...content.headers.main, 'Items'];
+        return buildTable(mainTableData, headers, [], [], 'pack-list');
+    }
 
     await TabManager.addTabNavigation('tabSystem', true);
 
@@ -41,19 +62,17 @@
                     tabButton.classList.add('tab-button');
                     tabButton.textContent = tabName;
                     modal.querySelector('#tabs-list').appendChild(tabButton);
-                    tabButton.addEventListener('click', () => {
-                        // Get the content of the tab from the Google Sheets API
-                        GoogleSheetsService.getPackListTable(SPREADSHEET_ID, tabName).then((tabElement) => {
-                            // Add the new tab with the content
+                    tabButton.addEventListener('click', async () => {
+                        try {
+                            const content = await GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName);
+                            const tabElement = buildPackListTable(content);
                             TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
-
-                        }).catch((error) => {
+                        } catch (error) {
                             console.error('Error loading sheet content:', error);
                             const errorMessage = document.createElement('p');
                             errorMessage.textContent = 'Failed to load spreadsheet content';
-                            TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
-                        });
-                        
+                            TabManager.addNewTab('tabSystem', tabName, errorMessage, true, true);
+                        }
                         modal.remove();
                     });
                 }
