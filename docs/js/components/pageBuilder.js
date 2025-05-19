@@ -1,17 +1,34 @@
-import { GoogleSheetsAuth } from '../index.js';
+import { GoogleSheetsAuth, GoogleSheetsService } from '../index.js';
 import { navigationItems } from '../app.js';
 
 export class PageBuilder {
-    
+    static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
+
     // Function to load content dynamically into the #content div
     static async loadContent(page) {
         try {
-            //await GoogleSheetsAuth.checkAuth();
-            
+            // Cache current page before loading new one if we're on a valid page
+            if (window.location.hash) {
+                const userEmail = await GoogleSheetsAuth.getUserEmail();
+                if (userEmail) {
+                    await GoogleSheetsService.cachePage(this.CACHE_SPREADSHEET_ID);
+                }
+            }
+
+            // Check for cached version of new page (valid for 1 hour)
+            const cachedContent = await GoogleSheetsService.getCachedPage(this.CACHE_SPREADSHEET_ID, 60 * 60 * 1000);
+            if (cachedContent) {
+                await this.buildPage(cachedContent);
+                return;
+            }
+
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
+                // Set the location hash to the current page name (without extension)
+                const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+                window.location.hash = pageName;
                 await this.buildPage(html);
             } else {
                 this.buildPage('<div class="loading-message">Error loading content.</div>');
@@ -86,21 +103,18 @@ export class PageBuilder {
         loginButton.textContent = 'Log in';
         loginButton.onclick = async () => {
             try {
-                this.buildPage(`<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`);
+                this.buildPage(`<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`,nav);
 
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
                     await this.generateNavigation();
-                    await this.loadContent('pages/home.html');
+                    //await this.loadContent('pages/home.html');
                 } else {
                     throw new Error('Authentication failed');
                 }
             } catch (error) {
                 console.error('Application error:', error);
-                this.buildPage(`
-                    <div class="error-message">
-                        Application error: ${error.message}.
-                    </div>`);
+                this.generateLoginButton();
             }
         };
         nav.appendChild(loginButton);

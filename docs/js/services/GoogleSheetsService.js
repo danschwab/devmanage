@@ -357,4 +357,93 @@ export class GoogleSheetsService {
         
         return response.result.sheets.map(sheet => sheet.properties.title);
     }
+
+    static async cachePage(spreadsheetId) {
+        await GoogleSheetsAuth.checkAuth();
+        const userEmail = await GoogleSheetsAuth.getUserEmail();
+        if (!userEmail) throw new Error('User not authenticated');
+        
+        // Get current page info
+        const pagePath = window.location.pathname;
+        const timestamp = new Date().toISOString();
+        const pageContent = document.documentElement.outerHTML;
+        
+        // Format tab name (sanitize email for sheet name)
+        const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+        
+        try {
+            // Try to get existing tab
+            await gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                ranges: [`${tabName}!A1:A`]
+            });
+        } catch (error) {
+            // Tab doesn't exist, create it
+            await gapi.client.sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                resource: {
+                    requests: [{
+                        addSheet: {
+                            properties: { title: tabName }
+                        }
+                    }]
+                }
+            });
+        }
+        
+        // Get existing pages
+        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
+        
+        // Find page index or append
+        let rowIndex = existingData.findIndex(row => row[0] === pagePath) + 1;
+        if (rowIndex === 0) {
+            rowIndex = existingData.length + 1;
+        }
+        
+        // Update cache data
+        const updates = [
+            { row: rowIndex, col: 0, value: pagePath },
+            { row: rowIndex, col: 1, value: timestamp },
+            { row: rowIndex, col: 2, value: pageContent }
+        ];
+        
+        await this.setSheetData(spreadsheetId, tabName, updates);
+        return true;
+    }
+    
+    static async getCachedPage(spreadsheetId, maxAgeMs = Infinity) {
+        await GoogleSheetsAuth.checkAuth();
+        const userEmail = await GoogleSheetsAuth.getUserEmail();
+        if (!userEmail) return null;
+        
+        // Format tab name (sanitize email for sheet name)
+        const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+        
+        try {
+            // Try to get existing tab
+            await gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                ranges: [`${tabName}!A1:A`]
+            });
+        } catch (error) {
+            // Tab doesn't exist
+            return null;
+        }
+        
+        // Get existing pages
+        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
+        
+        // Find page index
+        const pagePath = window.location.pathname;
+        const pageRow = existingData.find(row => row[0] === pagePath);
+        
+        if (pageRow) {
+            const timestamp = new Date(pageRow[1]).getTime();
+            const now = Date.now();
+            if (now - timestamp <= maxAgeMs) {
+                return pageRow[2]; // Return cached content if within age limit
+            }
+        }
+        return null;
+    }
 }
