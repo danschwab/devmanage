@@ -8,6 +8,8 @@ let gapiInited = false;
 let gisInited = false;
 
 export class GoogleSheetsAuth {
+    static userEmail = null;
+
     static async initialize() {
         try {
             await this.loadGAPIScript();
@@ -163,7 +165,31 @@ export class GoogleSheetsAuth {
         return !!gapi.client?.getToken();
     }
 
+    static async getUserEmail() {
+        if (this.userEmail) return this.userEmail;
+        
+        try {
+            await this.checkAuth();
+            const token = gapi.client.getToken();
+            if (!token) return null;
+            
+            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${token.access_token}` }
+            });
+            
+            if (!response.ok) return null;
+            
+            const data = await response.json();
+            this.userEmail = data.email;
+            return this.userEmail;
+        } catch (error) {
+            console.error('Error getting user email:', error);
+            return null;
+        }
+    }
+
     static async logout() {
+        this.userEmail = null;
         const token = gapi.client.getToken();
         if (token) {
             try {
