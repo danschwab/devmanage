@@ -1,7 +1,7 @@
 // Google Sheets API configuration
 const API_KEY = 'AIzaSyCDA4ynZWF1xbuFQ2exsX2orRYQPpsiX1U';
 const CLIENT_ID = '381868581846-a5hdjs5520u9u1jve5rdalm3kua2iqpf.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 let tokenClient;
 let gapiInited = false;
@@ -172,15 +172,13 @@ export class GoogleSheetsAuth {
             await this.checkAuth();
             const token = gapi.client.getToken();
             if (!token) return null;
-            
-            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { 'Authorization': `Bearer ${token.access_token}` }
+
+            const response = await gapi.client.request({
+                path: 'https://www.googleapis.com/oauth2/v1/userinfo',
+                method: 'GET'
             });
             
-            if (!response.ok) return null;
-            
-            const data = await response.json();
-            this.userEmail = data.email;
+            this.userEmail = response.result.email;
             return this.userEmail;
         } catch (error) {
             console.error('Error getting user email:', error);
