@@ -1,7 +1,7 @@
 // Google Sheets API configuration
 const API_KEY = 'AIzaSyCDA4ynZWF1xbuFQ2exsX2orRYQPpsiX1U';
 const CLIENT_ID = '381868581846-a5hdjs5520u9u1jve5rdalm3kua2iqpf.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/contacts.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 let tokenClient;
 let gapiInited = false;
@@ -64,10 +64,7 @@ export class GoogleSheetsAuth {
 
             await gapi.client.init({
                 apiKey: API_KEY,
-                discoveryDocs: [
-                    'https://sheets.googleapis.com/$discovery/rest?version=v4',
-                    'https://people.googleapis.com/$discovery/rest?version=v1'
-                ],
+                discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
             });
 
             gapiInited = true;
@@ -176,14 +173,16 @@ export class GoogleSheetsAuth {
             const token = gapi.client.getToken();
             if (!token) return null;
 
-            const response = await gapi.client.people.people.get({
-                resourceName: 'people/me',
-                personFields: 'emailAddresses'
-            });
+            // Get basic profile from google identity
+            const googleUser = google.accounts.oauth2.hasGrantedAllScopes(token, 'email');
+            const profile = googleUser && token.access_token;
             
-            const emailAddress = response.result.emailAddresses?.[0]?.value;
-            if (emailAddress) {
-                this.userEmail = emailAddress;
+            if (profile) {
+                const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { 'Authorization': `Bearer ${token.access_token}` }
+                });
+                const data = await response.json();
+                this.userEmail = data.email;
                 return this.userEmail;
             }
             return null;
