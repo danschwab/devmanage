@@ -359,6 +359,14 @@ export class GoogleSheetsService {
     }
 
     static async cachePage(spreadsheetId) {
+        // Don't cache empty locations
+        if (!window.location.pathname || window.location.pathname === '/') {
+            return false;
+        }
+
+        const contentDiv = document.getElementById('content');
+        if (!contentDiv) return false;
+
         await GoogleSheetsAuth.checkAuth();
         const userEmail = await GoogleSheetsAuth.getUserEmail();
         if (!userEmail) throw new Error('User not authenticated');
@@ -366,7 +374,7 @@ export class GoogleSheetsService {
         // Get current page info
         const pagePath = window.location.pathname;
         const timestamp = new Date().toISOString();
-        const pageContent = document.documentElement.outerHTML;
+        const pageContent = contentDiv.innerHTML;
         
         // Format tab name (sanitize email for sheet name)
         const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
@@ -378,7 +386,7 @@ export class GoogleSheetsService {
                 ranges: [`${tabName}!A1:A`]
             });
         } catch (error) {
-            // Tab doesn't exist, create it
+            // Tab doesn't exist, create it with headers
             await gapi.client.sheets.spreadsheets.batchUpdate({
                 spreadsheetId,
                 resource: {
@@ -389,6 +397,13 @@ export class GoogleSheetsService {
                     }]
                 }
             });
+            
+            // Add headers
+            await this.setSheetData(spreadsheetId, tabName, [
+                { row: 0, col: 0, value: "Page URL" },
+                { row: 0, col: 1, value: "Last Modified" },
+                { row: 0, col: 2, value: "Page Content" }
+            ]);
         }
         
         // Get existing pages
@@ -441,7 +456,9 @@ export class GoogleSheetsService {
             const timestamp = new Date(pageRow[1]).getTime();
             const now = Date.now();
             if (now - timestamp <= maxAgeMs) {
-                return pageRow[2]; // Return cached content if within age limit
+                const contentDiv = document.getElementById('content');
+                if (!contentDiv) return null;
+                return pageRow[2]; // Return cached content for content div
             }
         }
         return null;
