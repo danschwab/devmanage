@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, GoogleSheetsService } from '../index.js';
+import { GoogleSheetsAuth, GoogleSheetsService, ModalManager } from '../index.js';
 import { navigationItems } from '../app.js';
 
 export class PageBuilder {
@@ -7,6 +7,9 @@ export class PageBuilder {
     // Function to load content dynamically into the #content div
     static async loadContent(page) {
         try {
+            // Show loading message
+            await this.buildPage('<div class="loading-message">Loading page content...</div>');
+
             // Cache current page before loading new one if we're on a valid page
             if (window.location.hash) {
                 const userEmail = await GoogleSheetsAuth.getUserEmail();
@@ -15,11 +18,14 @@ export class PageBuilder {
                 }
             }
 
-            // Check for cached version of new page (valid for 1 hour)
+            // Check for cached version
             const cachedContent = await GoogleSheetsService.getCachedPage(this.CACHE_SPREADSHEET_ID, 60 * 60 * 1000);
             if (cachedContent) {
-                await this.buildPage(cachedContent);
-                return;
+                const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
+                if (useCache) {
+                    await this.buildPage(cachedContent);
+                    return;
+                }
             }
 
             const cacheBuster = `?v=${new Date().getTime()}`;

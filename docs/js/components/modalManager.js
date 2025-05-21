@@ -27,4 +27,28 @@ export class ModalManager {
 
         return modal;
     }
+
+    static async confirm(message) {
+        return new Promise((resolve) => {
+            const modal = this.createModal(`
+                <div style="text-align: center;">
+                    <p>${message}</p>
+                    <div class="button-container" style="display: flex; justify-content: center; gap: 1rem;">
+                        <button class="confirm-yes">Yes</button>
+                        <button class="confirm-no">No</button>
+                    </div>
+                </div>
+            `, { showClose: false });
+
+            modal.querySelector('.confirm-yes').addEventListener('click', () => {
+                modal.remove();
+                resolve(true);
+            });
+
+            modal.querySelector('.confirm-no').addEventListener('click', () => {
+                modal.remove();
+                resolve(false);
+            });
+        });
+    }
 }
