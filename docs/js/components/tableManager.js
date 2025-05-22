@@ -161,7 +161,7 @@ export class TableManager {
             
             const tr = dragHandle.closest('tr');
             if (!tr || !tr.classList.contains('draggable')) return;
-
+            
             this.dragState.isDragging = true;
             this.dragState.startX = e.clientX;
             this.dragState.startY = e.clientY;
@@ -179,17 +179,18 @@ export class TableManager {
             document.body.appendChild(this.dragState.dragClone);
             tr.classList.add('dragging');
         };
-
+        
         this.handlers.mousemove = (e) => {
             if (!this.dragState.isDragging) return;
             
             const deltaX = e.clientX - this.dragState.startX;
             const deltaY = e.clientY - this.dragState.startY;
+            const dragId = tr.closest('table').classList[0].split('-')[2];
             if (this.dragState.dragClone) {
                 this.dragState.dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
             }
-
-            const dropTarget = this.findDropTarget(e);
+            
+            const dropTarget = this.findDropTarget(e, dragId);
             if (dropTarget && this.dragState.sourceRow) {
                 const { row, position } = dropTarget;
                 if (position === 'before') {
@@ -230,7 +231,7 @@ export class TableManager {
         document.addEventListener('mouseup', this.handlers.mouseup);
     }
 
-    static findDropTarget(e) {
+    static findDropTarget(e, dragId) {
         // Look for any visible table with matching drag-id
         const elements = document.elementsFromPoint(e.clientX, e.clientY);
         
