@@ -42,14 +42,14 @@ export class PageBuilder {
                 // window.location.hash = pageName;
                 await this.buildPage(html);
             } else {
-                this.buildPage('<div class="loading-message">Error loading content.</div>');
+                await ModalManager.alert('Error loading content');
             }
         } catch (error) {
             console.error('Error:', error);
             if (error.message.includes('auth')) {
                 this.generateLoginButton();
             } else {
-                this.buildPage('<div class="loading-message">Error loading content.</div>');
+                await ModalManager.alert('Error loading content');
             }
         }
     }
@@ -125,6 +125,7 @@ export class PageBuilder {
                 }
             } catch (error) {
                 console.error('Application error:', error);
+                await ModalManager.alert('Authentication failed');
                 this.generateLoginButton();
             }
         };
@@ -158,7 +159,7 @@ export class PageBuilder {
                 await this.generateLoginButton();
             } catch (error) {
                 console.error('Logout failed:', error);
-                this.buildPage('<div class="error-message">Logout failed. Please try again.</div>');
+                await ModalManager.alert('Logout failed. Please try again.');
             }
         };
         nav.appendChild(logoutButton);

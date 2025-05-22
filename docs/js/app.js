@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, PageBuilder, FormBuilder, buildTable } from './index.js';
+import { GoogleSheetsAuth, PageBuilder, FormBuilder, buildTable, ModalManager } from './index.js';
 
 // Define navigation items
 export let navigationItems = [
@@ -26,17 +26,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (error) {
         await PageBuilder.generateLoginButton();
-        PageBuilder.buildPage('<div class="error-message">Authentication error. Please try again.</div>');
+        await ModalManager.alert('Authentication error. Please try again.');
     }
 });
 
 
 
 // Add global function for console access
+/*
 window.loadPage = async (pageName) => {
     try {
         await PageBuilder.loadContent(`pages/${pageName}.html`);
     } catch (error) {
         console.error(`Failed to load page ${pageName}:`, error);
+        await ModalManager.alert(`Failed to load page ${pageName}:`);
     }
 };
+*/

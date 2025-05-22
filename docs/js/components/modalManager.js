@@ -51,4 +51,22 @@ export class ModalManager {
             });
         });
     }
+
+    static async alert(message) {
+        return new Promise((resolve) => {
+            const modal = this.createModal(`
+                <div style="text-align: center;">
+                    <p>${message}</p>
+                    <div class="button-container" style="display: flex; justify-content: center;">
+                        <button class="alert-ok">OK</button>
+                    </div>
+                </div>
+            `, { showClose: false });
+
+            modal.querySelector('.alert-ok').addEventListener('click', () => {
+                modal.remove();
+                resolve();
+            });
+        });
+    }
 }
