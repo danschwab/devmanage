@@ -413,7 +413,7 @@ export class GoogleSheetsService {
         // Find page index or append
         let rowIndex = existingData.findIndex(row => row[0] === pagePath);
         if (rowIndex === 0) {
-            rowIndex = existingData.length;
+            rowIndex = existingData.length + 1;
         }
         
         // Update cache data
