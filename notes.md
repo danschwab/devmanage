@@ -2,7 +2,7 @@
 
 Allow multiple workspaces?
 Inject the sheet ids and the api-key via github soas not to expose them
-
+allow modals to recieve the arrow keys and enter button
 
 
 

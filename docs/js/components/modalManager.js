@@ -33,7 +33,7 @@ export class ModalManager {
             const modal = this.createModal(`
                 <div style="text-align: center;">
                     <p>${message}</p>
-                    <div class="button-container" style="display: flex; justify-content: center; gap: 1rem;">
+                    <div class="button-container" style="justify-content: center;">
                         <button class="confirm-yes">Yes</button>
                         <button class="confirm-no">No</button>
                     </div>
@@ -57,7 +57,7 @@ export class ModalManager {
             const modal = this.createModal(`
                 <div style="text-align: center;">
                     <p>${message}</p>
-                    <div class="button-container" style="display: flex; justify-content: center;">
+                    <div class="button-container" style="justify-content: center;">
                         <button class="alert-ok">OK</button>
                     </div>
                 </div>
