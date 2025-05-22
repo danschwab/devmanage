@@ -1,18 +1,10 @@
 <div id="tabSystem">
-    <script type="module">
-        // scripts that should only be run to build the page
-        import { TabManager } from './js/index.js';
-        await TabManager.addTabNavigation('tabSystem', true);
-    </script>
 </div>
 
 
 
 <script type="module">
-    // scripts that must be rerun on every page load
     import { TabManager, GoogleSheetsService, buildTable, ModalManager } from './js/index.js';
-    
-    TabManager.init('tabSystem');
     
     const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
     
@@ -32,10 +24,13 @@
             }
             return [...crate.info, itemData];
         });
-
+        
         const headers = [...content.headers.main, 'Items'];
         return buildTable(mainTableData, headers, [], [], 'pack-list');
     }
+
+    // Initialize the TabManager
+    TabManager.init('tabSystem', true);
 
     // this fails if it is an async function
     document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {
@@ -80,10 +75,4 @@
         
         //TabManager.addNewTab('New Tab', 'new-tab-content', true);
     });
-
-    // once this script finishes, remove it from the dom
-    const script = document.querySelector('script[type="module"]');
-    if (script) {
-        script.parentNode.removeChild(script);
-    }
 </script>

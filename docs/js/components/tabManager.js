@@ -3,19 +3,44 @@ import { PageBuilder } from '../index.js';
 export class TabManager {
     static tabCounter = 1;
     
-    static init(tabNavigationWrapper) {
-        // get the element if a string was passed in
-        if (typeof tabNavigationWrapper == 'string') {
+    static init(tabNavigationWrapper, allowNewTabs = true) {
+        // Get the element if a string was passed in
+        if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
         }
+        if (!tabNavigationWrapper) return;
 
-        const tabsContainer = tabNavigationWrapper.querySelector('.tabs');
-        if (!tabsContainer) return;
+        // Create tab structure if it doesn't exist
+        let tabs = tabNavigationWrapper.querySelector('.tabs');
+        if (!tabs) {
+            tabs = document.createElement('div');
+            tabs.className = 'tabs';
+
+            const hamburger = document.createElement('button');
+            hamburger.className = 'hamburger-menu';
+            hamburger.innerHTML = '<span></span><span></span><span></span>';
+            tabs.appendChild(hamburger);
+
+            if (allowNewTabs) {
+                const newTabBtn = document.createElement('button');
+                newTabBtn.className = 'new-tab-button';
+                newTabBtn.textContent = '+';
+                tabs.appendChild(newTabBtn);
+            }
+
+            tabNavigationWrapper.appendChild(tabs);
+        }
+
+        if (!tabNavigationWrapper.querySelector('.tab-container')) {
+            const tabContainer = document.createElement('div');
+            tabContainer.className = 'tab-container';
+            tabNavigationWrapper.appendChild(tabContainer);
+        }
 
         // Add click handler to close menu when clicking outside
         document.addEventListener('click', (e) => {
-            if (!tabsContainer.contains(e.target)) {
-                tabsContainer.classList.remove('menu-open');
+            if (!tabs.contains(e.target)) {
+                tabs.classList.remove('menu-open');
             }
         });
 
@@ -39,7 +64,7 @@ export class TabManager {
             else if (target.matches('.hamburger-menu, .hamburger-menu span')) {
                 const menuButton = target.closest('.hamburger-menu');
                 if (menuButton) {
-                    tabsContainer.classList.toggle('menu-open');
+                    tabs.classList.toggle('menu-open');
                 }
             }
         });
@@ -152,17 +177,5 @@ export class TabManager {
         this.openTab(tabButton, tabName, false);
         
         return { tabName, tabButton, tabContent };
-    }
-
-    static addTabNavigation(tabNavigationWrapper, allowNewTabs = true) {
-        const structure = `
-        <div class="tabs">
-        <button class="hamburger-menu"><span></span><span></span><span></span></button>
-        ${allowNewTabs ? '<button class="new-tab-button">+</button>' : ''}
-        </div>
-        <div class="tab-container"></div>
-        `;
-
-        PageBuilder.buildPage(structure, tabNavigationWrapper, false);
     }
 }
