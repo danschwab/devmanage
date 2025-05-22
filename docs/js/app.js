@@ -14,18 +14,21 @@ export let navigationItems = [
 document.addEventListener('DOMContentLoaded', async () => {    
     try {
         await GoogleSheetsAuth.initialize();
-        PageBuilder.buildPage('<div class="loading-message">Checking authentication...</div>');
+        const loadingModal = ModalManager.notify('Checking authentication...', { timeout: 0 });
 
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
             PageBuilder.generateNavigation();
             PageBuilder.loadContent('pages/home.html');
+            loadingModal.remove();
         } else {
             PageBuilder.generateLoginButton();
             PageBuilder.loadContent('pages/login.html');
+            loadingModal.remove();
         }
     } catch (error) {
         PageBuilder.generateLoginButton();
+        loadingModal.remove();
         ModalManager.alert('Authentication error. Please try again.');
     }
 });
