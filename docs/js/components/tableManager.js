@@ -192,30 +192,69 @@ export class TableManager {
     }
 
     static findDropTarget(e) {
+        // Look for any visible table with matching drag-id
         const elements = document.elementsFromPoint(e.clientX, e.clientY);
         
         for (const el of elements) {
-            // Skip our source row and clone
-            if (el === this.dragState.sourceRow || el === this.dragState.dragClone) continue;
-            
-            if (el.tagName === 'TR') {
-                const rect = el.getBoundingClientRect();
-                const midpoint = rect.top + rect.height / 2;
-                return {
-                    row: el,
-                    position: e.clientY >= midpoint ? 'after' : 'before'
-                };
-            }
-            
-            if (el.tagName === 'TD' || el.tagName === 'TH') {
-                const parentRow = el.closest('tr');
-                if (parentRow && parentRow !== this.dragState.sourceRow) {
-                    const rect = parentRow.getBoundingClientRect();
+            // Get the closest table and only continue if it has the correct tag
+            const targetTable = el.closest('table');
+            if (!targetTable || !targetTable.classList.contains(`drag-id-${dragId}`)) continue;
+
+            // Check for row targets
+            if (el.tagName === 'TR' && el !== tr) {
+                // If this TR is in the THEAD, drop into TBODY
+                if (el.parentElement && el.parentElement.tagName === 'THEAD') {
+                    const tableEl = el.closest('table');
+                    const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                    if (tbodyEl) {
+                        return {
+                            row: tbodyEl,
+                            position: 'into'
+                        };
+                    }
+                } else {
+                    const rect = el.getBoundingClientRect();
                     const midpoint = rect.top + rect.height / 2;
                     return {
-                        row: parentRow,
+                        row: el,
                         position: e.clientY >= midpoint ? 'after' : 'before'
                     };
+                }
+            }
+
+            // Check cells
+            if (el.tagName === 'TD' || el.tagName === 'TH') {
+                // If this TH is in the THEAD, drop into TBODY
+                if (el.tagName === 'TH' && el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.tagName === 'THEAD') {
+                    const tableEl = el.closest('table');
+                    const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                    if (tbodyEl) {
+                        return {
+                            row: tbodyEl,
+                            position: 'into'
+                        };
+                    }
+                }
+                const parentRow = el.closest('tr');
+                if (parentRow && parentRow !== tr) {
+                    // If parentRow is in THEAD, drop into TBODY
+                    if (parentRow.parentElement && parentRow.parentElement.tagName === 'THEAD') {
+                        const tableEl = el.closest('table');
+                        const tbodyEl = tableEl ? tableEl.querySelector('tbody') : null;
+                        if (tbodyEl) {
+                            return {
+                                row: tbodyEl,
+                                position: 'into'
+                            };
+                        }
+                    } else {
+                        const rect = parentRow.getBoundingClientRect();
+                        const midpoint = rect.top + rect.height / 2;
+                        return {
+                            row: parentRow,
+                            position: e.clientY >= midpoint ? 'after' : 'before'
+                        };
+                    }
                 }
             }
         }
