@@ -10,9 +10,9 @@
 
 <script type="module">
     // scripts that must be rerun on every page load
-    this.init('tabSystem');
-
     import { TabManager, GoogleSheetsService, buildTable, ModalManager } from './js/index.js';
+    
+    TabManager.init('tabSystem');
     
     const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
     
