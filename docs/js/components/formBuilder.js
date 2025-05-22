@@ -1,5 +1,4 @@
-import { GoogleSheetsService } from '../index.js';
-import { buildTable } from '../index.js';
+import { GoogleSheetsService, TableManager } from '../index.js';
 
 export class FormBuilder {
     constructor(containerId, resultContainerId) {
@@ -118,7 +117,7 @@ export class FormBuilder {
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
                     } else {
-                        const table = buildTable(result.data, result.headers, [], options.editColumns);
+                        const table = TableManager.buildTable(result.data, result.headers, [], options.editColumns);
                         // buildTable now returns a wrapped table, so we can directly append it
                         resultData.appendChild(table);
                     }
