@@ -185,11 +185,11 @@ export class TableManager {
             
             const deltaX = e.clientX - this.dragState.startX;
             const deltaY = e.clientY - this.dragState.startY;
-            const dragId = tr.closest('table').classList[0].split('-')[2];
             if (this.dragState.dragClone) {
                 this.dragState.dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
             }
             
+            const dragId = e.target.closest('table').classList[0].split('-')[2];
             const dropTarget = this.findDropTarget(e, dragId);
             if (dropTarget && this.dragState.sourceRow) {
                 const { row, position } = dropTarget;
