@@ -30,7 +30,7 @@ export class PageBuilder {
             }
 
             // Show loading notification
-            const loadingModal = await ModalManager.notify('Loading page content...', { timeout: 0 });
+            const loadingModal = ModalManager.notify('Loading page content...', { timeout: 0 });
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
