@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, GoogleSheetsService, ModalManager } from '../index.js';
+import { GoogleSheetsAuth, GoogleSheetsService, TableManager, TabManager, ModalManager } from '../index.js';
 import { navigationItems } from '../app.js';
 
 export class PageBuilder {
@@ -7,6 +7,10 @@ export class PageBuilder {
     // Function to load content dynamically into the #content div
     static async loadContent(page) {
         try {
+            // Clean up existing handlers
+            TableManager.cleanup();
+            TabManager.cleanup();
+
             // Cache current page before doing anything else
             if (window.location.hash) {
                 const userEmail = await GoogleSheetsAuth.getUserEmail();

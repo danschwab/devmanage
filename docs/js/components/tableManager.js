@@ -9,6 +9,12 @@ export class TableManager {
         lastHoveredElement: null
     };
 
+    static handlers = {
+        mousedown: null,
+        mousemove: null,
+        mouseup: null
+    };
+
     static formatError(message) {
         const div = document.createElement('div');
         div.innerHTML = message;
@@ -117,8 +123,36 @@ export class TableManager {
         return table;
     }
 
+    static cleanup() {
+        // Remove all event listeners
+        if (this.handlers.mousedown) {
+            document.removeEventListener('mousedown', this.handlers.mousedown);
+        }
+        if (this.handlers.mousemove) {
+            document.removeEventListener('mousemove', this.handlers.mousemove);
+        }
+        if (this.handlers.mouseup) {
+            document.removeEventListener('mouseup', this.handlers.mouseup);
+        }
+        
+        // Reset state
+        this.dragState = {
+            isDragging: false,
+            startX: 0,
+            startY: 0,
+            dragClone: null,
+            sourceRow: null,
+            hoverTimer: null,
+            lastHoveredElement: null
+        };
+    }
+
     static initDragAndDrop() {
-        document.addEventListener('mousedown', (e) => {
+        // Clean up any existing handlers
+        this.cleanup();
+
+        // Store handler references for cleanup
+        this.handlers.mousedown = (e) => {
             const dragHandle = e.target.closest('.row-drag-handle');
             if (!dragHandle) return;
             
@@ -144,9 +178,9 @@ export class TableManager {
             
             document.body.appendChild(this.dragState.dragClone);
             tr.classList.add('dragging');
-        });
+        };
 
-        document.addEventListener('mousemove', (e) => {
+        this.handlers.mousemove = (e) => {
             if (!this.dragState.isDragging) return;
             
             const deltaX = e.clientX - this.dragState.startX;
@@ -166,12 +200,12 @@ export class TableManager {
                     row.appendChild(this.dragState.sourceRow);
                 }
             }
-        });
+        };
 
-        document.addEventListener('mouseup', () => {
+        this.handlers.mouseup = () => {
             if (!this.dragState.isDragging) return;
             
-            if (this.dragState.sourceRow) {
+            if this.dragState.sourceRow) {
                 this.dragState.sourceRow.classList.remove('dragging');
             }
             if (this.dragState.dragClone) {
@@ -188,7 +222,12 @@ export class TableManager {
                 hoverTimer: null,
                 lastHoveredElement: null
             };
-        });
+        };
+
+        // Add listeners with stored handlers
+        document.addEventListener('mousedown', this.handlers.mousedown);
+        document.addEventListener('mousemove', this.handlers.mousemove);
+        document.addEventListener('mouseup', this.handlers.mouseup);
     }
 
     static findDropTarget(e) {

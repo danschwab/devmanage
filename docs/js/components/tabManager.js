@@ -2,8 +2,29 @@ import { PageBuilder } from '../index.js';
 
 export class TabManager {
     static tabCounter = 1;
+    static handlers = {
+        outsideClick: null,
+        tabEvents: null,
+        resize: null
+    };
     
+    static cleanup() {
+        // Remove all event listeners
+        if (this.handlers.outsideClick) {
+            document.removeEventListener('click', this.handlers.outsideClick);
+        }
+        if (this.handlers.tabEvents) {
+            document.removeEventListener('click', this.handlers.tabEvents);
+        }
+        if (this.handlers.resize) {
+            window.removeEventListener('resize', this.handlers.resize);
+        }
+    }
+
     static init(tabNavigationWrapper, newTabHandler = null) {
+        // Clean up existing handlers
+        this.cleanup();
+
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -37,19 +58,15 @@ export class TabManager {
             tabNavigationWrapper.appendChild(tabContainer);
         }
 
-        // Add click handler to close menu when clicking outside
-        document.addEventListener('click', (e) => {
+        this.handlers.outsideClick = (e) => {
             if (!tabs.contains(e.target)) {
                 tabs.classList.remove('menu-open');
             }
-        });
+        };
+        
+        this.handlers.resize = () => this.checkOverflow();
 
-        // Check for overflow and switch to dropdown if needed
-        this.checkOverflow();
-        window.addEventListener('resize', () => this.checkOverflow());
-
-        // Set up event delegation for tab container
-        document.addEventListener('click', (event) => {
+        this.handlers.tabEvents = (event) => {
             const target = event.target;
             
             if (target.matches('.tab-button')) {
@@ -70,7 +87,12 @@ export class TabManager {
             else if (target.matches('.new-tab-button') && newTabHandler) {
                 newTabHandler();
             }
-        });
+        };
+
+        // Add listeners with stored handlers
+        document.addEventListener('click', this.handlers.outsideClick);
+        window.addEventListener('resize', this.handlers.resize);
+        document.addEventListener('click', this.handlers.tabEvents);
     }
     
     static checkOverflow(openMenu = false) {
