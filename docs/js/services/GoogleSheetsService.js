@@ -410,17 +410,17 @@ export class GoogleSheetsService {
         // Get existing pages
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
         
-        // Find page index or append
-        let rowIndex = existingData.findIndex(row => row[0] === pagePath) + 1;
-        if (rowIndex === 0) {
-            rowIndex = existingData.length;
-        }
+        // Find existing row index for this path
+        const rowIndex = existingData.findIndex(row => row[0] === pagePath);
+        
+        // If found, update that row. If not, add to the end
+        const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
         
         // Update cache data
         const updates = [
-            { row: rowIndex, col: 0, value: pagePath },
-            { row: rowIndex, col: 1, value: timestamp },
-            { row: rowIndex, col: 2, value: pageContent }
+            { row: targetRow, col: 0, value: pagePath },
+            { row: targetRow, col: 1, value: timestamp },
+            { row: targetRow, col: 2, value: pageContent }
         ];
         
         await this.setSheetData(spreadsheetId, tabName, updates);
