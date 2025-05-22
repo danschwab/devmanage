@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, PageBuilder, FormBuilder, buildTable, ModalManager } from './index.js';
+import { GoogleSheetsAuth, PageBuilder, ModalManager } from './index.js';
 
 // Define navigation items
 export let navigationItems = [
