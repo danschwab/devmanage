@@ -3,7 +3,7 @@ import { PageBuilder } from '../index.js';
 export class TabManager {
     static tabCounter = 1;
     
-    static init(tabNavigationWrapper, allowNewTabs = true) {
+    static init(tabNavigationWrapper, newTabHandler = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -21,7 +21,7 @@ export class TabManager {
             hamburger.innerHTML = '<span></span><span></span><span></span>';
             tabs.appendChild(hamburger);
 
-            if (allowNewTabs) {
+            if (newTabHandler) {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
@@ -66,6 +66,9 @@ export class TabManager {
                 if (menuButton) {
                     tabs.classList.toggle('menu-open');
                 }
+            }
+            else if (target.matches('.new-tab-button') && newTabHandler) {
+                newTabHandler();
             }
         });
     }

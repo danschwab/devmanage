@@ -29,11 +29,8 @@
         return buildTable(mainTableData, headers, [], [], 'pack-list');
     }
 
-    // Initialize the TabManager
-    TabManager.init('tabSystem', true);
-
-    // this fails if it is an async function
-    document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {
+    // Initialize the TabManager with tab handler
+    TabManager.init('tabSystem', () => {
         const modal = ModalManager.createModal(`
             <div id="tabs-list">
                 <p class="loading-message">Loading...</p>
