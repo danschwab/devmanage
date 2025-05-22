@@ -407,14 +407,12 @@ export class GoogleSheetsService {
             ]);
         }
         
-        // Get existing pages
-        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
+        // Get existing pages (skip header row)
+        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
         
-        // Find existing row index for this path
+        // Find page index or use row 2 (after header)
         const rowIndex = existingData.findIndex(row => row[0] === pagePath);
-        
-        // If found, update that row. If not, add to the end
-        const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
+        const targetRow = rowIndex >= 0 ? rowIndex + 2 : 2;  // Add 2 for header row and 1-based index
         
         // Update cache data
         const updates = [
@@ -447,7 +445,7 @@ export class GoogleSheetsService {
         }
         
         // Get existing pages
-        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
+        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
         
         // Find page using hash without # symbol
         const pagePath = window.location.hash.substring(1);

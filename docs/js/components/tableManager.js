@@ -205,7 +205,7 @@ export class TableManager {
         this.handlers.mouseup = () => {
             if (!this.dragState.isDragging) return;
             
-            if this.dragState.sourceRow) {
+            if (this.dragState.sourceRow) {
                 this.dragState.sourceRow.classList.remove('dragging');
             }
             if (this.dragState.dragClone) {
