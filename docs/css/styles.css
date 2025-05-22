@@ -155,7 +155,7 @@ button:hover,
 .modal-content button.tab-button {
     border-radius: 0;
     width: 100%;
-    max-width: none;
+    max-width: 100%;
     margin:0;
 }
 .modal-content:has(.modal-header) {
@@ -254,7 +254,7 @@ button:hover,
     border: 1px solid rgba(5, 0, 50, 0.2);
     box-shadow: inset 0 -8px 16px -16px rgba(5, 0, 50, 0.6);
     border-radius: 0 0 3px 3px;
-    max-width: none;
+    max-width: 100%;
 }
 
 .tab-button {
@@ -267,7 +267,7 @@ button:hover,
     border-bottom: none;
     background-color: #f1f1f1;
     color: #333;
-    max-width: none;
+    max-width: 100%;
     height: auto;
     border-radius: 0;
     border-radius: 0.25rem 0.25rem 0 0;
@@ -340,7 +340,7 @@ button:hover,
 .new-tab-button {
     width: 24px;
     height: 24px;
-    min-width: none;
+    min-width: 0;
     border-radius: 50%;
     border: 1px solid rgba(5, 0, 50, 0.2);
     background-color: #f1f1f1;
