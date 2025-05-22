@@ -411,9 +411,9 @@ export class GoogleSheetsService {
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
         
         // Find page index or append
-        let rowIndex = existingData.findIndex(row => row[0] === pagePath);
+        let rowIndex = existingData.findIndex(row => row[0] === pagePath) + 1;
         if (rowIndex === 0) {
-            rowIndex = existingData.length + 1;
+            rowIndex = existingData.length;
         }
         
         // Update cache data
