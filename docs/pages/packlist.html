@@ -1,9 +1,17 @@
 <div id="tabSystem">
+    <script type="module">
+        // scripts that should only be run to build the page
+        import { TabManager } from './js/index.js';
+        await TabManager.addTabNavigation('tabSystem', true);
+    </script>
 </div>
 
 
 
 <script type="module">
+    // scripts that must be rerun on every page load
+    this.init('tabSystem');
+
     import { TabManager, GoogleSheetsService, buildTable, ModalManager } from './js/index.js';
     
     const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
@@ -28,8 +36,6 @@
         const headers = [...content.headers.main, 'Items'];
         return buildTable(mainTableData, headers, [], [], 'pack-list');
     }
-
-    await TabManager.addTabNavigation('tabSystem', true);
 
     // this fails if it is an async function
     document.querySelector('#tabSystem .new-tab-button')?.addEventListener('click', () => {

@@ -164,7 +164,5 @@ export class TabManager {
         `;
 
         PageBuilder.buildPage(structure, tabNavigationWrapper, false);
-
-        this.init(tabNavigationWrapper);
     }
 }
