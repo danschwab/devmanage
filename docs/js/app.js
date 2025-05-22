@@ -18,15 +18,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
-            await PageBuilder.generateNavigation();
-            await PageBuilder.loadContent('pages/home.html');
+            PageBuilder.generateNavigation();
+            PageBuilder.loadContent('pages/home.html');
         } else {
-            await PageBuilder.generateLoginButton();
-            PageBuilder.buildPage('<div class="info-message">Please log in.</div>');
+            PageBuilder.generateLoginButton();
+            PageBuilder.loadContent('pages/login.html');
         }
     } catch (error) {
-        await PageBuilder.generateLoginButton();
-        await ModalManager.alert('Authentication error. Please try again.');
+        PageBuilder.generateLoginButton();
+        ModalManager.alert('Authentication error. Please try again.');
     }
 });
 

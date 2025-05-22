@@ -69,4 +69,24 @@ export class ModalManager {
             });
         });
     }
+
+    static async notify(message, options = { showClose: true, timeout: 3000 }) {
+        return new Promise((resolve) => {
+            const modal = this.createModal(`
+                <div style="text-align: center;">
+                    <p>${message}</p>
+                </div>
+            `, options);
+
+            if (options.timeout) {
+                setTimeout(() => {
+                    modal.remove();
+                    resolve();
+                }, options.timeout);
+            } else {
+                // If no timeout, resolve when closed
+                modal.addEventListener('remove', () => resolve());
+            }
+        });
+    }
 }

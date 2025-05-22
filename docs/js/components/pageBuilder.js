@@ -29,18 +29,17 @@ export class PageBuilder {
                 }
             }
 
-            // Only show loading if we need to fetch
-            await this.buildPage('<div class="loading-message">Loading page content...</div>');
+            // Show loading notification
+            const loadingModal = await ModalManager.notify('Loading page content...', { timeout: 0 });
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
-                // Set the location hash to the current page name (without extension)
-                // const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-                // window.location.hash = pageName;
                 await this.buildPage(html);
+                loadingModal.remove();
             } else {
+                loadingModal.remove();
                 await ModalManager.alert('Error loading content');
             }
         } catch (error) {
@@ -124,7 +123,7 @@ export class PageBuilder {
                 }
             } catch (error) {
                 console.error('Application error:', error);
-                await ModalManager.alert('Authentication failed');
+                ModalManager.alert('Authentication failed');
                 this.generateLoginButton();
             }
         };
@@ -153,12 +152,12 @@ export class PageBuilder {
         logoutButton.className = 'logout-button';
         logoutButton.onclick = async () => {
             try {
-                await GoogleSheetsAuth.logout();
-                this.buildPage('<div class="info-message">Successfully logged out.</div>');
-                await this.generateLoginButton();
+                ModalManager.alert('Successfully logged out.');
+                this.loadContent('pages/login.html');
+                this.generateLoginButton();
             } catch (error) {
                 console.error('Logout failed:', error);
-                await ModalManager.alert('Logout failed. Please try again.');
+                ModalManager.alert('Logout failed. Please try again.');
             }
         };
         nav.appendChild(logoutButton);
