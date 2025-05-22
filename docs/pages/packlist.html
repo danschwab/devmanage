@@ -4,7 +4,7 @@
 
 
 <script type="module">
-    import { TabManager, GoogleSheetsService, buildTable, ModalManager } from './js/index.js';
+    import { TabManager, GoogleSheetsService, TableManager, ModalManager } from './js/index.js';
     
     const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
     
@@ -13,7 +13,7 @@
             const itemData = document.createElement('div');
             itemData.classList.add('table-wrapper');
             if (crate.items.length > 0) {
-                const itemTable = buildTable(
+                const itemTable = TableManager.buildTable(
                     crate.items,
                     content.headers.items,
                     ['Pack', 'Check'],
@@ -26,7 +26,7 @@
         });
         
         const headers = [...content.headers.main, 'Items'];
-        return buildTable(mainTableData, headers, [], [], 'pack-list');
+        return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list');
     }
 
     // Initialize the TabManager with tab handler
@@ -72,4 +72,7 @@
         
         //TabManager.addNewTab('New Tab', 'new-tab-content', true);
     });
+
+    // Initialize drag and drop handling in tables
+    TableManager.initDragAndDrop();
 </script>
