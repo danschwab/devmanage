@@ -326,7 +326,7 @@ export class GoogleSheetsService {
     static async setSheetData(spreadsheetId, tabName, updates) {
         await GoogleSheetsAuth.checkAuth();
         
-        // Convert array indices to A1 notation
+        // Convert 0-based indices to A1 notation (add 1 for 1-based sheet indexing)
         const data = updates.map(({row, col, value}) => ({
             range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
             values: [[value]]
@@ -410,9 +410,9 @@ export class GoogleSheetsService {
         // Get existing pages (skip header row)
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
         
-        // Find page index or use row 2 (after header)
+        // Find page index or append to end
         const rowIndex = existingData.findIndex(row => row[0] === pagePath);
-        const targetRow = rowIndex >= 0 ? rowIndex + 2 : 2;  // Add 2 for header row and 1-based index
+        const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
         
         // Update cache data
         const updates = [
