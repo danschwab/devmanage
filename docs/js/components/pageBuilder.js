@@ -7,12 +7,8 @@ export class PageBuilder {
     // Function to load content dynamically into the #content div
     static async loadContent(page) {
         try {
-            // Show loading message
-            await this.buildPage('<div class="loading-message">Loading page content...</div>');
-
-            // Get current hash before loading new page
-            const currentHash = window.location.hash;
-            if (currentHash && currentHash !== '#') {
+            // Cache current page before doing anything else
+            if (window.location.hash) {
                 const userEmail = await GoogleSheetsAuth.getUserEmail();
                 if (userEmail) {
                     await GoogleSheetsService.cachePage(this.CACHE_SPREADSHEET_ID);
@@ -23,7 +19,7 @@ export class PageBuilder {
             const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
             window.location.hash = pageName;
 
-            // Check for cached version of new page
+            // Check for cached version before showing loading message
             const cachedContent = await GoogleSheetsService.getCachedPage(this.CACHE_SPREADSHEET_ID, 60 * 60 * 1000);
             if (cachedContent) {
                 const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
@@ -32,6 +28,9 @@ export class PageBuilder {
                     return;
                 }
             }
+
+            // Only show loading if we need to fetch
+            await this.buildPage('<div class="loading-message">Loading page content...</div>');
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
