@@ -10,15 +10,20 @@ export class PageBuilder {
             // Show loading message
             await this.buildPage('<div class="loading-message">Loading page content...</div>');
 
-            // Cache current page before loading new one if we're on a valid page
-            if (window.location.hash) {
+            // Get current hash before loading new page
+            const currentHash = window.location.hash;
+            if (currentHash && currentHash !== '#') {
                 const userEmail = await GoogleSheetsAuth.getUserEmail();
                 if (userEmail) {
                     await GoogleSheetsService.cachePage(this.CACHE_SPREADSHEET_ID);
                 }
             }
 
-            // Check for cached version
+            // Set the new hash before checking cache
+            const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+            window.location.hash = pageName;
+
+            // Check for cached version of new page
             const cachedContent = await GoogleSheetsService.getCachedPage(this.CACHE_SPREADSHEET_ID, 60 * 60 * 1000);
             if (cachedContent) {
                 const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
@@ -33,8 +38,8 @@ export class PageBuilder {
             if (response.ok) {
                 const html = await response.text();
                 // Set the location hash to the current page name (without extension)
-                const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-                window.location.hash = pageName;
+                // const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+                // window.location.hash = pageName;
                 await this.buildPage(html);
             } else {
                 this.buildPage('<div class="loading-message">Error loading content.</div>');

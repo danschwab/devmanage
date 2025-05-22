@@ -360,7 +360,8 @@ export class GoogleSheetsService {
 
     static async cachePage(spreadsheetId) {
         // Don't cache empty locations
-        if (!window.location.pathname || window.location.pathname === '/') {
+        const hash = window.location.hash;
+        if (!hash || hash === '#') {
             return false;
         }
 
@@ -371,8 +372,8 @@ export class GoogleSheetsService {
         const userEmail = await GoogleSheetsAuth.getUserEmail();
         if (!userEmail) throw new Error('User not authenticated');
         
-        // Get current page info
-        const pagePath = window.location.pathname;
+        // Get current page info using hash as the page identifier
+        const pagePath = hash.substring(1); // Remove the # symbol
         const timestamp = new Date().toISOString();
         const pageContent = contentDiv.innerHTML;
         
@@ -448,8 +449,8 @@ export class GoogleSheetsService {
         // Get existing pages
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A:C`) || [];
         
-        // Find page index
-        const pagePath = window.location.pathname;
+        // Find page using hash without # symbol
+        const pagePath = window.location.hash.substring(1);
         const pageRow = existingData.find(row => row[0] === pagePath);
         
         if (pageRow) {
