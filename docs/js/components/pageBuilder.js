@@ -11,10 +11,11 @@ export class PageBuilder {
             TableManager.cleanup();
             TabManager.cleanup();
 
-            // Cache current page before doing anything else
+            // Only cache if page has content and hash exists
             if (window.location.hash) {
+                const contentDiv = document.getElementById('content');
                 const userEmail = await GoogleSheetsAuth.getUserEmail();
-                if (userEmail) {
+                if (userEmail && contentDiv?.children.length > 0) {
                     await GoogleSheetsService.cachePage(this.CACHE_SPREADSHEET_ID);
                 }
             }
@@ -109,6 +110,7 @@ export class PageBuilder {
 
     // Function to generate the login button
     static async generateLoginButton() {
+        window.location.hash = ''; // Clear hash when showing login
         const nav = document.getElementById('navbar');
         nav.innerHTML = ''; // Clear existing navigation
         
@@ -137,16 +139,12 @@ export class PageBuilder {
     // Function to generate the navigation menu
     static async generateNavigation() {
         const nav = document.getElementById('navbar');
-        nav.innerHTML = ''; // Clear existing content
+        nav.innerHTML = '';
         
         navigationItems.forEach(item => {
             const link = document.createElement('a');
-            link.href = '#';
+            link.href = `#${item.file}`;
             link.textContent = item.title;
-            link.onclick = (e) => {
-                e.preventDefault();
-                this.loadContent(`pages/${item.file}`);
-            };
             nav.appendChild(link);
         });
 
@@ -157,7 +155,7 @@ export class PageBuilder {
         logoutButton.onclick = async () => {
             try {
                 ModalManager.alert('Successfully logged out.');
-                this.loadContent('pages/login.html');
+                window.location.hash = 'login';
                 this.generateLoginButton();
             } catch (error) {
                 console.error('Logout failed:', error);

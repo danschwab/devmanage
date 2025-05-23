@@ -1,14 +1,10 @@
 import { GoogleSheetsAuth, PageBuilder, ModalManager } from './index.js';
 
-// Define navigation items
-export let navigationItems = [
-    { title: 'Home', file: 'home.html' },
-    { title: 'Prod Sched', file: 'prod.html' },
-    { title: 'Pack Lists', file: 'packlist.html' },
-    { title: 'About', file: 'about.html' }
-];
-
-
+// Handle hash changes
+window.addEventListener('hashchange', () => {
+    const pageName = window.location.hash.substring(1) || 'home';
+    PageBuilder.loadContent(`pages/${pageName}.html`);
+});
 
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {    
@@ -19,11 +15,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
             PageBuilder.generateNavigation();
-            PageBuilder.loadContent('pages/home.html');
+            // Let hash handler load initial page
+            if (!window.location.hash) {
+                window.location.hash = 'home';
+            } else {
+                const pageName = window.location.hash.substring(1);
+                PageBuilder.loadContent(`pages/${pageName}.html`);
+            }
             loadingModal.remove();
         } else {
             PageBuilder.generateLoginButton();
-            PageBuilder.loadContent('pages/login.html');
+            window.location.hash = 'login';
             loadingModal.remove();
         }
     } catch (error) {
@@ -33,16 +35,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-
-
-// Add global function for console access
-/*
-window.loadPage = async (pageName) => {
-    try {
-        await PageBuilder.loadContent(`pages/${pageName}.html`);
-    } catch (error) {
-        console.error(`Failed to load page ${pageName}:`, error);
-        await ModalManager.alert(`Failed to load page ${pageName}:`);
-    }
-};
-*/
+// Define navigation items
+export let navigationItems = [
+    { title: 'Home', file: 'home' },
+    { title: 'Prod Sched', file: 'prod' },
+    { title: 'Pack Lists', file: 'packlist' },
+    { title: 'About', file: 'about' }
+];
