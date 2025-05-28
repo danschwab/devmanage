@@ -6,7 +6,9 @@ export class TableManager {
         dragClone: null,
         sourceRow: null,
         hoverTimer: null,
-        lastHoveredElement: null
+        lastHoveredElement: null,
+        dropCheckTimeout: null,
+        lastDropCheck: 0
     };
 
     static handlers = {
@@ -143,8 +145,33 @@ export class TableManager {
             dragClone: null,
             sourceRow: null,
             hoverTimer: null,
-            lastHoveredElement: null
+            lastHoveredElement: null,
+            dropCheckTimeout: null,
+            lastDropCheck: 0
         };
+    }
+
+    static async checkDropTarget(e) {
+        const table = e.target.closest('table');
+        let dragId = null;
+        if (table) {
+            const dragIdClass = Array.from(table.classList).find(cls => cls.startsWith('drag-id-'));
+            if (dragIdClass) {
+                dragId = dragIdClass;
+            }
+        }
+
+        const dropTarget = this.findDropTarget(e, dragId);
+        if (dropTarget && this.dragState.sourceRow) {
+            const { row, position } = dropTarget;
+            if (position === 'before') {
+                row.parentNode.insertBefore(this.dragState.sourceRow, row);
+            } else if (position === 'after') {
+                row.parentNode.insertBefore(this.dragState.sourceRow, row.nextSibling);
+            } else if (position === 'into') {
+                row.appendChild(this.dragState.sourceRow);
+            }
+        }
     }
 
     static initDragAndDrop() {
@@ -189,17 +216,16 @@ export class TableManager {
                 this.dragState.dragClone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
             }
             
-            const dragId = e.target.closest('table').classList[0].split('-')[2];
-            const dropTarget = this.findDropTarget(e, dragId);
-            if (dropTarget && this.dragState.sourceRow) {
-                const { row, position } = dropTarget;
-                if (position === 'before') {
-                    row.parentNode.insertBefore(this.dragState.sourceRow, row);
-                } else if (position === 'after') {
-                    row.parentNode.insertBefore(this.dragState.sourceRow, row.nextSibling);
-                } else if (position === 'into') {
-                    row.appendChild(this.dragState.sourceRow);
+            // Throttle drop target checks to every 100ms
+            const now = Date.now();
+            if (now - this.dragState.lastDropCheck > 100) {
+                this.dragState.lastDropCheck = now;
+                if (this.dragState.dropCheckTimeout) {
+                    clearTimeout(this.dragState.dropCheckTimeout);
                 }
+                this.dragState.dropCheckTimeout = setTimeout(() => {
+                    this.checkDropTarget(e);
+                }, 0);
             }
         };
 
@@ -221,7 +247,9 @@ export class TableManager {
                 dragClone: null,
                 sourceRow: null,
                 hoverTimer: null,
-                lastHoveredElement: null
+                lastHoveredElement: null,
+                dropCheckTimeout: null,
+                lastDropCheck: 0
             };
         };
 
@@ -238,7 +266,7 @@ export class TableManager {
         for (const el of elements) {
             // Get the closest table and only continue if it has the correct tag
             const targetTable = el.closest('table');
-            if (!targetTable || !targetTable.classList.contains(`drag-id-${dragId}`)) continue;
+            if (!targetTable || !targetTable.classList.contains(dragId)) continue;
 
             // Check for row targets
             if (el.tagName === 'TR' && el !== tr) {
