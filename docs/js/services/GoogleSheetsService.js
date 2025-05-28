@@ -358,10 +358,14 @@ export class GoogleSheetsService {
         return response.result.sheets.map(sheet => sheet.properties.title);
     }
 
-    static async cachePage(spreadsheetId) {
+    static async cacheData(spreadsheetId, cacheName, content) {
+        // Don't cache empty content
+        if (!content || content.trim() === '') {
+            return false;
+        }
+        
         // Don't cache empty locations
-        const hash = window.location.hash;
-        if (!hash || hash === '#') {
+        if (!cacheName || cacheName.trim() === '') {
             return false;
         }
 
@@ -372,10 +376,7 @@ export class GoogleSheetsService {
         const userEmail = await GoogleSheetsAuth.getUserEmail();
         if (!userEmail) throw new Error('User not authenticated');
         
-        // Get current page info using hash as the page identifier
-        const pagePath = hash.substring(1); // Remove the # symbol
         const timestamp = new Date().toISOString();
-        const pageContent = contentDiv.innerHTML;
         
         // Format tab name (sanitize email for sheet name)
         const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
@@ -401,9 +402,9 @@ export class GoogleSheetsService {
             
             // Add headers
             await this.setSheetData(spreadsheetId, tabName, [
-                { row: 0, col: 0, value: "Page URL" },
+                { row: 0, col: 0, value: "Cache Name" },
                 { row: 0, col: 1, value: "Last Modified" },
-                { row: 0, col: 2, value: "Page Content" }
+                { row: 0, col: 2, value: "Content" }
             ]);
         }
         
@@ -411,21 +412,21 @@ export class GoogleSheetsService {
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
         
         // Find page index or append to end
-        const rowIndex = existingData.findIndex(row => row[0] === pagePath);
+        const rowIndex = existingData.findIndex(row => row[0] === cacheName);
         const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
         
         // Update cache data
         const updates = [
-            { row: targetRow, col: 0, value: pagePath },
+            { row: targetRow, col: 0, value: cacheName },
             { row: targetRow, col: 1, value: timestamp },
-            { row: targetRow, col: 2, value: pageContent }
+            { row: targetRow, col: 2, value: content }
         ];
         
         await this.setSheetData(spreadsheetId, tabName, updates);
         return true;
     }
     
-    static async getCachedPage(spreadsheetId, maxAgeMs = Infinity) {
+    static async getCachedData(spreadsheetId, cacheName, maxAgeMs = Infinity) {
         await GoogleSheetsAuth.checkAuth();
         const userEmail = await GoogleSheetsAuth.getUserEmail();
         if (!userEmail) return null;
@@ -448,8 +449,7 @@ export class GoogleSheetsService {
         const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
         
         // Find page using hash without # symbol
-        const pagePath = window.location.hash.substring(1);
-        const pageRow = existingData.find(row => row[0] === pagePath);
+        const pageRow = existingData.find(row => row[0] === cacheName);
         
         if (pageRow) {
             const timestamp = new Date(pageRow[1]).getTime();

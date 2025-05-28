@@ -1,11 +1,5 @@
 import { GoogleSheetsAuth, PageBuilder, ModalManager } from './index.js';
 
-// Handle hash changes
-window.addEventListener('hashchange', () => {
-    const pageName = window.location.hash.substring(1) || 'home';
-    PageBuilder.loadContent(`pages/${pageName}.html`);
-});
-
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {    
     try {

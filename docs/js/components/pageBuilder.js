@@ -10,14 +10,17 @@ export class PageBuilder {
             // Clean up existing handlers
             TableManager.cleanup();
             TabManager.cleanup();
-
-            // Only cache if page has content and hash exists
-            if (window.location.hash) {
+            
+            // Cache current page before changing
+            try {
                 const contentDiv = document.getElementById('content');
-                const userEmail = await GoogleSheetsAuth.getUserEmail();
-                if (userEmail && contentDiv?.children.length > 0) {
-                    await GoogleSheetsService.cachePage(this.CACHE_SPREADSHEET_ID);
+                if (contentDiv?.children.length > 0) {
+                    // Use old location for caching
+                    const cacheId = window.location.hash.substring(1);
+                    await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
                 }
+            } catch (error) {
+                console.error('Failed to cache page:', error);
             }
 
             // Set the new hash before checking cache
@@ -25,7 +28,7 @@ export class PageBuilder {
             window.location.hash = pageName;
 
             // Check for cached version before showing loading message
-            const cachedContent = await GoogleSheetsService.getCachedPage(this.CACHE_SPREADSHEET_ID, 60 * 60 * 1000);
+            const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageName, 60 * 60 * 1000);
             if (cachedContent) {
                 const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
                 if (useCache) {
@@ -110,7 +113,6 @@ export class PageBuilder {
 
     // Function to generate the login button
     static async generateLoginButton() {
-        window.location.hash = ''; // Clear hash when showing login
         const nav = document.getElementById('navbar');
         nav.innerHTML = ''; // Clear existing navigation
         
@@ -118,12 +120,13 @@ export class PageBuilder {
         loginButton.textContent = 'Log in';
         loginButton.onclick = async () => {
             try {
-                this.buildPage(`<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`,nav);
+                nav.innerHTML = `<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`;
 
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
-                    await this.generateNavigation();
-                    //await this.loadContent('pages/home.html');
+                    this.generateNavigation();
+                    const location = window.location.hash.substring(1);
+                    this.loadContent(`pages/${location || 'home'}.html`);
                 } else {
                     throw new Error('Authentication failed');
                 }
@@ -143,8 +146,12 @@ export class PageBuilder {
         
         navigationItems.forEach(item => {
             const link = document.createElement('a');
-            link.href = `#${item.file}`;
+            link.href = '#'; // Prevent default hash change
             link.textContent = item.title;
+            link.onclick = (e) => {
+            e.preventDefault();
+            this.loadContent(item.file);
+            };
             nav.appendChild(link);
         });
 
