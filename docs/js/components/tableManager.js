@@ -262,6 +262,7 @@ export class TableManager {
     static findDropTarget(e, dragId) {
         // Look for any visible table with matching drag-id
         const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const sourceRow = this.dragState.sourceRow;
         
         for (const el of elements) {
             // Get the closest table and only continue if it has the correct tag
@@ -269,7 +270,7 @@ export class TableManager {
             if (!targetTable || !targetTable.classList.contains(dragId)) continue;
 
             // Check for row targets
-            if (el.tagName === 'TR' && el !== tr) {
+            if (el.tagName === 'TR' && el !== sourceRow) {
                 // If this TR is in the THEAD, drop into TBODY
                 if (el.parentElement && el.parentElement.tagName === 'THEAD') {
                     const tableEl = el.closest('table');
@@ -304,7 +305,7 @@ export class TableManager {
                     }
                 }
                 const parentRow = el.closest('tr');
-                if (parentRow && parentRow !== tr) {
+                if (parentRow && parentRow !== sourceRow) {
                     // If parentRow is in THEAD, drop into TBODY
                     if (parentRow.parentElement && parentRow.parentElement.tagName === 'THEAD') {
                         const tableEl = el.closest('table');
