@@ -3,15 +3,15 @@ import { GoogleSheetsAuth, PageBuilder, ModalManager } from './index.js';
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {    
     try {
-        await GoogleSheetsAuth.initialize();
         const loadingModal = ModalManager.notify('Checking authentication...', { timeout: 0 });
+        await GoogleSheetsAuth.initialize();
 
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
         if (isAuthenticated) {
             PageBuilder.generateNavigation();
-            // Let hash handler load initial page
             if (!window.location.hash) {
                 window.location.hash = 'home';
+                PageBuilder.loadContent(`pages/home.html`);
             } else {
                 const pageName = window.location.hash.substring(1);
                 PageBuilder.loadContent(`pages/${pageName}.html`);

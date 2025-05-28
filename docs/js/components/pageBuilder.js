@@ -5,12 +5,19 @@ export class PageBuilder {
     static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
 
     // Function to load content dynamically into the #content div
-    static async loadContent(page) {
+    static async loadContent(pageName) {
         try {
             // Clean up existing handlers
             TableManager.cleanup();
             TabManager.cleanup();
             
+            // Ensure pageName ends with .html
+            if (!pageName.endsWith('.html')) {
+                pageName = `${pageName}.html`;
+            }
+            
+            const page = `pages/${pageName}`;
+
             // Cache current page before changing
             try {
                 const contentDiv = document.getElementById('content');
@@ -24,11 +31,11 @@ export class PageBuilder {
             }
 
             // Set the new hash before checking cache
-            const pageName = page.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-            window.location.hash = pageName;
+            const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+            window.location.hash = pageNameWithoutExt;
 
             // Check for cached version before showing loading message
-            const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageName, 60 * 60 * 1000);
+            const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
             if (cachedContent) {
                 const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
                 if (useCache) {
@@ -48,7 +55,12 @@ export class PageBuilder {
                 loadingModal.remove();
             } else {
                 loadingModal.remove();
-                await ModalManager.alert('Error loading content');
+                // Redirect to 404 page but don't recurse if 404 itself fails
+                if (!page.endsWith('404.html')) {
+                    await this.loadContent('404.html');
+                } else {
+                    await ModalManager.alert('Error loading content');
+                }
             }
         } catch (error) {
             console.error('Error:', error);
@@ -126,7 +138,7 @@ export class PageBuilder {
                 if (success) {
                     this.generateNavigation();
                     const location = window.location.hash.substring(1);
-                    this.loadContent(`pages/${location || 'home'}.html`);
+                    this.loadContent(location || 'home');
                 } else {
                     throw new Error('Authentication failed');
                 }
@@ -146,11 +158,11 @@ export class PageBuilder {
         
         navigationItems.forEach(item => {
             const link = document.createElement('a');
-            link.href = '#'; // Prevent default hash change
+            link.href = '#';
             link.textContent = item.title;
             link.onclick = (e) => {
-            e.preventDefault();
-            this.loadContent(`pages/${item.file}`);
+                e.preventDefault();
+                this.loadContent(item.file);
             };
             nav.appendChild(link);
         });
@@ -162,7 +174,7 @@ export class PageBuilder {
         logoutButton.onclick = async () => {
             try {
                 ModalManager.alert('Successfully logged out.');
-                window.location.hash = 'login';
+                this.loadContent('login');
                 this.generateLoginButton();
             } catch (error) {
                 console.error('Logout failed:', error);
