@@ -150,7 +150,7 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
             e.preventDefault();
-            this.loadContent(item.file);
+            this.loadContent(`pages/${item.file}`);
             };
             nav.appendChild(link);
         });
