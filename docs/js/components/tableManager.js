@@ -8,7 +8,9 @@ export class TableManager {
         hoverTimer: null,
         lastHoveredElement: null,
         dropCheckTimeout: null,
-        lastDropCheck: 0
+        lastDropCheck: 0,
+        lastTabHover: null,
+        tabHoverTimeout: null
     };
 
     static handlers = {
@@ -147,11 +149,13 @@ export class TableManager {
             hoverTimer: null,
             lastHoveredElement: null,
             dropCheckTimeout: null,
-            lastDropCheck: 0
+            lastDropCheck: 0,
+            lastTabHover: null,
+            tabHoverTimeout: null
         };
     }
 
-    static async checkDropTarget(e) {
+    static async checkDropTarget(e, allowedNavigationTags = []) {
         const table = e.target.closest('table');
         let dragId = null;
         if (table) {
@@ -161,7 +165,7 @@ export class TableManager {
             }
         }
 
-        const dropTarget = this.findDropTarget(e, dragId);
+        const dropTarget = this.findDropTarget(e, dragId, allowedNavigationTags);
         if (dropTarget && this.dragState.sourceRow) {
             const { row, position } = dropTarget;
             if (position === 'before') {
@@ -174,10 +178,10 @@ export class TableManager {
         }
     }
 
-    static initDragAndDrop() {
+    static initDragAndDrop(allowedNavigationTags = []) {
         // Clean up any existing handlers
         this.cleanup();
-
+        
         // Store handler references for cleanup
         this.handlers.mousedown = (e) => {
             const dragHandle = e.target.closest('.row-drag-handle');
@@ -224,7 +228,7 @@ export class TableManager {
                     clearTimeout(this.dragState.dropCheckTimeout);
                 }
                 this.dragState.dropCheckTimeout = setTimeout(() => {
-                    this.checkDropTarget(e);
+                    this.checkDropTarget(e, allowedNavigationTags);
                 }, 0);
             }
         };
@@ -249,7 +253,9 @@ export class TableManager {
                 hoverTimer: null,
                 lastHoveredElement: null,
                 dropCheckTimeout: null,
-                lastDropCheck: 0
+                lastDropCheck: 0,
+                lastTabHover: null,
+                tabHoverTimeout: null
             };
         };
 
@@ -259,11 +265,33 @@ export class TableManager {
         document.addEventListener('mouseup', this.handlers.mouseup);
     }
 
-    static findDropTarget(e, dragId) {
-        // Look for any visible table with matching drag-id
+    static findDropTarget(e, dragId, allowedNavigationTags = []) {
         const elements = document.elementsFromPoint(e.clientX, e.clientY);
         const sourceRow = this.dragState.sourceRow;
-        
+
+        // Check for navigation elements if we have allowed tags
+        if (allowedNavigationTags.length > 0) {
+            const navElement = elements.find(el => {
+                return allowedNavigationTags.some(tag => el.matches(tag));
+            });
+
+            if (navElement) {
+                if (this.dragState.lastTabHover !== navElement) {
+                    if (this.dragState.tabHoverTimeout) {
+                        clearTimeout(this.dragState.tabHoverTimeout);
+                    }
+                    this.dragState.lastTabHover = navElement;
+                    this.dragState.tabHoverTimeout = setTimeout(() => {
+                        navElement.click();
+                    }, 1000);
+                }
+            } else if (this.dragState.tabHoverTimeout) {
+                clearTimeout(this.dragState.tabHoverTimeout);
+                this.dragState.lastTabHover = null;
+            }
+        }
+
+        // Process drop targets
         for (const el of elements) {
             // Get the closest table and only continue if it has the correct tag
             const targetTable = el.closest('table');
