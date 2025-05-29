@@ -133,27 +133,6 @@ export class PageBuilder {
             }
         }
     }
-        
-        // Handle scripts in the loaded content
-        const scripts = contentDiv.querySelectorAll('script');
-        for (const script of scripts) {
-            if (script.type === 'module') {
-                const newScript = document.createElement('script');
-                newScript.type = 'module';
-                if (script.src) {
-                    newScript.src = script.src;
-                } else {
-                    newScript.textContent = script.textContent;
-                }
-                contentDiv.appendChild(newScript);
-            } else {
-                const newScript = document.createElement('script');
-                newScript.textContent = script.textContent;
-                contentDiv.appendChild(newScript);
-                contentDiv.removeChild(newScript);
-            }
-        }
-    }
 
 
     // Function to generate the login button
