@@ -21,7 +21,7 @@ export class TabManager {
         }
     }
 
-    static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
+    static buildTabSystem(tabNavigationWrapper, newTabHandler = null, dependencies = {}) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -43,8 +43,11 @@ export class TabManager {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
-                // Store the actual bound function
-                newTabBtn.onclick = newTabHandler;
+                // Store handler and dependencies
+                newTabBtn.dataset.handler = JSON.stringify({
+                    fn: newTabHandler.toString(),
+                    dependencies
+                });
                 tabs.appendChild(newTabBtn);
             }
 
@@ -94,6 +97,13 @@ export class TabManager {
                 if (menuButton) {
                     menuButton.closest('.tabs').classList.toggle('menu-open');
                 }
+            }
+            else if (target.matches('.new-tab-button')) {
+                const handlerData = JSON.parse(target.dataset.handler);
+                const handlerFn = new Function('deps', 
+                    `return (${handlerData.fn}).call(this, deps)`
+                );
+                handlerFn(handlerData.dependencies);
             }
         };
 
