@@ -101,21 +101,10 @@ export class PageBuilder {
             return null;
         }
 
-        // Handle scripts in the loaded content, avoiding duplicates
+        // Handle scripts in the loaded content
         const scripts = contentDiv.querySelectorAll('script');
-        const existingScripts = Array.from(document.querySelectorAll('script'))
-            .map(s => s.src || s.textContent);
 
         for (const script of scripts) {
-            let isDuplicate = false;
-            if (script.src) {
-                isDuplicate = existingScripts.includes(script.src);
-            } else {
-                // For inline scripts, check if the same code already exists
-                isDuplicate = existingScripts.includes(script.textContent);
-            }
-            if (isDuplicate) continue;
-
             if (script.type === 'module') {
                 const newScript = document.createElement('script');
                 newScript.type = 'module';
@@ -130,6 +119,13 @@ export class PageBuilder {
                 newScript.textContent = script.textContent;
                 contentDiv.appendChild(newScript);
                 contentDiv.removeChild(newScript);
+            }
+        }
+
+        // Remove original script tags
+        for (const script of scripts) {
+            if (script.parentNode) {
+                script.parentNode.removeChild(script); 
             }
         }
     }
