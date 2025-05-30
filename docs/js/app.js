@@ -11,10 +11,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             PageBuilder.generateNavigation();
             if (!window.location.hash) {
                 window.location.hash = 'home';
-                PageBuilder.loadContent(`pages/home.html`);
+                PageBuilder.loadContent(`home`);
             } else {
                 const pageName = window.location.hash.substring(1);
-                PageBuilder.loadContent(`pages/${pageName}.html`);
+                PageBuilder.loadContent(pageName);
             }
             loadingModal.remove();
         } else {
