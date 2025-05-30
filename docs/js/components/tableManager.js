@@ -156,13 +156,12 @@ export class TableManager {
     }
 
     static async checkDropTarget(e, allowedNavigationTags = []) {
-        const table = e.target.closest('table');
+        // Get dragId from the source row's table
+        const sourceTable = this.dragState.sourceRow?.closest('table');
         let dragId = null;
-        if (table) {
-            const dragIdClass = Array.from(table.classList).find(cls => cls.startsWith('drag-id-'));
-            if (dragIdClass) {
-                dragId = dragIdClass;
-            }
+        if (sourceTable) {
+            const dragIdClass = Array.from(sourceTable.classList).find(cls => cls.startsWith('drag-id-'));
+            dragId = dragIdClass;
         }
 
         const dropTarget = this.findDropTarget(e, dragId, allowedNavigationTags);
