@@ -5,7 +5,7 @@ export class PageBuilder {
     static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
 
     // Function to load content dynamically into the #content div
-    static async loadContent(pageName) {
+    static async loadContent(pageName, cache = true) {
         try {
             // Clean up existing handlers
             //TableManager.cleanup();
@@ -19,15 +19,17 @@ export class PageBuilder {
             const page = `pages/${pageName}`;
 
             // Cache current page before changing
-            try {
-                const contentDiv = document.getElementById('content');
-                if (contentDiv?.children.length > 0) {
-                    // Use old location for caching
-                    const cacheId = window.location.hash.substring(1);
-                    await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
+            if (cache) {
+                try {
+                    const contentDiv = document.getElementById('content');
+                    if (contentDiv?.children.length > 0) {
+                        // Use old location for caching
+                        const cacheId = window.location.hash.substring(1);
+                        await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
+                    }
+                } catch (error) {
+                    console.error('Failed to cache page:', error);
                 }
-            } catch (error) {
-                console.error('Failed to cache page:', error);
             }
 
             // Set the new hash before checking cache
@@ -57,7 +59,7 @@ export class PageBuilder {
                 loadingModal.remove();
                 // Redirect to 404 page but don't recurse if 404 itself fails
                 if (!page.endsWith('404.html')) {
-                    await this.loadContent('404.html');
+                    await this.loadContent('404.html', false);
                 } else {
                     await ModalManager.alert('Error loading content');
                 }
