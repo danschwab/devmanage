@@ -43,8 +43,8 @@ export class TabManager {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
-                // Store handler as serialized function in data attribute
-                newTabBtn.dataset.handler = newTabHandler.toString();
+                // Store the actual bound function
+                newTabBtn.onclick = newTabHandler;
                 tabs.appendChild(newTabBtn);
             }
 
@@ -93,14 +93,6 @@ export class TabManager {
                 const menuButton = target.closest('.hamburger-menu');
                 if (menuButton) {
                     menuButton.closest('.tabs').classList.toggle('menu-open');
-                }
-            }
-            else if (target.matches('.new-tab-button')) {
-                const handlerStr = target.dataset.handler;
-                if (handlerStr) {
-                    // Convert string back to function and execute
-                    const handler = new Function(`return ${handlerStr}`)();
-                    handler();
                 }
             }
         };
