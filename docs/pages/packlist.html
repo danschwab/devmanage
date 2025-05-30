@@ -18,7 +18,8 @@
                     content.headers.items,
                     ['Pack', 'Check'],
                     [],
-                    'pack-list-items'
+                    'pack-list-items',
+                    ['.tab-button']
                 );
                 itemData.appendChild(itemTable);
             }
@@ -26,11 +27,11 @@
         });
         
         const headers = [...content.headers.main, 'Items'];
-        return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list');
+        return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
     }
 
-    // Initialize the TabManager with tab handler
-    TabManager.init('tabSystem', () => {
+    // Standalone function for TabManager tab handler
+    function addNewPackListTab() {
         const modal = ModalManager.createModal(`
             <div id="tabs-list">
                 <p class="loading-message">Loading...</p>
@@ -69,10 +70,10 @@
             errorMessage.textContent = 'Failed to load spreadsheet tabs';
             modal.querySelector('#tabs-list').appendChild(errorMessage);
         }
-        
-        //TabManager.addNewTab('New Tab', 'new-tab-content', true);
-    });
+    }
 
-    // Initialize drag and drop handling in tables with tab navigation
-    TableManager.initDragAndDrop(['.tab-button']);
+    // Initialize the TabManager with tab handler
+    TabManager.buildTabSystem('tabSystem', addNewPackListTab);
+
+
 </script>

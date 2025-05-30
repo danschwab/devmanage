@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, PageBuilder, ModalManager } from './index.js';
+import { GoogleSheetsAuth, PageBuilder, ModalManager, TabManager, TableManager } from './index.js';
 
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {    
@@ -27,6 +27,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingModal.remove();
         ModalManager.alert('Authentication error. Please try again.');
     }
+
+    // Initialize the tab system
+    await TabManager.init();
+
+    // Initialize drag and drop handling in tables
+    await TableManager.init();
 });
 
 // Define navigation items

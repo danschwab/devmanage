@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth, GoogleSheetsService, TableManager, TabManager, ModalManager } from '../index.js';
+import { GoogleSheetsAuth, GoogleSheetsService, ModalManager } from '../index.js';
 import { navigationItems } from '../app.js';
 
 export class PageBuilder {
@@ -8,8 +8,8 @@ export class PageBuilder {
     static async loadContent(pageName) {
         try {
             // Clean up existing handlers
-            TableManager.cleanup();
-            TabManager.cleanup();
+            //TableManager.cleanup();
+            //TabManager.cleanup();
             
             // Ensure pageName ends with .html
             if (!pageName.endsWith('.html')) {

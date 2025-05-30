@@ -25,11 +25,15 @@ export class TableManager {
         return div;
     }
 
-    static buildTable(data, headers, hideColumns = [], editColumns = [], dragId = null) {
+    static buildTable(data, headers, hideColumns = [], editColumns = [], dragId = null, draggingClickTags = []) {
         const tableData = data.data || data;
         const table = document.createElement('table');
         if (dragId) {
             table.classList.add(`drag-id-${dragId}`);
+            // Store navigation tags in table dataset
+            if (draggingClickTags.length > 0) {
+                table.dataset.draggingClickTags = JSON.stringify(draggingClickTags);
+            }
         }
         const tbody = document.createElement('tbody');
 
@@ -155,7 +159,7 @@ export class TableManager {
         };
     }
 
-    static async checkDropTarget(e, allowedNavigationTags = []) {
+    static async checkDropTarget(e, draggingClickTags = []) {
         // Get dragId from the source row's table
         const sourceTable = this.dragState.sourceRow?.closest('table');
         let dragId = null;
@@ -164,7 +168,7 @@ export class TableManager {
             dragId = dragIdClass;
         }
 
-        const dropTarget = this.findDropTarget(e, dragId, allowedNavigationTags);
+        const dropTarget = this.findDropTarget(e, dragId, draggingClickTags);
         if (dropTarget && this.dragState.sourceRow) {
             const { row, position } = dropTarget;
             if (position === 'before') {
@@ -177,7 +181,7 @@ export class TableManager {
         }
     }
 
-    static initDragAndDrop(allowedNavigationTags = []) {
+    static init() {
         // Clean up any existing handlers
         this.cleanup();
         
@@ -191,6 +195,10 @@ export class TableManager {
             
             const tr = dragHandle.closest('tr');
             if (!tr || !tr.classList.contains('draggable')) return;
+            
+            const sourceTable = tr.closest('table');
+            const draggingClickTags = sourceTable?.dataset.draggingClickTags ? 
+                JSON.parse(sourceTable.dataset.draggingClickTags) : [];
             
             this.dragState.isDragging = true;
             this.dragState.startX = e.clientX;
@@ -227,7 +235,7 @@ export class TableManager {
                     clearTimeout(this.dragState.dropCheckTimeout);
                 }
                 this.dragState.dropCheckTimeout = setTimeout(() => {
-                    this.checkDropTarget(e, allowedNavigationTags);
+                    this.checkDropTarget(e, draggingClickTags);
                 }, 0);
             }
         };
@@ -264,14 +272,14 @@ export class TableManager {
         document.addEventListener('mouseup', this.handlers.mouseup);
     }
 
-    static findDropTarget(e, dragId, allowedNavigationTags = []) {
+    static findDropTarget(e, dragId, draggingClickTags = []) {
         const elements = document.elementsFromPoint(e.clientX, e.clientY);
         const sourceRow = this.dragState.sourceRow;
 
         // Check for navigation elements if we have allowed tags
-        if (allowedNavigationTags.length > 0) {
+        if (draggingClickTags.length > 0) {
             const navElement = elements.find(el => {
-                return allowedNavigationTags.some(tag => el.matches(tag));
+                return draggingClickTags.some(tag => el.matches(tag));
             });
 
             if (navElement) {

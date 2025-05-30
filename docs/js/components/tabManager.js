@@ -21,10 +21,7 @@ export class TabManager {
         }
     }
 
-    static init(tabNavigationWrapper, newTabHandler = null) {
-        // Clean up existing handlers
-        this.cleanup();
-
+    static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -46,6 +43,8 @@ export class TabManager {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
+                // Store handler as serialized function in data attribute
+                newTabBtn.dataset.handler = newTabHandler.toString();
                 tabs.appendChild(newTabBtn);
             }
 
@@ -58,14 +57,26 @@ export class TabManager {
             tabNavigationWrapper.appendChild(tabContainer);
         }
 
+        return tabNavigationWrapper;
+    }
+
+    static init() {
+        // Clean up existing handlers
+        this.cleanup();
+
+        // Handle outside clicks to close menus
         this.handlers.outsideClick = (e) => {
-            if (!tabs.contains(e.target)) {
-                tabs.classList.remove('menu-open');
-            }
+            document.querySelectorAll('.tabs').forEach(tabs => {
+                if (!tabs.contains(e.target)) {
+                    tabs.classList.remove('menu-open');
+                }
+            });
         };
         
+        // Handle window resizing
         this.handlers.resize = () => this.checkOverflow();
 
+        // Handle tab system events
         this.handlers.tabEvents = (event) => {
             const target = event.target;
             
@@ -81,11 +92,16 @@ export class TabManager {
             else if (target.matches('.hamburger-menu, .hamburger-menu span')) {
                 const menuButton = target.closest('.hamburger-menu');
                 if (menuButton) {
-                    tabs.classList.toggle('menu-open');
+                    menuButton.closest('.tabs').classList.toggle('menu-open');
                 }
             }
-            else if (target.matches('.new-tab-button') && newTabHandler) {
-                newTabHandler();
+            else if (target.matches('.new-tab-button')) {
+                const handlerStr = target.dataset.handler;
+                if (handlerStr) {
+                    // Convert string back to function and execute
+                    const handler = new Function(`return ${handlerStr}`)();
+                    handler();
+                }
             }
         };
 
@@ -93,6 +109,9 @@ export class TabManager {
         document.addEventListener('click', this.handlers.outsideClick);
         window.addEventListener('resize', this.handlers.resize);
         document.addEventListener('click', this.handlers.tabEvents);
+
+        // Initialize overflow checking for all tab systems
+        this.checkOverflow();
     }
     
     static checkOverflow(openMenu = false) {
