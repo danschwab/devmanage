@@ -1,4 +1,4 @@
-import { PageBuilder, ModalManager } from '../index.js';
+import { PageBuilder } from '../index.js';
 
 export class TabManager {
     static tabCounter = 1;
@@ -8,6 +8,8 @@ export class TabManager {
         resize: null
     };
     
+    static tabHandlers = new Map();
+
     static cleanup() {
         // Remove all event listeners
         if (this.handlers.outsideClick) {
@@ -19,9 +21,11 @@ export class TabManager {
         if (this.handlers.resize) {
             window.removeEventListener('resize', this.handlers.resize);
         }
+        // Clear tab handlers
+        this.tabHandlers.clear();
     }
 
-    static buildTabSystem(tabNavigationWrapper, newTabHandler = null, dependencies = {}) {
+    static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -43,11 +47,10 @@ export class TabManager {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
-                // Store handler and dependencies
-                newTabBtn.dataset.handler = JSON.stringify({
-                    fn: newTabHandler.toString(),
-                    dependencies
-                });
+                // Store handler in Map with a unique ID
+                const handlerId = `tab-handler-${Math.random().toString(36).substr(2, 9)}`;
+                newTabBtn.dataset.handlerId = handlerId;
+                this.tabHandlers.set(handlerId, newTabHandler);
                 tabs.appendChild(newTabBtn);
             }
 
@@ -63,59 +66,6 @@ export class TabManager {
         return tabNavigationWrapper;
     }
 
-    static init() {
-        // Clean up existing handlers
-        this.cleanup();
-
-        // Handle outside clicks to close menus
-        this.handlers.outsideClick = (e) => {
-            document.querySelectorAll('.tabs').forEach(tabs => {
-                if (!tabs.contains(e.target)) {
-                    tabs.classList.remove('menu-open');
-                }
-            });
-        };
-        
-        // Handle window resizing
-        this.handlers.resize = () => this.checkOverflow();
-
-        // Handle tab system events
-        this.handlers.tabEvents = (event) => {
-            const target = event.target;
-            
-            if (target.matches('.tab-button')) {
-                const tabName = target.getAttribute('data-tab');
-                if (tabName) this.openTab(target, tabName);
-            }
-            else if (target.matches('.tab-close')) {
-                event.stopPropagation();
-                const tabName = target.parentElement.getAttribute('data-tab');
-                if (tabName) this.closeTab(target, tabName);
-            }
-            else if (target.matches('.hamburger-menu, .hamburger-menu span')) {
-                const menuButton = target.closest('.hamburger-menu');
-                if (menuButton) {
-                    menuButton.closest('.tabs').classList.toggle('menu-open');
-                }
-            }
-            else if (target.matches('.new-tab-button')) {
-                const handlerData = JSON.parse(target.dataset.handler);
-                const handlerFn = new Function('deps', 
-                    `return (${handlerData.fn}).call(this, deps)`
-                );
-                handlerFn(handlerData.dependencies);
-            }
-        };
-
-        // Add listeners with stored handlers
-        document.addEventListener('click', this.handlers.outsideClick);
-        window.addEventListener('resize', this.handlers.resize);
-        document.addEventListener('click', this.handlers.tabEvents);
-
-        // Initialize overflow checking for all tab systems
-        this.checkOverflow();
-    }
-    
     static checkOverflow(openMenu = false) {
         // this may behave strangely if there is more than one tab container in the document
         const tabsContainer = document.querySelector('.tabs');
@@ -155,7 +105,7 @@ export class TabManager {
             button.classList.add('active');
         }
     }
-    
+
     static closeTab(closeButton, tabName) {
         const tab = document.getElementById(tabName);
         if (!tab) return;
@@ -179,9 +129,9 @@ export class TabManager {
 
         this.checkOverflow();
     }
-    
+
     static addNewTab(tabNavigationWrapper, tabTitle, content, allowClose = true, tabTitleIsName = false) {
-        if (typeof tabNavigationWrapper == 'string') {
+        if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
         }
         
@@ -214,14 +164,67 @@ export class TabManager {
         tabContent.id = tabName;
         tabContent.className = 'tab-content';
 
-        
         PageBuilder.buildPage(tabContent, tabNavigationWrapper.querySelector('.tab-container'), false);
         PageBuilder.buildPage(content, tabContent);
         
         this.checkOverflow(true);
-
         this.openTab(tabButton, tabName, false);
         
         return { tabName, tabButton, tabContent };
+    }
+
+    static init() {
+        // Clean up existing handlers
+        this.cleanup();
+
+        // Handle outside clicks to close menus
+        this.handlers.outsideClick = (e) => {
+            document.querySelectorAll('.tabs').forEach(tabs => {
+                if (!tabs.contains(e.target)) {
+                    tabs.classList.remove('menu-open');
+                }
+            });
+        };
+        
+        // Handle window resizing
+        this.handlers.resize = () => this.checkOverflow();
+
+        // Handle tab system events
+        this.handlers.tabEvents = (event) => {
+            const target = event.target;
+            
+            if (target.matches('.tab-button')) {
+                const tabName = target.getAttribute('data-tab');
+                if (tabName) this.openTab(target, tabName);
+            }
+            else if (target.matches('.tab-close')) {
+                event.stopPropagation();
+                const tabName = target.parentElement.getAttribute('data-tab');
+                if (tabName) this.closeTab(target, tabName);
+            }
+            else if (target.matches('.hamburger-menu, .hamburger-menu span')) {
+                const menuButton = target.closest('.hamburger-menu');
+                if (menuButton) {
+                    menuButton.closest('.tabs').classList.toggle('menu-open');
+                }
+            }
+            else if (target.matches('.new-tab-button')) {
+                const handlerId = target.dataset.handlerId;
+                if (handlerId) {
+                    const handler = this.tabHandlers.get(handlerId);
+                    if (handler) {
+                        handler();
+                    }
+                }
+            }
+        };
+
+        // Add listeners with stored handlers
+        document.addEventListener('click', this.handlers.outsideClick);
+        window.addEventListener('resize', this.handlers.resize);
+        document.addEventListener('click', this.handlers.tabEvents);
+
+        // Initialize overflow checking for all tab systems
+        this.checkOverflow();
     }
 }
