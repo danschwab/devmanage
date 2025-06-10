@@ -39,24 +39,24 @@ export class PageBuilder {
             // Check for cached version before showing loading message
             const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
             if (cachedContent) {
-                const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
-                if (useCache) {
+                //const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
+                //if (useCache) {
                     await this.buildPage(cachedContent);
                     return;
-                }
+                //}
             }
 
             // Show loading notification
-            const loadingModal = ModalManager.notify('Loading page content...', { timeout: 0 });
+            // const loadingModal = ModalManager.notify('Loading page content...', { timeout: 0 });
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
                 await this.buildPage(html);
-                loadingModal.remove();
+            //    loadingModal.remove();
             } else {
-                loadingModal.remove();
+            //    loadingModal.remove();
                 // Redirect to 404 page but don't recurse if 404 itself fails
                 if (!page.endsWith('404.html')) {
                     await this.loadContent('404.html', false);
