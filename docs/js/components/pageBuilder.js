@@ -47,7 +47,7 @@ export class PageBuilder {
             }
 
             // Show loading notification
-             const loadingModal = showLoadingIndicator();
+             const loadingModal = ModalManager.showLoadingIndicator();
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
