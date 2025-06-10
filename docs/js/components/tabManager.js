@@ -7,8 +7,6 @@ export class TabManager {
         tabEvents: null,
         resize: null
     };
-    
-    static tabHandlers = new Map();
 
     static cleanup() {
         // Remove all event listeners
@@ -21,11 +19,9 @@ export class TabManager {
         if (this.handlers.resize) {
             window.removeEventListener('resize', this.handlers.resize);
         }
-        // Clear tab handlers
-        this.tabHandlers.clear();
     }
 
-    static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
+    static buildTabSystem(tabNavigationWrapper, handlerName = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -43,14 +39,11 @@ export class TabManager {
             hamburger.innerHTML = '<span></span><span></span><span></span>';
             tabs.appendChild(hamburger);
 
-            if (newTabHandler) {
+            if (handlerName) {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
-                // Store handler in Map with a unique ID
-                const handlerId = `tab-handler-${Math.random().toString(36).substr(2, 9)}`;
-                newTabBtn.dataset.handlerId = handlerId;
-                this.tabHandlers.set(handlerId, newTabHandler);
+                newTabBtn.dataset.handlerName = handlerName;
                 tabs.appendChild(newTabBtn);
             }
 
@@ -209,12 +202,9 @@ export class TabManager {
                 }
             }
             else if (target.matches('.new-tab-button')) {
-                const handlerId = target.dataset.handlerId;
-                if (handlerId) {
-                    const handler = this.tabHandlers.get(handlerId);
-                    if (handler) {
-                        handler();
-                    }
+                const handlerName = target.dataset.handlerName;
+                if (handlerName && typeof window[handlerName] === 'function') {
+                    window[handlerName]();
                 }
             }
         };

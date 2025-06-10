@@ -70,10 +70,8 @@
             errorMessage.textContent = 'Failed to load spreadsheet tabs';
             modal.querySelector('#tabs-list').appendChild(errorMessage);
         }
-    }
-
-    // Initialize the TabManager with tab handler
-    TabManager.buildTabSystem('tabSystem', addNewPackListTab);
+    }    // Initialize the TabManager with tab handler
+    TabManager.buildTabSystem('tabSystem', 'addNewPackListTab');
 
 
 </script>
