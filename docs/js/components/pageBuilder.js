@@ -11,12 +11,9 @@ export class PageBuilder {
             //TableManager.cleanup();
             //TabManager.cleanup();
             
-            // Ensure pageName ends with .html
-            if (!pageName.endsWith('.html')) {
-                pageName = `${pageName}.html`;
-            }
+            // Show loading notification
+            const loadingModal = ModalManager.showLoadingIndicator();
             
-            const page = `pages/${pageName}`;
 
             // Cache current page before changing
             if (cache) {
@@ -31,10 +28,17 @@ export class PageBuilder {
                     console.error('Failed to cache page:', error);
                 }
             }
+            
 
-            // Set the new hash before checking cache
+            // Ensure pageName ends with .html
+            if (!pageName.endsWith('.html')) {
+                pageName = `${pageName}.html`;
+            }
+            const page = `pages/${pageName}`;
+            
+            // Get the new page name
             const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-            window.location.hash = pageNameWithoutExt;
+            
 
             // Check for cached version before showing loading message
             const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
@@ -42,30 +46,30 @@ export class PageBuilder {
                 //const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
                 //if (useCache) {
                     await this.buildPage(cachedContent);
-                    return;
                 //}
-            }
-
-            // Show loading notification
-             const loadingModal = ModalManager.showLoadingIndicator();
-
-            const cacheBuster = `?v=${new Date().getTime()}`;
-            const response = await fetch(page + cacheBuster);
-            if (response.ok) {
-                const html = await response.text();
-                await this.buildPage(html);
-                loadingModal.remove();
             } else {
-                loadingModal.remove();
-                // Redirect to 404 page but don't recurse if 404 itself fails
-                if (!page.endsWith('404.html')) {
-                    await this.loadContent('404.html', false);
+                const cacheBuster = `?v=${new Date().getTime()}`;
+                const response = await fetch(page + cacheBuster);
+                if (response.ok) {
+                    const html = await response.text();
+                    await this.buildPage(html);
                 } else {
-                    await ModalManager.alert('Error loading content');
-                    window.location.hash = "";
+                    loadingModal.remove();
+                    // Redirect to 404 page but don't recurse if 404 itself fails
+                    if (!page.endsWith('404.html')) {
+                        await this.loadContent('404.html', false);
+                    } else {
+                        await ModalManager.alert('Error loading content');
+                        window.location.hash = "";
+                    }
                 }
             }
+            
+            // Update the URL hash on success
+            window.location.hash = pageNameWithoutExt;
+            loadingModal.remove();
         } catch (error) {
+            loadingModal.remove();
             console.error('Error:', error);
             if (error.message.includes('auth')) {
                 this.generateLoginButton();
