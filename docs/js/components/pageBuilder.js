@@ -47,16 +47,16 @@ export class PageBuilder {
             }
 
             // Show loading notification
-            // const loadingModal = ModalManager.notify('Loading page content...', { timeout: 0 });
+             const loadingModal = showLoadingIndicator();
 
             const cacheBuster = `?v=${new Date().getTime()}`;
             const response = await fetch(page + cacheBuster);
             if (response.ok) {
                 const html = await response.text();
                 await this.buildPage(html);
-            //    loadingModal.remove();
+                loadingModal.remove();
             } else {
-            //    loadingModal.remove();
+                loadingModal.remove();
                 // Redirect to 404 page but don't recurse if 404 itself fails
                 if (!page.endsWith('404.html')) {
                     await this.loadContent('404.html', false);

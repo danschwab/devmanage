@@ -70,6 +70,18 @@ export class ModalManager {
         });
     }
 
+    static showLoadingIndicator() {
+        const modal = this.createModal(`
+            <div style="text-align: center;">
+                <img src="images/loading.gif" alt="Loading..." style="max-width: 64px; margin: 20px;">
+            </div>
+        `, { showClose: false });
+
+        // Add a method to the modal instance to remove it
+        modal.hide = () => modal.remove();
+        return modal;
+    }
+
     static notify(message, options = { showClose: true, timeout: 3000 }) {
         const modal = this.createModal(`
             <div style="text-align: center;">
