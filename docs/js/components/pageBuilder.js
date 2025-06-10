@@ -62,6 +62,7 @@ export class PageBuilder {
                     await this.loadContent('404.html', false);
                 } else {
                     await ModalManager.alert('Error loading content');
+                    window.location.hash = "";
                 }
             }
         } catch (error) {
@@ -69,7 +70,8 @@ export class PageBuilder {
             if (error.message.includes('auth')) {
                 this.generateLoginButton();
             } else {
-                await ModalManager.alert('Error loading content');
+                await ModalManager.alert('Error loading page: ' + error.message);
+                window.location.hash = "";
             }
         }
     }
