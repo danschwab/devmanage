@@ -10,7 +10,8 @@ export class TableManager {
         dropCheckTimeout: null,
         lastDropCheck: 0,
         lastTabHover: null,
-        tabHoverTimeout: null
+        tabHoverTimeout: null,
+        draggingClickTags: null
     };
 
     static handlers = {
@@ -155,7 +156,8 @@ export class TableManager {
             dropCheckTimeout: null,
             lastDropCheck: 0,
             lastTabHover: null,
-            tabHoverTimeout: null
+            tabHoverTimeout: null,
+            draggingClickTags: null
         };
     }
 
@@ -204,6 +206,7 @@ export class TableManager {
             this.dragState.startX = e.clientX;
             this.dragState.startY = e.clientY;
             this.dragState.sourceRow = tr;
+            this.dragState.draggingClickTags = draggingClickTags; // Store for use in mousemove
             
             // Create floating clone
             this.dragState.dragClone = tr.cloneNode(true);
@@ -235,7 +238,9 @@ export class TableManager {
                     clearTimeout(this.dragState.dropCheckTimeout);
                 }
                 this.dragState.dropCheckTimeout = setTimeout(() => {
-                    this.checkDropTarget(e, draggingClickTags);
+                    const sourceTable = this.dragState.sourceRow?.closest('table');
+                    const dragId = sourceTable ? Array.from(sourceTable.classList).find(cls => cls.startsWith('drag-id-')) : null;
+                    this.checkDropTarget(e, this.dragState.draggingClickTags || []);
                 }, 0);
             }
         };
@@ -262,7 +267,8 @@ export class TableManager {
                 dropCheckTimeout: null,
                 lastDropCheck: 0,
                 lastTabHover: null,
-                tabHoverTimeout: null
+                tabHoverTimeout: null,
+                draggingClickTags: null
             };
         };
 
