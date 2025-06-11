@@ -24,7 +24,7 @@ export class TabManager {
         // Clear tab handlers
         this.tabHandlers.clear();
     }
-    
+
     static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
@@ -56,7 +56,7 @@ export class TabManager {
 
             tabNavigationWrapper.appendChild(tabs);
         } else {
-            // If tabs already exist, ensure the new tab button is present
+            // If tabs already exist, ensure the new tab button handler is initialized correctly
             let newTabBtn = tabs.querySelector('.new-tab-button');
             if (newTabBtn && newTabHandler) {
                 // Store handler in Map with a unique ID
