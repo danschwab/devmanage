@@ -7,6 +7,8 @@ export class TabManager {
         tabEvents: null,
         resize: null
     };
+    
+    static tabHandlers = new Map();
 
     static cleanup() {
         // Remove all event listeners
@@ -19,9 +21,11 @@ export class TabManager {
         if (this.handlers.resize) {
             window.removeEventListener('resize', this.handlers.resize);
         }
+        // Clear tab handlers
+        this.tabHandlers.clear();
     }
-
-    static buildTabSystem(tabNavigationWrapper, handlerName = null) {
+    
+    static buildTabSystem(tabNavigationWrapper, newTabHandler = null) {
         // Get the element if a string was passed in
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
@@ -39,15 +43,28 @@ export class TabManager {
             hamburger.innerHTML = '<span></span><span></span><span></span>';
             tabs.appendChild(hamburger);
 
-            if (handlerName) {
+            if (newTabHandler) {
                 const newTabBtn = document.createElement('button');
                 newTabBtn.className = 'new-tab-button';
                 newTabBtn.textContent = '+';
-                newTabBtn.dataset.handlerName = handlerName;
+                // Store handler in Map with a unique ID
+                const handlerId = `tab-handler-${Math.random().toString(36).slice(2, 11)}`;
+                newTabBtn.dataset.handlerId = handlerId;
+                this.tabHandlers.set(handlerId, newTabHandler);
                 tabs.appendChild(newTabBtn);
             }
 
             tabNavigationWrapper.appendChild(tabs);
+        } else {
+            // If tabs already exist, ensure the new tab button is present
+            let newTabBtn = tabs.querySelector('.new-tab-button');
+            if (newTabBtn && newTabHandler) {
+                // Store handler in Map with a unique ID
+                const handlerId = `tab-handler-${Math.random().toString(36).slice(2, 11)}`;
+                newTabBtn.dataset.handlerId = handlerId;
+                this.tabHandlers.set(handlerId, newTabHandler);
+                tabs.appendChild(newTabBtn);
+            }
         }
 
         if (!tabNavigationWrapper.querySelector('.tab-container')) {
@@ -202,9 +219,12 @@ export class TabManager {
                 }
             }
             else if (target.matches('.new-tab-button')) {
-                const handlerName = target.dataset.handlerName;
-                if (handlerName && typeof window[handlerName] === 'function') {
-                    window[handlerName]();
+                const handlerId = target.dataset.handlerId;
+                if (handlerId) {
+                    const handler = this.tabHandlers.get(handlerId);
+                    if (handler) {
+                        handler();
+                    }
                 }
             }
         };
