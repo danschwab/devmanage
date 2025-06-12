@@ -70,10 +70,11 @@ export class ModalManager {
         });
     }
 
-    static showLoadingIndicator() {
+    static showLoadingIndicator(text = 'loading...') {
         const modal = this.createModal(`
             <div style="text-align: center;">
-                <img src="images/loading.gif" alt="Loading..." style="max-width: 64px; margin: 20px;">
+                ${text ? `<div style="margin-bottom: 10px;">${text}</div>` : ''}
+                <img src="images/loading.gif" alt="loading..." style="max-width: 64px; margin: 20px;">
             </div>
         `, { showClose: false });
 

@@ -3,7 +3,7 @@ import { GoogleSheetsAuth, PageBuilder, ModalManager, TabManager, TableManager }
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {    
     try {
-        const loadingModal = ModalManager.notify('Checking authentication...', { timeout: 0 });
+        const loadingModal = ModalManager.showLoadingIndicator('Checking authentication...');
         await GoogleSheetsAuth.initialize();
 
         const isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
@@ -16,15 +16,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const pageName = window.location.hash.substring(1);
                 PageBuilder.loadContent(pageName);
             }
-            loadingModal.remove();
         } else {
             PageBuilder.generateLoginButton();
             window.location.hash = 'login';
-            loadingModal.remove();
         }
+        loadingModal.hide();
     } catch (error) {
         PageBuilder.generateLoginButton();
-        loadingModal.remove();
+        loadingModal.hide();
         ModalManager.alert('Authentication error. Please try again.');
     }
 
