@@ -4,6 +4,18 @@ import { navigationItems } from '../app.js';
 export class PageBuilder {
     static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
 
+    static async cacheCurrentPage() {
+        try {
+            const contentDiv = document.getElementById('content');
+            if (contentDiv?.children.length > 0) {
+                const cacheId = window.location.hash.substring(1);
+                await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
+            }
+        } catch (error) {
+            console.error('Failed to cache page:', error);
+        }
+    }
+
     // Function to load content dynamically into the #content div
     static async loadContent(pageName, cache = true) {
         try {
@@ -17,16 +29,7 @@ export class PageBuilder {
 
             // Cache current page before changing
             if (cache) {
-                try {
-                    const contentDiv = document.getElementById('content');
-                    if (contentDiv?.children.length > 0) {
-                        // Use old location for caching
-                        const cacheId = window.location.hash.substring(1);
-                        await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
-                    }
-                } catch (error) {
-                    console.error('Failed to cache page:', error);
-                }
+                await this.cacheCurrentPage();
             }
             
 
@@ -182,7 +185,7 @@ export class PageBuilder {
             };
             nav.appendChild(link);
         });
-
+        
         // Add logout button
         const logoutButton = document.createElement('button');
         logoutButton.textContent = 'Log out';
@@ -190,7 +193,8 @@ export class PageBuilder {
         logoutButton.onclick = async () => {
             try {
                 ModalManager.alert('Successfully logged out.');
-                this.loadContent('login');
+                await this.cacheCurrentPage();
+                this.buildPage('')
                 this.generateLoginButton();
             } catch (error) {
                 console.error('Logout failed:', error);
