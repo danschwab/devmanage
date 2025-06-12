@@ -370,4 +370,85 @@ export class TableManager {
         }
         return null;
     }
+
+    static getDirtyInputs() {
+        return document.querySelectorAll('input[data-dirty="true"]');
+    }
+
+    static getUpdates(includePosition = true) {
+        const updates = [];
+        
+        // Get updates from dirty inputs
+        const dirtyInputs = this.getDirtyInputs();
+        updates.push(...Array.from(dirtyInputs).map(input => ({
+            type: 'cell',
+            row: parseInt(input.dataset.rowIndex) + 1,
+            col: parseInt(input.dataset.colIndex),
+            value: input.value
+        })));
+
+        // Get position updates if requested
+        if (includePosition) {
+            const tables = document.querySelectorAll('table');
+            tables.forEach(table => {
+                const tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                Array.from(tbody.rows).forEach((row, newIndex) => {
+                    const originalIndex = parseInt(row.dataset.originalIndex);
+                    if (!isNaN(originalIndex) && originalIndex !== newIndex) {
+                        updates.push({
+                            type: 'position',
+                            originalIndex: originalIndex + 1,
+                            newIndex: newIndex + 1,
+                            tableId: table.id || table.dataset.tableId
+                        });
+                    }
+                });
+            });
+        }
+        
+        return updates;
+    }
+
+    static trackRowPosition(table) {
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        
+        Array.from(tbody.rows).forEach((row, index) => {
+            row.dataset.originalIndex = index.toString();
+        });
+    }
+
+    static clearDirtyState() {
+        super.clearDirtyState();
+        
+        // Reset position tracking
+        const tables = document.querySelectorAll('table');
+        tables.forEach(table => this.trackRowPosition(table));
+    }
+
+    static onStateChange(callback) {
+        const observer = new MutationObserver((mutations) => {
+            const hasStructuralChanges = mutations.some(mutation => 
+                mutation.type === 'childList' || 
+                (mutation.type === 'attributes' && mutation.attributeName === 'data-original-index')
+            );
+            
+            if (hasStructuralChanges || mutations.some(m => m.attributeName === 'data-dirty')) {
+                callback(mutations);
+            }
+        });
+
+        const tables = document.querySelectorAll('table');
+        tables.forEach(table => {
+            observer.observe(table, {
+                subtree: true,
+                childList: true,
+                attributes: true,
+                attributeFilter: ['data-dirty', 'data-original-index']
+            });
+        });
+        return observer;
+    }
 }

@@ -52,18 +52,15 @@ export class FormBuilder {
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'button-container';
 
-            // Create result message div
             const resultMessage = document.createElement('div');
             resultMessage.id = 'resultMessage';
             this.resultContainer.appendChild(resultMessage);
 
-            // Create result data div
             const resultData = document.createElement('div');
             resultData.id = 'resultData';
-            
             this.resultContainer.appendChild(resultData);
 
-            // Add save button if editColumns are specified
+            let tableManager;
             let saveButton;
             if (options.editColumns?.length > 0) {
                 const tableId = `table-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -117,16 +114,19 @@ export class FormBuilder {
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
                     } else {
-                        const table = TableManager.buildTable(result.data, result.headers, [], options.editColumns);
-                        // buildTable now returns a wrapped table, so we can directly append it
-                        resultData.appendChild(table);
+                        tableManager = new TableManager(resultData);
+                        const table = tableManager.buildTable(
+                            result.data, 
+                            result.headers, 
+                            [], 
+                            options.editColumns
+                        );
+                        
+                        if (saveButton) {
+                            table.id = saveButton.dataset.tableId;
+                            this.setupTableSaveHandler(tableManager, saveButton, options);
+                        }
                     }
-
-                    if (saveButton) {
-                        table.id = saveButton.dataset.tableId;
-                        this.setupTableSaveHandler(table, saveButton, options);
-                    }
-
                 } catch (error) {
                     console.error('Submit error:', error);
                     resultMessage.textContent = `Error: ${error.message}`;
@@ -138,23 +138,19 @@ export class FormBuilder {
         });
     }
 
-    setupTableSaveHandler(table, saveButton, options) {
+    setupTableSaveHandler(tableManager, saveButton, options) {
         const checkDirtyState = () => {
-            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
+            const dirtyInputs = tableManager.getDirtyInputs();
             saveButton.disabled = dirtyInputs.length === 0;
         };
 
         saveButton.onclick = async () => {
-            const dirtyInputs = table.querySelectorAll('input[data-dirty="true"]');
+            const dirtyInputs = tableManager.getDirtyInputs();
             if (!dirtyInputs.length) return;
 
             try {
                 saveButton.disabled = true;
-                const updates = Array.from(dirtyInputs).map(input => ({
-                    row: parseInt(input.dataset.rowIndex) + 1,
-                    col: parseInt(input.dataset.colIndex),
-                    value: input.value
-                }));
+                const updates = tableManager.getUpdates();
 
                 await GoogleSheetsService.setSheetData(
                     options.spreadsheetId,
@@ -162,11 +158,7 @@ export class FormBuilder {
                     updates
                 );
 
-                dirtyInputs.forEach(input => {
-                    input.dataset.originalValue = input.value;
-                    input.dataset.dirty = 'false';
-                });
-
+                tableManager.clearDirtyState();
                 const resultMessage = document.getElementById('resultMessage');
                 resultMessage.textContent = 'Changes saved successfully';
             } catch (error) {
@@ -179,12 +171,7 @@ export class FormBuilder {
         };
 
         // Set up mutation observer for dirty state tracking
-        const observer = new MutationObserver(checkDirtyState);
-        observer.observe(table, {
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['data-dirty']
-        });
+        tableManager.onStateChange(() => checkDirtyState());
     }
 
     addDropdown(labelText, name, options = [], defaultOption = '') {
