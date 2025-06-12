@@ -5,12 +5,17 @@ export class GoogleSheetsService {
     static async checkItemQuantities(spreadsheetId, projectIdentifier) {
         try {
             // 1. Get the items in the project pack list
-            const packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
+            let packList;
+            try {
+                packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
+            } catch (err) {
+                console.error('Error getting pack list for project:', projectIdentifier, err && err.stack ? err.stack : err);
+                throw new Error('Failed to get pack list for project: ' + projectIdentifier);
+            }
             const itemHeaders = packList.headers.items;
             const itemRows = packList.crates.flatMap(crate => crate.items);
 
             // 2. Extract item IDs and quantities from description columns using regex
-            // Regex: (?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?
             const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
             const itemMap = {}; // { itemId: totalQty }
             for (const row of itemRows) {
@@ -27,7 +32,13 @@ export class GoogleSheetsService {
             const itemIds = Object.keys(itemMap);
 
             // 3. Get all other projects that overlap with the given project
-            const overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
+            let overlappingIds;
+            try {
+                overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
+            } catch (err) {
+                console.error('Error getting overlapping shows:', err && err.stack ? err.stack : err);
+                throw new Error('Failed to get overlapping shows for project: ' + projectIdentifier);
+            }
             const otherProjects = overlappingIds.filter(id => id !== projectIdentifier);
 
             // 4. For each overlapping project, get their pack list and sum up item quantities
@@ -50,12 +61,19 @@ export class GoogleSheetsService {
                         }
                     }
                 } catch (e) {
+                    console.error(`Error getting pack list for overlapping project: ${otherId}`, e && e.stack ? e.stack : e);
                     // Ignore missing/invalid pack lists
                 }
             }
 
             // 5. Get inventory quantities for all items
-            const inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
+            let inventoryInfo;
+            try {
+                inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
+            } catch (err) {
+                console.error('Error getting inventory information:', err && err.stack ? err.stack : err);
+                throw new Error('Failed to get inventory information for items: ' + itemIds.join(', '));
+            }
             const inventoryMap = {};
             inventoryInfo.forEach(obj => {
                 inventoryMap[obj.itemName] = parseInt(obj.Quantity || "0", 10);
@@ -76,7 +94,7 @@ export class GoogleSheetsService {
             }
             return result;
         } catch (error) {
-            console.error('Failed to check item quantities:', error);
+            console.error('Failed to check item quantities:', error && error.stack ? error.stack : error);
             throw new Error('Unable to check item quantities. Please verify the production schedule tab exists and you have permission.');
         }
     }
