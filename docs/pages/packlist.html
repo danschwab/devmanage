@@ -57,8 +57,14 @@
             console.error('Error building quantity check table:', error);
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
-            errorDiv.textContent = 'Failed to load quantity information';
+            errorDiv.textContent = error.message || 'Failed to load quantity information';
             container.appendChild(errorDiv);
+            
+            // Add retry button
+            const retryButton = document.createElement('button');
+            retryButton.textContent = 'Retry';
+            retryButton.onclick = () => buildQuantityCheckTable(tabName, container);
+            container.appendChild(retryButton);
         }
     }
 

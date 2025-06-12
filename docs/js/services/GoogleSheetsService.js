@@ -3,159 +3,175 @@ import { GoogleSheetsAuth } from '../index.js';
 export class GoogleSheetsService {
     
     static async checkItemQuantities(spreadsheetId, projectIdentifier) {
-        // 1. Get the items in the project pack list
-        const packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
-        const itemHeaders = packList.headers.items;
-        const itemRows = packList.crates.flatMap(crate => crate.items);
+        try {
+            // 1. Get the items in the project pack list
+            const packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
+            const itemHeaders = packList.headers.items;
+            const itemRows = packList.crates.flatMap(crate => crate.items);
 
-        // 2. Extract item IDs and quantities from description columns using regex
-        // Regex: (?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?
-        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
-        const itemMap = {}; // { itemId: totalQty }
-        for (const row of itemRows) {
-            for (const cell of row) {
-                if (!cell) continue;
-                const match = cell.match(itemRegex);
-                if (match && match[2]) {
-                    const qty = parseInt(match[1] || "1", 10);
-                    const id = match[2];
-                    itemMap[id] = (itemMap[id] || 0) + qty;
+            // 2. Extract item IDs and quantities from description columns using regex
+            // Regex: (?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)?
+            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
+            const itemMap = {}; // { itemId: totalQty }
+            for (const row of itemRows) {
+                for (const cell of row) {
+                    if (!cell) continue;
+                    const match = cell.match(itemRegex);
+                    if (match && match[2]) {
+                        const qty = parseInt(match[1] || "1", 10);
+                        const id = match[2];
+                        itemMap[id] = (itemMap[id] || 0) + qty;
+                    }
                 }
             }
-        }
-        const itemIds = Object.keys(itemMap);
+            const itemIds = Object.keys(itemMap);
 
-        // 3. Get all other projects that overlap with the given project
-        const overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
-        const otherProjects = overlappingIds.filter(id => id !== projectIdentifier);
+            // 3. Get all other projects that overlap with the given project
+            const overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
+            const otherProjects = overlappingIds.filter(id => id !== projectIdentifier);
 
-        // 4. For each overlapping project, get their pack list and sum up item quantities
-        const overlapItemTotals = {};
-        for (const otherId of otherProjects) {
-            try {
-                const otherPack = await this.getPackListContent(spreadsheetId, otherId);
-                const otherRows = otherPack.crates.flatMap(crate => crate.items);
-                for (const row of otherRows) {
-                    for (const cell of row) {
-                        if (!cell) continue;
-                        const match = cell.match(itemRegex);
-                        if (match && match[2]) {
-                            const qty = parseInt(match[1] || "1", 10);
-                            const id = match[2];
-                            if (itemIds.includes(id)) {
-                                overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
+            // 4. For each overlapping project, get their pack list and sum up item quantities
+            const overlapItemTotals = {};
+            for (const otherId of otherProjects) {
+                try {
+                    const otherPack = await this.getPackListContent(spreadsheetId, otherId);
+                    const otherRows = otherPack.crates.flatMap(crate => crate.items);
+                    for (const row of otherRows) {
+                        for (const cell of row) {
+                            if (!cell) continue;
+                            const match = cell.match(itemRegex);
+                            if (match && match[2]) {
+                                const qty = parseInt(match[1] || "1", 10);
+                                const id = match[2];
+                                if (itemIds.includes(id)) {
+                                    overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
                             }
                         }
                     }
+                } catch (e) {
+                    // Ignore missing/invalid pack lists
                 }
-            } catch (e) {
-                // Ignore missing/invalid pack lists
             }
-        }
 
-        // 5. Get inventory quantities for all items
-        const inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
-        const inventoryMap = {};
-        inventoryInfo.forEach(obj => {
-            inventoryMap[obj.itemName] = parseInt(obj.Quantity || "0", 10);
-        });
+            // 5. Get inventory quantities for all items
+            const inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
+            const inventoryMap = {};
+            inventoryInfo.forEach(obj => {
+                inventoryMap[obj.itemName] = parseInt(obj.Quantity || "0", 10);
+            });
 
-        // 6. Subtract total quantities in all overlapping shows from inventory quantities
-        const result = {};
-        for (const id of itemIds) {
-            const inventoryQty = inventoryMap[id] || 0;
-            const overlapQty = overlapItemTotals[id] || 0;
-            const projectQty = itemMap[id] || 0;
-            result[id] = {
-                inventory: inventoryQty,
-                requested: projectQty,
-                overlapping: overlapQty,
-                available: inventoryQty - overlapQty
-            };
+            // 6. Subtract total quantities in all overlapping shows from inventory quantities
+            const result = {};
+            for (const id of itemIds) {
+                const inventoryQty = inventoryMap[id] || 0;
+                const overlapQty = overlapItemTotals[id] || 0;
+                const projectQty = itemMap[id] || 0;
+                result[id] = {
+                    inventory: inventoryQty,
+                    requested: projectQty,
+                    overlapping: overlapQty,
+                    available: inventoryQty - overlapQty
+                };
+            }
+            return result;
+        } catch (error) {
+            console.error('Failed to check item quantities:', error);
+            throw new Error('Unable to check item quantities. Please verify the production schedule tab exists and you have permission.');
         }
-        return result;
     }
 
     static async getOverlappingShows(spreadsheetId, parameters) {
-        // parameters: { year, startDate, endDate } OR { identifier }
-        await GoogleSheetsAuth.checkAuth();
-        const tabName = "ProductionSchedule";
-        const headers = await this.getTableHeaders(spreadsheetId, tabName);
-
-        // Get all data
-        const lastCol = String.fromCharCode(65 + headers.length - 1);
-        const range = `${tabName}!A2:${lastCol}`;
-        const data = await this.getSheetData(spreadsheetId, range);
-
-        // Helper to parse date or return null
-        const parseDate = (val) => {
-            if (!val) return null;
-            const d = new Date(val);
-            return isNaN(d) ? null : d;
-        };
-
-        // Find header indices
-        const idx = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
-        const idxIdentifier = idx("Identifier");
-        const idxYear = idx("Year");
-        const idxShip = idx("Ship");
-        const idxReturn = idx("Expected Return Date");
-        const idxSStart = idx("S. Start");
-        const idxSEnd = idx("S. End");
-
-        let year, startDate, endDate;
-
-        if (typeof parameters === "string" || parameters.identifier) {
-            // Find the row for the identifier
-            const identifier = parameters.identifier || parameters;
-            const row = data.find(r => r[idxIdentifier] === identifier);
-            if (!row) return [];
-            year = row[idxYear];
-            // Try Ship/Return, fallback to S. Start/S. End +/- 10 days
-            let ship = parseDate(row[idxShip]);
-            let ret = parseDate(row[idxReturn]);
-            if (!ship) {
-                let sStart = parseDate(row[idxSStart]);
-                ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+        try {
+            await GoogleSheetsAuth.checkAuth();
+            const tabName = "ProductionSchedule";
+            
+            // First verify the tab exists
+            const tabs = await this.getSheetTabs(spreadsheetId);
+            if (!tabs.includes(tabName)) {
+                console.warn(`Tab "${tabName}" not found, skipping overlap check`);
+                return [];
             }
-            if (!ret) {
-                let sEnd = parseDate(row[idxSEnd]);
-                ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+
+            const headers = await this.getTableHeaders(spreadsheetId, tabName);
+
+            // Get all data with explicit sheet prefix
+            const lastCol = String.fromCharCode(65 + headers.length - 1);
+            const range = `'${tabName}'!A2:${lastCol}`;
+            const data = await this.getSheetData(spreadsheetId, range);
+
+            // Helper to parse date or return null
+            const parseDate = (val) => {
+                if (!val) return null;
+                const d = new Date(val);
+                return isNaN(d) ? null : d;
+            };
+
+            // Find header indices
+            const idx = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+            const idxIdentifier = idx("Identifier");
+            const idxYear = idx("Year");
+            const idxShip = idx("Ship");
+            const idxReturn = idx("Expected Return Date");
+            const idxSStart = idx("S. Start");
+            const idxSEnd = idx("S. End");
+
+            let year, startDate, endDate;
+
+            if (typeof parameters === "string" || parameters.identifier) {
+                // Find the row for the identifier
+                const identifier = parameters.identifier || parameters;
+                const row = data.find(r => r[idxIdentifier] === identifier);
+                if (!row) return [];
+                year = row[idxYear];
+                // Try Ship/Return, fallback to S. Start/S. End +/- 10 days
+                let ship = parseDate(row[idxShip]);
+                let ret = parseDate(row[idxReturn]);
+                if (!ship) {
+                    let sStart = parseDate(row[idxSStart]);
+                    ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+                }
+                if (!ret) {
+                    let sEnd = parseDate(row[idxSEnd]);
+                    ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+                }
+                startDate = ship;
+                endDate = ret;
+            } else {
+                year = parameters.year;
+                startDate = parseDate(parameters.startDate);
+                endDate = parseDate(parameters.endDate);
             }
-            startDate = ship;
-            endDate = ret;
-        } else {
-            year = parameters.year;
-            startDate = parseDate(parameters.startDate);
-            endDate = parseDate(parameters.endDate);
+
+            if (!year || !startDate || !endDate) return [];
+
+            // Find overlapping shows
+            const overlaps = [];
+            for (const row of data) {
+                if (!row[idxIdentifier] || row[idxYear] != year) continue;
+
+                // Get this row's date range
+                let ship = parseDate(row[idxShip]);
+                let ret = parseDate(row[idxReturn]);
+                if (!ship) {
+                    let sStart = parseDate(row[idxSStart]);
+                    ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+                }
+                if (!ret) {
+                    let sEnd = parseDate(row[idxSEnd]);
+                    ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+                }
+                if (!ship || !ret) continue;
+
+                // Check overlap
+                if (ret >= startDate && ship <= endDate) {
+                    overlaps.push(row[idxIdentifier]);
+                }
+            }
+            return overlaps;
+        } catch (error) {
+            console.warn('Failed to check overlapping shows:', error);
+            return [];
         }
-
-        if (!year || !startDate || !endDate) return [];
-
-        // Find overlapping shows
-        const overlaps = [];
-        for (const row of data) {
-            if (!row[idxIdentifier] || row[idxYear] != year) continue;
-
-            // Get this row's date range
-            let ship = parseDate(row[idxShip]);
-            let ret = parseDate(row[idxReturn]);
-            if (!ship) {
-                let sStart = parseDate(row[idxSStart]);
-                ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-            }
-            if (!ret) {
-                let sEnd = parseDate(row[idxSEnd]);
-                ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
-            }
-            if (!ship || !ret) continue;
-
-            // Check overlap
-            if (ret >= startDate && ship <= endDate) {
-                overlaps.push(row[idxIdentifier]);
-            }
-        }
-        return overlaps;
     }
 
     static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
@@ -281,15 +297,20 @@ export class GoogleSheetsService {
 
     static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
         await GoogleSheetsAuth.checkAuth();
-        const response = await gapi.client.sheets.spreadsheets.get({
-            spreadsheetId,
-            ranges: [`${tabName}!${headerRow}:${headerRow}`],
-            includeGridData: true
-        });
-        
-        return response.result.sheets[0].data[0].rowData[0].values
-            .map(cell => cell.formattedValue)
-            .filter(value => value);
+        try {
+            const response = await gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
+                includeGridData: true
+            });
+            
+            return response.result.sheets[0].data[0].rowData[0].values
+                .map(cell => cell.formattedValue)
+                .filter(value => value);
+        } catch (error) {
+            console.error(`Failed to get headers for tab "${tabName}":`, error);
+            throw new Error(`Unable to access tab "${tabName}". The tab may not exist or you may not have permission.`);
+        }
     }
 
     static async searchTable(spreadsheetId, tabName, headerName, searchValue) {
