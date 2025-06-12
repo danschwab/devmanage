@@ -30,6 +30,38 @@
         return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
     }
 
+    async function buildQuantityCheckTable(tabName, container) {
+        try {
+            const quantityData = await GoogleSheetsService.checkItemQuantities(SPREADSHEET_ID, tabName);
+            const headers = ['Item', 'Inventory', 'Requested', 'Overlapping', 'Available', 'Status'];
+            const rows = Object.entries(quantityData).map(([itemId, info]) => {
+                const status = info.available >= info.requested ? 'OK' : 'Warning';
+                const statusCell = document.createElement('td');
+                statusCell.textContent = status;
+                statusCell.style.color = status === 'OK' ? 'green' : 'red';
+                
+                return [
+                    itemId,
+                    info.inventory,
+                    info.requested,
+                    info.overlapping,
+                    info.available,
+                    statusCell
+                ];
+            });
+
+            const table = TableManager.buildTable(rows, headers);
+            table.classList.add('quantity-check-table');
+            container.appendChild(table);
+        } catch (error) {
+            console.error('Error building quantity check table:', error);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = 'Failed to load quantity information';
+            container.appendChild(errorDiv);
+        }
+    }
+
     // Standalone function for TabManager tab handler
     function addNewPackListTab() {
         const modal = ModalManager.createModal(`
@@ -52,8 +84,14 @@
                     tabButton.addEventListener('click', async () => {
                         try {
                             const content = await GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName);
-                            const tabElement = buildPackListTable(content);
-                            TabManager.addNewTab('tabSystem', tabName, tabElement, true, true);
+                            const tabContainer = document.createElement('div');
+                            const packListTable = buildPackListTable(content);
+                            tabContainer.appendChild(packListTable);
+                            
+                            // Add quantity check table below pack list
+                            await buildQuantityCheckTable(tabName, tabContainer);
+                            
+                            TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
                         } catch (error) {
                             console.error('Error loading sheet content:', error);
                             const errorMessage = document.createElement('p');
