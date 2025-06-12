@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             PageBuilder.generateLoginButton();
-            window.location.hash = 'login';
         }
         loadingModal.hide();
     } catch (error) {
