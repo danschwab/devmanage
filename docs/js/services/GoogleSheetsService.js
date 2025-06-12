@@ -45,6 +45,7 @@ export class GoogleSheetsService {
                                 const id = match[2];
                                 if (itemIds.includes(id)) {
                                     overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
+                                }
                             }
                         }
                     }
