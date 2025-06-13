@@ -117,33 +117,37 @@ export class GoogleSheetsService {
     }
 
     static async getOverlappingShows(parameters) {
+        console.group(`Getting overlapping shows for:`, parameters);
         try {
             await GoogleSheetsAuth.checkAuth();
             const tabName = "ProductionSchedule";
             
-            // First verify the tab exists
+            console.log('1. Verifying tab exists...');
             const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
             if (!tabs.includes(tabName)) {
                 console.warn(`Tab "${tabName}" not found, skipping overlap check`);
+                console.groupEnd();
                 return [];
             }
+            console.log('Tab found:', tabName);
 
+            console.log('2. Getting headers...');
             const headers = await this.getTableHeaders(SPREADSHEET_IDS.PROD_SCHED, tabName);
+            console.log('Headers retrieved:', headers);
 
-            // Get all data with explicit sheet prefix
+            console.log('3. Getting data...');
             const lastCol = String.fromCharCode(65 + headers.length - 1);
             const range = `'${tabName}'!A2:${lastCol}`;
             const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, range);
+            console.log(`Retrieved ${data?.length || 0} rows of data`);
 
-            // Helper to parse date or return null
-            const parseDate = (val) => {
-                if (!val) return null;
-                const d = new Date(val);
-                return isNaN(d) ? null : d;
+            console.log('4. Finding header indices...');
+            const idx = (name) => {
+                const index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+                console.log(`Column "${name}" found at index: ${index}`);
+                return index;
             };
 
-            // Find header indices
-            const idx = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
             const idxIdentifier = idx("Identifier");
             const idxYear = idx("Year");
             const idxShip = idx("Ship");
@@ -152,62 +156,96 @@ export class GoogleSheetsService {
             const idxSEnd = idx("S. End");
 
             let year, startDate, endDate;
+            console.log('5. Processing parameters...');
 
             if (typeof parameters === "string" || parameters.identifier) {
-                // Find the row for the identifier
                 const identifier = parameters.identifier || parameters;
+                console.log(`Looking for show: ${identifier}`);
                 const row = data.find(r => r[idxIdentifier] === identifier);
-                if (!row) return [];
+                if (!row) {
+                    console.warn(`Show ${identifier} not found in schedule`);
+                    console.groupEnd();
+                    return [];
+                }
+                console.log('Found show row:', row);
+
                 year = row[idxYear];
-                // Try Ship/Return, fallback to S. Start/S. End +/- 10 days
-                let ship = parseDate(row[idxShip]);
-                let ret = parseDate(row[idxReturn]);
+                console.log(`Show year: ${year}`);
+
+                let ship = this.parseDate(row[idxShip]);
+                let ret = this.parseDate(row[idxReturn]);
+                console.log('Initial dates:', { ship, ret });
+
                 if (!ship) {
-                    let sStart = parseDate(row[idxSStart]);
+                    let sStart = this.parseDate(row[idxSStart]);
                     ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
+                    console.log('Using adjusted start date:', ship);
                 }
                 if (!ret) {
-                    let sEnd = parseDate(row[idxSEnd]);
+                    let sEnd = this.parseDate(row[idxSEnd]);
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+                    console.log('Using adjusted end date:', ret);
                 }
                 startDate = ship;
                 endDate = ret;
             } else {
                 year = parameters.year;
-                startDate = parseDate(parameters.startDate);
-                endDate = parseDate(parameters.endDate);
+                startDate = this.parseDate(parameters.startDate);
+                endDate = this.parseDate(parameters.endDate);
+                console.log('Using direct parameters:', { year, startDate, endDate });
             }
 
-            if (!year || !startDate || !endDate) return [];
+            if (!year || !startDate || !endDate) {
+                console.warn('Missing required date information');
+                console.groupEnd();
+                return [];
+            }
 
-            // Find overlapping shows
+            console.log('6. Finding overlaps...');
             const overlaps = [];
             for (const row of data) {
                 if (!row[idxIdentifier] || row[idxYear] != year) continue;
 
-                // Get this row's date range
-                let ship = parseDate(row[idxShip]);
-                let ret = parseDate(row[idxReturn]);
-                if (!ship) {
-                    let sStart = parseDate(row[idxSStart]);
-                    ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-                }
-                if (!ret) {
-                    let sEnd = parseDate(row[idxSEnd]);
-                    ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
-                }
-                if (!ship || !ret) continue;
+                const ship = this.parseDate(row[idxShip]) || 
+                    (this.parseDate(row[idxSStart]) ? 
+                        new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) : 
+                        null);
+                const ret = this.parseDate(row[idxReturn]) || 
+                    (this.parseDate(row[idxSEnd]) ? 
+                        new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : 
+                        null);
 
-                // Check overlap
+                if (!ship || !ret) {
+                    console.log(`Skipping ${row[idxIdentifier]}: missing dates`);
+                    continue;
+                }
+
                 if (ret >= startDate && ship <= endDate) {
+                    console.log(`Found overlap: ${row[idxIdentifier]}`, {
+                        ship,
+                        ret,
+                        overlapsWithStart: startDate,
+                        overlapsWithEnd: endDate
+                    });
                     overlaps.push(row[idxIdentifier]);
                 }
             }
+
+            console.log('Overlapping shows found:', overlaps);
+            console.groupEnd();
             return overlaps;
         } catch (error) {
-            console.warn('Failed to check overlapping shows:', error);
+            console.error('Failed to check overlapping shows:', error);
+            console.groupEnd();
             return [];
         }
+    }
+
+    // Helper method for date parsing
+    static parseDate(val) {
+        if (!val) return null;
+        const d = new Date(val);
+        return isNaN(d) ? null : d;
     }
 
     static async getInventoryInformation(itemName, retreiveInformation) {
