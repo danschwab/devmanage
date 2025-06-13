@@ -1,12 +1,8 @@
 <div id="tabSystem">
 </div>
 
-
-
 <script type="module">
     import { TabManager, GoogleSheetsService, TableManager, ModalManager } from './js/index.js';
-    
-    const SPREADSHEET_ID = '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0';
     
     function buildPackListTable(content) {
         const mainTableData = content.crates.map(crate => {
@@ -32,7 +28,7 @@
 
     async function buildQuantityCheckTable(tabName, container) {
         try {
-            const quantityData = await GoogleSheetsService.checkItemQuantities(SPREADSHEET_ID, tabName);
+            const quantityData = await GoogleSheetsService.checkItemQuantities(tabName);
             const headers = ['Item', 'Inventory', 'Requested', 'Overlapping', 'Available', 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
                 const status = info.available >= info.requested ? 'OK' : 'Warning';
@@ -77,7 +73,7 @@
         `);
 
         try {
-            const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_ID).then((sheetTabs) => {
+            const sheetTabs = GoogleSheetsService.getSheetTabs().then((sheetTabs) => {
                 modal.querySelector('#tabs-list').innerHTML = ''; // Clear loading message
                 for (const tabName of sheetTabs) {
                     // if the tab name is TEMPLATE then skip it
@@ -89,7 +85,7 @@
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', async () => {
                         try {
-                            const content = await GoogleSheetsService.getPackListContent(SPREADSHEET_ID, tabName);
+                            const content = await GoogleSheetsService.getPackListContent(tabName);
                             const tabContainer = document.createElement('div');
                             const packListTable = buildPackListTable(content);
                             tabContainer.appendChild(packListTable);

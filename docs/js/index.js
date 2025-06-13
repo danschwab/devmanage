@@ -10,3 +10,6 @@ export { PageBuilder } from './components/pageBuilder.js';
 export { TableManager } from './components/tableManager.js';
 export { TabManager } from './components/tabManager.js';
 export { ModalManager } from './components/modalManager.js';
+
+export { navigationItems } from './app.js';
+export { SPREADSHEET_IDS } from './app.js';

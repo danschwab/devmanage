@@ -1,5 +1,4 @@
-import { GoogleSheetsAuth, GoogleSheetsService, ModalManager } from '../index.js';
-import { navigationItems } from '../app.js';
+import { GoogleSheetsAuth, GoogleSheetsService, ModalManager, navigationItems } from '../index.js';
 
 export class PageBuilder {
     static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';

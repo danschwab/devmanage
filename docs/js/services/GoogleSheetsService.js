@@ -1,13 +1,12 @@
-import { GoogleSheetsAuth } from '../index.js';
+import { GoogleSheetsAuth, SPREADSHEET_IDS } from '../index.js';
 
 export class GoogleSheetsService {
-    
-    static async checkItemQuantities(spreadsheetId, projectIdentifier) {
+    static async checkItemQuantities(projectIdentifier) {
         try {
             // 1. Get the items in the project pack list
             let packList;
             try {
-                packList = await this.getPackListContent(spreadsheetId, projectIdentifier);
+                packList = await this.getPackListContent(projectIdentifier);
             } catch (err) {
                 console.error('Error getting pack list for project:', projectIdentifier, err && err.stack ? err.stack : err);
                 throw new Error('Failed to get pack list for project: ' + projectIdentifier);
@@ -34,7 +33,7 @@ export class GoogleSheetsService {
             // 3. Get all other projects that overlap with the given project
             let overlappingIds;
             try {
-                overlappingIds = await this.getOverlappingShows(spreadsheetId, { identifier: projectIdentifier });
+                overlappingIds = await this.getOverlappingShows({ identifier: projectIdentifier });
             } catch (err) {
                 console.error('Error getting overlapping shows:', err && err.stack ? err.stack : err);
                 throw new Error('Failed to get overlapping shows for project: ' + projectIdentifier);
@@ -45,7 +44,7 @@ export class GoogleSheetsService {
             const overlapItemTotals = {};
             for (const otherId of otherProjects) {
                 try {
-                    const otherPack = await this.getPackListContent(spreadsheetId, otherId);
+                    const otherPack = await this.getPackListContent(otherId);
                     const otherRows = otherPack.crates.flatMap(crate => crate.items);
                     for (const row of otherRows) {
                         for (const cell of row) {
@@ -69,7 +68,7 @@ export class GoogleSheetsService {
             // 5. Get inventory quantities for all items
             let inventoryInfo;
             try {
-                inventoryInfo = await this.getInventoryInformation(spreadsheetId, itemIds, "Quantity");
+                inventoryInfo = await this.getInventoryInformation(itemIds, "Quantity");
             } catch (err) {
                 console.error('Error getting inventory information:', err && err.stack ? err.stack : err);
                 throw new Error('Failed to get inventory information for items: ' + itemIds.join(', '));
@@ -99,24 +98,24 @@ export class GoogleSheetsService {
         }
     }
 
-    static async getOverlappingShows(spreadsheetId, parameters) {
+    static async getOverlappingShows(parameters) {
         try {
             await GoogleSheetsAuth.checkAuth();
             const tabName = "ProductionSchedule";
             
             // First verify the tab exists
-            const tabs = await this.getSheetTabs(spreadsheetId);
+            const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
             if (!tabs.includes(tabName)) {
                 console.warn(`Tab "${tabName}" not found, skipping overlap check`);
                 return [];
             }
 
-            const headers = await this.getTableHeaders(spreadsheetId, tabName);
+            const headers = await this.getTableHeaders(SPREADSHEET_IDS.PROD_SCHED, tabName);
 
             // Get all data with explicit sheet prefix
             const lastCol = String.fromCharCode(65 + headers.length - 1);
             const range = `'${tabName}'!A2:${lastCol}`;
-            const data = await this.getSheetData(spreadsheetId, range);
+            const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, range);
 
             // Helper to parse date or return null
             const parseDate = (val) => {
@@ -193,7 +192,7 @@ export class GoogleSheetsService {
         }
     }
 
-    static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
+    static async getInventoryInformation(itemName, retreiveInformation) {
         try {
             // Normalize input to arrays
             const itemNames = Array.isArray(itemName) ? itemName : [itemName];
@@ -208,7 +207,7 @@ export class GoogleSheetsService {
             const indexTab = 'INDEX';
             let indexData;
             try {
-                indexData = await this.getSheetData(spreadsheetId, `${indexTab}!A2:B`);
+                indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `${indexTab}!A2:B`);
                 if (!indexData || !indexData.length) {
                     throw new Error('INDEX tab is empty or missing');
                 }
@@ -257,7 +256,7 @@ export class GoogleSheetsService {
 
             for (const [tab, items] of Object.entries(itemsByTab)) {
                 try {
-                    const headers = await this.getTableHeaders(spreadsheetId, tab);
+                    const headers = await this.getTableHeaders(SPREADSHEET_IDS.INVENTORY, tab);
                     const itemColIdx = headers.findIndex(h => h.toLowerCase() === 'item');
                     
                     if (itemColIdx === -1) {
@@ -273,7 +272,7 @@ export class GoogleSheetsService {
                     });
 
                     const range = `${tab}!A2:${String.fromCharCode(65 + headers.length - 1)}`;
-                    const data = await this.getSheetData(spreadsheetId, range);
+                    const data = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, range);
 
                     items.forEach(item => {
                         const row = data?.find(r => r[itemColIdx] === item);
@@ -311,10 +310,10 @@ export class GoogleSheetsService {
         }
     }
 
-    static async getPackListContent(spreadsheetId, projectIdentifier, itemColumnsStart = "Pack") {
+    static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
         const response = await gapi.client.sheets.spreadsheets.get({
-            spreadsheetId,
+            spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
             ranges: [`${projectIdentifier}`],
             includeGridData: true
         });
