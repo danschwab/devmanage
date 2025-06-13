@@ -186,8 +186,25 @@ export class GoogleSheetsService {
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
                     console.log('Using adjusted end date:', ret);
                 }
+
+                // Ensure ship and ret are in the correct year
+                if (ship && ship.getFullYear() != year) {
+                    ship.setFullYear(Number(year));
+                    console.log('Adjusted ship year:', ship);
+                }
+                if (ret && ret.getFullYear() != year) {
+                    ret.setFullYear(Number(year));
+                    console.log('Adjusted return year:', ret);
+                }
+                // Ensure ret date is after ship date; if not, add a year to ret
+                if (ship && ret && ret <= ship) {
+                    ret.setFullYear(ret.getFullYear() + 1);
+                    console.log('Adjusted return to next year:', ret);
+                }
+
                 startDate = ship;
                 endDate = ret;
+
             } else {
                 year = parameters.year;
                 startDate = this.parseDate(parameters.startDate);
@@ -206,21 +223,33 @@ export class GoogleSheetsService {
             for (const row of data) {
                 if (!row[idxIdentifier] || row[idxYear] != year) continue;
 
-                const ship = this.parseDate(row[idxShip]) || 
+                let ship = this.parseDate(row[idxShip]) || 
                     (this.parseDate(row[idxSStart]) ? 
                         new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) : 
                         null);
-                const ret = this.parseDate(row[idxReturn]) || 
+                let ret = this.parseDate(row[idxReturn]) || 
                     (this.parseDate(row[idxSEnd]) ? 
                         new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : 
                         null);
+
+                // Ensure ship and ret are in the correct year
+                if (ship && ship.getFullYear() != year) {
+                    ship.setFullYear(Number(year));
+                }
+                if (ret && ret.getFullYear() != year) {
+                    ret.setFullYear(Number(year));
+                }
+                // Ensure ret date is after ship date; if not, add a year to ret
+                if (ship && ret && ret <= ship) {
+                    ret.setFullYear(ret.getFullYear() + 1);
+                }
 
                 if (!ship || !ret) {
                     console.log(`Skipping ${row[idxIdentifier]}: missing dates`);
                     continue;
                 }
 
-                if (ret >= startDate && ship <= endDate) {
+                if (ret >= startDate || ship <= endDate) {
                     console.log(`Found overlap: ${row[idxIdentifier]}`, {
                         ship,
                         ret,
