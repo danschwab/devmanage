@@ -53,11 +53,11 @@
             const table = TableManager.buildTable(rows, headers);
             table.classList.add('quantity-check-table');
             container.appendChild(table);
-        } catch (error) {
-            console.error('Error building quantity check table:', error);
+        } catch (err) {
+            console.error('Error building quantity check table:', err && err.stack ? err.stack : err);
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
-            errorDiv.textContent = error.message || 'Failed to load quantity information';
+            errorDiv.textContent = err.message || 'Failed to load quantity information';
             container.appendChild(errorDiv);
             
             // Add retry button
