@@ -2,8 +2,8 @@
 </div>
 
 <script type="module">
-    import { TabManager, GoogleSheetsService, TableManager, ModalManager } from './js/index.js';
-    
+    import { TabManager, GoogleSheetsService, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
+
     function buildPackListTable(content) {
         const mainTableData = content.crates.map(crate => {
             const itemData = document.createElement('div');
@@ -73,7 +73,7 @@
         `);
 
         try {
-            const sheetTabs = GoogleSheetsService.getSheetTabs().then((sheetTabs) => {
+            const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS).then((sheetTabs) => {
                 modal.querySelector('#tabs-list').innerHTML = ''; // Clear loading message
                 for (const tabName of sheetTabs) {
                     // if the tab name is TEMPLATE then skip it
