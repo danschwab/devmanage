@@ -117,37 +117,19 @@ export class GoogleSheetsService {
     }
 
     static async getOverlappingShows(parameters) {
-        console.group(`Getting overlapping shows for:`, parameters);
         try {
             await GoogleSheetsAuth.checkAuth();
             const tabName = "ProductionSchedule";
-            
-            console.log('1. Verifying tab exists...');
             const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
             if (!tabs.includes(tabName)) {
-                console.warn(`Tab "${tabName}" not found, skipping overlap check`);
-                console.groupEnd();
                 return [];
             }
-            console.log('Tab found:', tabName);
-
-            console.log('2. Getting headers...');
             const headers = await this.getTableHeaders(SPREADSHEET_IDS.PROD_SCHED, tabName);
-            console.log('Headers retrieved:', headers);
-
-            console.log('3. Getting data...');
             const lastCol = String.fromCharCode(65 + headers.length - 1);
             const range = `'${tabName}'!A2:${lastCol}`;
             const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, range);
-            console.log(`Retrieved ${data?.length || 0} rows of data`);
 
-            console.log('4. Finding header indices...');
-            const idx = (name) => {
-                const index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
-                console.log(`Column "${name}" found at index: ${index}`);
-                return index;
-            };
-
+            const idx = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
             const idxIdentifier = idx("Identifier");
             const idxYear = idx("Year");
             const idxShip = idx("Ship");
@@ -156,116 +138,74 @@ export class GoogleSheetsService {
             const idxSEnd = idx("S. End");
 
             let year, startDate, endDate;
-            console.log('5. Processing parameters...');
 
             if (typeof parameters === "string" || parameters.identifier) {
                 const identifier = parameters.identifier || parameters;
-                console.log(`Looking for show: ${identifier}`);
                 const row = data.find(r => r[idxIdentifier] === identifier);
                 if (!row) {
-                    console.warn(`Show ${identifier} not found in schedule`);
-                    console.groupEnd();
                     return [];
                 }
-                console.log('Found show row:', row);
-
                 year = row[idxYear];
-                console.log(`Show year: ${year}`);
-
                 let ship = this.parseDate(row[idxShip]);
                 let ret = this.parseDate(row[idxReturn]);
-                console.log('Initial dates:', { ship, ret });
-
                 if (!ship) {
                     let sStart = this.parseDate(row[idxSStart]);
                     ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-                    console.log('Using adjusted start date:', ship);
                 }
                 if (!ret) {
                     let sEnd = this.parseDate(row[idxSEnd]);
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
-                    console.log('Using adjusted end date:', ret);
                 }
-
-                // Ensure ship and ret are in the correct year
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
-                    console.log('Adjusted ship year:', ship);
                 }
                 if (ret && ret.getFullYear() != year) {
                     ret.setFullYear(Number(year));
-                    console.log('Adjusted return year:', ret);
                 }
-                // Ensure ret date is after ship date; if not, add a year to ret
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
-                    console.log('Adjusted return to next year:', ret);
                 }
-
                 startDate = ship;
                 endDate = ret;
-
             } else {
                 year = parameters.year;
                 startDate = this.parseDate(parameters.startDate);
                 endDate = this.parseDate(parameters.endDate);
-                console.log('Using direct parameters:', { year, startDate, endDate });
             }
 
             if (!year || !startDate || !endDate) {
-                console.warn('Missing required date information');
-                console.groupEnd();
                 return [];
             }
 
-            console.log('6. Finding overlaps...');
             const overlaps = [];
             for (const row of data) {
                 if (!row[idxIdentifier] || row[idxYear] != year) continue;
-
-                let ship = this.parseDate(row[idxShip]) || 
-                    (this.parseDate(row[idxSStart]) ? 
-                        new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) : 
+                let ship = this.parseDate(row[idxShip]) ||
+                    (this.parseDate(row[idxSStart]) ?
+                        new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) :
                         null);
-                let ret = this.parseDate(row[idxReturn]) || 
-                    (this.parseDate(row[idxSEnd]) ? 
-                        new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : 
+                let ret = this.parseDate(row[idxReturn]) ||
+                    (this.parseDate(row[idxSEnd]) ?
+                        new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) :
                         null);
-
-                // Ensure ship and ret are in the correct year
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
                 }
                 if (ret && ret.getFullYear() != year) {
                     ret.setFullYear(Number(year));
                 }
-                // Ensure ret date is after ship date; if not, add a year to ret
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
                 }
-
                 if (!ship || !ret) {
-                    console.log(`Skipping ${row[idxIdentifier]}: missing dates`);
                     continue;
                 }
-
                 if (ret >= startDate && ship <= endDate) {
-                    console.log(`Found overlap: ${row[idxIdentifier]}`, {
-                        ship,
-                        ret,
-                        overlapsWithStart: startDate,
-                        overlapsWithEnd: endDate
-                    });
                     overlaps.push(row[idxIdentifier]);
                 }
             }
-
-            console.log('Overlapping shows found:', overlaps);
-            console.groupEnd();
             return overlaps;
         } catch (error) {
-            console.error('Failed to check overlapping shows:', error);
-            console.groupEnd();
             return [];
         }
     }
