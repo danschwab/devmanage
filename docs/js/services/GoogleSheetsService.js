@@ -2,86 +2,99 @@ import { GoogleSheetsAuth, SPREADSHEET_IDS } from '../index.js';
 
 export class GoogleSheetsService {
     static async checkItemQuantities(projectIdentifier) {
+        console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
-            // 1. Get the items in the project pack list
+            // 1. Get pack list
+            console.log('1. Getting pack list...');
             let packList;
             try {
                 packList = await this.getPackListContent(projectIdentifier);
+                console.log('Pack list retrieved:', packList);
             } catch (err) {
-                console.error('Error getting pack list for project:', projectIdentifier, err && err.stack ? err.stack : err);
+                console.error('Error getting pack list:', err);
                 throw new Error('Failed to get pack list for project: ' + projectIdentifier);
             }
-            const itemHeaders = packList.headers.items;
-            const itemRows = packList.crates.flatMap(crate => crate.items);
 
-            // 2. Extract item IDs and quantities from description columns using regex
+            // 2. Extract items
+            console.log('2. Extracting items from pack list...');
             const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
-            const itemMap = {}; // { itemId: totalQty }
-            for (const row of itemRows) {
-                for (const cell of row) {
-                    if (!cell) continue;
-                    const match = cell.match(itemRegex);
-                    if (match && match[2]) {
-                        const qty = parseInt(match[1] || "1", 10);
-                        const id = match[2];
-                        itemMap[id] = (itemMap[id] || 0) + qty;
-                    }
-                }
-            }
+            const itemMap = {};
+            packList.crates.forEach((crate, crateIndex) => {
+                console.log(`Processing crate ${crateIndex + 1}:`, crate);
+                crate.items.forEach((row, rowIndex) => {
+                    row.forEach((cell, cellIndex) => {
+                        if (!cell) return;
+                        const match = cell.match(itemRegex);
+                        if (match && match[2]) {
+                            const qty = parseInt(match[1] || "1", 10);
+                            const id = match[2];
+                            itemMap[id] = (itemMap[id] || 0) + qty;
+                            console.log(`Found item: ${id}, quantity: ${qty} (total: ${itemMap[id]})`);
+                        }
+                    });
+                });
+            });
             const itemIds = Object.keys(itemMap);
+            console.log('Total items found:', itemIds.length, itemMap);
 
-            // 3. Get all other projects that overlap with the given project
+            // 3. Get overlapping shows
+            console.log('3. Checking for overlapping shows...');
             let overlappingIds;
             try {
                 overlappingIds = await this.getOverlappingShows({ identifier: projectIdentifier });
+                console.log('Overlapping shows found:', overlappingIds);
             } catch (err) {
-                console.error('Error getting overlapping shows:', err && err.stack ? err.stack : err);
-                throw new Error('Failed to get overlapping shows for project: ' + projectIdentifier);
+                console.error('Error getting overlapping shows:', err);
+                throw new Error('Failed to get overlapping shows');
             }
-            const otherProjects = overlappingIds.filter(id => id !== projectIdentifier);
 
-            // 4. For each overlapping project, get their pack list and sum up item quantities
+            // 4. Process overlapping shows
+            console.log('4. Processing overlapping shows...');
             const overlapItemTotals = {};
-            for (const otherId of otherProjects) {
+            for (const otherId of overlappingIds) {
+                if (otherId === projectIdentifier) continue;
+                console.log(`Processing overlapping show: ${otherId}`);
                 try {
                     const otherPack = await this.getPackListContent(otherId);
-                    const otherRows = otherPack.crates.flatMap(crate => crate.items);
-                    for (const row of otherRows) {
-                        for (const cell of row) {
-                            if (!cell) continue;
-                            const match = cell.match(itemRegex);
-                            if (match && match[2]) {
-                                const qty = parseInt(match[1] || "1", 10);
-                                const id = match[2];
-                                if (itemIds.includes(id)) {
-                                    overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
+                    console.log(`Pack list retrieved for ${otherId}:`, otherPack);
+                    otherPack.crates.forEach(crate => {
+                        crate.items.forEach(row => {
+                            row.forEach(cell => {
+                                if (!cell) return;
+                                const match = cell.match(itemRegex);
+                                if (match && match[2]) {
+                                    const qty = parseInt(match[1] || "1", 10);
+                                    const id = match[2];
+                                    if (itemIds.includes(id)) {
+                                        overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
+                                        console.log(`Found overlapping item: ${id}, quantity: ${qty} (total: ${overlapItemTotals[id]})`);
+                                    }
                                 }
-                            }
-                        }
-                    }
+                            });
+                        });
+                    });
                 } catch (e) {
-                    console.error(`Error getting pack list for overlapping project: ${otherId}`, e && e.stack ? e.stack : e);
-                    // Ignore missing/invalid pack lists
+                    console.warn(`Failed to process overlapping show ${otherId}:`, e);
                 }
             }
+            console.log('Overlapping totals:', overlapItemTotals);
 
-            // 5. Get inventory quantities for all items
+            // 5. Get inventory quantities
+            console.log('5. Getting inventory quantities...');
             let inventoryInfo;
             try {
                 inventoryInfo = await this.getInventoryInformation(itemIds, "QTY");
+                console.log('Inventory information retrieved:', inventoryInfo);
             } catch (err) {
-                console.error('Error getting inventory information:', err && err.stack ? err.stack : err);
-                throw new Error('Failed to get inventory information for items: ' + itemIds.join(', '));
+                console.error('Error getting inventory:', err);
+                throw new Error('Failed to get inventory information');
             }
-            const inventoryMap = {};
-            inventoryInfo.forEach(obj => {
-                inventoryMap[obj.itemName] = parseInt(obj.QTY || "0", 10);
-            });
 
-            // 6. Subtract total quantities in all overlapping shows from inventory quantities
+            // 6. Calculate final quantities
+            console.log('6. Calculating final quantities...');
             const result = {};
-            for (const id of itemIds) {
-                const inventoryQty = inventoryMap[id] || 0;
+            itemIds.forEach(id => {
+                const inventoryQty = parseInt(inventoryInfo.find(i => i.itemName === id)?.QTY || "0", 10);
                 const overlapQty = overlapItemTotals[id] || 0;
                 const projectQty = itemMap[id] || 0;
                 result[id] = {
@@ -90,11 +103,16 @@ export class GoogleSheetsService {
                     overlapping: overlapQty,
                     available: inventoryQty - overlapQty
                 };
-            }
+                console.log(`Item ${id} summary:`, result[id]);
+            });
+
+            console.log('Final results:', result);
+            console.groupEnd();
             return result;
         } catch (error) {
-            console.error('Failed to check item quantities:', error && error.stack ? error.stack : error);
-            throw new Error('Unable to check item quantities. Please verify the production schedule tab exists and you have permission.');
+            console.error('Failed to check quantities:', error);
+            console.groupEnd();
+            throw error;
         }
     }
 
