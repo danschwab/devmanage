@@ -85,6 +85,9 @@
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', async () => {
                         try {
+                            // loading modal using ModalManager
+                            loadingModal = ModalManager.showLoadingModal();
+
                             const content = await GoogleSheetsService.getPackListContent(tabName);
                             const tabContainer = document.createElement('div');
                             const packListTable = buildPackListTable(content);
@@ -94,7 +97,9 @@
                             await buildQuantityCheckTable(tabName, tabContainer);
                             
                             TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
+                            loadingModal.close();
                         } catch (error) {
+                            loadingModal.close();
                             console.error('Error loading sheet content:', error);
                             const errorMessage = document.createElement('p');
                             errorMessage.textContent = 'Failed to load spreadsheet content';
