@@ -249,7 +249,7 @@ export class GoogleSheetsService {
                     continue;
                 }
 
-                if (ret >= startDate || ship <= endDate) {
+                if (ret >= startDate && ship <= endDate) {
                     console.log(`Found overlap: ${row[idxIdentifier]}`, {
                         ship,
                         ret,
