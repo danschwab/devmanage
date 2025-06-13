@@ -68,14 +68,14 @@ export class GoogleSheetsService {
             // 5. Get inventory quantities for all items
             let inventoryInfo;
             try {
-                inventoryInfo = await this.getInventoryInformation(itemIds, "Quantity");
+                inventoryInfo = await this.getInventoryInformation(itemIds, "QTY");
             } catch (err) {
                 console.error('Error getting inventory information:', err && err.stack ? err.stack : err);
                 throw new Error('Failed to get inventory information for items: ' + itemIds.join(', '));
             }
             const inventoryMap = {};
             inventoryInfo.forEach(obj => {
-                inventoryMap[obj.itemName] = parseInt(obj.Quantity || "0", 10);
+                inventoryMap[obj.itemName] = parseInt(obj.QTY || "0", 10);
             });
 
             // 6. Subtract total quantities in all overlapping shows from inventory quantities
