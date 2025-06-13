@@ -95,9 +95,9 @@
                             await buildQuantityCheckTable(tabName, tabContainer);
                             
                             TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
-                            loadingModal.close();
+                            loadingModal.hide();
                         } catch (error) {
-                            loadingModal.close();
+                            loadingModal.hide();
                             console.error('Error loading sheet content:', error);
                             const errorMessage = document.createElement('p');
                             errorMessage.textContent = 'Failed to load spreadsheet content';
