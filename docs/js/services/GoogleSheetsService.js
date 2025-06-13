@@ -194,60 +194,121 @@ export class GoogleSheetsService {
     }
 
     static async getInventoryInformation(spreadsheetId, itemName, retreiveInformation) {
-        // Normalize input to arrays
-        const itemNames = Array.isArray(itemName) ? itemName : [itemName];
-        const infoFields = Array.isArray(retreiveInformation) ? retreiveInformation : [retreiveInformation];
+        try {
+            // Normalize input to arrays
+            const itemNames = Array.isArray(itemName) ? itemName : [itemName];
+            const infoFields = Array.isArray(retreiveInformation) ? retreiveInformation : [retreiveInformation];
 
-        // Step 1: Get INDEX tab data (prefix -> tab name)
-        const indexTab = 'INDEX';
-        const indexData = await this.getSheetData(spreadsheetId, `${indexTab}!A2:B`);
-        const prefixToTab = {};
-        indexData.forEach(row => {
-            if (row[0] && row[1]) prefixToTab[row[0]] = row[1];
-        });
-
-        // Step 2: Group itemNames by prefix
-        const itemsByTab = {};
-        itemNames.forEach(item => {
-            let [prefix] = item.split('-');
-            let tab = prefixToTab[prefix];
-            if (!tab && prefix && prefix.length > 0) {
-            // Try using just the first character as prefix
-            prefix = prefix[0];
-            tab = prefixToTab[prefix];
+            // Validate inputs
+            if (!itemNames.length || !infoFields.length) {
+                throw new Error('No items or fields specified for inventory lookup');
             }
-            if (!tab) return; // skip if prefix not found
-            if (!itemsByTab[tab]) itemsByTab[tab] = [];
-            itemsByTab[tab].push(item);
-        });
 
-        // Step 3: For each tab, get headers and data, then find requested info
-        const results = [];
-        for (const [tab, items] of Object.entries(itemsByTab)) {
-            const headers = await this.getTableHeaders(spreadsheetId, tab);
-            const itemColIdx = 0; // 'Item' is always the first column
-            const infoIdxs = infoFields.map(field =>
-                headers.findIndex(h => h.toLowerCase() === field.toLowerCase())
-            );
-            // Get all data from tab
-            const data = await this.getSheetData(spreadsheetId, `${tab}!A2:${String.fromCharCode(65 + headers.length - 1)}`);
-            items.forEach(item => {
-                const row = data.find(r => r[itemColIdx] === item);
-                if (row) {
-                    const obj = { itemName: item };
-                    infoFields.forEach((field, i) => {
-                        obj[field] = row[infoIdxs[i]] ?? null;
-                    });
-                    results.push(obj);
-                } else {
-                    // Item not found, return nulls
-                    const obj = { itemName: item };
-                    infoFields.forEach(field => obj[field] = null);
-                    results.push(obj);
+            // Step 1: Get INDEX tab data with error handling
+            const indexTab = 'INDEX';
+            let indexData;
+            try {
+                indexData = await this.getSheetData(spreadsheetId, `${indexTab}!A2:B`);
+                if (!indexData || !indexData.length) {
+                    throw new Error('INDEX tab is empty or missing');
                 }
+            } catch (error) {
+                console.error('Failed to read INDEX tab:', error);
+                throw new Error('Unable to read inventory index. The INDEX tab may not exist.');
+            }
+
+            // Process prefix mapping
+            const prefixToTab = {};
+            indexData.forEach(row => {
+                if (row[0] && row[1]) prefixToTab[row[0]] = row[1];
             });
+
+            if (Object.keys(prefixToTab).length === 0) {
+                throw new Error('No valid prefix mappings found in INDEX tab');
+            }
+
+            // Step 2: Group itemNames by prefix with validation
+            const itemsByTab = {};
+            const unmappedItems = [];
+            itemNames.forEach(item => {
+                if (!item) return;
+                let [prefix] = item.split('-');
+                let tab = prefixToTab[prefix];
+                if (!tab && prefix && prefix.length > 0) {
+                    // Try using just the first character as prefix
+                    prefix = prefix[0];
+                    tab = prefixToTab[prefix];
+                }
+                if (!tab) {
+                    unmappedItems.push(item);
+                    return;
+                }
+                if (!itemsByTab[tab]) itemsByTab[tab] = [];
+                itemsByTab[tab].push(item);
+            });
+
+            if (unmappedItems.length > 0) {
+                console.warn('Some items could not be mapped to inventory tabs:', unmappedItems);
+            }
+
+            // Step 3: Process each tab with error handling
+            const results = [];
+            const errors = [];
+
+            for (const [tab, items] of Object.entries(itemsByTab)) {
+                try {
+                    const headers = await this.getTableHeaders(spreadsheetId, tab);
+                    const itemColIdx = headers.findIndex(h => h.toLowerCase() === 'item');
+                    
+                    if (itemColIdx === -1) {
+                        throw new Error(`No 'Item' column found in tab ${tab}`);
+                    }
+
+                    const infoIdxs = infoFields.map(field => {
+                        const idx = headers.findIndex(h => h.toLowerCase() === field.toLowerCase());
+                        if (idx === -1) {
+                            throw new Error(`Column '${field}' not found in tab ${tab}`);
+                        }
+                        return idx;
+                    });
+
+                    const range = `${tab}!A2:${String.fromCharCode(65 + headers.length - 1)}`;
+                    const data = await this.getSheetData(spreadsheetId, range);
+
+                    items.forEach(item => {
+                        const row = data?.find(r => r[itemColIdx] === item);
+                        const obj = { itemName: item };
+                        if (row) {
+                            infoFields.forEach((field, i) => {
+                                obj[field] = row[infoIdxs[i]] ?? null;
+                            });
+                        } else {
+                            infoFields.forEach(field => obj[field] = null);
+                        }
+                        results.push(obj);
+                    });
+                } catch (error) {
+                    console.error(`Error processing tab ${tab}:`, error);
+                    errors.push(`Tab ${tab}: ${error.message}`);
+                    // Add null results for items in this tab
+                    items.forEach(item => {
+                        const obj = { itemName: item };
+                        infoFields.forEach(field => obj[field] = null);
+                        results.push(obj);
+                    });
+                }
+            }
+
+            if (errors.length > 0) {
+                console.warn('Encountered errors while fetching inventory information:', errors);
+            }
+
+            return results;
+
+        } catch (error) {
+            console.error('Failed to get inventory information:', error);
+            throw new Error(`Failed to get inventory information: ${error.message}`);
         }
-        return results;
     }
 
     static async getPackListContent(spreadsheetId, projectIdentifier, itemColumnsStart = "Pack") {
