@@ -84,10 +84,8 @@
                     tabButton.textContent = tabName;
                     modal.querySelector('#tabs-list').appendChild(tabButton);
                     tabButton.addEventListener('click', async () => {
+                        const loadingModal = ModalManager.showLoadingModal();
                         try {
-                            // loading modal using ModalManager
-                            loadingModal = ModalManager.showLoadingModal();
-
                             const content = await GoogleSheetsService.getPackListContent(tabName);
                             const tabContainer = document.createElement('div');
                             const packListTable = buildPackListTable(content);
