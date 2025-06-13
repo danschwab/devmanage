@@ -257,11 +257,13 @@ export class GoogleSheetsService {
             for (const [tab, items] of Object.entries(itemsByTab)) {
                 try {
                     const headers = await this.getTableHeaders(SPREADSHEET_IDS.INVENTORY, tab);
-                    const itemColIdx = headers.findIndex(h => h.toLowerCase() === 'item');
-                    
-                    if (itemColIdx === -1) {
-                        throw new Error(`No 'Item' column found in tab ${tab}`);
-                    }
+
+                    // currently assuming first column is 'Item'
+                    const itemColIdx = 0//headers.findIndex(h => h.toLowerCase() === 'item');
+                    //
+                    //if (itemColIdx === -1) {
+                    //    throw new Error(`No 'Item' column found in tab ${tab}`);
+                    //}
 
                     const infoIdxs = infoFields.map(field => {
                         const idx = headers.findIndex(h => h.toLowerCase() === field.toLowerCase());
