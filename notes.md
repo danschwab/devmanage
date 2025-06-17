@@ -3,7 +3,10 @@
 Allow multiple workspaces?
 Inject the sheet ids and the api-key via github soas not to expose them
 allow modals to recieve the arrow keys and enter button
-
+remove reliance on google sheets fuzzymatching for identifyers - or make google sheets fuzzymatching set the cell contents instead of dynamically load
+make sure cache renewal is logical
+ensure that everything works if ben and DY simultaneously edit
+auth last longer than an hour
 
 
 

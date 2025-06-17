@@ -29,7 +29,9 @@
     async function buildQuantityCheckTable(tabName, container) {
         try {
             const quantityData = await GoogleSheetsService.checkItemQuantities(tabName);
-            const headers = ['Item', 'Inventory', 'Requested', 'Overlapping', 'Available', 'Status'];
+            // Dynamically get headers from the first entry in the map
+            const firstEntry = Object.values(quantityData)[0] || {};
+            const headers = ['Item', ...Object.keys(firstEntry).filter(key => key !== 'status'), 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
                 const status = info.available >= info.requested ? 'OK' : 'Warning';
                 const statusCell = document.createElement('td');
