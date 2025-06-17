@@ -56,6 +56,10 @@ export class GoogleSheetsService {
                 console.log(`Processing overlapping show: ${otherId}`);
                 try {
                     const otherPack = await this.getPackListContent(otherId);
+                    if (!otherPack) {
+                        console.log(`Skipping ${otherId}: pack list not found`);
+                        continue;
+                    }
                     console.log(`Pack list retrieved for ${otherId}:`, otherPack);
                     otherPack.crates.forEach(crate => {
                         crate.items.forEach(row => {
@@ -399,6 +403,14 @@ export class GoogleSheetsService {
 
     static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
+        
+        // First verify the tab exists
+        const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
+        if (!tabs.includes(projectIdentifier)) {
+            console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
+            return null;
+        }
+
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
             ranges: [`${projectIdentifier}`],
