@@ -366,6 +366,7 @@ export class GoogleSheetsService {
                 }
                 if (!itemsByTab[tab]) itemsByTab[tab] = [];
                 itemsByTab[tab].push(item);
+                console.log(`Mapped item ${item} to tab ${tab}`);
             });
 
             // Process each tab
@@ -390,18 +391,23 @@ export class GoogleSheetsService {
 
                     // Process items with logging
                     items.forEach(item => {
+                        const originalItem = item;
+                        // Strip prefix if item contains a hyphen
+                        if (item.includes('-')) {
+                            item = item.split('-')[1];
+                            console.log(`Searching for stripped item: ${item} (original: ${originalItem})`);
+                        }
                         const row = tabData.slice(1).find(r => r[0] === item);
-                        const obj = { itemName: item };
+                        const obj = { itemName: originalItem }; // Use original item name in result
                         if (row) {
+                            console.log(`Found row for ${item}:`, row);
                             infoFields.forEach((field, i) => {
                                 obj[field] = row[infoIdxs[i]] ?? null;
-                                console.log(`Item ${item}: Found value for "${field}" =`, obj[field]);
+                                console.log(`${field}: ${obj[field]}`);
                             });
                         } else {
-                            infoFields.forEach(field => {
-                                obj[field] = null;
-                                console.log(`Item ${item}: No row found, setting "${field}" to null`);
-                            });
+                            console.log(`No row found for ${item}`);
+                            infoFields.forEach(field => obj[field] = null);
                         }
                         results.push(obj);
                     });
