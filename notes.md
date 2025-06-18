@@ -82,14 +82,9 @@ tag in a cell:
 
 <tr class="draggable"><td class="row-drag-handle"></td><td style="
     /* background-color: #fdd; */
-">(2) CAB-005<span style="
-    display: block;
-    border: 1px solid red;
-    padding: .25em;
-    margin-top: .5em;
-    background-color: #f99;
-    border-radius: 4px;
-"><strong>Warning: </strong>Only 1 CAB-005 left in stock</span></td><td>Booth # W3067</td></tr>
+">(2) CAB-005
+<span class="table-cell-warning"><strong>Warning: </strong>Only 1 CAB-005 left in stock</span>
+</td><td>Booth # W3067</td></tr>
 
 
 modal:

@@ -26,7 +26,7 @@
         return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
     }
 
-    async function buildQuantityCheckTable(tabName, container) {
+    async function checkPackListQuantities(tabName, container) {
         try {
             const quantityData = await GoogleSheetsService.checkItemQuantities(tabName);
             // Dynamically get headers from the first entry in the map
@@ -34,7 +34,7 @@
             const headers = ['Item', ...Object.keys(firstEntry).filter(key => key !== 'status'), 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
                 const status = info.available >= info.requested ? 'OK' : 'Warning';
-                const statusCell = document.createElement('td');
+                const statusCell = document.createElement('span');
                 statusCell.textContent = status;
                 statusCell.style.color = status === 'OK' ? 'green' : 'red';
                 
@@ -50,19 +50,34 @@
 
             const table = TableManager.buildTable(rows, headers);
             table.classList.add('quantity-check-table');
-            container.appendChild(table);
+            
+            // Create a div to hold the table with a logical heading
+            const inventoryReportContainer = document.createElement('div');
+            const heading = document.createElement('h2');
+            heading.textContent = `Inventory report for "${tabName}" pack list:`;
+            inventoryReportContainer.classList.add('inventory-report-container');
+            inventoryReportContainer.appendChild(heading);
+            inventoryReportContainer.appendChild(table);
+            container.appendChild(inventoryReportContainer);
+
+            // For each inventory item with an error, find the pack list table and scan for
+            // the corresponding item to highlight it
+            const errorItems = Object.entries(quantityData).filter(([itemId, info]) => info.status === 'Warning');
+            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+            errorItems.forEach(([itemId]) => {
+                const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
+                packListItems.forEach(packListItem => {
+                    // use regex
+                    const match = packListItem.textContent.match(itemRegex);
+                    if (match && match[2] === itemId) {
+                        TableManager.tableCellWarning(packListItem, 'Not enough available');
+                    }
+                });
+            });
+
         } catch (err) {
             console.error('Error building quantity check table:', err && err.stack ? err.stack : err);
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.textContent = err.message || 'Failed to load quantity information';
-            container.appendChild(errorDiv);
-            
-            // Add retry button
-            const retryButton = document.createElement('button');
-            retryButton.textContent = 'Retry';
-            retryButton.onclick = () => buildQuantityCheckTable(tabName, container);
-            container.appendChild(retryButton);
+            ModalManager.alert('Failed to check item quantities.');
         }
     }
 
@@ -93,8 +108,8 @@
                             const packListTable = buildPackListTable(content);
                             tabContainer.appendChild(packListTable);
                             
-                            // Add quantity check table below pack list
-                            await buildQuantityCheckTable(tabName, tabContainer);
+                            // Asynchronously check item quantities
+                            checkPackListQuantities(tabName, tabContainer);
                             
                             TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
                             loadingModal.hide();

@@ -451,4 +451,15 @@ export class TableManager {
         });
         return observer;
     }
+
+    static tableCellWarning(cell, message) {
+        // Remove existing warning if present
+        const existing = cell.querySelector('.table-cell-warning');
+        if (existing) existing.remove();
+
+        const span = document.createElement('span');
+        span.className = 'table-cell-warning';
+        span.innerHTML = `<strong>Warning: </strong>${message}`;
+        cell.appendChild(span);
+    }
 }

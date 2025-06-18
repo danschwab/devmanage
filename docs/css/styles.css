@@ -527,6 +527,17 @@ tr.dragging::after {
     z-index: 2;
 }
 
+.table-cell-error {
+    display: block;
+    border: 1px solid red;
+    padding: .25em;
+    margin-top: .5em;
+    background-color: #f99;
+    border-radius: 4px;
+}
+
+
+
 /* Messages */
 .loading-message {
     padding: 1rem;
