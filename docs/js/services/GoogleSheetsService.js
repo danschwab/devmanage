@@ -583,107 +583,129 @@ export class GoogleSheetsService {
     }
 
     static async cacheData(spreadsheetId, cacheName, content) {
-        // Don't cache empty content
-        if (!content || content.trim() === '') {
-            return false;
-        }
-        
-        // Don't cache empty locations
-        if (!cacheName || cacheName.trim() === '') {
-            return false;
-        }
-
-        const contentDiv = document.getElementById('content');
-        if (!contentDiv) return false;
-
-        await GoogleSheetsAuth.checkAuth();
-        const userEmail = await GoogleSheetsAuth.getUserEmail();
-        if (!userEmail) throw new Error('User not authenticated');
-        
-        const timestamp = new Date().toISOString();
-        
-        // Format tab name (sanitize email for sheet name)
-        const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
-        
         try {
-            // Try to get existing tab
-            await gapi.client.sheets.spreadsheets.get({
-                spreadsheetId,
-                ranges: [`${tabName}!A1:A`]
-            });
-        } catch (error) {
-            // Tab doesn't exist, create it with headers
-            await gapi.client.sheets.spreadsheets.batchUpdate({
-                spreadsheetId,
-                resource: {
-                    requests: [{
-                        addSheet: {
-                            properties: { title: tabName }
-                        }
-                    }]
-                }
-            });
+            await GoogleSheetsAuth.checkAuth();
+            // Don't cache empty content
+            if (!content || content.trim() === '') {
+                return false;
+            }
             
-            // Add headers
-            await this.setSheetData(spreadsheetId, tabName, [
-                { row: 0, col: 0, value: "Cache Name" },
-                { row: 0, col: 1, value: "Last Modified" },
-                { row: 0, col: 2, value: "Content" }
-            ]);
+            // Don't cache empty locations
+            if (!cacheName || cacheName.trim() === '') {
+                return false;
+            }
+
+            const contentDiv = document.getElementById('content');
+            if (!contentDiv) return false;
+
+            const userEmail = await GoogleSheetsAuth.getUserEmail();
+            if (!userEmail) throw new Error('User not authenticated');
+            
+            const timestamp = new Date().toISOString();
+            
+            // Format tab name (sanitize email for sheet name)
+            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+            
+            try {
+                // Try to get existing tab
+                await gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [`${tabName}!A1:A`]
+                });
+            } catch (error) {
+                if (error.status === 401) {
+                    console.warn('Unauthorized. Attempting re-authentication...');
+                    await GoogleSheetsAuth.authenticate(false);
+                    // Retry after re-auth
+                    return this.cacheData(spreadsheetId, cacheName, content);
+                }
+                // Tab doesn't exist, create it with headers
+                await gapi.client.sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: {
+                        requests: [{
+                            addSheet: {
+                                properties: { title: tabName }
+                            }
+                        }]
+                    }
+                });
+                
+                // Add headers
+                await this.setSheetData(spreadsheetId, tabName, [
+                    { row: 0, col: 0, value: "Cache Name" },
+                    { row: 0, col: 1, value: "Last Modified" },
+                    { row: 0, col: 2, value: "Content" }
+                ]);
+            }
+            
+            // Get existing pages (skip header row)
+            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
+            
+            // Find page index or append to end
+            const rowIndex = existingData.findIndex(row => row[0] === cacheName);
+            const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
+            
+            // Update cache data
+            const updates = [
+                { row: targetRow, col: 0, value: cacheName },
+                { row: targetRow, col: 1, value: timestamp },
+                { row: targetRow, col: 2, value: content }
+            ];
+            
+            await this.setSheetData(spreadsheetId, tabName, updates);
+            return true;
+        } catch (error) {
+            console.error('Error caching data:', error);
+            throw error;
         }
-        
-        // Get existing pages (skip header row)
-        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
-        
-        // Find page index or append to end
-        const rowIndex = existingData.findIndex(row => row[0] === cacheName);
-        const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
-        
-        // Update cache data
-        const updates = [
-            { row: targetRow, col: 0, value: cacheName },
-            { row: targetRow, col: 1, value: timestamp },
-            { row: targetRow, col: 2, value: content }
-        ];
-        
-        await this.setSheetData(spreadsheetId, tabName, updates);
-        return true;
     }
     
     static async getCachedData(spreadsheetId, cacheName, maxAgeMs = Infinity) {
-        await GoogleSheetsAuth.checkAuth();
-        const userEmail = await GoogleSheetsAuth.getUserEmail();
-        if (!userEmail) return null;
-        
-        // Format tab name (sanitize email for sheet name)
-        const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
-        
         try {
-            // Try to get existing tab
-            await gapi.client.sheets.spreadsheets.get({
-                spreadsheetId,
-                ranges: [`${tabName}!A1:A`]
-            });
-        } catch (error) {
-            // Tab doesn't exist
-            return null;
-        }
-        
-        // Get existing pages
-        const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
-        
-        // Find page using hash without # symbol
-        const pageRow = existingData.find(row => row[0] === cacheName);
-        
-        if (pageRow) {
-            const timestamp = new Date(pageRow[1]).getTime();
-            const now = Date.now();
-            if (now - timestamp <= maxAgeMs) {
-                const contentDiv = document.getElementById('content');
-                if (!contentDiv) return null;
-                return pageRow[2]; // Return cached content for content div
+            await GoogleSheetsAuth.checkAuth();
+            const userEmail = await GoogleSheetsAuth.getUserEmail();
+            if (!userEmail) return null;
+            
+            // Format tab name (sanitize email for sheet name)
+            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+            
+            try {
+                // Try to get existing tab
+                await gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [`${tabName}!A1:A`]
+                });
+            } catch (error) {
+                if (error.status === 401) {
+                    console.warn('Unauthorized. Attempting re-authentication...');
+                    await GoogleSheetsAuth.authenticate(false);
+                    // Retry after re-auth
+                    return this.getCachedData(spreadsheetId, cacheName, maxAgeMs);
+                }
+                // Tab doesn't exist
+                return null;
             }
+            
+            // Get existing pages
+            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
+            
+            // Find page using hash without # symbol
+            const pageRow = existingData.find(row => row[0] === cacheName);
+            
+            if (pageRow) {
+                const timestamp = new Date(pageRow[1]).getTime();
+                const now = Date.now();
+                if (now - timestamp <= maxAgeMs) {
+                    const contentDiv = document.getElementById('content');
+                    if (!contentDiv) return null;
+                    return pageRow[2]; // Return cached content for content div
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to get cached data:', error);
+            throw error;
         }
-        return null;
     }
 }
