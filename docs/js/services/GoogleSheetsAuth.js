@@ -74,24 +74,30 @@ export class GoogleSheetsAuth {
         }
     }
 
-    static async authenticate() {
+    static async authenticate(silent = false) {
         if (!gapiInited || !gisInited) {
             throw new Error('Google API not properly initialized');
         }
-    
+
         try {
+            const lastEmail = localStorage.getItem('last_email');
+            
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: '', // defined in the promise
-                ux_mode: 'popup',
-                enable_serial_consent: true, // Enable multiple account handling
-                prompt: 'select_account' // Always show account selector
+                callback: '',
+                login_hint: silent ? lastEmail : '',
+                prompt: silent ? 'none' : 'select_account'
             });
-    
+
             return new Promise((resolve, reject) => {
                 tokenClient.callback = async (resp) => {
                     if (resp.error !== undefined) {
+                        if (silent) {
+                            // Silent refresh failed, but this isn't an error
+                            resolve(false);
+                            return;
+                        }
                         console.error('Authentication error:', resp);
                         reject(resp);
                         return;
@@ -105,21 +111,34 @@ export class GoogleSheetsAuth {
                     }
                     
                     this.storeToken(token);
-                    console.log('Authentication successful, token stored');
-                    resolve(resp);
+                    
+                    // Store email for future silent refresh
+                    const email = await this.getUserEmail();
+                    if (email) {
+                        localStorage.setItem('last_email', email);
+                    }
+                    
+                    resolve(true);
                 };
                 
                 try {
                     tokenClient.requestAccessToken({
-                        prompt: 'select_account', // Force account selection
-                        login_hint: '' // Clear any previous login hint
+                        prompt: silent ? 'none' : 'select_account',
+                        login_hint: silent ? lastEmail : ''
                     });
                 } catch (error) {
-                    console.error('Token request error:', error);
-                    reject(error);
+                    if (silent) {
+                        resolve(false);
+                    } else {
+                        console.error('Token request error:', error);
+                        reject(error);
+                    }
                 }
             });
         } catch (error) {
+            if (silent) {
+                return false;
+            }
             console.error('Authentication error:', error);
             throw error;
         }
@@ -133,7 +152,13 @@ export class GoogleSheetsAuth {
                 gapi.client.setToken(savedToken);
                 return true;
             }
-            await this.authenticate();
+            
+            // Try silent refresh first
+            const silentSuccess = await this.authenticate(true);
+            if (!silentSuccess) {
+                // If silent refresh fails, try interactive login
+                await this.authenticate(false);
+            }
         }
         return true;
     }
@@ -159,6 +184,7 @@ export class GoogleSheetsAuth {
 
     static clearStoredToken() {
         localStorage.removeItem('gapi_token');
+        localStorage.removeItem('last_email');
     }
 
     static isAuthenticated() {

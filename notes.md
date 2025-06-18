@@ -1,4 +1,4 @@
-**Ideas:**
+**To do:**
 
 Allow multiple workspaces?
 Inject the sheet ids and the api-key via github soas not to expose them
@@ -7,6 +7,14 @@ remove reliance on google sheets fuzzymatching for identifyers - or make google 
 make sure cache renewal is logical
 ensure that everything works if ben and DY simultaneously edit
 auth last longer than an hour
+
+
+
+
+**Learning:**
+Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
+Google drive rate-limits queries, making it dificult to realtime-check tons of stuff
+
 
 
 
