@@ -1,6 +1,59 @@
 import { GoogleSheetsAuth, SPREADSHEET_IDS } from '../index.js';
 
 export class GoogleSheetsService {
+    // Add static cache for all spreadsheets
+    static sheetCache = {
+        timestamp: {},
+        data: {},
+        TTL: 5 * 60 * 1000 // 5 minutes
+    };
+
+    static async getSheetData(spreadsheetId, range, useCache = true) {
+        // Check cache first if enabled
+        if (useCache) {
+            const now = Date.now();
+            const cacheKey = `${spreadsheetId}:${range}`;
+            if (this.sheetCache.data[cacheKey] && 
+                now - (this.sheetCache.timestamp[cacheKey] || 0) < this.sheetCache.TTL) {
+                console.log(`Cache hit for ${cacheKey}`);
+                return this.sheetCache.data[cacheKey];
+            }
+        }
+
+        // Fetch new data
+        await GoogleSheetsAuth.checkAuth();
+        const response = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+
+        // Update cache if enabled
+        if (useCache) {
+            const cacheKey = `${spreadsheetId}:${range}`;
+            this.sheetCache.data[cacheKey] = response.result.values;
+            this.sheetCache.timestamp[cacheKey] = Date.now();
+        }
+
+        return response.result.values;
+    }
+
+    static clearCache(spreadsheetId = null, range = null) {
+        if (!spreadsheetId) {
+            // Clear all cache
+            this.sheetCache.data = {};
+            this.sheetCache.timestamp = {};
+            return;
+        }
+
+        const prefix = `${spreadsheetId}:`;
+        Object.keys(this.sheetCache.data).forEach(key => {
+            if (key.startsWith(prefix) && (!range || key === `${spreadsheetId}:${range}`)) {
+                delete this.sheetCache.data[key];
+                delete this.sheetCache.timestamp[key];
+            }
+        });
+    }
+
     static async checkItemQuantities(projectIdentifier) {
         console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
@@ -126,6 +179,10 @@ export class GoogleSheetsService {
             await GoogleSheetsAuth.checkAuth();
             const tabName = "ProductionSchedule";
             
+            // Use cached data for production schedule
+            const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, `${tabName}!A:Z`);
+            const headers = data[0];
+
             console.log('1. Verifying tab exists...');
             const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
             if (!tabs.includes(tabName)) {
@@ -136,16 +193,6 @@ export class GoogleSheetsService {
             console.log('Tab found:', tabName);
 
             console.log('2. Getting headers...');
-            const headers = await this.getTableHeaders(SPREADSHEET_IDS.PROD_SCHED, tabName);
-            console.log('Headers retrieved:', headers);
-
-            console.log('3. Getting data...');
-            const lastCol = String.fromCharCode(65 + headers.length - 1);
-            const range = `'${tabName}'!A2:${lastCol}`;
-            const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, range);
-            console.log(`Retrieved ${data?.length || 0} rows of data`);
-
-            console.log('4. Finding header indices...');
             const idx = (name) => {
                 const index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
                 console.log(`Column "${name}" found at index: ${index}`);
@@ -281,13 +328,6 @@ export class GoogleSheetsService {
         return isNaN(d) ? null : d;
     }
 
-    // Add static cache for inventory data
-    static inventoryCache = {
-        timestamp: 0,
-        data: {},
-        TTL: 5 * 60 * 1000 // 5 minutes
-    };
-
     static async getInventoryInformation(itemName, retreiveInformation) {
         console.group('Getting inventory information');
         try {
@@ -297,22 +337,8 @@ export class GoogleSheetsService {
 
             // Step 1: Get INDEX tab data
             console.log('1. Getting INDEX tab data...');
-            let indexData;
-            try {
-                const now = Date.now();
-                if (now - this.inventoryCache.timestamp > this.inventoryCache.TTL) {
-                    // Cache expired or doesn't exist, fetch all data
-                    indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `INDEX!A:B`);
-                    this.inventoryCache.data = { INDEX: indexData };
-                    this.inventoryCache.timestamp = now;
-                } else {
-                    indexData = this.inventoryCache.data.INDEX;
-                }
-                console.log('INDEX data retrieved:', indexData);
-            } catch (error) {
-                console.error('Failed to read INDEX tab:', error);
-                throw new Error('Unable to read inventory index');
-            }
+            const indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, 'INDEX!A:B');
+            console.log('INDEX data retrieved:', indexData);
 
             // Process prefix mapping (skip header row)
             const prefixToTab = {};
@@ -349,14 +375,8 @@ export class GoogleSheetsService {
             for (const [tab, items] of Object.entries(itemsByTab)) {
                 console.log(`Processing tab ${tab}`);
                 try {
-                    // Get or fetch tab data
-                    let tabData;
-                    if (this.inventoryCache.data[tab]) {
-                        tabData = this.inventoryCache.data[tab];
-                    } else {
-                        tabData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `${tab}!A:Z`);
-                        this.inventoryCache.data[tab] = tabData;
-                    }
+                    // Get or fetch tab data (modified to use general cache)
+                    let tabData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `${tab}!A:Z`);
 
                     // First row contains headers
                     const headers = tabData[0];
@@ -414,6 +434,7 @@ export class GoogleSheetsService {
             return null;
         }
 
+        // Use cache for full sheet data
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
             ranges: [`${projectIdentifier}`],
@@ -467,15 +488,6 @@ export class GoogleSheetsService {
         return result;
     }
     
-    static async getSheetData(spreadsheetId, range) {
-        await GoogleSheetsAuth.checkAuth();
-        const response = await gapi.client.sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
-        });
-        return response.result.values;
-    }
-
     static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
         await GoogleSheetsAuth.checkAuth();
         try {
