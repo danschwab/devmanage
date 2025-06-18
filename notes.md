@@ -49,7 +49,7 @@ Split long description into component parts:
 3: part number "CAB-001" etc
 4: remaining text
 
-@"^(?:(on top):)? ?(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+)? ?(.+)$"gmi
+@"^(?:(on top):)? ?(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+[a-zA-Z]?)? (.+)$"gmi
 ##
 
 

@@ -70,7 +70,7 @@ export class GoogleSheetsService {
 
             // 2. Extract items
             console.log('2. Extracting items from pack list...');
-            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+)/;
+            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
             const itemMap = {};
             packList.crates.forEach((crate, crateIndex) => {
                 console.log(`Processing crate ${crateIndex + 1}:`, crate);
