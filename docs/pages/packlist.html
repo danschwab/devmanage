@@ -62,7 +62,7 @@
 
             // For each inventory item with an error, find the pack list table and scan for
             // the corresponding item to highlight it
-            const errorItems = Object.entries(quantityData).filter(([itemId, info]) => info.status === 'Warning');
+            const errorItems = Object.entries(quantityData).filter(([itemId, info]) => info.status == 'Warning');
             const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
             console.log('Error items to highlight:', errorItems.map(([itemId]) => itemId));
             errorItems.forEach(([itemId]) => {
