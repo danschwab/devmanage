@@ -64,12 +64,15 @@
             // the corresponding item to highlight it
             const errorItems = Object.entries(quantityData).filter(([itemId, info]) => info.status === 'Warning');
             const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+            console.log('Error items to highlight:', errorItems.map(([itemId]) => itemId));
             errorItems.forEach(([itemId]) => {
                 const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
+                console.log(`Searching for itemId "${itemId}" in pack list table...`);
                 packListItems.forEach(packListItem => {
                     // use regex
                     const match = packListItem.textContent.match(itemRegex);
-                    if (match && match[2] === itemId) {
+                    if (match && match[2] == itemId) {
+                        console.log(`Highlighting cell for itemId "${itemId}"`);
                         TableManager.tableCellWarning(packListItem, 'Not enough available');
                     }
                 });
