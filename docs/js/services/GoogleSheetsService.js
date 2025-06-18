@@ -212,7 +212,7 @@ export class GoogleSheetsService {
             if (typeof parameters === "string" || parameters.identifier) {
                 const identifier = parameters.identifier || parameters;
                 console.log(`Looking for show: ${identifier}`);
-                const row = data.find(r => r[idxIdentifier] === identifier);
+                const row = data.find(r => r[idxIdentifier] == identifier);
                 if (!row) {
                     console.warn(`Show ${identifier} not found in schedule`);
                     console.groupEnd();
