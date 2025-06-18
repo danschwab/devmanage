@@ -388,16 +388,20 @@ export class GoogleSheetsService {
                         return idx;
                     });
 
-                    // Process items
+                    // Process items with logging
                     items.forEach(item => {
                         const row = tabData.slice(1).find(r => r[0] === item);
                         const obj = { itemName: item };
                         if (row) {
                             infoFields.forEach((field, i) => {
                                 obj[field] = row[infoIdxs[i]] ?? null;
+                                console.log(`Item ${item}: Found value for "${field}" =`, obj[field]);
                             });
                         } else {
-                            infoFields.forEach(field => obj[field] = null);
+                            infoFields.forEach(field => {
+                                obj[field] = null;
+                                console.log(`Item ${item}: No row found, setting "${field}" to null`);
+                            });
                         }
                         results.push(obj);
                     });
