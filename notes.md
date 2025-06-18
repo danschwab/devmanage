@@ -36,7 +36,7 @@ AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack li
         + Allow moving items
         - Allow editing item contents
     - allow saving edits to google sheet
-
+    - warnings for items that are unavailable
 
 
 
