@@ -20,6 +20,26 @@ AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack li
 
 
 
+
+**Minimum Features To Show:**
+- Export Basic Pack List from Inventor
+    - Categorize all booth parts according to Pack List Rules (preferences)
+    + Create new pack list in Google Sheets
+    + Input items into Google Sheets
+    > (PLANNED) Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
+- Open Pack List in Web
+    + Get pack list data from web and display
+    - Allow addition of new crates
+    - Allow crate contents edit
+        - Allow addition of new items
+        - Allow deletion of items
+        + Allow moving items
+        - Allow editing item contents
+    - allow saving edits to google sheet
+
+
+
+
 **To do:**
 
 Allow multiple workspaces?
