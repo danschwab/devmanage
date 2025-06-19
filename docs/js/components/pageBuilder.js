@@ -180,6 +180,7 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
                 e.preventDefault();
+                GoogleSheetsAuth.checkAuth();
                 this.loadContent(item.file);
             };
             nav.appendChild(link);

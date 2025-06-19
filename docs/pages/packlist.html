@@ -2,7 +2,7 @@
 </div>
 
 <script type="module">
-    import { TabManager, GoogleSheetsService, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
+    import { TabManager, GoogleSheetsService, GoogleSheetsAuth, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
 
     function buildPackListTable(content) {
         const mainTableData = content.crates.map(crate => {
@@ -90,6 +90,8 @@
 
     // Standalone function for TabManager tab handler
     function addNewPackListTab() {
+        GoogleSheetsAuth.checkAuth();
+        
         const modal = ModalManager.createModal(`
             <div id="tabs-list">
                 <p class="loading-message">Loading...</p>
