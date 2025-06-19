@@ -75,7 +75,7 @@
                         const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
                         const match = packListItem.textContent.match(itemRegex);
                         if (match && match[2] === itemId) {
-                            TableManager.tableCellWarning(packListItem, '<strong>Warning: </strong>insufficient inventory', '.red', '.inventory-report-container');
+                            TableManager.tableCellCard(packListItem, '<strong>Warning: </strong>insufficient inventory', '.red', '.inventory-report-container');
                         }
                     });
                 } else if (remaining === 0) {
@@ -85,7 +85,7 @@
                         const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
                         const match = packListItem.textContent.match(itemRegex);
                         if (match && match[2] === itemId) {
-                            TableManager.tableCellWarning(packListItem, '<strong>Warning: </strong>no inventory margin', '.yellow', '.inventory-report-container');
+                            TableManager.tableCellCard(packListItem, '<strong>Warning: </strong>no inventory margin', '.yellow', '.inventory-report-container');
                         }
                     });
                 }
