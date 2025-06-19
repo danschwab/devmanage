@@ -452,7 +452,7 @@ export class TableManager {
         return observer;
     }
 
-    static tableCellWarning(cell, message) {
+    static tableCellWarning(cell, message, scrollToId = null) {
         // Remove existing warning if present
         const existing = cell.querySelector('.table-cell-warning');
         if (existing) existing.remove();
@@ -460,6 +460,13 @@ export class TableManager {
         const span = document.createElement('span');
         span.className = 'table-cell-warning';
         span.innerHTML = `<strong>Warning: </strong>${message}`;
+        if (scrollToId) {
+            span.style.cursor = 'pointer';
+            span.onclick = () => {
+                const el = document.getElementById(scrollToId);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+        }
         cell.appendChild(span);
     }
 }

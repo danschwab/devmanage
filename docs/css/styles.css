@@ -534,6 +534,10 @@ tr.dragging::after {
     margin-top: .5em;
     background-color: #f99;
     border-radius: 4px;
+    transition: background-color 0.15s ease-in-out;
+}
+.table-cell-warning:hover {
+    background-color: #f66;
 }
 
 
