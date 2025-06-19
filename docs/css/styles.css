@@ -527,19 +527,47 @@ tr.dragging::after {
     z-index: 2;
 }
 
-.table-cell-warning {
+
+.table-cell-card {
     display: block;
-    border: 1px solid red;
+    border: 1px solid #aaa;
     padding: .25em;
     margin-top: .5em;
-    background-color: #f99;
+    background-color: #f8f8f8;
     border-radius: 4px;
     transition: background-color 0.15s ease-in-out;
 }
-.table-cell-warning:hover {
+.table-cell-card.red {
+    border-color: red;
+    background-color: #f99;
+}
+.table-cell-card.yellow {
+    border-color: yellow;
+    background-color: #ff9;
+}
+.table-cell-card.blue {
+    border-color: #0d6efd;
+    background-color: #cce5ff;
+}
+.table-cell-card.green {
+    border-color: #198731;
+    background-color: #c3e6c3;
+}
+.table-cell-card:hover {
+    background-color: #eee;
+}
+.table-cell-card.red:hover {
     background-color: #f66;
 }
-
+.table-cell-card.yellow:hover {
+    background-color: #ff6;
+}
+.table-cell-card.blue:hover {
+    background-color: #99d;
+}
+.table-cell-card.green:hover {
+    background-color: rgb(102, 204, 116);
+}
 
 
 /* Messages */

@@ -33,7 +33,7 @@
             const firstEntry = Object.values(quantityData)[0] || {};
             const headers = ['Item', ...Object.keys(firstEntry).filter(key => key !== 'status'), 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
-                const status = info.available >= info.requested ? 'OK' : 'Warning';
+                const status = info.remaining < 0 ? 'OK' : 'Warning';
                 const statusCell = document.createElement('span');
                 statusCell.textContent = status;
                 statusCell.style.color = status === 'OK' ? 'green' : 'red';
@@ -43,7 +43,7 @@
                     info.inventory,
                     info.requested,
                     info.overlapping,
-                    info.available,
+                    info.remaining, // was info.available
                     statusCell
                 ];
             });
@@ -76,7 +76,7 @@
                         const match = packListItem.textContent.match(itemRegex);
                         if (match && match[2] === itemId) {
                             console.log(`Highlighting cell for item "${itemId}".`);
-                            TableManager.tableCellWarning(packListItem, 'Not enough available');
+                            TableManager.tableCellWarning(packListItem, 'insufficient inventory', '.red', '.inventory-report-container');
                         }
                     });
                 }

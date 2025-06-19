@@ -452,19 +452,31 @@ export class TableManager {
         return observer;
     }
 
-    static tableCellWarning(cell, message, scrollToId = null) {
+    static tableCellWarning(cell, message, classes = '', scrollTo = null) {
         // Remove existing warning if present
         const existing = cell.querySelector('.table-cell-warning');
         if (existing) existing.remove();
 
         const span = document.createElement('span');
-        span.className = 'table-cell-warning';
+        span.className = `table-cell-warning ${classes}`;
         span.innerHTML = `<strong>Warning: </strong>${message}`;
-        if (scrollToId) {
+        if (scrollTo) {
             span.style.cursor = 'pointer';
             span.onclick = () => {
-                const el = document.getElementById(scrollToId);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Search every parent element's siblings until a match is found
+                let parent = cell.parentElement;
+                let found = null;
+                while (parent && !found) {
+                    let siblings = Array.from(parent.parentElement ? parent.parentElement.children : []);
+                    for (let sibling of siblings) {
+                        if (sibling !== parent) {
+                            found = sibling.matches && sibling.matches(scrollTo) ? sibling : sibling.querySelector && sibling.querySelector(scrollTo);
+                            if (found) break;
+                        }
+                    }
+                    parent = parent.parentElement;
+                }
+                if (found) found.scrollIntoView({ behavior: 'smooth', block: 'center' });
             };
         }
         cell.appendChild(span);

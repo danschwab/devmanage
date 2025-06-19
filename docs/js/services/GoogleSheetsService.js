@@ -154,11 +154,13 @@ export class GoogleSheetsService {
                 const inventoryQty = parseInt(inventoryInfo.find(i => i.itemName === id)?.QTY || "0", 10);
                 const overlapQty = overlapItemTotals[id] || 0;
                 const projectQty = itemMap[id] || 0;
+                // Calculate remaining (can be negative)
+                const remaining = inventoryQty - overlapQty - projectQty;
                 result[id] = {
                     inventory: inventoryQty,
                     requested: projectQty,
                     overlapping: overlapQty,
-                    available: inventoryQty - overlapQty
+                    remaining: remaining // was "available"
                 };
                 console.log(`Item ${id} summary:`, result[id]);
             });
