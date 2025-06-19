@@ -162,17 +162,20 @@ export class GoogleSheetsService {
             console.log('6. Calculating final quantities...');
             const result = {};
             itemIds.forEach(id => {
-                const inventoryQty = parseInt(inventoryInfo.find(i => i.itemName === id)?.QTY || "0", 10);
+                const inventoryObj = inventoryInfo.find(i => i.itemName === id);
+                // Remove item if no inventory quantity can be found (null, undefined, or empty string)
+                if (!inventoryObj || inventoryObj.QTY === null || inventoryObj.QTY === undefined || inventoryObj.QTY === '') {
+                    console.log(`Skipping item ${id}: no inventory quantity found`);
+                    return;
+                }
+                const inventoryQty = parseInt(inventoryObj.QTY || "0", 10);
                 const projectQty = itemMap[id] || 0;
-                // overlapping is now a list of show identifiers
                 const overlapping = overlapItemShows[id] || [];
-                // Calculate remaining (can be negative)
-                // If you want to keep the old logic for remaining, you may want to count the number of overlapping shows for subtraction, but here we just keep the list.
                 const remaining = inventoryQty - (overlapping.length) - projectQty;
                 result[id] = {
                     inventory: inventoryQty,
                     requested: projectQty,
-                    overlapping: overlapping, // now a list of show identifiers
+                    overlapping: overlapping,
                     remaining: remaining
                 };
                 console.log(`Item ${id} summary:`, result[id]);

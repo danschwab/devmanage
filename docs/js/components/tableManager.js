@@ -462,14 +462,14 @@ export class TableManager {
         return observer;
     }
 
-    static tableCellWarning(cell, message, classes = '', scrollTo = null) {
+    static tableCellCard(cell, message, classes = '', scrollTo = null) {
         // Remove existing warning if present
         const existing = cell.querySelector('.table-cell-warning');
         if (existing) existing.remove();
 
         const span = document.createElement('span');
-        span.className = `table-cell-warning ${classes}`;
-        span.innerHTML = `<strong>Warning: </strong>${message}`;
+        span.className = `table-cell-card ${classes}`;
+        span.innerHTML = message;
         if (scrollTo) {
             span.style.cursor = 'pointer';
             span.onclick = () => {
