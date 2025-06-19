@@ -107,12 +107,18 @@ export class TableManager {
                                     input.dataset.rowIndex = rowIndex;
                                     input.dataset.colIndex = colIndex;
                                     input.dataset.dirty = 'false';
-                                    
+
                                     input.addEventListener('input', (e) => {
                                         const target = e.target;
-                                        target.dataset.dirty = (target.value !== target.dataset.originalValue).toString();
+                                        const isDirty = (target.value !== target.dataset.originalValue);
+                                        target.dataset.dirty = isDirty.toString();
+                                        if (isDirty) {
+                                            target.classList.add('dirty');
+                                        } else {
+                                            target.classList.remove('dirty');
+                                        }
                                     });
-                                    
+
                                     td.appendChild(input);
                                 } else {
                                     td.textContent = cell || '';
@@ -426,6 +432,10 @@ export class TableManager {
         // Reset position tracking
         const tables = document.querySelectorAll('table');
         tables.forEach(table => this.trackRowPosition(table));
+
+        // Remove .dirty class from all inputs
+        const dirtyInputs = document.querySelectorAll('input.dirty');
+        dirtyInputs.forEach(input => input.classList.remove('dirty'));
     }
 
     static onStateChange(callback) {

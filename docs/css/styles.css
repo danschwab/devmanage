@@ -570,6 +570,20 @@ tr.dragging::after {
 }
 
 
+
+.dirty::after {
+    content: "Unsaved changes";
+    /* display: block; */
+    font-size: 0.6rem;
+    color: #c51f2f;
+    border-radius: 4px;
+    border: 1px dotted #c51f2f;
+    border-style: dashed;
+    padding: 2px;
+}
+
+
+
 /* Messages */
 .loading-message {
     padding: 1rem;
