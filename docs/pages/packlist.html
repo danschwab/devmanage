@@ -31,7 +31,7 @@
             const quantityData = await GoogleSheetsService.checkItemQuantities(tabName);
             // Dynamically get headers from the first entry in the map
             const firstEntry = Object.values(quantityData)[0] || {};
-            const headers = ['Item', ...Object.keys(firstEntry).filter(key => key !== 'status'), 'Status'];
+            const headers = ['Item', 'Inventory', 'Requested', 'Remaining', 'Overlapping Shows', 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
                 const status = info.remaining > 0 ? 'OK' : 'Warning';
                 const statusCell = document.createElement('span');
@@ -42,8 +42,8 @@
                     itemId,
                     info.inventory,
                     info.requested,
-                    info.overlapping,
-                    info.remaining, // was info.available
+                    info.remaining,
+                    buildTabsListElement(info.overlapping),
                     statusCell
                 ];
             });
@@ -108,7 +108,7 @@
             tabButton.textContent = tabName;
             tabsList.appendChild(tabButton);
             tabButton.addEventListener('click', async () => {
-                
+                const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
                 try {
                     const content = await GoogleSheetsService.getPackListContent(tabName);
                     const tabContainer = document.createElement('div');
@@ -119,7 +119,9 @@
                     checkPackListQuantities(tabName, tabContainer);
 
                     TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
+                    loadingModal.hide();
                 } catch (error) {
+                    loadingModal.hide();
                     console.error('Error loading sheet content:', error);
                     ModalManager.alert('Failed to load spreadsheet content');
                 }
@@ -139,7 +141,6 @@
             <p class="loading-message">Loading...</p>
         `);
 
-        const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
         try {
             const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS).then((sheetTabs) => {
                 const tabsListElement = buildTabsListElement(sheetTabs);
@@ -147,10 +148,8 @@
                 modalBody.innerHTML = '';
                 modalBody.appendChild(tabsListElement);
             });
-            loadingModal.hide();
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
-            loadingModal.hide();
             buildPage('<p class="error">Failed to load spreadsheet tabs</p>', modal.querySelector('.modal-body'));
         }
     }
