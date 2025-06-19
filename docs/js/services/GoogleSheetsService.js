@@ -626,7 +626,6 @@ export class GoogleSheetsService {
             if (!content || content.trim() === '') {
                 return false;
             }
-            
             // Don't cache empty locations
             if (!cacheName || cacheName.trim() === '') {
                 return false;
@@ -637,18 +636,16 @@ export class GoogleSheetsService {
 
             const userEmail = await GoogleSheetsAuth.getUserEmail();
             if (!userEmail) throw new Error('User not authenticated');
-            
+
             const timestamp = new Date().toISOString();
-            
+
             // Format tab name (sanitize email for sheet name)
             const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
-            
+
             try {
                 // Try to get existing tab
-                await gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId,
-                    ranges: [`${tabName}!A1:A`]
-                });
+                // Force bypass of local cache for this call
+                await this.getSheetData(spreadsheetId, `${tabName}!A1:A`, false);
             } catch (error) {
                 if (error.status === 401) {
                     console.warn('Unauthorized. Attempting re-authentication...');
@@ -667,7 +664,7 @@ export class GoogleSheetsService {
                         }]
                     }
                 });
-                
+
                 // Add headers
                 await this.setSheetData(spreadsheetId, tabName, [
                     { row: 0, col: 0, value: "Cache Name" },
@@ -675,21 +672,21 @@ export class GoogleSheetsService {
                     { row: 0, col: 2, value: "Content" }
                 ]);
             }
-            
-            // Get existing pages (skip header row)
-            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
-            
+
+            // Get existing pages (skip header row) - bypass local cache
+            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`, false) || [];
+
             // Find page index or append to end
             const rowIndex = existingData.findIndex(row => row[0] === cacheName);
             const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
-            
+
             // Update cache data
             const updates = [
                 { row: targetRow, col: 0, value: cacheName },
                 { row: targetRow, col: 1, value: timestamp },
                 { row: targetRow, col: 2, value: content }
             ];
-            
+
             await this.setSheetData(spreadsheetId, tabName, updates);
             return true;
         } catch (error) {
