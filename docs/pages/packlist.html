@@ -147,8 +147,10 @@
                 modalBody.innerHTML = '';
                 modalBody.appendChild(tabsListElement);
             });
+            loadingModal.hide();
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
+            loadingModal.hide();
             buildPage('<p class="error">Failed to load spreadsheet tabs</p>', modal.querySelector('.modal-body'));
         }
     }
