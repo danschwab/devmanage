@@ -33,7 +33,7 @@
             const firstEntry = Object.values(quantityData)[0] || {};
             const headers = ['Item', ...Object.keys(firstEntry).filter(key => key !== 'status'), 'Status'];
             const rows = Object.entries(quantityData).map(([itemId, info]) => {
-                const status = info.remaining < 0 ? 'OK' : 'Warning';
+                const status = info.remaining > 0 ? 'OK' : 'Warning';
                 const statusCell = document.createElement('span');
                 statusCell.textContent = status;
                 statusCell.style.color = status === 'OK' ? 'green' : 'red';
@@ -66,17 +66,26 @@
             console.log('Highlighting error items in pack list table...');
             rows.forEach(row => {
                 const itemId = row[0];
+                const remaining = row[4];
                 const statusCell = row[row.length - 1];
-                if (statusCell.textContent !== 'OK') {
-                    console.log(`Item "${itemId}" has status "${statusCell.textContent}". Attempting to highlight in pack list table.`);
+                if (remaining < 0) {
+                    // Insufficient inventory: red
                     const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
                     packListItems.forEach(packListItem => {
-                        // use regex to extract itemId from cell text
                         const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
                         const match = packListItem.textContent.match(itemRegex);
                         if (match && match[2] === itemId) {
-                            console.log(`Highlighting cell for item "${itemId}".`);
                             TableManager.tableCellWarning(packListItem, 'insufficient inventory', '.red', '.inventory-report-container');
+                        }
+                    });
+                } else if (remaining === 0) {
+                    // No inventory margin: yellow
+                    const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
+                    packListItems.forEach(packListItem => {
+                        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+                        const match = packListItem.textContent.match(itemRegex);
+                        if (match && match[2] === itemId) {
+                            TableManager.tableCellWarning(packListItem, 'no inventory margin', '.yellow', '.inventory-report-container');
                         }
                     });
                 }
