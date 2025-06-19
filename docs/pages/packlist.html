@@ -97,56 +97,59 @@
         }
     }
 
+    // Extracted function to build the tabs-list DOM element from a list of sheetTabs
+    function buildTabsListElement(sheetTabs) {
+        const tabsList = document.createElement('div');
+        tabsList.className = 'tabs-list';
+        for (const tabName of sheetTabs) {
+            if (tabName === 'TEMPLATE') continue;
+            const tabButton = document.createElement('button');
+            tabButton.classList.add('tab-button');
+            tabButton.textContent = tabName;
+            tabsList.appendChild(tabButton);
+            tabButton.addEventListener('click', async () => {
+                
+                try {
+                    const content = await GoogleSheetsService.getPackListContent(tabName);
+                    const tabContainer = document.createElement('div');
+                    const packListTable = buildPackListTable(content);
+                    tabContainer.appendChild(packListTable);
+
+                    // Asynchronously check item quantities
+                    checkPackListQuantities(tabName, tabContainer);
+
+                    TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
+                } catch (error) {
+                    console.error('Error loading sheet content:', error);
+                    ModalManager.alert('Failed to load spreadsheet content');
+                }
+                // Remove modal if present
+                const modal = document.querySelector('.modal');
+                if (modal) modal.remove();
+            });
+        }
+        return tabsList;
+    }
+
     // Standalone function for TabManager tab handler
     function addNewPackListTab() {
         GoogleSheetsAuth.checkAuth();
-        
+
         const modal = ModalManager.createModal(`
-            <div id="tabs-list">
-                <p class="loading-message">Loading...</p>
-            </div>
+            <p class="loading-message">Loading...</p>
         `);
 
+        const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
         try {
             const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS).then((sheetTabs) => {
-                modal.querySelector('#tabs-list').innerHTML = ''; // Clear loading message
-                for (const tabName of sheetTabs) {
-                    // if the tab name is TEMPLATE then skip it
-                    if (tabName === 'TEMPLATE') continue;
-                    
-                    const tabButton = document.createElement('button');
-                    tabButton.classList.add('tab-button');
-                    tabButton.textContent = tabName;
-                    modal.querySelector('#tabs-list').appendChild(tabButton);
-                    tabButton.addEventListener('click', async () => {
-                        const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
-                        try {
-                            const content = await GoogleSheetsService.getPackListContent(tabName);
-                            const tabContainer = document.createElement('div');
-                            const packListTable = buildPackListTable(content);
-                            tabContainer.appendChild(packListTable);
-                            
-                            // Asynchronously check item quantities
-                            checkPackListQuantities(tabName, tabContainer);
-                            
-                            TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
-                            loadingModal.hide();
-                        } catch (error) {
-                            loadingModal.hide();
-                            console.error('Error loading sheet content:', error);
-                            const errorMessage = document.createElement('p');
-                            errorMessage.textContent = 'Failed to load spreadsheet content';
-                            TabManager.addNewTab('tabSystem', tabName, errorMessage, true, true);
-                        }
-                        modal.remove();
-                    });
-                }
+                const tabsListElement = buildTabsListElement(sheetTabs);
+                const modalBody = modal.querySelector('.modal-body');
+                modalBody.innerHTML = '';
+                modalBody.appendChild(tabsListElement);
             });
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
-            const errorMessage = document.createElement('p');
-            errorMessage.textContent = 'Failed to load spreadsheet tabs';
-            modal.querySelector('#tabs-list').appendChild(errorMessage);
+            buildPage('<p class="error">Failed to load spreadsheet tabs</p>', modal.querySelector('.modal-body'));
         }
     }
 

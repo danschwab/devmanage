@@ -111,7 +111,8 @@ export class GoogleSheetsService {
 
             // 4. Process overlapping shows
             console.log('4. Processing overlapping shows...');
-            const overlapItemTotals = {};
+            // For each item, keep a list of overlapping show identifiers where it appears
+            const overlapItemShows = {};
             for (const otherId of overlappingIds) {
                 if (otherId === projectIdentifier) continue;
                 console.log(`Processing overlapping show: ${otherId}`);
@@ -128,11 +129,13 @@ export class GoogleSheetsService {
                                 if (!cell) return;
                                 const match = cell.match(itemRegex);
                                 if (match && match[2]) {
-                                    const qty = parseInt(match[1] || "1", 10);
                                     const id = match[2];
                                     if (itemIds.includes(id)) {
-                                        overlapItemTotals[id] = (overlapItemTotals[id] || 0) + qty;
-                                        console.log(`Found overlapping item: ${id}, quantity: ${qty} (total: ${overlapItemTotals[id]})`);
+                                        if (!overlapItemShows[id]) overlapItemShows[id] = [];
+                                        if (!overlapItemShows[id].includes(otherId)) {
+                                            overlapItemShows[id].push(otherId);
+                                            console.log(`Item ${id} found in overlapping show: ${otherId}`);
+                                        }
                                     }
                                 }
                             });
@@ -142,7 +145,7 @@ export class GoogleSheetsService {
                     console.warn(`Failed to process overlapping show ${otherId}:`, e);
                 }
             }
-            console.log('Overlapping totals:', overlapItemTotals);
+            console.log('Overlapping item show lists:', overlapItemShows);
 
             // 5. Get inventory quantities
             console.log('5. Getting inventory quantities...');
@@ -160,15 +163,17 @@ export class GoogleSheetsService {
             const result = {};
             itemIds.forEach(id => {
                 const inventoryQty = parseInt(inventoryInfo.find(i => i.itemName === id)?.QTY || "0", 10);
-                const overlapQty = overlapItemTotals[id] || 0;
                 const projectQty = itemMap[id] || 0;
+                // overlapping is now a list of show identifiers
+                const overlapping = overlapItemShows[id] || [];
                 // Calculate remaining (can be negative)
-                const remaining = inventoryQty - overlapQty - projectQty;
+                // If you want to keep the old logic for remaining, you may want to count the number of overlapping shows for subtraction, but here we just keep the list.
+                const remaining = inventoryQty - (overlapping.length) - projectQty;
                 result[id] = {
                     inventory: inventoryQty,
                     requested: projectQty,
-                    overlapping: overlapQty,
-                    remaining: remaining // was "available"
+                    overlapping: overlapping, // now a list of show identifiers
+                    remaining: remaining
                 };
                 console.log(`Item ${id} summary:`, result[id]);
             });

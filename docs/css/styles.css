@@ -152,12 +152,6 @@ button:hover,
     border-radius: 4px;
     overflow: hidden;
 }
-.modal-content button.tab-button {
-    border-radius: 0;
-    width: 100%;
-    max-width: 100%;
-    margin:0;
-}
 .modal-content:has(.modal-header) {
     padding-top: 0px;
 }
@@ -315,6 +309,13 @@ button:hover,
 .tab-button:has(span) {
     position: relative;
     padding-right: 25px;  /* Make room for close button */
+}
+
+.tabs-list button.tab-button {
+    border-radius: 0;
+    width: 100%;
+    max-width: 100%;
+    margin:0;
 }
 
 .tab-close {
