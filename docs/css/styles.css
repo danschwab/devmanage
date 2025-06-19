@@ -527,7 +527,7 @@ tr.dragging::after {
     z-index: 2;
 }
 
-.table-cell-error {
+.table-cell-warning {
     display: block;
     border: 1px solid red;
     padding: .25em;
