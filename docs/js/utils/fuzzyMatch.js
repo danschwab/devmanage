@@ -1,5 +1,4 @@
 export class FuzzyMatcher {
-  // Static maps for faster lookups
   static #keyboardAdjacencyMap = new Map(Object.entries({
     Q: ['W', 'A'],
     W: ['Q', 'E', 'S'],
@@ -29,49 +28,49 @@ export class FuzzyMatcher {
     M: ['N', 'J']
   }));
 
-  static #visualSimilaritySet = new Set([
-    'O0', '0O', 'L1', '1L', 'IL', 'LI', 'CE', 'EC', 'GQ', 'QG', 'UV', 'VU', 'MN', 'NM', '_ ', ' _', '- ', ' -'
-  ]);
+  static #visualSimilarityPairs = [
+    ['O', '0'], ['L', '1'], ['I', 'L'], ['C', 'E'], ['G', 'Q'], ['U', 'V'], ['M', 'N'], [' ', '_'], [' ', '-']
+  ];
 
   static GetTopFuzzyMatch(inputText, comparisonRange, abbreviationRange = null, distanceThreshold = 2) {
     if (typeof inputText !== 'string') {
       throw new Error(`Input must be text.`);
     }
 
-    const searchText = inputText.trim().toUpperCase().replace(/[\(\).'"]/g, '');
-    if (!searchText) return '';
-    
-    if (!comparisonRange?.length) return '';
+    inputText = inputText.trim().toUpperCase().replace(/[\(\).'"]/g, '');
+    const inputLen = inputText.length;
 
     let bestMatch = '';
     let lowestDistance = distanceThreshold;
     let multipleBestResults = false;
-    const inputFirstLetter = searchText[0];
 
-    // Preprocess all values and abbreviations
+    const comparisonValues = comparisonRange.flat();
+    const abbreviations = abbreviationRange ? abbreviationRange.flat() : [];
+
     const preprocessedValues = [];
-    
-    for (let i = 0; i < comparisonRange.length; i++) {
-      const value = comparisonRange[i];
-      if (!value?.trim()) continue;
 
-      // Add main value
-      const processed = value.trim().toUpperCase().replace(/[\(\).'"]/g, '');
+    for (let i = 0; i < comparisonValues.length; i++) {
+      const value = comparisonValues[i];
+      if (!value) continue;
+
+      // Add the main comparison value itself as a candidate
+      const processedValue = value.trim().toUpperCase().replace(/[\(\).'"]/g, '');
       preprocessedValues.push({
         original: value,
-        processed,
-        length: processed.length
+        processed: processedValue,
+        length: processedValue.length
       });
 
-      // Add abbreviations if provided
-      if (abbreviationRange?.[i]) {
-        const abbrs = abbreviationRange[i].split(',')
+      // If abbreviationRange is provided, add those too
+      if (abbreviations[i]) {
+        const splitAbbrs = abbreviations[i]
+          .split(',')
           .map(a => a.trim())
-          .filter(Boolean);
+          .filter(a => a.length > 0);
 
-        for (const abbr of abbrs) {
+        for (let abbr of splitAbbrs) {
           preprocessedValues.push({
-            original: value,
+            original: value, // Always return the value from comparisonRange
             processed: abbr.toUpperCase().replace(/[\(\).'"]/g, ''),
             length: abbr.length
           });
@@ -79,19 +78,23 @@ export class FuzzyMatcher {
       }
     }
 
-    // Sort by first letter match
+    const inputFirstLetter = inputText[0]?.toUpperCase() || '';
+
+    // Put entries that start with the same first letter at the top
     preprocessedValues.sort((a, b) => {
-      const aMatches = a.processed[0] === inputFirstLetter;
-      const bMatches = b.processed[0] === inputFirstLetter;
-      return (bMatches - aMatches);
+      const aMatches = a.processed?.[0] === inputFirstLetter;
+      const bMatches = b.processed?.[0] === inputFirstLetter;
+
+      if (aMatches && !bMatches) return -1;
+      if (!aMatches && bMatches) return 1;
+      return 0; // maintain original order among equal-priority entries
     });
 
-    for (const { original, processed, length } of preprocessedValues) {
-      if (processed === searchText) return original;
-      if (Math.abs(length - searchText.length) > lowestDistance) continue;
+    for (let { original, processed, length } of preprocessedValues) {
+      if (Math.abs(inputLen - length) > lowestDistance) continue;
 
-      const dist = this.#fastDamerauLevenshteinEarlyAbort(searchText, processed, lowestDistance);
-      
+      const dist = FuzzyMatcher.#fastDamerauLevenshteinEarlyAbort(inputText, processed, lowestDistance);
+
       if (dist === 0) return original;
 
       if (dist < lowestDistance) {
@@ -112,10 +115,9 @@ export class FuzzyMatcher {
     return bestMatch;
   }
 
-  // Optimized Damerau-Levenshtein with early abort
   static #fastDamerauLevenshteinEarlyAbort(a, b, maxDist) {
     const m = a.length, n = b.length;
-    if (Math.abs(m - n) > maxDist) return maxDist + 1; // Skip too far lengths
+    if (Math.abs(m - n) > maxDist) return maxDist + 1;
 
     if (m === 0) return n;
     if (n === 0) return m;
@@ -152,31 +154,41 @@ export class FuzzyMatcher {
 
         dp[i + 1][j + 1] = Math.min(
           dp[i][j] + cost,                         // substitution
-          dp[i + 1][j] + 1,                       // insertion
-          dp[i][j + 1] + 1,                       // deletion
-          dp[i1][j1] + ((i - i1 - 1) + (j - j1 - 1)) * 0.5  // transposition with half cost
+          dp[i + 1][j] + 1,                        // insertion
+          dp[i][j + 1] + 1,                        // deletion
+          dp[i1][j1] + (i - i1 - 1) + 1 + (j - j1 - 1) // transposition
         );
       }
 
       const rowMin = Math.min(...dp[i + 1]);
-      if (rowMin > maxDist) return maxDist + 1; // early abort
+      if (rowMin > maxDist) return maxDist + 1;
       da[a[i - 1]] = i;
     }
 
     return dp[m + 1][n + 1];
   }
 
-  // Optimized substitution cost with keyboard adjacency and visual similarity
   static #substitutionCost(charA, charB) {
     if (charA === charB) return 0;
 
-    const pair = `${charA}${charB}`;
-    if (this.#visualSimilaritySet.has(pair)) return 0.7; // Adjusted to match Google Scripts version
-    
-    const adjacent = this.#keyboardAdjacencyMap.get(charA);
-    return adjacent?.includes(charB) ? 0.7 : 1; // Adjusted to match Google Scripts version
+    charA = charA.toUpperCase();
+    charB = charB.toUpperCase();
+
+    // Visual similarity check
+    for (const pair of FuzzyMatcher.#visualSimilarityPairs) {
+      if ((pair[0] === charA && pair[1] === charB) || (pair[1] === charA && pair[0] === charB)) {
+        return 0.7;
+      }
+    }
+
+    // Keyboard adjacency check
+    const adj = FuzzyMatcher.#keyboardAdjacencyMap.get(charA);
+    if (adj && adj.includes(charB)) {
+      return 0.7;
+    }
+
+    return 1;
   }
 }
 
-// Update the export to maintain backwards compatibility
 export const GetTopFuzzyMatch = FuzzyMatcher.GetTopFuzzyMatch;

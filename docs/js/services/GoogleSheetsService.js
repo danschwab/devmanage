@@ -1,10 +1,18 @@
-import { GoogleSheetsAuth, SPREADSHEET_IDS } from '../index.js';
+import { GoogleSheetsAuth, SPREADSHEET_IDS, GetTopFuzzyMatch } from '../index.js';
 
 export class GoogleSheetsService {
     // Add static cache for all spreadsheets
     static sheetCache = {
         timestamp: {},
         data: {},
+        TTL: 5 * 60 * 1000 // 5 minutes
+    };
+
+    // Static cache for production schedule identifier dependencies
+    static prodSchedIdentifierCache = {
+        clients: null,
+        shows: null,
+        timestamp: 0,
         TTL: 5 * 60 * 1000 // 5 minutes
     };
 
@@ -201,12 +209,14 @@ export class GoogleSheetsService {
                 return index;
             };
 
-            const idxIdentifier = idx("Identifier");
-            const idxYear = idx("Year");
-            const idxShip = idx("Ship");
-            const idxReturn = idx("Expected Return Date");
-            const idxSStart = idx("S. Start");
-            const idxSEnd = idx("S. End");
+            const idxIdentifier = headers.findIndex(h => h.toLowerCase() === "identifier");
+            const idxYear = headers.findIndex(h => h.toLowerCase() === "year");
+            const idxShip = headers.findIndex(h => h.toLowerCase() === "ship");
+            const idxReturn = headers.findIndex(h => h.toLowerCase() === "expected return date");
+            const idxSStart = headers.findIndex(h => h.toLowerCase() === "s. start");
+            const idxSEnd = headers.findIndex(h => h.toLowerCase() === "s. end");
+            const idxShowName = headers.findIndex(h => h.toLowerCase() === "show name" || h.toLowerCase() === "show");
+            const idxClient = headers.findIndex(h => h.toLowerCase() === "client");
 
             let year, startDate, endDate;
             console.log('5. Processing parameters...');
@@ -214,28 +224,42 @@ export class GoogleSheetsService {
             if (typeof parameters === "string" || parameters.identifier) {
                 const identifier = parameters.identifier || parameters;
                 console.log(`Looking for show: ${identifier}`);
-                const row = data.find(r => r[idxIdentifier] == identifier);
-                if (!row) {
+
+                // Instead of searching by Identifier column, use computeProdSchedIdentifier
+                let foundRow = null;
+                for (const row of data) {
+                    // Compute identifier for this row
+                    const showName = row[idxShowName];
+                    const client = row[idxClient];
+                    const yearVal = row[idxYear];
+                    const computedIdentifier = await this.computeProdSchedIdentifier(showName, client, yearVal);
+                    if (computedIdentifier === identifier) {
+                        foundRow = row;
+                        break;
+                    }
+                }
+
+                if (!foundRow) {
                     console.warn(`Show ${identifier} not found in schedule`);
                     console.groupEnd();
                     return [];
                 }
-                console.log('Found show row:', row);
+                console.log('Found show row:', foundRow);
 
-                year = row[idxYear];
+                year = foundRow[idxYear];
                 console.log(`Show year: ${year}`);
 
-                let ship = this.parseDate(row[idxShip]);
-                let ret = this.parseDate(row[idxReturn]);
+                let ship = this.parseDate(foundRow[idxShip]);
+                let ret = this.parseDate(foundRow[idxReturn]);
                 console.log('Initial dates:', { ship, ret });
 
                 if (!ship) {
-                    let sStart = this.parseDate(row[idxSStart]);
+                    let sStart = this.parseDate(foundRow[idxSStart]);
                     ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
                     console.log('Using adjusted start date:', ship);
                 }
                 if (!ret) {
-                    let sEnd = this.parseDate(row[idxSEnd]);
+                    let sEnd = this.parseDate(foundRow[idxSEnd]);
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
                     console.log('Using adjusted end date:', ret);
                 }
@@ -257,7 +281,6 @@ export class GoogleSheetsService {
 
                 startDate = ship;
                 endDate = ret;
-
             } else {
                 year = parameters.year;
                 startDate = this.parseDate(parameters.startDate);
@@ -274,7 +297,13 @@ export class GoogleSheetsService {
             console.log('6. Finding overlaps...');
             const overlaps = [];
             for (const row of data) {
-                if (!row[idxIdentifier] || row[idxYear] != year) continue;
+                if (!row[idxYear] || row[idxYear] != year) continue;
+
+                // Compute identifier for this row
+                const showName = row[idxShowName];
+                const client = row[idxClient];
+                const yearVal = row[idxYear];
+                const computedIdentifier = await this.computeProdSchedIdentifier(showName, client, yearVal);
 
                 let ship = this.parseDate(row[idxShip]) || 
                     (this.parseDate(row[idxSStart]) ? 
@@ -285,31 +314,29 @@ export class GoogleSheetsService {
                         new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : 
                         null);
 
-                // Ensure ship and ret are in the correct year
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
                 }
                 if (ret && ret.getFullYear() != year) {
                     ret.setFullYear(Number(year));
                 }
-                // Ensure ret date is after ship date; if not, add a year to ret
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
                 }
 
                 if (!ship || !ret) {
-                    console.log(`Skipping ${row[idxIdentifier]}: missing dates`);
+                    console.log(`Skipping ${computedIdentifier}: missing dates`);
                     continue;
                 }
 
                 if (ret >= startDate && ship <= endDate) {
-                    console.log(`Found overlap: ${row[idxIdentifier]}`, {
+                    console.log(`Found overlap: ${computedIdentifier}`, {
                         ship,
                         ret,
                         overlapsWithStart: startDate,
                         overlapsWithEnd: endDate
                     });
-                    overlaps.push(row[idxIdentifier]);
+                    overlaps.push(computedIdentifier);
                 }
             }
 
@@ -709,5 +736,75 @@ export class GoogleSheetsService {
             console.error('Failed to get cached data:', error);
             throw error;
         }
+    }
+
+    /**
+     * Compute the "Identifier" value for a production schedule row.
+     * @param {string} a2 - The value from column A (Show Name)
+     * @param {string} b2 - The value from column B (Client Name)
+     * @param {string} c2 - The value from column C (Year)
+     * @returns {Promise<string>} The computed identifier string.
+     */
+    static async computeProdSchedIdentifier(a2, b2, c2) {
+        console.log('computeProdSchedIdentifier inputs:', { a2, b2, c2 });
+        // If A2 is blank, return blank
+        if (!a2 || !a2.trim()) {
+            console.log('computeProdSchedIdentifier output:', '');
+            return '';
+        }
+
+        // Check cache validity
+        const now = Date.now();
+        if (
+            !this.prodSchedIdentifierCache.clients ||
+            !this.prodSchedIdentifierCache.shows ||
+            now - this.prodSchedIdentifierCache.timestamp > this.prodSchedIdentifierCache.TTL
+        ) {
+            // Fetch and cache Clients and Shows data
+            await GoogleSheetsAuth.checkAuth();
+            // Clients: [A, B] columns
+            const clientsData = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, "Clients!A2:B");
+            // Shows: [A, B] columns
+            const showsData = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, "Shows!A2:B");
+            this.prodSchedIdentifierCache.clients = {
+                names: clientsData.map(row => row[0] || ''),
+                abbrs: clientsData.map(row => row[1] || '')
+            };
+            this.prodSchedIdentifierCache.shows = {
+                names: showsData.map(row => row[0] || ''),
+                abbrs: showsData.map(row => row[1] || '')
+            };
+            this.prodSchedIdentifierCache.timestamp = now;
+        }
+
+        // Fuzzy match client
+        let clientMatch = '';
+        try {
+            clientMatch = GetTopFuzzyMatch(
+                b2,
+                this.prodSchedIdentifierCache.clients.names,
+                this.prodSchedIdentifierCache.clients.abbrs
+            );
+        } catch (e) {
+            clientMatch = b2 || '';
+        }
+
+        // Fuzzy match show
+        let showMatch = '';
+        try {
+            showMatch = GetTopFuzzyMatch(
+                a2,
+                this.prodSchedIdentifierCache.shows.names,
+                this.prodSchedIdentifierCache.shows.abbrs,
+                2.5
+            );
+        } catch (e) {
+            showMatch = a2 || '';
+        }
+
+        // Compose identifier
+        const identifier = `${clientMatch} ${c2 || ''} ${showMatch}`.trim();
+        console.log('computeProdSchedIdentifier output:', identifier);
+        return identifier;
     }
 }
