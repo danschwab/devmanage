@@ -62,20 +62,24 @@
 
             // For each inventory item with an error, find the pack list table and scan for
             // the corresponding item to highlight it
-            const errorItems = Object.entries(quantityData).filter(([itemId, info]) => info.available < info.requested);
-            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-            console.log('Error items to highlight:', errorItems.map(([itemId]) => itemId));
-            errorItems.forEach(([itemId]) => {
-                const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
-                console.log(`Searching for itemId "${itemId}" in pack list table...`);
-                packListItems.forEach(packListItem => {
-                    // use regex
-                    const match = packListItem.textContent.match(itemRegex);
-                    if (match && match[2] == itemId) {
-                        console.log(`Highlighting cell for itemId "${itemId}"`);
-                        TableManager.tableCellWarning(packListItem, 'Not enough available');
-                    }
-                });
+            // Find error items from rows (statusCell.textContent !== 'OK')
+            console.log('Highlighting error items in pack list table...');
+            rows.forEach(row => {
+                const itemId = row[0];
+                const statusCell = row[row.length - 1];
+                if (statusCell.textContent !== 'OK') {
+                    console.log(`Item "${itemId}" has status "${statusCell.textContent}". Attempting to highlight in pack list table.`);
+                    const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
+                    packListItems.forEach(packListItem => {
+                        // use regex to extract itemId from cell text
+                        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+                        const match = packListItem.textContent.match(itemRegex);
+                        if (match && match[2] === itemId) {
+                            console.log(`Highlighting cell for item "${itemId}".`);
+                            TableManager.tableCellWarning(packListItem, 'Not enough available');
+                        }
+                    });
+                }
             });
 
         } catch (err) {
