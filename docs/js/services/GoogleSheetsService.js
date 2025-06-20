@@ -198,7 +198,7 @@ export class GoogleSheetsService {
             const tabName = "ProductionSchedule";
             
             // Use cached data for production schedule
-            const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, `${tabName}!A:Z`);
+            const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, `${tabName}!A:J`);
             const headers = data[0];
 
             console.log('1. Verifying tab exists...');

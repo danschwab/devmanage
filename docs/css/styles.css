@@ -142,7 +142,7 @@ button:hover,
     overflow: auto;
 }
 .modal-content {
-    background-color: #fefefe;
+    background-color: #fefefeaa;
     margin: 15% auto; /* 15% from the top and centered */
     border: 1px solid #888;
     width: 50%; /* Could be more or less, depending on screen size */
@@ -183,7 +183,7 @@ button:hover,
     color: #fff;
 }
 .modal-body {
-    margin: 20px 0;
+    margin: 20px;
 }
 
 
@@ -311,12 +311,19 @@ button:hover,
     padding-right: 25px;  /* Make room for close button */
 }
 
+.tabs-list {
+    border-radius: 0.25rem;
+    overflow: hidden;
+    border: 1px solid rgba(5, 0, 50, 0.2);
+    padding: 0;
+}
 
 .tabs-list button.tab-button {
     border-radius: 0;
     width: 100%;
     max-width: 100%;
     margin:0;
+    top:0;
 }
 
 .tab-close {
