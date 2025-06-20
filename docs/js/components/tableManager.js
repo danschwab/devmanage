@@ -100,15 +100,16 @@ export class TableManager {
                                 td.appendChild(cell);
                             } else {
                                 if (editIndexes.includes(colIndex)) {
-                                    const input = document.createElement('input');
-                                    input.type = 'text';
-                                    input.value = cell || '';
-                                    input.dataset.originalValue = cell || '';
-                                    input.dataset.rowIndex = rowIndex;
-                                    input.dataset.colIndex = colIndex;
-                                    input.dataset.dirty = 'false';
+                                    // Use textarea instead of input
+                                    const textarea = document.createElement('textarea');
+                                    textarea.value = cell || '';
+                                    textarea.dataset.originalValue = cell || '';
+                                    textarea.dataset.rowIndex = rowIndex;
+                                    textarea.dataset.colIndex = colIndex;
+                                    textarea.dataset.dirty = 'false';
+                                    textarea.classList.add('table-edit-textarea');
 
-                                    input.addEventListener('input', (e) => {
+                                    textarea.addEventListener('input', (e) => {
                                         const target = e.target;
                                         const isDirty = (target.value !== target.dataset.originalValue);
                                         target.dataset.dirty = isDirty.toString();
@@ -119,7 +120,7 @@ export class TableManager {
                                         }
                                     });
 
-                                    td.appendChild(input);
+                                    td.appendChild(textarea);
                                 } else {
                                     td.textContent = cell || '';
                                 }
