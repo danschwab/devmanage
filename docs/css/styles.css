@@ -5,7 +5,7 @@ body {
     padding: 0;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: start;
     min-height: 100vh;
 }
 
@@ -15,7 +15,7 @@ body {
     border-radius: 4px;
     padding: 20px;
     width: 90%;
-    max-width: 800px;
+    max-width: 1000px;
     min-height: calc(100vh - 80px); /* Ensure the box almost fills the screen */
     display: flex;
     flex-direction: column;
@@ -209,6 +209,7 @@ button:hover,
 
 .tabs.dropdown-mode.menu-open {
     height: 38px;
+    z-index: 1000;
 }
 
 .tabs.dropdown-mode .hamburger-menu {
@@ -375,6 +376,7 @@ button:hover,
     box-sizing: border-box;
     display: none;
     width: 28px;
+    min-width:0;
     height: 28px;
     padding: 0;
     border-radius: 3px;
