@@ -54,7 +54,7 @@
             // Create a div to hold the table with a logical heading
             const inventoryReportContainer = document.createElement('div');
             const heading = document.createElement('h2');
-            heading.textContent = `Inventory report for "${tabName}" pack list:`;
+            heading.textContent = `Inventory report:`;
             inventoryReportContainer.classList.add('inventory-report-container');
             inventoryReportContainer.appendChild(heading);
             inventoryReportContainer.appendChild(table);
@@ -66,7 +66,7 @@
             console.log('Highlighting error items in pack list table...');
             rows.forEach(row => {
                 const itemId = row[0];
-                const remaining = row[4];
+                const remaining = row[3];
                 const statusCell = row[row.length - 1];
                 if (remaining < 0) {
                     // Insufficient inventory: red
