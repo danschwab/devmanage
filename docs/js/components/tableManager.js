@@ -100,18 +100,20 @@ export class TableManager {
                                 td.appendChild(cell);
                             } else {
                                 if (editIndexes.includes(colIndex)) {
-                                    // Use textarea instead of input
-                                    const textarea = document.createElement('textarea');
-                                    textarea.value = cell || '';
-                                    textarea.dataset.originalValue = cell || '';
-                                    textarea.dataset.rowIndex = rowIndex;
-                                    textarea.dataset.colIndex = colIndex;
-                                    textarea.dataset.dirty = 'false';
-                                    textarea.classList.add('table-edit-textarea');
+                                    // Use contenteditable div instead of textarea/input
+                                    const editableDiv = document.createElement('div');
+                                    editableDiv.textContent = cell || '';
+                                    editableDiv.setAttribute('role', 'textbox');
+                                    editableDiv.setAttribute('contenteditable', 'true');
+                                    editableDiv.dataset.originalValue = cell || '';
+                                    editableDiv.dataset.rowIndex = rowIndex;
+                                    editableDiv.dataset.colIndex = colIndex;
+                                    editableDiv.dataset.dirty = 'false';
+                                    editableDiv.classList.add('table-edit-textarea');
 
-                                    textarea.addEventListener('input', (e) => {
+                                    editableDiv.addEventListener('input', (e) => {
                                         const target = e.target;
-                                        const isDirty = (target.value !== target.dataset.originalValue);
+                                        const isDirty = (target.textContent !== target.dataset.originalValue);
                                         target.dataset.dirty = isDirty.toString();
                                         if (isDirty) {
                                             target.classList.add('dirty');
@@ -120,7 +122,7 @@ export class TableManager {
                                         }
                                     });
 
-                                    td.appendChild(textarea);
+                                    td.appendChild(editableDiv);
                                 } else {
                                     td.textContent = cell || '';
                                 }

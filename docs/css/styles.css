@@ -78,50 +78,11 @@ nav a:hover {
     transition: border-color 0.15s ease-in-out;
 }
 
-input,
-textarea {
-    box-sizing: border-box;
-    width: 100%;
-    font-size: 1rem;
-    font-family: inherit;
-    line-height: 1.5;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    padding: 0.375rem 0.75rem;
-    transition: border-color 0.15s ease-in-out;
-}
-
 .form-group input:focus,
 .form-group select:focus {
     border-color: #86b7fe;
     outline: 0;
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
-
-textarea,
-.table-edit-textarea {
-    min-height: 2.2em;
-    resize: vertical;
-    overflow-y: hidden;
-    /* Ensure textareas expand to fit content */
-    height: auto;
-    max-height: 400px;
-    background: #fff;
-}
-
-.table-edit-textarea.dirty {
-    border-color: #f90;
-    background: #fffbe6;
-}
-
-td > .table-edit-textarea {
-    display: block;
-}
-
-/* Optional: auto-grow textarea on input */
-.table-edit-textarea {
-    /* Remove fixed height if set elsewhere */
-    height: auto !important;
 }
 
 /* Button Container */
