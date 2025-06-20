@@ -580,17 +580,21 @@ tr.dragging::after {
     background-color: rgb(102, 204, 116);
 }
 
-
+.table-edit-textarea:focus {
+    outline: solid 2px #aeceff;
+}
 
 .dirty::after {
-    content: "Unsaved changes";
-    /* display: block; */
-    font-size: 0.6rem;
+    content: "unsaved edits";
+    display: inline-block;
+    position: relative;
+    font-size: 0.8rem;
     color: #c51f2f;
     border-radius: 4px;
-    border: 1px dotted #c51f2f;
-    border-style: dashed;
-    padding: 2px;
+    border: 1px dashed #c51f2f;
+    padding: 1.5px;
+    margin: 0 4px;
+    bottom: 1px;
 }
 
 

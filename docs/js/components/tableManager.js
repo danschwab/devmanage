@@ -124,7 +124,8 @@ export class TableManager {
 
                                     td.appendChild(editableDiv);
                                 } else {
-                                    td.textContent = cell || '';
+                                    // Fix: display 0 as '0' instead of empty string
+                                    td.textContent = (cell === 0 || cell === '0') ? '0' : (cell || '');
                                 }
                             }
                             tr.appendChild(td);
