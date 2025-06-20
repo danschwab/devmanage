@@ -413,21 +413,34 @@ export class GoogleSheetsService {
                     // Process items with logging
                     items.forEach(item => {
                         const originalItem = item;
-                        // Strip prefix if item contains a hyphen
+                        let searchItem = item;
+                        let foundRow = null;
+
+                        // Try searching by item number alone if it contains a hyphen
                         if (item.includes('-')) {
-                            item = item.split('-')[1];
-                            console.log(`Searching for stripped item: ${item} (original: ${originalItem})`);
+                            const itemNumber = item.split('-')[1];
+                            console.log(`Searching for stripped item: ${itemNumber} (original: ${originalItem})`);
+                            foundRow = tabData.slice(1).find(r => r[0] === itemNumber);
+
+                            // If not found, try searching for the full item (prefix + number)
+                            if (!foundRow) {
+                                console.log(`Not found as '${itemNumber}', trying full item: ${originalItem}`);
+                                foundRow = tabData.slice(1).find(r => r[0] === originalItem);
+                            }
+                        } else {
+                            // Try searching for the item as-is
+                            foundRow = tabData.slice(1).find(r => r[0] === item);
                         }
-                        const row = tabData.slice(1).find(r => r[0] === item);
+
                         const obj = { itemName: originalItem }; // Use original item name in result
-                        if (row) {
-                            console.log(`Found row for ${item}:`, row);
+                        if (foundRow) {
+                            console.log(`Found row for ${originalItem}:`, foundRow);
                             infoFields.forEach((field, i) => {
-                                obj[field] = row[infoIdxs[i]] ?? null;
+                                obj[field] = foundRow[infoIdxs[i]] ?? null;
                                 console.log(`${field}: ${obj[field]}`);
                             });
                         } else {
-                            console.log(`No row found for ${item}`);
+                            console.log(`No row found for ${originalItem}`);
                             infoFields.forEach(field => obj[field] = null);
                         }
                         results.push(obj);
