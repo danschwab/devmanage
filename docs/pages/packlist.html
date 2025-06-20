@@ -99,6 +99,12 @@
 
     // Extracted function to build the tabs-list DOM element from a list of sheetTabs
     function buildTabsListElement(sheetTabs) {
+        if (!sheetTabs || sheetTabs.length === 0) {
+            const noTabsMessage = document.createElement('p');
+            noTabsMessage.textContent = '-';
+            return noTabsMessage;
+        }
+        
         const tabsList = document.createElement('div');
         tabsList.className = 'tabs-list';
         for (const tabName of sheetTabs) {
