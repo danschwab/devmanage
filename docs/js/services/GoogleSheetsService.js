@@ -481,19 +481,13 @@ export class GoogleSheetsService {
         }
 
         // Use cache for full sheet data
-        /*const response = await gapi.client.sheets.spreadsheets.get({
+        const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
             ranges: [`${projectIdentifier}`],
             includeGridData: true
         });
         
-        const sheetData = response.result.sheets[0].data[0].rowData;*/
-        
-        // Use getSheetData to leverage caching for full sheet data (A1:Z1000 is a safe range)
-        const sheetData = await this.getSheetData(
-            SPREADSHEET_IDS.PACK_LISTS,
-            `${projectIdentifier}!A:J`
-        );
+        const sheetData = response.result.sheets[0].data[0].rowData;
 
         const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
         const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
