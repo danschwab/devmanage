@@ -134,20 +134,19 @@
     }
 
     // Standalone function for TabManager tab handler
-    function addNewPackListTab() {
-        GoogleSheetsAuth.checkAuth();
+    async function addNewPackListTab() {
+        await GoogleSheetsAuth.checkAuth();
 
         const modal = ModalManager.createModal(`
             <p class="loading-message">Loading...</p>
         `);
 
         try {
-            const sheetTabs = GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS).then((sheetTabs) => {
-                const tabsListElement = buildTabsListElement(sheetTabs);
-                const modalBody = modal.querySelector('.modal-body');
-                modalBody.innerHTML = '';
-                modalBody.appendChild(tabsListElement);
-            });
+            const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
+            const tabsListElement = buildTabsListElement(sheetTabs);
+            const modalBody = modal.querySelector('.modal-body');
+            modalBody.innerHTML = '';
+            modalBody.appendChild(tabsListElement);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
             buildPage('<p class="error">Failed to load spreadsheet tabs</p>', modal.querySelector('.modal-body'));

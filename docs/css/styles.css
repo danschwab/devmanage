@@ -311,6 +311,7 @@ button:hover,
     padding-right: 25px;  /* Make room for close button */
 }
 
+
 .tabs-list button.tab-button {
     border-radius: 0;
     width: 100%;
