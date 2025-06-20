@@ -62,6 +62,30 @@ export class GoogleSheetsService {
         });
     }
 
+    /**
+     * Extracts item quantities from pack list content.
+     * @param {object} packList - The pack list content object.
+     * @returns {object} Map of itemId to quantity.
+     */
+    static extractItemsFromPackList(packList) {
+        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+        const itemMap = {};
+        packList.crates.forEach(crate => {
+            crate.items.forEach(row => {
+                row.forEach(cell => {
+                    if (!cell) return;
+                    const match = cell.match(itemRegex);
+                    if (match && match[2]) {
+                        const qty = parseInt(match[1] || "1", 10);
+                        const id = match[2];
+                        itemMap[id] = (itemMap[id] || 0) + qty;
+                    }
+                });
+            });
+        });
+        return itemMap;
+    }
+
     static async checkItemQuantities(projectIdentifier) {
         console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
@@ -76,23 +100,9 @@ export class GoogleSheetsService {
                 throw new Error('Failed to get pack list for project: ' + projectIdentifier);
             }
 
-            // 2. Extract items
+            // 2. Extract items (now using extracted function)
             console.log('2. Extracting items from pack list...');
-            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-            const itemMap = {};
-            packList.crates.forEach((crate, crateIndex) => {
-                crate.items.forEach((row, rowIndex) => {
-                    row.forEach((cell, cellIndex) => {
-                        if (!cell) return;
-                        const match = cell.match(itemRegex);
-                        if (match && match[2]) {
-                            const qty = parseInt(match[1] || "1", 10);
-                            const id = match[2];
-                            itemMap[id] = (itemMap[id] || 0) + qty;
-                        }
-                    });
-                });
-            });
+            const itemMap = this.extractItemsFromPackList(packList);
             const itemIds = Object.keys(itemMap);
 
             // 3. Get inventory quantities FIRST
@@ -142,23 +152,15 @@ export class GoogleSheetsService {
                 try {
                     const otherPack = await this.getPackListContent(otherId);
                     if (!otherPack) continue;
-                    otherPack.crates.forEach(crate => {
-                        crate.items.forEach(row => {
-                            row.forEach(cell => {
-                                if (!cell) return;
-                                const match = cell.match(itemRegex);
-                                if (match && match[2]) {
-                                    const id = match[2];
-                                    if (result[id]) {
-                                        // Only decrement if the item is valid
-                                        result[id].remaining -= 1;
-                                        if (!result[id].overlapping.includes(otherId)) {
-                                            result[id].overlapping.push(otherId);
-                                        }
-                                    }
-                                }
-                            });
-                        });
+                    // Use extractItemsFromPackList to get items and their quantities for the overlapping show
+                    const overlapItemMap = this.extractItemsFromPackList(otherPack);
+                    Object.entries(overlapItemMap).forEach(([id, qty]) => {
+                        if (result[id]) {
+                            result[id].remaining -= qty;
+                            if (!result[id].overlapping.includes(otherId)) {
+                                result[id].overlapping.push(otherId);
+                            }
+                        }
                     });
                 } catch (e) {
                     console.warn(`Failed to process overlapping show ${otherId}:`, e);
