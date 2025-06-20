@@ -4,12 +4,14 @@
 <script type="module">
     import { TabManager, GoogleSheetsService, GoogleSheetsAuth, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
 
-    function buildPackListTable(content) {
-        const mainTableData = content.crates.map(crate => {
+    function buildPackListTable(content, tabName = null) {
+        const mainTableData = content.crates.map((crate, crateIdx) => {
             const itemData = document.createElement('div');
             itemData.classList.add('table-wrapper');
+            let itemTable = null;
+            let saveBtn = null;
             if (crate.items.length > 0) {
-                const itemTable = TableManager.buildTable(
+                itemTable = TableManager.buildTable(
                     crate.items,
                     content.headers.items,
                     ['Pack', 'Check'],
@@ -17,13 +19,73 @@
                     'pack-list-items',
                     ['.tab-button']
                 );
+                
+                // Add save button for crate items if tabName is provided
+                if (tabName) {
+                    saveBtn = document.createElement('button');
+                    saveBtn.textContent = 'Save Changes';
+                    saveBtn.className = 'save-button';
+                    saveBtn.style.margin = '8px 0';
+                    saveBtn.disabled = true;
+                    itemData.appendChild(saveBtn);
+                    
+                    setupPackListSaveButton(itemTable, saveBtn, tabName, content.headers.items, crateIdx);
+                }
+
                 itemData.appendChild(itemTable);
             }
             return [...crate.info, itemData];
         });
-        
+
         const headers = [...content.headers.main, 'Items'];
         return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
+    }
+
+    // Setup save button for a pack list table using TableManager logic
+    function setupPackListSaveButton(table, saveBtn, tabName, headers, crateIdx) {
+        // Only care about editable fields (contenteditable)
+        const getDirtyEditables = () => table.querySelectorAll('.table-edit-textarea[data-dirty="true"]');
+        const checkDirtyState = () => {
+            saveBtn.disabled = getDirtyEditables().length === 0;
+        };
+        saveBtn.onclick = async () => {
+            const dirtyEditables = getDirtyEditables();
+            if (!dirtyEditables.length) return;
+            try {
+                saveBtn.disabled = true;
+                // Find the row index and col index for each dirty field
+                const updates = Array.from(dirtyEditables).map(editable => ({
+                    type: 'cell',
+                    row: parseInt(editable.dataset.rowIndex) + 1,
+                    col: parseInt(editable.dataset.colIndex),
+                    value: editable.textContent
+                }));
+                // Save to Google Sheets
+                await GoogleSheetsService.setSheetData(
+                    SPREADSHEET_IDS.PACK_LISTS,
+                    tabName,
+                    updates
+                );
+                // Clear dirty state
+                dirtyEditables.forEach(editable => {
+                    editable.dataset.dirty = 'false';
+                    editable.classList.remove('dirty');
+                    editable.dataset.originalValue = editable.textContent;
+                });
+                ModalManager.alert('Changes saved successfully');
+            } catch (error) {
+                ModalManager.alert('Error saving changes: ' + error.message);
+            } finally {
+                checkDirtyState();
+            }
+        };
+        // Observe dirty state
+        const observer = new MutationObserver(checkDirtyState);
+        observer.observe(table, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-dirty']
+        });
     }
 
     async function checkPackListQuantities(tabName, container) {
@@ -118,7 +180,8 @@
                 try {
                     const content = await GoogleSheetsService.getPackListContent(tabName);
                     const tabContainer = document.createElement('div');
-                    const packListTable = buildPackListTable(content);
+                    // Pass tabName to buildPackListTable so save buttons are added
+                    const packListTable = buildPackListTable(content, tabName);
                     tabContainer.appendChild(packListTable);
 
                     // Asynchronously check item quantities

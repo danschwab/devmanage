@@ -114,14 +114,14 @@ export class FormBuilder {
                     if (options.onSuccess) {
                         options.onSuccess(result, resultData);
                     } else {
-                        tableManager = new TableManager(resultData);
-                        const table = tableManager.buildTable(
+                        // Use static method directly, not as an import
+                        const table = TableManager.buildTable(
                             result.data, 
                             result.headers, 
                             [], 
                             options.editColumns
                         );
-                        
+                        resultData.appendChild(table);
                         if (saveButton) {
                             table.id = saveButton.dataset.tableId;
                             this.setupTableSaveHandler(tableManager, saveButton, options);
