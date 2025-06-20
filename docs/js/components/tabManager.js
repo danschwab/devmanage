@@ -176,6 +176,13 @@ export class TabManager {
 
         PageBuilder.buildPage(tabContent, tabNavigationWrapper.querySelector('.tab-container'), false);
         PageBuilder.buildPage(content, tabContent);
+
+        // Scroll to top of the tabNavigationWrapper when a new tab is opened
+        setTimeout(() => {
+            if (tabNavigationWrapper && typeof tabNavigationWrapper.scrollTop === 'number') {
+                tabNavigationWrapper.scrollTop = 0;
+            }
+        }, 0);
         
         this.checkOverflow(true);
         this.openTab(tabButton, tabName, false);
