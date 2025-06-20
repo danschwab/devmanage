@@ -472,7 +472,7 @@ export class GoogleSheetsService {
 
     static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
-
+        
         // First verify the tab exists
         const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
         if (!tabs.includes(projectIdentifier)) {
@@ -480,23 +480,28 @@ export class GoogleSheetsService {
             return null;
         }
 
+        // Use cache for full sheet data
+        /*const response = await gapi.client.sheets.spreadsheets.get({
+            spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
+            ranges: [`${projectIdentifier}`],
+            includeGridData: true
+        });
+        
+        const sheetData = response.result.sheets[0].data[0].rowData;*/
+        
         // Use getSheetData to leverage caching for full sheet data (A1:Z1000 is a safe range)
-        const sheetDataArr = await this.getSheetData(
+        const sheetData = await this.getSheetData(
             SPREADSHEET_IDS.PACK_LISTS,
-            `${projectIdentifier}!A1:Z1000`
+            `${projectIdentifier}!A:J`
         );
 
-        // Assume header is on row 3 (index 2)
-        const headerRow = sheetDataArr[2];
-        if (!headerRow) {
-            throw new Error(`Header row not found in sheet "${projectIdentifier}".`);
-        }
+        const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
         const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
-
+        
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
         }
-
+        
         const result = {
             headers: {
                 main: headerRow.slice(0, itemStartIndex),
@@ -508,8 +513,9 @@ export class GoogleSheetsService {
         let currentCrate = null;
 
         // Process rows starting from row 4 (index 3)
-        for (let i = 3; i < sheetDataArr.length; i++) {
-            const rowValues = sheetDataArr[i] || [];
+        for (let i = 3; i < sheetData.length; i++) {
+            const row = sheetData[i];
+            const rowValues = row.values.map(cell => cell?.formattedValue || null);
             const crateInfo = rowValues.slice(0, itemStartIndex);
             const crateContents = rowValues.slice(itemStartIndex);
 
@@ -524,9 +530,7 @@ export class GoogleSheetsService {
             }
 
             if (crateContents.some(cell => cell)) {
-                if (currentCrate) {
-                    currentCrate.items.push(crateContents);
-                }
+                currentCrate.items.push(crateContents);
             }
         }
 
