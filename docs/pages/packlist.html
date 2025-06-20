@@ -149,7 +149,7 @@
             modalBody.appendChild(tabsListElement);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
-            buildPage('<p class="error">Failed to load spreadsheet tabs</p>', modal.querySelector('.modal-body'));
+            modal.querySelector('.modal-body').innerHTML = '<p class="error">Failed to load spreadsheet tabs</p>';
         }
     }
 
