@@ -597,6 +597,9 @@ tr.dragging::after {
     bottom: 1px;
 }
 
+table button.save-button:disabled {
+    display: none;
+}
 
 
 /* Messages */

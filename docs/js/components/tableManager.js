@@ -502,6 +502,20 @@ export class TableManager {
     static setupPackListSaveButton(table, saveBtn, tabName, headers, crateIdx) {
         const getDirtyEditables = () => TableManager.getDirtyEditables(table);
         const checkDirtyState = () => TableManager.checkDirtyState(table, saveBtn);
+
+        // Use onStateChange to observe dirty state for this table only
+        const observer = new MutationObserver((mutations) => {
+            // Only react if the mutation is for this table
+            if ([...mutations].some(m => table.contains(m.target))) {
+                checkDirtyState();
+            }
+        });
+        observer.observe(table, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-dirty']
+        });
+
         saveBtn.onclick = async () => {
             const dirtyEditables = getDirtyEditables();
             if (!dirtyEditables.length) return;
@@ -524,13 +538,53 @@ export class TableManager {
                 window.ModalManager.alert('Error saving changes: ' + error.message);
             } finally {
                 checkDirtyState();
+                observer.disconnect(); // Stop observing after save
+                // Optionally, re-enable observation if needed:
+                // observer.observe(table, { subtree: true, attributes: true, attributeFilter: ['data-dirty'] });
             }
         };
-        const observer = new MutationObserver(checkDirtyState);
-        observer.observe(table, {
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['data-dirty']
-        });
+
+        // Initial state check
+        checkDirtyState();
+    }
+
+    /**
+     * Converts a DOM table element to a 2D array (including headers).
+     * Each cell's textContent is used. Contenteditable divs are included as their text.
+     * @param {HTMLTableElement} table
+     * @returns {string[][]}
+     */
+    static tableToArray(table) {
+        const result = [];
+        // Get headers if present
+        const thead = table.querySelector('thead');
+        if (thead) {
+            const headerRow = thead.querySelector('tr');
+            if (headerRow) {
+                const headers = [];
+                headerRow.querySelectorAll('th').forEach(th => {
+                    headers.push(th.textContent.trim());
+                });
+                result.push(headers);
+            }
+        }
+        // Get body rows
+        const tbody = table.querySelector('tbody');
+        if (tbody) {
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const row = [];
+                tr.querySelectorAll('td').forEach(td => {
+                    // If cell contains a contenteditable div, use its textContent
+                    const editable = td.querySelector('.table-edit-textarea');
+                    if (editable) {
+                        row.push(editable.textContent.trim());
+                    } else {
+                        row.push(td.textContent.trim());
+                    }
+                });
+                result.push(row);
+            });
+        }
+        return result;
     }
 }

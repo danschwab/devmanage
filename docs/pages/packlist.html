@@ -38,7 +38,70 @@
         });
 
         const headers = [...content.headers.main, 'Items'];
-        return TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
+        const mainTable = TableManager.buildTable(mainTableData, headers, [], [], 'pack-list', ['.tab-button']);
+
+        // Add whole-table save button if tabName is provided
+        if (tabName) {
+            const saveAllBtn = document.createElement('button');
+            saveAllBtn.textContent = 'Save Entire Pack List';
+            saveAllBtn.className = 'save-all-button';
+            saveAllBtn.style.margin = '12px 0';
+            saveAllBtn.disabled = true;
+
+            // Enable button if any cell is dirty or any row is moved
+            const checkSaveAllState = () => {
+                // Check for any dirty cell
+                const dirty = mainTable.querySelector('.table-edit-textarea.dirty');
+                // Check for any row moved (originalIndex != current index)
+                let moved = false;
+                const tbody = mainTable.querySelector('tbody');
+                if (tbody) {
+                    Array.from(tbody.rows).forEach((row, idx) => {
+                        if (row.dataset.originalIndex !== undefined && parseInt(row.dataset.originalIndex) !== idx) {
+                            moved = true;
+                        }
+                    });
+                }
+                saveAllBtn.disabled = !(dirty || moved);
+            };
+
+            // Observe dirty state and row moves
+            const observer = new MutationObserver(checkSaveAllState);
+            observer.observe(mainTable, {
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['data-dirty', 'data-original-index', 'class']
+            });
+
+            // Also check on input events (for contenteditable changes)
+            mainTable.addEventListener('input', checkSaveAllState);
+
+            // Also check after drag/drop (row move)
+            mainTable.addEventListener('mouseup', () => setTimeout(checkSaveAllState, 10));
+
+            saveAllBtn.onclick = async () => {
+                saveAllBtn.disabled = true;
+                try {
+                    await savePackListTable(
+                        mainTable,
+                        SPREADSHEET_IDS.PACK_LISTS,
+                        tabName,
+                        GoogleSheetsService.setSheetData
+                    );
+                    ModalManager.alert('Entire pack list saved successfully');
+                } catch (err) {
+                    ModalManager.alert('Error saving entire pack list: ' + (err && err.message ? err.message : err));
+                } finally {
+                    checkSaveAllState();
+                }
+            };
+            // Wrap table and button in a container
+            const wrapper = document.createElement('div');
+            wrapper.appendChild(saveAllBtn);
+            wrapper.appendChild(mainTable);
+            return wrapper;
+        }
+        return mainTable;
     }
 
     async function checkPackListQuantities(tabName, container) {
@@ -172,6 +235,116 @@
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
             modal.querySelector('.modal-body').innerHTML = '<p class="error">Failed to load spreadsheet tabs</p>';
+        }
+    }
+
+    /**
+     * Save the entire pack list table (all crates and their items) to Google Sheets.
+     * Only writes data rows (no header row).
+     * @param {HTMLTableElement} mainTable - The main pack list table element.
+     * @param {string} sheetId - The Google Sheets ID.
+     * @param {string} tabName - The sheet/tab name.
+     * @param {function} setSheetData - Function to call for saving (should match GoogleSheetsService.setSheetData).
+     * @returns {Promise<void>}
+     */
+    async function savePackListTable(mainTable, sheetId, tabName, setSheetData) {
+        // Show loading modal
+        const loadingModal = ModalManager.showLoadingIndicator('Saving pack list...');
+        try {
+            // Get main headers (skip drag handle th)
+            const thead = mainTable.querySelector('thead');
+            let mainHeaders = [];
+            if (thead) {
+                const headerRow = thead.querySelector('tr');
+                if (headerRow) {
+                    mainHeaders = Array.from(headerRow.querySelectorAll('th'))
+                        .slice(1) // skip drag handle
+                        .map(th => th.textContent.trim());
+                }
+            }
+
+            // Find the index of the "Items" column
+            const itemsColIdx = mainHeaders.findIndex(h => h === 'Items');
+            // The columns before "Items" are crate info columns
+            const crateInfoCols = mainHeaders.slice(0, itemsColIdx);
+
+            // Compose the spreadsheet rows (no header row)
+            const result = [];
+            // We'll get item headers from the first crate with items
+            let itemHeaders = [];
+            const tbody = mainTable.querySelector('tbody');
+            const crateRows = Array.from(tbody.querySelectorAll('tr'));
+            for (const crateRow of crateRows) {
+                const crateCells = Array.from(crateRow.querySelectorAll('td'));
+                if (crateCells.length === 0) continue;
+                // Crate info: skip drag handle, up to but not including "Items"
+                const crateInfo = crateCells.slice(1, 1 + crateInfoCols.length).map(td => td.textContent.trim());
+                const itemsCell = crateCells[crateCells.length - 1];
+                // Find the nested items table
+                const itemsTable = itemsCell.querySelector('table');
+                if (itemsTable && itemHeaders.length === 0) {
+                    // Get item headers (skip drag handle)
+                    const itemsThead = itemsTable.querySelector('thead');
+                    if (itemsThead) {
+                        const itemsHeaderRow = itemsThead.querySelector('tr');
+                        if (itemsHeaderRow) {
+                            itemHeaders = Array.from(itemsHeaderRow.querySelectorAll('th'))
+                                .slice(1)
+                                .map(th => th.textContent.trim());
+                        }
+                    }
+                }
+            }
+
+            // Now process each crate row
+            for (const crateRow of crateRows) {
+                const crateCells = Array.from(crateRow.querySelectorAll('td'));
+                if (crateCells.length === 0) continue;
+                const crateInfo = crateCells.slice(1, 1 + crateInfoCols.length).map(td => td.textContent.trim());
+                const itemsCell = crateCells[crateCells.length - 1];
+                const itemsTable = itemsCell.querySelector('table');
+                let hasItems = false;
+                if (itemsTable) {
+                    const itemsTbody = itemsTable.querySelector('tbody');
+                    if (itemsTbody) {
+                        const itemRows = Array.from(itemsTbody.querySelectorAll('tr'));
+                        for (const itemTr of itemRows) {
+                            // Get item columns (skip drag handle)
+                            const itemTds = Array.from(itemTr.querySelectorAll('td')).slice(1);
+                            const itemData = itemTds.map(td => {
+                                const editable = td.querySelector('.table-edit-textarea');
+                                return editable ? editable.textContent.trim() : td.textContent.trim();
+                            });
+                            // Only push if at least one item cell is non-empty
+                            if (itemData.some(cell => cell.length > 0)) {
+                                // Crate info columns are blank except for the first item row (per crate)
+                                result.push([
+                                    ...crateInfo,
+                                    ...itemData
+                                ]);
+                                // For subsequent item rows, crate info columns are blank
+                                crateInfoCols.forEach((_, idx) => crateInfo[idx] = '');
+                                hasItems = true;
+                            }
+                        }
+                    }
+                }
+                if (!hasItems) {
+                    // No items, just push crate info row with empty item columns
+                    result.push([
+                        ...crateInfo,
+                        ...itemHeaders.map(() => '')
+                    ]);
+                }
+            }
+
+            // Save to Google Sheets (no header row)
+            await setSheetData(sheetId, tabName, {
+                type: 'full-table',
+                values: result
+            });
+        } finally {
+            loadingModal.hide();
         }
     }
 
