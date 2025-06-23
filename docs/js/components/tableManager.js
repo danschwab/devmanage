@@ -318,8 +318,8 @@ export class TableManager {
                 const parentTable = this.dragState.sourceRow.closest('table');
                 if (parentTable) {
                     const tfoot = parentTable.querySelector('tfoot');
-                    if (tfoot && tfoot.contains(document.elementFromPoint(this.dragState.startX, this.dragState.startY))) {
-                        // If mouseup started in tfoot, remove the row
+                    if (tfoot && tfoot.contains(this.dragState.sourceRow)) {
+                        // If row is inside tfoot, remove the row
                         this.dragState.sourceRow.remove();
                     }
                 }
