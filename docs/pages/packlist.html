@@ -375,6 +375,36 @@
         const tbody = table.querySelector('tbody');
         if (!tbody) return;
 
+        // Find the nearest main table to get content.headers.items
+        let headersItems = null;
+        let parent = table;
+        while (parent) {
+            if (parent.classList && parent.classList.contains('drag-id-pack-list')) {
+                // Try to find the headers from the mainTableData context
+                if (window._packListHeadersItems) {
+                    headersItems = window._packListHeadersItems;
+                }
+                break;
+            }
+            parent = parent.parentElement;
+        }
+        // Fallback: try to get from global if available
+        if (!headersItems && window._packListHeadersItems) {
+            headersItems = window._packListHeadersItems;
+        }
+        // If still not found, try to get from the first .drag-id-pack-list-items table
+        if (!headersItems) {
+            const firstItemsTable = document.querySelector('.drag-id-pack-list-items');
+            if (firstItemsTable) {
+                const ths = firstItemsTable.querySelectorAll('thead th');
+                headersItems = Array.from(ths).map(th => th.textContent.trim());
+            }
+        }
+        // If still not found, fallback to ['Description', 'Packing/shop notes']
+        if (!headersItems) {
+            headersItems = ['Description', 'Packing/shop notes'];
+        }
+
         console.log(`[newRowFunction] Adding new row to table with class: ${dragIdClass}`);
 
         if (dragIdClass === 'drag-id-pack-list-items') {
@@ -453,7 +483,7 @@
             // Create an empty pack-list-items table with newRowFunction
             const itemsTable = TableManager.buildTable(
                 [],
-                content.headers.items,
+                headersItems,
                 ['Pack', 'Check'],
                 ['Description', 'Packing/shop notes'],
                 'pack-list-items',
