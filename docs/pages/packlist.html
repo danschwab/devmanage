@@ -361,15 +361,30 @@
                 const cratePart = row.slice(0, crateInfoCols.length);
                 const itemPart = row.slice(crateInfoCols.length);
                 // Fill columns between crate and item with empty strings
-                const gap = Array(itemStartCol - crateInfoCols.length).fill('');
+                const gap = Array(itemStartCol).fill('');
                 return [...cratePart, ...gap, ...itemPart];
             });
 
+            // Remove all data after row 3, then insert the new table at once
+            // 1. Clear all rows after row 3
+            if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.values?.batchClear) {
+                await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.values.batchClear({
+                        spreadsheetId: sheetId,
+                        resource: {
+                            ranges: [`${tabName}!A4:J1000`]
+                        }
+                    })
+                );
+            }
+
+            // 2. Insert the new data starting at row 4, column A
             await GoogleSheetsService.setSheetData(sheetId, tabName, {
                 type: 'full-table',
                 values: Array.isArray(fullRows) ? fullRows : [],
-                startRow: startRow - 1 // zero-based for API
+                startRow: startRow // zero-based for API, so row 4
             });
+
             // Reset dirty state after successful save
             TableManager.clearDirtyState(mainTable);
         } finally {

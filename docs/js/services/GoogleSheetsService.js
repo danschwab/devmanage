@@ -620,35 +620,59 @@ export class GoogleSheetsService {
 
     static async setSheetData(spreadsheetId, tabName, updates) {
         await GoogleSheetsAuth.checkAuth();
-        
-        // Convert 0-based indices to A1 notation (add 1 for 1-based sheet indexing)
-        const data = Array.isArray(updates)
-            ? updates.map(({row, col, value}) => ({
+
+        // If updates is an array (cell updates), use batchUpdate
+        if (Array.isArray(updates)) {
+            const data = updates.map(({row, col, value}) => ({
                 range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
                 values: [[value]]
-            }))
-            : updates.values
-                ? [{ range: `${tabName}!A1`, values: updates.values }]
-                : [];
-
-        const request = {
-            spreadsheetId,
-            resource: {
-                data: data,
-                valueInputOption: 'USER_ENTERED'
+            }));
+            const request = {
+                spreadsheetId,
+                resource: {
+                    data: data,
+                    valueInputOption: 'USER_ENTERED'
+                }
+            };
+            try {
+                await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.values.batchUpdate(request)
+                );
+                return true;
+            } catch (error) {
+                console.error('Error updating sheet:', error);
+                throw error;
             }
-        };
-
-        try {
-            // Use the class name directly to ensure correct context
-            await GoogleSheetsService.withExponentialBackoff(() =>
-                gapi.client.sheets.spreadsheets.values.batchUpdate(request)
-            );
-            return true;
-        } catch (error) {
-            console.error('Error updating sheet:', error);
-            throw error;
         }
+
+        // If updates is an object with type: 'full-table', use update with range and values
+        if (updates && updates.type === 'full-table' && Array.isArray(updates.values)) {
+            // Determine starting row and column
+            const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
+            const startCol = 0;
+            // Calculate end column letter
+            const numCols = updates.values[0]?.length || 1;
+            const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
+            const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + updates.values.length}`;
+            try {
+                await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: {
+                            values: updates.values
+                        }
+                    })
+                );
+                return true;
+            } catch (error) {
+                console.error('Error updating sheet:', error);
+                throw error;
+            }
+        }
+
+        throw new Error('Invalid updates format for setSheetData');
     }
 
     static async getSheetTabs(spreadsheetId) {

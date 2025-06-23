@@ -510,7 +510,7 @@ table {
     background-color: #f8f8f8;
 }
 
-.td.spacer-cell {
+td.spacer-cell {
     padding: 0px;
     min-width: 0px;
     border: none;
