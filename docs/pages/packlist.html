@@ -271,10 +271,14 @@
     async function savePackListTable(mainTable, sheetId, tabName) {
         const loadingModal = ModalManager.showLoadingIndicator('Saving pack list...');
         try {
+            console.log('[savePackListTable] Starting save for tab:', tabName);
+
             // 1. Gather all crate rows (main table body)
             const tbody = mainTable.querySelector('tbody');
             const crateRows = Array.from(tbody.querySelectorAll('tr'));
             const result = [];
+
+            console.log('[savePackListTable] Found crate rows:', crateRows.length);
 
             for (const crateRow of crateRows) {
                 const crateCells = Array.from(crateRow.querySelectorAll('td'));
@@ -283,7 +287,6 @@
 
                 // 2. Append crate data row (cells 1-6, skip drag handle)
                 const crateData = crateCells.slice(1, 7).map(td => {
-                    // If cell contains a contenteditable div, use its textContent
                     const editable = td.querySelector('.table-edit-textarea');
                     return editable ? editable.textContent.trim() : td.textContent.trim();
                 });
@@ -296,15 +299,14 @@
                     const itemsTbody = itemsTable.querySelector('tbody');
                     if (itemsTbody) {
                         const itemRows = Array.from(itemsTbody.querySelectorAll('tr'));
+                        console.log('[savePackListTable] Found item rows for crate:', itemRows.length);
                         for (const itemTr of itemRows) {
                             const itemTds = Array.from(itemTr.querySelectorAll('td')).slice(1); // skip drag handle
-                            // Only process if there are at least 2 item columns
                             if (itemTds.length >= 2) {
                                 const itemData = itemTds.map(td => {
                                     const editable = td.querySelector('.table-edit-textarea');
                                     return editable ? editable.textContent.trim() : td.textContent.trim();
                                 });
-                                // Only save if at least one item cell is non-empty
                                 if (itemData.some(cell => cell.length > 0)) {
                                     result.push([
                                         '', '', '', '', '', '', '', '', // 8 empty columns
@@ -316,7 +318,9 @@
                     }
                 }
             }
-            
+
+            console.log('[savePackListTable] Final result array:', result);
+
             // Delete all rows after row 4 (i.e., keep only rows 1-4)
             if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
                 const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -330,7 +334,7 @@
                 if (sheet) {
                     const sheetRowCount = sheet.properties.gridProperties.rowCount;
                     if (sheetRowCount > 4) {
-                        // Delete rows after row 4 (i.e., rows 5 to sheetRowCount)
+                        console.log('[savePackListTable] Deleting rows after row 4:', sheetRowCount - 4);
                         await GoogleSheetsService.withExponentialBackoff(() =>
                             gapi.client.sheets.spreadsheets.batchUpdate({
                                 spreadsheetId: sheetId,
@@ -353,16 +357,17 @@
                     }
                 }
             }
-            
+
             // Insert the new data starting at row 4, column A
+            console.log('[savePackListTable] Writing data to sheet:', result.length, 'rows');
             await GoogleSheetsService.setSheetData(sheetId, tabName, {
                 type: 'full-table',
                 values: Array.isArray(result) ? result : [],
                 startRow: 3 // 1-based for Sheets API, row 4
             });
 
-
             TableManager.clearDirtyState(mainTable);
+            console.log('[savePackListTable] Save complete');
         } finally {
             loadingModal.hide();
         }
