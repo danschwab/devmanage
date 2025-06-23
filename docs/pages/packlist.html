@@ -382,99 +382,105 @@
     }
 
     function newRowFunction(event) {
-            const btn = event.target.closest('.new-row-btn');
-            if (!btn) return;
-            const table = btn.closest('table');
-            if (!table) return;
-            const dragIdClass = Array.from(table.classList).find(cls => cls.startsWith('drag-id-'));
-            const tbody = table.querySelector('tbody');
-            if (!tbody) return;
+        const btn = event.target.closest('.new-row-btn');
+        if (!btn) return;
+        const table = btn.closest('table');
+        if (!table) return;
+        const dragIdClass = Array.from(table.classList).find(cls => cls.startsWith('drag-id-'));
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
 
-            if (dragIdClass === 'drag-id-pack-list-items') {
-                // Add a new draggable row with 2 editable cells
-                const rowIndex = tbody.rows.length;
-                const tr = document.createElement('tr');
-                tr.classList.add('draggable');
-                // Drag handle
-                const dragTd = document.createElement('td');
-                dragTd.className = 'row-drag-handle';
-                tr.appendChild(dragTd);
-                // 2 editable cells
-                for (let i = 0; i < 2; i++) {
-                    const td = document.createElement('td');
-                    const editableDiv = document.createElement('div');
-                    editableDiv.setAttribute('role', 'textbox');
-                    editableDiv.setAttribute('contenteditable', 'true');
-                    editableDiv.dataset.originalValue = '';
-                    editableDiv.dataset.rowIndex = rowIndex;
-                    editableDiv.dataset.colIndex = i + 2; // skip drag handle and possible hidden columns
-                    editableDiv.dataset.dirty = 'false';
-                    editableDiv.classList.add('table-edit-textarea');
-                    editableDiv.addEventListener('input', (e) => {
-                        const target = e.target;
-                        const isDirty = (target.textContent !== target.dataset.originalValue);
-                        target.dataset.dirty = isDirty.toString();
-                        if (isDirty) {
-                            target.classList.add('dirty');
-                        } else {
-                            target.classList.remove('dirty');
-                        }
-                    });
-                    td.appendChild(editableDiv);
-                    tr.appendChild(td);
-                }
-                tbody.appendChild(tr);
-            } else if (dragIdClass === 'drag-id-pack-list') {
-                // Add a new draggable row with 7 columns: first 6 editable, last is a new pack-list-items table
-                const rowIndex = tbody.rows.length;
-                const tr = document.createElement('tr');
-                tr.classList.add('draggable');
-                // Drag handle
-                const dragTd = document.createElement('td');
-                dragTd.className = 'row-drag-handle';
-                tr.appendChild(dragTd);
-                // 6 editable cells
-                for (let i = 0; i < 6; i++) {
-                    const td = document.createElement('td');
-                    const editableDiv = document.createElement('div');
-                    editableDiv.setAttribute('role', 'textbox');
-                    editableDiv.setAttribute('contenteditable', 'true');
-                    editableDiv.dataset.originalValue = '';
-                    editableDiv.dataset.rowIndex = rowIndex;
-                    editableDiv.dataset.colIndex = i + 1; // skip drag handle
-                    editableDiv.dataset.dirty = 'false';
-                    editableDiv.classList.add('table-edit-textarea');
-                    editableDiv.addEventListener('input', (e) => {
-                        const target = e.target;
-                        const isDirty = (target.textContent !== target.dataset.originalValue);
-                        target.dataset.dirty = isDirty.toString();
-                        if (isDirty) {
-                            target.classList.add('dirty');
-                        } else {
-                            target.classList.remove('dirty');
-                        }
-                    });
-                    td.appendChild(editableDiv);
-                    tr.appendChild(td);
-                }
-                // 7th cell: new pack-list-items table
-                const itemsTd = document.createElement('td');
-                itemsTd.className = 'table-wrapper';
-                // Create an empty pack-list-items table with newRowFunction
-                const itemsTable = TableManager.buildTable(
-                    [],
-                    content.headers.items,
-                    ['Pack', 'Check'],
-                    ['Description', 'Packing/shop notes'],
-                    'pack-list-items',
-                    ['.tab-button'],
-                    newRowFunction
-                );
-                itemsTd.appendChild(itemsTable);
-                tr.appendChild(itemsTd);
-                tbody.appendChild(tr);
+        console.log(`[newRowFunction] Adding new row to table with class: ${dragIdClass}`);
+
+        if (dragIdClass === 'drag-id-pack-list-items') {
+            // Add a new draggable row with 2 editable cells
+            const rowIndex = tbody.rows.length;
+            const tr = document.createElement('tr');
+            tr.classList.add('draggable');
+            // Drag handle
+            const dragTd = document.createElement('td');
+            dragTd.className = 'row-drag-handle';
+            tr.appendChild(dragTd);
+            // 2 editable cells
+            for (let i = 0; i < 2; i++) {
+                const td = document.createElement('td');
+                const editableDiv = document.createElement('div');
+                editableDiv.setAttribute('role', 'textbox');
+                editableDiv.setAttribute('contenteditable', 'true');
+                editableDiv.dataset.originalValue = '';
+                editableDiv.dataset.rowIndex = rowIndex;
+                editableDiv.dataset.colIndex = i + 2; // skip drag handle and possible hidden columns
+                editableDiv.dataset.dirty = 'false';
+                editableDiv.classList.add('table-edit-textarea');
+                editableDiv.addEventListener('input', (e) => {
+                    const target = e.target;
+                    const isDirty = (target.textContent !== target.dataset.originalValue);
+                    target.dataset.dirty = isDirty.toString();
+                    if (isDirty) {
+                        target.classList.add('dirty');
+                    } else {
+                        target.classList.remove('dirty');
+                    }
+                    console.log(`[newRowFunction] Cell edited in pack-list-items row ${rowIndex}, col ${i + 2}, dirty: ${isDirty}`);
+                });
+                td.appendChild(editableDiv);
+                tr.appendChild(td);
             }
+            tbody.appendChild(tr);
+            console.log(`[newRowFunction] Added new row to pack-list-items table at index ${rowIndex}`);
+        } else if (dragIdClass === 'drag-id-pack-list') {
+            // Add a new draggable row with 7 columns: first 6 editable, last is a new pack-list-items table
+            const rowIndex = tbody.rows.length;
+            const tr = document.createElement('tr');
+            tr.classList.add('draggable');
+            // Drag handle
+            const dragTd = document.createElement('td');
+            dragTd.className = 'row-drag-handle';
+            tr.appendChild(dragTd);
+            // 6 editable cells
+            for (let i = 0; i < 6; i++) {
+                const td = document.createElement('td');
+                const editableDiv = document.createElement('div');
+                editableDiv.setAttribute('role', 'textbox');
+                editableDiv.setAttribute('contenteditable', 'true');
+                editableDiv.dataset.originalValue = '';
+                editableDiv.dataset.rowIndex = rowIndex;
+                editableDiv.dataset.colIndex = i + 1; // skip drag handle
+                editableDiv.dataset.dirty = 'false';
+                editableDiv.classList.add('table-edit-textarea');
+                editableDiv.addEventListener('input', (e) => {
+                    const target = e.target;
+                    const isDirty = (target.textContent !== target.dataset.originalValue);
+                    target.dataset.dirty = isDirty.toString();
+                    if (isDirty) {
+                        target.classList.add('dirty');
+                    } else {
+                        target.classList.remove('dirty');
+                    }
+                    console.log(`[newRowFunction] Cell edited in pack-list row ${rowIndex}, col ${i + 1}, dirty: ${isDirty}`);
+                });
+                td.appendChild(editableDiv);
+                tr.appendChild(td);
+            }
+            // 7th cell: new pack-list-items table
+            const itemsTd = document.createElement('td');
+            itemsTd.className = 'table-wrapper';
+            // Create an empty pack-list-items table with newRowFunction
+            const itemsTable = TableManager.buildTable(
+                [],
+                content.headers.items,
+                ['Pack', 'Check'],
+                ['Description', 'Packing/shop notes'],
+                'pack-list-items',
+                ['.tab-button'],
+                newRowFunction
+            );
+            itemsTd.appendChild(itemsTable);
+            tr.appendChild(itemsTd);
+            tbody.appendChild(tr);
+            console.log(`[newRowFunction] Added new row to pack-list table at index ${rowIndex}`);
         }
+    }
         
 
     // Initialize the TabManager with tab handler
