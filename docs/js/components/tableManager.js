@@ -435,14 +435,15 @@ export class TableManager {
         });
     }
 
-    static clearDirtyState() {
-        // Reset position tracking
-        const tables = document.querySelectorAll('table');
-        tables.forEach(table => this.trackRowPosition(table));
+    static clearDirtyState(table) {
+        // Reset position tracking for the given table only
+        if (table) {
+            this.trackRowPosition(table);
 
-        // Remove .dirty class from all contenteditable divs
-        const dirtyEditables = document.querySelectorAll('.table-edit-textarea.dirty');
-        dirtyEditables.forEach(editable => editable.classList.remove('dirty'));
+            // Remove .dirty class from all contenteditable divs in the table
+            const dirtyEditables = table.querySelectorAll('.table-edit-textarea.dirty');
+            dirtyEditables.forEach(editable => editable.classList.remove('dirty'));
+        }
     }
 
     static onStateChange(callback) {
