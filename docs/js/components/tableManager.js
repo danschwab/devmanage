@@ -381,22 +381,13 @@ export class TableManager {
         return null;
     }
 
-    static getDirtyInputs() {
-        return document.querySelectorAll('input[data-dirty="true"]');
+    static getDirtyEditables(table) {
+        return table.querySelectorAll('.table-edit-textarea[data-dirty="true"]');
     }
 
     static getUpdates(includePosition = true) {
         const updates = [];
         
-        // Get updates from dirty inputs
-        const dirtyInputs = this.getDirtyInputs();
-        updates.push(...Array.from(dirtyInputs).map(input => ({
-            type: 'cell',
-            row: parseInt(input.dataset.rowIndex) + 1,
-            col: parseInt(input.dataset.colIndex),
-            value: input.value
-        })));
-
         // Get position updates if requested
         if (includePosition) {
             const tables = document.querySelectorAll('table');
@@ -421,6 +412,20 @@ export class TableManager {
         return updates;
     }
 
+    // Enables/disables a save button based on dirty editables in a table
+    static checkDirtyState(table, saveBtn) {
+        saveBtn.disabled = TableManager.getDirtyEditables(table).length === 0;
+    }
+
+    // Clears dirty state for a list of editable divs
+    static clearDirtyEditables(editables) {
+        editables.forEach(editable => {
+            editable.dataset.dirty = 'false';
+            editable.classList.remove('dirty');
+            editable.dataset.originalValue = editable.textContent;
+        });
+    }
+
     static trackRowPosition(table) {
         const tbody = table.querySelector('tbody');
         if (!tbody) return;
@@ -431,15 +436,13 @@ export class TableManager {
     }
 
     static clearDirtyState() {
-        super.clearDirtyState();
-        
         // Reset position tracking
         const tables = document.querySelectorAll('table');
         tables.forEach(table => this.trackRowPosition(table));
 
-        // Remove .dirty class from all inputs
-        const dirtyInputs = document.querySelectorAll('input.dirty');
-        dirtyInputs.forEach(input => input.classList.remove('dirty'));
+        // Remove .dirty class from all contenteditable divs
+        const dirtyEditables = document.querySelectorAll('.table-edit-textarea.dirty');
+        dirtyEditables.forEach(editable => editable.classList.remove('dirty'));
     }
 
     static onStateChange(callback) {
@@ -494,5 +497,40 @@ export class TableManager {
             };
         }
         cell.appendChild(span);
+    }
+
+    static setupPackListSaveButton(table, saveBtn, tabName, headers, crateIdx) {
+        const getDirtyEditables = () => TableManager.getDirtyEditables(table);
+        const checkDirtyState = () => TableManager.checkDirtyState(table, saveBtn);
+        saveBtn.onclick = async () => {
+            const dirtyEditables = getDirtyEditables();
+            if (!dirtyEditables.length) return;
+            try {
+                saveBtn.disabled = true;
+                const updates = Array.from(dirtyEditables).map(editable => ({
+                    type: 'cell',
+                    row: parseInt(editable.dataset.rowIndex) + 1,
+                    col: parseInt(editable.dataset.colIndex),
+                    value: editable.textContent
+                }));
+                await window.GoogleSheetsService.setSheetData(
+                    window.SPREADSHEET_IDS.PACK_LISTS,
+                    tabName,
+                    updates
+                );
+                TableManager.clearDirtyEditables(dirtyEditables);
+                window.ModalManager.alert('Changes saved successfully');
+            } catch (error) {
+                window.ModalManager.alert('Error saving changes: ' + error.message);
+            } finally {
+                checkDirtyState();
+            }
+        };
+        const observer = new MutationObserver(checkDirtyState);
+        observer.observe(table, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-dirty']
+        });
     }
 }

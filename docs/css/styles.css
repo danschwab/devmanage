@@ -432,7 +432,7 @@ button:hover,
     /*margin-top: 1rem;*/
     /*border-radius: 0.25rem;*/
     /*box-shadow: 0 0 0 1px #dee2e6;*/
-    box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);
+    /*box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);*/
 }
 
 .table-wrapper:has(tbody:empty)::after {
