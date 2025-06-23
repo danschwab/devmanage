@@ -26,7 +26,67 @@ export class TableManager {
         return div;
     }
 
-    static buildTable(data, headers, hideColumns = [], editColumns = [], dragId = null, draggingClickTags = []) {
+    /**
+     * Helper to create a table row (tr) from a data array.
+     * @param {Array} row - The data for the row.
+     * @param {number} rowIndex - The index of the row.
+     * @param {Array} visibleIndexes - The visible column indexes.
+     * @param {Array} editIndexes - The editable column indexes.
+     * @param {string|null} dragId - Optional drag id.
+     * @returns {HTMLTableRowElement}
+     */
+    static createTableRow(row, rowIndex, visibleIndexes, editIndexes, dragId) {
+        const tr = document.createElement('tr');
+        // Only add drag functionality if dragId provided
+        if (dragId) {
+            tr.classList.add('draggable');
+            const dragHandle = document.createElement('td');
+            dragHandle.className = 'row-drag-handle';
+            tr.appendChild(dragHandle);
+        }
+        // Only create cells for visible columns
+        row.forEach((cell, colIndex) => {
+            if (visibleIndexes.includes(colIndex)) {
+                const td = document.createElement('td');
+                if (cell instanceof HTMLElement) {
+                    td.appendChild(cell);
+                } else {
+                    if (editIndexes.includes(colIndex)) {
+                        // Use contenteditable div instead of textarea/input
+                        const editableDiv = document.createElement('div');
+                        editableDiv.textContent = cell || '';
+                        editableDiv.setAttribute('role', 'textbox');
+                        editableDiv.setAttribute('contenteditable', 'true');
+                        editableDiv.dataset.originalValue = cell || '';
+                        editableDiv.dataset.rowIndex = rowIndex;
+                        editableDiv.dataset.colIndex = colIndex;
+                        editableDiv.dataset.dirty = 'false';
+                        editableDiv.classList.add('table-edit-textarea');
+
+                        editableDiv.addEventListener('input', (e) => {
+                            const target = e.target;
+                            const isDirty = (target.textContent !== target.dataset.originalValue);
+                            target.dataset.dirty = isDirty.toString();
+                            if (isDirty) {
+                                target.classList.add('dirty');
+                            } else {
+                                target.classList.remove('dirty');
+                            }
+                        });
+
+                        td.appendChild(editableDiv);
+                    } else {
+                        // Fix: display 0 as '0' instead of empty string
+                        td.textContent = (cell === 0 || cell === '0') ? '0' : (cell || '');
+                    }
+                }
+                tr.appendChild(td);
+            }
+        });
+        return tr;
+    }
+
+    static buildTable(data, headers, hideColumns = [], editColumns = [], dragId = null, draggingClickTags = [], newRowFunction = null) {
         const tableData = data.data || data;
         const table = document.createElement('table');
         if (dragId) {
@@ -59,10 +119,7 @@ export class TableManager {
                 // Only add drag handle header if dragId provided
                 if (dragId) {
                     const dragHandleTh = document.createElement('th');
-                    dragHandleTh.style.padding = '0';
-                    dragHandleTh.style.minWidth = '0';
-                    dragHandleTh.style.border = 'none';
-                    dragHandleTh.style.backgroundColor = 'transparent';
+                    dragHandleTh.className = 'spacer-cell';
                     headerRow.appendChild(dragHandleTh);
                 }
 
@@ -82,55 +139,7 @@ export class TableManager {
             if (Array.isArray(tableData) && tableData.length > 0) {
                 tableData.forEach((row, rowIndex) => {
                     if (!Array.isArray(row)) return;
-                    const tr = document.createElement('tr');
-                    
-                    // Only add drag functionality if dragId provided
-                    if (dragId) {
-                        tr.classList.add('draggable');
-                        const dragHandle = document.createElement('td');
-                        dragHandle.className = 'row-drag-handle';
-                        tr.appendChild(dragHandle);
-                    }
-
-                    // Only create cells for visible columns
-                    row.forEach((cell, colIndex) => {
-                        if (visibleIndexes.includes(colIndex)) {
-                            const td = document.createElement('td');
-                            if (cell instanceof HTMLElement) {
-                                td.appendChild(cell);
-                            } else {
-                                if (editIndexes.includes(colIndex)) {
-                                    // Use contenteditable div instead of textarea/input
-                                    const editableDiv = document.createElement('div');
-                                    editableDiv.textContent = cell || '';
-                                    editableDiv.setAttribute('role', 'textbox');
-                                    editableDiv.setAttribute('contenteditable', 'true');
-                                    editableDiv.dataset.originalValue = cell || '';
-                                    editableDiv.dataset.rowIndex = rowIndex;
-                                    editableDiv.dataset.colIndex = colIndex;
-                                    editableDiv.dataset.dirty = 'false';
-                                    editableDiv.classList.add('table-edit-textarea');
-
-                                    editableDiv.addEventListener('input', (e) => {
-                                        const target = e.target;
-                                        const isDirty = (target.textContent !== target.dataset.originalValue);
-                                        target.dataset.dirty = isDirty.toString();
-                                        if (isDirty) {
-                                            target.classList.add('dirty');
-                                        } else {
-                                            target.classList.remove('dirty');
-                                        }
-                                    });
-
-                                    td.appendChild(editableDiv);
-                                } else {
-                                    // Fix: display 0 as '0' instead of empty string
-                                    td.textContent = (cell === 0 || cell === '0') ? '0' : (cell || '');
-                                }
-                            }
-                            tr.appendChild(td);
-                        }
-                    });
+                    const tr = TableManager.createTableRow(row, rowIndex, visibleIndexes, editIndexes, dragId);
                     tbody.appendChild(tr);
                 });
             } else {
@@ -138,6 +147,47 @@ export class TableManager {
             }
         }
         table.appendChild(tbody);
+
+        // Add footer for new row if newRowFunction is provided
+        if (typeof newRowFunction === 'function') {
+            const tfoot = document.createElement('tfoot');
+            const tr = document.createElement('tr');
+            const spacer = document.createElement('td');
+            spacer.className = 'spacer-cell';
+            tr.appendChild(spacer);
+
+            const newRowTd = document.createElement('td');
+            newRowTd.colSpan = 1000; // large number to cover all columns
+            newRowTd.className = 'new-row-button';
+
+            const newRowBtn = document.createElement('button');
+            newRowBtn.textContent = '+ Add Row';
+            newRowBtn.type = 'button';
+            newRowBtn.className = 'new-row-btn';
+
+            // Handler like TabManager: store handler in a Map with a unique id
+            if (!TableManager._newRowHandlers) TableManager._newRowHandlers = new Map();
+            const handlerId = `new-row-handler-${Math.random().toString(36).slice(2, 11)}`;
+            newRowBtn.dataset.handlerId = handlerId;
+            TableManager._newRowHandlers.set(handlerId, newRowFunction);
+
+            newRowTd.appendChild(newRowBtn);
+            tr.appendChild(newRowTd);
+            tfoot.appendChild(tr);
+            table.appendChild(tfoot);
+
+            // Delegate click event for all new-row-btns (one-time global handler)
+            if (!TableManager._newRowBtnListener) {
+                TableManager._newRowBtnListener = (event) => {
+                    const btn = event.target.closest('.new-row-btn');
+                    if (btn && btn.dataset.handlerId) {
+                        const handler = TableManager._newRowHandlers.get(btn.dataset.handlerId);
+                        if (handler) handler(event);
+                    }
+                };
+                document.addEventListener('click', TableManager._newRowBtnListener);
+            }
+        }
 
         return table;
     }
