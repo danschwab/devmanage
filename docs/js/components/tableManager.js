@@ -152,9 +152,9 @@ export class TableManager {
         if (typeof newRowFunction === 'function') {
             const tfoot = document.createElement('tfoot');
             const tr = document.createElement('tr');
-            const spacer = document.createElement('td');
-            spacer.className = 'spacer-cell';
-            tr.appendChild(spacer);
+            //const spacer = document.createElement('td');
+            //spacer.className = 'spacer-cell';
+            //tr.appendChild(spacer);
 
             const newRowTd = document.createElement('td');
             newRowTd.colSpan = 1000; // large number to cover all columns
@@ -220,12 +220,17 @@ export class TableManager {
         const dropTarget = this.findDropTarget(e, dragId, draggingClickTags);
         if (dropTarget && this.dragState.sourceRow) {
             const { row, position } = dropTarget;
-            if (position === 'before') {
-                row.parentNode.insertBefore(this.dragState.sourceRow, row);
-            } else if (position === 'after') {
-                row.parentNode.insertBefore(this.dragState.sourceRow, row.nextSibling);
-            } else if (position === 'into') {
-                row.appendChild(this.dragState.sourceRow);
+            // If drop target is inside a tfoot, always append as last child
+            if (row.parentElement && row.parentElement.tagName === 'TFOOT') {
+                row.parentElement.appendChild(this.dragState.sourceRow);
+            } else {
+                if (position === 'before') {
+                    row.parentNode.insertBefore(this.dragState.sourceRow, row);
+                } else if (position === 'after') {
+                    row.parentNode.insertBefore(this.dragState.sourceRow, row.nextSibling);
+                } else if (position === 'into') {
+                    row.appendChild(this.dragState.sourceRow);
+                }
             }
         }
     }
@@ -294,8 +299,17 @@ export class TableManager {
 
         this.handlers.mouseup = () => {
             if (!this.dragState.isDragging) return;
-            
+
+            // Remove row if dropped inside a tfoot
             if (this.dragState.sourceRow) {
+                const parentTable = this.dragState.sourceRow.closest('table');
+                if (parentTable) {
+                    const tfoot = parentTable.querySelector('tfoot');
+                    if (tfoot && tfoot.contains(document.elementFromPoint(this.dragState.startX, this.dragState.startY))) {
+                        // If mouseup started in tfoot, remove the row
+                        this.dragState.sourceRow.remove();
+                    }
+                }
                 this.dragState.sourceRow.classList.remove('dragging');
             }
             if (this.dragState.dragClone) {
