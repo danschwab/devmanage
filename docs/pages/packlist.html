@@ -338,7 +338,7 @@
 
             // Delete any extra rows after the last data row
             // Get the current number of rows in the sheet
-            if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
+        /*    if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
                 const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
                     gapi.client.sheets.spreadsheets.get({
                         spreadsheetId: sheetId,
@@ -373,7 +373,7 @@
                         );
                     }
                 }
-            }
+            }*/
 
             TableManager.clearDirtyState(mainTable);
         } finally {
