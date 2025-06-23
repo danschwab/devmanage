@@ -157,10 +157,9 @@ export class TableManager {
             //tr.appendChild(spacer);
 
             const newRowTd = document.createElement('td');
-            newRowTd.colSpan = 1000; // large number to cover all columns
+            newRowTd.colSpan = 1000;
             newRowTd.className = 'new-row-button';
 
-            // Handler like TabManager: store handler in a Map with a unique id
             if (!TableManager._newRowHandlers) TableManager._newRowHandlers = new Map();
             const handlerId = `new-row-handler-${Math.random().toString(36).slice(2, 11)}`;
             newRowTd.dataset.handlerId = handlerId;
@@ -171,8 +170,18 @@ export class TableManager {
             btn.type = 'button';
             btn.textContent = '+ Add Row';
             btn.onclick = (event) => {
+                console.log('[TableManager] New row button clicked', { handlerId, event, table });
                 const handler = TableManager._newRowHandlers.get(handlerId);
-                if (handler) handler(event);
+                if (handler) {
+                    try {
+                        handler(event);
+                        console.log('[TableManager] New row handler executed successfully');
+                    } catch (err) {
+                        console.error('[TableManager] Error in new row handler:', err);
+                    }
+                } else {
+                    console.warn('[TableManager] No handler found for new row button', handlerId);
+                }
             };
             newRowTd.appendChild(btn);
 
