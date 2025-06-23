@@ -85,8 +85,7 @@
                     await savePackListTable(
                         mainTable,
                         SPREADSHEET_IDS.PACK_LISTS,
-                        tabName,
-                        GoogleSheetsService.setSheetData
+                        tabName
                     );
                     ModalManager.alert('Entire pack list saved successfully');
                 } catch (err) {
@@ -248,7 +247,7 @@
      * @param {function} setSheetData - Function to call for saving (should match GoogleSheetsService.setSheetData).
      * @returns {Promise<void>}
      */
-    async function savePackListTable(mainTable, sheetId, tabName, setSheetData) {
+    async function savePackListTable(mainTable, sheetId, tabName) {
         // Show loading modal
         const loadingModal = ModalManager.showLoadingIndicator('Saving pack list...');
         try {
@@ -340,9 +339,7 @@
             }
 
             // Save to Google Sheets (no header row)
-            // Ensure updates is an array before using .map()
-            // (no .map() is used in this function, but if you see updates.map() elsewhere, check the type)
-            await setSheetData(sheetId, tabName, {
+            await GoogleSheetsService.setSheetData(sheetId, tabName, {
                 type: 'full-table',
                 values: Array.isArray(result) ? result : []
             });

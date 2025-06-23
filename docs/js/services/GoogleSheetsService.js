@@ -640,6 +640,7 @@ export class GoogleSheetsService {
         };
 
         try {
+            // Use the class name directly to ensure correct context
             await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.values.batchUpdate(request)
             );
