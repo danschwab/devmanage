@@ -56,7 +56,7 @@ export class GoogleSheetsService {
 
         // Fetch new data
         await GoogleSheetsAuth.checkAuth();
-        const response = await this.withExponentialBackoff(() =>
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range,
@@ -509,7 +509,7 @@ export class GoogleSheetsService {
         }
 
         // Use cache for full sheet data
-        const response = await this.withExponentialBackoff(() =>
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.get({
                 spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
                 ranges: [`${projectIdentifier}`],
@@ -568,7 +568,7 @@ export class GoogleSheetsService {
     static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
         await GoogleSheetsAuth.checkAuth();
         try {
-            const response = await this.withExponentialBackoff(() =>
+            const response = await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.get({
                     spreadsheetId,
                     ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
@@ -599,7 +599,7 @@ export class GoogleSheetsService {
         const lastCol = String.fromCharCode(65 + headers.length - 1);
         const range = `${tabName}!A1:${lastCol}`;
         
-        const searchResponse = await this.withExponentialBackoff(() =>
+        const searchResponse = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range,
@@ -640,7 +640,7 @@ export class GoogleSheetsService {
         };
 
         try {
-            await this.withExponentialBackoff(() =>
+            await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.values.batchUpdate(request)
             );
             return true;
@@ -652,7 +652,7 @@ export class GoogleSheetsService {
 
     static async getSheetTabs(spreadsheetId) {
         await GoogleSheetsAuth.checkAuth();
-        const response = await this.withExponentialBackoff(() =>
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.get({
                 spreadsheetId
             })

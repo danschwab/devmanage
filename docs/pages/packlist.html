@@ -21,16 +21,16 @@
                 );
                 
                 // Add save button for crate items if tabName is provided
-                if (tabName) {
+                /*if (tabName) {
                     saveBtn = document.createElement('button');
-                    saveBtn.textContent = 'Save Changes';
+                    saveBtn.textContent = 'Save Crate Changes';
                     saveBtn.className = 'save-button';
                     saveBtn.style.margin = '8px 0';
                     saveBtn.disabled = true;
                     itemData.appendChild(saveBtn);
 
                     TableManager.setupPackListSaveButton(itemTable, saveBtn, tabName, content.headers.items, crateIdx);
-                }
+                }*/
 
                 itemData.appendChild(itemTable);
             }
@@ -43,8 +43,8 @@
         // Add whole-table save button if tabName is provided
         if (tabName) {
             const saveAllBtn = document.createElement('button');
-            saveAllBtn.textContent = 'Save Entire Pack List';
-            saveAllBtn.className = 'save-all-button';
+            saveAllBtn.textContent = 'Save Pack List Changes';
+            saveAllBtn.className = 'save-button';
             saveAllBtn.style.margin = '12px 0';
             saveAllBtn.disabled = true;
 
