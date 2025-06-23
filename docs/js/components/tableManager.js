@@ -160,35 +160,22 @@ export class TableManager {
             newRowTd.colSpan = 1000; // large number to cover all columns
             newRowTd.className = 'new-row-button';
 
-            const newRowBtn = document.createElement('button');
-            newRowBtn.textContent = '+ Add Row';
-            newRowBtn.type = 'button';
-            newRowBtn.className = 'new-row-btn';
-
             // Handler like TabManager: store handler in a Map with a unique id
             if (!TableManager._newRowHandlers) TableManager._newRowHandlers = new Map();
             const handlerId = `new-row-handler-${Math.random().toString(36).slice(2, 11)}`;
-            newRowBtn.dataset.handlerId = handlerId;
+            newRowTd.dataset.handlerId = handlerId;
             TableManager._newRowHandlers.set(handlerId, newRowFunction);
 
-            newRowTd.appendChild(newRowBtn);
+            // Attach click handler directly to the td
+            newRowTd.onclick = (event) => {
+                const handler = TableManager._newRowHandlers.get(handlerId);
+                if (handler) handler(event);
+            };
+
             tr.appendChild(newRowTd);
             tfoot.appendChild(tr);
             table.appendChild(tfoot);
-
-            // Delegate click event for all new-row-btns (one-time global handler)
-            if (!TableManager._newRowBtnListener) {
-                TableManager._newRowBtnListener = (event) => {
-                    const btn = event.target.closest('.new-row-btn');
-                    if (btn && btn.dataset.handlerId) {
-                        const handler = TableManager._newRowHandlers.get(btn.dataset.handlerId);
-                        if (handler) handler(event);
-                    }
-                };
-                document.addEventListener('click', TableManager._newRowBtnListener);
-            }
         }
-
         return table;
     }
 
