@@ -382,9 +382,7 @@
     }
 
     function newRowFunction(event) {
-        const btn = event.target.closest('.new-row-btn');
-        if (!btn) return;
-        const table = btn.closest('table');
+        const table = event.target.closest('table');
         if (!table) return;
         const dragIdClass = Array.from(table.classList).find(cls => cls.startsWith('drag-id-'));
         const tbody = table.querySelector('tbody');
