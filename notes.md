@@ -30,13 +30,13 @@ AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack li
 - Open Pack List in Web
     + Get pack list data from web and display
     - Allow addition of new crates
-    - Allow crate contents edit
-        - Allow addition of new items
-        - Allow deletion of items
+    + Allow crate contents edit
+        + Allow addition of new items
+        + Allow deletion of items
         + Allow moving items
-        - Allow editing item contents
+        + Allow editing item contents
     - allow saving edits to google sheet
-    - warnings for items that are unavailable
+    + warnings for items that are unavailable
 
 
 

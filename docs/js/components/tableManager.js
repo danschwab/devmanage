@@ -257,7 +257,11 @@ export class TableManager {
             const sourceTable = tr.closest('table');
             const draggingClickTags = sourceTable?.dataset.draggingClickTags ? 
                 JSON.parse(sourceTable.dataset.draggingClickTags) : [];
-            
+
+            // Remove any existing row-clone from the DOM before starting a new drag
+            const existingClone = document.querySelector('.row-clone');
+            if (existingClone) existingClone.remove();
+
             this.dragState.isDragging = true;
             this.dragState.startX = e.clientX;
             this.dragState.startY = e.clientY;
