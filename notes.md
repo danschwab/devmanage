@@ -42,6 +42,7 @@ AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack li
 
 **To do:**
 
+Set up a queue for packlist overlaps and cache data. If there are multiple tabs open, run for all open tabs at once while avoiding rate-limiting.
 Allow multiple workspaces?
 Inject the sheet ids and the api-key via github soas not to expose them
 allow modals to recieve the arrow keys and enter button
@@ -55,7 +56,7 @@ auth last longer than an hour
 
 **Learning:**
 Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
-Google drive rate-limits queries, making it dificult to realtime-check tons of stuff
+Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
 
 
 
