@@ -222,7 +222,7 @@ export class TableManager {
             const { row, position } = dropTarget;
             // If drop target is inside a tfoot, always append as last child
             if (row.parentElement && row.parentElement.tagName === 'TFOOT') {
-                row.parentElement.appendChild(this.dragState.sourceRow);
+                row.parentNode.insertBefore(this.dragState.sourceRow, row);
             } else {
                 if (position === 'before') {
                     row.parentNode.insertBefore(this.dragState.sourceRow, row);
