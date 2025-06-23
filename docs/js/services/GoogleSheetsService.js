@@ -16,6 +16,32 @@ export class GoogleSheetsService {
         TTL: 5 * 60 * 1000 // 5 minutes
     };
 
+    // Exponential backoff helper for Google Sheets API calls
+    static async withExponentialBackoff(fn, maxRetries = 5, initialDelay = 500) {
+        let attempt = 0;
+        let delay = initialDelay;
+        while (true) {
+            try {
+                return await fn();
+            } catch (err) {
+                // Check for rate limit or quota errors
+                const isRateLimit = err && (
+                    (err.status && (err.status === 429 || err.status === 403)) ||
+                    (err.result && err.result.error && (
+                        err.result.error.status === 'RESOURCE_EXHAUSTED' ||
+                        err.result.error.status === 'PERMISSION_DENIED' ||
+                        err.result.error.message?.toLowerCase().includes('rate limit') ||
+                        err.result.error.message?.toLowerCase().includes('quota')
+                    ))
+                );
+                if (!isRateLimit || attempt >= maxRetries) throw err;
+                await new Promise(res => setTimeout(res, delay));
+                delay *= 2;
+                attempt++;
+            }
+        }
+    }
+
     static async getSheetData(spreadsheetId, range, useCache = true) {
         // Check cache first if enabled
         if (useCache) {
@@ -30,10 +56,12 @@ export class GoogleSheetsService {
 
         // Fetch new data
         await GoogleSheetsAuth.checkAuth();
-        const response = await gapi.client.sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
-        });
+        const response = await this.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+            })
+        );
 
         // Update cache if enabled
         if (useCache) {
@@ -481,11 +509,13 @@ export class GoogleSheetsService {
         }
 
         // Use cache for full sheet data
-        const response = await gapi.client.sheets.spreadsheets.get({
-            spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
-            ranges: [`${projectIdentifier}`],
-            includeGridData: true
-        });
+        const response = await this.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
+                ranges: [`${projectIdentifier}`],
+                includeGridData: true
+            })
+        );
         
         const sheetData = response.result.sheets[0].data[0].rowData;
 
@@ -538,11 +568,13 @@ export class GoogleSheetsService {
     static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
         await GoogleSheetsAuth.checkAuth();
         try {
-            const response = await gapi.client.sheets.spreadsheets.get({
-                spreadsheetId,
-                ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
-                includeGridData: true
-            });
+            const response = await this.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
+                    includeGridData: true
+                })
+            );
             
             return response.result.sheets[0].data[0].rowData[0].values
                 .map(cell => cell.formattedValue)
@@ -567,11 +599,13 @@ export class GoogleSheetsService {
         const lastCol = String.fromCharCode(65 + headers.length - 1);
         const range = `${tabName}!A1:${lastCol}`;
         
-        const searchResponse = await gapi.client.sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
-            majorDimension: 'ROWS'
-        });
+        const searchResponse = await this.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+                majorDimension: 'ROWS'
+            })
+        );
 
         const allData = searchResponse.result.values || [];
         const filteredData = allData.slice(1).filter(row => 
@@ -588,10 +622,14 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
         
         // Convert 0-based indices to A1 notation (add 1 for 1-based sheet indexing)
-        const data = updates.map(({row, col, value}) => ({
-            range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
-            values: [[value]]
-        }));
+        const data = Array.isArray(updates)
+            ? updates.map(({row, col, value}) => ({
+                range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
+                values: [[value]]
+            }))
+            : updates.values
+                ? [{ range: `${tabName}!A1`, values: updates.values }]
+                : [];
 
         const request = {
             spreadsheetId,
@@ -602,7 +640,9 @@ export class GoogleSheetsService {
         };
 
         try {
-            await gapi.client.sheets.spreadsheets.values.batchUpdate(request);
+            await this.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.values.batchUpdate(request)
+            );
             return true;
         } catch (error) {
             console.error('Error updating sheet:', error);
@@ -612,10 +652,11 @@ export class GoogleSheetsService {
 
     static async getSheetTabs(spreadsheetId) {
         await GoogleSheetsAuth.checkAuth();
-        const response = await gapi.client.sheets.spreadsheets.get({
-            spreadsheetId
-        });
-        
+        const response = await this.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId
+            })
+        );
         return response.result.sheets.map(sheet => sheet.properties.title);
     }
 
