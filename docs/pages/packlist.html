@@ -263,7 +263,7 @@
         // Show loading modal
         const loadingModal = ModalManager.showLoadingIndicator('Saving pack list...');
         try {
-            // Get main headers (skip drag handle th)
+            // Determine how many crate columns and item columns
             const thead = mainTable.querySelector('thead');
             let mainHeaders = [];
             if (thead) {
@@ -274,14 +274,8 @@
                         .map(th => th.textContent.trim());
                 }
             }
-
-            // Find the index of the "Items" column
             const itemsColIdx = mainHeaders.findIndex(h => h === 'Items');
-            // The columns before "Items" are crate info columns
             const crateInfoCols = mainHeaders.slice(0, itemsColIdx);
-
-            // Compose the spreadsheet rows (no header row)
-            const result = [];
             // We'll get item headers from the first crate with items
             let itemHeaders = [];
             const tbody = mainTable.querySelector('tbody');
@@ -289,13 +283,9 @@
             for (const crateRow of crateRows) {
                 const crateCells = Array.from(crateRow.querySelectorAll('td'));
                 if (crateCells.length === 0) continue;
-                // Crate info: skip drag handle, up to but not including "Items"
-                const crateInfo = crateCells.slice(1, 1 + crateInfoCols.length).map(td => td.textContent.trim());
                 const itemsCell = crateCells[crateCells.length - 1];
-                // Find the nested items table
                 const itemsTable = itemsCell.querySelector('table');
                 if (itemsTable && itemHeaders.length === 0) {
-                    // Get item headers (skip drag handle)
                     const itemsThead = itemsTable.querySelector('thead');
                     if (itemsThead) {
                         const itemsHeaderRow = itemsThead.querySelector('tr');
@@ -308,6 +298,8 @@
                 }
             }
 
+            // Compose the spreadsheet rows (no header row)
+            const result = [];
             // Now process each crate row
             for (const crateRow of crateRows) {
                 const crateCells = Array.from(crateRow.querySelectorAll('td'));
@@ -351,9 +343,23 @@
             }
 
             // Save to Google Sheets (no header row)
+            // Data starts at row 4 (A4), crate info in A, item data in I
+            // Build a 2D array with empty columns for the gap between crate and item columns
+            const startRow = 4;
+            const itemStartCol = 8; // Column I is index 8 (0-based)
+            const fullRows = result.map(row => {
+                // row = [crateInfo..., itemData...]
+                const cratePart = row.slice(0, crateInfoCols.length);
+                const itemPart = row.slice(crateInfoCols.length);
+                // Fill columns between crate and item with empty strings
+                const gap = Array(itemStartCol - crateInfoCols.length).fill('');
+                return [...cratePart, ...gap, ...itemPart];
+            });
+
             await GoogleSheetsService.setSheetData(sheetId, tabName, {
                 type: 'full-table',
-                values: Array.isArray(result) ? result : []
+                values: Array.isArray(fullRows) ? fullRows : [],
+                startRow: startRow - 1 // zero-based for API
             });
             // Reset dirty state after successful save
             TableManager.clearDirtyState(mainTable);
