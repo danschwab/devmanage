@@ -650,26 +650,57 @@ export class GoogleSheetsService {
             // Determine starting row and column
             const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
             const startCol = 0;
-            // Calculate end column letter
+            const numRows = updates.values.length;
             const numCols = updates.values[0]?.length || 1;
             const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
-            const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + updates.values.length}`;
-            try {
-                await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.values.update({
+            const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + numRows}`;
+
+            // If the data would extend beyond the current sheet, add rows first
+            if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
+                const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.get({
                         spreadsheetId,
-                        range,
-                        valueInputOption: 'USER_ENTERED',
-                        resource: {
-                            values: updates.values
-                        }
+                        ranges: [tabName],
+                        includeGridData: false
                     })
                 );
-                return true;
-            } catch (error) {
-                console.error('Error updating sheet:', error);
-                throw error;
+                const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+                if (sheet) {
+                    const sheetRowCount = sheet.properties.gridProperties.rowCount;
+                    const requiredRows = startRow + numRows;
+                    if (requiredRows > sheetRowCount) {
+                        await GoogleSheetsService.withExponentialBackoff(() =>
+                            gapi.client.sheets.spreadsheets.batchUpdate({
+                                spreadsheetId,
+                                resource: {
+                                    requests: [
+                                        {
+                                            appendDimension: {
+                                                sheetId: sheet.properties.sheetId,
+                                                dimension: 'ROWS',
+                                                length: requiredRows - sheetRowCount
+                                            }
+                                        }
+                                    ]
+                                }
+                            })
+                        );
+                    }
+                }
             }
+
+            // ...existing code for update...
+            await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: {
+                        values: updates.values
+                    }
+                })
+            );
+            return true;
         }
 
         throw new Error('Invalid updates format for setSheetData');
