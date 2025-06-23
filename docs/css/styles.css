@@ -491,6 +491,20 @@ table {
     background-color: #f8f8f8;
     transition: background-color 0.15s ease-in-out;
 }
+.new-row-button button {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: none;
+    min-width: auto;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+    height: auto;
+    box-shadow: none;
+}
 
 .new-row-button::before {
     content: "+";
