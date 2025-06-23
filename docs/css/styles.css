@@ -516,7 +516,7 @@ table {
 }
 
 /* Row delete button styling */
-:has(.dragging) .new-row-button {
+table:has(.dragging) .new-row-button {
     min-width: 0;
     cursor: pointer;
     position: relative;
@@ -525,7 +525,7 @@ table {
     border: none;
     outline: none;
 }
-:has(.dragging) .new-row-button::before {
+table:has(.dragging) .new-row-button::before {
     content: "×";
     display: block;
     text-align: center;
@@ -537,7 +537,7 @@ table {
 tr.dragging ~ tr td.new-row-button {
     display:none;
 }
-:has(.dragging) .new-row-button:hover {
+table:has(.dragging) .new-row-button:hover {
     background-color: #ff9292;
 }
 /* row is being deleted */
