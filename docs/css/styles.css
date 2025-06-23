@@ -500,6 +500,30 @@ table {
     line-height: 100%;
 }
 
+/* Row delete button styling */
+:has(.dragging) .new-row-button {
+    min-width: 0;
+    cursor: pointer;
+    position: relative;
+    padding: 0 !important;
+    background-color: #f8f8f8;
+    border: none;
+    outline: none;
+}
+:has(.dragging) .new-row-button::before {
+    content: "✕";
+    display: block;
+    text-align: center;
+    color: #c51f2f;
+    font-size: 20px;
+    line-height: 100%;
+    transition: color 0.15s;
+}
+:has(.dragging) .new-row-button:hover {
+    background-color: #ffeaea;
+}
+
+
 .row-drag-handle {
     min-width: 0;
     width: 20px;
