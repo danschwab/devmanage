@@ -165,12 +165,10 @@ export class TableManager {
             newRowTd.dataset.handlerId = handlerId;
             TableManager._newRowHandlers.set(handlerId, newRowFunction);
 
-            // Add a button element for click
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = '+ Add Row';
-            btn.onclick = (event) => {
-                console.log('[TableManager] New row button clicked', { handlerId, event, table });
+            // Use the tr as the button: add text and click handler to the tr
+            tr.appendChild(newRowTd);
+            tr.onclick = (event) => {
+                console.log('[TableManager] New row tr clicked', { handlerId, event, table });
                 const handler = TableManager._newRowHandlers.get(handlerId);
                 if (handler) {
                     try {
@@ -180,12 +178,10 @@ export class TableManager {
                         console.error('[TableManager] Error in new row handler:', err);
                     }
                 } else {
-                    console.warn('[TableManager] No handler found for new row button', handlerId);
+                    console.warn('[TableManager] No handler found for new row tr', handlerId);
                 }
             };
-            newRowTd.appendChild(btn);
 
-            tr.appendChild(newRowTd);
             tfoot.appendChild(tr);
             table.appendChild(tfoot);
         }
