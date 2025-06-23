@@ -166,11 +166,21 @@ export class TableManager {
             newRowTd.dataset.handlerId = handlerId;
             TableManager._newRowHandlers.set(handlerId, newRowFunction);
 
-            // Attach click handler directly to the td
-            newRowTd.onclick = (event) => {
-                const handler = TableManager._newRowHandlers.get(handlerId);
-                if (handler) handler(event);
-            };
+            // Attach click handler using event delegation (for dynamically created tables)
+            // Remove any previous listener to avoid duplicates
+            if (!TableManager._newRowBtnListener) {
+                TableManager._newRowBtnListener = (event) => {
+                    const td = event.target.closest('.new-row-button');
+                    if (td && td.dataset.handlerId) {
+                        const handler = TableManager._newRowHandlers.get(td.dataset.handlerId);
+                        if (handler) handler(event);
+                    }
+                };
+                document.addEventListener('click', TableManager._newRowBtnListener);
+            }
+
+            // No direct onclick on the td
+            newRowTd.textContent = '+ Add Row';
 
             tr.appendChild(newRowTd);
             tfoot.appendChild(tr);
