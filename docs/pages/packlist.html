@@ -339,9 +339,11 @@
             }
 
             // Save to Google Sheets (no header row)
+            // Ensure updates is an array before using .map()
+            // (no .map() is used in this function, but if you see updates.map() elsewhere, check the type)
             await setSheetData(sheetId, tabName, {
                 type: 'full-table',
-                values: result
+                values: Array.isArray(result) ? result : []
             });
         } finally {
             loadingModal.hide();
