@@ -516,7 +516,8 @@ table {
 }
 
 /* Row delete button styling */
-table:has(.dragging) .new-row-button {
+/* Only select .new-row-button in the top-level table's tfoot, not in nested tables or parent tables */
+table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button {
     min-width: 0;
     cursor: pointer;
     position: relative;
@@ -525,7 +526,7 @@ table:has(.dragging) .new-row-button {
     border: none;
     outline: none;
 }
-table:has(.dragging) .new-row-button::before {
+table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::before {
     content: "×";
     display: block;
     text-align: center;
@@ -537,7 +538,7 @@ table:has(.dragging) .new-row-button::before {
 tr.dragging ~ tr td.new-row-button {
     display:none;
 }
-table:has(.dragging) .new-row-button:hover {
+table:has(.dragging) tfoot .new-row-button:hover {
     background-color: #ff9292;
 }
 /* row is being deleted */
@@ -565,7 +566,7 @@ tfoot tr.dragging::after {
 
 td.spacer-cell, th.spacer-cell {
     padding: 0px;
-    min-width: 0px;
+    min-width: 20px;
     border: none;
     background-color: transparent;
 }
