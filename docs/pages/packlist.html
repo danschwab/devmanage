@@ -90,6 +90,7 @@
                     );
                     ModalManager.alert('Entire pack list saved successfully');
                 } catch (err) {
+                    console.error('Error saving entire pack list:', err && err.stack ? err.stack : err);
                     ModalManager.alert('Error saving entire pack list: ' + (err && err.message ? err.message : err));
                 } finally {
                     checkSaveAllState();
