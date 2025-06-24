@@ -922,4 +922,22 @@ export class GoogleSheetsService {
         console.log('computeProdSchedIdentifier output:', identifier);
         return identifier;
     }
+
+    static async getSheetGid(spreadsheetId, tabName) {
+        await GoogleSheetsAuth.checkAuth();
+        if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
+            const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [tabName],
+                    includeGridData: false
+                })
+            );
+            const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+            if (sheet) {
+                return sheet.properties.sheetId; // This is the gid
+            }
+        }
+        return 0; // fallback to 0 if not found
+    }
 }

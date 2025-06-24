@@ -4,7 +4,7 @@
 <script type="module">
     import { TabManager, GoogleSheetsService, GoogleSheetsAuth, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
 
-    function buildPackListTable(content, tabName = null) {
+    function buildPackListTable(content, tabName = null, tabGid = null) {
         const mainTableData = content.crates.map((crate, crateIdx) => {
             const itemData = document.createElement('div');
             itemData.classList.add('table-wrapper');
@@ -49,8 +49,27 @@
             newRowFunction
         );
 
+        // Store gid as data attribute if provided
+        if (tabGid) {
+            mainTable.dataset.gid = tabGid;
+        }
+
         // Add whole-table save button if tabName is provided
         if (tabName) {
+            // Add Print Pack List button before the table
+            const printBtn = document.createElement('button');
+            printBtn.textContent = 'Print Pack List';
+            printBtn.className = 'print-packlist-button';
+            printBtn.style.margin = '12px 8px 12px 0';
+            printBtn.onclick = () => {
+                // Use the gid from the table's data attribute if available
+                const gid = mainTable.dataset.gid || 0;
+                window.open(
+                    `https://docs.google.com/spreadsheets/d/${SPREADSHEET_IDS.PACK_LISTS}/print?gid=${gid}`,
+                    '_blank'
+                );
+            };
+
             const saveAllBtn = document.createElement('button');
             saveAllBtn.textContent = 'Save Pack List Changes';
             saveAllBtn.className = 'save-button';
@@ -152,6 +171,7 @@
             };
             // Wrap table and button in a container
             const wrapper = document.createElement('div');
+            wrapper.appendChild(printBtn);
             wrapper.appendChild(saveAllBtn);
             wrapper.appendChild(mainTable);
             return wrapper;
@@ -249,10 +269,12 @@
             tabButton.addEventListener('click', async () => {
                 const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
                 try {
+                    // Fetch gid for this tab
+                    const gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
                     const content = await GoogleSheetsService.getPackListContent(tabName);
                     const tabContainer = document.createElement('div');
-                    // Pass tabName to buildPackListTable so save buttons are added
-                    const packListTable = buildPackListTable(content, tabName);
+                    // Pass tabName and gid to buildPackListTable so save buttons and print button are added
+                    const packListTable = buildPackListTable(content, tabName, gid);
                     tabContainer.appendChild(packListTable);
 
                     // Asynchronously check item quantities
