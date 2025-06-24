@@ -647,11 +647,25 @@ export class GoogleSheetsService {
 
         // If updates is an object with type: 'full-table', use update with range and values
         if (updates && updates.type === 'full-table' && Array.isArray(updates.values)) {
+            // Ensure all rows have the same number of columns (at least 10 for item rows)
+            let values = updates.values;
+            if (Array.isArray(values) && values.length > 0) {
+                const maxCols = Math.max(
+                    ...values.map(row => row.length),
+                    10 // ensure at least 10 columns for item rows
+                );
+                for (let i = 0; i < values.length; ++i) {
+                    if (values[i].length < maxCols) {
+                        while (values[i].length < maxCols) values[i].push('');
+                    }
+                }
+            }
+
             // Determine starting row and column
             const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
             const startCol = 0;
-            const numRows = updates.values.length;
-            const numCols = updates.values[0]?.length || 1;
+            const numRows = values.length;
+            const numCols = values[0]?.length || 1;
             const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
             const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + numRows}`;
 
@@ -689,14 +703,13 @@ export class GoogleSheetsService {
                 }
             }
 
-            // ...existing code for update...
             await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.values.update({
                     spreadsheetId,
                     range,
                     valueInputOption: 'USER_ENTERED',
                     resource: {
-                        values: updates.values
+                        values: values
                     }
                 })
             );
