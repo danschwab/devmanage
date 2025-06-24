@@ -660,6 +660,9 @@ tr.dragging::after {
     background-color: rgb(102, 204, 116);
 }
 
+.table-edit-textarea {
+    background-color: #f0f5ff;
+}
 .table-edit-textarea:focus {
     outline: solid 2px #aeceff;
 }
@@ -667,14 +670,14 @@ tr.dragging::after {
 .dirty::after {
     content: "unsaved edits";
     display: inline-block;
-    position: relative;
+    /*position: relative;*/
     font-size: 0.8rem;
-    color: #c51f2f;
+    color: #f00;
     border-radius: 4px;
-    border: 1px dashed #c51f2f;
+    border: 1px dashed #f00;
     padding: 1.5px;
     margin: 0 4px;
-    bottom: 1px;
+    /*bottom: 1px;*/
 }
 
 button.save-button:disabled {
