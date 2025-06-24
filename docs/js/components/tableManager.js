@@ -320,19 +320,22 @@ export class TableManager {
             const parentTable = this.dragState.sourceRow.closest('table');
             if (parentTable) {
                 const tfoot = Array.from(parentTable.children).find(
-                el => el.tagName === 'TFOOT'
+                    el => el.tagName === 'TFOOT'
                 );
                 if (tfoot && tfoot.contains(this.dragState.sourceRow)) {
-                // Show confirmation dialog before removing the row
-                if (window.confirm('Are you sure you want to delete this row?')) {
-                    this.dragState.sourceRow.remove();
-                } else {
-                    // Move row back to tbody if user cancels
-                    const tbody = parentTable.querySelector('tbody');
-                    if (tbody) {
-                    tbody.appendChild(this.dragState.sourceRow);
-                    }
-                }
+                    // Show confirmation dialog before removing the row using ModalManager.confirm
+                    window.ModalManager.confirm('Are you sure you want to delete this row?')
+                        .then(confirmed => {
+                            if (confirmed) {
+                                this.dragState.sourceRow.remove();
+                            } else {
+                                // Move row back to tbody if user cancels
+                                const tbody = parentTable.querySelector('tbody');
+                                if (tbody) {
+                                    tbody.appendChild(this.dragState.sourceRow);
+                                }
+                            }
+                        });
                 }
             }
             this.dragState.sourceRow.classList.remove('dragging');
