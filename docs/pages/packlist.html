@@ -74,11 +74,31 @@
                         console.log(`[checkSaveAllState] No tbody found for ${tableName}`);
                         return false;
                     }
-                    const movedRow = Array.from(tbody.rows).find((row, idx) =>
-                        row.dataset.originalIndex !== undefined && parseInt(row.dataset.originalIndex) !== idx
-                    );
-                    if (movedRow) {
-                        console.log(`[checkSaveAllState] Row moved in ${tableName}:`, movedRow, 'originalIndex:', movedRow.dataset.originalIndex, 'currentIndex:', Array.from(tbody.rows).indexOf(movedRow));
+                    // Mark all rows with their current index if not already set
+                    Array.from(tbody.rows).forEach((row, idx) => {
+                        if (row.dataset.originalIndex === undefined) {
+                            // If not set, set it to current index
+                            row.dataset.originalIndex = idx.toString();
+                        }
+                    });
+                    // Check for any row that has moved, is new, or has been removed
+                    let movedOrNew = false;
+                    Array.from(tbody.rows).forEach((row, idx) => {
+                        // Row is new if it has no originalIndex or originalIndex is empty
+                        if (row.dataset.originalIndex === undefined || row.dataset.originalIndex === '') {
+                            movedOrNew = true;
+                        }
+                        // Row is moved if originalIndex does not match current index
+                        else if (parseInt(row.dataset.originalIndex) !== idx) {
+                            movedOrNew = true;
+                        }
+                    });
+                    // If number of rows has changed, that's a removal or addition
+                    if (tbody.rows.length !== Object.keys(tbody.rows).length) {
+                        movedOrNew = true;
+                    }
+                    if (movedOrNew) {
+                        console.log(`[checkSaveAllState] Row moved/new/removed in ${tableName}`);
                         return true;
                     }
                     return false;
