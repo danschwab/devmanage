@@ -445,6 +445,11 @@
                 startRow: 3 // 1-based for Sheets API, row 4
             });
 
+            // Remove any rows in tfoot after successful save
+            mainTable.querySelectorAll('tfoot').forEach(tfoot => {
+                Array.from(tfoot.querySelectorAll('tr')).forEach(tr => tr.remove());
+            });
+
             TableManager.clearDirtyState(mainTable);
             console.log('[savePackListTable] Save complete');
         } finally {

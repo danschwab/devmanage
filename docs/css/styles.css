@@ -543,7 +543,7 @@ table:has(.dragging) tfoot .new-row-button:hover {
 }
 /* row is being deleted */
 tfoot tr.draggable::after {
-    content: "deleting this row";
+    content: "row deleted";
     position: absolute;
     top: 0;
     bottom: 0;
