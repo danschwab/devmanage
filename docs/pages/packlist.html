@@ -309,47 +309,70 @@
 
             // 1. Gather all crate rows (main table body)
             const tbody = mainTable.querySelector('tbody');
-            const crateRows = Array.from(tbody.querySelectorAll('tr'));
+            const crateRows = Array.from(tbody.children).filter(el => el.tagName === 'TR');
             const result = [];
 
             console.log('[savePackListTable] Found crate rows:', crateRows.length);
 
-            for (const crateRow of crateRows) {
-                const crateCells = Array.from(crateRow.querySelectorAll('td'));
+            for (const [crateIdx, crateRow] of crateRows.entries()) {
+                console.log(`[savePackListTable] Processing crate row ${crateIdx}`);
+                const crateCells = Array.from(crateRow.children).filter(el => el.tagName === 'TD');
+                console.log(`[savePackListTable] Crate row ${crateIdx} has ${crateCells.length} cells`);
                 // Only process rows with at least 7 cells (drag + 6 crate info + items)
-                if (crateCells.length < 7) continue;
+                if (crateCells.length < 7) {
+                    console.warn(`[savePackListTable] Skipping crate row ${crateIdx} due to insufficient cells (${crateCells.length})`);
+                    continue;
+                }
 
                 // 2. Append crate data row (cells 1-6, skip drag handle)
-                const crateData = crateCells.slice(1, 7).map(td => {
+                const crateData = crateCells.slice(1, 7).map((td, i) => {
                     const editable = td.querySelector('.table-edit-textarea');
-                    return editable ? editable.textContent.trim() : td.textContent.trim();
+                    const value = editable ? editable.textContent.trim() : td.textContent.trim();
+                    console.log(`[savePackListTable] Crate row ${crateIdx}, cell ${i + 1}: "${value}"`);
+                    return value;
                 });
+                console.log(`[savePackListTable] Pushing crate data for row ${crateIdx}:`, crateData);
                 result.push(crateData);
 
                 // 3. For each item in the crate's item table, append a row with 8 empty, then 2 item values
-                const itemsCell = crateCells[8];
+                const itemsCell = crateCells[6];
+                if (!itemsCell) {
+                    console.warn(`[savePackListTable] No items cell found for crate row ${crateIdx}`);
+                    continue;
+                }
                 const itemsTable = itemsCell.querySelector('table');
                 if (itemsTable) {
                     const itemsTbody = itemsTable.querySelector('tbody');
                     if (itemsTbody) {
                         const itemRows = Array.from(itemsTbody.querySelectorAll('tr'));
-                        console.log('[savePackListTable] Found item rows for crate:', itemRows.length);
-                        for (const itemTr of itemRows) {
+                        console.log(`[savePackListTable] Found ${itemRows.length} item rows for crate ${crateIdx}`);
+                        for (const [itemIdx, itemTr] of itemRows.entries()) {
                             const itemTds = Array.from(itemTr.querySelectorAll('td')).slice(1); // skip drag handle
                             if (itemTds.length >= 2) {
-                                const itemData = itemTds.map(td => {
+                                const itemData = itemTds.map((td, j) => {
                                     const editable = td.querySelector('.table-edit-textarea');
-                                    return editable ? editable.textContent.trim() : td.textContent.trim();
+                                    const value = editable ? editable.textContent.trim() : td.textContent.trim();
+                                    console.log(`[savePackListTable] Crate ${crateIdx}, item row ${itemIdx}, cell ${j + 1}: "${value}"`);
+                                    return value;
                                 });
                                 if (itemData.some(cell => cell.length > 0)) {
+                                    console.log(`[savePackListTable] Pushing item data for crate ${crateIdx}, item row ${itemIdx}:`, itemData.slice(0, 2));
                                     result.push([
                                         '', '', '', '', '', '', '', '', // 8 empty columns
                                         ...itemData.slice(0, 2)
                                     ]);
+                                } else {
+                                    console.log(`[savePackListTable] Skipping empty item row ${itemIdx} in crate ${crateIdx}`);
                                 }
+                            } else {
+                                console.warn(`[savePackListTable] Item row ${itemIdx} in crate ${crateIdx} has insufficient cells (${itemTds.length})`);
                             }
                         }
+                    } else {
+                        console.warn(`[savePackListTable] No tbody found in items table for crate ${crateIdx}`);
                     }
+                } else {
+                    console.warn(`[savePackListTable] No items table found in items cell for crate ${crateIdx}`);
                 }
             }
 
