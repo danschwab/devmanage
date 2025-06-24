@@ -19,6 +19,14 @@ AS REQUESTED OR AT THE TIME ELEVATIONS ARE PRODUCED: Daniel, Dan, or Patrick use
 AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack lists
 
 
+**Use Cases**
+We can have pack lists generated from Inventor
+We can know if there are item shortages as pack lists are generated
+If we add bematrix stuff to pack lists, we can also check inventory qty of them
+If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
+We can get an inventory report of item quantities throughout the year
+
+
 
 
 **Minimum Features To Show:**
