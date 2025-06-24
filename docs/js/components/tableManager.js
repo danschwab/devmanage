@@ -231,9 +231,26 @@ export class TableManager {
         const dropTarget = this.findDropTarget(e, dragId, draggingClickTags);
         if (dropTarget && this.dragState.sourceRow) {
             const { row, position } = dropTarget;
-            // If drop target is inside a tfoot, always append as last child
+            // If drop target is inside a tfoot, confirm deletion
             if (row.parentElement && row.parentElement.tagName === 'TFOOT') {
-                row.parentNode.insertBefore(this.dragState.sourceRow, row);
+                const tr = this.dragState.sourceRow;
+                const tfoot = row.parentElement;
+                const tbody = tfoot.previousElementSibling && tfoot.previousElementSibling.tagName === 'TBODY'
+                    ? tfoot.previousElementSibling
+                    : null;
+                // Confirm deletion
+                if (typeof window.ModalManager?.confirm === 'function') {
+                    window.ModalManager.confirm('Delete this row?').then(yes => {
+                        if (yes) {
+                            tr.remove();
+                        } else if (tbody) {
+                            tbody.appendChild(tr);
+                        }
+                    });
+                } else {
+                    // fallback: just remove
+                    tr.remove();
+                }
             } else {
                 if (position === 'before') {
                     row.parentNode.insertBefore(this.dragState.sourceRow, row);
