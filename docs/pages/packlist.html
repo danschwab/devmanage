@@ -401,8 +401,10 @@
         if (!headersItems) {
             const firstItemsTable = document.querySelector('.drag-id-pack-list-items');
             if (firstItemsTable) {
-                const ths = firstItemsTable.querySelectorAll('thead th');
-                headersItems = Array.from(ths).map(th => th.textContent.trim());
+            const ths = firstItemsTable.querySelectorAll('thead th');
+            headersItems = Array.from(ths)
+                .filter(th => !th.classList.contains('spacer-cell'))
+                .map(th => th.textContent.trim());
             }
         }
         // If still not found, fallback to ['Description', 'Packing/shop notes']
