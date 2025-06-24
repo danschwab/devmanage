@@ -396,6 +396,10 @@
                 } else {
                     console.warn(`[savePackListTable] No items table found in items cell for crate ${crateIdx}`);
                 }
+
+                if (crateIdx < crateRows.length - 1) {
+                    result.push(['']); // Add an empty row to separate crates
+                }
             }
 
             console.log('[savePackListTable] Final result array:', result);
