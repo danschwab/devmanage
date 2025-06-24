@@ -61,23 +61,37 @@
             const checkSaveAllState = () => {
                 // Check for any dirty cell in main table or any sub-table
                 const dirty = mainTable.querySelector('.table-edit-textarea.dirty');
+                if (dirty) {
+                    console.log('[checkSaveAllState] Found dirty cell:', dirty);
+                } else {
+                    console.log('[checkSaveAllState] No dirty cells found');
+                }
                 // Check for any row moved (originalIndex != current index) in main table or any sub-table
                 let moved = false;
                 // Check main table
-                const checkMoved = (tbody) => {
-                    if (!tbody) return false;
-                    return Array.from(tbody.rows).some((row, idx) =>
+                const checkMoved = (tbody, tableName = 'mainTable') => {
+                    if (!tbody) {
+                        console.log(`[checkSaveAllState] No tbody found for ${tableName}`);
+                        return false;
+                    }
+                    const movedRow = Array.from(tbody.rows).find((row, idx) =>
                         row.dataset.originalIndex !== undefined && parseInt(row.dataset.originalIndex) !== idx
                     );
+                    if (movedRow) {
+                        console.log(`[checkSaveAllState] Row moved in ${tableName}:`, movedRow, 'originalIndex:', movedRow.dataset.originalIndex, 'currentIndex:', Array.from(tbody.rows).indexOf(movedRow));
+                        return true;
+                    }
+                    return false;
                 };
                 const mainTbody = mainTable.querySelector('tbody');
-                if (checkMoved(mainTbody)) moved = true;
+                if (checkMoved(mainTbody, 'mainTable')) moved = true;
                 // Check all sub-tables
-                mainTable.querySelectorAll('table').forEach(subTable => {
+                mainTable.querySelectorAll('table').forEach((subTable, i) => {
                     if (subTable === mainTable) return;
                     const subTbody = subTable.querySelector('tbody');
-                    if (checkMoved(subTbody)) moved = true;
+                    if (checkMoved(subTbody, `subTable[${i}]`)) moved = true;
                 });
+                console.log('[checkSaveAllState] dirty:', !!dirty, 'moved:', moved, 'saveAllBtn.disabled:', !(dirty || moved));
                 saveAllBtn.disabled = !(dirty || moved);
             };
 
@@ -91,7 +105,7 @@
             // Also observe for row additions/removals (childList)
             observer.observe(mainTable.querySelector('tbody'), {
                 childList: true,
-                subtree: true // only direct children (rows)
+                subtree: false // only direct children (rows)
             });
 
             // Also check on input events (for contenteditable changes)
