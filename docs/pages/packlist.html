@@ -114,26 +114,6 @@
             // Also check after drag/drop (row move)
             mainTable.addEventListener('mouseup', () => setTimeout(checkSaveAllState, 10));
 
-            // Add unsaved changes check for tab close
-            setTimeout(() => {
-                // Find the tab button for this table
-                const tabButton = document.querySelector(`.tab-button[data-tab]`);
-                if (tabButton) {
-                    tabButton.addEventListener('click', async (e) => {
-                        // Only prompt if not already active and there are unsaved changes
-                        if (!tabButton.classList.contains('active') && (!saveAllBtn.disabled)) {
-                            e.preventDefault();
-                            const confirmed = await ModalManager.confirm('You have unsaved changes. Close tab and lose changes?');
-                            if (confirmed) {
-                                // Find the close button and trigger close
-                                const closeBtn = tabButton.querySelector('.tab-close');
-                                if (closeBtn) closeBtn.click();
-                            }
-                        }
-                    });
-                }
-            }, 0);
-
             saveAllBtn.onclick = async () => {
                 saveAllBtn.disabled = true;
                 try {

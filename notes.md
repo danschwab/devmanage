@@ -41,7 +41,7 @@ AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack li
 
 
 **To do:**
-
+add verification when closing a tab
 Set up a queue for packlist overlaps and cache data. If there are multiple tabs open, run for all open tabs at once while avoiding rate-limiting.
 Allow multiple workspaces?
 Inject the sheet ids and the api-key via github soas not to expose them
