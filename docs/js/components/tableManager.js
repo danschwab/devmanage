@@ -317,7 +317,9 @@ export class TableManager {
             if (this.dragState.sourceRow) {
                 const parentTable = this.dragState.sourceRow.closest('table');
                 if (parentTable) {
-                    const tfoot = parentTable.querySelector('tfoot');
+                    const tfoot = Array.from(parentTable.children).find(
+                        el => el.tagName === 'TFOOT'
+                    );
                     if (tfoot && tfoot.contains(this.dragState.sourceRow)) {
                         // If row is inside tfoot, remove the row
                         this.dragState.sourceRow.remove();
