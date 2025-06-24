@@ -143,7 +143,9 @@ export class TableManager {
                     tbody.appendChild(tr);
                 });
             } else {
-                return this.formatError('<div class="error-message">No data available</div>');
+                if (!newRowFunction && !dragId) {
+                    return this.formatError('<div class="error-message">No data available</div>');
+                }
             }
         }
         table.appendChild(tbody);
