@@ -231,26 +231,9 @@ export class TableManager {
         const dropTarget = this.findDropTarget(e, dragId, draggingClickTags);
         if (dropTarget && this.dragState.sourceRow) {
             const { row, position } = dropTarget;
-            // If drop target is inside a tfoot, confirm deletion
+            // If drop target is inside a tfoot, always append as last child
             if (row.parentElement && row.parentElement.tagName === 'TFOOT') {
-                const tr = this.dragState.sourceRow;
-                const tfoot = row.parentElement;
-                const tbody = tfoot.previousElementSibling && tfoot.previousElementSibling.tagName === 'TBODY'
-                    ? tfoot.previousElementSibling
-                    : null;
-                // Confirm deletion
-                if (typeof window.ModalManager?.confirm === 'function') {
-                    window.ModalManager.confirm('Delete this row?').then(yes => {
-                        if (yes) {
-                            tr.remove();
-                        } else if (tbody) {
-                            tbody.appendChild(tr);
-                        }
-                    });
-                } else {
-                    // fallback: just remove
-                    tr.remove();
-                }
+                row.parentNode.insertBefore(this.dragState.sourceRow, row);
             } else {
                 if (position === 'before') {
                     row.parentNode.insertBefore(this.dragState.sourceRow, row);
@@ -332,38 +315,46 @@ export class TableManager {
         this.handlers.mouseup = () => {
             if (!this.dragState.isDragging) return;
 
-            // Remove row if dropped inside a tfoot
+            // Remove row if dropped inside a tfoot, but ask for confirmation first
             if (this.dragState.sourceRow) {
-                const parentTable = this.dragState.sourceRow.closest('table');
-                if (parentTable) {
-                    const tfoot = Array.from(parentTable.children).find(
-                        el => el.tagName === 'TFOOT'
-                    );
-                    if (tfoot && tfoot.contains(this.dragState.sourceRow)) {
-                        // If row is inside tfoot, remove the row
-                        this.dragState.sourceRow.remove();
+            const parentTable = this.dragState.sourceRow.closest('table');
+            if (parentTable) {
+                const tfoot = Array.from(parentTable.children).find(
+                el => el.tagName === 'TFOOT'
+                );
+                if (tfoot && tfoot.contains(this.dragState.sourceRow)) {
+                // Show confirmation dialog before removing the row
+                if (window.confirm('Are you sure you want to delete this row?')) {
+                    this.dragState.sourceRow.remove();
+                } else {
+                    // Move row back to tbody if user cancels
+                    const tbody = parentTable.querySelector('tbody');
+                    if (tbody) {
+                    tbody.appendChild(this.dragState.sourceRow);
                     }
                 }
-                this.dragState.sourceRow.classList.remove('dragging');
+                }
+            }
+            this.dragState.sourceRow.classList.remove('dragging');
             }
             if (this.dragState.dragClone) {
-                this.dragState.dragClone.remove();
+            this.dragState.dragClone.remove();
             }
             
             // Reset state
             this.dragState = {
-                isDragging: false,
-                startX: 0,
-                startY: 0,
-                dragClone: null,
-                sourceRow: null,
-                hoverTimer: null,
-                lastHoveredElement: null,
-                dropCheckTimeout: null,
-                lastDropCheck: 0,
-                lastTabHover: null,
-                tabHoverTimeout: null,
-                draggingClickTags: null
+            isDragging: false,
+            startX: 0,
+            startY: 0,
+            dragClone: null,
+            sourceRow: null,
+            hoverTimer: null,
+            lastHoveredElement: null,
+            dropCheckTimeout: null,
+            lastDropCheck: 0,
+            lastTabHover: null,
+            tabHoverTimeout: null,
+            draggingClickTags: null
             };
         };
 
