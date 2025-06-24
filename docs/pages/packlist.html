@@ -43,7 +43,7 @@
             mainTableData,
             headers,
             [],
-            [],
+            ['Type','L','W','H','Weight'],
             'pack-list',
             ['.tab-button'],
             newRowFunction
@@ -457,8 +457,10 @@
             const dragTd = document.createElement('td');
             dragTd.className = 'row-drag-handle';
             tr.appendChild(dragTd);
-            // 6 editable cells
-            for (let i = 0; i < 6; i++) {
+            // First cell is uneditable (for row index)
+            const indexTd = document.createElement('td');
+            // 5 editable cells
+            for (let i = 1; i < 6; i++) {
                 const td = document.createElement('td');
                 const editableDiv = document.createElement('div');
                 editableDiv.setAttribute('role', 'textbox');
