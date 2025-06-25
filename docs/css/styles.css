@@ -677,7 +677,7 @@ tr.dragging::after {
 }
 
 .dirty::after {
-    content: "unsaved edits";
+    content: "edited";
     display: inline-block;
     /*position: relative;*/
     font-size: 0.8rem;

@@ -114,31 +114,17 @@
             itemData.classList.add('table-wrapper');
             let itemTable = null;
             let saveBtn = null;
-            if (crate.items.length > 0) {
-                itemTable = TableManager.buildTable(
-                    crate.items,
-                    content.headers.items,
-                    ['Pack', 'Check'],
-                    ['Description','Packing/shop notes'],
-                    'pack-list-items',
-                    ['.tab-button'],
-                    newRowFunction
-                );
-                
-                // Add save button for crate items if tabName is provided
-                /*if (tabName) {
-                    saveBtn = document.createElement('button');
-                    saveBtn.textContent = 'Save Crate Changes';
-                    saveBtn.className = 'save-button';
-                    saveBtn.style.margin = '8px 0';
-                    saveBtn.disabled = true;
-                    itemData.appendChild(saveBtn);
-
-                    TableManager.setupPackListSaveButton(itemTable, saveBtn, tabName, content.headers.items, crateIdx);
-                }*/
-
-                itemData.appendChild(itemTable);
-            }
+            // Always create an item table, even if crate.items is empty
+            itemTable = TableManager.buildTable(
+                crate.items,
+                content.headers.items,
+                ['Pack', 'Check'],
+                ['Description','Packing/shop notes'],
+                'pack-list-items',
+                ['.tab-button'],
+                newRowFunction
+            );
+            itemData.appendChild(itemTable);
             return [...crate.info, itemData];
         });
 
