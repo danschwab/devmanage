@@ -59,7 +59,12 @@ make sure cache renewal is logical
 ensure that everything works if ben and DY simultaneously edit
 auth last longer than an hour
 create backup of packlists before saving packlist to ensure no data loss
-
+Track crate information to further streamline pack list generation
+Impliment a pack list suggestion system to quickly add typical client or show items
+Provide a feedback mechanism for users to suggest improvements or report issues
+Provide a user-friendly interface to locate and update item status
+Allow for item images to be uploaded for better identification
+Customizable User Dashboards
 
 
 **Learning:**

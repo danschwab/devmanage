@@ -35,10 +35,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Define navigation items
 export let navigationItems = [
-    { title: 'Home', file: 'home' },
-    { title: 'Prod Sched', file: 'prod' },
+    { title: 'Plan', file: 'home' },
     { title: 'Pack Lists', file: 'packlist' },
-    { title: 'About', file: 'about' }
+    { title: 'Inventory', file: 'inventory' }
 ];
 
 export const SPREADSHEET_IDS = {
