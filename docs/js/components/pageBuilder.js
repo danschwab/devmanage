@@ -207,8 +207,7 @@ export class PageBuilder {
                 // Remove hash and reload to ensure clean state
                 window.location.hash = '';
                 this.buildPage('')
-                ModalManager.alert('Successfully logged out.');
-                setTimeout(() => window.location.reload(), 100);
+                ModalManager.notify('Successfully logged out.', { showClose: false, timeout: 3000 });
             } catch (error) {
                 console.error('Logout failed:', error);
                 ModalManager.alert('Logout failed. Please try again.');
