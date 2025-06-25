@@ -4,6 +4,110 @@
 <script type="module">
     import { TabManager, GoogleSheetsService, GoogleSheetsAuth, TableManager, ModalManager, SPREADSHEET_IDS } from './js/index.js';
 
+    // Modular checkSaveAllState function
+    function checkSaveAllState(mainTable, saveAllBtn) {
+        // Check for any dirty cell in main table or any sub-table
+        const dirty = mainTable.querySelector('.table-edit-textarea.dirty');
+        if (dirty) {
+            console.log('[checkSaveAllState] Found dirty cell:', dirty);
+        } else {
+            console.log('[checkSaveAllState] No dirty cells found');
+        }
+        // Check for any row moved (originalIndex != current index), new, or deleted rows
+        let moved = false;
+        // Check main table
+        const checkMoved = (tbody, tableName = 'mainTable') => {
+            if (!tbody) {
+                console.log(`[checkSaveAllState] No tbody found for ${tableName}`);
+                return false;
+            }
+            // Also check tfoot for deleted rows
+            const table = tbody.closest('table');
+            let tfootRows = [];
+            if (table) {
+                const tfoot = table.querySelector('tfoot');
+                if (tfoot) {
+                    tfootRows = Array.from(tfoot.querySelectorAll('tr.draggable'));
+                }
+            }
+            // Mark all rows with their current index if not already set
+            Array.from(tbody.rows).forEach((row, idx) => {
+                if (row.dataset.originalIndex === undefined) {
+                    // If not set, set it to current index
+                    row.dataset.originalIndex = idx.toString();
+                }
+            });
+            // Check for any row that has moved, is new, or has been removed
+            let movedOrNew = false;
+            Array.from(tbody.rows).forEach((row, idx) => {
+                // Row is new if it has no originalIndex or originalIndex is empty
+                if (row.dataset.originalIndex === undefined || row.dataset.originalIndex === '') {
+                    movedOrNew = true;
+                }
+                // Row is moved if originalIndex does not match current index
+                else if (parseInt(row.dataset.originalIndex) !== idx) {
+                    movedOrNew = true;
+                }
+                // Row is new if originalIndex is -1 (see newRowFunction below)
+                else if (row.dataset.originalIndex === '-1') {
+                    movedOrNew = true;
+                }
+            });
+            // If number of rows has changed, that's a removal or addition
+            if (tbody.rows.length !== Object.keys(tbody.rows).length) {
+                movedOrNew = true;
+            }
+            // If any row is in tfoot, that's a deletion (flag as movement)
+            if (tfootRows.length > 0) {
+                movedOrNew = true;
+            }
+            // NEW: If any row that was originally in tbody is now in tfoot, flag as movement
+            // (i.e., if any tfoot row has a data-original-index that matches any tbody row's originalIndex)
+            const tbodyOriginalIndexes = Array.from(tbody.rows).map(row => row.dataset.originalIndex);
+            for (const tfootRow of tfootRows) {
+                // If this row's originalIndex is not -1 (i.e., not a new row), and it was ever in tbody, flag as movement
+                if (tfootRow.dataset.originalIndex !== undefined && tfootRow.dataset.originalIndex !== '-1') {
+                    movedOrNew = true;
+                }
+            }
+            if (movedOrNew) {
+                console.log(`[checkSaveAllState] Row moved/new/removed in ${tableName}`);
+                return true;
+            }
+            return false;
+        };
+        const mainTbody = mainTable.querySelector('tbody');
+        if (checkMoved(mainTbody, 'mainTable')) moved = true;
+        // Check all sub-tables
+        mainTable.querySelectorAll('table').forEach((subTable, i) => {
+            if (subTable === mainTable) return;
+            const subTbody = subTable.querySelector('tbody');
+            if (checkMoved(subTbody, `subTable[${i}]`)) moved = true;
+        });
+        console.log('[checkSaveAllState] dirty:', !!dirty, 'moved:', moved, 'saveAllBtn.disabled:', !(dirty || moved));
+        
+        // After all movement/dirty checks, update index column for main pack-list table
+        // Find the main pack-list table (class drag-id-pack-list)
+        const mainPackListTable = mainTable.closest('div').querySelector('table.drag-id-pack-list');
+        if (mainPackListTable) {
+            const tbody = mainPackListTable.querySelector('tbody');
+            if (tbody) {
+                Array.from(tbody.rows).forEach((row, idx) => {
+                    // The index column is the second cell (after drag handle)
+                    const indexTd = row.cells[1];
+                    if (indexTd) {
+                        indexTd.textContent = (idx + 1).toString();
+                    }
+                });
+            }
+        }
+
+        if (saveAllBtn) {
+            saveAllBtn.disabled = !(dirty || moved);
+        }
+        return { dirty, moved };
+    }
+
     function buildPackListTable(content, tabName = null, tabGid = null) {
         const mainTableData = content.crates.map((crate, crateIdx) => {
             const itemData = document.createElement('div');
@@ -85,109 +189,11 @@
             saveAllBtn.style.margin = '12px 0';
             saveAllBtn.disabled = true;
 
-            // Enable button if any cell is dirty or any row is moved
-            const checkSaveAllState = () => {
-                // Check for any dirty cell in main table or any sub-table
-                const dirty = mainTable.querySelector('.table-edit-textarea.dirty');
-                if (dirty) {
-                    console.log('[checkSaveAllState] Found dirty cell:', dirty);
-                } else {
-                    console.log('[checkSaveAllState] No dirty cells found');
-                }
-                // Check for any row moved (originalIndex != current index), new, or deleted rows
-                let moved = false;
-                // Check main table
-                const checkMoved = (tbody, tableName = 'mainTable') => {
-                    if (!tbody) {
-                        console.log(`[checkSaveAllState] No tbody found for ${tableName}`);
-                        return false;
-                    }
-                    // Also check tfoot for deleted rows
-                    const table = tbody.closest('table');
-                    let tfootRows = [];
-                    if (table) {
-                        const tfoot = table.querySelector('tfoot');
-                        if (tfoot) {
-                            tfootRows = Array.from(tfoot.querySelectorAll('tr.draggable'));
-                        }
-                    }
-                    // Mark all rows with their current index if not already set
-                    Array.from(tbody.rows).forEach((row, idx) => {
-                        if (row.dataset.originalIndex === undefined) {
-                            // If not set, set it to current index
-                            row.dataset.originalIndex = idx.toString();
-                        }
-                    });
-                    // Check for any row that has moved, is new, or has been removed
-                    let movedOrNew = false;
-                    Array.from(tbody.rows).forEach((row, idx) => {
-                        // Row is new if it has no originalIndex or originalIndex is empty
-                        if (row.dataset.originalIndex === undefined || row.dataset.originalIndex === '') {
-                            movedOrNew = true;
-                        }
-                        // Row is moved if originalIndex does not match current index
-                        else if (parseInt(row.dataset.originalIndex) !== idx) {
-                            movedOrNew = true;
-                        }
-                        // Row is new if originalIndex is -1 (see newRowFunction below)
-                        else if (row.dataset.originalIndex === '-1') {
-                            movedOrNew = true;
-                        }
-                    });
-                    // If number of rows has changed, that's a removal or addition
-                    if (tbody.rows.length !== Object.keys(tbody.rows).length) {
-                        movedOrNew = true;
-                    }
-                    // If any row is in tfoot, that's a deletion (flag as movement)
-                    if (tfootRows.length > 0) {
-                        movedOrNew = true;
-                    }
-                    // NEW: If any row that was originally in tbody is now in tfoot, flag as movement
-                    // (i.e., if any tfoot row has a data-original-index that matches any tbody row's originalIndex)
-                    const tbodyOriginalIndexes = Array.from(tbody.rows).map(row => row.dataset.originalIndex);
-                    for (const tfootRow of tfootRows) {
-                        // If this row's originalIndex is not -1 (i.e., not a new row), and it was ever in tbody, flag as movement
-                        if (tfootRow.dataset.originalIndex !== undefined && tfootRow.dataset.originalIndex !== '-1') {
-                            movedOrNew = true;
-                        }
-                    }
-                    if (movedOrNew) {
-                        console.log(`[checkSaveAllState] Row moved/new/removed in ${tableName}`);
-                        return true;
-                    }
-                    return false;
-                };
-                const mainTbody = mainTable.querySelector('tbody');
-                if (checkMoved(mainTbody, 'mainTable')) moved = true;
-                // Check all sub-tables
-                mainTable.querySelectorAll('table').forEach((subTable, i) => {
-                    if (subTable === mainTable) return;
-                    const subTbody = subTable.querySelector('tbody');
-                    if (checkMoved(subTbody, `subTable[${i}]`)) moved = true;
-                });
-                console.log('[checkSaveAllState] dirty:', !!dirty, 'moved:', moved, 'saveAllBtn.disabled:', !(dirty || moved));
-                
-                // After all movement/dirty checks, update index column for main pack-list table
-                // Find the main pack-list table (class drag-id-pack-list)
-                const mainPackListTable = mainTable.closest('div').querySelector('table.drag-id-pack-list');
-                if (mainPackListTable) {
-                    const tbody = mainPackListTable.querySelector('tbody');
-                    if (tbody) {
-                        Array.from(tbody.rows).forEach((row, idx) => {
-                            // The index column is the second cell (after drag handle)
-                            const indexTd = row.cells[1];
-                            if (indexTd) {
-                                indexTd.textContent = (idx + 1).toString();
-                            }
-                        });
-                    }
-                }
-
-                saveAllBtn.disabled = !(dirty || moved);
-            };
+            // Use modular checkSaveAllState
+            const checkAllState = () => checkSaveAllState(mainTable, saveAllBtn);
 
             // Observe dirty state and row moves
-            const observer = new MutationObserver(checkSaveAllState);
+            const observer = new MutationObserver(checkAllState);
             observer.observe(mainTable, {
                 subtree: true,
                 attributes: true,
@@ -200,10 +206,10 @@
             });
 
             // Also check on input events (for contenteditable changes)
-            mainTable.addEventListener('input', checkSaveAllState);
+            mainTable.addEventListener('input', checkAllState);
 
             // Also check after drag/drop (row move)
-            mainTable.addEventListener('mouseup', () => setTimeout(checkSaveAllState, 10));
+            mainTable.addEventListener('mouseup', () => setTimeout(checkAllState, 10));
 
             saveAllBtn.onclick = async () => {
                 saveAllBtn.disabled = true;
@@ -218,7 +224,7 @@
                     console.error('Error saving entire pack list:', err && err.stack ? err.stack : err);
                     ModalManager.alert('Error saving entire pack list: ' + (err && err.message ? err.message : err));
                 } finally {
-                    checkSaveAllState();
+                    checkAllState();
                 }
             };
             // Wrap table and button in a container
