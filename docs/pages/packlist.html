@@ -88,13 +88,22 @@
                 } else {
                     console.log('[checkSaveAllState] No dirty cells found');
                 }
-                // Check for any row moved (originalIndex != current index) in main table or any sub-table
+                // Check for any row moved (originalIndex != current index), new, or deleted rows
                 let moved = false;
                 // Check main table
                 const checkMoved = (tbody, tableName = 'mainTable') => {
                     if (!tbody) {
                         console.log(`[checkSaveAllState] No tbody found for ${tableName}`);
                         return false;
+                    }
+                    // Also check tfoot for deleted rows
+                    const table = tbody.closest('table');
+                    let tfootRows = [];
+                    if (table) {
+                        const tfoot = table.querySelector('tfoot');
+                        if (tfoot) {
+                            tfootRows = Array.from(tfoot.querySelectorAll('tr.draggable'));
+                        }
                     }
                     // Mark all rows with their current index if not already set
                     Array.from(tbody.rows).forEach((row, idx) => {
@@ -114,9 +123,17 @@
                         else if (parseInt(row.dataset.originalIndex) !== idx) {
                             movedOrNew = true;
                         }
+                        // Row is new if originalIndex is -1 (see newRowFunction below)
+                        else if (row.dataset.originalIndex === '-1') {
+                            movedOrNew = true;
+                        }
                     });
                     // If number of rows has changed, that's a removal or addition
                     if (tbody.rows.length !== Object.keys(tbody.rows).length) {
+                        movedOrNew = true;
+                    }
+                    // If any row is in tfoot, that's a deletion (flag as movement)
+                    if (tfootRows.length > 0) {
                         movedOrNew = true;
                     }
                     if (movedOrNew) {
@@ -510,6 +527,8 @@
             const rowIndex = tbody.rows.length;
             const tr = document.createElement('tr');
             tr.classList.add('draggable');
+            // Mark as new row for movement detection
+            tr.dataset.originalIndex = '-1';
             // Drag handle
             const dragTd = document.createElement('td');
             dragTd.className = 'row-drag-handle';
@@ -520,11 +539,13 @@
                 const editableDiv = document.createElement('div');
                 editableDiv.setAttribute('role', 'textbox');
                 editableDiv.setAttribute('contenteditable', 'true');
-                editableDiv.dataset.originalValue = '';
+                // Set initial value to a unique marker so it is always dirty until edited
+                editableDiv.dataset.originalValue = '__NEW__';
                 editableDiv.dataset.rowIndex = rowIndex;
                 editableDiv.dataset.colIndex = i + 2; // skip drag handle and possible hidden columns
-                editableDiv.dataset.dirty = 'false';
-                editableDiv.classList.add('table-edit-textarea');
+                editableDiv.dataset.dirty = 'true';
+                editableDiv.classList.add('table-edit-textarea', 'dirty');
+                editableDiv.textContent = '';
                 editableDiv.addEventListener('input', (e) => {
                     const target = e.target;
                     const isDirty = (target.textContent !== target.dataset.originalValue);
@@ -546,6 +567,8 @@
             const rowIndex = tbody.rows.length;
             const tr = document.createElement('tr');
             tr.classList.add('draggable');
+            // Mark as new row for movement detection
+            tr.dataset.originalIndex = '-1';
             // Drag handle
             const dragTd = document.createElement('td');
             dragTd.className = 'row-drag-handle';
@@ -559,11 +582,13 @@
                 const editableDiv = document.createElement('div');
                 editableDiv.setAttribute('role', 'textbox');
                 editableDiv.setAttribute('contenteditable', 'true');
-                editableDiv.dataset.originalValue = '';
+                // Set initial value to a unique marker so it is always dirty until edited
+                editableDiv.dataset.originalValue = '__NEW__';
                 editableDiv.dataset.rowIndex = rowIndex;
                 editableDiv.dataset.colIndex = i + 1; // skip drag handle
-                editableDiv.dataset.dirty = 'false';
-                editableDiv.classList.add('table-edit-textarea');
+                editableDiv.dataset.dirty = 'true';
+                editableDiv.classList.add('table-edit-textarea', 'dirty');
+                editableDiv.textContent = '';
                 editableDiv.addEventListener('input', (e) => {
                     const target = e.target;
                     const isDirty = (target.textContent !== target.dataset.originalValue);
