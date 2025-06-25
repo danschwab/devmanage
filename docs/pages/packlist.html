@@ -404,7 +404,7 @@
             const modalBody = modal.querySelector('.modal-body');
             modalBody.innerHTML = '<div id="open-pack-list-tab-system"></div>';
             TabManager.buildTabSystem('open-pack-list-tab-system');
-            addNewTab('open-pack-list-tab-system', 'Open Existing', tabsListElement, false, true)
+            TabManager.addNewTab('open-pack-list-tab-system', 'Open Existing', tabsListElement, false, true)
             // now get overlapping shows by passing 1/1/25 and 3/1/25 as the date range (year, startDate, endDate)
             const overlappingShows = await GoogleSheetsService.getOverlappingShows({
                 startDate: '2025-01-01',
@@ -415,7 +415,7 @@
             const filteredOverlappingShows = overlappingShows.filter(show => !existingTabs.has(show));
             const newTabsListElement = buildTabsListElement(filteredOverlappingShows);
             // Add overlapping shows as a new tab
-            addNewTab('open-pack-list-tab-system', 'Create New', newTabsListElement, false, true)
+            TabManager.addNewTab('open-pack-list-tab-system', 'Create New', newTabsListElement, false, true)
             modalBody.appendChild(tabsListElement);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
