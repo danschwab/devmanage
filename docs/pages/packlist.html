@@ -142,6 +142,15 @@
                     if (tfootRows.length > 0) {
                         movedOrNew = true;
                     }
+                    // NEW: If any row that was originally in tbody is now in tfoot, flag as movement
+                    // (i.e., if any tfoot row has a data-original-index that matches any tbody row's originalIndex)
+                    const tbodyOriginalIndexes = Array.from(tbody.rows).map(row => row.dataset.originalIndex);
+                    for (const tfootRow of tfootRows) {
+                        // If this row's originalIndex is not -1 (i.e., not a new row), and it was ever in tbody, flag as movement
+                        if (tfootRow.dataset.originalIndex !== undefined && tfootRow.dataset.originalIndex !== '-1') {
+                            movedOrNew = true;
+                        }
+                    }
                     if (movedOrNew) {
                         console.log(`[checkSaveAllState] Row moved/new/removed in ${tableName}`);
                         return true;
@@ -547,7 +556,7 @@
                 editableDiv.setAttribute('contenteditable', 'true');
                 // Set initial value to a unique marker so it is always dirty until edited
                 editableDiv.dataset.originalValue = '__NEW__';
-                editableDiv.dataset.rowIndex = rowIndex;
+                editableDiv.dataset.rowIndex = -1;//rowIndex; initialize as -1 to indicate new row
                 editableDiv.dataset.colIndex = i + 2; // skip drag handle and possible hidden columns
                 editableDiv.dataset.dirty = 'true';
                 editableDiv.classList.add('table-edit-textarea', 'dirty');
