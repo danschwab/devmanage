@@ -251,33 +251,41 @@
                 .map(btn => btn.getAttribute('data-tab'))
                 .filter(Boolean);
 
-            // Remove all existing inventory reports and cell cards
-            document.querySelectorAll('.inventory-report-container').forEach(el => el.remove());
-            document.querySelectorAll('.table-cell-card').forEach(el => el.remove());
+            // Get overlapping shows for the current tabName only once
+            const overlappingShowTabs = await GoogleSheetsService.getOverlappingShows({ identifier: tabName });
 
-            // For each open tab, check if it overlaps with the tab being built
-            for (const openTab of openTabNames) {
-                // Only check for overlap if not the current tab
-                if (openTab === tabName) continue;
+            // Build the update list: tabName first, then intersection of openTabNames and overlappingShowTabs (excluding tabName)
+            const updateTabs = [
+                tabName,
+                ...openTabNames.filter(
+                    t => t !== tabName && overlappingShowTabs && overlappingShowTabs.includes(t)
+                )
+            ];
 
-                // Check for overlap
-                const overlaps = await GoogleSheetsService.getOverlappingShows({
-                    identifier: openTab
+            // Now, run the inventory check for each tab in the update list
+            for (const openTab of updateTabs) {
+                // Remove only inventory reports and cell cards for this tab
+                // Remove inventory report(s) for this tab
+                document.querySelectorAll('.inventory-report-container').forEach(el => {
+                    const heading = el.querySelector('h2');
+                    if (heading && heading.textContent && heading.textContent.includes(openTab)) {
+                        el.remove();
+                    }
                 });
-                if (overlaps && overlaps.includes(tabName)) {
-                    // Optionally, you could display a warning or highlight
-                    ModalManager.notify(`Warning: "${tabName}" overlaps with open tab "${openTab}"`, { timeout: 2000 });
-                }
-            }
+                // Remove cell cards for this tab's items
+                document.querySelectorAll('.drag-id-pack-list-items td').forEach(td => {
+                    const card = td.querySelector('.table-cell-card');
+                    if (card) card.remove();
+                });
 
-            // Now, run the inventory check for each open tab (including the current one)
-            for (const openTab of openTabNames) {
                 // Silently skip if there are no crates to check
                 let quantityData;
                 try {
                     quantityData = await GoogleSheetsService.checkItemQuantities(openTab);
                 } catch (err) {
-                    // If error is due to missing crates, just skip this tab
+                    if (openTab === tabName) {
+                        return;
+                    }
                     continue;
                 }
                 if (!quantityData) continue;
@@ -334,9 +342,6 @@
                 });
             }
         } catch (err) {
-            // Silently abort if error is due to missing crates
-            // Otherwise, show error
-            if (err && err.message && err.message.includes('crates')) return;
             console.error('Error building quantity check table:', err && err.stack ? err.stack : err);
             ModalManager.alert('Failed to check item quantities.');
         }
