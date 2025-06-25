@@ -537,10 +537,10 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::
 }
 
 /* row is being deleted */
-tfoot tr.draggable:first-child::after {
+tfoot > tr.draggable:first-child::after {
     content: "Deleted rows";
 }
-tfoot tr.draggable::after {
+tfoot > tr.draggable::after {
     content: "";
     position: absolute;
     padding-top: .25rem;
