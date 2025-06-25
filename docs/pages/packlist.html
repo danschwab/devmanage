@@ -65,11 +65,17 @@
                 const gid = mainTable.dataset.gid || 0;
                 // Hide all other tabs and show only the requested tab, then open the sheet
                 await GoogleSheetsService.showOnlyTab(SPREADSHEET_IDS.PACK_LISTS, tabName);
-                ModalManager.alert('Opening pack list. Press Ctrl+P', () => {
+                const modal = ModalManager.createModal(`
+                    <p>Opening pack list for printing. Press Ctrl+P or navigate to File &gt; Print to print.</p>
+                    <button class="open-print-btn">Open For Printing</button>
+                `, { title: 'Open For Printing' });
+                const btn = modal.querySelector('.open-print-btn');
+                btn.addEventListener('click', () => {
                     window.open(
-                        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_IDS.PACK_LISTS}/edit`,
+                        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_IDS.PACK_LISTS}`,
                         '_blank'
                     );
+                    modal.hide();
                 });
             };
 
