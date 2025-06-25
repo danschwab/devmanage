@@ -500,11 +500,12 @@ export class TableManager {
     }
 
     static trackRowPosition(table) {
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        
-        Array.from(tbody.rows).forEach((row, index) => {
-            row.dataset.originalIndex = index.toString();
+        // For each tbody in this table (including sub-tables), set row.dataset.originalIndex = sequential index
+        const tbodys = table.querySelectorAll('tbody');
+        tbodys.forEach(tbody => {
+            Array.from(tbody.rows).forEach((row, index) => {
+                row.dataset.originalIndex = index.toString();
+            });
         });
     }
 
