@@ -535,24 +535,22 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::
     line-height: 100%;
     transition: color 0.15s;
 }
-tr.dragging ~ tr td.new-row-button {
-    display:none;
-}
-table:has(.dragging) tfoot .new-row-button:hover {
-    background-color: #ff9292;
-}
+
 /* row is being deleted */
+tfoot tr.draggable:first-child::after {
+    content: "Deleted rows";
+}
 tfoot tr.draggable::after {
-    content: "row deleted";
+    content: "";
     position: absolute;
-    top: 0;
-    bottom: 0;
+    padding-top: .25rem;
+    color: white;
     inset: 0;
     background: #bb121277;
     pointer-events: none;
+    font-style: italic;
     z-index: 2;
     text-align: center;
-    font-size: 20px;
     text-shadow: 0 0 8px black;
 }
 
@@ -582,7 +580,7 @@ td.spacer-cell, th.spacer-cell {
     line-height: 100%;
 }
 
-.row-drag-handle:hover, .new-row-button:hover {
+.row-drag-handle:hover, :not(:has(.dragging)) .new-row-button:hover {
     background-color: #eee;
 }
 
@@ -607,7 +605,7 @@ td.spacer-cell, th.spacer-cell {
     transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out;
 }*/
 
-tr.dragging {
+tr.dragging, tfoot tr.draggable {
     position: relative;
 }
 tr.dragging::after {
