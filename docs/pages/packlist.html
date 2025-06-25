@@ -166,6 +166,23 @@
                     if (checkMoved(subTbody, `subTable[${i}]`)) moved = true;
                 });
                 console.log('[checkSaveAllState] dirty:', !!dirty, 'moved:', moved, 'saveAllBtn.disabled:', !(dirty || moved));
+                
+                // After all movement/dirty checks, update index column for main pack-list table
+                // Find the main pack-list table (class drag-id-pack-list)
+                const mainPackListTable = mainTable.closest('div').querySelector('table.drag-id-pack-list');
+                if (mainPackListTable) {
+                    const tbody = mainPackListTable.querySelector('tbody');
+                    if (tbody) {
+                        Array.from(tbody.rows).forEach((row, idx) => {
+                            // The index column is the second cell (after drag handle)
+                            const indexTd = row.cells[1];
+                            if (indexTd) {
+                                indexTd.textContent = (idx + 1).toString();
+                            }
+                        });
+                    }
+                }
+
                 saveAllBtn.disabled = !(dirty || moved);
             };
 
