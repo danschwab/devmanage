@@ -224,6 +224,8 @@
                         tabName
                     );
                     ModalManager.alert('Entire pack list saved successfully');
+                    // Rerun inventory check after save
+                    checkPackListQuantities(tabName, mainTable.parentElement || mainTable);
                 } catch (err) {
                     console.error('Error saving entire pack list:', err && err.stack ? err.stack : err);
                     ModalManager.alert('Error saving entire pack list: ' + (err && err.message ? err.message : err));
