@@ -167,6 +167,24 @@
             printBtn.style.margin = '12px 8px 12px 0';
             printBtn.onclick = async () => {
                 const gid = mainTable.dataset.gid || 0;
+                // Before opening the modal, check if there are unsaved changes and save if needed
+                const { dirty, moved } = checkSaveAllState(mainTable, null);
+                if (dirty || moved) {
+                    printBtn.disabled = true;
+                    try {
+                        await savePackListTable(
+                            mainTable,
+                            SPREADSHEET_IDS.PACK_LISTS,
+                            tabName
+                        );
+                        ModalManager.notify('Pack list saved before printing.', { timeout: 1500 });
+                    } catch (err) {
+                        ModalManager.alert('Could not save before printing: ' + (err && err.message ? err.message : err));
+                        printBtn.disabled = false;
+                        return;
+                    }
+                    printBtn.disabled = false;
+                }
                 // Hide all other tabs and show only the requested tab, then open the sheet
                 await GoogleSheetsService.showOnlyTab(SPREADSHEET_IDS.PACK_LISTS, tabName);
                 const modal = ModalManager.createModal(`
