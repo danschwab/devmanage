@@ -29,6 +29,8 @@ export class ModalManager {
             });
         }
 
+        modal.hide = () => modal.remove();
+
         return modal;
     }
 
@@ -82,8 +84,6 @@ export class ModalManager {
             </div>
         `, { showClose: false });
 
-        // Add a method to the modal instance to remove it
-        modal.hide = () => modal.remove();
         return modal;
     }
 
