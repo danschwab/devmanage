@@ -18,6 +18,10 @@ export class ModalManager {
 
         document.body.appendChild(modal);
 
+        // Set focus to the modal for accessibility
+        modal.setAttribute('tabindex', '-1');
+        setTimeout(() => { modal.focus(); }, 0);
+
         // Add close handler if needed
         if (options.showClose !== false) {
             modal.querySelector('.modal-close')?.addEventListener('click', () => {
