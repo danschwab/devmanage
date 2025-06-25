@@ -270,7 +270,15 @@
 
             // Now, run the inventory check for each open tab (including the current one)
             for (const openTab of openTabNames) {
-                const quantityData = await GoogleSheetsService.checkItemQuantities(openTab);
+                // Silently skip if there are no crates to check
+                let quantityData;
+                try {
+                    quantityData = await GoogleSheetsService.checkItemQuantities(openTab);
+                } catch (err) {
+                    // If error is due to missing crates, just skip this tab
+                    continue;
+                }
+                if (!quantityData) continue;
                 const headers = ['Item', 'Inventory', 'Requested', 'Remaining', 'Overlapping Shows', 'Status'];
                 const rows = Object.entries(quantityData).map(([itemId, info]) => {
                     const status = info.remaining > 0 ? 'OK' : 'Warning';
@@ -324,6 +332,9 @@
                 });
             }
         } catch (err) {
+            // Silently abort if error is due to missing crates
+            // Otherwise, show error
+            if (err && err.message && err.message.includes('crates')) return;
             console.error('Error building quantity check table:', err && err.stack ? err.stack : err);
             ModalManager.alert('Failed to check item quantities.');
         }
