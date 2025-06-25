@@ -961,34 +961,49 @@ export class GoogleSheetsService {
         const sheets = sheetInfo.result.sheets;
         if (!sheets) return;
 
-        const requests = [];
         let requestedSheetId = null;
+        let showRequest = null;
+        const hideRequests = [];
+
+        // First, find the requested tab and build the show request
         for (const sheet of sheets) {
             const sheetId = sheet.properties.sheetId;
             const title = sheet.properties.title;
             const hidden = !!sheet.properties.hidden;
             if (title === tabName) {
                 requestedSheetId = sheetId;
-                if (hidden) {
-                    requests.push({
-                        updateSheetProperties: {
-                            properties: { sheetId, hidden: false },
-                            fields: 'hidden'
-                        }
-                    });
-                }
-            } else {
-                if (!hidden) {
-                    requests.push({
-                        updateSheetProperties: {
-                            properties: { sheetId, hidden: true },
-                            fields: 'hidden'
-                        }
-                    });
-                }
+                // Always add a show request for the requested tab as the first request
+                showRequest = {
+                    updateSheetProperties: {
+                        properties: { sheetId, hidden: false },
+                        fields: 'hidden'
+                    }
+                };
+                break;
             }
         }
-        if (requests.length > 0) {
+
+        // If we didn't find the requested tab, abort
+        if (requestedSheetId === null) return;
+
+        // Now, build hide requests for all other visible tabs
+        for (const sheet of sheets) {
+            const sheetId = sheet.properties.sheetId;
+            const title = sheet.properties.title;
+            const hidden = !!sheet.properties.hidden;
+            if (sheetId !== requestedSheetId && !hidden) {
+                hideRequests.push({
+                    updateSheetProperties: {
+                        properties: { sheetId, hidden: true },
+                        fields: 'hidden'
+                    }
+                });
+            }
+        }
+
+        // Only send batchUpdate if there is at least one request
+        if (showRequest || hideRequests.length > 0) {
+            const requests = [showRequest, ...hideRequests].filter(Boolean);
             await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.batchUpdate({
                     spreadsheetId,
