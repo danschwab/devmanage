@@ -240,7 +240,12 @@ export class TableManager {
                 } else if (position === 'after') {
                     row.parentNode.insertBefore(this.dragState.sourceRow, row.nextSibling);
                 } else if (position === 'into') {
-                    row.appendChild(this.dragState.sourceRow);
+                    // Place as first child if there are other children
+                    if (row.children.length > 0) {
+                        row.insertBefore(this.dragState.sourceRow, row.firstChild);
+                    } else {
+                        row.appendChild(this.dragState.sourceRow);
+                    }
                 }
             }
         }
