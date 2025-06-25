@@ -161,6 +161,7 @@ export class TabManager {
         
         // add the new tab button to the tab navigation
         const newTabButton = tabNavigationWrapper.querySelector('.new-tab-button');
+        const tabsContainer = tabNavigationWrapper.querySelector('.tabs');
         
         const tabButton = document.createElement('button');
         tabButton.className = 'tab-button';
@@ -168,7 +169,11 @@ export class TabManager {
         tabButton.innerHTML = `${tabTitle}${allowClose ? ' <span class="tab-close">×</span>' : ''}`;
         tabButton.id = tabName + '-button';
         
-        newTabButton.parentNode.insertBefore(tabButton, newTabButton);
+        if (newTabButton && newTabButton.parentNode) {
+            newTabButton.parentNode.insertBefore(tabButton, newTabButton);
+        } else if (tabsContainer) {
+            tabsContainer.appendChild(tabButton);
+        }
         
         const tabContent = document.createElement('div');
         tabContent.id = tabName;
