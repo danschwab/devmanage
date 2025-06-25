@@ -940,4 +940,61 @@ export class GoogleSheetsService {
         }
         return 0; // fallback to 0 if not found
     }
+
+    /**
+     * Sets the requested tab to visible and hides all other visible tabs in the spreadsheet.
+     * @param {string} spreadsheetId
+     * @param {string} tabName
+     * @returns {Promise<void>}
+     */
+    static async showOnlyTab(spreadsheetId, tabName) {
+        await GoogleSheetsAuth.checkAuth();
+        if (typeof gapi === 'undefined' || !gapi.client?.sheets?.spreadsheets?.get) return;
+
+        // Get all sheets and their visibility
+        const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                includeGridData: false
+            })
+        );
+        const sheets = sheetInfo.result.sheets;
+        if (!sheets) return;
+
+        const requests = [];
+        let requestedSheetId = null;
+        for (const sheet of sheets) {
+            const sheetId = sheet.properties.sheetId;
+            const title = sheet.properties.title;
+            const hidden = !!sheet.properties.hidden;
+            if (title === tabName) {
+                requestedSheetId = sheetId;
+                if (hidden) {
+                    requests.push({
+                        updateSheetProperties: {
+                            properties: { sheetId, hidden: false },
+                            fields: 'hidden'
+                        }
+                    });
+                }
+            } else {
+                if (!hidden) {
+                    requests.push({
+                        updateSheetProperties: {
+                            properties: { sheetId, hidden: true },
+                            fields: 'hidden'
+                        }
+                    });
+                }
+            }
+        }
+        if (requests.length > 0) {
+            await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: { requests }
+                })
+            );
+        }
+    }
 }

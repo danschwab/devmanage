@@ -61,13 +61,16 @@
             printBtn.textContent = 'Print Pack List';
             printBtn.className = 'print-packlist-button';
             printBtn.style.margin = '12px 8px 12px 0';
-            printBtn.onclick = () => {
-                // Use the gid from the table's data attribute if available
+            printBtn.onclick = async () => {
                 const gid = mainTable.dataset.gid || 0;
-                window.open(
-                    `https://docs.google.com/spreadsheets/d/${SPREADSHEET_IDS.PACK_LISTS}/print?gid=${gid}`,
-                    '_blank'
-                );
+                // Hide all other tabs and show only the requested tab, then open the sheet
+                await GoogleSheetsService.showOnlyTab(SPREADSHEET_IDS.PACK_LISTS, tabName);
+                ModalManager.alert('Opening pack list. Press Ctrl+P', () => {
+                    window.open(
+                        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_IDS.PACK_LISTS}/edit`,
+                        '_blank'
+                    );
+                });
             };
 
             const saveAllBtn = document.createElement('button');

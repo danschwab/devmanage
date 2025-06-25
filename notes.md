@@ -58,7 +58,7 @@ remove reliance on google sheets fuzzymatching for identifyers - or make google 
 make sure cache renewal is logical
 ensure that everything works if ben and DY simultaneously edit
 auth last longer than an hour
-
+create backup of packlists before saving packlist to ensure no data loss
 
 
 
