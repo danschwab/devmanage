@@ -1017,4 +1017,54 @@ export class GoogleSheetsService {
             );
         }
     }
+
+    /**
+     * Copy a sheet tab within a spreadsheet (e.g., to create a new tab from TEMPLATE).
+     * @param {string} spreadsheetId
+     * @param {string} sourceTabName
+     * @param {string} newTabName
+     * @returns {Promise<void>}
+     */
+    static async copySheetTab(spreadsheetId, sourceTabName, newTabName) {
+        await GoogleSheetsAuth.checkAuth();
+        // Get the sheetId of the source tab
+        const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                includeGridData: false
+            })
+        );
+        const sourceSheet = sheetInfo.result.sheets.find(s => s.properties.title === sourceTabName);
+        if (!sourceSheet) throw new Error(`Source tab "${sourceTabName}" not found`);
+        const sourceSheetId = sourceSheet.properties.sheetId;
+
+        // Copy the sheet
+        const copyResponse = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.sheets.copyTo({
+                spreadsheetId,
+                sheetId: sourceSheetId,
+                resource: { destinationSpreadsheetId: spreadsheetId }
+            })
+        );
+        // Rename the new sheet to newTabName
+        const newSheetId = copyResponse.result.sheetId;
+        await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                resource: {
+                    requests: [
+                        {
+                            updateSheetProperties: {
+                                properties: {
+                                    sheetId: newSheetId,
+                                    title: newTabName
+                                },
+                                fields: 'title'
+                            }
+                        }
+                    ]
+                }
+            })
+        );
+    }
 }
