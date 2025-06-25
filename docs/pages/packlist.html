@@ -257,69 +257,86 @@
 
     async function checkPackListQuantities(tabName, container) {
         try {
-            const quantityData = await GoogleSheetsService.checkItemQuantities(tabName);
-            // Dynamically get headers from the first entry in the map
-            const firstEntry = Object.values(quantityData)[0] || {};
-            const headers = ['Item', 'Inventory', 'Requested', 'Remaining', 'Overlapping Shows', 'Status'];
-            const rows = Object.entries(quantityData).map(([itemId, info]) => {
-                const status = info.remaining > 0 ? 'OK' : 'Warning';
-                const statusCell = document.createElement('span');
-                statusCell.textContent = status;
-                statusCell.style.color = status === 'OK' ? 'green' : 'red';
-                
-                return [
-                    itemId,
-                    info.inventory,
-                    info.requested,
-                    info.remaining,
-                    buildTabsListElement(info.overlapping),
-                    statusCell
-                ];
-            });
+            // Get all open tabs (by tab button data-tab attribute)
+            const openTabButtons = document.querySelectorAll('.tab-button[data-tab]');
+            const openTabNames = Array.from(openTabButtons)
+                .map(btn => btn.getAttribute('data-tab'))
+                .filter(Boolean);
 
-            const table = TableManager.buildTable(rows, headers);
-            table.classList.add('quantity-check-table');
-            
-            // Create a div to hold the table with a logical heading
-            const inventoryReportContainer = document.createElement('div');
-            const heading = document.createElement('h2');
-            heading.textContent = `Inventory report:`;
-            inventoryReportContainer.classList.add('inventory-report-container');
-            inventoryReportContainer.appendChild(heading);
-            inventoryReportContainer.appendChild(table);
-            container.appendChild(inventoryReportContainer);
+            // Remove all existing inventory reports and cell cards
+            document.querySelectorAll('.inventory-report-container').forEach(el => el.remove());
+            document.querySelectorAll('.table-cell-card').forEach(el => el.remove());
 
-            // For each inventory item with an error, find the pack list table and scan for
-            // the corresponding item to highlight it
-            // Find error items from rows (statusCell.textContent !== 'OK')
-            console.log('Highlighting error items in pack list table...');
-            rows.forEach(row => {
-                const itemId = row[0];
-                const remaining = row[3];
-                const statusCell = row[row.length - 1];
-                if (remaining < 0) {
-                    // Insufficient inventory: red
-                    const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
-                    packListItems.forEach(packListItem => {
-                        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-                        const match = packListItem.textContent.match(itemRegex);
-                        if (match && match[2] === itemId) {
-                            TableManager.tableCellCard(packListItem, `<strong>Warning: </strong>insufficient inventory (${remaining})`, 'red', '.inventory-report-container');
-                        }
-                    });
-                } else if (remaining === 0) {
-                    // No inventory margin: yellow
-                    const packListItems = container.querySelectorAll('.drag-id-pack-list-items td');
-                    packListItems.forEach(packListItem => {
-                        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-                        const match = packListItem.textContent.match(itemRegex);
-                        if (match && match[2] === itemId) {
-                            TableManager.tableCellCard(packListItem, '<strong>Warning: </strong>no inventory margin', 'yellow', '.inventory-report-container');
-                        }
-                    });
+            // For each open tab, check if it overlaps with the tab being built
+            for (const openTab of openTabNames) {
+                // Only check for overlap if not the current tab
+                if (openTab === tabName) continue;
+
+                // Check for overlap
+                const overlaps = await GoogleSheetsService.getOverlappingShows({
+                    identifier: openTab
+                });
+                if (overlaps && overlaps.includes(tabName)) {
+                    // Optionally, you could display a warning or highlight
+                    ModalManager.notify(`Warning: "${tabName}" overlaps with open tab "${openTab}"`, { timeout: 2000 });
                 }
-            });
+            }
 
+            // Now, run the inventory check for each open tab (including the current one)
+            for (const openTab of openTabNames) {
+                const quantityData = await GoogleSheetsService.checkItemQuantities(openTab);
+                const headers = ['Item', 'Inventory', 'Requested', 'Remaining', 'Overlapping Shows', 'Status'];
+                const rows = Object.entries(quantityData).map(([itemId, info]) => {
+                    const status = info.remaining > 0 ? 'OK' : 'Warning';
+                    const statusCell = document.createElement('span');
+                    statusCell.textContent = status;
+                    statusCell.style.color = status === 'OK' ? 'green' : 'red';
+                    return [
+                        itemId,
+                        info.inventory,
+                        info.requested,
+                        info.remaining,
+                        buildTabsListElement(info.overlapping),
+                        statusCell
+                    ];
+                });
+
+                const table = TableManager.buildTable(rows, headers);
+                table.classList.add('quantity-check-table');
+
+                // Create a div to hold the table with a logical heading
+                const inventoryReportContainer = document.createElement('div');
+                const heading = document.createElement('h2');
+                heading.textContent = `Inventory report for: ${openTab}`;
+                inventoryReportContainer.classList.add('inventory-report-container');
+                inventoryReportContainer.appendChild(heading);
+                inventoryReportContainer.appendChild(table);
+                container.appendChild(inventoryReportContainer);
+
+                // Highlight error items in pack list table for this tab
+                rows.forEach(row => {
+                    const itemId = row[0];
+                    const remaining = row[3];
+                    if (remaining < 0 || remaining === 0) {
+                        const color = remaining < 0 ? 'red' : 'yellow';
+                        // Find all matching pack-list-items tables for this tab
+                        document.querySelectorAll('.drag-id-pack-list-items td').forEach(packListItem => {
+                            const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
+                            const match = packListItem.textContent.match(itemRegex);
+                            if (match && match[2] === itemId) {
+                                TableManager.tableCellCard(
+                                    packListItem,
+                                    remaining < 0
+                                        ? `<strong>Warning: </strong>insufficient inventory (${remaining})`
+                                        : '<strong>Warning: </strong>no inventory margin',
+                                    color,
+                                    '.inventory-report-container'
+                                );
+                            }
+                        });
+                    }
+                });
+            }
         } catch (err) {
             console.error('Error building quantity check table:', err && err.stack ? err.stack : err);
             ModalManager.alert('Failed to check item quantities.');
