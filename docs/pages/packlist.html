@@ -433,7 +433,7 @@
             const existingTabs = new Set(sheetTabs);
             const filteredOverlappingShows = overlappingShows.filter(show => !existingTabs.has(show));
             const newTabsListElement = buildTabsListElement(filteredOverlappingShows);
-            TabManager.addNewTab(tabSystemDiv, 'Create New', newTabsListElement, false, true);
+            TabManager.addNewTab(tabSystemDiv, 'Create New', newTabsListElement, false, true, false);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
             modal.querySelector('.modal-body').innerHTML = '<p class="error">Failed to load spreadsheet tabs</p>';

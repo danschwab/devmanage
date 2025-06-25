@@ -140,7 +140,7 @@ export class TabManager {
         this.checkOverflow();
     }
 
-    static addNewTab(tabNavigationWrapper, tabTitle, content, allowClose = true, tabTitleIsName = false) {
+    static addNewTab(tabNavigationWrapper, tabTitle, content, allowClose = true, tabTitleIsName = false, openNewTab = true) {
         if (typeof tabNavigationWrapper === 'string') {
             tabNavigationWrapper = document.getElementById(tabNavigationWrapper);
         }
@@ -190,7 +190,9 @@ export class TabManager {
         }, 0);
         
         this.checkOverflow(true);
-        this.openTab(tabButton, tabName, false);
+        if (openNewTab) {
+            this.openTab(tabButton, tabName, false);
+        }
         
         return { tabName, tabButton, tabContent };
     }
