@@ -629,8 +629,8 @@ tr.dragging::after {
     transition: background-color 0.15s ease-in-out;
 }
 .table-cell-card.red {
-    border-color: red;
-    background-color: #f99;
+    border-color: #ff6200;
+    background-color: #ffbb9d;
 }
 .table-cell-card.yellow {
     border-color: yellow;
@@ -680,8 +680,11 @@ tr.dragging::after {
     /*bottom: 1px;*/
 }
 
+button.save-button {
+    background-color: #e55555;
+}
 button.save-button:disabled {
-    display: none;
+    background-color: #bdbdbd;
 }
 
 
