@@ -152,6 +152,11 @@ export class PageBuilder {
             try {
                 nav.innerHTML = `<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`;
 
+                // Clear any stored tokens before login
+                if (window.GoogleSheetsAuth && typeof window.GoogleSheetsAuth.clearStoredToken === 'function') {
+                    window.GoogleSheetsAuth.clearStoredToken();
+                }
+
                 const success = await GoogleSheetsAuth.authenticate();
                 if (success) {
                     this.generateNavigation();
@@ -192,10 +197,18 @@ export class PageBuilder {
         logoutButton.className = 'logout-button';
         logoutButton.onclick = async () => {
             try {
-                ModalManager.alert('Successfully logged out.');
                 await this.cacheCurrentPage();
-                this.buildPage('')
+                // Clear tokens and user state
+                await GoogleSheetsAuth.logout();
+                if (window.GoogleSheetsAuth && typeof window.GoogleSheetsAuth.clearStoredToken === 'function') {
+                    window.GoogleSheetsAuth.clearStoredToken();
+                }
                 this.generateLoginButton();
+                // Remove hash and reload to ensure clean state
+                window.location.hash = '';
+                this.buildPage('')
+                ModalManager.alert('Successfully logged out.');
+                setTimeout(() => window.location.reload(), 100);
             } catch (error) {
                 console.error('Logout failed:', error);
                 ModalManager.alert('Logout failed. Please try again.');
