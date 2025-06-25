@@ -4,6 +4,9 @@ export class PageBuilder {
     static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
 
     static async cacheCurrentPage() {
+        // Disabled: do not cache page to sheets
+        return;
+        /*
         try {
             const contentDiv = document.getElementById('content');
             if (contentDiv?.children.length > 0) {
@@ -13,6 +16,7 @@ export class PageBuilder {
         } catch (error) {
             console.error('Failed to cache page:', error);
         }
+        */
     }
 
     // Function to load content dynamically into the #content div
@@ -42,8 +46,10 @@ export class PageBuilder {
             const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
             
 
-            // Check for cached version before showing loading message
-            const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
+            // Disabled: do not load from sheets cache
+            //const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
+            const cachedContent = null;
+
             if (cachedContent) {
                 //const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
                 //if (useCache) {
