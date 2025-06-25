@@ -322,8 +322,27 @@
                 const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
                 try {
                     // Fetch gid for this tab
-                    const gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
-                    const content = await GoogleSheetsService.getPackListContent(tabName);
+                    let gid;
+                    try {
+                        gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
+                    } catch (gidErr) {
+                        // Tab does not exist, copy TEMPLATE sheet
+                        await GoogleSheetsService.copySheetTab(SPREADSHEET_IDS.PACK_LISTS, "TEMPLATE", tabName);
+                        gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
+                    }
+                    let content;
+                    try {
+                        content = await GoogleSheetsService.getPackListContent(tabName);
+                    } catch (contentErr) {
+                        // If content fetch fails (e.g., new tab), use empty structure
+                        content = {
+                            crates: [],
+                            headers: {
+                                main: ['Type', 'L', 'W', 'H', 'Weight', 'Notes'],
+                                items: ['Description', 'Packing/shop notes']
+                            }
+                        };
+                    }
                     const tabContainer = document.createElement('div');
                     // Pass tabName and gid to buildPackListTable so save buttons and print button are added
                     const packListTable = buildPackListTable(content, tabName, gid);
@@ -334,11 +353,11 @@
 
                     TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
                     loadingModal.hide();
-                } catch (error) {
-                    loadingModal.hide();
-                    console.error('Error loading sheet content:', error);
-                    ModalManager.alert('Failed to load spreadsheet content');
-                }
+                    } catch (error) {
+                        loadingModal.hide();
+                        console.error('Error loading sheet content:', error);
+                        ModalManager.alert('Failed to load spreadsheet content');
+                    }
                 // Remove modal if present
                 const modal = document.querySelector('.modal');
                 if (modal) modal.hide();
@@ -359,7 +378,20 @@
             const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
             const tabsListElement = buildTabsListElement(sheetTabs);
             const modalBody = modal.querySelector('.modal-body');
-            modalBody.innerHTML = '';
+            modalBody.innerHTML = '<div id="open-pack-list-tab-system"></div>';
+            TabManager.buildTabSystem('open-pack-list-tab-system');
+            addNewTab('open-pack-list-tab-system', 'Open Existing', tabsListElement, false, true)
+            // now get overlapping shows by passing 1/1/25 and 3/1/25 as the date range (year, startDate, endDate)
+            const overlappingShows = await GoogleSheetsService.getOverlappingShows({
+                startDate: '2025-01-01',
+                endDate: '2025-03-01'
+            });
+            // remove items from overlappingShows that already exist in sheetTabs
+            const existingTabs = new Set(sheetTabs);
+            const filteredOverlappingShows = overlappingShows.filter(show => !existingTabs.has(show));
+            const newTabsListElement = buildTabsListElement(filteredOverlappingShows);
+            // Add overlapping shows as a new tab
+            addNewTab('open-pack-list-tab-system', 'Create New', newTabsListElement, false, true)
             modalBody.appendChild(tabsListElement);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);

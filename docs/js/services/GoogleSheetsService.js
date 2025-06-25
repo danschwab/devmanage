@@ -304,9 +304,14 @@ export class GoogleSheetsService {
                 startDate = ship;
                 endDate = ret;
             } else {
-                year = parameters.year;
                 startDate = this.parseDate(parameters.startDate);
                 endDate = this.parseDate(parameters.endDate);
+                // if no year parameter exists, get it from the start date
+                if (!parameters.year) {
+                    year = this.parseDate(startDate)?.getFullYear();
+                } else {
+                    year = parameters.year;
+                }
                 console.log('Using direct parameters:', { year, startDate, endDate });
             }
 
