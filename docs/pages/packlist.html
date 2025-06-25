@@ -454,7 +454,7 @@
 
             // Remove any rows in tfoot after successful save
             mainTable.querySelectorAll('tfoot').forEach(tfoot => {
-                Array.from(tfoot.querySelectorAll('tr')).forEach(tr => tr.remove());
+                Array.from(tfoot.querySelectorAll('tr.draggable')).forEach(tr => tr.remove());
             });
 
             TableManager.clearDirtyState(mainTable);
