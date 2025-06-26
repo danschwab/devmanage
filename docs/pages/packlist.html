@@ -223,7 +223,7 @@
                         SPREADSHEET_IDS.PACK_LISTS,
                         tabName
                     );
-                    ModalManager.alert('Entire pack list saved successfully');
+                    ModalManager.notify('Pack list saved successfully');
                     // Rerun inventory check after save
                     checkPackListQuantities(tabName, mainTable.parentElement || mainTable);
                 } catch (err) {
