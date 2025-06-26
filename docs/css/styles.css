@@ -696,6 +696,9 @@ tr.dragging::after {
 }
 
 .table-edit-textarea {
+    transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
+}
+tr:hover > td > .table-edit-textarea {
     background-color: #f0f5ff;
 }
 .table-edit-textarea:focus {
