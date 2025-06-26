@@ -723,7 +723,7 @@
                 editableDiv.setAttribute('role', 'textbox');
                 editableDiv.setAttribute('contenteditable', 'true');
                 // Set initial value to a unique marker so it is always dirty until edited
-                editableDiv.dataset.originalValue = '__NEW__';
+                editableDiv.dataset.originalValue = '';
                 editableDiv.dataset.rowIndex = rowIndex;
                 editableDiv.dataset.colIndex = i + 1; // skip drag handle
                 editableDiv.dataset.dirty = 'true';
