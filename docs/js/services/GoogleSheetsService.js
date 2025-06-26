@@ -722,13 +722,32 @@ export class GoogleSheetsService {
     }
 
     static async getSheetTabs(spreadsheetId) {
+        // Try to use cacheData/getCachedData for tabs list
+        const cacheKey = '__sheetTabs__';
+        let cachedTabs = null;
+        try {
+            const cached = await this.getCachedData(spreadsheetId, cacheKey, 2 * 60 * 1000); // 2 min
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) return parsed;
+            }
+        } catch (e) {
+            // ignore cache errors
+        }
         await GoogleSheetsAuth.checkAuth();
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.get({
                 spreadsheetId
             })
         );
-        return response.result.sheets.map(sheet => sheet.properties.title);
+        const tabs = response.result.sheets.map(sheet => sheet.properties.title);
+        // Save to cache
+        try {
+            await this.cacheData(spreadsheetId, cacheKey, JSON.stringify(tabs));
+        } catch (e) {
+            // ignore cache errors
+        }
+        return tabs;
     }
 
     static async cacheData(spreadsheetId, cacheName, content) {
