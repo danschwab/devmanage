@@ -508,7 +508,7 @@ export class GoogleSheetsService {
 
     static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
         await GoogleSheetsAuth.checkAuth();
-
+        
         // First verify the tab exists
         const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
         if (!tabs.includes(projectIdentifier)) {
@@ -516,20 +516,24 @@ export class GoogleSheetsService {
             return null;
         }
 
-        // Use getSheetData to get all rows (including headers)
-        const data = await this.getSheetData(SPREADSHEET_IDS.PACK_LISTS, `${projectIdentifier}`, true);
+        // Use cache for full sheet data
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
+                ranges: [`${projectIdentifier}`],
+                includeGridData: true
+            })
+        );
+        
+        const sheetData = response.result.sheets[0].data[0].rowData;
 
-        // Find the header row (row 3, zero-based index 2)
-        const headerRow = data[2];
-        if (!headerRow) {
-            throw new Error(`Header row not found in sheet "${projectIdentifier}"`);
-        }
+        const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
         const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
-
+        
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
         }
-
+        
         const result = {
             headers: {
                 main: headerRow.slice(0, itemStartIndex),
@@ -541,10 +545,11 @@ export class GoogleSheetsService {
         let currentCrate = null;
 
         // Process rows starting from row 4 (index 3)
-        for (let i = 3; i < data.length; i++) {
-            const row = data[i] || [];
-            const crateInfo = row.slice(0, itemStartIndex);
-            const crateContents = row.slice(itemStartIndex);
+        for (let i = 3; i < sheetData.length; i++) {
+            const row = sheetData[i];
+            const rowValues = row.values.map(cell => cell?.formattedValue || null);
+            const crateInfo = rowValues.slice(0, itemStartIndex);
+            const crateContents = rowValues.slice(itemStartIndex);
 
             if (crateInfo.some(cell => cell)) {
                 if (currentCrate) {
