@@ -722,17 +722,13 @@ export class GoogleSheetsService {
     }
 
     static async getSheetTabs(spreadsheetId) {
-        // Try to use cacheData/getCachedData for tabs list
-        const cacheKey = '__sheetTabs__';
-        let cachedTabs = null;
-        try {
-            const cached = await this.getCachedData(spreadsheetId, cacheKey, 2 * 60 * 1000); // 2 min
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed)) return parsed;
-            }
-        } catch (e) {
-            // ignore cache errors
+        // Use in-memory cache, similar to getSheetData
+        const now = Date.now();
+        if (
+            this.sheetTabsCache.data[spreadsheetId] &&
+            now - (this.sheetTabsCache.timestamp[spreadsheetId] || 0) < this.sheetTabsCache.TTL
+        ) {
+            return this.sheetTabsCache.data[spreadsheetId];
         }
         await GoogleSheetsAuth.checkAuth();
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -741,12 +737,8 @@ export class GoogleSheetsService {
             })
         );
         const tabs = response.result.sheets.map(sheet => sheet.properties.title);
-        // Save to cache
-        try {
-            await this.cacheData(spreadsheetId, cacheKey, JSON.stringify(tabs));
-        } catch (e) {
-            // ignore cache errors
-        }
+        this.sheetTabsCache.data[spreadsheetId] = tabs;
+        this.sheetTabsCache.timestamp[spreadsheetId] = now;
         return tabs;
     }
 
