@@ -326,9 +326,10 @@ button:hover,
 
 .tabs-list {
     border-radius: 0.25rem;
-    overflow: hidden;
+    overflow: auto;
     border: 1px solid rgba(5, 0, 50, 0.2);
     padding: 0;
+    max-height: 312px;
 }
 
 .tabs-list button.tab-button {

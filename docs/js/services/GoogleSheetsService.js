@@ -17,7 +17,7 @@ export class GoogleSheetsService {
     };
 
     // Exponential backoff helper for Google Sheets API calls
-    static async withExponentialBackoff(fn, maxRetries = 5, initialDelay = 500) {
+    static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
         while (true) {
@@ -215,19 +215,19 @@ export class GoogleSheetsService {
             const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, `${tabName}!A:J`);
             const headers = data[0];
 
-            console.log('1. Verifying tab exists...');
+            
             const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
             if (!tabs.includes(tabName)) {
                 console.warn(`Tab "${tabName}" not found, skipping overlap check`);
                 console.groupEnd();
                 return [];
             }
-            console.log('Tab found:', tabName);
+            
 
-            console.log('2. Getting headers...');
+            
             const idx = (name) => {
                 const index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
-                console.log(`Column "${name}" found at index: ${index}`);
+                
                 return index;
             };
 
@@ -241,11 +241,11 @@ export class GoogleSheetsService {
             const idxClient = headers.findIndex(h => h.toLowerCase() === "client");
 
             let year, startDate, endDate;
-            console.log('5. Processing parameters...');
+            
 
             if (typeof parameters === "string" || parameters.identifier) {
                 const identifier = parameters.identifier || parameters;
-                console.log(`Looking for show: ${identifier}`);
+                
 
                 // Instead of searching by Identifier column, use computeProdSchedIdentifier
                 let foundRow = null;
@@ -266,39 +266,39 @@ export class GoogleSheetsService {
                     console.groupEnd();
                     return [];
                 }
-                console.log('Found show row:', foundRow);
+                
 
                 year = foundRow[idxYear];
-                console.log(`Show year: ${year}`);
+                
 
                 let ship = this.parseDate(foundRow[idxShip]);
                 let ret = this.parseDate(foundRow[idxReturn]);
-                console.log('Initial dates:', { ship, ret });
+                
 
                 if (!ship) {
                     let sStart = this.parseDate(foundRow[idxSStart]);
                     ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-                    console.log('Using adjusted start date:', ship);
+                    
                 }
                 if (!ret) {
                     let sEnd = this.parseDate(foundRow[idxSEnd]);
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
-                    console.log('Using adjusted end date:', ret);
+                    
                 }
 
                 // Ensure ship and ret are in the correct year
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
-                    console.log('Adjusted ship year:', ship);
+                    
                 }
                 if (ret && ret.getFullYear() != year) {
                     ret.setFullYear(Number(year));
-                    console.log('Adjusted return year:', ret);
+                    
                 }
                 // Ensure ret date is after ship date; if not, add a year to ret
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
-                    console.log('Adjusted return to next year:', ret);
+                    
                 }
 
                 startDate = ship;
@@ -312,7 +312,7 @@ export class GoogleSheetsService {
                 } else {
                     year = parameters.year;
                 }
-                console.log('Using direct parameters:', { year, startDate, endDate });
+                
             }
 
             if (!year || !startDate || !endDate) {
@@ -321,7 +321,7 @@ export class GoogleSheetsService {
                 return [];
             }
 
-            console.log('6. Finding overlaps...');
+            
             const overlaps = [];
             for (const row of data) {
                 if (!row[idxYear] || row[idxYear] != year) continue;
@@ -352,17 +352,11 @@ export class GoogleSheetsService {
                 }
 
                 if (!ship || !ret) {
-                    console.log(`Skipping ${computedIdentifier}: missing dates`);
+                    
                     continue;
                 }
 
                 if (ret >= startDate && ship <= endDate) {
-                    console.log(`Found overlap: ${computedIdentifier}`, {
-                        ship,
-                        ret,
-                        overlapsWithStart: startDate,
-                        overlapsWithEnd: endDate
-                    });
                     overlaps.push(computedIdentifier);
                 }
             }
@@ -398,16 +392,16 @@ export class GoogleSheetsService {
             console.log('Processing request for:', { itemNames, infoFields });
 
             // Step 1: Get INDEX tab data
-            console.log('1. Getting INDEX tab data...');
+            
             const indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, 'INDEX!A:B');
-            console.log('INDEX data retrieved:', indexData);
+            
 
             // Process prefix mapping (skip header row)
             const prefixToTab = {};
             indexData.slice(1).forEach(row => {
                 if (row[0] && row[1]) {
                     prefixToTab[row[0]] = row[1];
-                    console.log(`Mapped prefix ${row[0]} to tab ${row[1]}`);
+                    
                 }
             });
 
@@ -460,12 +454,12 @@ export class GoogleSheetsService {
                         // Try searching by item number alone if it contains a hyphen
                         if (item.includes('-')) {
                             const itemNumber = item.split('-')[1];
-                            console.log(`Searching for stripped item: ${itemNumber} (original: ${originalItem})`);
+                            
                             foundRow = tabData.slice(1).find(r => r[0] === itemNumber);
 
                             // If not found, try searching for the full item (prefix + number)
                             if (!foundRow) {
-                                console.log(`Not found as '${itemNumber}', trying full item: ${originalItem}`);
+                                
                                 foundRow = tabData.slice(1).find(r => r[0] === originalItem);
                             }
                         } else {
@@ -475,13 +469,13 @@ export class GoogleSheetsService {
 
                         const obj = { itemName: originalItem }; // Use original item name in result
                         if (foundRow) {
-                            console.log(`Found row for ${originalItem}:`, foundRow);
+                            
                             infoFields.forEach((field, i) => {
                                 obj[field] = foundRow[infoIdxs[i]] ?? null;
-                                console.log(`${field}: ${obj[field]}`);
+                                
                             });
                         } else {
-                            console.log(`No row found for ${originalItem}`);
+                            
                             infoFields.forEach(field => obj[field] = null);
                         }
                         results.push(obj);
@@ -872,10 +866,10 @@ export class GoogleSheetsService {
      * @returns {Promise<string>} The computed identifier string.
      */
     static async computeProdSchedIdentifier(a2, b2, c2) {
-        console.log('computeProdSchedIdentifier inputs:', { a2, b2, c2 });
+        
         // If A2 is blank, return blank
         if (!a2 || !a2.trim()) {
-            console.log('computeProdSchedIdentifier output:', '');
+            
             return '';
         }
 
@@ -930,7 +924,7 @@ export class GoogleSheetsService {
 
         // Compose identifier
         const identifier = `${clientMatch} ${c2 || ''} ${showMatch}`.trim();
-        console.log('computeProdSchedIdentifier output:', identifier);
+        
         return identifier;
     }
 

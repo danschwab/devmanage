@@ -444,7 +444,7 @@
             // Immediately create the 'Create New' tab with loading message and get its content element
             const loadingDiv = document.createElement('div');
             loadingDiv.innerHTML = `<p class="loading-message">Getting shows from production schedule...</p>`;
-            const createNewTab = await TabManager.addNewTab(tabSystemDiv, 'Create New', loadingDiv, false, false, false);
+            const createNewTab = await TabManager.addNewTab(tabSystemDiv, 'Create New', loadingDiv, false, true, false);
             const createNewTabContent = createNewTab.tabContent;
 
             // Asynchronously get overlapping shows and update the 'Create New' tab
