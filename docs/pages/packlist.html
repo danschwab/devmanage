@@ -266,7 +266,7 @@
 
             // Build the update list: tabName first, then intersection of openTabNames and overlappingShowTabs (excluding tabName)
             const updateTabs = [
-                tabName,
+                tabName.replace(/[^a-zA-Z0-9-_]/g, '_'), // Normalize tabName to match sheet tab names
                 ...openTabNames
                     .filter(t => t !== tabName && overlappingShowTabs && overlappingShowTabs.includes(denormalizeTabName(t)))
             ];
@@ -284,10 +284,17 @@
                 // Find the tab content container for this tab
                 const tabContent = document.getElementById(openTab);
                 if (tabContent) {
+                    console.log(`[checkPackListQuantities] Clearing previous inventory reports and cell cards for tab: ${openTab}`);
                     // Remove all inventory reports for this tab
-                    tabContent.querySelectorAll('.inventory-report-container').forEach(el => el.remove());
+                    tabContent.querySelectorAll('.inventory-report-container').forEach(el => {
+                        console.log(`[checkPackListQuantities] Removing inventory report container for tab: ${openTab}`);
+                        el.remove();
+                    });
                     // Remove all cell cards for this tab's items
-                    tabContent.querySelectorAll('.drag-id-pack-list-items td .table-cell-card').forEach(card => card.remove());
+                    tabContent.querySelectorAll('.drag-id-pack-list-items td .table-cell-card').forEach(card => {
+                        console.log(`[checkPackListQuantities] Removing table cell card in tab: ${openTab}`);
+                        card.remove();
+                    });
                 }
 
                 // Silently skip if there are no crates to check
