@@ -13,7 +13,7 @@ export class GoogleSheetsService {
         clients: null,
         shows: null,
         timestamp: 0,
-        TTL: 5 * 60 * 1000 // 5 minutes
+        TTL: 2 * 60 * 1000 // 2 minutes
     };
 
     // Exponential backoff helper for Google Sheets API calls
