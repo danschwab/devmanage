@@ -227,7 +227,7 @@
                     GoogleSheetsService.clearCache(SPREADSHEET_IDS.PACK_LISTS, tabName);
                     ModalManager.notify('Pack list saved successfully');
                     // Rerun inventory check after save
-                    checkPackListQuantities(tabName, mainTable.parentElement || mainTable);
+                    checkPackListQuantities(tabName);
                 } catch (err) {
                     console.error('Error saving entire pack list:', err && err.stack ? err.stack : err);
                     ModalManager.alert('Error saving entire pack list: ' + (err && err.message ? err.message : err));
@@ -245,13 +245,18 @@
         return mainTable;
     }
 
-    async function checkPackListQuantities(tabName, container) {
+    async function checkPackListQuantities(tabName) {
         try {
             // Get all open tabs (by tab button data-tab attribute)
-            const openTabButtons = document.querySelectorAll('.tab-button[data-tab]');
+            const openTabButtons = document.getElementById('tabSystem').querySelectorAll('.tab-button[data-tab]');
             const openTabNames = Array.from(openTabButtons)
                 .map(btn => btn.getAttribute('data-tab'))
                 .filter(Boolean);
+
+            // Helper to denormalize tab names (replace underscores with spaces)
+            function denormalizeTabName(tab) {
+                return tab.replace(/_/g, ' ');
+            }
 
             // Get overlapping shows for the current tabName only once
             const overlappingShowTabs = await GoogleSheetsService.getOverlappingShows({ identifier: tabName });
@@ -259,31 +264,27 @@
             // Build the update list: tabName first, then intersection of openTabNames and overlappingShowTabs (excluding tabName)
             const updateTabs = [
                 tabName,
-                ...openTabNames.filter(
-                    t => t !== tabName && overlappingShowTabs && overlappingShowTabs.includes(t)
-                )
+                ...openTabNames
+                    .filter(t => t !== tabName && overlappingShowTabs && overlappingShowTabs.includes(denormalizeTabName(t)))
             ];
 
             // Now, run the inventory check for each tab in the update list
             for (const openTab of updateTabs) {
                 // Remove only inventory reports and cell cards for this tab
                 // Remove inventory report(s) for this tab
-                document.querySelectorAll('.inventory-report-container').forEach(el => {
-                    const heading = el.querySelector('h2');
-                    if (heading && heading.textContent && heading.textContent.includes(openTab)) {
-                        el.remove();
-                    }
-                });
-                // Remove cell cards for this tab's items
-                document.querySelectorAll('.drag-id-pack-list-items td').forEach(td => {
-                    const card = td.querySelector('.table-cell-card');
-                    if (card) card.remove();
-                });
+                // Find the tab content container for this tab
+                const tabContent = document.getElementById(openTab);
+                if (tabContent) {
+                    // Remove all inventory reports for this tab
+                    tabContent.querySelectorAll('.inventory-report-container').forEach(el => el.remove());
+                    // Remove all cell cards for this tab's items
+                    tabContent.querySelectorAll('.drag-id-pack-list-items td .table-cell-card').forEach(card => card.remove());
+                }
 
                 // Silently skip if there are no crates to check
                 let quantityData;
                 try {
-                    quantityData = await GoogleSheetsService.checkItemQuantities(openTab);
+                    quantityData = await GoogleSheetsService.checkItemQuantities(denormalizeTabName(openTab));
                 } catch (err) {
                     if (openTab === tabName) {
                         return;
@@ -313,11 +314,11 @@
                 // Create a div to hold the table with a logical heading
                 const inventoryReportContainer = document.createElement('div');
                 const heading = document.createElement('h2');
-                heading.textContent = `Inventory report for: ${openTab}`;
+                heading.textContent = `Inventory report for: ${denormalizeTabName(openTab)}`;
                 inventoryReportContainer.classList.add('inventory-report-container');
                 inventoryReportContainer.appendChild(heading);
                 inventoryReportContainer.appendChild(table);
-                container.appendChild(inventoryReportContainer);
+                tabContent.appendChild(inventoryReportContainer);
 
                 // Highlight error items in pack list table for this tab
                 rows.forEach(row => {
@@ -408,7 +409,7 @@
                     tabContainer.appendChild(packListTable);
 
                     // Asynchronously check item quantities
-                    checkPackListQuantities(tabName, tabContainer);
+                    checkPackListQuantities(tabName);
 
                     TabManager.addNewTab('tabSystem', tabName, tabContainer, true, true);
                     loadingModal.hide();
