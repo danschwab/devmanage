@@ -20,10 +20,24 @@ export class GoogleSheetsService {
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
+        let lastError = null;
         while (true) {
             try {
                 return await fn();
             } catch (err) {
+                // If 401 Unauthorized, try to re-authenticate once and retry
+                if (
+                    (err && (err.status === 401 || (err.result && err.result.error && err.result.error.code === 401)))
+                    && attempt === 0
+                ) {
+                    try {
+                        await GoogleSheetsAuth.authenticate(false);
+                        attempt++;
+                        continue;
+                    } catch (reauthErr) {
+                        throw reauthErr;
+                    }
+                }
                 // Check for rate limit or quota errors
                 const isRateLimit = err && (
                     (err.status && (err.status === 429 || err.status === 403)) ||
@@ -38,6 +52,7 @@ export class GoogleSheetsService {
                 await new Promise(res => setTimeout(res, delay));
                 delay *= 2;
                 attempt++;
+                lastError = err;
             }
         }
     }
