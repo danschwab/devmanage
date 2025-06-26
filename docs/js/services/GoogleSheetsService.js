@@ -8,6 +8,12 @@ export class GoogleSheetsService {
         TTL: 5 * 60 * 1000 // 5 minutes
     };
 
+    static sheetTabsCache = {
+        data: {},
+        timestamp: {},
+        TTL: 40 * 1000 // 40 seconds
+    };
+
     // Static cache for production schedule identifier dependencies
     static prodSchedIdentifierCache = {
         clients: null,
