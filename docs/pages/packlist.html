@@ -416,7 +416,7 @@
         await GoogleSheetsAuth.checkAuth();
 
         const modal = ModalManager.createModal(`
-            <p class="loading-message">Loading...</p>
+            <p class="loading-message">Getting shows from production schedule...</p>
         `);
 
         try {
@@ -428,19 +428,35 @@
             // Ensure the tab system is present before adding tabs
             const tabSystemDiv = document.getElementById('open-pack-list-tab-system');
             TabManager.addNewTab(tabSystemDiv, 'Open Existing', tabsListElement, false, true);
-            // now get overlapping shows by passing 1/1/25 and 3/1/25 as the date range (year, startDate, endDate)
-            const overlappingShows = await GoogleSheetsService.getOverlappingShows({
+
+            // Immediately create the 'Create New' tab with loading message and get its content element
+            const loadingDiv = document.createElement('div');
+            loadingDiv.innerHTML = `<p class="loading-message">Getting shows from production schedule...</p>`;
+            const createNewTab = TabManager.addNewTab(tabSystemDiv, 'Create New', loadingDiv, false, true, false);
+            const createNewTabContent = createNewTab?.content;
+
+            // Asynchronously get overlapping shows and update the 'Create New' tab
+            GoogleSheetsService.getOverlappingShows({
                 startDate: '2025-01-01',
                 endDate: '2025-03-01'
+            }).then(overlappingShows => {
+                const existingTabs = new Set(sheetTabs);
+                const filteredOverlappingShows = overlappingShows.filter(show => !existingTabs.has(show));
+                const newTabsListElement = buildTabsListElement(filteredOverlappingShows);
+                // Replace the content using the returned element
+                if (createNewTabContent) {
+                    createNewTabContent.innerHTML = '';
+                    createNewTabContent.appendChild(newTabsListElement);
+                }
+            }).catch(error => {
+                console.error('Error loading overlapping shows:', error);
+                if (createNewTabContent) {
+                    createNewTabContent.innerHTML = '<p class="error">Failed to load shows</p>';
+                }
             });
-            // remove items from overlappingShows that already exist in sheetTabs
-            const existingTabs = new Set(sheetTabs);
-            const filteredOverlappingShows = overlappingShows.filter(show => !existingTabs.has(show));
-            const newTabsListElement = buildTabsListElement(filteredOverlappingShows);
-            TabManager.addNewTab(tabSystemDiv, 'Create New', newTabsListElement, false, true, false);
         } catch (error) {
             console.error('Error loading sheet tabs:', error);
-            modal.querySelector('.modal-body').innerHTML = '<p class="error">Failed to load spreadsheet tabs</p>';
+            modal.querySelector('.modal-body').innerHTML = '<p class="error">Failed to load tabs</p>';
         }
     }
 

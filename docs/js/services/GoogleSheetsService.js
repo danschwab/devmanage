@@ -308,7 +308,7 @@ export class GoogleSheetsService {
                 endDate = this.parseDate(parameters.endDate);
                 // if no year parameter exists, get it from the start date
                 if (!parameters.year) {
-                    year = this.parseDate(startDate)?.getFullYear();
+                    year = startDate?.getFullYear();
                 } else {
                     year = parameters.year;
                 }
@@ -378,8 +378,16 @@ export class GoogleSheetsService {
     }
 
     // Helper method for date parsing
-    static parseDate(val) {
+    static parseDate(val, forceLocal = true) {
         if (!val) return null;
+        if (forceLocal && typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            // Use Date.parse with 'YYYY-MM-DD' to get local time (ECMAScript 2019+)
+            // Date.parse('YYYY-MM-DD') is treated as local time in modern browsers
+            const timestamp = Date.parse(val);
+            if (!isNaN(timestamp)) {
+                return new Date(timestamp);
+            }
+        }
         const d = new Date(val);
         return isNaN(d) ? null : d;
     }
