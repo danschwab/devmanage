@@ -118,7 +118,7 @@ export class ModalManager {
         return loadingModal;
     }
 
-    static notify(message, options = { showClose: true, timeout: 3000 }) {
+    static notify(message, options = { showClose: true, timeout: 1500 }) {
         const modal = this.createModal(`
             <div style="text-align: center;">
                 <p>${message}</p>
