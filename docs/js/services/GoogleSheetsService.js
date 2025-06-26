@@ -232,109 +232,82 @@ export class GoogleSheetsService {
         try {
             await GoogleSheetsAuth.checkAuth();
             const tabName = "ProductionSchedule";
-            
             // Use cached data for production schedule
             const data = await this.getSheetData(SPREADSHEET_IDS.PROD_SCHED, `${tabName}!A:J`);
             const headers = data[0];
 
-            
-            const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PROD_SCHED);
-            if (!tabs.includes(tabName)) {
-                console.warn(`Tab "${tabName}" not found, skipping overlap check`);
-                console.groupEnd();
-                return [];
-            }
-            
-
-            
-            const idx = (name) => {
-                const index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
-                
-                return index;
-            };
-
-            const idxIdentifier = headers.findIndex(h => h.toLowerCase() === "identifier");
+            // Build index maps for show/client/year to identifier for fast lookup
+            const idxShowName = headers.findIndex(h => h.toLowerCase() === "show name" || h.toLowerCase() === "show");
+            const idxClient = headers.findIndex(h => h.toLowerCase() === "client");
             const idxYear = headers.findIndex(h => h.toLowerCase() === "year");
             const idxShip = headers.findIndex(h => h.toLowerCase() === "ship");
             const idxReturn = headers.findIndex(h => h.toLowerCase() === "expected return date");
             const idxSStart = headers.findIndex(h => h.toLowerCase() === "s. start");
             const idxSEnd = headers.findIndex(h => h.toLowerCase() === "s. end");
-            const idxShowName = headers.findIndex(h => h.toLowerCase() === "show name" || h.toLowerCase() === "show");
-            const idxClient = headers.findIndex(h => h.toLowerCase() === "client");
+
+            // Precompute all identifiers for all rows (avoid repeated fuzzy matching)
+            const identifierCache = {};
+            for (const row of data) {
+                const showName = row[idxShowName];
+                const client = row[idxClient];
+                const yearVal = row[idxYear];
+                if (showName && client && yearVal) {
+                    const key = `${showName}|||${client}|||${yearVal}`;
+                    identifierCache[key] = await this.computeProdSchedIdentifier(showName, client, yearVal);
+                }
+            }
 
             let year, startDate, endDate;
-            
 
             if (typeof parameters === "string" || parameters.identifier) {
                 const identifier = parameters.identifier || parameters;
-                
-
-                // Instead of searching by Identifier column, use computeProdSchedIdentifier
+                // Find the row with the matching identifier (use precomputed cache)
                 let foundRow = null;
                 for (const row of data) {
-                    // Compute identifier for this row
                     const showName = row[idxShowName];
                     const client = row[idxClient];
                     const yearVal = row[idxYear];
-                    const computedIdentifier = await this.computeProdSchedIdentifier(showName, client, yearVal);
-                    if (computedIdentifier === identifier) {
+                    const key = `${showName}|||${client}|||${yearVal}`;
+                    if (identifierCache[key] === identifier) {
                         foundRow = row;
                         break;
                     }
                 }
-
                 if (!foundRow) {
                     console.warn(`Show ${identifier} not found in schedule`);
                     console.groupEnd();
                     return [];
                 }
-                
-
                 year = foundRow[idxYear];
-                
-
                 let ship = this.parseDate(foundRow[idxShip]);
                 let ret = this.parseDate(foundRow[idxReturn]);
-                
-
                 if (!ship) {
                     let sStart = this.parseDate(foundRow[idxSStart]);
                     ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-                    
                 }
                 if (!ret) {
                     let sEnd = this.parseDate(foundRow[idxSEnd]);
                     ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
-                    
                 }
-
-                // Ensure ship and ret are in the correct year
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
-                    
                 }
                 if (ret && ret.getFullYear() != year) {
                     ret.setFullYear(Number(year));
-                    
                 }
-                // Ensure ret date is after ship date; if not, add a year to ret
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
-                    
                 }
-
                 startDate = ship;
                 endDate = ret;
             } else {
                 startDate = this.parseDate(parameters.startDate);
                 endDate = this.parseDate(parameters.endDate);
-                // if no year parameter exists, get it from the start date
                 if (!parameters.year) {
                     year = startDate?.getFullYear();
                 } else {
                     year = parameters.year;
                 }
-                
             }
 
             if (!year || !startDate || !endDate) {
@@ -343,26 +316,23 @@ export class GoogleSheetsService {
                 return [];
             }
 
-            
-            const overlaps = [];
+            // Precompute all row date ranges and identifiers
+            const rowInfos = [];
             for (const row of data) {
                 if (!row[idxYear] || row[idxYear] != year) continue;
-
-                // Compute identifier for this row
                 const showName = row[idxShowName];
                 const client = row[idxClient];
                 const yearVal = row[idxYear];
-                const computedIdentifier = await this.computeProdSchedIdentifier(showName, client, yearVal);
-
-                let ship = this.parseDate(row[idxShip]) || 
-                    (this.parseDate(row[idxSStart]) ? 
-                        new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) : 
+                const key = `${showName}|||${client}|||${yearVal}`;
+                const computedIdentifier = identifierCache[key];
+                let ship = this.parseDate(row[idxShip]) ||
+                    (this.parseDate(row[idxSStart]) ?
+                        new Date(this.parseDate(row[idxSStart]).getTime() - 10 * 86400000) :
                         null);
-                let ret = this.parseDate(row[idxReturn]) || 
-                    (this.parseDate(row[idxSEnd]) ? 
-                        new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : 
+                let ret = this.parseDate(row[idxReturn]) ||
+                    (this.parseDate(row[idxSEnd]) ?
+                        new Date(this.parseDate(row[idxSEnd]).getTime() + 10 * 86400000) :
                         null);
-
                 if (ship && ship.getFullYear() != year) {
                     ship.setFullYear(Number(year));
                 }
@@ -372,14 +342,19 @@ export class GoogleSheetsService {
                 if (ship && ret && ret <= ship) {
                     ret.setFullYear(ret.getFullYear() + 1);
                 }
+                if (!ship || !ret) continue;
+                rowInfos.push({
+                    identifier: computedIdentifier,
+                    ship,
+                    ret
+                });
+            }
 
-                if (!ship || !ret) {
-                    
-                    continue;
-                }
-
-                if (ret >= startDate && ship <= endDate) {
-                    overlaps.push(computedIdentifier);
+            // Find overlaps using precomputed info
+            const overlaps = [];
+            for (const info of rowInfos) {
+                if (info.ret >= startDate && info.ship <= endDate) {
+                    overlaps.push(info.identifier);
                 }
             }
 
