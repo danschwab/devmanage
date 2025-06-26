@@ -148,7 +148,7 @@
         if (tabName) {
             // Add Print Pack List button before the table
             const printBtn = document.createElement('button');
-            printBtn.textContent = 'Print Pack List';
+            printBtn.textContent = 'Print';
             printBtn.className = 'print-packlist-button';
             printBtn.style.margin = '12px 8px 12px 0';
             printBtn.onclick = async () => {
@@ -188,7 +188,7 @@
             };
 
             const saveAllBtn = document.createElement('button');
-            saveAllBtn.textContent = 'Save Pack List';
+            saveAllBtn.textContent = 'Save';
             saveAllBtn.className = 'save-button';
             saveAllBtn.style.margin = '12px 0';
             saveAllBtn.disabled = true;
@@ -405,7 +405,10 @@
             tabButton.textContent = tabName;
             tabsList.appendChild(tabButton);
             tabButton.addEventListener('click', async () => {
-                const loadingModal = ModalManager.showLoadingIndicator('Fetching and analyzing pack list...');
+                // Remove modal if present
+                const modal = document.querySelector('.modal');
+                if (modal) modal.hide();
+                const loadingModal = ModalManager.showLoadingIndicator('Setting up pack list...');
                 try {
                     // Fetch gid for this tab
                     let gid;
@@ -456,9 +459,6 @@
                         console.error('Error loading sheet content:', error);
                         ModalManager.alert('Failed to load content');
                     }
-                // Remove modal if present
-                const modal = document.querySelector('.modal');
-                if (modal) modal.hide();
             });
         }
         return tabsList;
