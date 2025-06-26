@@ -247,6 +247,8 @@
 
     async function checkPackListQuantities(tabName) {
         try {
+            console.log('[checkPackListQuantities] Checking quantities for tab:', tabName);
+
             // Get all open tabs (by tab button data-tab attribute)
             const openTabButtons = document.getElementById('tabSystem').querySelectorAll('.tab-button[data-tab]');
             const openTabNames = Array.from(openTabButtons)
@@ -260,6 +262,7 @@
 
             // Get overlapping shows for the current tabName only once
             const overlappingShowTabs = await GoogleSheetsService.getOverlappingShows({ identifier: tabName });
+            console.log('[checkPackListQuantities] Overlapping shows:', overlappingShowTabs);
 
             // Build the update list: tabName first, then intersection of openTabNames and overlappingShowTabs (excluding tabName)
             const updateTabs = [
@@ -267,9 +270,15 @@
                 ...openTabNames
                     .filter(t => t !== tabName && overlappingShowTabs && overlappingShowTabs.includes(denormalizeTabName(t)))
             ];
+            console.log('[checkPackListQuantities] Tabs to check:', updateTabs);
+
+            let primaryChecked = false;
 
             // Now, run the inventory check for each tab in the update list
             for (const openTab of updateTabs) {
+                const isPrimary = openTab === tabName;
+                console.log(`[checkPackListQuantities] Checking tab: ${openTab} (primary: ${isPrimary})`);
+
                 // Remove only inventory reports and cell cards for this tab
                 // Remove inventory report(s) for this tab
                 // Find the tab content container for this tab
@@ -286,12 +295,23 @@
                 try {
                     quantityData = await GoogleSheetsService.checkItemQuantities(denormalizeTabName(openTab));
                 } catch (err) {
-                    if (openTab === tabName) {
+                    console.warn(`[checkPackListQuantities] Error checking quantities for ${openTab}:`, err);
+                    if (isPrimary) {
+                        console.warn('[checkPackListQuantities] Aborting: error in primary packlist.');
                         return;
                     }
                     continue;
                 }
-                if (!quantityData) continue;
+                if (!quantityData) {
+                    console.log(`[checkPackListQuantities] No items found in pack list for ${openTab}.`);
+                    if (isPrimary) {
+                        console.warn('[checkPackListQuantities] Aborting: no items in primary packlist.');
+                        return;
+                    }
+                    continue;
+                }
+                if (isPrimary) primaryChecked = true;
+
                 const headers = ['Item', 'Inventory', 'Requested', 'Remaining', 'Overlapping Shows', 'Status'];
                 const rows = Object.entries(quantityData).map(([itemId, info]) => {
                     const status = info.remaining > 0 ? 'OK' : 'Warning';
@@ -308,6 +328,11 @@
                     ];
                 });
 
+                if (!rows.length) {
+                    console.log(`[checkPackListQuantities] No rows to display for ${openTab}, skipping table build.`);
+                    continue;
+                }
+
                 const table = TableManager.buildTable(rows, headers);
                 table.classList.add('quantity-check-table');
 
@@ -318,7 +343,9 @@
                 inventoryReportContainer.classList.add('inventory-report-container');
                 inventoryReportContainer.appendChild(heading);
                 inventoryReportContainer.appendChild(table);
-                tabContent.appendChild(inventoryReportContainer);
+                if (tabContent) {
+                    tabContent.appendChild(inventoryReportContainer);
+                }
 
                 // Highlight error items in pack list table for this tab
                 rows.forEach(row => {
@@ -343,6 +370,10 @@
                         });
                     }
                 });
+            }
+            if (!primaryChecked) {
+                console.warn('[checkPackListQuantities] Primary packlist was not checked or had no items. Aborting.');
+                return;
             }
         } catch (err) {
             console.error('Error building quantity check table:', err && err.stack ? err.stack : err);

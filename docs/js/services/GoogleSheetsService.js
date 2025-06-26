@@ -148,6 +148,13 @@ export class GoogleSheetsService {
             const itemMap = this.extractItemsFromPackList(packList);
             const itemIds = Object.keys(itemMap);
 
+            // If there are no items in the pack list, return
+            if (!itemIds.length) {
+                console.log('No items found in pack list, returning.');
+                console.groupEnd();
+                return;
+            }
+
             // 3. Get inventory quantities FIRST
             console.log('3. Getting inventory quantities...');
             let inventoryInfo;
