@@ -108,7 +108,7 @@
         return { dirty, moved };
     }
 
-    function buildPackListTable(content, tabName = null, tabGid = null) {
+    function buildPackListTable(content, tabName = null) {
         const mainTableData = content.crates.map((crate, crateIdx) => {
             const itemData = document.createElement('div');
             itemData.classList.add('table-wrapper');
@@ -139,10 +139,10 @@
             newRowFunction
         );
 
-        // Store gid as data attribute if provided
-        if (tabGid) {
-            mainTable.dataset.gid = tabGid;
-        }
+        // Remove gid logic (no longer used)
+        // if (tabGid) {
+        //     mainTable.dataset.gid = tabGid;
+        // }
 
         // Add whole-table save button if tabName is provided
         if (tabName) {
@@ -152,7 +152,7 @@
             printBtn.className = 'print-packlist-button';
             printBtn.style.margin = '12px 8px 12px 0';
             printBtn.onclick = async () => {
-                const gid = mainTable.dataset.gid || 0;
+                // const gid = mainTable.dataset.gid || 0; // gid no longer used
                 // Before opening the modal, check if there are unsaved changes and save if needed
                 const { dirty, moved } = checkSaveAllState(mainTable, null);
                 if (dirty || moved) {
@@ -411,14 +411,12 @@
                 const loadingModal = ModalManager.showLoadingIndicator('Setting up pack list...');
                 try {
                     // Fetch gid for this tab
-                    let gid;
                     let isNewTab = false;
-                    try {
-                        gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
-                    } catch (gidErr) {
+                    // Check if the tab already exists by getting all tab names
+                    const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
+                    if (!sheetTabs.includes(tabName)) {
                         // Tab does not exist, copy TEMPLATE sheet
                         await GoogleSheetsService.copySheetTab(SPREADSHEET_IDS.PACK_LISTS, "TEMPLATE", tabName);
-                        gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
                         isNewTab = true;
                     }
                     // If we just created the tab, set the show identifier in cell E1
@@ -445,8 +443,8 @@
                         };
                     }
                     const tabContainer = document.createElement('div');
-                    // Pass tabName and gid to buildPackListTable so save buttons and print button are added
-                    const packListTable = buildPackListTable(content, tabName, gid);
+                    // Pass tabName to buildPackListTable so save buttons and print button are added
+                    const packListTable = buildPackListTable(content, tabName);
                     tabContainer.appendChild(packListTable);
 
                     // Asynchronously check item quantities
