@@ -223,6 +223,8 @@
                         SPREADSHEET_IDS.PACK_LISTS,
                         tabName
                     );
+                    // Clear cache for this pack list after saving
+                    GoogleSheetsService.clearCache(SPREADSHEET_IDS.PACK_LISTS, tabName);
                     ModalManager.notify('Pack list saved successfully');
                     // Rerun inventory check after save
                     checkPackListQuantities(tabName, mainTable.parentElement || mainTable);
