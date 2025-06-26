@@ -62,7 +62,7 @@ export class PageBuilder {
                     const html = await response.text();
                     await this.buildPage(html);
                 } else {
-                    loadingModal.remove();
+                    loadingModal.hide();
                     // Redirect to 404 page but don't recurse if 404 itself fails
                     if (!page.endsWith('404.html')) {
                         await this.loadContent('404.html', false);
@@ -75,9 +75,9 @@ export class PageBuilder {
             
             // Update the URL hash on success
             window.location.hash = pageNameWithoutExt;
-            loadingModal.remove();
+            loadingModal.hide();
         } catch (error) {
-            loadingModal.remove();
+            loadingModal.hide();
             console.error('Error:', error);
             if (error.message.includes('auth')) {
                 this.generateLoginButton();

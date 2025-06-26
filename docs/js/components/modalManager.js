@@ -3,19 +3,26 @@ export class ModalManager {
         const modal = document.createElement('div');
         modal.classList.add('modal');
         
+        modal.hide = () => {
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.remove();
+            }, 200);
+        };
+        
         modal.innerHTML = `
-            <div class="modal-content">
-                ${options.showClose !== false ? `
-                    <div class="modal-header">
-                        <span class="modal-close">&times;</span>
-                    </div>
-                ` : ''}
-                <div class="modal-body">
-                    ${content}
-                </div>
+        <div class="modal-content">
+        ${options.showClose !== false ? `
+            <div class="modal-header">
+            <span class="modal-close">&times;</span>
             </div>
-        `;
-
+            ` : ''}
+            <div class="modal-body">
+            ${content}
+            </div>
+            </div>
+            `;
+            
         document.body.appendChild(modal);
 
         // Fade in after a short delay to trigger transition
@@ -34,12 +41,6 @@ export class ModalManager {
             });
         }
 
-        modal.hide = () => {
-            modal.style.opacity = '0';
-            setTimeout(() => {
-                modal.remove();
-            }, 200);
-        };
         return modal;
     }
 
@@ -56,12 +57,12 @@ export class ModalManager {
             `, { showClose: false });
 
             modal.querySelector('.confirm-yes').addEventListener('click', () => {
-                modal.remove();
+                modal.hide();
                 resolve(true);
             });
 
             modal.querySelector('.confirm-no').addEventListener('click', () => {
-                modal.remove();
+                modal.hide();
                 resolve(false);
             });
         });
@@ -79,7 +80,7 @@ export class ModalManager {
             `, { showClose: false });
 
             modal.querySelector('.alert-ok').addEventListener('click', () => {
-                modal.remove();
+                modal.hide();
                 resolve();
             });
         });
@@ -95,7 +96,7 @@ export class ModalManager {
         const loadingModal = {
             hide: () => {
                 hideCalled = true;
-                if (modal) modal.remove();
+                if (modal) modal.hide();
             }
         };
 
@@ -108,10 +109,6 @@ export class ModalManager {
                 </div>
             `, { showClose: false });
             shown = true;
-            // Patch .hide to remove the modal if not already removed
-            loadingModal.hide = () => {
-                if (modal) modal.remove();
-            };
         }, 500);
 
         return loadingModal;
@@ -125,7 +122,7 @@ export class ModalManager {
         `, options);
 
         if (options.timeout) {
-            setTimeout(() => modal.remove(), options.timeout);
+            setTimeout(() => modal.hide(), options.timeout);
         }
 
         return modal;
