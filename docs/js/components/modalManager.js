@@ -109,6 +109,10 @@ export class ModalManager {
                 </div>
             `, { showClose: false });
             shown = true;
+            // Patch .hide to remove the modal if not already removed
+            loadingModal.hide = () => {
+                if (modal) modal.hide();
+            };
         }, 500);
 
         return loadingModal;
