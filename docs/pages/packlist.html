@@ -474,7 +474,7 @@
             const sheetTabs = await GoogleSheetsService.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
             const tabsListElement = buildTabsListElement(sheetTabs);
             const modalBody = modal.querySelector('.modal-body');
-            modalBody.innerHTML = '<div id="open-pack-list-tab-system"><p>Select a pack list:</p></div>';
+            modalBody.innerHTML = '<div id="open-pack-list-tab-system"><p style="margin-bottom: 20px;">Select a pack list:</p></div>';
             await TabManager.buildTabSystem('open-pack-list-tab-system');
             // Ensure the tab system is present before adding tabs
             const tabSystemDiv = document.getElementById('open-pack-list-tab-system');
