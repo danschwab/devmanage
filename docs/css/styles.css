@@ -28,7 +28,7 @@ body {
 }
 .reading-page {
     margin: 0 auto;
-    padding: 5rem 0;
+    padding: 1rem 4rem;
     line-height: 1.6;
     color: #333;
 }
@@ -149,6 +149,8 @@ button:hover,
     background-color: rgb(0,0,0); /* Fallback color */
     background: linear-gradient(to bottom, #156accaa, #2baaff);
     overflow: auto;
+    transition: opacity 0.18s ease-in-out;
+    opacity: 0;
 }
 .modal-content {
     background-color: #fefefe;

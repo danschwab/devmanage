@@ -18,6 +18,11 @@ export class ModalManager {
 
         document.body.appendChild(modal);
 
+        // Fade in after a short delay to trigger transition
+        setTimeout(() => {
+            modal.style.opacity = '1';
+        }, 10);
+
         // Set focus to the modal for accessibility
         modal.setAttribute('tabindex', '-1');
         setTimeout(() => { modal.focus(); }, 0);
@@ -25,12 +30,16 @@ export class ModalManager {
         // Add close handler if needed
         if (options.showClose !== false) {
             modal.querySelector('.modal-close')?.addEventListener('click', () => {
-                modal.remove();
+                modal.hide();
             });
         }
 
-        modal.hide = () => modal.remove();
-
+        modal.hide = () => {
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.remove();
+            }, 200);
+        };
         return modal;
     }
 
@@ -77,14 +86,35 @@ export class ModalManager {
     }
 
     static showLoadingIndicator(text = 'loading...') {
-        const modal = this.createModal(`
-            <div style="text-align: center;">
-                ${text ? `<div style="margin-bottom: 10px;">${text}</div>` : ''}
-                <img src="images/loading.gif" alt="loading..." style="max-width: 64px; margin: 20px;">
-            </div>
-        `, { showClose: false });
+        let modal = null;
+        let shown = false;
+        let hideCalled = false;
+        let timeoutId = null;
 
-        return modal;
+        // Create a wrapper object to allow .hide before modal is shown
+        const loadingModal = {
+            hide: () => {
+                hideCalled = true;
+                if (modal) modal.remove();
+            }
+        };
+
+        timeoutId = setTimeout(() => {
+            if (hideCalled) return;
+            modal = ModalManager.createModal(`
+                <div style="text-align: center;">
+                    ${text ? `<div style="margin-bottom: 10px;">${text}</div>` : ''}
+                    <img src="images/loading.gif" alt="loading..." style="max-width: 64px; margin: 20px;">
+                </div>
+            `, { showClose: false });
+            shown = true;
+            // Patch .hide to remove the modal if not already removed
+            loadingModal.hide = () => {
+                if (modal) modal.remove();
+            };
+        }, 500);
+
+        return loadingModal;
     }
 
     static notify(message, options = { showClose: true, timeout: 3000 }) {
