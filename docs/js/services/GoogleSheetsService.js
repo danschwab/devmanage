@@ -1,14 +1,14 @@
 import { GoogleSheetsAuth, SPREADSHEET_IDS, GetTopFuzzyMatch } from '../index.js';
 
 export class GoogleSheetsService {
-    // Add static cache for all spreadsheets
+    // --- Caching and Utility Methods ---
+
     static sheetCache = {
         timestamp: {},
         data: {},
         TTL: 5 * 60 * 1000 // 5 minutes
     };
 
-    // Static cache for production schedule identifier dependencies
     static prodSchedIdentifierCache = {
         clients: null,
         shows: null,
@@ -16,7 +16,9 @@ export class GoogleSheetsService {
         TTL: 2 * 60 * 1000 // 2 minutes
     };
 
-    // Exponential backoff helper for Google Sheets API calls
+    /**
+     * Exponential backoff helper for Google Sheets API calls
+     */
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
@@ -56,6 +58,23 @@ export class GoogleSheetsService {
             }
         }
     }
+
+    /**
+     * Helper method for date parsing
+     */
+    static parseDate(val, forceLocal = true) {
+        if (!val) return null;
+        if (forceLocal && typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            // Parse as local date: 'YYYY-MM-DD'
+            // Use split and Date(year, monthIndex, day) to avoid timezone offset
+            const [year, month, day] = val.split('-').map(Number);
+            return new Date(year, month - 1, day, 12, 0, 0, 0); // noon local time to avoid DST issues
+        }
+        const d = new Date(val);
+        return isNaN(d) ? null : d;
+    }
+
+    // --- Sheet Data Methods ---
 
     static async getSheetData(spreadsheetId, range, useCache = true) {
         // Check cache first if enabled
@@ -105,11 +124,384 @@ export class GoogleSheetsService {
         });
     }
 
-    /**
-     * Extracts item quantities from pack list content.
-     * @param {object} packList - The pack list content object.
-     * @returns {object} Map of itemId to quantity.
-     */
+    static async setSheetData(spreadsheetId, tabName, updates) {
+        await GoogleSheetsAuth.checkAuth();
+
+        // If updates is an array (cell updates), use batchUpdate
+        if (Array.isArray(updates)) {
+            const data = updates.map(({row, col, value}) => ({
+                range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
+                values: [[value]]
+            }));
+            const request = {
+                spreadsheetId,
+                resource: {
+                    data: data,
+                    valueInputOption: 'USER_ENTERED'
+                }
+            };
+            try {
+                await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.values.batchUpdate(request)
+                );
+                return true;
+            } catch (error) {
+                console.error('Error updating sheet:', error);
+                throw error;
+            }
+        }
+
+        // If updates is an object with type: 'full-table', use update with range and values
+        if (updates && updates.type === 'full-table' && Array.isArray(updates.values)) {
+            // Ensure all rows have the same number of columns (at least 10 for item rows)
+            let values = updates.values;
+            if (Array.isArray(values) && values.length > 0) {
+                const maxCols = Math.max(
+                    ...values.map(row => row.length),
+                    10 // ensure at least 10 columns for item rows
+                );
+                for (let i = 0; i < values.length; ++i) {
+                    if (values[i].length < maxCols) {
+                        while (values[i].length < maxCols) values[i].push('');
+                    }
+                }
+            }
+
+            // Determine starting row and column
+            const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
+            const startCol = 0;
+            const numRows = values.length;
+            const numCols = values[0]?.length || 1;
+            const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
+            const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + numRows}`;
+
+            // If the data would extend beyond the current sheet, add rows first
+            if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
+                const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.get({
+                        spreadsheetId,
+                        ranges: [tabName],
+                        includeGridData: false
+                    })
+                );
+                const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+                if (sheet) {
+                    const sheetRowCount = sheet.properties.gridProperties.rowCount;
+                    const requiredRows = startRow + numRows;
+                    if (requiredRows > sheetRowCount) {
+                        await GoogleSheetsService.withExponentialBackoff(() =>
+                            gapi.client.sheets.spreadsheets.batchUpdate({
+                                spreadsheetId,
+                                resource: {
+                                    requests: [
+                                        {
+                                            appendDimension: {
+                                                sheetId: sheet.properties.sheetId,
+                                                dimension: 'ROWS',
+                                                length: requiredRows - sheetRowCount
+                                            }
+                                        }
+                                    ]
+                                }
+                            })
+                        );
+                    }
+                }
+            }
+
+            await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: {
+                        values: values
+                    }
+                })
+            );
+            return true;
+        }
+
+        throw new Error('Invalid updates format for setSheetData');
+    }
+
+    static async getSheetTabs(spreadsheetId) {
+        // Try to use cacheData/getCachedData for tabs list
+        const cacheKey = '__sheetTabs__';
+        let cachedTabs = null;
+        try {
+            const cached = await this.getCachedData(spreadsheetId, cacheKey, 2 * 60 * 1000); // 2 min
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) return parsed;
+            }
+        } catch (e) {
+            // ignore cache errors
+        }
+        await GoogleSheetsAuth.checkAuth();
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId
+            })
+        );
+        const tabs = response.result.sheets.map(sheet => sheet.properties.title);
+        // Save to cache
+        try {
+            await this.cacheData(spreadsheetId, cacheKey, JSON.stringify(tabs));
+        } catch (e) {
+            // ignore cache errors
+        }
+        return tabs;
+    }
+
+    static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
+        await GoogleSheetsAuth.checkAuth();
+        try {
+            const response = await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
+                    includeGridData: true
+                })
+            );
+            
+            return response.result.sheets[0].data[0].rowData[0].values
+                .map(cell => cell.formattedValue)
+                .filter(value => value);
+        } catch (error) {
+            console.error(`Failed to get headers for tab "${tabName}":`, error);
+            throw new Error(`Unable to access tab "${tabName}". The tab may not exist or you may not have permission.`);
+        }
+    }
+
+    static async searchTable(spreadsheetId, tabName, headerName, searchValue) {
+        await GoogleSheetsAuth.checkAuth();
+        const headers = await this.getTableHeaders(spreadsheetId, tabName);
+        const headerIndex = headers.findIndex(h => 
+            h?.toString().toLowerCase() === headerName.toString().toLowerCase()
+        );
+
+        if (headerIndex === -1) {
+            throw new Error(`Header "${headerName}" not found`);
+        }
+
+        const lastCol = String.fromCharCode(65 + headers.length - 1);
+        const range = `${tabName}!A1:${lastCol}`;
+        
+        const searchResponse = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+                majorDimension: 'ROWS'
+            })
+        );
+
+        const allData = searchResponse.result.values || [];
+        const filteredData = allData.slice(1).filter(row => 
+            row[headerIndex]?.toString().toLowerCase().includes(searchValue.toLowerCase())
+        );
+
+        return {
+            headers,
+            data: filteredData
+        };
+    }
+
+    // --- Caching for Pages and Tabs ---
+
+    static async cacheData(spreadsheetId, cacheName, content) {
+        try {
+            await GoogleSheetsAuth.checkAuth();
+            // Don't cache empty content
+            if (!content || content.trim() === '') {
+                return false;
+            }
+            // Don't cache empty locations
+            if (!cacheName || cacheName.trim() === '') {
+                return false;
+            }
+
+            const contentDiv = document.getElementById('content');
+            if (!contentDiv) return false;
+
+            const userEmail = await GoogleSheetsAuth.getUserEmail();
+            if (!userEmail) throw new Error('User not authenticated');
+
+            const timestamp = new Date().toISOString();
+
+            // Format tab name (sanitize email for sheet name)
+            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+
+            try {
+                // Try to get existing tab
+                // Force bypass of local cache for this call
+                await this.getSheetData(spreadsheetId, `${tabName}!A1:A`, false);
+            } catch (error) {
+                if (error.status === 401) {
+                    console.warn('Unauthorized. Attempting re-authentication...');
+                    await GoogleSheetsAuth.authenticate(false);
+                    // Retry after re-auth
+                    return this.cacheData(spreadsheetId, cacheName, content);
+                }
+                // Tab doesn't exist, create it with headers
+                await gapi.client.sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: {
+                        requests: [{
+                            addSheet: {
+                                properties: { title: tabName }
+                            }
+                        }]
+                    }
+                });
+
+                // Add headers
+                await this.setSheetData(spreadsheetId, tabName, [
+                    { row: 0, col: 0, value: "Cache Name" },
+                    { row: 0, col: 1, value: "Last Modified" },
+                    { row: 0, col: 2, value: "Content" }
+                ]);
+            }
+
+            // Get existing pages (skip header row) - bypass local cache
+            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`, false) || [];
+
+            // Find page index or append to end
+            const rowIndex = existingData.findIndex(row => row[0] === cacheName);
+            const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
+
+            // Update cache data
+            const updates = [
+                { row: targetRow, col: 0, value: cacheName },
+                { row: targetRow, col: 1, value: timestamp },
+                { row: targetRow, col: 2, value: content }
+            ];
+
+            await this.setSheetData(spreadsheetId, tabName, updates);
+            return true;
+        } catch (error) {
+            console.error('Error caching data:', error);
+            throw error;
+        }
+    }
+    
+    static async getCachedData(spreadsheetId, cacheName, maxAgeMs = Infinity) {
+        try {
+            await GoogleSheetsAuth.checkAuth();
+            const userEmail = await GoogleSheetsAuth.getUserEmail();
+            if (!userEmail) return null;
+            
+            // Format tab name (sanitize email for sheet name)
+            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
+            
+            try {
+                // Try to get existing tab
+                await gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId,
+                    ranges: [`${tabName}!A1:A`]
+                });
+            } catch (error) {
+                if (error.status === 401) {
+                    console.warn('Unauthorized. Attempting re-authentication...');
+                    await GoogleSheetsAuth.authenticate(false);
+                    // Retry after re-auth
+                    return this.getCachedData(spreadsheetId, cacheName, maxAgeMs);
+                }
+                // Tab doesn't exist
+                return null;
+            }
+            
+            // Get existing pages
+            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
+            
+            // Find page using hash without # symbol
+            const pageRow = existingData.find(row => row[0] === cacheName);
+            
+            if (pageRow) {
+                const timestamp = new Date(pageRow[1]).getTime();
+                const now = Date.now();
+                if (now - timestamp <= maxAgeMs) {
+                    const contentDiv = document.getElementById('content');
+                    if (!contentDiv) return null;
+                    return pageRow[2]; // Return cached content for content div
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to get cached data:', error);
+            throw error;
+        }
+    }
+
+    // --- Pack List Methods ---
+
+    static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
+        await GoogleSheetsAuth.checkAuth();
+        
+        // First verify the tab exists
+        const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
+        if (!tabs.includes(projectIdentifier)) {
+            console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
+            return null;
+        }
+
+        // Use cache for full sheet data
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
+                ranges: [`${projectIdentifier}`],
+                includeGridData: true
+            })
+        );
+        
+        const sheetData = response.result.sheets[0].data[0].rowData;
+
+        const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
+        const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
+        
+        if (itemStartIndex === -1) {
+            throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
+        }
+        
+        const result = {
+            headers: {
+                main: headerRow.slice(0, itemStartIndex),
+                items: headerRow.slice(itemStartIndex)
+            },
+            crates: []
+        };
+
+        let currentCrate = null;
+
+        // Process rows starting from row 4 (index 3)
+        for (let i = 3; i < sheetData.length; i++) {
+            const row = sheetData[i];
+            const rowValues = row.values.map(cell => cell?.formattedValue || null);
+            const crateInfo = rowValues.slice(0, itemStartIndex);
+            const crateContents = rowValues.slice(itemStartIndex);
+
+            if (crateInfo.some(cell => cell)) {
+                if (currentCrate) {
+                    result.crates.push(currentCrate);
+                }
+                currentCrate = {
+                    info: crateInfo,
+                    items: []
+                };
+            }
+
+            if (crateContents.some(cell => cell)) {
+                currentCrate.items.push(crateContents);
+            }
+        }
+
+        if (currentCrate) {
+            result.crates.push(currentCrate);
+        }
+
+        return result;
+    }
+    
     static extractItemsFromPackList(packList) {
         const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
         const itemMap = {};
@@ -226,6 +618,129 @@ export class GoogleSheetsService {
             throw error;
         }
     }
+
+    // --- Inventory Methods ---
+
+    static async getInventoryInformation(itemName, retreiveInformation) {
+        console.group('Getting inventory information');
+        try {
+            const itemNames = Array.isArray(itemName) ? itemName : [itemName];
+            const infoFields = Array.isArray(retreiveInformation) ? retreiveInformation : [retreiveInformation];
+            console.log('Processing request for:', { itemNames, infoFields });
+
+            // Step 1: Get INDEX tab data
+            
+            const indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, 'INDEX!A:B');
+            
+
+            // Process prefix mapping (skip header row)
+            const prefixToTab = {};
+            indexData.slice(1).forEach(row => {
+                if (row[0] && row[1]) {
+                    prefixToTab[row[0]] = row[1];
+                    
+                }
+            });
+
+            // Group items by tab
+            const itemsByTab = {};
+            const unmappedItems = [];
+            itemNames.forEach(item => {
+                if (!item) return;
+                let [prefix] = item.split('-');
+                let tab = prefixToTab[prefix];
+                if (!tab && prefix?.length > 0) {
+                    prefix = prefix[0];
+                    tab = prefixToTab[prefix];
+                }
+                if (!tab) {
+                    unmappedItems.push(item);
+                    return;
+                }
+                if (!itemsByTab[tab]) itemsByTab[tab] = [];
+                itemsByTab[tab].push(item);
+                console.log(`Mapped item ${item} to tab ${tab}`);
+            });
+
+            // Process each tab
+            const results = [];
+            const errors = [];
+
+            for (const [tab, items] of Object.entries(itemsByTab)) {
+                console.log(`Processing tab ${tab}`);
+                try {
+                    // Get or fetch tab data (modified to use general cache)
+                    let tabData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `${tab}!A:Z`);
+
+                    // First row contains headers
+                    const headers = tabData[0];
+                    const infoIdxs = infoFields.map(field => {
+                        const idx = headers.findIndex(h => h?.toLowerCase() === field.toLowerCase());
+                        if (idx === -1) {
+                            throw new Error(`Column '${field}' not found in tab ${tab}`);
+                        }
+                        return idx;
+                    });
+
+                    // Process items with logging
+                    items.forEach(item => {
+                        const originalItem = item;
+                        let searchItem = item;
+                        let foundRow = null;
+
+                        // Try searching by item number alone if it contains a hyphen
+                        if (item.includes('-')) {
+                            const itemNumber = item.split('-')[1];
+                            
+                            foundRow = tabData.slice(1).find(r => r[0] === itemNumber);
+
+                            // If not found, try searching for the full item (prefix + number)
+                            if (!foundRow) {
+                                
+                                foundRow = tabData.slice(1).find(r => r[0] === originalItem);
+                            }
+                        } else {
+                            // Try searching for the item as-is
+                            foundRow = tabData.slice(1).find(r => r[0] === item);
+                        }
+
+                        const obj = { itemName: originalItem }; // Use original item name in result
+                        if (foundRow) {
+                            
+                            infoFields.forEach((field, i) => {
+                                obj[field] = foundRow[infoIdxs[i]] ?? null;
+                                
+                            });
+                        } else {
+                            
+                            infoFields.forEach(field => obj[field] = null);
+                        }
+                        results.push(obj);
+                    });
+
+                } catch (error) {
+                    console.error(`Error processing tab ${tab}:`, error);
+                    errors.push(`Tab ${tab}: ${error.message}`);
+                    items.forEach(item => {
+                        const obj = { itemName: item };
+                        infoFields.forEach(field => obj[field] = null);
+                        results.push(obj);
+                    });
+                }
+            }
+
+            console.log('Final results:', results);
+            console.groupEnd();
+            return results;
+
+        } catch (error) {
+            console.error('Failed to get inventory information:', error);
+            console.groupEnd();
+            throw new Error(`Failed to get inventory information: ${error.message}`);
+        }
+    }
+
+    // --- Production Schedule Methods ---
 
     static async getOverlappingShows(parameters) {
         console.group(`Getting overlapping shows for:`, parameters);
@@ -368,519 +883,6 @@ export class GoogleSheetsService {
         }
     }
 
-    // Helper method for date parsing
-    static parseDate(val, forceLocal = true) {
-        if (!val) return null;
-        if (forceLocal && typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-            // Parse as local date: 'YYYY-MM-DD'
-            // Use split and Date(year, monthIndex, day) to avoid timezone offset
-            const [year, month, day] = val.split('-').map(Number);
-            return new Date(year, month - 1, day, 12, 0, 0, 0); // noon local time to avoid DST issues
-        }
-        const d = new Date(val);
-        return isNaN(d) ? null : d;
-    }
-
-    static async getInventoryInformation(itemName, retreiveInformation) {
-        console.group('Getting inventory information');
-        try {
-            const itemNames = Array.isArray(itemName) ? itemName : [itemName];
-            const infoFields = Array.isArray(retreiveInformation) ? retreiveInformation : [retreiveInformation];
-            console.log('Processing request for:', { itemNames, infoFields });
-
-            // Step 1: Get INDEX tab data
-            
-            const indexData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, 'INDEX!A:B');
-            
-
-            // Process prefix mapping (skip header row)
-            const prefixToTab = {};
-            indexData.slice(1).forEach(row => {
-                if (row[0] && row[1]) {
-                    prefixToTab[row[0]] = row[1];
-                    
-                }
-            });
-
-            // Group items by tab
-            const itemsByTab = {};
-            const unmappedItems = [];
-            itemNames.forEach(item => {
-                if (!item) return;
-                let [prefix] = item.split('-');
-                let tab = prefixToTab[prefix];
-                if (!tab && prefix?.length > 0) {
-                    prefix = prefix[0];
-                    tab = prefixToTab[prefix];
-                }
-                if (!tab) {
-                    unmappedItems.push(item);
-                    return;
-                }
-                if (!itemsByTab[tab]) itemsByTab[tab] = [];
-                itemsByTab[tab].push(item);
-                console.log(`Mapped item ${item} to tab ${tab}`);
-            });
-
-            // Process each tab
-            const results = [];
-            const errors = [];
-
-            for (const [tab, items] of Object.entries(itemsByTab)) {
-                console.log(`Processing tab ${tab}`);
-                try {
-                    // Get or fetch tab data (modified to use general cache)
-                    let tabData = await this.getSheetData(SPREADSHEET_IDS.INVENTORY, `${tab}!A:Z`);
-
-                    // First row contains headers
-                    const headers = tabData[0];
-                    const infoIdxs = infoFields.map(field => {
-                        const idx = headers.findIndex(h => h?.toLowerCase() === field.toLowerCase());
-                        if (idx === -1) {
-                            throw new Error(`Column '${field}' not found in tab ${tab}`);
-                        }
-                        return idx;
-                    });
-
-                    // Process items with logging
-                    items.forEach(item => {
-                        const originalItem = item;
-                        let searchItem = item;
-                        let foundRow = null;
-
-                        // Try searching by item number alone if it contains a hyphen
-                        if (item.includes('-')) {
-                            const itemNumber = item.split('-')[1];
-                            
-                            foundRow = tabData.slice(1).find(r => r[0] === itemNumber);
-
-                            // If not found, try searching for the full item (prefix + number)
-                            if (!foundRow) {
-                                
-                                foundRow = tabData.slice(1).find(r => r[0] === originalItem);
-                            }
-                        } else {
-                            // Try searching for the item as-is
-                            foundRow = tabData.slice(1).find(r => r[0] === item);
-                        }
-
-                        const obj = { itemName: originalItem }; // Use original item name in result
-                        if (foundRow) {
-                            
-                            infoFields.forEach((field, i) => {
-                                obj[field] = foundRow[infoIdxs[i]] ?? null;
-                                
-                            });
-                        } else {
-                            
-                            infoFields.forEach(field => obj[field] = null);
-                        }
-                        results.push(obj);
-                    });
-
-                } catch (error) {
-                    console.error(`Error processing tab ${tab}:`, error);
-                    errors.push(`Tab ${tab}: ${error.message}`);
-                    items.forEach(item => {
-                        const obj = { itemName: item };
-                        infoFields.forEach(field => obj[field] = null);
-                        results.push(obj);
-                    });
-                }
-            }
-
-            console.log('Final results:', results);
-            console.groupEnd();
-            return results;
-
-        } catch (error) {
-            console.error('Failed to get inventory information:', error);
-            console.groupEnd();
-            throw new Error(`Failed to get inventory information: ${error.message}`);
-        }
-    }
-
-    static async getPackListContent(projectIdentifier, itemColumnsStart = "Pack") {
-        await GoogleSheetsAuth.checkAuth();
-        
-        // First verify the tab exists
-        const tabs = await this.getSheetTabs(SPREADSHEET_IDS.PACK_LISTS);
-        if (!tabs.includes(projectIdentifier)) {
-            console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
-            return null;
-        }
-
-        // Use cache for full sheet data
-        const response = await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.get({
-                spreadsheetId: SPREADSHEET_IDS.PACK_LISTS,
-                ranges: [`${projectIdentifier}`],
-                includeGridData: true
-            })
-        );
-        
-        const sheetData = response.result.sheets[0].data[0].rowData;
-
-        const headerRow = sheetData[2].values.map(cell => cell.formattedValue);
-        const itemStartIndex = headerRow.findIndex(header => header == itemColumnsStart);
-        
-        if (itemStartIndex === -1) {
-            throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
-        }
-        
-        const result = {
-            headers: {
-                main: headerRow.slice(0, itemStartIndex),
-                items: headerRow.slice(itemStartIndex)
-            },
-            crates: []
-        };
-
-        let currentCrate = null;
-
-        // Process rows starting from row 4 (index 3)
-        for (let i = 3; i < sheetData.length; i++) {
-            const row = sheetData[i];
-            const rowValues = row.values.map(cell => cell?.formattedValue || null);
-            const crateInfo = rowValues.slice(0, itemStartIndex);
-            const crateContents = rowValues.slice(itemStartIndex);
-
-            if (crateInfo.some(cell => cell)) {
-                if (currentCrate) {
-                    result.crates.push(currentCrate);
-                }
-                currentCrate = {
-                    info: crateInfo,
-                    items: []
-                };
-            }
-
-            if (crateContents.some(cell => cell)) {
-                currentCrate.items.push(crateContents);
-            }
-        }
-
-        if (currentCrate) {
-            result.crates.push(currentCrate);
-        }
-
-        return result;
-    }
-    
-    static async getTableHeaders(spreadsheetId, tabName, headerRow = 1) {
-        await GoogleSheetsAuth.checkAuth();
-        try {
-            const response = await GoogleSheetsService.withExponentialBackoff(() =>
-                gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId,
-                    ranges: [`'${tabName}'!${headerRow}:${headerRow}`],
-                    includeGridData: true
-                })
-            );
-            
-            return response.result.sheets[0].data[0].rowData[0].values
-                .map(cell => cell.formattedValue)
-                .filter(value => value);
-        } catch (error) {
-            console.error(`Failed to get headers for tab "${tabName}":`, error);
-            throw new Error(`Unable to access tab "${tabName}". The tab may not exist or you may not have permission.`);
-        }
-    }
-
-    static async searchTable(spreadsheetId, tabName, headerName, searchValue) {
-        await GoogleSheetsAuth.checkAuth();
-        const headers = await this.getTableHeaders(spreadsheetId, tabName);
-        const headerIndex = headers.findIndex(h => 
-            h?.toString().toLowerCase() === headerName.toString().toLowerCase()
-        );
-
-        if (headerIndex === -1) {
-            throw new Error(`Header "${headerName}" not found`);
-        }
-
-        const lastCol = String.fromCharCode(65 + headers.length - 1);
-        const range = `${tabName}!A1:${lastCol}`;
-        
-        const searchResponse = await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range,
-                majorDimension: 'ROWS'
-            })
-        );
-
-        const allData = searchResponse.result.values || [];
-        const filteredData = allData.slice(1).filter(row => 
-            row[headerIndex]?.toString().toLowerCase().includes(searchValue.toLowerCase())
-        );
-
-        return {
-            headers,
-            data: filteredData
-        };
-    }
-
-    static async setSheetData(spreadsheetId, tabName, updates) {
-        await GoogleSheetsAuth.checkAuth();
-
-        // If updates is an array (cell updates), use batchUpdate
-        if (Array.isArray(updates)) {
-            const data = updates.map(({row, col, value}) => ({
-                range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
-                values: [[value]]
-            }));
-            const request = {
-                spreadsheetId,
-                resource: {
-                    data: data,
-                    valueInputOption: 'USER_ENTERED'
-                }
-            };
-            try {
-                await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.values.batchUpdate(request)
-                );
-                return true;
-            } catch (error) {
-                console.error('Error updating sheet:', error);
-                throw error;
-            }
-        }
-
-        // If updates is an object with type: 'full-table', use update with range and values
-        if (updates && updates.type === 'full-table' && Array.isArray(updates.values)) {
-            // Ensure all rows have the same number of columns (at least 10 for item rows)
-            let values = updates.values;
-            if (Array.isArray(values) && values.length > 0) {
-                const maxCols = Math.max(
-                    ...values.map(row => row.length),
-                    10 // ensure at least 10 columns for item rows
-                );
-                for (let i = 0; i < values.length; ++i) {
-                    if (values[i].length < maxCols) {
-                        while (values[i].length < maxCols) values[i].push('');
-                    }
-                }
-            }
-
-            // Determine starting row and column
-            const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
-            const startCol = 0;
-            const numRows = values.length;
-            const numCols = values[0]?.length || 1;
-            const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
-            const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + numRows}`;
-
-            // If the data would extend beyond the current sheet, add rows first
-            if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
-                const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.get({
-                        spreadsheetId,
-                        ranges: [tabName],
-                        includeGridData: false
-                    })
-                );
-                const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
-                if (sheet) {
-                    const sheetRowCount = sheet.properties.gridProperties.rowCount;
-                    const requiredRows = startRow + numRows;
-                    if (requiredRows > sheetRowCount) {
-                        await GoogleSheetsService.withExponentialBackoff(() =>
-                            gapi.client.sheets.spreadsheets.batchUpdate({
-                                spreadsheetId,
-                                resource: {
-                                    requests: [
-                                        {
-                                            appendDimension: {
-                                                sheetId: sheet.properties.sheetId,
-                                                dimension: 'ROWS',
-                                                length: requiredRows - sheetRowCount
-                                            }
-                                        }
-                                    ]
-                                }
-                            })
-                        );
-                    }
-                }
-            }
-
-            await GoogleSheetsService.withExponentialBackoff(() =>
-                gapi.client.sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range,
-                    valueInputOption: 'USER_ENTERED',
-                    resource: {
-                        values: values
-                    }
-                })
-            );
-            return true;
-        }
-
-        throw new Error('Invalid updates format for setSheetData');
-    }
-
-    static async getSheetTabs(spreadsheetId) {
-        // Try to use cacheData/getCachedData for tabs list
-        const cacheKey = '__sheetTabs__';
-        let cachedTabs = null;
-        try {
-            const cached = await this.getCachedData(spreadsheetId, cacheKey, 2 * 60 * 1000); // 2 min
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed)) return parsed;
-            }
-        } catch (e) {
-            // ignore cache errors
-        }
-        await GoogleSheetsAuth.checkAuth();
-        const response = await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.get({
-                spreadsheetId
-            })
-        );
-        const tabs = response.result.sheets.map(sheet => sheet.properties.title);
-        // Save to cache
-        try {
-            await this.cacheData(spreadsheetId, cacheKey, JSON.stringify(tabs));
-        } catch (e) {
-            // ignore cache errors
-        }
-        return tabs;
-    }
-
-    static async cacheData(spreadsheetId, cacheName, content) {
-        try {
-            await GoogleSheetsAuth.checkAuth();
-            // Don't cache empty content
-            if (!content || content.trim() === '') {
-                return false;
-            }
-            // Don't cache empty locations
-            if (!cacheName || cacheName.trim() === '') {
-                return false;
-            }
-
-            const contentDiv = document.getElementById('content');
-            if (!contentDiv) return false;
-
-            const userEmail = await GoogleSheetsAuth.getUserEmail();
-            if (!userEmail) throw new Error('User not authenticated');
-
-            const timestamp = new Date().toISOString();
-
-            // Format tab name (sanitize email for sheet name)
-            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
-
-            try {
-                // Try to get existing tab
-                // Force bypass of local cache for this call
-                await this.getSheetData(spreadsheetId, `${tabName}!A1:A`, false);
-            } catch (error) {
-                if (error.status === 401) {
-                    console.warn('Unauthorized. Attempting re-authentication...');
-                    await GoogleSheetsAuth.authenticate(false);
-                    // Retry after re-auth
-                    return this.cacheData(spreadsheetId, cacheName, content);
-                }
-                // Tab doesn't exist, create it with headers
-                await gapi.client.sheets.spreadsheets.batchUpdate({
-                    spreadsheetId,
-                    resource: {
-                        requests: [{
-                            addSheet: {
-                                properties: { title: tabName }
-                            }
-                        }]
-                    }
-                });
-
-                // Add headers
-                await this.setSheetData(spreadsheetId, tabName, [
-                    { row: 0, col: 0, value: "Cache Name" },
-                    { row: 0, col: 1, value: "Last Modified" },
-                    { row: 0, col: 2, value: "Content" }
-                ]);
-            }
-
-            // Get existing pages (skip header row) - bypass local cache
-            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`, false) || [];
-
-            // Find page index or append to end
-            const rowIndex = existingData.findIndex(row => row[0] === cacheName);
-            const targetRow = rowIndex >= 0 ? rowIndex + 1 : existingData.length + 1;
-
-            // Update cache data
-            const updates = [
-                { row: targetRow, col: 0, value: cacheName },
-                { row: targetRow, col: 1, value: timestamp },
-                { row: targetRow, col: 2, value: content }
-            ];
-
-            await this.setSheetData(spreadsheetId, tabName, updates);
-            return true;
-        } catch (error) {
-            console.error('Error caching data:', error);
-            throw error;
-        }
-    }
-    
-    static async getCachedData(spreadsheetId, cacheName, maxAgeMs = Infinity) {
-        try {
-            await GoogleSheetsAuth.checkAuth();
-            const userEmail = await GoogleSheetsAuth.getUserEmail();
-            if (!userEmail) return null;
-            
-            // Format tab name (sanitize email for sheet name)
-            const tabName = `Cache - ${userEmail.replace(/[^a-z0-9]/gi, '_')}`;
-            
-            try {
-                // Try to get existing tab
-                await gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId,
-                    ranges: [`${tabName}!A1:A`]
-                });
-            } catch (error) {
-                if (error.status === 401) {
-                    console.warn('Unauthorized. Attempting re-authentication...');
-                    await GoogleSheetsAuth.authenticate(false);
-                    // Retry after re-auth
-                    return this.getCachedData(spreadsheetId, cacheName, maxAgeMs);
-                }
-                // Tab doesn't exist
-                return null;
-            }
-            
-            // Get existing pages
-            const existingData = await this.getSheetData(spreadsheetId, `${tabName}!A2:C`) || [];
-            
-            // Find page using hash without # symbol
-            const pageRow = existingData.find(row => row[0] === cacheName);
-            
-            if (pageRow) {
-                const timestamp = new Date(pageRow[1]).getTime();
-                const now = Date.now();
-                if (now - timestamp <= maxAgeMs) {
-                    const contentDiv = document.getElementById('content');
-                    if (!contentDiv) return null;
-                    return pageRow[2]; // Return cached content for content div
-                }
-            }
-            return null;
-        } catch (error) {
-            console.error('Failed to get cached data:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Compute the "Identifier" value for a production schedule row.
-     * @param {string} a2 - The value from column A (Show Name)
-     * @param {string} b2 - The value from column B (Client Name)
-     * @param {string} c2 - The value from column C (Year)
-     * @returns {Promise<string>} The computed identifier string.
-     */
     static async computeProdSchedIdentifier(a2, b2, c2) {
         
         // If A2 is blank, return blank
@@ -944,30 +946,8 @@ export class GoogleSheetsService {
         return identifier;
     }
 
-    static async getSheetGid(spreadsheetId, tabName) {
-        await GoogleSheetsAuth.checkAuth();
-        if (typeof gapi !== 'undefined' && gapi.client?.sheets?.spreadsheets?.get) {
-            const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
-                gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId,
-                    ranges: [tabName],
-                    includeGridData: false
-                })
-            );
-            const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
-            if (sheet) {
-                return sheet.properties.sheetId; // This is the gid
-            }
-        }
-        return 0; // fallback to 0 if not found
-    }
+    // --- Sheet Tab Management ---
 
-    /**
-     * Sets the requested tab to visible and hides all other visible tabs in the spreadsheet.
-     * @param {string} spreadsheetId
-     * @param {string} tabName
-     * @returns {Promise<void>}
-     */
     static async showOnlyTab(spreadsheetId, tabName) {
         await GoogleSheetsAuth.checkAuth();
         if (typeof gapi === 'undefined' || !gapi.client?.sheets?.spreadsheets?.get) return;
@@ -1034,13 +1014,6 @@ export class GoogleSheetsService {
         }
     }
 
-    /**
-     * Copy a sheet tab within a spreadsheet (e.g., to create a new tab from TEMPLATE).
-     * @param {string} spreadsheetId
-     * @param {string} sourceTabName
-     * @param {string} newTabName
-     * @returns {Promise<void>}
-     */
     static async copySheetTab(spreadsheetId, sourceTabName, newTabName) {
         await GoogleSheetsAuth.checkAuth();
         // Get the sheetId of the source tab
