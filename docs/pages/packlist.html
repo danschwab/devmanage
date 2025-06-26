@@ -368,12 +368,24 @@
                 try {
                     // Fetch gid for this tab
                     let gid;
+                    let isNewTab = false;
                     try {
                         gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
                     } catch (gidErr) {
                         // Tab does not exist, copy TEMPLATE sheet
                         await GoogleSheetsService.copySheetTab(SPREADSHEET_IDS.PACK_LISTS, "TEMPLATE", tabName);
                         gid = await GoogleSheetsService.getSheetGid(SPREADSHEET_IDS.PACK_LISTS, tabName);
+                        isNewTab = true;
+                    }
+                    // If we just created the tab, set the show identifier in cell E1
+                    if (isNewTab) {
+                        await GoogleSheetsService.setSheetData(
+                            SPREADSHEET_IDS.PACK_LISTS,
+                            tabName,
+                            [
+                                { row: 0, col: 4, value: tabName }
+                            ]
+                        );
                     }
                     let content;
                     try {
