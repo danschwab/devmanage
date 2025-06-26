@@ -640,6 +640,10 @@ tr.dragging::after {
     border-radius: 4px;
     transition: background-color 0.15s ease-in-out;
 }
+.table-cell-card:only-child {
+    margin-top: 0;
+}
+
 .table-cell-card.red {
     border-color: #ff6200;
     background-color: #ffbb9d;

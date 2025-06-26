@@ -324,7 +324,7 @@
                     const status = info.remaining > 0 ? 'OK' : 'Warning';
                     const statusCell = document.createElement('span');
                     statusCell.textContent = status;
-                    statusCell.style.color = status === 'OK' ? 'green' : 'red';
+                    statusCell.className = status === 'OK' ? 'table-cell-card green' : 'table-cell-card red';
                     return [
                         itemId,
                         info.inventory,
