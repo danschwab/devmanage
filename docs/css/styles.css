@@ -16,13 +16,31 @@ body {
     padding: 20px;
     width: 90%;
     max-width: 1000px;
-    min-height: calc(100vh - 80px); /* Ensure the box almost fills the screen */
+    height: calc(100vh - 80px);
     display: flex;
     flex-direction: column;
     justify-content: start;
     text-align: left;
     margin: 20px;
 }
+/* Custom Webkit Scrollbar with rounded corners */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: #e6f0fa;
+    border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #b3d2ed;
+    margin: 2px;
+    border-radius: 8px;
+    width: 8px;
+}
+
+
+
+
 .container:has(.reading-page) {
     max-width: 800px; /* Limit width for reading pages */
 }
