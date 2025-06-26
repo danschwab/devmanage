@@ -361,7 +361,7 @@
                     if (remaining < 0 || remaining === 0) {
                         const color = remaining < 0 ? 'red' : 'yellow';
                         // Find all matching pack-list-items tables for this tab
-                        document.querySelectorAll('.drag-id-pack-list-items td').forEach(packListItem => {
+                        tabContent.querySelectorAll('.drag-id-pack-list-items td').forEach(packListItem => {
                             const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
                             const match = packListItem.textContent.match(itemRegex);
                             if (match && match[2] === itemId) {
