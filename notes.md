@@ -1,24 +1,3 @@
-**Vision**
-
-Assumptions:
-Dave's time is valuable.
-Dave currently spends time building pack lists from diverse sources of information.
-If Dave requires information about current inventories that he and Ben do not already have, he must rely on Dan's potentially outdated information or time-consuming warehouse searching.
-In order to assess show overlaps and present inventory quantities, Dave must combine these pieces of information with other cross-references from the production schedule.
-Dan, Patrick, and Daniel can typically easily manage the workload of concept and control drawings.
-
-Goals:
-Allow Dave to focus on reviewing pack lists instead of writing them from scratch
-Provide Dave and Ben with easy and early access to current item quantities and show overlaps
-Provide Ben with easy access to item history and possible location
-
-Responsibilities:
-THROUGHOUT THE YEAR: Daniel maintains the stability of a web app that provides functionality to the company
-THROUGHOUT THE YEAR: Ben and Dave use easy tools to maintain the accuracy of our live inventory quantities, keeping track of damaged or destroyed items
-AS REQUESTED OR AT THE TIME ELEVATIONS ARE PRODUCED: Daniel, Dan, or Patrick use easy tools to generate basic pack lists from CAD models and inventories
-AS EARLY AS DESIRED: Dave uses easy tools to check, organize, and export pack lists
-
-
 **Use Cases**
 We can have pack lists generated from Inventor
 We can know if there are item shortages as pack lists are generated
