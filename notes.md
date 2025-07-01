@@ -4,7 +4,6 @@ We can know if there are item shortages as pack lists are generated
 If we add bematrix stuff to pack lists, we can also check inventory qty of them
 If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
 We can get an inventory report of item quantities throughout the year
-test
 
 
 
