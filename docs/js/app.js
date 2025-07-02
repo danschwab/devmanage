@@ -37,7 +37,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 export let navigationItems = [
     { title: 'Plan', file: 'home' },
     { title: 'Pack Lists', file: 'packlist' },
-    { title: 'Inventory', file: 'inventory' }
+    { title: 'Inventory', file: 'inventory' },
+    { title: 'Test', file: 'interfaces' }
 ];
 
 export const SPREADSHEET_IDS = {
