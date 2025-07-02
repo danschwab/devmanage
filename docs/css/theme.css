@@ -1,7 +1,23 @@
 /* theme.css - Centralized color variables for the site theme */
 :root {
+    /* Interface Sizes */
+    /*--navbar-height: 80px;
+    --page-width-card: 360px;
+    --page-width-large: 1000px;
+    --page-width-small: 800px;
+
+    --control-height: 38px;
+    --control-height-sm: 24px;*/
+    
+    /* Padding defaults */
+    --padding-md: 20px;
+    --padding-lg: 40px;
+
+    /* Border Radius */
+    --radius-md: 3px;
+    --radius-lg: 6px;
+    
     /* Primary Brand Colors */
-    /* Brand Colors */
     --color-primary: #156bcc;
     --color-primary-light: #2baaff;
     --color-primary-gradient: linear-gradient(to bottom, var(--color-primary), var(--color-primary-light));
@@ -52,4 +68,12 @@
     --color-scrollbar-thumb: #dbdbdb;
     --color-scrollbar-bg: #f3f3f3;
     --color-row-drag-handle: #666;
+}
+
+/* Responsive: Reduce padding on small screens */
+@media (max-width: 600px) {
+    :root {
+        --padding-md: 8px;
+        --padding-lg: 16px;
+    }
 }
