@@ -1,22 +1,23 @@
+@import url('theme.css');
 body {
     font-family: Arial, sans-serif;
-    background: linear-gradient(to bottom, #156bcc, #2baaff);
+    background: var(--color-primary-gradient);
     margin: 0;
-    padding: 0;
+    padding: 80px 0 0 0;
     display: flex;
     justify-content: center;
     align-items: start;
-    min-height: 100vh;
+    height: calc(100vh - 80px);
 }
 
 .container {
-    background: #fff;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    background: var(--background-color);
+    box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: 4px;
     padding: 20px;
     width: 90%;
     max-width: 1000px;
-    height: calc(100vh - 80px);
+    height: calc(100vh - 80px - 80px); /* Full height minus navbar and padding */
     display: flex;
     flex-direction: column;
     justify-content: start;
@@ -28,20 +29,21 @@ body {
 ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
-    background: #f3f3f3;
+    background: var(--color-scrollbar-bg);
     border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #dbdbdb;
+    background: var(--color-scrollbar-thumb);
     margin: 2px;
     border-radius: 5px;
     width: 8px;
 }
 
+
 p {
     margin: 0;
-    color: #333;
+    color: var(--color-text);
 }
 
 
@@ -52,23 +54,49 @@ p {
     margin: 0 auto;
     padding: 1rem 4rem;
     line-height: 1.6;
-    color: #333;
+    color: var(--color-text);
 }
 
 nav {
-    margin-bottom: 20px;
+    position: fixed;
+    display: flex;
+    left:0;
+    right:0;
+    top: 0;
+    height:80px;
+    z-index: 3000;
+    background-color: var(--background-color);
 }
-
-nav a {
-    margin: 0 10px;
+nav img {
+    height: 64px;
+    width: auto;
+    margin: 8px 20px;
+}
+#navbar a {
+    margin: auto 40px;
     text-decoration: none;
     font-weight: bold;
-    color: #005ab9;
+    color: var(--color-primary);
 }
 
-nav a:hover {
+
+#navbar a:hover {
     text-decoration: underline;
 }
+/* Ensure login button is centered in navbar */
+#navbar .logout-button {
+    position: absolute;
+    right: 20px;
+}
+#navbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+
+
+
 
 /* Form Layout */
 .submission-form {
@@ -90,7 +118,7 @@ nav a:hover {
 .form-group label {
     display: block;
     font-size: 0.8rem;
-    color: #666;
+    color: var(--color-text-light);
     margin-bottom: 0.3rem;
 }
 
@@ -104,16 +132,16 @@ nav a:hover {
     padding: 0.375rem 0.75rem;
     font-size: 1rem;
     line-height: 1.5;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--color-border);
     border-radius: 0.25rem;
     transition: border-color 0.15s ease-in-out;
 }
 
 .form-group input:focus,
 .form-group select:focus {
-    border-color: #86b7fe;
+    border-color: var(--color-accent-light);
     outline: 0;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    box-shadow: 0 0 0 0.25rem var(--color-shadow);
 }
 
 /* Button Container */
@@ -126,10 +154,9 @@ nav a:hover {
 
 /* Button styles */
 .submit-button, 
-button,
-#navbar button {
-    background-color: #0d6efd;
-    color: white;
+button {
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
     border: none;
     cursor: pointer;
     max-width: 200px;
@@ -139,25 +166,15 @@ button,
     font-size: 1rem;
     line-height: 1.5;
     border-radius: 0.25rem;
-    box-shadow: 2px 2px 8px -4px rgba(5, 0, 50, .6);
+    box-shadow: 2px 2px 8px -4px var(--color-shadow);
     transition: background-color 0.15s ease-in-out;
-}
-#navbar button {
-    margin: 0 1rem;
 }
 
 .submit-button:hover, 
-button:hover,
-#navbar button:hover {
-    background-color: #0b5ed7;
+button:hover {
+    background-color: var(--color-blue-hover);
 }
 
-/* Ensure login button is centered in navbar */
-#navbar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
 
 /* Modal dialogs */
 .modal {
@@ -168,20 +185,20 @@ button:hover,
     width: 100%; /* Full width */
     height: 100%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
-    background-color: rgb(0,0,0); /* Fallback color */
-    background: linear-gradient(to bottom, #156accaa, #2baaff);
+    background-color: var(--color-modal-bg-gradient);
+    background: var(--color-modal-bg-gradient);
     overflow: auto;
     transition: opacity 0.18s ease-in-out;
     opacity: 0;
 }
 .modal-content {
-    background-color: #fefefe;
+    background-color: var(--background-color);
     margin: 15% auto 0 auto; /* 15% from the top and centered */
-    border: 1px solid #888;
+    border: 1px solid var(--color-border);
     width: 50%; /* Could be more or less, depending on screen size */
     min-width: 300px;
     max-width: 500px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -191,7 +208,7 @@ button:hover,
 .modal-header {
     display: flex;
     flex-direction: row;
-    /*border-bottom: 1px solid #dee2e6;*/
+    /*border-bottom: 1px solid var(--color-border);*/
     margin-bottom: 5px;
     justify-content: space-between;
     padding: 5px;
@@ -213,7 +230,7 @@ button:hover,
 
 .modal-close:hover {
     background-color: rgba(0, 0, 0, 0.3);
-    color: #fff;
+    color: var(--color-text-inverted);
 }
 .modal-body {
     margin: 20px;
@@ -262,13 +279,13 @@ button:hover,
 .tabs.dropdown-mode.menu-open .tab-button {
     display: block;
     margin: 0;
-    border: 1px solid rgba(5, 0, 50, 0.2);
+    border: 1px solid var(--color-shadow);
     border-radius: 0;
 }
 
 .tabs.dropdown-mode.menu-open .tab-button.active {
-    background-color: #0d6efd;
-    color: white;
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
 }
 
 .tabs.dropdown-mode.menu-open .tab-button:has(span) {
@@ -279,8 +296,8 @@ button:hover,
     display: block;
     width: 50%;
     margin: 0;
-    border: 1px solid rgba(5, 0, 50, 0.2);
-    box-shadow: inset 0 -8px 16px -16px rgba(5, 0, 50, 0.6);
+    border: 1px solid var(--color-border);
+    box-shadow: inset 0 -8px 16px -16px var(--color-shadow);
     border-radius: 0 0 3px 3px;
     max-width: 100%;
 }
@@ -291,25 +308,25 @@ button:hover,
     position: relative;
     top: 1px;
     cursor: pointer;
-    border: 1px solid rgba(5, 0, 50, 0.2);
+    border: 1px solid var(--color-border);
     border-bottom: none;
-    background-color: #f1f1f1;
-    color: #333;
+    background-color: var(--background-color);
+    color: var(--color-text);
     max-width: 100%;
     height: auto;
     border-radius: 0;
     border-radius: 0.25rem 0.25rem 0 0;
-    box-shadow: inset 0 -8px 16px -16px rgba(5, 0, 50, 0.6);
+    box-shadow: inset 0 -8px 16px -16px var(--color-shadow);
 }
 
 .tab-button.active {
-    background-color: white;
-    color: #333;
-    box-shadow: -3px -3px 6px -6px rgba(5, 0, 50, 0.6);
+    background-color: var(--background-color);
+    color: var(--color-text);
+    box-shadow: -3px -3px 6px -6px var(--color-shadow);
 }
 
 .tab-button:hover {
-    background-color: white;
+    background-color: var(--background-color);
 }
 
 .tab-container {
@@ -319,7 +336,7 @@ button:hover,
     flex: 1;
     width: 100%;
     min-height: 100px;
-    box-shadow: 0 -12px 14px -18px rgba(5, 0, 50, 0.7);
+    box-shadow: 0 -12px 14px -18px var(--color-shadow);
 }
 
 .tab-container:empty:after {
@@ -328,7 +345,7 @@ button:hover,
     right: 0;
     text-align: center;
     padding: .25rem;
-    color: #666;
+    color: var(--color-text-light);
     font-style: italic;
 }
 
@@ -349,7 +366,7 @@ button:hover,
 .tabs-list {
     border-radius: 0.25rem;
     overflow: auto;
-    border: 1px solid rgba(5, 0, 50, 0.2);
+    border: 1px solid var(--color-shadow);
     padding: 0;
     max-height: 312px;
 }
@@ -380,7 +397,7 @@ button:hover,
 
 .tab-close:hover {
     background-color: rgba(0, 0, 0, 0.3);
-    color: #fff;
+    color: var(--background-color);
 }
 
 .new-tab-button {
@@ -403,7 +420,7 @@ button:hover,
 }
 
 .new-tab-button:hover {
-    background-color: #fff;
+    background-color: var(--background-color);
     color: #333;
 }
 
@@ -427,7 +444,7 @@ button:hover,
 }
 
 .hamburger-menu:hover {
-    background-color: #fff;
+    background-color: var(--background-color);
 }
 
 .hamburger-menu span {
@@ -477,9 +494,9 @@ button:hover,
     right: 0;
     text-align: center;
     padding: .25rem;
-    color: #666;
+    color: var(--color-text-light);
     font-style: italic;
-    background: #f8f8f8;
+    background: var(--background-color);
     border: 1px solid #dee2e6;
     box-sizing: border-box;
     border-top: 0;
@@ -491,7 +508,7 @@ td:has(.table-wrapper) {
 
 th, td {
     padding: 0.5rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--color-border);
     text-align: left;
     vertical-align: top;
     min-width: 30px;
@@ -502,8 +519,8 @@ th, td {
 }
 
 th {
-    background-color: #aaa;
-    color: #fff;
+    background-color: var(--color-gray);
+    color: var(--color-text-inverted);
     font-weight: 400;
     position: sticky;
     top: 0;
@@ -514,7 +531,7 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin: 0;
-    background-color: white;
+    background-color: var(--background-color);
     overflow: hidden;
 }
 
@@ -523,7 +540,7 @@ table {
     cursor: pointer;
     position: relative;
     padding: 0 !important;
-    background-color: #f8f8f8;
+    background-color: var(--background-color);
     transition: background-color 0.15s ease-in-out;
 }
 .new-row-button button {
@@ -545,7 +562,7 @@ table {
     content: "+";
     display: block;
     text-align: center;
-    color: #666;
+    color: var(--color-text-light);
     font-size: 20px;
     line-height: 100%;
 }
@@ -557,7 +574,7 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button {
     cursor: pointer;
     position: relative;
     padding: 0 !important;
-    background-color: #ff9292;
+    background-color: var(--color-red-bg);
     border: none;
     outline: none;
 }
@@ -581,12 +598,12 @@ tfoot > tr.draggable::after {
     padding-top: .25rem;
     color: white;
     inset: 0;
-    background: #bb121277;
+    background: var(--color-red-bg-transparent);
     pointer-events: none;
     font-style: italic;
     z-index: 2;
     text-align: center;
-    text-shadow: 0 0 8px black;
+    text-shadow: 0 0 8px var(--color-shadow);
 }
 
 .row-drag-handle {
@@ -596,7 +613,8 @@ tfoot > tr.draggable::after {
     cursor: grab;
     position: relative;
     padding: 0 !important;
-    background-color: #f8f8f8;
+    background-color: var(--color-gray-bg);
+    transition: background-color 0.15s ease-in-out;
 }
 
 td.spacer-cell, th.spacer-cell {
@@ -610,28 +628,28 @@ td.spacer-cell, th.spacer-cell {
     content: "⋮⋮";
     display: block;
     text-align: center;
-    color: #666;
+    color: var(--color-row-drag-handle);
     font-size: 12px;
     line-height: 100%;
 }
 
 .row-drag-handle:hover, :not(:has(.dragging)) .new-row-button:hover {
-    background-color: #eee;
+    background-color: var(--color-gray-bg-hover);
 }
 
 .row-clone {
     pointer-events: none;
     opacity: 0.95;
-    background: white;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    background: var(--color-gray-bg);
+    box-shadow: 0 8px 16px var(--color-shadow);
     z-index: 1000;
     max-height: 100px;
     overflow: hidden;
     transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out; 
 }
 .row-clone .row-drag-handle {
-    background-color: #bbb;
-    color: #000;
+    background-color: var(--color-gray-bg-hover);
+    color: var(--color-text-inverted);
     max-height: 100%;
 }
 
@@ -648,7 +666,7 @@ tr.dragging::after {
     color: white;
     position: absolute;
     inset: 0;
-    background: rgba(51, 51, 51, 0.3);
+    background: var(--color-gray-bg-transparent);
     pointer-events: none;
     z-index: 2;
 }
@@ -656,57 +674,63 @@ tr.dragging::after {
 
 .table-cell-card {
     display: block;
-    border: 1px solid #aaa;
+    border: 1px solid var(--color-border);
     padding: .25em;
     margin-top: .5em;
-    background-color: #f8f8f8;
+    background-color: var(--color-gray-bg);
     border-radius: 4px;
     transition: background-color 0.15s ease-in-out;
 }
 .table-cell-card:only-child {
     margin-top: 0;
 }
-
 .table-cell-card.red {
-    border-color: #ff6200;
-    background-color: #ffbb9d;
+    border-color: var(--color-red);
+    background-color: var(--color-red-bg);
+}
+.table-cell-card.orange {
+    border-color: var(--color-orange);
+    background-color: var(--color-orange-bg);
 }
 .table-cell-card.yellow {
-    border-color: yellow;
-    background-color: #ff9;
+    border-color: var(--color-yellow);
+    background-color: var(--color-yellow-bg);
 }
 .table-cell-card.blue {
-    border-color: #0d6efd;
-    background-color: #cce5ff;
+    border-color: var(--color-blue);
+    background-color: var(--color-blue-bg);
 }
 .table-cell-card.green {
-    border-color: #198731;
-    background-color: #c3e6c3;
+    border-color: var(--color-green);
+    background-color: var(--color-green-bg);
 }
 .table-cell-card:hover {
-    background-color: #eee;
+    background-color: var(--color-gray-bg-hover);
 }
 .table-cell-card.red:hover {
-    background-color: #f66;
+    background-color: var(--color-red-bg-hover);
+}
+.table-cell-card.orange:hover {
+    background-color: var(--color-orange-bg-hover);
 }
 .table-cell-card.yellow:hover {
-    background-color: #ff6;
+    background-color: var(--color-yellow-bg-hover);
 }
 .table-cell-card.blue:hover {
-    background-color: #99d;
+    background-color: var(--color-blue-bg-hover);
 }
 .table-cell-card.green:hover {
-    background-color: rgb(102, 204, 116);
+    background-color: var(--color-green-bg-hover);
 }
 
 .table-edit-textarea {
     transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
 }
 tr:hover > td > .table-edit-textarea {
-    background-color: #f0f5ff;
+    background-color: var(--color-blue-bg-transparent);
 }
 .table-edit-textarea:focus {
-    outline: solid 2px #aeceff;
+    outline: solid 2px var(--color-blue-bg-hover);
 }
 
 .dirty::after {
@@ -714,19 +738,22 @@ tr:hover > td > .table-edit-textarea {
     display: inline-block;
     /*position: relative;*/
     font-size: 0.8rem;
-    color: #f00;
+    color: var(--color-red);
     border-radius: 4px;
-    border: 1px dashed #f00;
+    border: 1px dashed var(--color-red);
     padding: 1.5px;
     margin: 0 4px;
     /*bottom: 1px;*/
 }
 
 button.save-button {
-    background-color: #e55555;
+    background-color: var(--color-red);
+}
+button.save-button:hover {
+    background-color: var(--color-red-hover);
 }
 button.save-button:disabled {
-    background-color: #bdbdbd;
+    background-color: var(--color-gray-bg);
 }
 
 
@@ -739,7 +766,7 @@ button.save-button:disabled {
 
 .error-message {
     padding: 1rem;
-    color: hsl(0, 100%, 35%);
+    color: var(--color-red);
     font-style: italic;
 }
 

@@ -1,0 +1,55 @@
+/* theme.css - Centralized color variables for the site theme */
+:root {
+    /* Primary Brand Colors */
+    /* Brand Colors */
+    --color-primary: #156bcc;
+    --color-primary-light: #2baaff;
+    --color-primary-gradient: linear-gradient(to bottom, var(--color-primary), var(--color-primary-light));
+
+    /* Grays and Neutrals */
+    --background-color: #fefefe;
+    --color-gray: #aaa;
+    --color-gray-bg: #f0f0f0;
+    --color-gray-bg-transparent: #3333334d;
+    --color-gray-bg-hover: #e0e0e0;
+
+    /* Colors */
+    --color-red: #ce2a24;
+    --color-red-hover: #ad0a0a;
+    --color-red-bg: #ff9a9a;
+    --color-red-bg-transparent: #bb121277;
+    --color-red-bg-hover: #f75e5e;
+
+    --color-orange: #ff6200;
+    --color-orange-bg: #ffbb9d;
+    --color-orange-bg-hover: #ff8566;
+
+    --color-yellow: yellow;
+    --color-yellow-bg: #ff9;
+    --color-yellow-bg-hover: #ff6;
+
+    --color-blue: #0d6efd;
+    --color-blue-hover: #0b5ed7;
+    --color-blue-bg: #cce5ff;
+    --color-blue-bg-transparent: #7790ff17;
+    --color-blue-bg-hover: #aec4ff;
+
+    --color-green: #198731;
+    --color-green-bg: #c3e6c3;
+    --color-green-bg-hover: #66cc74;
+
+    /* Borders and Shadows */
+    --color-border: #ced4da;
+    --color-shadow: rgba(10, 10, 30, 0.4);
+
+    /* Text Colors */
+    --color-text: #333;
+    --color-text-light: #666;
+    --color-text-inverted: #fff;
+
+    /* Misc */
+    --color-modal-bg-gradient: linear-gradient(to bottom, #156accaa, #2baaff);
+    --color-scrollbar-thumb: #dbdbdb;
+    --color-scrollbar-bg: #f3f3f3;
+    --color-row-drag-handle: #666;
+}
