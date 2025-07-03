@@ -3,8 +3,8 @@ body {
     font-family: Arial, sans-serif;
     color: var(--color-text);
     background: var(--color-primary-gradient);
-    margin: 0;
     background-attachment: fixed;
+    margin: 0;
 }
 body > div {
     display: flex;
@@ -15,25 +15,55 @@ body > div {
     left:0;
     right:0;
     padding: calc(var(--padding-lg) / 2);/* 180px;*/
-    top: 80px;
+    top: var(--navbar-height);
     bottom: 0;
     overflow: auto;
 }
-
-.container {
-    background: var(--background-color);
-    box-shadow: 0 4px 8px var(--color-shadow);
-    border-radius: var(--radius-lg);
-    padding: var(--padding-md);
-    width: 90%;
-    max-width: var(--page-width-large);
-    /*height: calc(100vh - 80px - 80px); /* Full height minus navbar and padding */
+/* Primary Navigation */
+nav {
+    position: fixed;
     display: flex;
-    flex-direction: column;
-    justify-content: start;
-    text-align: left;
-    margin: calc(var(--padding-lg) / 2);
-    overflow: auto;
+    left:0;
+    right:0;
+    top: 0;
+    height:80px;
+    z-index: 3000;
+    background-color: var(--background-color);
+    box-shadow: 0 4px 8px var(--color-shadow);
+    transition: height 0.3s ease-in-out;
+    overflow: hidden;
+}
+nav .hamburger-menu {
+    right: 0;
+    margin: 22px;
+    position: absolute;
+    left: auto;
+}
+nav img {
+    height: 64px;
+    width: auto;
+    margin: 8px 20px;
+}
+nav #navbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+nav #navbar a {
+    margin: auto 40px;
+    text-decoration: none;
+    font-weight: bold;
+    color: var(--color-primary);
+}
+nav #navbar a.active {
+    color: var(--color-primary-light);
+}
+nav #navbar a:hover {
+    text-decoration: underline;
+}
+nav #navbar .logout-button {
+    position: absolute;
+    right: 20px;
 }
 /* Custom Webkit Scrollbar with rounded corners */
 ::-webkit-scrollbar {
@@ -46,7 +76,6 @@ body > div {
 body > div::-webkit-scrollbar {
     background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
     background: var(--color-gray);
     margin: 2px;
@@ -56,12 +85,36 @@ body > div::-webkit-scrollbar {
 body > div::-webkit-scrollbar-thumb {
     background: var(--color-primary);
 }
-
-
 p {
     margin: 0;
     color: var(--color-text);
 }
+
+
+
+
+
+
+
+
+
+
+.container {
+    background: var(--background-color);
+    box-shadow: 0 4px 8px var(--color-shadow);
+    border-radius: var(--radius-lg);
+    padding: var(--padding-md);
+    width: 90%;
+    max-width: var(--page-width-large);
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    text-align: left;
+    margin: calc(var(--padding-lg) / 2);
+    overflow: auto;
+}
+
+
 
 
 .container:has(.reading-page) {
@@ -74,49 +127,6 @@ p {
     color: var(--color-text);
 }
 
-nav {
-    position: fixed;
-    display: flex;
-    left:0;
-    right:0;
-    top: 0;
-    height:80px;
-    z-index: 3000;
-    background-color: var(--background-color);
-    box-shadow: 0 4px 8px var(--color-shadow);
-    transition: top 0.3s ease-in-out;
-}
-
-body.scrolled nav {
-    top: -80px;
-}
-
-nav img {
-    height: 64px;
-    width: auto;
-    margin: 8px 20px;
-}
-#navbar a {
-    margin: auto 40px;
-    text-decoration: none;
-    font-weight: bold;
-    color: var(--color-primary);
-}
-
-
-#navbar a:hover {
-    text-decoration: underline;
-}
-/* Ensure login button is centered in navbar */
-#navbar .logout-button {
-    position: absolute;
-    right: 20px;
-}
-#navbar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
 
 
 
@@ -792,11 +802,37 @@ button.save-button:disabled {
 }
 
 @media (max-width: 800px) {
+    nav.open {
+        height:auto;
+    }
+    nav #navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 20px;
+    }
+    nav .hamburger-menu {
+        display: block;
+    }
+    nav #navbar a, nav #navbar button {
+        display: none
+    }
+    nav #navbar a.active {
+        color: var(--color-primary);
+        display: block;
+    }
+    nav.open #navbar a, nav.open #navbar button {
+        display: block;
+        position: static;
+        margin: 0.5rem;
+    }
+
+
     .tabs.dropdown-mode .tab-button,
     .tabs.dropdown-mode .tab-button.active,
     .tabs.dropdown-mode.menu-open .tab-button,
     .tabs.dropdown-mode.menu-open .new-tab-button{
         width: calc(100% - 1rem); /* Adjust width for smaller screens */
+        max-width: 400px;
     }
 
     .tabs.dropdown-mode .new-tab-button{

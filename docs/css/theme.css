@@ -1,13 +1,13 @@
 /* theme.css - Centralized color variables for the site theme */
 :root {
     /* Interface Sizes */
-    /*--navbar-height: 80px;
+    --navbar-height: 80px;
     --page-width-card: 360px;
     --page-width-large: 1000px;
     --page-width-small: 800px;
 
     --control-height: 38px;
-    --control-height-sm: 24px;*/
+    --control-height-sm: 24px;
     
     /* Padding defaults */
     --padding-md: 20px;
@@ -79,7 +79,7 @@
 }
 
 /* Dark mode overrides */
-@media (prefers-color-scheme: dark) {
+/*@media (prefers-color-scheme: dark) {
     :root {
         --background-color: #181a1b;
         --color-text: #b4b4b4;
@@ -127,4 +127,4 @@
         --color-scrollbar-bg: #222;
         --color-row-drag-handle: #bbb;
     }
-}
+}*/
