@@ -304,7 +304,7 @@ button:hover {
 .tabs.dropdown-mode.menu-open .tab-button {
     display: block;
     margin: 0;
-    border: 1px solid var(--color-shadow);
+    border: 1px solid var(--color-border);
     border-radius: 0;
 }
 
@@ -331,11 +331,10 @@ button:hover {
     display: inline-block;
     margin: 0 2px;
     position: relative;
-    top: 1px;
     cursor: pointer;
     border: 1px solid var(--color-border);
     border-bottom: none;
-    background-color: var(--background-color);
+    background-color: var(--color-gray-bg);
     color: var(--color-text);
     max-width: 100%;
     height: auto;
@@ -347,6 +346,7 @@ button:hover {
 .tab-button.active {
     background-color: var(--background-color);
     color: var(--color-text);
+    top: 1px;
     box-shadow: -3px -3px 6px -6px var(--color-shadow);
 }
 
@@ -453,14 +453,16 @@ button:hover {
 /* Hamburger Menu */
 .hamburger-menu {
     box-sizing: border-box;
+    font-size: 14pt;
     display: none;
     width: 28px;
     min-width:0;
     height: 28px;
     padding: 0;
+    color: var(--color-text-light);
     border-radius: var(--radius-md);
     border: 1px solid var(--color-border);
-    background-color: #f1f1f1;
+    background-color: var(--color-gray-bg);
     cursor: pointer;
     position: absolute;
     left: 8px;
@@ -471,19 +473,7 @@ button:hover {
 
 .hamburger-menu:hover {
     background-color: var(--background-color);
-}
-
-.hamburger-menu span {
-    display: block;
-    width: 14px;
-    height: 2px;
-    background-color: #666;
-    margin: 2px auto;
-    transition: background-color 0.15s ease-in-out;
-}
-
-.hamburger-menu:hover span {
-    background-color: #333;
+    color: var(--color-text);
 }
 
 /* Result Containers */
@@ -566,7 +556,7 @@ table {
     cursor: pointer;
     position: relative;
     padding: 0 !important;
-    background-color: var(--background-color);
+    background-color: var(--color-gray-bg);
     transition: background-color 0.15s ease-in-out;
 }
 .new-row-button button {
@@ -801,7 +791,7 @@ button.save-button:disabled {
     cursor: grabbing !important;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 800px) {
     .tabs.dropdown-mode .tab-button,
     .tabs.dropdown-mode .tab-button.active,
     .tabs.dropdown-mode.menu-open .tab-button,
