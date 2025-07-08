@@ -111,12 +111,25 @@ export class PageBuilder {
             const link = document.createElement('a');
             link.href = '#';
             link.textContent = item.title;
-            link.onclick = (e) => {
+            link.onclick = async (e) => {
                 e.preventDefault();
                 const loadingModal = ModalManager.showLoadingIndicator();
-
-                PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml(item.file)));
-                loadingModal.hide();
+                
+                try {
+                    // Fetch the page content
+                    const pageContent = await PageBuilder.fetchHtml(item.file);
+                    // Build from template with the page content
+                    const builtContent = await PageBuilder.buildFromTemplate(pageContent);
+                    // Build the page
+                    await PageBuilder.buildPage(builtContent);
+                    // Update location
+                    PageBuilder.setLocation(item.title);
+                } catch (error) {
+                    console.error('Error loading page:', error);
+                    ModalManager.alert('Failed to load page');
+                } finally {
+                    loadingModal.hide();
+                }
             };
             nav.appendChild(link);
         });

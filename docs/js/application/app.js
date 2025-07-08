@@ -60,16 +60,12 @@ function subscribeNotifications() {
         console.log('Auth initialized:', event.data);
     });
     
-    NotificationManager.subscribe(NOTIFICATIONS.AUTH_SUCCESS, event => {
+    NotificationManager.subscribe(NOTIFICATIONS.AUTH_SUCCESS, async event => {
         console.log('Auth success:', event.data);
         PageBuilder.generateNavigation();
-        if (!window.location.hash) {
-            window.location.hash = 'home';
-            PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml('home')));
-        } else {
-            const pageName = window.location.hash.substring(1);
-            PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml(pageName, true)));
-        }
+        
+        // Use the openPage helper function
+        await openPage();
     });
     
     NotificationManager.subscribe(NOTIFICATIONS.AUTH_ERROR, event => {
@@ -79,6 +75,51 @@ function subscribeNotifications() {
     });
 }
 
+// Helper function to open a page by name
+async function openPage(pageName = null) {
+    try {
+        // Use current hash if no pageName provided, default to 'home'
+        if (!pageName) {
+            pageName = window.location.hash ? window.location.hash.substring(1) : 'home';
+        }
+        
+        // Find the navigation item by checking both title and file properties
+        const navItem = navigationItems.find(item => 
+            item.file === pageName || item.title.toLowerCase() === pageName.toLowerCase()
+        );
+        
+        // Use the found item's file or fallback to the pageName directly
+        const fileName = navItem ? navItem.file : pageName;
+        
+        // If we couldn't find a match and it's not 'home', fallback to home
+        if (!navItem && pageName !== 'home') {
+            console.warn(`Page '${pageName}' not found in navigationItems, falling back to home`);
+            window.location.hash = 'home';
+            return await openPage('home');
+        }
+        
+        // Update URL hash if it's different
+        const pageNameWithoutExt = fileName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+        if (window.location.hash.substring(1) !== pageNameWithoutExt) {
+            window.location.hash = pageNameWithoutExt;
+        }
+        
+        // Load and build the page
+        const pageContent = await PageBuilder.fetchHtml(fileName);
+        const builtContent = await PageBuilder.buildFromTemplate(pageContent);
+        await PageBuilder.buildPage(builtContent);
+        
+    } catch (error) {
+        console.error('Error loading page:', error);
+        ModalManager.alert('Error loading page content');
+        
+        // If it wasn't home and failed, try home as last resort
+        if (pageName !== 'home') {
+            window.location.hash = 'home';
+            return await openPage('home');
+        }
+    }
+}
 
 // Update the DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', init);
