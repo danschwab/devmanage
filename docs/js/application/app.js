@@ -10,9 +10,10 @@ export let navigationItems = [
 
 // initialize the application
 async function init() {
+    const loadingModal = ModalManager.showLoadingIndicator('Checking authentication...');
     try {
         // Initialize the notification system first
-        showAuthModal();
+        subscribeNotifications();
         
         // Initialize Auth system
         await Auth.init();
@@ -37,7 +38,7 @@ async function init() {
 
     // Initialize drag and drop handling in tables
     await TableManager.init();
-    
+
     // Hide loading modal if it exists
     if (loadingModal) {
         loadingModal.hide();
@@ -45,9 +46,7 @@ async function init() {
 }
 
 // Helper function to set up notification subscriptions
-function showAuthModal() {
-    const loadingModal = ModalManager.showLoadingIndicator('Checking authentication...');
-    
+function subscribeNotifications() {
     NotificationManager.subscribe(NOTIFICATIONS.AUTH_INITIALIZED, event => {
         console.log('Auth initialized:', event.data);
     });
@@ -62,13 +61,11 @@ function showAuthModal() {
             const pageName = window.location.hash.substring(1);
             PageBuilder.loadContent(pageName);
         }
-        loadingModal.hide();
     });
     
     NotificationManager.subscribe(NOTIFICATIONS.AUTH_ERROR, event => {
         console.error('Auth error:', event.data);
         PageBuilder.generateLoginButton();
-        loadingModal.hide();
         ModalManager.alert('Authentication error. Please try again.');
     });
 }
