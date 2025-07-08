@@ -2,6 +2,7 @@ import { Auth, PageBuilder, ModalManager, TabManager, TableManager, Notification
 
 // Define initial navigation items
 export let navigationItems = [
+    { title: 'Dashboard', file: 'dashboard' },
     { title: 'Plan', file: 'home' },
     { title: 'Pack Lists', file: 'packlist' },
     { title: 'Inventory', file: 'inventory' },

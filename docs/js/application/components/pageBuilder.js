@@ -4,7 +4,7 @@ export class PageBuilder {
 
 
     // Function to load content dynamically into the dom
-    static async loadContent(pageName) {
+    static async loadContent(pageName, template = 'container') {
         try {
             // Show loading notification
             const loadingModal = ModalManager.showLoadingIndicator();
