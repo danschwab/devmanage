@@ -11,6 +11,12 @@ export let navigationItems = [
 
 // initialize the application
 async function init() {
+    
+    const appBody = document.querySelector('body');
+    const appTemplate = await PageBuilder.fetchHtml('app', true);
+    PageBuilder.buildPage(appTemplate, appBody, true);
+
+    
     const loadingModal = ModalManager.showLoadingIndicator('Checking authentication...');
     try {
         // Initialize the notification system first

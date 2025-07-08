@@ -19,12 +19,12 @@ div#app {
     bottom: 0;
     overflow: auto;
 }
-div#app:not(:has(div))::after {
+div#app:not(:has(div))::before {
     content: "open a page to see content";
     color: var(--color-gray-bg-transparent);
     font-size: larger;
     font-style: italic;
-    line-height: calc(100vh - var(--navbar-height) - 2 * var(--padding-lg));
+    line-height: calc(100vh - var(--navbar-height) - var(--padding-lg));
 }
 div#app::-webkit-scrollbar {
     background: transparent;
@@ -34,7 +34,7 @@ div#app::-webkit-scrollbar-thumb {
 }
 
 /* Primary Navigation */
-nav {
+header nav {
     position: fixed;
     display: flex;
     left:0;
@@ -79,7 +79,32 @@ nav #navbar .login-out-button {
     position: absolute;
     right: 20px;
 }
-/* Custom Webkit Scrollbar with rounded corners */
+
+footer {
+    width:100%;
+    /*height: var(--navbar-height);*/
+    background-color: transparent;
+    box-shadow: 0 -12px 14px -18px var(--color-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    color: var(--color-text-light);
+    padding-top: calc(var(--padding-lg) / 2);
+    margin-top: calc(var(--padding-lg) / 2);
+}
+footer a, footer p {
+    color: var(--color-text-light);
+    text-decoration: none;
+}
+footer a:hover {
+    text-decoration: underline;
+}
+footer a:visited {
+    color: var(--color-text-light);
+}
+
+/* Global interface */
 ::-webkit-scrollbar {
     z-index: 1000;
     width: 10px;

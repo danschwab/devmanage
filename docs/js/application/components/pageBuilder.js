@@ -4,47 +4,48 @@ export class PageBuilder {
 
 
     // Function to load content dynamically into the dom
-    static async loadContent(pageName, template = 'container') {
+    static async setLocation(pageName) {
         try {
-            // Show loading notification
-            const loadingModal = ModalManager.showLoadingIndicator();
-            
             // Get the new page name for URL hash
             const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-            
-            try {
-                const html = await this.fetchHtmlFile(pageName);
-                await this.buildPage(html);
-                
-                // Update the URL hash on success
-                window.location.hash = pageNameWithoutExt;
-            } catch (fetchError) {
-                console.error('Fetch error:', fetchError);
-                // Redirect to 404 page but don't recurse if 404 itself fails
-                if (!pageName.includes('404')) {
-                    await this.loadContent('404');
-                } else {
-                    await ModalManager.alert('Error loading content');
-                    window.location.hash = "";
-                }
-            }
-            
-            loadingModal.hide();
-        } catch (error) {
-            console.error('Error:', error);
-            if (error.message.includes('auth')) {
-                this.generateLoginButton();
+            // Update the URL hash on success
+            window.location.hash = pageNameWithoutExt;
+        } catch (fetchError) {
+            console.error('Fetch error:', fetchError);
+            // Redirect to 404 page but don't recurse if 404 itself fails
+            if (!pageName.includes('404')) {
+                await this.loadContent('404');
             } else {
-                await ModalManager.alert('Error loading page: ' + error.message);
+                await ModalManager.alert('Error loading content');
                 window.location.hash = "";
             }
         }
     }
-    
+
+    // Helper function to fetch HTML content from a page
+    static async fetchHtml(pageName, template = false) {
+        // Ensure pageName ends with .html
+        if (!pageName.endsWith('.html')) {
+            pageName = `${pageName}.html`;
+        }
+        const page = `html/${template ? 'templates/' : 'pages/'}${pageName}`;
+
+        const cacheBuster = `?v=${new Date().getTime()}`;
+        const response = await fetch(page + cacheBuster);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch page: ${page} (${response.status})`);
+        }
+        
+        return await response.text();
+    }
     
     static async buildPage(content, contentDiv = null, overwrite = true) {
+        
         // if no contentDiv passed, assume the primary page content div
         if (!contentDiv) contentDiv = document.getElementById('app');
+        if (!contentDiv) contentDiv = document.querySelector('body');
+        
         // allow contentDiv to be a string id value
         if (typeof contentDiv == 'string') {
             contentDiv = document.getElementById(contentDiv);
@@ -68,34 +69,6 @@ export class PageBuilder {
         } else {
             console.error('Content must be a string or a DOM element');
             return null;
-        }
-
-        // Handle scripts in the loaded content
-        const scripts = contentDiv.querySelectorAll('script');
-
-        for (const script of scripts) {
-            if (script.type === 'module') {
-                const newScript = document.createElement('script');
-                newScript.type = 'module';
-                if (script.src) {
-                    newScript.src = script.src;
-                } else {
-                    newScript.textContent = script.textContent;
-                }
-                contentDiv.appendChild(newScript);
-            } else {
-                const newScript = document.createElement('script');
-                newScript.textContent = script.textContent;
-                contentDiv.appendChild(newScript);
-                contentDiv.removeChild(newScript);
-            }
-        }
-
-        // Remove original script tags
-        for (const script of scripts) {
-            if (script.parentNode) {
-                script.parentNode.removeChild(script); 
-            }
         }
     }
 
@@ -140,7 +113,11 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
                 e.preventDefault();
-                this.loadContent(item.file);
+                const loadingModal = ModalManager.showLoadingIndicator();
+                const pageContent = this.fetchHtml(item.file);
+                this.buildPage(pageContent);
+                this.setLocation(item.title);
+                loadingModal.hide();
             };
             nav.appendChild(link);
         });
@@ -164,24 +141,5 @@ export class PageBuilder {
             }
         };
         nav.appendChild(logoutButton);
-    }
-
-
-    // Helper function to fetch HTML content from a page
-    static async fetchHtmlFile(pageName, source = 'pages') {
-        // Ensure pageName ends with .html
-        if (!pageName.endsWith('.html')) {
-            pageName = `${pageName}.html`;
-        }
-        const page = `html/${source}/${pageName}`;
-        
-        const cacheBuster = `?v=${new Date().getTime()}`;
-        const response = await fetch(page + cacheBuster);
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch page: ${page} (${response.status})`);
-        }
-        
-        return await response.text();
     }
 }
