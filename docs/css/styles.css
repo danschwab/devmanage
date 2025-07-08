@@ -233,7 +233,7 @@ button:hover {
     min-width: 300px;
     max-width: 500px;
     box-shadow: 0 4px 8px var(--color-shadow);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     overflow: hidden;
 }
 .modal-content:has(.modal-header) {
