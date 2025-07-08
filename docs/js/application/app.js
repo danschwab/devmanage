@@ -37,6 +37,11 @@ async function init() {
 
     // Initialize drag and drop handling in tables
     await TableManager.init();
+    
+    // Hide loading modal if it exists
+    if (loadingModal) {
+        loadingModal.hide();
+    }
 }
 
 // Helper function to set up notification subscriptions
