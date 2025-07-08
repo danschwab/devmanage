@@ -116,6 +116,7 @@ export class PageBuilder {
         
         const loginButton = document.createElement('button');
         loginButton.textContent = 'Log in';
+        loginButton.className = 'login-out-button';
         loginButton.onclick = async () => {
             try {
                 nav.innerHTML = `<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`;
@@ -157,7 +158,7 @@ export class PageBuilder {
         // Add logout button
         const logoutButton = document.createElement('button');
         logoutButton.textContent = 'Log out';
-        logoutButton.className = 'logout-button';
+        logoutButton.className = 'login-out-button';
         logoutButton.onclick = async () => {
             try {
                 // Clear tokens and user state

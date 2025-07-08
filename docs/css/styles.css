@@ -61,7 +61,7 @@ nav #navbar a.active {
 nav #navbar a:hover {
     text-decoration: underline;
 }
-nav #navbar .logout-button {
+nav #navbar .login-out-button {
     position: absolute;
     right: 20px;
 }
