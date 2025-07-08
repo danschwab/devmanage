@@ -1,41 +1,15 @@
-import { GoogleSheetsAuth, GoogleSheetsService, ModalManager, navigationItems } from '../index.js';
+import { Auth, ModalManager, navigationItems } from '../../index.js';
 
 export class PageBuilder {
-    static CACHE_SPREADSHEET_ID = '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw';
 
-    static async cacheCurrentPage() {
-        // Disabled: do not cache page to sheets
-        return;
-        /*
-        try {
-            const contentDiv = document.getElementById('content');
-            if (contentDiv?.children.length > 0) {
-                const cacheId = window.location.hash.substring(1);
-                await GoogleSheetsService.cacheData(this.CACHE_SPREADSHEET_ID, cacheId, contentDiv.innerHTML);
-            }
-        } catch (error) {
-            console.error('Failed to cache page:', error);
-        }
-        */
-    }
 
     // Function to load content dynamically into the #content div
-    static async loadContent(pageName, cache = true) {
+    static async loadContent(pageName) {
         try {
-            // Clean up existing handlers
-            //TableManager.cleanup();
-            //TabManager.cleanup();
             
             // Show loading notification
             const loadingModal = ModalManager.showLoadingIndicator();
             
-
-            // Cache current page before changing
-            if (cache) {
-                await this.cacheCurrentPage();
-            }
-            
-
             // Ensure pageName ends with .html
             if (!pageName.endsWith('.html')) {
                 pageName = `${pageName}.html`;
@@ -45,34 +19,22 @@ export class PageBuilder {
             // Get the new page name
             const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
             
-
-            // Disabled: do not load from sheets cache
-            //const cachedContent = await GoogleSheetsService.getCachedData(this.CACHE_SPREADSHEET_ID, pageNameWithoutExt, 60 * 60 * 1000);
-            const cachedContent = null;
-
-            if (cachedContent) {
-                //const useCache = await ModalManager.confirm('A cached version of this page exists. Would you like to load it?');
-                //if (useCache) {
-                    await this.buildPage(cachedContent);
-                //}
+            const cacheBuster = `?v=${new Date().getTime()}`;
+            const response = await fetch(page + cacheBuster);
+            if (response.ok) {
+                const html = await response.text();
+                await this.buildPage(html);
             } else {
-                const cacheBuster = `?v=${new Date().getTime()}`;
-                const response = await fetch(page + cacheBuster);
-                if (response.ok) {
-                    const html = await response.text();
-                    await this.buildPage(html);
+                loadingModal.hide();
+                // Redirect to 404 page but don't recurse if 404 itself fails
+                if (!page.endsWith('404.html')) {
+                    await this.loadContent('404.html', false);
                 } else {
-                    loadingModal.hide();
-                    // Redirect to 404 page but don't recurse if 404 itself fails
-                    if (!page.endsWith('404.html')) {
-                        await this.loadContent('404.html', false);
-                    } else {
-                        await ModalManager.alert('Error loading content');
-                        window.location.hash = "";
-                    }
+                    await ModalManager.alert('Error loading content');
+                    window.location.hash = "";
                 }
             }
-            
+
             // Update the URL hash on success
             window.location.hash = pageNameWithoutExt;
             loadingModal.hide();
@@ -158,12 +120,7 @@ export class PageBuilder {
             try {
                 nav.innerHTML = `<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`;
 
-                // Clear any stored tokens before login
-                if (window.GoogleSheetsAuth && typeof window.GoogleSheetsAuth.clearStoredToken === 'function') {
-                    window.GoogleSheetsAuth.clearStoredToken();
-                }
-
-                const success = await GoogleSheetsAuth.authenticate();
+                const success = await Auth.authenticate();
                 if (success) {
                     this.generateNavigation();
                     const location = window.location.hash.substring(1);
@@ -191,7 +148,7 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
                 e.preventDefault();
-                GoogleSheetsAuth.checkAuth();
+                Auth.checkAuth();
                 this.loadContent(item.file);
             };
             nav.appendChild(link);
@@ -203,11 +160,10 @@ export class PageBuilder {
         logoutButton.className = 'logout-button';
         logoutButton.onclick = async () => {
             try {
-                await this.cacheCurrentPage();
                 // Clear tokens and user state
-                await GoogleSheetsAuth.logout();
-                if (window.GoogleSheetsAuth && typeof window.GoogleSheetsAuth.clearStoredToken === 'function') {
-                    window.GoogleSheetsAuth.clearStoredToken();
+                await Auth.logout();
+                if (window.Auth && typeof window.Auth.clearStoredToken === 'function') {
+                    window.Auth.clearStoredToken();
                 }
                 this.generateLoginButton();
                 // Remove hash and reload to ensure clean state

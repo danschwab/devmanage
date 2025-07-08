@@ -1,5 +1,5 @@
-import { GoogleSheetsAuth } from '../google_sheets_services/GoogleSheetsAuth.js';
-import { NotificationManager, NOTIFICATIONS } from './notifications.js';
+import { GoogleSheetsAuth } from '../../google_sheets_services/GoogleSheetsAuth.js';
+import { NotificationManager, NOTIFICATIONS } from '../../utils/notifications.js';
 
 /**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
@@ -16,8 +16,10 @@ export class Auth {
      */
     static async init() {
         try {
-            await GoogleSheetsAuth.loadGapiClient();
-            this._isAuthenticated = await GoogleSheetsAuth.isSignedIn();
+            // Use initialize() instead of loadGapiClient()
+            await GoogleSheetsAuth.initialize();
+            // Use isAuthenticated() instead of isSignedIn()
+            this._isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
             if (this._isAuthenticated) {
                 this._notifyListeners('init_success');
                 // Also use the new notification system
@@ -86,7 +88,8 @@ export class Auth {
      */
     static async signOut() {
         try {
-            await GoogleSheetsAuth.signOut();
+            // Use logout() instead of signOut()
+            await GoogleSheetsAuth.logout();
             this._isAuthenticated = false;
             this._notifyListeners('signout');
             // Also use the new notification system
@@ -126,16 +129,40 @@ export class Auth {
         if (!this._isAuthenticated) return null;
         
         try {
-            const authInstance = gapi.auth2.getAuthInstance();
-            const user = authInstance.currentUser.get();
-            const profile = user.getBasicProfile();
+            // If we can get the email from GoogleSheetsAuth, use that
+            const email = GoogleSheetsAuth.userEmail;
             
-            return {
-                id: profile.getId(),
-                name: profile.getName(),
-                email: profile.getEmail(),
-                imageUrl: profile.getImageUrl()
-            };
+            // Try to get more profile information if available
+            try {
+                const authInstance = gapi.auth2.getAuthInstance();
+                if (authInstance) {
+                    const user = authInstance.currentUser.get();
+                    const profile = user.getBasicProfile();
+                    
+                    if (profile) {
+                        return {
+                            id: profile.getId(),
+                            name: profile.getName(),
+                            email: profile.getEmail() || email,
+                            imageUrl: profile.getImageUrl()
+                        };
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not get detailed profile:', e);
+            }
+            
+            // Fallback to just email
+            if (email) {
+                return {
+                    id: 'unknown',
+                    name: email.split('@')[0],
+                    email: email,
+                    imageUrl: null
+                };
+            }
+            
+            return null;
         } catch (error) {
             console.error('Error getting user info:', error);
             return null;

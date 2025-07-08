@@ -1,4 +1,4 @@
-import { GoogleSheetsService, TableManager } from '../index.js';
+import { GoogleSheetsService, TableManager } from '../../index.js';
 
 export class FormBuilder {
     constructor(containerId, resultContainerId) {

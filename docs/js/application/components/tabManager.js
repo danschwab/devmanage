@@ -1,4 +1,4 @@
-import { PageBuilder } from '../index.js';
+import { PageBuilder } from '../../index.js';
 
 export class TabManager {
     static tabCounter = 1;
@@ -40,7 +40,7 @@ export class TabManager {
 
             const hamburger = document.createElement('button');
             hamburger.className = 'hamburger-menu';
-            hamburger.innerHTML = '<span></span><span></span><span></span>';
+            hamburger.innerHTML = '≡';
             tabs.appendChild(hamburger);
 
             if (newTabHandler) {
