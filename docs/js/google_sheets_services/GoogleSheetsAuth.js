@@ -74,30 +74,22 @@ export class GoogleSheetsAuth {
         }
     }
 
-    static async authenticate(silent = false) {
+    static async authenticate() {
         if (!gapiInited || !gisInited) {
             throw new Error('Google API not properly initialized');
         }
 
         try {
-            const lastEmail = localStorage.getItem('last_email');
-            
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '',
-                login_hint: silent ? lastEmail : '',
-                prompt: silent ? 'none' : 'select_account'
+                prompt: 'select_account'
             });
 
             return new Promise((resolve, reject) => {
                 tokenClient.callback = async (resp) => {
                     if (resp.error !== undefined) {
-                        if (silent) {
-                            // Silent refresh failed, but this isn't an error
-                            resolve(false);
-                            return;
-                        }
                         console.error('Authentication error:', resp);
                         reject(resp);
                         return;
@@ -112,7 +104,7 @@ export class GoogleSheetsAuth {
                     
                     this.storeToken(token);
                     
-                    // Store email for future silent refresh
+                    // Store email for future reference
                     const email = await this.getUserEmail();
                     if (email) {
                         localStorage.setItem('last_email', email);
@@ -123,22 +115,14 @@ export class GoogleSheetsAuth {
                 
                 try {
                     tokenClient.requestAccessToken({
-                        prompt: silent ? 'none' : 'select_account',
-                        login_hint: silent ? lastEmail : ''
+                        prompt: 'select_account'
                     });
                 } catch (error) {
-                    if (silent) {
-                        resolve(false);
-                    } else {
-                        console.error('Token request error:', error);
-                        reject(error);
-                    }
+                    console.error('Token request error:', error);
+                    reject(error);
                 }
             });
         } catch (error) {
-            if (silent) {
-                return false;
-            }
             console.error('Authentication error:', error);
             throw error;
         }
@@ -153,12 +137,8 @@ export class GoogleSheetsAuth {
                 return true;
             }
             
-            // Try silent refresh first
-            const silentSuccess = await this.authenticate(true);
-            if (!silentSuccess) {
-                // If silent refresh fails, try interactive login
-                await this.authenticate(false);
-            }
+            // No valid token available - user must authenticate interactively
+            return false;
         }
         return true;
     }

@@ -22,12 +22,9 @@ async function init() {
             // Already authenticated from init
             NotificationManager.publish(NOTIFICATIONS.AUTH_SUCCESS, { userInfo: Auth.getCurrentUser() });
         } else {
-            // Try silent sign-in
-            const success = await Auth.signIn(true);
-            if (!success) {
-                PageBuilder.generateNavigation();
-                PageBuilder.generateLoginButton();
-            }
+            // User needs to authenticate interactively
+            PageBuilder.generateNavigation();
+            PageBuilder.generateLoginButton();
         }
 
     } catch (error) {

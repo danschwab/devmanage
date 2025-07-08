@@ -8,7 +8,6 @@ export class Auth {
     // Authentication state
     static _isAuthenticated = false;
     static _isAuthenticating = false;
-    static _authListeners = [];
     
     /**
      * Initialize the authentication system
@@ -16,13 +15,10 @@ export class Auth {
      */
     static async init() {
         try {
-            // Use initialize() instead of loadGapiClient()
             await GoogleSheetsAuth.initialize();
-            // Use isAuthenticated() instead of isSignedIn()
             this._isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
             if (this._isAuthenticated) {
-                this._notifyListeners('init_success');
-                // Also use the new notification system
+                // Use the notification system
                 NotificationManager.publish(NOTIFICATIONS.AUTH_INITIALIZED, { 
                     success: true,
                     isAuthenticated: true
@@ -35,8 +31,7 @@ export class Auth {
             }
         } catch (error) {
             console.error('Auth initialization error:', error);
-            this._notifyListeners('init_error', error);
-            // Also use the new notification system
+            // Use the notification system
             NotificationManager.publish(NOTIFICATIONS.AUTH_INITIALIZED, { 
                 success: false,
                 error: error.message
@@ -46,35 +41,31 @@ export class Auth {
     
     /**
      * Sign in the user
-     * @param {boolean} [silentMode=false] - Whether to use silent mode for sign-in
      * @returns {Promise<boolean>} Authentication result
      */
-    static async signIn(silentMode = false) {
+    static async signIn() {
         if (this._isAuthenticating) {
             return false;
         }
         
         this._isAuthenticating = true;
-        this._notifyListeners('auth_start');
-        // Also use the new notification system
-        NotificationManager.publish(NOTIFICATIONS.AUTH_STARTED, { silentMode });
+        // Use the notification system
+        NotificationManager.publish(NOTIFICATIONS.AUTH_STARTED);
         
         try {
-            await GoogleSheetsAuth.authenticate(silentMode);
+            await GoogleSheetsAuth.authenticate();
             this._isAuthenticated = true;
-            this._notifyListeners('auth_success');
             
             // Get user info for notification
             const userInfo = this.getCurrentUser();
             
-            // Also use the new notification system
+            // Use the notification system
             NotificationManager.publish(NOTIFICATIONS.AUTH_SUCCESS, { userInfo });
             
             return true;
         } catch (error) {
             console.error('Authentication error:', error);
-            this._notifyListeners('auth_error', error);
-            // Also use the new notification system
+            // Use the notification system
             NotificationManager.publish(NOTIFICATIONS.AUTH_ERROR, { error: error.message });
             return false;
         } finally {
@@ -91,13 +82,11 @@ export class Auth {
             // Use logout() instead of signOut()
             await GoogleSheetsAuth.logout();
             this._isAuthenticated = false;
-            this._notifyListeners('signout');
-            // Also use the new notification system
+            // Use the notification system
             NotificationManager.publish(NOTIFICATIONS.AUTH_SIGNOUT);
         } catch (error) {
             console.error('Sign out error:', error);
-            this._notifyListeners('signout_error', error);
-            // Also use the new notification system
+            // Use the notification system
             NotificationManager.publish(NOTIFICATIONS.AUTH_ERROR, { 
                 action: 'signout',
                 error: error.message 
@@ -167,43 +156,5 @@ export class Auth {
             console.error('Error getting user info:', error);
             return null;
         }
-    }
-    
-    /**
-     * Add authentication state change listener
-     * @param {function(string, Object=)} callback - Callback function
-     * @returns {number} Listener ID for removal
-     */
-    static addAuthListener(callback) {
-        this._authListeners.push(callback);
-        return this._authListeners.length - 1;
-    }
-    
-    /**
-     * Remove authentication state change listener
-     * @param {number} id - Listener ID returned from addAuthListener
-     */
-    static removeAuthListener(id) {
-        if (id >= 0 && id < this._authListeners.length) {
-            this._authListeners[id] = null;
-        }
-    }
-    
-    /**
-     * Notify all listeners of auth state change
-     * @param {string} event - Event name
-     * @param {Object} [data] - Optional event data
-     * @private
-     */
-    static _notifyListeners(event, data) {
-        this._authListeners.forEach(listener => {
-            if (listener) {
-                try {
-                    listener(event, data);
-                } catch (e) {
-                    console.error('Error in auth listener:', e);
-                }
-            }
-        });
     }
 }
