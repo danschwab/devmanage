@@ -121,7 +121,7 @@ export class PageBuilder {
             try {
                 nav.innerHTML = `<div class="loading-message">Loading authentication...</br>A pop up blocker may have prevented google authentication from loading.</div>`;
 
-                const success = await Auth.authenticate();
+                const success = await Auth.signIn();
                 if (success) {
                     this.generateNavigation();
                     const location = window.location.hash.substring(1);
@@ -149,7 +149,6 @@ export class PageBuilder {
             link.textContent = item.title;
             link.onclick = (e) => {
                 e.preventDefault();
-                Auth.checkAuth();
                 this.loadContent(item.file);
             };
             nav.appendChild(link);
@@ -162,10 +161,7 @@ export class PageBuilder {
         logoutButton.onclick = async () => {
             try {
                 // Clear tokens and user state
-                await Auth.logout();
-                if (window.Auth && typeof window.Auth.clearStoredToken === 'function') {
-                    window.Auth.clearStoredToken();
-                }
+                await Auth.signOut();
                 this.generateLoginButton();
                 // Remove hash and reload to ensure clean state
                 window.location.hash = '';

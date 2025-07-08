@@ -45,7 +45,9 @@ async function init() {
     }
 }
 
-// Helper function to set up notification subscriptions
+
+
+// Set up primary application notification subscriptions
 function subscribeNotifications() {
     NotificationManager.subscribe(NOTIFICATIONS.AUTH_INITIALIZED, event => {
         console.log('Auth initialized:', event.data);
