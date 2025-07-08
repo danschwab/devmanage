@@ -1,5 +1,5 @@
 import { GoogleSheetsService } from '../google_sheets_services/GoogleSheetsData.js';
-import { CacheManager, getCurrentTrackingId } from '../index.js';
+import { CacheManager } from '../index.js';
 
 export class Database {
     /**
@@ -12,7 +12,7 @@ export class Database {
      */
     static async getData(tableId, range, useCache = true, trackingId = null) {
         // Use provided tracking ID or get current one from execution context
-        trackingId = trackingId || getCurrentTrackingId();
+        trackingId = trackingId || CacheManager.getCurrentTrackingId();
         
         const cacheKey = `${tableId}:${range}`;
         
@@ -77,7 +77,7 @@ export class Database {
      */
     static async getTabs(tableId, useCache = true, trackingId = null) {
         // Use provided tracking ID or get current one from execution context
-        trackingId = trackingId || getCurrentTrackingId();
+        trackingId = trackingId || CacheManager.getCurrentTrackingId();
         
         // Check cache if allowed
         if (useCache) {
@@ -171,7 +171,7 @@ export class Database {
      */
     static async queryData(tableId, query, trackingId = null) {
         // Use provided tracking ID or get current one from execution context
-        trackingId = trackingId || getCurrentTrackingId();
+        trackingId = trackingId || CacheManager.getCurrentTrackingId();
         
         // Generate a cache key for this query
         const cacheKey = `${tableId}:${query}`;

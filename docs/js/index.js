@@ -1,5 +1,6 @@
 // Application components
 //export { FormBuilder } from './application/components/formBuilder.js';
+export { navigationItems } from './application/app.js';
 export { PageBuilder } from './application/components/pageBuilder.js';
 export { TableManager } from './application/components/tableManager.js';
 export { TabManager } from './application/components/tabManager.js';
@@ -15,7 +16,7 @@ export { PackListUtils } from './data_management/utils/packlist-utils.js';
 export { ProductionUtils } from './data_management/utils/production-utils.js';
 
 // Utility classes
-export { Auth } from './utils/auth.js';
+export { Auth } from './application/utils/auth.js';
 export { NotificationManager, NOTIFICATIONS } from './utils/notifications.js';
 export { FuzzyMatcher, GetTopFuzzyMatch } from './utils/fuzzyMatch.js';
-export { helpers, parseDate } from './utils/fuzzyMatch.js';
+export { parseDate } from './utils/helpers.js';
