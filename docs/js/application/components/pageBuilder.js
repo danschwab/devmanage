@@ -3,43 +3,34 @@ import { Auth, ModalManager, navigationItems } from '../../index.js';
 export class PageBuilder {
 
 
-    // Function to load content dynamically into the #content div
+    // Function to load content dynamically into the dom
     static async loadContent(pageName) {
         try {
-            
             // Show loading notification
             const loadingModal = ModalManager.showLoadingIndicator();
             
-            // Ensure pageName ends with .html
-            if (!pageName.endsWith('.html')) {
-                pageName = `${pageName}.html`;
-            }
-            const page = `pages/${pageName}`;
-            
-            // Get the new page name
+            // Get the new page name for URL hash
             const pageNameWithoutExt = pageName.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
             
-            const cacheBuster = `?v=${new Date().getTime()}`;
-            const response = await fetch(page + cacheBuster);
-            if (response.ok) {
-                const html = await response.text();
+            try {
+                const html = await this.fetchHtmlFile(pageName);
                 await this.buildPage(html);
-            } else {
-                loadingModal.hide();
+                
+                // Update the URL hash on success
+                window.location.hash = pageNameWithoutExt;
+            } catch (fetchError) {
+                console.error('Fetch error:', fetchError);
                 // Redirect to 404 page but don't recurse if 404 itself fails
-                if (!page.endsWith('404.html')) {
-                    await this.loadContent('404.html', false);
+                if (!pageName.includes('404')) {
+                    await this.loadContent('404');
                 } else {
                     await ModalManager.alert('Error loading content');
                     window.location.hash = "";
                 }
             }
-
-            // Update the URL hash on success
-            window.location.hash = pageNameWithoutExt;
+            
             loadingModal.hide();
         } catch (error) {
-            loadingModal.hide();
             console.error('Error:', error);
             if (error.message.includes('auth')) {
                 this.generateLoginButton();
@@ -53,7 +44,7 @@ export class PageBuilder {
     
     static async buildPage(content, contentDiv = null, overwrite = true) {
         // if no contentDiv passed, assume the primary page content div
-        if (!contentDiv) contentDiv = document.getElementById('content');
+        if (!contentDiv) contentDiv = document.getElementById('app');
         // allow contentDiv to be a string id value
         if (typeof contentDiv == 'string') {
             contentDiv = document.getElementById(contentDiv);
@@ -173,5 +164,24 @@ export class PageBuilder {
             }
         };
         nav.appendChild(logoutButton);
+    }
+
+
+    // Helper function to fetch HTML content from a page
+    static async fetchHtmlFile(pageName, source = 'pages') {
+        // Ensure pageName ends with .html
+        if (!pageName.endsWith('.html')) {
+            pageName = `${pageName}.html`;
+        }
+        const page = `html/${source}/${pageName}`;
+        
+        const cacheBuster = `?v=${new Date().getTime()}`;
+        const response = await fetch(page + cacheBuster);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch page: ${page} (${response.status})`);
+        }
+        
+        return await response.text();
     }
 }

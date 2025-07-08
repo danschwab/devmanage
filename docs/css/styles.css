@@ -6,7 +6,7 @@ body {
     background-attachment: fixed;
     margin: 0;
 }
-body > div {
+div#app {
     display: flex;
     flex-wrap: wrap;
     align-items: start;
@@ -14,11 +14,25 @@ body > div {
     position: fixed;
     left:0;
     right:0;
-    padding: calc(var(--padding-lg) / 2);/* 180px;*/
+    padding: calc(var(--padding-lg) / 2);
     top: var(--navbar-height);
     bottom: 0;
     overflow: auto;
 }
+div#app:not(:has(div))::after {
+    content: "open a page to see content";
+    color: var(--color-gray-bg-transparent);
+    font-size: larger;
+    font-style: italic;
+    line-height: calc(100vh - var(--navbar-height) - 2 * var(--padding-lg));
+}
+div#app::-webkit-scrollbar {
+    background: transparent;
+}
+div#app::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+}
+
 /* Primary Navigation */
 nav {
     position: fixed;
@@ -73,17 +87,11 @@ nav #navbar .login-out-button {
     background: var(--color-gray-bg);
     border-radius: var(--radius-lg);
 }
-body > div::-webkit-scrollbar {
-    background: transparent;
-}
 ::-webkit-scrollbar-thumb {
     background: var(--color-gray);
     margin: 2px;
     border-radius: var(--radius-lg);
     width: 8px;
-}
-body > div::-webkit-scrollbar-thumb {
-    background: var(--color-primary);
 }
 p {
     margin: 0;
@@ -106,6 +114,8 @@ p {
     padding: var(--padding-md);
     width: 90%;
     max-width: var(--page-width-large);
+    min-height: calc(100vh - var(--navbar-height) - 2 * var(--padding-lg));
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: start;
@@ -247,6 +257,14 @@ button:hover {
     justify-content: space-between;
     padding: 5px;
 }
+.modal-header h1 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--color-text);
+    font-weight: 600;
+    width: 100%;
+    text-align: center;
+}
 .modal-close {
     /*transform: translateX(80%);*/
     width: 16px;
@@ -376,7 +394,7 @@ button:hover {
 }
 
 .tab-container:empty:after {
-    content: "Open a tab to see content. It may take a second to load.";
+    content: "open a tab to see content";
     display: block;
     right: 0;
     text-align: center;
