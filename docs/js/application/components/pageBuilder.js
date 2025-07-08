@@ -114,9 +114,8 @@ export class PageBuilder {
             link.onclick = (e) => {
                 e.preventDefault();
                 const loadingModal = ModalManager.showLoadingIndicator();
-                const pageContent = this.fetchHtml(item.file);
-                this.buildPage(pageContent);
-                this.setLocation(item.title);
+
+                PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml(item.file)));
                 loadingModal.hide();
             };
             nav.appendChild(link);
@@ -141,5 +140,42 @@ export class PageBuilder {
             }
         };
         nav.appendChild(logoutButton);
+    }
+
+    // Flexible template builder: accepts a string (body content) or an object (content map)
+    static async buildFromTemplate(content = '', templateName = 'container') {
+        try {
+            // Fetch the template HTML
+            const templateHtml = await this.fetchHtml(templateName, true);
+
+            // If content is a string, treat it as body content
+            let map = {};
+            if (typeof content === 'string') {
+                map = {
+                    'header-content': '',
+                    'content': content,
+                    'footer-content': ''
+                };
+            } else {
+                map = {
+                    'header-content': '',
+                    'content': '',
+                    'footer-content': '',
+                    ...content
+                };
+            }
+
+            // Replace all template placeholders
+            let builtContent = templateHtml;
+            for (const [placeholder, content] of Object.entries(map)) {
+                const regex = new RegExp(`<!--${placeholder}-->`, 'g');
+                builtContent = builtContent.replace(regex, content);
+            }
+
+            return builtContent;
+        } catch (error) {
+            console.error('Error building from template:', error);
+            throw new Error(`Failed to build content from template: ${templateName}`);
+        }
     }
 }

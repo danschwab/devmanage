@@ -16,7 +16,7 @@ async function init() {
     const appTemplate = await PageBuilder.fetchHtml('app', true);
     PageBuilder.buildPage(appTemplate, appBody, true);
 
-    
+
     const loadingModal = ModalManager.showLoadingIndicator('Checking authentication...');
     try {
         // Initialize the notification system first
@@ -65,10 +65,10 @@ function subscribeNotifications() {
         PageBuilder.generateNavigation();
         if (!window.location.hash) {
             window.location.hash = 'home';
-            PageBuilder.loadContent(`home`);
+            PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml('home')));
         } else {
             const pageName = window.location.hash.substring(1);
-            PageBuilder.loadContent(pageName);
+            PageBuilder.buildPage(PageBuilder.buildFromTemplate(PageBuilder.fetchHtml(pageName, true)));
         }
     });
     
