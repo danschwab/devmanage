@@ -1,20 +1,20 @@
-// Auth store - wraps your existing GoogleSheetsAuth functionality
-const { defineStore } = window.Pinia;
-const { ref, computed } = Vue;
+// Auth store - using Vue's built-in reactivity instead of Pinia
+const { ref, computed, reactive } = Vue;
 
-export const useAuthStore = defineStore('auth', () => {
-    // State
-    const isAuthenticated = ref(false);
-    const isAuthenticating = ref(false);
-    const user = ref(null);
-    const error = ref(null);
-    
-    // Computed
-    const userEmail = computed(() => user.value?.email || null);
-    const userName = computed(() => user.value?.name || null);
-    
-    // Import your existing auth classes
-    let GoogleSheetsAuth;
+// Create a reactive auth store
+const authState = reactive({
+    isAuthenticated: false,
+    isAuthenticating: false,
+    user: null,
+    error: null
+});
+
+let GoogleSheetsAuth;
+
+export const useAuthStore = () => {
+    // Computed properties
+    const userEmail = computed(() => authState.user?.email || null);
+    const userName = computed(() => authState.user?.name || null);
     
     // Actions
     async function init() {
@@ -27,48 +27,48 @@ export const useAuthStore = defineStore('auth', () => {
             await GoogleSheetsAuth.initialize();
             
             // Check if already authenticated
-            isAuthenticated.value = GoogleSheetsAuth.isAuthenticated();
+            authState.isAuthenticated = GoogleSheetsAuth.isAuthenticated();
             
-            if (isAuthenticated.value) {
-                user.value = await getCurrentUserInfo();
+            if (authState.isAuthenticated) {
+                authState.user = await getCurrentUserInfo();
             }
             
         } catch (err) {
             console.error('Auth initialization error:', err);
-            error.value = err.message;
+            authState.error = err.message;
             throw err;
         }
     }
     
     async function signIn() {
-        if (isAuthenticating.value) return false;
+        if (authState.isAuthenticating) return false;
         
-        isAuthenticating.value = true;
-        error.value = null;
+        authState.isAuthenticating = true;
+        authState.error = null;
         
         try {
             await GoogleSheetsAuth.authenticate();
-            isAuthenticated.value = true;
-            user.value = await getCurrentUserInfo();
+            authState.isAuthenticated = true;
+            authState.user = await getCurrentUserInfo();
             return true;
         } catch (err) {
             console.error('Authentication error:', err);
-            error.value = err.message;
+            authState.error = err.message;
             return false;
         } finally {
-            isAuthenticating.value = false;
+            authState.isAuthenticating = false;
         }
     }
     
     async function signOut() {
         try {
             await GoogleSheetsAuth.logout();
-            isAuthenticated.value = false;
-            user.value = null;
-            error.value = null;
+            authState.isAuthenticated = false;
+            authState.user = null;
+            authState.error = null;
         } catch (err) {
             console.error('Sign out error:', err);
-            error.value = err.message;
+            authState.error = err.message;
             throw err;
         }
     }
@@ -118,11 +118,8 @@ export const useAuthStore = defineStore('auth', () => {
     
     // Return the store API
     return {
-        // State
-        isAuthenticated,
-        isAuthenticating,
-        user,
-        error,
+        // State (direct access to reactive properties)
+        ...authState,
         
         // Computed
         userEmail,
@@ -134,4 +131,4 @@ export const useAuthStore = defineStore('auth', () => {
         signOut,
         getCurrentUserInfo
     };
-});
+};

@@ -1,7 +1,6 @@
 // Vue 3 main entry point
 const { createApp } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
-const { createPinia } = window.Pinia;
 
 // Import components
 import App from './components/App.js';
@@ -38,7 +37,6 @@ router.beforeEach((to, from, next) => {
 
 // Create and mount the Vue app
 const app = createApp(App);
-app.use(createPinia());
 app.use(router);
 
 // Make existing utilities available globally for gradual migration
