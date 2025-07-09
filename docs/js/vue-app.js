@@ -1,6 +1,20 @@
 const { createApp } = Vue;
 
-// Vue app that mimics the existing app.html template
+// Function to load template from external file
+async function loadTemplate(templateName) {
+    try {
+        const response = await fetch(`html/templates/${templateName}.html`);
+        if (!response.ok) {
+            throw new Error(`Failed to load template: ${response.status}`);
+        }
+        return await response.text();
+    } catch (error) {
+        console.error('Error loading template:', error);
+        return '<div>Error loading template</div>';
+    }
+}
+
+// Vue app that uses external template
 const App = {
     data() {
         return {
@@ -38,69 +52,15 @@ const App = {
             this.currentPage = pageFile;
             console.log(`Navigating to: ${pageFile}`);
         }
-    },
-    template: `
-        <header>
-            <nav :class="{ 'open': isMenuOpen }">
-                <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-                
-                <span id="navbar">
-                    <!-- Navigation items when authenticated -->
-                    <template v-if="isAuthenticated">
-                        <a v-for="item in navigationItems" 
-                            :key="item.file"
-                            :class="{ 'active': currentPage === item.file }"
-                            @click="navigateToPage(item.file)"
-                            href="#">
-                            {{ item.title }}
-                        </a>
-                    </template>
-                    
-                    <!-- Login/Logout button -->
-                    <button v-if="!isAuthenticated" 
-                            @click="login" 
-                            class="login-out-button">
-                        Login
-                    </button>
-                    <button v-else 
-                            @click="logout" 
-                            class="login-out-button">
-                        Logout ({{ currentUser?.name }})
-                    </button>
-                </span>
-                
-                <button class="hamburger-menu" @click="toggleMenu">≡</button>
-            </nav>
-        </header>
-        
-        <div id="app-content">
-            <!-- Main content area -->
-            <div class="container">
-                <h1>Vue.js Test Page</h1>
-                <p>Current page: {{ currentPage }}</p>
-                <p>Authentication status: {{ isAuthenticated ? 'Authenticated' : 'Not authenticated' }}</p>
-                <p>Menu status: {{ isMenuOpen ? 'Open' : 'Closed' }}</p>
-                
-                <div v-if="isAuthenticated">
-                    <h2>Navigation Test</h2>
-                    <p>Click on navigation items above to test page switching.</p>
-                </div>
-                <div v-else>
-                    <h2>Please Login</h2>
-                    <p>Click the Login button to see the navigation.</p>
-                </div>
-            </div>
-            
-            <footer>
-                <p>
-                    &copy; 2024 Top Shelf Exhibits
-                    <br>
-                    <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
-                </p>
-            </footer>
-        </div>
-    `
+    }
 };
 
-// Create and mount the Vue app
-createApp(App).mount('#app');
+// Initialize the app with external template
+async function initApp() {
+    const template = await loadTemplate('vue-app');
+    App.template = template;
+    createApp(App).mount('#app');
+}
+
+// Initialize the app when the page loads
+initApp();
