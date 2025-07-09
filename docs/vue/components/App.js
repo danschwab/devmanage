@@ -61,6 +61,36 @@ export default {
         };
     },
     template: `
+        <header>
+            <nav>
+                <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+                
+                <!-- Navigation items when authenticated -->
+                <div v-if="authStore?.isAuthenticated" id="navbar" class="nav-links">
+                    <a 
+                        v-for="item in navigationItems" 
+                        :key="item.path"
+                        href="#" 
+                        :class="{ active: route.path === item.path }"
+                        @click.prevent="navigateToPage(item.path)"
+                    >
+                        {{ item.title }}
+                    </a>
+                    <button class="login-out-button" @click="handleLogout">
+                        Log out
+                    </button>
+                </div>
+                
+                <!-- Login button when not authenticated -->
+                <div v-else id="navbar">
+                    <button class="login-out-button" @click="handleLogin">
+                        Log in
+                    </button>
+                </div>
+                
+                <button class="hamburger-menu" @click="toggleMobileMenu">≡</button>
+            </nav>
+        </header>
         <div id="app-container">
             <!-- Loading indicator -->
             <div v-if="isLoading" class="loading-overlay">
@@ -69,36 +99,6 @@ export default {
             
             <!-- Main app layout - based on app.html template -->
             <div v-else>
-                <header>
-                    <nav>
-                        <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-                        
-                        <!-- Navigation items when authenticated -->
-                        <div v-if="authStore?.isAuthenticated" id="navbar" class="nav-links">
-                            <a 
-                                v-for="item in navigationItems" 
-                                :key="item.path"
-                                href="#" 
-                                :class="{ active: route.path === item.path }"
-                                @click.prevent="navigateToPage(item.path)"
-                            >
-                                {{ item.title }}
-                            </a>
-                            <button class="login-out-button" @click="handleLogout">
-                                Log out
-                            </button>
-                        </div>
-                        
-                        <!-- Login button when not authenticated -->
-                        <div v-else id="navbar">
-                            <button class="login-out-button" @click="handleLogin">
-                                Log in
-                            </button>
-                        </div>
-                        
-                        <button class="hamburger-menu" @click="toggleMobileMenu">≡</button>
-                    </nav>
-                </header>
                 
                 <!-- Main content area -->
                 <div id="app-content" class="main-content">
@@ -114,15 +114,15 @@ export default {
                     <!-- Show page content if authenticated -->
                     <router-view v-else />
                     
-                    <footer>
-                        <p>
-                            &copy; 2024 Top Shelf Exhibits
-                            <br>
-                            <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
-                        </p>
-                    </footer>
+                    </div>
                 </div>
             </div>
-        </div>
-    `
+        <footer>
+            <p>
+                &copy; 2024 Top Shelf Exhibits
+                <br>
+                <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
+            </p>
+        </footer>
+        `
 };

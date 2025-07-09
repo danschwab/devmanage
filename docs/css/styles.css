@@ -89,19 +89,19 @@ footer {
     align-items: center;
     justify-content: center;
     z-index: 3000;
-    color: var(--color-text-light);
+    color: var(--color-text);
     padding-top: calc(var(--padding-lg) / 2);
     margin-top: calc(var(--padding-lg) / 2);
 }
 footer a, footer p {
-    color: var(--color-text-light);
+    color: var(--color-text);
     text-decoration: none;
 }
 footer a:hover {
     text-decoration: underline;
 }
 footer a:visited {
-    color: var(--color-text-light);
+    color: var(--color-text);
 }
 
 /* Global interface */
