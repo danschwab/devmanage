@@ -28,12 +28,23 @@ export default {
             try {
                 // Import and initialize the auth store
                 const { useAuthStore } = await import('../stores/auth.js');
-                authStore.value = useAuthStore();
-                await authStore.value.init();
+                const store = useAuthStore();
+                authStore.value = store;
+                
+                console.log('Auth store created:', store);
+                console.log('Initial auth state:', store.isAuthenticated);
+                
+                await store.init();
+                
+                console.log('After init - auth state:', store.isAuthenticated);
+                console.log('User:', store.user);
                 
                 // Import navigation config
                 const { navigationConfig } = await import('../config/navigation.js');
                 navigationItems.value = navigationConfig;
+                
+                console.log('Navigation items loaded:', navigationItems.value);
+                
             } catch (error) {
                 console.error('App initialization error:', error);
             } finally {
@@ -89,6 +100,13 @@ export default {
         <header>
             <nav>
                 <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+                
+                <!-- Debug info -->
+                <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999;">
+                    AuthStore: {{ authStore ? 'exists' : 'null' }}<br>
+                    IsAuth: {{ authStore?.isAuthenticated }}<br>
+                    NavItems: {{ navigationItems?.length || 0 }}
+                </div>
                 
                 <!-- Navigation items when authenticated -->
                 <span v-if="authStore?.isAuthenticated" id="navbar">

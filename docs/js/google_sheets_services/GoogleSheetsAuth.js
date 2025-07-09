@@ -12,8 +12,17 @@ export class GoogleSheetsAuth {
 
     static async initialize() {
         try {
-            await this.loadGAPIScript();
-            await this.loadGISScript();
+            // Check if APIs are already loaded (from HTML script tags)
+            if (typeof gapi === 'undefined') {
+                await this.loadGAPIScript();
+            }
+            
+            if (typeof google === 'undefined') {
+                await this.loadGISScript();
+            } else {
+                gisInited = true;
+            }
+            
             await this.initializeGAPI();
             
             // Try to restore previous session

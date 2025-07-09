@@ -12,7 +12,15 @@ const authState = reactive({
 let GoogleSheetsAuth;
 let modalStore;
 
+// Create a single instance of the auth store
+let authStoreInstance = null;
+
 export const useAuthStore = () => {
+    // Return the same instance every time
+    if (authStoreInstance) {
+        return authStoreInstance;
+    }
+    
     // Computed properties
     const userEmail = computed(() => authState.user?.email || null);
     const userName = computed(() => authState.user?.name || null);
@@ -154,10 +162,13 @@ export const useAuthStore = () => {
         }
     }
     
-    // Return the store API
-    return {
-        // State (direct access to reactive properties)
-        ...authState,
+    // Create and cache the store instance
+    authStoreInstance = reactive({
+        // State properties
+        get isAuthenticated() { return authState.isAuthenticated; },
+        get isAuthenticating() { return authState.isAuthenticating; },
+        get user() { return authState.user; },
+        get error() { return authState.error; },
         
         // Computed
         userEmail,
@@ -168,5 +179,7 @@ export const useAuthStore = () => {
         signIn,
         signOut,
         getCurrentUserInfo
-    };
+    });
+    
+    return authStoreInstance;
 };
