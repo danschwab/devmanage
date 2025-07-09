@@ -55,16 +55,10 @@ router.beforeEach((to, from, next) => {
 const app = createApp(App);
 app.use(router);
 
-// Make existing utilities available globally for gradual migration
-app.config.globalProperties.$modal = {
-    showLoadingIndicator: (message = 'Loading...') => {
-        // You can implement a Vue modal here or use existing ModalManager
-        console.log('Loading:', message);
-        return { hide: () => console.log('Loading hidden') };
-    },
-    alert: (message) => {
-        alert(message); // Temporary, replace with Vue modal component
-    }
-};
+// Import and setup global modal service
+import { VueModalManager } from './services/ModalService.js';
+
+// Make modal service available globally
+app.config.globalProperties.$modal = VueModalManager;
 
 app.mount('#app');

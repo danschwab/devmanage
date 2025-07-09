@@ -2,19 +2,29 @@
 const { ref, computed, onMounted } = Vue;
 const { useRouter, useRoute } = VueRouter;
 
+import ModalContainer from './ModalContainer.js';
+import { useModal } from '../stores/modal.js';
+
 export default {
     name: 'App',
+    components: {
+        ModalContainer
+    },
     setup() {
         const router = useRouter();
         const route = useRoute();
+        const { showLoadingIndicator } = useModal();
         
-        const isLoading = ref(true);
         const authStore = ref(null);
         const isNavigationLoading = ref(false);
         const navigationItems = ref([]);
+        let authLoadingModal = null;
         
         // Initialize the app
         onMounted(async () => {
+            // Show loading modal for authentication check
+            authLoadingModal = showLoadingIndicator('Checking authentication...');
+            
             try {
                 // Import and initialize the auth store
                 const { useAuthStore } = await import('../stores/auth.js');
@@ -27,7 +37,10 @@ export default {
             } catch (error) {
                 console.error('App initialization error:', error);
             } finally {
-                isLoading.value = false;
+                // Hide the loading modal
+                if (authLoadingModal) {
+                    authLoadingModal.hide();
+                }
             }
         });
         
@@ -63,7 +76,6 @@ export default {
         
         return {
             authStore,
-            isLoading,
             isNavigationLoading,
             navigationItems,
             route,
@@ -110,29 +122,19 @@ export default {
             </nav>
         </header>
         <div id="app-container">
-            <!-- Loading indicator -->
-            <div v-if="isLoading" class="loading-overlay">
-                <div class="loading-message">Checking authentication...</div>
-            </div>
-            
             <!-- Main app layout - based on app.html template -->
-            <div v-else>
-                
-                <!-- Main content area -->
-                <div id="app-content" class="main-content">
-                    <!-- Show login prompt if not authenticated -->
-                    <div v-if="!authStore?.isAuthenticated" class="login-prompt">
-                        <h2>Please log in to continue</h2>
-                        <p>You need to authenticate with Google to access the inventory system.</p>
-                        <button class="login-out-button" @click="handleLogin">
-                            Log in with Google
-                        </button>
-                    </div>
-                    
-                    <!-- Show page content if authenticated -->
-                    <router-view v-else />
-                    
+            <div id="app-content" class="main-content">
+                <!-- Show login prompt if not authenticated -->
+                <div v-if="!authStore?.isAuthenticated" class="login-prompt">
+                    <h2>Please log in to continue</h2>
+                    <p>You need to authenticate with Google to access the inventory system.</p>
+                    <button class="login-out-button" @click="handleLogin">
+                        Log in with Google
+                    </button>
                 </div>
+                
+                <!-- Show page content if authenticated -->
+                <router-view v-else />
             </div>
         </div>
         <footer>
@@ -142,5 +144,8 @@ export default {
                 <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
             </p>
         </footer>
+        
+        <!-- Modal Container for all modals -->
+        <ModalContainer />
         `
 };

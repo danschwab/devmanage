@@ -10,6 +10,7 @@ const authState = reactive({
 });
 
 let GoogleSheetsAuth;
+let modalStore;
 
 export const useAuthStore = () => {
     // Computed properties
@@ -46,29 +47,66 @@ export const useAuthStore = () => {
         authState.isAuthenticating = true;
         authState.error = null;
         
+        // Import modal store if not already imported
+        if (!modalStore) {
+            const { useModal } = await import('./modal.js');
+            modalStore = useModal();
+        }
+        
+        const loadingModal = modalStore.showLoadingIndicator('Signing in...');
+        
         try {
             await GoogleSheetsAuth.authenticate();
             authState.isAuthenticated = true;
             authState.user = await getCurrentUserInfo();
+            
+            // Show success notification
+            modalStore.notify('Successfully signed in!', { timeout: 2000 });
+            
             return true;
         } catch (err) {
             console.error('Authentication error:', err);
             authState.error = err.message;
+            
+            // Show error notification
+            modalStore.notify(`Authentication failed: ${err.message}`, { 
+                timeout: 5000, 
+                showClose: true 
+            });
+            
             return false;
         } finally {
             authState.isAuthenticating = false;
+            loadingModal.hide();
         }
     }
     
     async function signOut() {
+        // Import modal store if not already imported
+        if (!modalStore) {
+            const { useModal } = await import('./modal.js');
+            modalStore = useModal();
+        }
+        
         try {
             await GoogleSheetsAuth.logout();
             authState.isAuthenticated = false;
             authState.user = null;
             authState.error = null;
+            
+            // Show success notification
+            modalStore.notify('Successfully signed out!', { timeout: 2000 });
+            
         } catch (err) {
             console.error('Sign out error:', err);
             authState.error = err.message;
+            
+            // Show error notification
+            modalStore.notify(`Sign out failed: ${err.message}`, { 
+                timeout: 5000, 
+                showClose: true 
+            });
+            
             throw err;
         }
     }

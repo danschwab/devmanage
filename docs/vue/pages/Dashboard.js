@@ -1,5 +1,6 @@
 // Dashboard page component
 import Container from '../components/Container.js';
+import { useModalService } from '../composables/useModalService.js';
 
 export default {
     name: 'Dashboard',
@@ -8,6 +9,7 @@ export default {
     },
     setup() {
         const { ref, onMounted } = Vue;
+        const modalService = useModalService();
         
         const dashboardData = ref({
             totalInventory: 0,
@@ -21,8 +23,27 @@ export default {
             console.log('Dashboard mounted');
         });
         
+        const handleNewPackList = async () => {
+            const confirmed = await modalService.confirm('Do you want to create a new pack list?');
+            if (confirmed) {
+                const loadingModal = await modalService.showLoadingIndicator('Creating pack list...');
+                
+                // Simulate async operation
+                setTimeout(() => {
+                    loadingModal.hide();
+                    modalService.notify('Pack list created successfully!');
+                }, 2000);
+            }
+        };
+        
+        const handleAddInventory = async () => {
+            await modalService.alert('This feature will be implemented soon!');
+        };
+        
         return {
-            dashboardData
+            dashboardData,
+            handleNewPackList,
+            handleAddInventory
         };
     },
     template: `
@@ -46,8 +67,8 @@ export default {
                 <div class="dashboard-card">
                     <h3>Quick Actions</h3>
                     <div class="action-buttons">
-                        <button class="btn-primary">New Pack List</button>
-                        <button class="btn-secondary">Add Inventory</button>
+                        <button class="btn-primary" @click="handleNewPackList">New Pack List</button>
+                        <button class="btn-secondary" @click="handleAddInventory">Add Inventory</button>
                         <button class="btn-secondary">Generate Report</button>
                     </div>
                 </div>
