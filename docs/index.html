@@ -7,9 +7,15 @@
         <link rel="stylesheet" href="css\styles.css">
         <link rel="icon" href="images\favicon.png" />
         <meta name="google-site-verification" content="RQVP29WC9y-bnMCZw06liZbkgi3TDgWLYM5bYigVPTc" />
-        <script type="module" src="js\application\app.js"></script>
+        <!-- Vue.js CDN -->
+        <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+        <!-- Comment out existing app for Vue testing -->
+        <!-- <script type="module" src="js\application\app.js"></script> -->
+        <script type="module" src="js\vue-app.js"></script>
     </head>
     <body>
-        <!--content-->
+        <div id="app">
+            <!-- Vue app will mount here -->
+        </div>
     </body>
 </html>
