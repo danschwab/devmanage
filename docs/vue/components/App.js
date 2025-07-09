@@ -102,7 +102,7 @@ export default {
                 <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
                 
                 <!-- Debug info -->
-                <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999;">
+                <div style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999;">
                     AuthStore: {{ authStore ? 'exists' : 'null' }}<br>
                     IsAuth: {{ authStore?.isAuthenticated }}<br>
                     NavItems: {{ navigationItems?.length || 0 }}
@@ -139,29 +139,27 @@ export default {
                 <button class="hamburger-menu" @click="toggleMobileMenu">≡</button>
             </nav>
         </header>
-        <div id="app-container">
-            <!-- Main app layout - based on app.html template -->
-            <div id="app-content" class="main-content">
-                <!-- Show login prompt if not authenticated -->
-                <div v-if="!authStore?.isAuthenticated" class="login-prompt">
-                    <h2>Please log in to continue</h2>
-                    <p>You need to authenticate with Google to access the inventory system.</p>
-                    <button class="login-out-button" @click="handleLogin">
-                        Log in with Google
-                    </button>
-                </div>
-                
-                <!-- Show page content if authenticated -->
-                <router-view v-else />
+        <!-- Main app layout - based on app.html template -->
+        <div id="app-content" class="main-content">
+            <!-- Show login prompt if not authenticated -->
+            <div v-if="!authStore?.isAuthenticated" class="login-prompt">
+                <h2>Please log in to continue</h2>
+                <p>You need to authenticate with Google to access the inventory system.</p>
+                <button class="login-out-button" @click="handleLogin">
+                    Log in with Google
+                </button>
             </div>
+            
+            <!-- Show page content if authenticated -->
+            <router-view v-else />
+            <footer>
+                <p>
+                    &copy; 2024 Top Shelf Exhibits
+                    <br>
+                    <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
+                </p>
+            </footer>
         </div>
-        <footer>
-            <p>
-                &copy; 2024 Top Shelf Exhibits
-                <br>
-                <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
-            </p>
-        </footer>
         
         <!-- Modal Container for all modals -->
         <ModalContainer />

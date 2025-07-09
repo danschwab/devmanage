@@ -1,12 +1,18 @@
 @import url('theme.css');
-body {
+body, #app {
     font-family: Arial, sans-serif;
     color: var(--color-text);
     background: var(--color-primary-gradient);
     background-attachment: fixed;
     margin: 0;
+    padding: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
 }
-div#app {
+div#app-content {
     display: flex;
     flex-wrap: wrap;
     align-items: start;
@@ -17,19 +23,21 @@ div#app {
     padding: calc(var(--padding-lg) / 2);
     top: var(--navbar-height);
     bottom: 0;
+    max-height: calc(100vh - var(--navbar-height));
+    box-sizing: border-box;
     overflow: auto;
 }
-div#app:not(:has(div))::before {
+div#app-content:not(:has(div))::before {
     content: "open a page to see content";
     color: var(--color-gray-bg-transparent);
     font-size: larger;
     font-style: italic;
     line-height: calc(100vh - var(--navbar-height) - var(--padding-lg));
 }
-div#app::-webkit-scrollbar {
+div#app-content::-webkit-scrollbar {
     background: transparent;
 }
-div#app::-webkit-scrollbar-thumb {
+div#app-content::-webkit-scrollbar-thumb {
     background: var(--color-primary);
 }
 
@@ -113,7 +121,7 @@ nav #navbar .nav-loading {
 }
 
 /* App container and content styling */
-#app-container {
+#app-content-container {
     position: relative;
     min-height: 100vh;
 }
