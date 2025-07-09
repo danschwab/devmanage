@@ -10,18 +10,34 @@ import PackList from './pages/PackList.js';
 import Inventory from './pages/Inventory.js';
 import Interfaces from './pages/Interfaces.js';
 
+// Import navigation config
+import { navigationConfig } from './config/navigation.js';
+
 // Import stores
 import { useAuthStore } from './stores/auth.js';
 
-// Define routes based on your existing navigationItems
+// Define routes based on navigation config
 const routes = [
     { path: '/', redirect: '/dashboard' },
-    { path: '/dashboard', component: Dashboard, name: 'Dashboard' },
-    { path: '/home', component: Home, name: 'Plan' },
-    { path: '/packlist', component: PackList, name: 'Pack Lists' },
-    { path: '/inventory', component: Inventory, name: 'Inventory' },
-    { path: '/interfaces', component: Interfaces, name: 'Test' }
+    ...navigationConfig.map(item => ({
+        path: item.path,
+        component: getComponentByFile(item.file),
+        name: item.title,
+        meta: { title: item.title }
+    }))
 ];
+
+// Helper function to map file names to components
+function getComponentByFile(fileName) {
+    const componentMap = {
+        'dashboard': Dashboard,
+        'home': Home,
+        'packlist': PackList,
+        'inventory': Inventory,
+        'interfaces': Interfaces
+    };
+    return componentMap[fileName] || Dashboard;
+}
 
 const router = createRouter({
     history: createWebHashHistory(),

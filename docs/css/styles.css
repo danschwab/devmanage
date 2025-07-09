@@ -48,10 +48,23 @@ header nav {
     overflow: hidden;
 }
 nav .hamburger-menu {
-    right: 0;
-    margin: 22px;
+    display: none; /* Hidden by default on desktop */
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--color-primary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.3s ease;
     position: absolute;
-    left: auto;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+nav .hamburger-menu:hover {
+    background-color: var(--color-gray-bg);
 }
 nav img {
     height: 64px;
@@ -78,6 +91,85 @@ nav #navbar a:hover {
 nav #navbar .login-out-button {
     position: absolute;
     right: 20px;
+}
+
+/* Navigation loading indicator */
+nav #navbar .nav-loading {
+    display: flex;
+    align-items: center;
+    color: var(--color-primary);
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--color-gray-bg);
+    border-radius: var(--radius-sm);
+    margin: 0 1rem;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* App container and content styling */
+#app-container {
+    position: relative;
+    min-height: 100vh;
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.loading-message {
+    font-size: 1.2rem;
+    color: var(--color-primary);
+    text-align: center;
+    padding: 2rem;
+    background-color: var(--background-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 8px var(--color-shadow);
+}
+
+.main-content {
+    padding-top: calc(var(--navbar-height) + 1rem);
+    min-height: calc(100vh - var(--navbar-height));
+}
+
+.login-prompt {
+    text-align: center;
+    padding: 3rem 2rem;
+    max-width: 500px;
+    margin: 0 auto;
+    background-color: var(--background-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 8px var(--color-shadow);
+}
+
+.login-prompt h2 {
+    color: var(--color-primary);
+    margin-bottom: 1rem;
+}
+
+.login-prompt p {
+    color: var(--color-text);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.login-out-button.large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
 }
 
 footer {
@@ -845,28 +937,58 @@ button.save-button:disabled {
 }
 
 @media (max-width: 800px) {
+    /* Mobile navigation */
     nav.open {
-        height:auto;
+        height: auto;
     }
+    
     nav #navbar {
         flex-direction: column;
         align-items: flex-start;
         padding: 20px;
+        width: 100%;
+        box-sizing: border-box;
     }
+    
     nav .hamburger-menu {
         display: block;
     }
-    nav #navbar a, nav #navbar button {
-        display: none
+    
+    /* Hide navigation items by default on mobile */
+    nav #navbar a, 
+    nav #navbar button:not(.hamburger-menu) {
+        display: none;
     }
+    
+    /* Show active page link on mobile */
     nav #navbar a.active {
         color: var(--color-primary);
         display: block;
     }
-    nav.open #navbar a, nav.open #navbar button {
+    
+    /* Show all navigation when menu is open */
+    nav.open #navbar a, 
+    nav.open #navbar button:not(.hamburger-menu) {
         display: block;
         position: static;
         margin: 0.5rem;
+        width: auto;
+    }
+    
+    /* Navigation loading indicator on mobile */
+    nav #navbar .nav-loading {
+        margin: 0.5rem;
+        display: block;
+    }
+    
+    /* Mobile login prompt adjustments */
+    .login-prompt {
+        margin: 1rem;
+        padding: 2rem 1rem;
+    }
+    
+    .main-content {
+        padding: calc(var(--navbar-height) + 1rem) 0.5rem 0;
     }
 
 

@@ -10,6 +10,8 @@ export default {
         
         const isLoading = ref(true);
         const authStore = ref(null);
+        const isNavigationLoading = ref(false);
+        const navigationItems = ref([]);
         
         // Initialize the app
         onMounted(async () => {
@@ -18,20 +20,16 @@ export default {
                 const { useAuthStore } = await import('../stores/auth.js');
                 authStore.value = useAuthStore();
                 await authStore.value.init();
+                
+                // Import navigation config
+                const { navigationConfig } = await import('../config/navigation.js');
+                navigationItems.value = navigationConfig;
             } catch (error) {
                 console.error('App initialization error:', error);
             } finally {
                 isLoading.value = false;
             }
         });
-        
-        const navigationItems = [
-            { title: 'Dashboard', file: 'dashboard', path: '/dashboard' },
-            { title: 'Plan', file: 'home', path: '/home' },
-            { title: 'Pack Lists', file: 'packlist', path: '/packlist' },
-            { title: 'Inventory', file: 'inventory', path: '/inventory' },
-            { title: 'Test', file: 'interfaces', path: '/interfaces' }
-        ];
         
         const handleLogin = async () => {
             if (authStore.value) {
@@ -46,18 +44,33 @@ export default {
             }
         };
         
-        const navigateToPage = (path) => {
-            router.push(path);
+        const navigateToPage = async (path) => {
+            isNavigationLoading.value = true;
+            try {
+                await router.push(path);
+            } finally {
+                // Small delay to show loading state
+                setTimeout(() => {
+                    isNavigationLoading.value = false;
+                }, 100);
+            }
+        };
+        
+        const toggleMobileMenu = (event) => {
+            const nav = event.target.closest('nav');
+            nav.classList.toggle('open');
         };
         
         return {
             authStore,
             isLoading,
+            isNavigationLoading,
             navigationItems,
             route,
             handleLogin,
             handleLogout,
-            navigateToPage
+            navigateToPage,
+            toggleMobileMenu
         };
     },
     template: `
@@ -66,27 +79,32 @@ export default {
                 <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
                 
                 <!-- Navigation items when authenticated -->
-                <div v-if="authStore?.isAuthenticated" id="navbar" class="nav-links">
-                    <a 
-                        v-for="item in navigationItems" 
-                        :key="item.path"
-                        href="#" 
-                        :class="{ active: route.path === item.path }"
-                        @click.prevent="navigateToPage(item.path)"
-                    >
-                        {{ item.title }}
-                    </a>
-                    <button class="login-out-button" @click="handleLogout">
-                        Log out
-                    </button>
-                </div>
+                <span v-if="authStore?.isAuthenticated" id="navbar">
+                    <!-- Loading indicator for navigation -->
+                    <div v-if="isNavigationLoading" class="nav-loading">Loading...</div>
+                    
+                    <template v-else>
+                        <a 
+                            v-for="item in navigationItems" 
+                            :key="item.path"
+                            href="#" 
+                            :class="{ active: route.path === item.path }"
+                            @click.prevent="navigateToPage(item.path)"
+                        >
+                            {{ item.title }}
+                        </a>
+                        <button class="login-out-button" @click="handleLogout">
+                            Log out
+                        </button>
+                    </template>
+                </span>
                 
                 <!-- Login button when not authenticated -->
-                <div v-else id="navbar">
+                <span v-else id="navbar">
                     <button class="login-out-button" @click="handleLogin">
                         Log in
                     </button>
-                </div>
+                </span>
                 
                 <button class="hamburger-menu" @click="toggleMobileMenu">≡</button>
             </nav>
@@ -106,7 +124,7 @@ export default {
                     <div v-if="!authStore?.isAuthenticated" class="login-prompt">
                         <h2>Please log in to continue</h2>
                         <p>You need to authenticate with Google to access the inventory system.</p>
-                        <button class="login-out-button large" @click="handleLogin">
+                        <button class="login-out-button" @click="handleLogin">
                             Log in with Google
                         </button>
                     </div>
@@ -114,9 +132,9 @@ export default {
                     <!-- Show page content if authenticated -->
                     <router-view v-else />
                     
-                    </div>
                 </div>
             </div>
+        </div>
         <footer>
             <p>
                 &copy; 2024 Top Shelf Exhibits
