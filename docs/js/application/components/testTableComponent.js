@@ -33,7 +33,7 @@ export const TestTableComponent = {
                 const simulatedData = this.generateSimulatedData();
                 
                 // Simulate potential API error (10% chance)
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.5) {
                     throw new Error('Simulated API error');
                 }
                 
@@ -98,7 +98,7 @@ export const TestTableComponent = {
     },
     template: `
         <div class="test-table-component">
-            <div class="container-header">
+            <div class="content-header">
                 <h3>Inventory Data Test</h3>
                 <button @click="refreshData" :disabled="isLoading" class="refresh-button">
                     {{ isLoading ? 'Loading...' : 'Refresh Data' }}
@@ -111,7 +111,7 @@ export const TestTableComponent = {
             </div>
             
             <!-- Error State -->
-            <div v-else-if="error" class="error-message">
+            <div v-else-if="error" class="content-footer error-message">
                 <p>Error loading data: {{ error }}</p>
                 <button @click="refreshData">Try Again</button>
             </div>
@@ -145,7 +145,7 @@ export const TestTableComponent = {
             </div>
             
             <!-- Data Summary -->
-            <div v-if="tableData.length > 0" class="data-summary">
+            <div v-if="tableData.length > 0" class="content-footer">
                 <p>Loaded {{ tableData.length }} items from simulated API</p>
             </div>
         </div>

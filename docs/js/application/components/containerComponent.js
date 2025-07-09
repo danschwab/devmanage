@@ -12,6 +12,10 @@ export const ContainerComponent = {
         title: {
             type: String,
             default: ''
+        },
+        cardStyle: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
@@ -54,28 +58,38 @@ export const ContainerComponent = {
         },
         setFooterContent(content) {
             this.content.footer = content;
+        },
+        closeContainer() {
+            // Emit an event to parent component to handle container removal
+            this.$emit('close-container', this.containerId);
         }
     },
     template: `
-        <div v-if="!isLoading" class="container" :data-container-id="containerId" :data-container-type="containerType">
-            <div class="content">
-                <div v-if="title" class="container-header">
-                    <h2>{{ title }}</h2>
-                </div>
+        <div v-if="!isLoading" 
+             class="container" 
+             :class="{ 'dashboard-card': cardStyle }"
+             :data-container-id="containerId" 
+             :data-container-type="containerType">
+            <div v-if="title" class="container-header">
+                <h2>{{ title }}</h2>
+                <button class="button-symbol gray" @click="closeContainer" title="Close container">×</button>
                 <div v-if="content.header" class="header-content" v-html="content.header"></div>
-                <div class="main-content">
-                    <slot name="content">
-                        <div v-if="content.main" v-html="content.main"></div>
-                        <div v-else>
-                            <p>Container {{ containerId }} loaded successfully!</p>
-                            <p>Type: {{ containerType }}</p>
-                        </div>
-                    </slot>
-                </div>
+            </div>
+            <div v-else class="container-header">
+                <button class="button-symbol gray" @click="closeContainer" title="Close container">×</button>
+            </div>
+            <div class="content">
+                <slot name="content">
+                    <div v-if="content.main" v-html="content.main"></div>
+                    <div v-else>
+                        <p>Container {{ containerId }} loaded successfully!</p>
+                        <p>Type: {{ containerType }}</p>
+                    </div>
+                </slot>
                 <div v-if="content.footer" class="footer-content" v-html="content.footer"></div>
             </div>
         </div>
-        <div v-else class="container">
+        <div v-else class="container" :class="{ 'dashboard-card': cardStyle }">
             <div class="content">
                 <div class="loading-message">Loading container...</div>
             </div>
@@ -98,6 +112,7 @@ export class ContainerManager {
             type: type,
             title: title,
             options: options,
+            cardStyle: options.cardStyle || false,
             created: new Date()
         };
 

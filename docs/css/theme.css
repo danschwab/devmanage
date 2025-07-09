@@ -3,6 +3,7 @@
     /* Interface Sizes */
     --navbar-height: 80px;
     --page-width-card: 360px;
+    --page-height-card: 360px;
     --page-width-large: 1000px;
     --page-width-small: 800px;
 
@@ -10,6 +11,7 @@
     --control-height-sm: 24px;
     
     /* Padding defaults */
+    --padding-sm: 12px;
     --padding-md: 20px;
     --padding-lg: 40px;
 
@@ -24,6 +26,7 @@
 
     /* Grays and Neutrals */
     --background-color: #fefefe;
+    --background-color-hover: #f0f0f0;
     --color-gray: #aaa;
     --color-gray-bg: #f0f0f0;
     --color-gray-bg-transparent: #3333334d;
@@ -73,6 +76,7 @@
 /* Responsive: Reduce padding on small screens */
 @media (max-width: 600px) {
     :root {
+        --padding-sm: 8px;
         --padding-md: 8px;
         --padding-lg: 16px;
     }

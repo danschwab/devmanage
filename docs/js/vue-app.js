@@ -1,5 +1,6 @@
 import { ContainerComponent, containerManager } from './application/components/containerComponent.js';
 import { TestTableComponent } from './application/components/testTableComponent.js';
+import { ModalComponent, modalManager } from './application/components/modalComponent.js';
 
 const { createApp } = Vue;
 
@@ -21,7 +22,8 @@ async function loadTemplate(templateName) {
 const App = {
     components: {
         'app-container': ContainerComponent,
-        'test-table': TestTableComponent
+        'test-table': TestTableComponent,
+        'app-modal': ModalComponent
     },
     data() {
         return {
@@ -30,18 +32,25 @@ const App = {
             currentUser: null,
             navigationItems: [
                 { title: 'Dashboard', file: 'dashboard' },
-                { title: 'Plan', file: 'home' },
                 { title: 'Pack Lists', file: 'packlist' },
                 { title: 'Inventory', file: 'inventory' },
                 { title: 'Test', file: 'interfaces' }
             ],
-            currentPage: 'home',
-            containers: []
+            currentPage: 'dashboard',
+            containers: [],
+            modals: []
         };
     },
     mounted() {
         // Create some example containers
         this.addTestContainers();
+        
+        // Add ESC key support for closing modals
+        document.addEventListener('keydown', this.handleKeyDown);
+    },
+    beforeUnmount() {
+        // Clean up event listener
+        document.removeEventListener('keydown', this.handleKeyDown);
     },
     methods: {
         toggleMenu() {
@@ -53,16 +62,16 @@ const App = {
             // For testing, simulate authentication
             this.isAuthenticated = true;
             this.currentUser = { name: 'Test User' };
-            // Add more containers when authenticated
-            this.addAuthenticatedContainers();
+            // Load containers for the current page after authentication
+            this.updateContainersForPage(this.currentPage);
         },
         logout() {
             // Placeholder for logout functionality
             console.log('Logout clicked');
             this.isAuthenticated = false;
             this.currentUser = null;
-            // Reset to basic containers
-            this.resetToBasicContainers();
+            // Update containers for current page (will show login prompt when not authenticated)
+            this.updateContainersForPage(this.currentPage);
         },
         navigateToPage(pageFile) {
             this.currentPage = pageFile;
@@ -96,14 +105,20 @@ const App = {
             // Clear existing containers
             this.containers = [];
             
-            // Add containers based on the current page
+            // If not authenticated, show login prompt regardless of page
+            if (!this.isAuthenticated) {
+                this.addContainer('welcome', 'Welcome - Please Login');
+                return;
+            }
+            
+            // Add containers based on the current page when authenticated
             switch(pageFile) {
                 case 'dashboard':
-                    this.addContainer('dashboard', 'Dashboard');
-                    this.addContainer('stats', 'Statistics');
-                    break;
-                case 'home':
-                    this.addContainer('home', 'Planning');
+                    // Create dashboard cards
+                    this.addContainer('dashboard-overview', 'Dashboard Overview', { cardStyle: true });
+                    this.addContainer('dashboard-stats', 'Quick Stats', { cardStyle: true });
+                    this.addContainer('dashboard-table', 'Recent Data', { cardStyle: true });
+                    this.addContainer('dashboard-actions', 'Quick Actions', { cardStyle: true });
                     break;
                 case 'packlist':
                     this.addContainer('packlist', 'Pack Lists');
@@ -117,6 +132,49 @@ const App = {
                 default:
                     this.addContainer('default', `${pageFile} Page`);
             }
+        },
+        // Modal management methods
+        addModal(title = '', content = '', options = {}) {
+            const modal = modalManager.createModal(title, content, options);
+            this.modals.push(modal);
+            return modal;
+        },
+        showModal(modalId) {
+            const modal = modalManager.showModal(modalId);
+            if (modal) {
+                // Update the modal in the reactive array
+                const index = this.modals.findIndex(m => m.id === modalId);
+                if (index !== -1) {
+                    this.modals[index].isVisible = true;
+                }
+            }
+            return modal;
+        },
+        hideModal(modalId) {
+            const modal = modalManager.hideModal(modalId);
+            if (modal) {
+                // Update the modal in the reactive array
+                const index = this.modals.findIndex(m => m.id === modalId);
+                if (index !== -1) {
+                    this.modals[index].isVisible = false;
+                }
+            }
+            return modal;
+        },
+        removeModal(modalId) {
+            this.modals = this.modals.filter(m => m.id !== modalId);
+            modalManager.removeModal(modalId);
+        },
+        // Quick modal creation methods
+        showAlert(message, title = 'Alert') {
+            const modal = this.addModal(title, message);
+            this.showModal(modal.id);
+            return modal;
+        },
+        showConfirm(message, title = 'Confirm') {
+            const modal = this.addModal(title, message);
+            this.showModal(modal.id);
+            return modal;
         }
     }
 };
@@ -125,7 +183,7 @@ const App = {
 async function initApp() {
     const template = await loadTemplate('vue-app');
     App.template = template;
-    createApp(App).mount('#app');
+    createApp(App).mount('body');
 }
 
 // Initialize the app when the page loads

@@ -1,4 +1,5 @@
 @import url('theme.css');
+
 body, #app {
     font-family: Arial, sans-serif;
     color: var(--color-text);
@@ -55,25 +56,15 @@ header nav {
     transition: height 0.3s ease-in-out;
     overflow: hidden;
 }
-nav .hamburger-menu {
+nav .button-symbol {
     display: none; /* Hidden by default on desktop */
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--color-primary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: var(--radius-sm);
-    transition: background-color 0.3s ease;
     position: absolute;
-    right: 20px;
     top: 50%;
     transform: translateY(-50%);
+    right: var(--padding-lg);
 }
 
-nav .hamburger-menu:hover {
-    background-color: var(--color-gray-bg);
-}
+
 nav img {
     height: 64px;
     width: auto;
@@ -156,9 +147,28 @@ p {
     margin: 0;
     color: var(--color-text);
 }
+h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+}
 
+/* Hamburger Menu etc */
+.button-symbol {
+    box-sizing: border-box;
+    font-size: 14pt;
+    width: 28px;
+    min-width:0;
+    height: 28px;
+    padding: 0;
+    cursor: pointer;
+    
+    /*transform: translateY(-50%);*/
+    box-shadow: -1px 1px 6px -2px var(--color-shadow);
+}
 
-
+.hamburger-menu:hover {
+    background-color: var(--background-color);
+    color: var(--color-text);
+}
 
 
 
@@ -170,7 +180,7 @@ p {
     background: var(--background-color);
     box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: var(--radius-lg);
-    padding: var(--padding-md);
+    padding: 0;
     width: 90%;
     max-width: var(--page-width-large);
     min-height: calc(100vh - var(--navbar-height) - 2 * var(--padding-lg));
@@ -184,13 +194,35 @@ p {
 }
 .container-header {
     display: flex;
+    z-index: 1000;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
+    padding: var(--padding-md);
+    padding-bottom: var(--padding-md);
     border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
+.content {
+    flex: 1;
+    padding: var(--padding-md);
+    overflow: auto;
+    box-sizing: border-box;
+}
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: var(--padding-md);
+} 
 
+.content-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--padding-md);
+    padding: var(--padding-sm);
+    background-color: var(--color-gray-bg);
+}
 
 
 .container:has(.reading-page) {
@@ -203,6 +235,34 @@ p {
     color: var(--color-text);
 }
 
+/* Dashboard Card Containers */
+.container.dashboard-card {
+    max-width: var(--page-width-card);
+    max-height: var(--page-height-card);
+    min-height: var(--page-height-card);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.container.dashboard-card .content {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.container.dashboard-card .container-header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--padding-sm);
+}
+
+.container.dashboard-card .container-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--color-text);
+}
 
 
 
@@ -287,6 +347,16 @@ button:hover {
 
 
 /* Modal dialogs */
+#modal-space {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+}
+
 .modal {
     position: fixed; /* Stay in place */
     z-index: 1000; /* Sit on top */
@@ -298,8 +368,9 @@ button:hover {
     background-color: var(--color-modal-bg-gradient);
     background: var(--color-modal-bg-gradient);
     overflow: auto;
-    transition: opacity 0.18s ease-in-out;
-    opacity: 0;
+    pointer-events: auto;
+    /* Ensure transitions work properly */
+    opacity: 1;
 }
 .modal-content {
     background-color: var(--background-color);
@@ -353,9 +424,6 @@ button:hover {
 .modal-body {
     margin: 20px;
 }
-
-
-
 
 /* Tab Navigation */
 .tabs {
@@ -544,54 +612,13 @@ button:hover {
     color: var(--color-text-light);
 }
 
-/* Hamburger Menu */
-.hamburger-menu {
-    box-sizing: border-box;
-    font-size: 14pt;
-    display: none;
-    width: 28px;
-    min-width:0;
-    height: 28px;
-    padding: 0;
-    color: var(--color-text-light);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    background-color: var(--color-gray-bg);
-    cursor: pointer;
-    position: absolute;
-    left: 8px;
-    top: 4px;
-    /*transform: translateY(-50%);*/
-    box-shadow: -1px 1px 6px -2px var(--color-shadow);
-}
-
-.hamburger-menu:hover {
-    background-color: var(--background-color);
-    color: var(--color-text);
-}
-
-/* Result Containers */
-#resultMessage {
-    margin: 1rem 0;
-    font-size: 0.9rem;
-    width: 100%;
-}
-
-#resultData {
-    width: 100%; 
-    overflow-x: auto;
-}
-
-#resultContainer {
-    width: 100%;
-}
 
 
 /* Table Styling */
 
 .table-wrapper{
     width: 100%;
-    overflow-x: auto;
+    /*overflow-x: auto;*/
     /*margin-top: 1rem;*/
     /*border-radius: var(--radius-md);*/
     /*box-shadow: 0 0 0 1px #dee2e6;*/
@@ -794,44 +821,6 @@ tr.dragging::after {
 .table-cell-card:only-child {
     margin-top: 0;
 }
-.table-cell-card.red {
-    border-color: var(--color-red);
-    background-color: var(--color-red-bg);
-}
-.table-cell-card.orange {
-    border-color: var(--color-orange);
-    background-color: var(--color-orange-bg);
-}
-.table-cell-card.yellow {
-    border-color: var(--color-yellow);
-    background-color: var(--color-yellow-bg);
-}
-.table-cell-card.blue {
-    border-color: var(--color-blue);
-    background-color: var(--color-blue-bg);
-}
-.table-cell-card.green {
-    border-color: var(--color-green);
-    background-color: var(--color-green-bg);
-}
-.table-cell-card:hover {
-    background-color: var(--color-gray-bg-hover);
-}
-.table-cell-card.red:hover {
-    background-color: var(--color-red-bg-hover);
-}
-.table-cell-card.orange:hover {
-    background-color: var(--color-orange-bg-hover);
-}
-.table-cell-card.yellow:hover {
-    background-color: var(--color-yellow-bg-hover);
-}
-.table-cell-card.blue:hover {
-    background-color: var(--color-blue-bg-hover);
-}
-.table-cell-card.green:hover {
-    background-color: var(--color-green-bg-hover);
-}
 
 .table-edit-textarea {
     transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
@@ -885,6 +874,11 @@ button.save-button:disabled {
     cursor: grabbing !important;
 }
 
+
+
+
+
+
 @media (max-width: 800px) {
     /* Mobile navigation */
     nav.open {
@@ -899,13 +893,16 @@ button.save-button:disabled {
         box-sizing: border-box;
     }
     
-    nav .hamburger-menu {
+    nav .button-symbol {
         display: block;
+    }
+    nav:not(:has(#navbar a)) .button-symbol {
+        display:none;
     }
     
     /* Hide navigation items by default on mobile */
     nav #navbar a, 
-    nav #navbar button:not(.hamburger-menu) {
+    nav #navbar button:not(.button-symbol) {
         display: none;
     }
     
@@ -914,10 +911,14 @@ button.save-button:disabled {
         color: var(--color-primary);
         display: block;
     }
+    nav #navbar button.active {
+        display: block;
+        position: static;
+    }
     
     /* Show all navigation when menu is open */
     nav.open #navbar a, 
-    nav.open #navbar button:not(.hamburger-menu) {
+    nav.open #navbar button:not(.button-symbol) {
         display: block;
         position: static;
         margin: 0.5rem;

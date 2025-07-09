@@ -1,0 +1,113 @@
+/* Vue Transitions */
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 0.15s ease-in-out;
+}
+.fade-enter-from, .fade-leave-to {
+    opacity: 0;
+}
+
+
+/* apply colors */
+
+.white {
+    border-color: var(--color-border);
+    background-color: var(--background-color);
+}
+.gray {
+    border-color: var(--color-gray);
+    background-color: var(--color-gray-bg);
+}
+.red {
+    border-color: var(--color-red);
+    background-color: var(--color-red-bg);
+}
+.orange {
+    border-color: var(--color-orange);
+    background-color: var(--color-orange-bg);
+}
+.yellow {
+    border-color: var(--color-yellow);
+    background-color: var(--color-yellow-bg);
+}
+.blue {
+    border-color: var(--color-blue);
+    background-color: var(--color-blue-bg);
+}
+.green {
+    border-color: var(--color-green);
+    background-color: var(--color-green-bg);
+}
+.white:hover {
+    background-color: var(--background-color-hover);
+}
+.gray:hover {
+    background-color: var(--color-gray-bg-hover);
+}
+.red:hover {
+    background-color: var(--color-red-bg-hover);
+}
+.orange:hover {
+    background-color: var(--color-orange-bg-hover);
+}
+.yellow:hover {
+    background-color: var(--color-yellow-bg-hover);
+}
+.blue:hover {
+    background-color: var(--color-blue-bg-hover);
+}
+.green:hover {
+    background-color: var(--color-green-bg-hover);
+}
+
+button.white, input[type="button"].white, input[type="submit"].white {
+    background-color: var(--background-color);
+    color: var(--color-text-light);
+    border: 1px solid var(--color-border);
+}
+button.gray, input[type="button"].gray, input[type="submit"].gray {
+    background-color: var(--color-gray-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+button.red, input[type="button"].red, input[type="submit"].red {
+    background-color: var(--color-red-bg);
+    border: none;
+}
+button.orange, input[type="button"].orange, input[type="submit"].orange {
+    background-color: var(--color-orange-bg);
+    border: none;
+}
+button.yellow, input[type="button"].yellow, input[type="submit"].yellow {
+    background-color: var(--color-yellow-bg);
+    border: none;
+}
+button.blue, input[type="button"].blue, input[type="submit"].blue {
+    background-color: var(--color-blue-bg);
+    border: none;
+}
+button.green, input[type="button"].green, input[type="submit"].green {
+    background-color: var(--color-green-bg);
+    border: none;
+}
+
+button.white:hover, input[type="button"].white:hover, input[type="submit"].white:hover {
+    background-color: var(--background-color-hover);
+}
+button.gray:hover, input[type="button"].gray:hover, input[type="submit"].gray:hover {
+    background-color: var(--color-gray-bg-hover);
+}
+button.red:hover, input[type="button"].red:hover, input[type="submit"].red:hover {
+    background-color: var(--color-red-bg-hover);
+}
+button.orange:hover, input[type="button"].orange:hover, input[type="submit"].orange:hover {
+    background-color: var(--color-orange-bg-hover);
+}
+button.yellow:hover, input[type="button"].yellow:hover, input[type="submit"].yellow:hover {
+    background-color: var(--color-yellow-bg-hover);
+}
+button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:hover {
+    background-color: var(--color-blue-bg-hover);
+}
+button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover {
+    background-color: var(--color-green-bg-hover);
+}
