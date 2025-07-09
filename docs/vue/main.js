@@ -1,7 +1,7 @@
 // Vue 3 main entry point
 const { createApp } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
-const { createPinia } = Pinia;
+const { createPinia } = window.Pinia;
 
 // Import components
 import App from './components/App.js';
@@ -31,15 +31,9 @@ const router = createRouter({
 
 // Navigation guard for authentication
 router.beforeEach((to, from, next) => {
-    const authStore = useAuthStore();
-    
-    // If not authenticated and not going to login, redirect to login
-    if (!authStore.isAuthenticated && to.path !== '/login') {
-        // Allow the route but the App component will handle showing login
-        next();
-    } else {
-        next();
-    }
+    // The App component will handle authentication checks
+    // This allows the route but lets the App decide what to show
+    next();
 });
 
 // Create and mount the Vue app

@@ -4,20 +4,20 @@ const { useRouter, useRoute } = VueRouter;
 
 export default {
     name: 'App',
-    async setup() {
+    setup() {
         const router = useRouter();
         const route = useRoute();
         
-        // Import the auth store
-        const { useAuthStore } = await import('../stores/auth.js');
-        const authStore = useAuthStore();
-        
         const isLoading = ref(true);
+        const authStore = ref(null);
         
         // Initialize the app
         onMounted(async () => {
             try {
-                await authStore.init();
+                // Import and initialize the auth store
+                const { useAuthStore } = await import('../stores/auth.js');
+                authStore.value = useAuthStore();
+                await authStore.value.init();
             } catch (error) {
                 console.error('App initialization error:', error);
             } finally {
@@ -34,12 +34,16 @@ export default {
         ];
         
         const handleLogin = async () => {
-            await authStore.signIn();
+            if (authStore.value) {
+                await authStore.value.signIn();
+            }
         };
         
         const handleLogout = async () => {
-            await authStore.signOut();
-            router.push('/dashboard');
+            if (authStore.value) {
+                await authStore.value.signOut();
+                router.push('/dashboard');
+            }
         };
         
         const navigateToPage = (path) => {
@@ -70,7 +74,7 @@ export default {
                         <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
                         
                         <!-- Navigation items when authenticated -->
-                        <div v-if="authStore.isAuthenticated" id="navbar" class="nav-links">
+                        <div v-if="authStore?.isAuthenticated" id="navbar" class="nav-links">
                             <a 
                                 v-for="item in navigationItems" 
                                 :key="item.path"
@@ -99,7 +103,7 @@ export default {
                 <!-- Main content area -->
                 <div id="app-content" class="main-content">
                     <!-- Show login prompt if not authenticated -->
-                    <div v-if="!authStore.isAuthenticated" class="login-prompt">
+                    <div v-if="!authStore?.isAuthenticated" class="login-prompt">
                         <h2>Please log in to continue</h2>
                         <p>You need to authenticate with Google to access the inventory system.</p>
                         <button class="login-out-button large" @click="handleLogin">

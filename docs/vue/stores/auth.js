@@ -1,5 +1,5 @@
 // Auth store - wraps your existing GoogleSheetsAuth functionality
-const { defineStore } = Pinia;
+const { defineStore } = window.Pinia;
 const { ref, computed } = Vue;
 
 export const useAuthStore = defineStore('auth', () => {
@@ -20,7 +20,7 @@ export const useAuthStore = defineStore('auth', () => {
     async function init() {
         try {
             // Dynamically import your existing auth module
-            const authModule = await import('../js/google_sheets_services/GoogleSheetsAuth.js');
+            const authModule = await import('../../js/google_sheets_services/GoogleSheetsAuth.js');
             GoogleSheetsAuth = authModule.GoogleSheetsAuth;
             
             // Initialize the Google Sheets Auth
