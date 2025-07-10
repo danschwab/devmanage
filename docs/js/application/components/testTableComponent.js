@@ -1,5 +1,6 @@
 import { Requests } from '../../data_management/api.js';
 import { TableComponent } from './tableComponent.js';
+import { html } from '../utils/template-helpers.js';
 
 // Test component that loads real inventory data using the data management API
 export const TestTableComponent = {
@@ -87,7 +88,7 @@ export const TestTableComponent = {
             this.loadTestData();
         }
     },
-    template: `
+    template: html `
         <div class="test-table-component">
             <TableComponent
                 :data="tableData"

@@ -1,5 +1,7 @@
+import { html } from '../../utils/template-helpers.js';
+
 export const DashboardStats = {
-    template: `
+    template: html `
         <div class="dashboard-stats" style="display: flex; flex-direction: column; gap: 0.5rem;">
             <div><strong>Total Items:</strong> 1,247</div>
             <div><strong>Low Stock:</strong> 12</div>

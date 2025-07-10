@@ -1,4 +1,5 @@
 import { TestTableComponent } from '../testTableComponent.js';
+import { html } from '../../utils/template-helpers.js';
 
 export const InventoryContent = {
     components: {
@@ -7,7 +8,7 @@ export const InventoryContent = {
     props: {
         showAlert: Function
     },
-    template: `
+    template: html `
         <div class="inventory-page">
             <h3>Inventory Management</h3>
             <p>Manage and track all inventory items, conditions, and locations.</p>

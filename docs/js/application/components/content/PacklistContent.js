@@ -1,8 +1,10 @@
+import { html } from '../../utils/template-helpers.js';
+
 export const PacklistContent = {
     props: {
         showAlert: Function
     },
-    template: `
+    template: html `
         <div class="packlist-page">
             <h3>Pack List Management</h3>
             <p>Create and manage pack lists for exhibits and events.</p>

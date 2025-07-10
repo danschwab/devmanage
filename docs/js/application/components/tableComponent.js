@@ -1,3 +1,5 @@
+import { html } from '../utils/template-helpers.js';
+
 export const TableComponent = {
     props: {
         data: {
@@ -84,7 +86,7 @@ export const TableComponent = {
             return column.width ? `${column.width}px` : 'auto';
         }
     },
-    template: `
+    template: html `
         <div class="dynamic-table">
             <div class="content-header" v-if="title || showRefresh">
                 <h3 v-if="title">{{ title }}</h3>

@@ -1,8 +1,10 @@
+import { html } from '../../utils/template-helpers.js';
+
 export const DashboardOverview = {
     props: {
         currentUser: Object
     },
-    template: `
+    template: html `
         <div class="dashboard-overview">
             <p>Welcome to your dashboard, {{ currentUser?.name || 'User' }}!</p>
             <p>System Status: <span style="color: green;">Online</span></p>

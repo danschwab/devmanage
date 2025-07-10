@@ -1,3 +1,5 @@
+import { html } from '../utils/template-helpers.js';
+
 // Container component functionality
 export const ContainerComponent = {
     props: {
@@ -90,7 +92,7 @@ export const ContainerComponent = {
             });
         }
     },
-    template: `
+    template: html `
         <div v-if="!isLoading" 
              class="container" 
              :class="{ 'dashboard-card': cardStyle }"

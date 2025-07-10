@@ -1,3 +1,5 @@
+import { html } from '../../utils/template-helpers.js';
+
 export const DashboardActions = {
     props: {
         navigateToPage: Function,
@@ -5,7 +7,7 @@ export const DashboardActions = {
         showAlert: Function,
         showConfirm: Function
     },
-    template: `
+    template: html `
         <div class="dashboard-actions" style="display: flex; flex-direction: column; gap: 0.5rem;">
             <button @click="navigateToPage('inventory')">Manage Inventory</button>
             <button @click="navigateToPage('packlist')">Create Pack List</button>

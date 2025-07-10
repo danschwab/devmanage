@@ -1,3 +1,5 @@
+import { html } from '../utils/template-helpers.js';
+
 // Modal component functionality
 export const ModalComponent = {
     props: {
@@ -25,7 +27,7 @@ export const ModalComponent = {
             }
         }
     },
-    template: `
+    template: html `
             <div v-if="isVisible" 
                  class="modal" 
                  @click="onBackdropClick"
