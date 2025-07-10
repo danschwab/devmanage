@@ -362,6 +362,33 @@ const App = {
         containerInfo() {
             console.log('Showing container info...');
             this.showAlert('Container information functionality coming soon!', 'Info');
+        },
+
+        expandContainer(containerData) {
+            console.log('Expanding container:', containerData);
+            
+            // If the container has a specific page location, navigate to it
+            if (containerData.pageLocation) {
+                this.navigateToPage(containerData.pageLocation);
+                return;
+            }
+            
+            // Map dashboard containers to their corresponding pages
+            const pageMapping = {
+                'dashboard-overview': 'dashboard',
+                'dashboard-stats': 'inventory',
+                'dashboard-table': 'packlist',
+                'dashboard-actions': 'dashboard'
+            };
+            
+            // Check if there's a page mapping for this container type
+            const targetPage = pageMapping[containerData.containerType];
+            if (targetPage) {
+                this.navigateToPage(targetPage);
+            } else {
+                // For containers without specific pages, show them in expanded view
+                this.showAlert(`Expanded view for "${containerData.title}" - Full page functionality coming soon!`, 'Expand Container');
+            }
         }
     }
 };

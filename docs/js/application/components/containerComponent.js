@@ -28,6 +28,14 @@ export const ContainerComponent = {
         hamburgerMenuContent: {
             type: String,
             default: ''
+        },
+        showExpandButton: {
+            type: Boolean,
+            default: false
+        },
+        pageLocation: {
+            type: String,
+            default: ''
         }
     },
     data() {
@@ -82,6 +90,15 @@ export const ContainerComponent = {
                 title: `${this.title} Menu`,
                 content: this.hamburgerMenuContent
             });
+        },
+        expandContainer() {
+            // Emit event to parent to open container as a page
+            this.$emit('expand-container', {
+                containerId: this.containerId,
+                title: this.title,
+                containerType: this.containerType,
+                pageLocation: this.pageLocation
+            });
         }
     },
     template: `
@@ -90,13 +107,17 @@ export const ContainerComponent = {
              :class="{ 'dashboard-card': cardStyle }"
              :data-container-id="containerId" 
              :data-container-type="containerType">
-            <div v-if="title || showCloseButton || showHamburgerMenu" class="container-header">
+            <div v-if="title || showCloseButton || showHamburgerMenu || showExpandButton" class="container-header">
                 <h2 v-if="title">{{ title }}</h2>
-                <div v-if="showHamburgerMenu || showCloseButton" class="header-buttons">
+                <div v-if="showHamburgerMenu || showExpandButton || showCloseButton" class="header-buttons">
                     <button v-if="showHamburgerMenu" 
                             class="button-symbol gray" 
                             @click="openHamburgerMenu" 
                             title="Menu">☰</button>
+                    <button v-if="showExpandButton" 
+                            class="button-symbol gray" 
+                            @click="expandContainer" 
+                            title="Expand to page">⤴</button>
                     <button v-if="showCloseButton" 
                             class="button-symbol gray" 
                             @click="closeContainer" 
@@ -142,6 +163,8 @@ export class ContainerManager {
             showCloseButton: options.showCloseButton !== false, // default true
             showHamburgerMenu: options.showHamburgerMenu || false,
             hamburgerMenuContent: options.hamburgerMenuContent || '',
+            showExpandButton: options.showExpandButton || false,
+            pageLocation: options.pageLocation || '',
             created: new Date()
         };
 

@@ -51,9 +51,12 @@
             :card-style="container.cardStyle"
             :show-close-button="container.type !== 'dashboard-overview'"
             :show-hamburger-menu="!container.type.startsWith('dashboard')"
+            :show-expand-button="container.cardStyle"
+            :page-location="container.pageLocation"
             :hamburger-menu-content="getHamburgerMenuContent(container.type)"
             @close-container="removeContainer"
-            @show-hamburger-menu="showHamburgerMenuModal">
+            @show-hamburger-menu="showHamburgerMenuModal"
+            @expand-container="expandContainer">
             <template #content>
                 <!-- Dynamic content based on container type -->
                 <div v-if="container.type === 'welcome'">
