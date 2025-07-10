@@ -16,12 +16,25 @@ export const ContainerComponent = {
         cardStyle: {
             type: Boolean,
             default: false
+        },
+        showCloseButton: {
+            type: Boolean,
+            default: true
+        },
+        showHamburgerMenu: {
+            type: Boolean,
+            default: false
+        },
+        hamburgerMenuContent: {
+            type: String,
+            default: ''
         }
     },
     data() {
         return {
             template: null,
             isLoading: true,
+            showModal: false,
             content: {
                 header: '',
                 main: '',
@@ -62,6 +75,12 @@ export const ContainerComponent = {
         closeContainer() {
             // Emit an event to parent component to handle container removal
             this.$emit('close-container', this.containerId);
+        },
+        openHamburgerMenu() {
+            this.showModal = true;
+        },
+        closeModal() {
+            this.showModal = false;
         }
     },
     template: `
@@ -72,11 +91,29 @@ export const ContainerComponent = {
              :data-container-type="containerType">
             <div v-if="title" class="container-header">
                 <h2>{{ title }}</h2>
-                <button class="button-symbol gray" @click="closeContainer" title="Close container">×</button>
+                <div class="header-buttons">
+                    <button v-if="showHamburgerMenu" 
+                            class="button-symbol gray" 
+                            @click="openHamburgerMenu" 
+                            title="Menu">☰</button>
+                    <button v-if="showCloseButton" 
+                            class="button-symbol gray" 
+                            @click="closeContainer" 
+                            title="Close container">×</button>
+                </div>
                 <div v-if="content.header" class="header-content" v-html="content.header"></div>
             </div>
-            <div v-else class="container-header">
-                <button class="button-symbol gray" @click="closeContainer" title="Close container">×</button>
+            <div v-else-if="showCloseButton || showHamburgerMenu" class="container-header">
+                <div class="header-buttons">
+                    <button v-if="showHamburgerMenu" 
+                            class="button-symbol gray" 
+                            @click="openHamburgerMenu" 
+                            title="Menu">☰</button>
+                    <button v-if="showCloseButton" 
+                            class="button-symbol gray" 
+                            @click="closeContainer" 
+                            title="Close container">×</button>
+                </div>
             </div>
             <div class="content">
                 <slot name="content">
@@ -87,6 +124,22 @@ export const ContainerComponent = {
                     </div>
                 </slot>
                 <div v-if="content.footer" class="footer-content" v-html="content.footer"></div>
+            </div>
+            
+            <!-- Modal for hamburger menu -->
+            <div v-if="showModal" class="modal-overlay" @click="closeModal">
+                <div class="modal-content" @click.stop>
+                    <div class="modal-header">
+                        <h3>Menu</h3>
+                        <button class="button-symbol gray" @click="closeModal" title="Close">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div v-if="hamburgerMenuContent" v-html="hamburgerMenuContent"></div>
+                        <div v-else>
+                            <p>No menu content provided</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div v-else class="container" :class="{ 'dashboard-card': cardStyle }">
@@ -113,6 +166,9 @@ export class ContainerManager {
             title: title,
             options: options,
             cardStyle: options.cardStyle || false,
+            showCloseButton: options.showCloseButton !== false, // default true
+            showHamburgerMenu: options.showHamburgerMenu || false,
+            hamburgerMenuContent: options.hamburgerMenuContent || '',
             created: new Date()
         };
 

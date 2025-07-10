@@ -51,6 +51,7 @@
             :container-type="container.type"
             :title="container.title"
             :card-style="container.cardStyle"
+            :show-close-button="container.type !== 'dashboard-overview'"
             @close-container="removeContainer">
             <template #content>
                 <!-- Dynamic content based on container type -->
