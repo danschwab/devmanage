@@ -4,18 +4,16 @@
             <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
             
             <span id="navbar">
-                <!-- Navigation items when authenticated -->
                 <template v-if="isAuthenticated">
                     <a v-for="item in navigationItems" 
-                    :key="item.file"
-                    :class="{ 'active': currentPage === item.file }"
-                    @click="navigateToPage(item.file); isMenuOpen = false"
-                    href="#">
+                       :key="item.file"
+                       :class="{ 'active': currentPage === item.file }"
+                       @click="navigateToPage(item.file); isMenuOpen = false"
+                       href="#">
                         {{ item.title }}
                     </a>
                 </template>
                 
-                <!-- Login/Logout button -->
                 <button v-if="!isAuthenticated" 
                         @click="login" 
                         :disabled="isAuthLoading"
@@ -36,6 +34,8 @@
         </nav>
     </header>
 
+    <div id="app-content">
+        <div v-if="authError" class="error-message"></div>
     <div id="app-content">
         <!-- Show auth error if present -->
         <div v-if="authError" class="error-message" style="background: #ffebee; border: 1px solid #f44336; padding: 1rem; margin: 1rem; border-radius: 4px; color: #c62828;">
