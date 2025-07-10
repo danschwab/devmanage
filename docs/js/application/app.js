@@ -114,6 +114,11 @@ const App = {
         removeContainer(containerId) {
             this.containers = this.containers.filter(c => c.id !== containerId);
             containerManager.removeContainer(containerId);
+            
+            // If authenticated and no containers remain, navigate to dashboard
+            if (this.isAuthenticated && this.containers.length === 0) {
+                this.navigateToPage('dashboard');
+            }
         },
         addTestContainers() {
             this.containers = [];
@@ -132,9 +137,8 @@ const App = {
             // Clear existing containers
             this.containers = [];
             
-            // If not authenticated, show login prompt regardless of page
+            // If not authenticated, don't show any containers
             if (!this.isAuthenticated) {
-                this.addContainer('welcome', 'Welcome - Please Login');
                 return;
             }
             
@@ -158,6 +162,11 @@ const App = {
                     break;
                 default:
                     this.addContainer('default', `${pageFile} Page`);
+            }
+            
+            // If authenticated and no containers were added, navigate to dashboard
+            if (this.isAuthenticated && this.containers.length === 0) {
+                this.navigateToPage('dashboard');
             }
         },
         handleKeyDown(event) {

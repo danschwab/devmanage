@@ -59,22 +59,7 @@
             @expand-container="expandContainer">
             <template #content>
                 <!-- Dynamic content based on container type -->
-                <div v-if="container.type === 'welcome'">
-                    <div v-if="isAuthLoading" style="text-align: center; padding: 2rem;">
-                        <p>Initializing authentication...</p>
-                        <div style="font-size: 2em;">⟳</div>
-                    </div>
-                    <div v-else>
-                        <p>Vue.js integration with Google Sheets authentication is working!</p>
-                        <p>Current page: {{ currentPage }}</p>
-                        <p>Authentication: {{ isAuthenticated ? 'Authenticated' : 'Not authenticated' }}</p>
-                        <p>User: {{ currentUser?.email || 'None' }}</p>
-                        <button v-if="!isAuthenticated" @click="login" :disabled="isAuthLoading">
-                            {{ isAuthLoading ? 'Authenticating...' : 'Click to Login' }}
-                        </button>
-                    </div>
-                </div>
-                <div v-else-if="container.type === 'dashboard-overview'">
+                <div v-if="container.type === 'dashboard-overview'">
                     <p>Welcome to your dashboard, {{ currentUser?.name }}!</p>
                     <p>System Status: <span style="color: green;">Online</span></p>
                     <p>Last Login: Today, 9:30 AM</p>
@@ -121,9 +106,6 @@
             </template>
         </app-container>
         
-        <!-- Fallback message when no containers (shown as comment placeholder) -->
-        <!-- No containers loaded when containers array is empty -->
-        
         <footer>
             <p>
                 &copy; 2024 Top Shelf Exhibits
@@ -149,6 +131,9 @@
                     <p>Modal {{ modal.id }} content</p>
                 </div>
             </template>
+        </app-modal>
+    </transition-group>
+</div>
         </app-modal>
     </transition-group>
 </div>
