@@ -113,6 +113,7 @@ const App = {
             // Set container type and page for content determination
             container.containerType = type;
             container.currentPage = this.currentPage;
+            container.containerPath = options.containerPath || '';
             
             this.containers.push(container);
             return container;
@@ -138,23 +139,35 @@ const App = {
             // Add containers based on the current page when authenticated
             switch(pageFile) {
                 case 'dashboard':
-                    // Create dashboard cards
-                    await this.addContainer('dashboard-overview', 'Dashboard Overview', { cardStyle: true });
-                    await this.addContainer('dashboard-stats', 'Quick Stats', { cardStyle: true });
-                    await this.addContainer('dashboard-actions', 'Quick Actions', { cardStyle: true });
-                    await this.addContainer('inventory', 'Inventory Management', { cardStyle: true });
+                    // Create dashboard cards with paths that terminate on their target pages
+                    await this.addContainer('dashboard-overview', '', { 
+                        cardStyle: true, 
+                        containerPath: 'dashboard' 
+                    });
+                    await this.addContainer('dashboard-stats', '', { 
+                        cardStyle: true, 
+                        containerPath: 'inventory' 
+                    });
+                    await this.addContainer('dashboard-actions', '', { 
+                        cardStyle: true, 
+                        containerPath: 'dashboard' 
+                    });
+                    await this.addContainer('dashboard-inventory', '', { 
+                        cardStyle: true, 
+                        containerPath: 'inventory' 
+                    });
                     break;
                 case 'packlist':
-                    await this.addContainer('packlist', 'Pack Lists');
+                    await this.addContainer('packlist', '', { containerPath: 'packlist' });
                     break;
                 case 'inventory':
-                    await this.addContainer('inventory', 'Inventory Management');
+                    await this.addContainer('inventory', '', { containerPath: 'inventory' });
                     break;
                 case 'interfaces':
-                    await this.addContainer('test', 'Interface Testing');
+                    await this.addContainer('test', '', { containerPath: 'interfaces' });
                     break;
                 default:
-                    await this.addContainer('default', `${pageFile} Page`);
+                    await this.addContainer('default', '', { containerPath: pageFile });
             }
             
             // If authenticated and no containers were added, navigate to dashboard
@@ -380,6 +393,7 @@ const App = {
                 'dashboard-overview': 'dashboard',
                 'dashboard-stats': 'inventory',
                 'dashboard-actions': 'dashboard',
+                'dashboard-inventory': 'inventory',
                 'test': 'interfaces'
             };
             
@@ -387,11 +401,51 @@ const App = {
             const targetPage = pageMapping[containerData.containerType] || containerData.containerType;
             
             if (targetPage !== this.currentPage) {
+                // Navigate to the target page
                 this.navigateToPage(targetPage);
+                
+                // If the container has a path, update the new container to that path
+                if (containerData.containerPath) {
+                    this.$nextTick(() => {
+                        const expandedContainer = this.containers.find(c => c.containerType === targetPage);
+                        if (expandedContainer) {
+                            expandedContainer.containerPath = containerData.containerPath;
+                        }
+                    });
+                }
             } else {
                 // Already on the target page, show a message
                 this.showAlert(`You are already viewing the ${containerData.title} page.`, 'Already Here');
             }
+        },
+        handleNavigateBack(navigationData) {
+            const { containerId, parentPath } = navigationData;
+            const container = this.containers.find(c => c.id === containerId);
+            
+            if (container) {
+                if (parentPath) {
+                    container.containerPath = parentPath;
+                } else {
+                    // If no parent path, remove the container
+                    this.removeContainer(containerId);
+                }
+            }
+        },
+        handleNavigateToPath(navigationData) {
+            const { containerId, targetPath } = navigationData;
+            const container = this.containers.find(c => c.id === containerId);
+            
+            if (container) {
+                container.containerPath = targetPath;
+            }
+        },
+        createNavigateToPathHandler(containerId) {
+            return (path) => {
+                this.handleNavigateToPath({
+                    containerId: containerId,
+                    targetPath: path
+                });
+            };
         }
     },
     template: html `
@@ -445,6 +499,7 @@ const App = {
                     :container-id="container.id"
                     :container-type="container.containerType"
                     :title="container.title"
+                    :container-path="container.containerPath"
                     :card-style="container.cardStyle"
                     :show-close-button="container.containerType !== 'dashboard-overview'"
                     :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
@@ -453,6 +508,8 @@ const App = {
                     :hamburger-menu-content="getHamburgerMenuContent(container.containerType)"
                     :container-data="container"
                     @close-container="removeContainer"
+                    @navigate-back="handleNavigateBack"
+                    @navigate-to-path="handleNavigateToPath"
                     @show-hamburger-menu="showHamburgerMenuModal"
                     @expand-container="expandContainer">
                     <template #content>
@@ -476,16 +533,28 @@ const App = {
                             :show-confirm="showConfirm">
                         </dashboard-actions>
                         
+                        <!-- Dashboard Inventory Content -->
+                        <inventory-content 
+                            v-else-if="container.containerType === 'dashboard-inventory'"
+                            :show-alert="showAlert"
+                            :container-path="container.containerPath"
+                            :navigate-to-path="createNavigateToPathHandler(container.id)">
+                        </inventory-content>
+                        
                         <!-- Packlist Content -->
                         <packlist-content 
                             v-else-if="container.containerType === 'packlist'"
-                            :show-alert="showAlert">
+                            :show-alert="showAlert"
+                            :container-path="container.containerPath"
+                            :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </packlist-content>
                         
                         <!-- Inventory Content -->
                         <inventory-content 
                             v-else-if="container.containerType === 'inventory'"
-                            :show-alert="showAlert">
+                            :show-alert="showAlert"
+                            :container-path="container.containerPath"
+                            :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </inventory-content>
                         
                         <!-- Test/Interfaces Content -->
@@ -497,7 +566,7 @@ const App = {
                         <div v-else class="default-container">
                             <p>Container {{ container.id }} loaded successfully!</p>
                             <p>Type: {{ container.containerType }}</p>
-                            <p>Page: {{ currentPage }}</p>
+                            <p>Path: {{ container.containerPath || 'No path' }}</p>
                         </div>
                     </template>
                 </app-container>

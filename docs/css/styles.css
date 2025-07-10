@@ -159,14 +159,17 @@ h1, h2, h3, h4, h5, h6 {
     min-width:0;
     height: 28px;
     padding: 0;
-    margin-left: var(--padding-sm);
     cursor: pointer;
     
     /*transform: translateY(-50%);*/
     box-shadow: -1px 1px 6px -2px var(--color-shadow);
 }
+.material-symbols-outlined {
+    font-size: 14pt !important;
+    line-height: 27px !important;
+}
 
-.hamburger-menu:hover {
+.button-symbol:hover {
     background-color: var(--background-color);
     color: var(--color-text);
 }
@@ -264,8 +267,32 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 1.2rem;
     color: var(--color-text);
 }
+.header-buttons {
+    display: flex;
+    gap: var(--padding-sm);
+}
 
-
+/* breadcrumbs */
+.breadcrumb-path {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: large;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.breadcrumb-path .breadcrumb-segment:hover {
+    text-decoration: underline;
+    cursor: pointer;
+}
+.breadcrumb-path .breadcrumb-segment:not(.active):hover {
+    text-decoration: underline;
+    cursor: pointer;
+}
+.breadcrumb-path .breadcrumb-separator {
+    color: var(--color-text-light);
+    font-weight: 200;
+}
 
 
 

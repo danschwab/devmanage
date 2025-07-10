@@ -15,6 +15,10 @@ export const ContainerComponent = {
             type: String,
             default: ''
         },
+        containerPath: {
+            type: String,
+            default: ''
+        },
         cardStyle: {
             type: Boolean,
             default: false
@@ -54,6 +58,75 @@ export const ContainerComponent = {
             }
         };
     },
+    computed: {
+        pathSegments() {
+            if (!this.containerPath) return [];
+            return this.containerPath.split('/').filter(segment => segment.length > 0);
+        },
+        pathSegmentsWithNames() {
+            if (!this.pathSegments.length) return [];
+            
+            // Map of segment IDs to human-readable names
+            const segmentNames = {
+                // Main pages
+                'dashboard': 'Dashboard',
+                'inventory': 'Inventory',
+                'packlist': 'Pack Lists',
+                'interfaces': 'Test Interface',
+                
+                // Dashboard sections
+                'overview': 'Overview',
+                'stats': 'Quick Stats',
+                'actions': 'Quick Actions',
+                
+                // Inventory sections
+                'categories': 'Categories',
+                'search': 'Search',
+                'reports': 'Reports',
+                
+                // Categories
+                'furniture': 'Furniture',
+                'electronics': 'Electronics',
+                'signage': 'Signage',
+                
+                // Generic
+                'main': 'Overview'
+            };
+            
+            return this.pathSegments.map((segment, index) => ({
+                id: segment,
+                name: segmentNames[segment] || segment.charAt(0).toUpperCase() + segment.slice(1),
+                index: index
+            }));
+        },
+        breadcrumbTitle() {
+            if (this.pathSegmentsWithNames.length === 0) return this.title;
+            return this.pathSegmentsWithNames[this.pathSegmentsWithNames.length - 1].name;
+        },
+        displayTitle() {
+            // Always use breadcrumb title if containerPath exists, otherwise fallback to title
+            return this.containerPath ? this.breadcrumbTitle : this.title;
+        },
+        currentPage() {
+            if (this.pathSegments.length === 0) return '';
+            return this.pathSegments[0];
+        },
+        canGoBack() {
+            if (this.pathSegments.length <= 1) return false;
+            
+            // Don't allow going back if the parent path would be 'dashboard'
+            const parentSegments = this.pathSegments.slice(0, -1);
+            if (parentSegments.length === 1 && parentSegments[0] === 'dashboard') {
+                return false;
+            }
+            
+            return true;
+        },
+        parentPath() {
+            if (this.pathSegments.length <= 1) return '';
+            return this.pathSegments.slice(0, -1).join('/');
+        }
+    },
     methods: {
         updateContent(section, content) {
             this.content[section] = content;
@@ -88,8 +161,31 @@ export const ContainerComponent = {
                 containerId: this.containerId,
                 title: this.title,
                 containerType: this.containerType,
-                pageLocation: this.pageLocation
+                pageLocation: this.pageLocation,
+                containerPath: this.containerPath
             });
+        },
+        goBack() {
+            if (this.canGoBack) {
+                this.$emit('navigate-back', {
+                    containerId: this.containerId,
+                    parentPath: this.parentPath,
+                    currentPath: this.containerPath
+                });
+            } else {
+                // If no parent path, close the container
+                this.closeContainer();
+            }
+        },
+        navigateToBreadcrumb(index) {
+            if (index < this.pathSegments.length - 1) {
+                const targetPath = this.pathSegments.slice(0, index + 1).join('/');
+                this.$emit('navigate-to-path', {
+                    containerId: this.containerId,
+                    targetPath: targetPath,
+                    currentPath: this.containerPath
+                });
+            }
         }
     },
     template: html `
@@ -97,10 +193,33 @@ export const ContainerComponent = {
              class="container" 
              :class="{ 'dashboard-card': cardStyle }"
              :data-container-id="containerId" 
-             :data-container-type="containerType">
-            <div v-if="title || showCloseButton || showHamburgerMenu || showExpandButton" class="container-header">
-                <h2 v-if="title">{{ title }}</h2>
-                <div v-if="showHamburgerMenu || showExpandButton || showCloseButton" class="header-buttons">
+             :data-container-type="containerType"
+             :data-container-path="containerPath">
+            <div v-if="containerPath || title || showCloseButton || showHamburgerMenu || showExpandButton" class="container-header">
+                <!-- Breadcrumb Navigation -->
+                <div v-if="containerPath" class="breadcrumb-nav">
+                    <!-- Full breadcrumb path for non-card containers -->
+                    <div v-if="!cardStyle" class="breadcrumb-path">
+                        <template v-for="(segment, index) in pathSegmentsWithNames" :key="segment.id">
+                            <span 
+                                class="breadcrumb-segment"
+                                :class="{ 
+                                    'active': index === pathSegmentsWithNames.length - 1,
+                                    'page-highlight': index === 0 
+                                }"
+                                @click="navigateToBreadcrumb(index)">
+                                {{ segment.name }}
+                            </span>
+                            <span v-if="index < pathSegmentsWithNames.length - 1" class="breadcrumb-separator">/</span>
+                        </template>
+                    </div>
+                    <!-- Current location only for dashboard cards -->
+                    <h2 v-else class="breadcrumb-current">{{ displayTitle }}</h2>
+                </div>
+                <!-- Traditional Title (fallback) -->
+                <h2 v-else-if="title">{{ displayTitle }}</h2>
+                
+                <div v-if="showHamburgerMenu || showExpandButton || showCloseButton || containerPath" class="header-buttons">
                     <button v-if="showHamburgerMenu" 
                             class="button-symbol gray" 
                             @click="openHamburgerMenu" 
@@ -108,11 +227,14 @@ export const ContainerComponent = {
                     <button v-if="showExpandButton" 
                             class="button-symbol gray" 
                             @click="expandContainer" 
-                            title="Expand to page">⤴</button>
-                    <button v-if="showCloseButton" 
-                            class="button-symbol gray" 
-                            @click="closeContainer" 
-                            title="Close container">×</button>
+                            title="Expand to page"><span class="material-symbols-outlined">expand_content</span></button>
+                    <button v-if="(containerPath && canGoBack) || showCloseButton" 
+                        class="button-symbol gray back-button" 
+                        @click="goBack" 
+                        :title="canGoBack ? 'Go back' : 'Close container'">
+                        <span v-if="canGoBack" class="material-symbols-outlined">arrow_back</span>
+                        <span v-else>×</span>
+                    </button>
                 </div>
                 <div v-if="content.header" class="header-content" v-html="content.header"></div>
             </div>
@@ -122,6 +244,7 @@ export const ContainerComponent = {
                     <div v-else>
                         <p>Container {{ containerId }} loaded successfully!</p>
                         <p>Type: {{ containerType }}</p>
+                        <p>Path: {{ containerPath || 'No path' }}</p>
                     </div>
                 </slot>
                 <div v-if="content.footer" class="footer-content" v-html="content.footer"></div>
