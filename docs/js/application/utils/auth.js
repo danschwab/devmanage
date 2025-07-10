@@ -1,160 +1,128 @@
 import { GoogleSheetsAuth } from '../../google_sheets_services/GoogleSheetsAuth.js';
-import { NotificationManager, NOTIFICATIONS } from '../../utils/notifications.js';
+
+/**
+ * Reactive authentication state
+ */
+export const authState = Vue.reactive({
+    isAuthenticated: false,
+    isLoading: false,
+    user: null,
+    error: null,
+    isInitialized: false
+});
 
 /**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
 export class Auth {
-    // Authentication state
-    static _isAuthenticated = false;
-    static _isAuthenticating = false;
-    
-    /**
-     * Initialize the authentication system
-     * @returns {Promise<void>}
-     */
-    static async init() {
+    static async initialize() {
+        authState.isLoading = true;
+        authState.error = null;
+        
         try {
             await GoogleSheetsAuth.initialize();
-            this._isAuthenticated = await GoogleSheetsAuth.isAuthenticated();
-            if (this._isAuthenticated) {
-                // Use the notification system
-                NotificationManager.publish(NOTIFICATIONS.AUTH_INITIALIZED, { 
-                    success: true,
-                    isAuthenticated: true
-                });
-            } else {
-                NotificationManager.publish(NOTIFICATIONS.AUTH_INITIALIZED, { 
-                    success: true,
-                    isAuthenticated: false
-                });
+            
+            // Check if user is already authenticated
+            const isAuth = await GoogleSheetsAuth.checkAuth();
+            if (isAuth) {
+                const email = await GoogleSheetsAuth.getUserEmail();
+                authState.user = { email, name: email?.split('@')[0] || 'User' };
+                authState.isAuthenticated = true;
             }
+            
+            authState.isInitialized = true;
         } catch (error) {
-            console.error('Auth initialization error:', error);
-            // Use the notification system
-            NotificationManager.publish(NOTIFICATIONS.AUTH_INITIALIZED, { 
-                success: false,
-                error: error.message
-            });
+            console.error('Auth initialization failed:', error);
+            authState.error = error.message;
+        } finally {
+            authState.isLoading = false;
         }
     }
-    
-    /**
-     * Sign in the user
-     * @returns {Promise<boolean>} Authentication result
-     */
-    static async signIn() {
-        if (this._isAuthenticating) {
-            return false;
-        }
-        
-        this._isAuthenticating = true;
-        // Use the notification system
-        NotificationManager.publish(NOTIFICATIONS.AUTH_STARTED);
+
+    static async login() {
+        authState.isLoading = true;
+        authState.error = null;
         
         try {
             await GoogleSheetsAuth.authenticate();
-            this._isAuthenticated = true;
             
-            // Get user info for notification
-            const userInfo = this.getCurrentUser();
-            
-            // Use the notification system
-            NotificationManager.publish(NOTIFICATIONS.AUTH_SUCCESS, { userInfo });
+            const email = await GoogleSheetsAuth.getUserEmail();
+            authState.user = { email, name: email?.split('@')[0] || 'User' };
+            authState.isAuthenticated = true;
             
             return true;
         } catch (error) {
-            console.error('Authentication error:', error);
-            // Use the notification system
-            NotificationManager.publish(NOTIFICATIONS.AUTH_ERROR, { error: error.message });
+            console.error('Login failed:', error);
+            authState.error = error.message;
+            authState.isAuthenticated = false;
+            authState.user = null;
             return false;
         } finally {
-            this._isAuthenticating = false;
+            authState.isLoading = false;
         }
     }
-    
-    /**
-     * Sign out the user
-     * @returns {Promise<void>}
-     */
-    static async signOut() {
-        try {
-            // Use logout() instead of signOut()
-            await GoogleSheetsAuth.logout();
-            this._isAuthenticated = false;
-            // Use the notification system
-            NotificationManager.publish(NOTIFICATIONS.AUTH_SIGNOUT);
-        } catch (error) {
-            console.error('Sign out error:', error);
-            // Use the notification system
-            NotificationManager.publish(NOTIFICATIONS.AUTH_ERROR, { 
-                action: 'signout',
-                error: error.message 
-            });
-        }
-    }
-    
-    /**
-     * Check if the user is signed in
-     * @returns {boolean} Authentication status
-     */
-    static isSignedIn() {
-        return this._isAuthenticated;
-    }
-    
-    /**
-     * Check if authentication is in progress
-     * @returns {boolean} Authentication in progress status
-     */
-    static isAuthenticating() {
-        return this._isAuthenticating;
-    }
-    
-    /**
-     * Get current user information
-     * @returns {Object|null} User info object or null if not signed in
-     */
-    static getCurrentUser() {
-        if (!this._isAuthenticated) return null;
+
+    static async logout() {
+        authState.isLoading = true;
+        authState.error = null;
         
         try {
-            // If we can get the email from GoogleSheetsAuth, use that
-            const email = GoogleSheetsAuth.userEmail;
-            
-            // Try to get more profile information if available
-            try {
-                const authInstance = gapi.auth2.getAuthInstance();
-                if (authInstance) {
-                    const user = authInstance.currentUser.get();
-                    const profile = user.getBasicProfile();
-                    
-                    if (profile) {
-                        return {
-                            id: profile.getId(),
-                            name: profile.getName(),
-                            email: profile.getEmail() || email,
-                            imageUrl: profile.getImageUrl()
-                        };
-                    }
-                }
-            } catch (e) {
-                console.warn('Could not get detailed profile:', e);
-            }
-            
-            // Fallback to just email
-            if (email) {
-                return {
-                    id: 'unknown',
-                    name: email.split('@')[0],
-                    email: email,
-                    imageUrl: null
-                };
-            }
-            
-            return null;
+            await GoogleSheetsAuth.logout();
+            authState.isAuthenticated = false;
+            authState.user = null;
         } catch (error) {
-            console.error('Error getting user info:', error);
-            return null;
+            console.error('Logout failed:', error);
+            authState.error = error.message;
+        } finally {
+            authState.isLoading = false;
         }
     }
+
+    static async checkAuth() {
+        if (!authState.isInitialized) {
+            await this.initialize();
+        }
+        return GoogleSheetsAuth.checkAuth();
+    }
+
+    static get state() {
+        return authState;
+    }
+}
+
+/**
+ * Vue composable for authentication
+ */
+export function useAuth() {
+    const login = async () => {
+        return await Auth.login();
+    };
+
+    const logout = async () => {
+        await Auth.logout();
+    };
+
+    const checkAuth = async () => {
+        return await Auth.checkAuth();
+    };
+
+    const initialize = async () => {
+        await Auth.initialize();
+    };
+
+    return {
+        // Reactive state
+        authState,
+        isAuthenticated: Vue.ref(() => authState.isAuthenticated),
+        isLoading: Vue.ref(() => authState.isLoading),
+        user: Vue.ref(() => authState.user),
+        error: Vue.ref(() => authState.error),
+        isInitialized: Vue.ref(() => authState.isInitialized),
+        
+        // Methods
+        login,
+        logout,
+        checkAuth,
+        initialize
+    };
 }

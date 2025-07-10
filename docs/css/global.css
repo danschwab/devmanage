@@ -9,55 +9,58 @@
 
 /* apply colors */
 
-.white {
+div.white, span.white {
     border-color: var(--color-border);
     background-color: var(--background-color);
 }
-.gray {
+div.gray, span.gray {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
 }
-.red {
+div.red, span.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
 }
-.orange {
+div.orange, span.orange {
     border-color: var(--color-orange);
     background-color: var(--color-orange-bg);
 }
-.yellow {
+div.yellow, span.yellow {
     border-color: var(--color-yellow);
     background-color: var(--color-yellow-bg);
 }
-.blue {
+div.blue, span.blue {
     border-color: var(--color-blue);
     background-color: var(--color-blue-bg);
 }
-.green {
+div.green, span.green {
     border-color: var(--color-green);
     background-color: var(--color-green-bg);
 }
-.white:hover {
+
+
+div.white:hover, span.white:hover {
     background-color: var(--background-color-hover);
 }
-.gray:hover {
+div.gray:hover, span.gray:hover {
     background-color: var(--color-gray-bg-hover);
 }
-.red:hover {
+div.red:hover, span.red:hover {
     background-color: var(--color-red-bg-hover);
 }
-.orange:hover {
+div.orange:hover, span.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
-.yellow:hover {
+div.yellow:hover, span.yellow:hover {
     background-color: var(--color-yellow-bg-hover);
 }
-.blue:hover {
+div.blue:hover, span.blue:hover {
     background-color: var(--color-blue-bg-hover);
 }
-.green:hover {
+div.green:hover, span.green:hover {
     background-color: var(--color-green-bg-hover);
 }
+
 
 button.white, input[type="button"].white, input[type="submit"].white {
     background-color: var(--background-color);
@@ -110,4 +113,57 @@ button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:ho
 }
 button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover {
     background-color: var(--color-green-bg-hover);
+}
+
+
+p.white, h1.white, h2.white, h3.white, h4.white, h5.white, h6.white {
+    color: var(--color-text-inverted);
+}
+p.gray, h1.gray, h2.gray, h3.gray, h4.gray, h5.gray, h6.gray {
+    color: var(--color-text-light);
+}
+p.red, h1.red, h2.red, h3.red, h4.red, h5.red, h6.red {
+    color: var(--color-red);
+}
+p.orange, h1.orange, h2.orange, h3.orange, h4.orange, h5.orange, h6.orange {
+    color: var(--color-orange);
+}
+p.yellow, h1.yellow, h2.yellow, h3.yellow, h4.yellow, h5.yellow, h6.yellow {
+    color: var(--color-yellow);
+}
+p.blue, h1.blue, h2.blue, h3.blue, h4.blue, h5.blue, h6.blue {
+    color: var(--color-blue);
+}
+p.green, h1.green, h2.green, h3.green, h4.green, h5.green, h6.green {
+    color: var(--color-green);
+}
+
+
+table.white th, td.white th, td.white tr, th.white, td.white {
+    background-color: var(--background-color);
+    color: var(--color-text);
+}
+table.gray th, td.gray th, td.gray tr, th.gray, td.gray {
+    background-color: var(--color-gray);
+    color: var(--color-text);
+}
+table.red th, td.red th, td.red tr, th.red, td.red {
+    background-color: var(--color-red);
+    color: var(--color-text-inverted);
+}
+table.orange th, td.orange th, td.orange tr, th.orange, td.orange {
+    background-color: var(--color-orange);
+    color: var(--color-text-inverted);
+}
+table.yellow th, td.yellow th, td.yellow tr, th.yellow, td.yellow {
+    background-color: var(--color-yellow);
+    color: var(--color-text);
+}
+table.blue th, td.blue th, td.blue tr, th.blue, td.blue {
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
+}
+table.green th, td.green th, td.green tr, th.green, td.green {
+    background-color: var(--color-green);
+    color: var(--color-text-inverted);
 }

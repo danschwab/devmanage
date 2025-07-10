@@ -1,6 +1,7 @@
 import { ContainerComponent, containerManager } from './application/components/containerComponent.js';
 import { TestTableComponent } from './application/components/testTableComponent.js';
 import { ModalComponent, modalManager } from './application/components/modalComponent.js';
+import { Auth, authState } from './application/utils/auth.js';
 
 const { createApp } = Vue;
 
@@ -28,8 +29,6 @@ const App = {
     data() {
         return {
             isMenuOpen: false,
-            isAuthenticated: false,
-            currentUser: null,
             navigationItems: [
                 { title: 'Dashboard', file: 'dashboard' },
                 { title: 'Pack Lists', file: 'packlist' },
@@ -41,12 +40,35 @@ const App = {
             modals: []
         };
     },
-    mounted() {
-        // Create some example containers
-        this.addTestContainers();
+    computed: {
+        // Make auth state reactive in the component
+        isAuthenticated() {
+            return authState.isAuthenticated;
+        },
+        currentUser() {
+            return authState.user;
+        },
+        isAuthLoading() {
+            return authState.isLoading;
+        },
+        authError() {
+            return authState.error;
+        }
+    },
+    async mounted() {
+        // Initialize authentication on app mount
+        await Auth.initialize();
+        
+        // Create containers based on auth state
+        this.updateContainersForPage(this.currentPage);
         
         // Add ESC key support for closing modals
         document.addEventListener('keydown', this.handleKeyDown);
+        
+        // Watch for auth state changes
+        this.$watch('isAuthenticated', (newVal) => {
+            this.updateContainersForPage(this.currentPage);
+        });
     },
     beforeUnmount() {
         // Clean up event listener
@@ -56,22 +78,27 @@ const App = {
         toggleMenu() {
             this.isMenuOpen = !this.isMenuOpen;
         },
-        login() {
-            // Placeholder for login functionality
-            console.log('Login clicked');
-            // For testing, simulate authentication
-            this.isAuthenticated = true;
-            this.currentUser = { name: 'Test User' };
-            // Load containers for the current page after authentication
-            this.updateContainersForPage(this.currentPage);
+        async login() {
+            try {
+                const success = await Auth.login();
+                if (success) {
+                    console.log('Login successful');
+                    // Containers will update automatically via watcher
+                } else {
+                    console.error('Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+            }
         },
-        logout() {
-            // Placeholder for logout functionality
-            console.log('Logout clicked');
-            this.isAuthenticated = false;
-            this.currentUser = null;
-            // Update containers for current page (will show login prompt when not authenticated)
-            this.updateContainersForPage(this.currentPage);
+        async logout() {
+            try {
+                await Auth.logout();
+                console.log('Logout successful');
+                // Containers will update automatically via watcher
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
         },
         navigateToPage(pageFile) {
             this.currentPage = pageFile;
@@ -131,6 +158,16 @@ const App = {
                     break;
                 default:
                     this.addContainer('default', `${pageFile} Page`);
+            }
+        },
+        handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                // Close all modals on ESC
+                this.modals.forEach(modal => {
+                    if (modal.isVisible) {
+                        this.hideModal(modal.id);
+                    }
+                });
             }
         },
         // Modal management methods
