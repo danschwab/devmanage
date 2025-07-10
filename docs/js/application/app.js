@@ -123,8 +123,11 @@ const App = {
             // Load page content if not cached
             const contentKey = `${this.currentPage}-${type}`;
             if (!this.pageContent.has(contentKey)) {
-                // Try specific container template first, then fallback to generic page template
-                const content = await loadTemplate(`pages/${this.currentPage}/${type}`, `pages/${this.currentPage}`);
+                let content;
+                
+                // use the main page template
+                content = await loadTemplate(`pages/${this.currentPage}`);
+                
                 this.pageContent.set(contentKey, content);
                 container.pageContent = content;
             } else {
