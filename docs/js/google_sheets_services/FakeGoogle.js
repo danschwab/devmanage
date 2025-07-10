@@ -94,7 +94,7 @@ export class FakeGoogleSheetsService {
     // Mock data for different sheets
     static mockData = {
         'INVENTORY': {
-            'FURNITURE': [
+            'Furniture': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],
                 ['TABLE-001', '', '2', '', '', 'Conference room table black 30 x 76 x 30', ''],
                 ['TABLE-002', '', '2', '', '', 'Glass-top square end table w/ metal bases 18x18x16', ''],

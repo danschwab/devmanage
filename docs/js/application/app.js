@@ -2,6 +2,14 @@ import { ContainerComponent, containerManager } from './components/containerComp
 import { TestTableComponent } from './components/testTableComponent.js';
 import { ModalComponent, modalManager } from './components/modalComponent.js';
 import { Auth, authState } from './utils/auth.js';
+import { 
+    DashboardOverview, 
+    DashboardStats, 
+    DashboardActions, 
+    PacklistContent, 
+    InventoryContent, 
+    InterfacesContent 
+} from './components/content/index.js';
 
 const { createApp } = Vue;
 
@@ -34,7 +42,13 @@ const App = {
     components: {
         'app-container': ContainerComponent,
         'test-table': TestTableComponent,
-        'app-modal': ModalComponent
+        'app-modal': ModalComponent,
+        'dashboard-overview': DashboardOverview,
+        'dashboard-stats': DashboardStats,
+        'dashboard-actions': DashboardActions,
+        'packlist-content': PacklistContent,
+        'inventory-content': InventoryContent,
+        'interfaces-content': InterfacesContent
     },
     data() {
         return {
@@ -47,8 +61,7 @@ const App = {
             ],
             currentPage: 'dashboard',
             containers: [],
-            modals: [],
-            pageContent: new Map() // Cache for loaded page content
+            modals: []
         };
     },
     computed: {
@@ -120,19 +133,9 @@ const App = {
         async addContainer(type = 'default', title = '', options = {}) {
             const container = containerManager.createContainer(type, title, options);
             
-            // Load page content if not cached
-            const contentKey = `${this.currentPage}-${type}`;
-            if (!this.pageContent.has(contentKey)) {
-                let content;
-                
-                // use the main page template
-                content = await loadTemplate(`pages/${this.currentPage}`);
-                
-                this.pageContent.set(contentKey, content);
-                container.pageContent = content;
-            } else {
-                container.pageContent = this.pageContent.get(contentKey);
-            }
+            // Set container type and page for content determination
+            container.containerType = type;
+            container.currentPage = this.currentPage;
             
             this.containers.push(container);
             return container;
@@ -145,11 +148,6 @@ const App = {
             if (this.isAuthenticated && this.containers.length === 0) {
                 this.navigateToPage('dashboard');
             }
-        },
-        addAuthenticatedContainers() {
-            this.containers = [];
-            this.addContainer('dashboard', 'Dashboard Overview');
-            this.addContainer('actions', 'Quick Actions');
         },
         async updateContainersForPage(pageFile) {
             // Clear existing containers
@@ -414,19 +412,6 @@ const App = {
                 // For containers without specific pages, show them in expanded view
                 this.showAlert(`Expanded view for "${containerData.title}" - Full page functionality coming soon!`, 'Expand Container');
             }
-        },
-        getContainerData(container) {
-            return {
-                ...container,
-                currentUser: this.currentUser,
-                currentPage: this.currentPage,
-                isAuthenticated: this.isAuthenticated,
-                navigateToPage: this.navigateToPage,
-                addContainer: this.addContainer,
-                removeContainer: this.removeContainer,
-                showAlert: this.showAlert,
-                showConfirm: this.showConfirm
-            };
         }
     }
 };

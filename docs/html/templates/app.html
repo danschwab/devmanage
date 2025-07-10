@@ -46,26 +46,79 @@
             v-for="container in containers" 
             :key="container.id"
             :container-id="container.id"
-            :container-type="container.type"
+            :container-type="container.containerType"
             :title="container.title"
             :card-style="container.cardStyle"
-            :show-close-button="container.type !== 'dashboard-overview'"
-            :show-hamburger-menu="!container.type.startsWith('dashboard')"
+            :show-close-button="container.containerType !== 'dashboard-overview'"
+            :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
             :show-expand-button="container.cardStyle"
             :page-location="container.pageLocation"
-            :hamburger-menu-content="getHamburgerMenuContent(container.type)"
-            :container-data="getContainerData(container)"
+            :hamburger-menu-content="getHamburgerMenuContent(container.containerType)"
+            :container-data="container"
             @close-container="removeContainer"
             @show-hamburger-menu="showHamburgerMenuModal"
             @expand-container="expandContainer">
             <template #content>
-                <!-- Load page content dynamically -->
-                <div v-if="container.pageContent" v-html="container.pageContent"></div>
-                <div v-else>
-                    <p>Loading {{ container.type }} content...</p>
+                <!-- Dashboard Overview Content -->
+                <dashboard-overview 
+                    v-if="container.containerType === 'dashboard-overview'"
+                    :current-user="currentUser">
+                </dashboard-overview>
+                
+                <!-- Dashboard Stats Content -->
+                <dashboard-stats 
+                    v-else-if="container.containerType === 'dashboard-stats'">
+                </dashboard-stats>
+                
+                <!-- Dashboard Actions Content -->
+                <dashboard-actions 
+                    v-else-if="container.containerType === 'dashboard-actions'"
+                    :navigate-to-page="navigateToPage"
+                    :add-container="addContainer"
+                    :show-alert="showAlert"
+                    :show-confirm="showConfirm">
+                </dashboard-actions>
+                
+                <!-- Packlist Content -->
+                <packlist-content 
+                    v-else-if="container.containerType === 'packlist'"
+                    :show-alert="showAlert">
+                </packlist-content>
+                
+                <!-- Inventory Content -->
+                <inventory-content 
+                    v-else-if="container.containerType === 'inventory'"
+                    :show-alert="showAlert">
+                </inventory-content>
+                
+                <!-- Test/Interfaces Content -->
+                <interfaces-content 
+                    v-else-if="container.containerType === 'test'">
+                </interfaces-content>
+                
+                <!-- Default Content -->
+                <div v-else class="default-container">
+                    <p>Container {{ container.id }} loaded successfully!</p>
+                    <p>Type: {{ container.containerType }}</p>
+                    <p>Page: {{ currentPage }}</p>
                 </div>
             </template>
         </app-container>
+        
+        <!-- Show message when not authenticated and no containers -->
+        <div v-if="!isAuthenticated && containers.length === 0" class="welcome-message" style="text-align: center; padding: 2rem; margin: 2rem; background: #f5f5f5; border-radius: 8px;">
+            <div v-if="isAuthLoading">
+                <p>Initializing authentication...</p>
+                <div style="font-size: 2em;">⟳</div>
+            </div>
+            <div v-else>
+                <h2>Welcome to Top Shelf Live Inventory</h2>
+                <p>Please log in to access the application.</p>
+                <button @click="login" :disabled="isAuthLoading" class="login-button" style="padding: 0.5rem 1rem; font-size: 1.1em; background: #007cba; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    {{ isAuthLoading ? 'Authenticating...' : 'Login with Google' }}
+                </button>
+            </div>
+        </div>
         
         <footer>
             <p>
@@ -92,33 +145,6 @@
                     <p>Modal {{ modal.id }} content</p>
                 </div>
             </template>
-        </app-modal>
-    </transition-group>
-</div>
-                <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
-            </p>
-        </footer>
-    </div>
-</div>
-<!-- Modal Space -->
-<div id="modal-space">
-    <transition-group name="fade">
-        <app-modal 
-            v-for="modal in modals" 
-            :key="modal.id"
-            :modal-id="modal.id"
-            :title="modal.title"
-            :is-visible="modal.isVisible"
-            @close-modal="removeModal">
-            <template #content>
-                <div v-if="modal.content" v-html="modal.content"></div>
-                <div v-else>
-                    <p>Modal {{ modal.id }} content</p>
-                </div>
-            </template>
-        </app-modal>
-    </transition-group>
-</div>
         </app-modal>
     </transition-group>
 </div>
