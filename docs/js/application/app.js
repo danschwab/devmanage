@@ -120,18 +120,10 @@ const App = {
                 this.navigateToPage('dashboard');
             }
         },
-        addTestContainers() {
-            this.containers = [];
-            this.addContainer('welcome', 'Vue.js Integration Test');
-        },
         addAuthenticatedContainers() {
             this.containers = [];
             this.addContainer('dashboard', 'Dashboard Overview');
             this.addContainer('actions', 'Quick Actions');
-        },
-        resetToBasicContainers() {
-            this.containers = [];
-            this.addContainer('welcome', 'Welcome - Please Login');
         },
         updateContainersForPage(pageFile) {
             // Clear existing containers
