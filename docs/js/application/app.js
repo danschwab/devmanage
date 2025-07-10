@@ -498,22 +498,6 @@ const App = {
                         </div>
                     </template>
                 </app-container>
-                
-                <!-- Show message when not authenticated and no containers -->
-                <div v-if="!isAuthenticated && containers.length === 0" class="welcome-message" style="text-align: center; padding: 2rem; margin: 2rem; background: #f5f5f5; border-radius: 8px;">
-                    <div v-if="isAuthLoading">
-                        <p>Initializing authentication...</p>
-                        <div style="font-size: 2em;">⟳</div>
-                    </div>
-                    <div v-else>
-                        <h2>Welcome to Top Shelf Live Inventory</h2>
-                        <p>Please log in to access the application.</p>
-                        <button @click="login" :disabled="isAuthLoading" class="login-button" style="padding: 0.5rem 1rem; font-size: 1.1em; background: #007cba; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            {{ isAuthLoading ? 'Authenticating...' : 'Login with Google' }}
-                        </button>
-                    </div>
-                </div>
-                
                 <footer>
                     <p>
                         &copy; 2024 Top Shelf Exhibits
