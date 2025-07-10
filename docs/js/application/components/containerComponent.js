@@ -44,8 +44,7 @@ export const ContainerComponent = {
     },
     data() {
         return {
-            template: null,
-            isLoading: true,
+            isLoading: false,
             content: {
                 header: '',
                 main: '',
@@ -53,24 +52,7 @@ export const ContainerComponent = {
             }
         };
     },
-    async created() {
-        await this.loadContainerTemplate();
-    },
     methods: {
-        async loadContainerTemplate() {
-            try {
-                const response = await fetch('html/templates/container.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load container template: ${response.status}`);
-                }
-                this.template = await response.text();
-                this.isLoading = false;
-            } catch (error) {
-                console.error('Error loading container template:', error);
-                this.template = '<div class="container"><div class="content">Error loading container</div></div>';
-                this.isLoading = false;
-            }
-        },
         updateContent(section, content) {
             this.content[section] = content;
         },
