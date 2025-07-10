@@ -142,6 +142,7 @@ const App = {
                     await this.addContainer('dashboard-overview', 'Dashboard Overview', { cardStyle: true });
                     await this.addContainer('dashboard-stats', 'Quick Stats', { cardStyle: true });
                     await this.addContainer('dashboard-actions', 'Quick Actions', { cardStyle: true });
+                    await this.addContainer('inventory', 'Inventory Management', { cardStyle: true });
                     break;
                 case 'packlist':
                     await this.addContainer('packlist', 'Pack Lists');
@@ -378,16 +379,18 @@ const App = {
             const pageMapping = {
                 'dashboard-overview': 'dashboard',
                 'dashboard-stats': 'inventory',
-                'dashboard-actions': 'dashboard'
+                'dashboard-actions': 'dashboard',
+                'test': 'interfaces'
             };
             
-            // Check if there's a page mapping for this container type
-            const targetPage = pageMapping[containerData.containerType];
-            if (targetPage) {
+            // Get target page from mapping, or use container type as fallback
+            const targetPage = pageMapping[containerData.containerType] || containerData.containerType;
+            
+            if (targetPage !== this.currentPage) {
                 this.navigateToPage(targetPage);
             } else {
-                // For containers without specific pages, show them in expanded view
-                this.showAlert(`Expanded view for "${containerData.title}" - Full page functionality coming soon!`, 'Expand Container');
+                // Already on the target page, show a message
+                this.showAlert(`You are already viewing the ${containerData.title} page.`, 'Already Here');
             }
         }
     },
