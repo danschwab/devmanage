@@ -1,19 +1,152 @@
-<header>
-    <nav>
-        <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-        <!--header-content-->
-        <span id="navbar"></span>
-        <button class="hamburger-menu" onclick="this.closest('nav').classList.toggle('open')">≡</button>
-    </nav>
-</header>
-<div id="app-content">
-    <!--content-->
-    <footer>
-        <p>
-            <!--footer-content-->
-            &copy; 2024 Top Shelf Exhibits
-            <br>
-            <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
-        </p>
-    </footer>
+<div id="app">
+    <header>
+        <nav :class="{ 'open': isMenuOpen }">
+            <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+            
+            <span id="navbar">
+                <template v-if="isAuthenticated">
+                    <a v-for="item in navigationItems" 
+                       :key="item.file"
+                       :class="{ 'active': currentPage === item.file }"
+                       @click="navigateToPage(item.file); isMenuOpen = false"
+                       href="#">
+                        {{ item.title }}
+                    </a>
+                </template>
+                
+                <button v-if="!isAuthenticated" 
+                        @click="login" 
+                        :disabled="isAuthLoading"
+                        class="login-out-button active">
+                    {{ isAuthLoading ? 'Loading...' : 'Login' }}
+                </button>
+                <button v-else 
+                        @click="logout" 
+                        :disabled="isAuthLoading"
+                        class="login-out-button">
+                    {{ isAuthLoading ? 'Logging out...' : `Logout (${currentUser?.name})` }}
+                </button>
+            </span>
+            
+            <button class="button-symbol gray" @click="toggleMenu">
+                {{ isMenuOpen ? '×' : '≡' }}
+            </button>
+        </nav>
+    </header>
+
+    <div id="app-content">
+        <div v-if="authError" class="error-message"></div>
+    <div id="app-content">
+        <!-- Show auth error if present -->
+        <div v-if="authError" class="error-message" style="background: #ffebee; border: 1px solid #f44336; padding: 1rem; margin: 1rem; border-radius: 4px; color: #c62828;">
+            <strong>Authentication Error:</strong> {{ authError }}
+            <button @click="authError = null" style="float: right; background: none; border: none; font-size: 1.2em; cursor: pointer;">&times;</button>
+        </div>
+
+        <!-- Dynamic containers inserted directly here -->
+        <app-container 
+            v-for="container in containers" 
+            :key="container.id"
+            :container-id="container.id"
+            :container-type="container.type"
+            :title="container.title"
+            :card-style="container.cardStyle"
+            :show-close-button="container.type !== 'dashboard-overview'"
+            :show-hamburger-menu="!container.type.startsWith('dashboard')"
+            :hamburger-menu-content="'test content'"
+            @close-container="removeContainer">
+            <template #content>
+                <!-- Dynamic content based on container type -->
+                <div v-if="container.type === 'welcome'">
+                    <div v-if="isAuthLoading" style="text-align: center; padding: 2rem;">
+                        <p>Initializing authentication...</p>
+                        <div style="font-size: 2em;">⟳</div>
+                    </div>
+                    <div v-else>
+                        <p>Vue.js integration with Google Sheets authentication is working!</p>
+                        <p>Current page: {{ currentPage }}</p>
+                        <p>Authentication: {{ isAuthenticated ? 'Authenticated' : 'Not authenticated' }}</p>
+                        <p>User: {{ currentUser?.email || 'None' }}</p>
+                        <button v-if="!isAuthenticated" @click="login" :disabled="isAuthLoading">
+                            {{ isAuthLoading ? 'Authenticating...' : 'Click to Login' }}
+                        </button>
+                    </div>
+                </div>
+                <div v-else-if="container.type === 'dashboard-overview'">
+                    <p>Welcome to your dashboard, {{ currentUser?.name }}!</p>
+                    <p>System Status: <span style="color: green;">Online</span></p>
+                    <p>Last Login: Today, 9:30 AM</p>
+                    <p>Active Sessions: 3</p>
+                </div>
+                <div v-else-if="container.type === 'dashboard-stats'">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div><strong>Total Items:</strong> 1,247</div>
+                        <div><strong>Low Stock:</strong> 12</div>
+                        <div><strong>Out of Stock:</strong> 3</div>
+                        <div><strong>Categories:</strong> 6</div>
+                    </div>
+                </div>
+                <div v-else-if="container.type === 'dashboard-table'">
+                    <test-table></test-table>
+                </div>
+                <div v-else-if="container.type === 'dashboard-actions'">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <button @click="navigateToPage('inventory')">Manage Inventory</button>
+                        <button @click="navigateToPage('packlist')">Create Pack List</button>
+                        <button @click="addContainer('dynamic', 'New Card', { cardStyle: true })">Add Card</button>
+                        <button @click="showAlert('This is a test alert modal!', 'Test Alert')">Show Alert</button>
+                        <button @click="showConfirm('Do you want to proceed?', 'Confirmation')">Show Confirm</button>
+                    </div>
+                </div>
+                <div v-else-if="container.type === 'actions'">
+                    <p>Quick action buttons will go here</p>
+                    <button @click="addContainer('dynamic', 'Dynamic Container')">Add Container</button>
+                </div>
+                <div v-else-if="container.type === 'stats'">
+                    <p>Statistics and charts will go here</p>
+                </div>
+                <div v-else-if="container.type === 'dynamic'">
+                    <p>This is a dynamically added container!</p>
+                    <button @click="removeContainer(container.id)">Remove This Container</button>
+                </div>
+                <div v-else-if="container.type === 'test'">
+                    <test-table></test-table>
+                </div>
+                <div v-else>
+                    <p>{{ container.type }} container content</p>
+                    <p>Container ID: {{ container.id }}</p>
+                </div>
+            </template>
+        </app-container>
+        
+        <!-- Fallback message when no containers (shown as comment placeholder) -->
+        <!-- No containers loaded when containers array is empty -->
+        
+        <footer>
+            <p>
+                &copy; 2024 Top Shelf Exhibits
+                <br>
+                <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
+            </p>
+        </footer>
+    </div>
+</div>
+<!-- Modal Space -->
+<div id="modal-space">
+    <transition-group name="fade">
+        <app-modal 
+            v-for="modal in modals" 
+            :key="modal.id"
+            :modal-id="modal.id"
+            :title="modal.title"
+            :is-visible="modal.isVisible"
+            @close-modal="removeModal">
+            <template #content>
+                <div v-if="modal.content" v-html="modal.content"></div>
+                <div v-else>
+                    <p>Modal {{ modal.id }} content</p>
+                </div>
+            </template>
+        </app-modal>
+    </transition-group>
 </div>

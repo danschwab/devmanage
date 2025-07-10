@@ -34,7 +34,6 @@ export const ContainerComponent = {
         return {
             template: null,
             isLoading: true,
-            showModal: false,
             content: {
                 header: '',
                 main: '',
@@ -77,10 +76,12 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
-            this.showModal = true;
-        },
-        closeModal() {
-            this.showModal = false;
+            // Emit event to parent to show modal using modalComponent
+            this.$emit('show-hamburger-menu', {
+                containerId: this.containerId,
+                title: `${this.title} Menu`,
+                content: this.hamburgerMenuContent
+            });
         }
     },
     template: `
@@ -124,22 +125,6 @@ export const ContainerComponent = {
                     </div>
                 </slot>
                 <div v-if="content.footer" class="footer-content" v-html="content.footer"></div>
-            </div>
-            
-            <!-- Modal for hamburger menu -->
-            <div v-if="showModal" class="modal-overlay" @click="closeModal">
-                <div class="modal-content" @click.stop>
-                    <div class="modal-header">
-                        <h3>Menu</h3>
-                        <button class="button-symbol gray" @click="closeModal" title="Close">×</button>
-                    </div>
-                    <div class="modal-body">
-                        <div v-if="hamburgerMenuContent" v-html="hamburgerMenuContent"></div>
-                        <div v-else>
-                            <p>No menu content provided</p>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
         <div v-else class="container" :class="{ 'dashboard-card': cardStyle }">
