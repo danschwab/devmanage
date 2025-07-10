@@ -86,7 +86,7 @@ export const TableComponent = {
     },
     template: `
         <div class="dynamic-table">
-            <div class="table-header" v-if="title || showRefresh">
+            <div class="content-header" v-if="title || showRefresh">
                 <h3 v-if="title">{{ title }}</h3>
                 <button 
                     v-if="showRefresh" 
@@ -145,7 +145,7 @@ export const TableComponent = {
             </div>
             
             <!-- Data Summary -->
-            <div v-if="data && data.length > 0" class="table-footer">
+            <div v-if="data && data.length > 0" class="content-footer">
                 <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
             </div>
         </div>
