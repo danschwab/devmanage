@@ -3,6 +3,8 @@
  * Provides dummy data and authentication objects that mirror the real GoogleSheetsAuth and GoogleSheetsService
  */
 
+import { SheetSql } from './sheetSql.js';
+
 export class FakeGoogleSheetsAuth {
     static userEmail = 'test@example.com';
     static isInitialized = false;
@@ -672,38 +674,23 @@ export class FakeGoogleSheetsService {
         await this.delay(100);
 
         try {
-            // Simple mock query execution - just parse FROM clause and return that sheet's data
-            const fromMatch = query.match(/FROM\s+(.*?)(?:\s+WHERE|\s+ORDER BY|\s+LIMIT|\s*$)/i);
-            if (!fromMatch) {
+            // Parse the query using SheetSql like the real implementation
+            const parsedQuery = SheetSql.parseQuery(query);
+            
+            if (!parsedQuery.from) {
                 throw new Error('Invalid query: FROM clause is required');
             }
             
-            const sheetName = fromMatch[1].trim();
-            const data = await this.getSheetData(tableId, sheetName);
+            // Get the data from the sheet
+            const data = await this.getSheetData(tableId, parsedQuery.from);
             
             if (!data || data.length === 0) {
                 return [];
             }
-
-            // Convert to objects using first row as headers
-            const headers = data[0];
-            const results = data.slice(1).map(row => {
-                const obj = {};
-                headers.forEach((header, index) => {
-                    obj[header] = row[index] || '';
-                });
-                return obj;
-            });
-
-            // Apply simple WHERE filtering if present
-            const whereMatch = query.match(/WHERE\s+(.*?)(?:\s+ORDER BY|\s+LIMIT|\s*$)/i);
-            if (whereMatch) {
-                const whereClause = whereMatch[1].trim();
-                console.log(`FakeGoogleSheetsService: Applying WHERE filter: ${whereClause}`);
-                // For demo purposes, just return all results
-                // In a real implementation, you'd parse and apply the WHERE conditions
-            }
-
+            
+            // Execute the query against the data using SheetSql
+            const results = SheetSql.executeQuery(parsedQuery, data);
+            
             console.log(`FakeGoogleSheetsService: Query returned ${results.length} results`);
             return results;
         } catch (error) {

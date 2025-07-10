@@ -1,4 +1,4 @@
-import { GoogleSheetsService } from '../google_sheets_services/GoogleSheetsData.js';
+import { GoogleSheetsService } from '../google_sheets_services/index.js';
 import { CacheManager } from '../index.js';
 
 export class Database {

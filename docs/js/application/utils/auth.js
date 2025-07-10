@@ -1,4 +1,4 @@
-import { GoogleSheetsAuth } from '../../google_sheets_services/GoogleSheetsAuth.js';
+import { GoogleSheetsAuth } from '../../google_sheets_services/index.js';
 
 /**
  * Reactive authentication state
