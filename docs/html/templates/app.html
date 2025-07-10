@@ -35,8 +35,6 @@
     </header>
 
     <div id="app-content">
-        <div v-if="authError" class="error-message"></div>
-    <div id="app-content">
         <!-- Show auth error if present -->
         <div v-if="authError" class="error-message" style="background: #ffebee; border: 1px solid #f44336; padding: 1rem; margin: 1rem; border-radius: 4px; color: #c62828;">
             <strong>Authentication Error:</strong> {{ authError }}
@@ -53,8 +51,9 @@
             :card-style="container.cardStyle"
             :show-close-button="container.type !== 'dashboard-overview'"
             :show-hamburger-menu="!container.type.startsWith('dashboard')"
-            :hamburger-menu-content="'test content'"
-            @close-container="removeContainer">
+            :hamburger-menu-content="getHamburgerMenuContent(container.type)"
+            @close-container="removeContainer"
+            @show-hamburger-menu="showHamburgerMenuModal">
             <template #content>
                 <!-- Dynamic content based on container type -->
                 <div v-if="container.type === 'welcome'">

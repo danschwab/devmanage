@@ -76,7 +76,7 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
-            // Emit event to parent to show modal using modalComponent
+            // Emit event to parent to show modal in centralized modal-space
             this.$emit('show-hamburger-menu', {
                 containerId: this.containerId,
                 title: `${this.title} Menu`,
@@ -90,9 +90,9 @@ export const ContainerComponent = {
              :class="{ 'dashboard-card': cardStyle }"
              :data-container-id="containerId" 
              :data-container-type="containerType">
-            <div v-if="title" class="container-header">
-                <h2>{{ title }}</h2>
-                <div class="header-buttons">
+            <div v-if="title || showCloseButton || showHamburgerMenu" class="container-header">
+                <h2 v-if="title">{{ title }}</h2>
+                <div v-if="showHamburgerMenu || showCloseButton" class="header-buttons">
                     <button v-if="showHamburgerMenu" 
                             class="button-symbol gray" 
                             @click="openHamburgerMenu" 
@@ -103,18 +103,6 @@ export const ContainerComponent = {
                             title="Close container">×</button>
                 </div>
                 <div v-if="content.header" class="header-content" v-html="content.header"></div>
-            </div>
-            <div v-else-if="showCloseButton || showHamburgerMenu" class="container-header">
-                <div class="header-buttons">
-                    <button v-if="showHamburgerMenu" 
-                            class="button-symbol gray" 
-                            @click="openHamburgerMenu" 
-                            title="Menu">☰</button>
-                    <button v-if="showCloseButton" 
-                            class="button-symbol gray" 
-                            @click="closeContainer" 
-                            title="Close container">×</button>
-                </div>
             </div>
             <div class="content">
                 <slot name="content">
