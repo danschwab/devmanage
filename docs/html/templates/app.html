@@ -54,54 +54,15 @@
             :show-expand-button="container.cardStyle"
             :page-location="container.pageLocation"
             :hamburger-menu-content="getHamburgerMenuContent(container.type)"
+            :container-data="getContainerData(container)"
             @close-container="removeContainer"
             @show-hamburger-menu="showHamburgerMenuModal"
             @expand-container="expandContainer">
             <template #content>
-                <!-- Dynamic content based on container type -->
-                <div v-if="container.type === 'dashboard-overview'">
-                    <p>Welcome to your dashboard, {{ currentUser?.name }}!</p>
-                    <p>System Status: <span style="color: green;">Online</span></p>
-                    <p>Last Login: Today, 9:30 AM</p>
-                    <p>Active Sessions: 3</p>
-                </div>
-                <div v-else-if="container.type === 'dashboard-stats'">
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <div><strong>Total Items:</strong> 1,247</div>
-                        <div><strong>Low Stock:</strong> 12</div>
-                        <div><strong>Out of Stock:</strong> 3</div>
-                        <div><strong>Categories:</strong> 6</div>
-                    </div>
-                </div>
-                <div v-else-if="container.type === 'dashboard-table'">
-                    <test-table></test-table>
-                </div>
-                <div v-else-if="container.type === 'dashboard-actions'">
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <button @click="navigateToPage('inventory')">Manage Inventory</button>
-                        <button @click="navigateToPage('packlist')">Create Pack List</button>
-                        <button @click="addContainer('dynamic', 'New Card', { cardStyle: true })">Add Card</button>
-                        <button @click="showAlert('This is a test alert modal!', 'Test Alert')">Show Alert</button>
-                        <button @click="showConfirm('Do you want to proceed?', 'Confirmation')">Show Confirm</button>
-                    </div>
-                </div>
-                <div v-else-if="container.type === 'actions'">
-                    <p>Quick action buttons will go here</p>
-                    <button @click="addContainer('dynamic', 'Dynamic Container')">Add Container</button>
-                </div>
-                <div v-else-if="container.type === 'stats'">
-                    <p>Statistics and charts will go here</p>
-                </div>
-                <div v-else-if="container.type === 'dynamic'">
-                    <p>This is a dynamically added container!</p>
-                    <button @click="removeContainer(container.id)">Remove This Container</button>
-                </div>
-                <div v-else-if="container.type === 'test'">
-                    <test-table></test-table>
-                </div>
+                <!-- Load page content dynamically -->
+                <div v-if="container.pageContent" v-html="container.pageContent"></div>
                 <div v-else>
-                    <p>{{ container.type }} container content</p>
-                    <p>Container ID: {{ container.id }}</p>
+                    <p>Loading {{ container.type }} content...</p>
                 </div>
             </template>
         </app-container>
@@ -110,6 +71,30 @@
             <p>
                 &copy; 2024 Top Shelf Exhibits
                 <br>
+                <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
+            </p>
+        </footer>
+    </div>
+</div>
+<!-- Modal Space -->
+<div id="modal-space">
+    <transition-group name="fade">
+        <app-modal 
+            v-for="modal in modals" 
+            :key="modal.id"
+            :modal-id="modal.id"
+            :title="modal.title"
+            :is-visible="modal.isVisible"
+            @close-modal="removeModal">
+            <template #content>
+                <div v-if="modal.content" v-html="modal.content"></div>
+                <div v-else>
+                    <p>Modal {{ modal.id }} content</p>
+                </div>
+            </template>
+        </app-modal>
+    </transition-group>
+</div>
                 <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
             </p>
         </footer>

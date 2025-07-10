@@ -36,6 +36,10 @@ export const ContainerComponent = {
         pageLocation: {
             type: String,
             default: ''
+        },
+        containerData: {
+            type: Object,
+            default: () => ({})
         }
     },
     data() {
@@ -84,11 +88,14 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
+            // Check if container has custom hamburger content, otherwise use default
+            const customContent = this.containerData?.customHamburgerContent || this.hamburgerMenuContent;
+            
             // Emit event to parent to show modal in centralized modal-space
             this.$emit('show-hamburger-menu', {
                 containerId: this.containerId,
                 title: `${this.title} Menu`,
-                content: this.hamburgerMenuContent
+                content: customContent
             });
         },
         expandContainer() {

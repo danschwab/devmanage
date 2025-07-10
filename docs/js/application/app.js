@@ -5,17 +5,27 @@ import { Auth, authState } from './utils/auth.js';
 
 const { createApp } = Vue;
 
-// Function to load template from external file
-async function loadTemplate(templateName) {
+// Function to load template from external file with fallback support
+async function loadTemplate(templatePath, fallbackPath = null) {
     try {
-        const response = await fetch(`html/templates/${templateName}.html`);
+        const response = await fetch(`html/${templatePath}.html`);
         if (!response.ok) {
+            if (fallbackPath) {
+                // Try fallback path
+                const fallbackResponse = await fetch(`html/${fallbackPath}.html`);
+                if (!fallbackResponse.ok) {
+                    throw new Error(`Failed to load template and fallback: ${response.status}, ${fallbackResponse.status}`);
+                }
+                return await fallbackResponse.text();
+            }
             throw new Error(`Failed to load template: ${response.status}`);
         }
         return await response.text();
     } catch (error) {
         console.error('Error loading template:', error);
-        return '<div>Error loading template</div>';
+        return fallbackPath ? 
+            `<div>Error loading ${templatePath} and fallback ${fallbackPath}</div>` :
+            `<div>Error loading ${templatePath}</div>`;
     }
 }
 
@@ -37,7 +47,8 @@ const App = {
             ],
             currentPage: 'dashboard',
             containers: [],
-            modals: []
+            modals: [],
+            pageContent: new Map() // Cache for loaded page content
         };
     },
     computed: {
@@ -106,8 +117,20 @@ const App = {
             // Update containers based on current page
             this.updateContainersForPage(pageFile);
         },
-        addContainer(type = 'default', title = '', options = {}) {
+        async addContainer(type = 'default', title = '', options = {}) {
             const container = containerManager.createContainer(type, title, options);
+            
+            // Load page content if not cached
+            const contentKey = `${this.currentPage}-${type}`;
+            if (!this.pageContent.has(contentKey)) {
+                // Try specific container template first, then fallback to generic page template
+                const content = await loadTemplate(`pages/${this.currentPage}/${type}`, `pages/${this.currentPage}`);
+                this.pageContent.set(contentKey, content);
+                container.pageContent = content;
+            } else {
+                container.pageContent = this.pageContent.get(contentKey);
+            }
+            
             this.containers.push(container);
             return container;
         },
@@ -125,7 +148,7 @@ const App = {
             this.addContainer('dashboard', 'Dashboard Overview');
             this.addContainer('actions', 'Quick Actions');
         },
-        updateContainersForPage(pageFile) {
+        async updateContainersForPage(pageFile) {
             // Clear existing containers
             this.containers = [];
             
@@ -138,22 +161,21 @@ const App = {
             switch(pageFile) {
                 case 'dashboard':
                     // Create dashboard cards
-                    this.addContainer('dashboard-overview', 'Dashboard Overview', { cardStyle: true });
-                    this.addContainer('dashboard-stats', 'Quick Stats', { cardStyle: true });
-                    this.addContainer('dashboard-table', 'Recent Data', { cardStyle: true });
-                    this.addContainer('dashboard-actions', 'Quick Actions', { cardStyle: true });
+                    await this.addContainer('dashboard-overview', 'Dashboard Overview', { cardStyle: true });
+                    await this.addContainer('dashboard-stats', 'Quick Stats', { cardStyle: true });
+                    await this.addContainer('dashboard-actions', 'Quick Actions', { cardStyle: true });
                     break;
                 case 'packlist':
-                    this.addContainer('packlist', 'Pack Lists');
+                    await this.addContainer('packlist', 'Pack Lists');
                     break;
                 case 'inventory':
-                    this.addContainer('inventory', 'Inventory Management');
+                    await this.addContainer('inventory', 'Inventory Management');
                     break;
                 case 'interfaces':
-                    this.addContainer('test', 'Interface Testing');
+                    await this.addContainer('test', 'Interface Testing');
                     break;
                 default:
-                    this.addContainer('default', `${pageFile} Page`);
+                    await this.addContainer('default', `${pageFile} Page`);
             }
             
             // If authenticated and no containers were added, navigate to dashboard
@@ -378,7 +400,6 @@ const App = {
             const pageMapping = {
                 'dashboard-overview': 'dashboard',
                 'dashboard-stats': 'inventory',
-                'dashboard-table': 'packlist',
                 'dashboard-actions': 'dashboard'
             };
             
@@ -390,13 +411,26 @@ const App = {
                 // For containers without specific pages, show them in expanded view
                 this.showAlert(`Expanded view for "${containerData.title}" - Full page functionality coming soon!`, 'Expand Container');
             }
+        },
+        getContainerData(container) {
+            return {
+                ...container,
+                currentUser: this.currentUser,
+                currentPage: this.currentPage,
+                isAuthenticated: this.isAuthenticated,
+                navigateToPage: this.navigateToPage,
+                addContainer: this.addContainer,
+                removeContainer: this.removeContainer,
+                showAlert: this.showAlert,
+                showConfirm: this.showConfirm
+            };
         }
     }
 };
 
 // Initialize the app with external template
 async function initApp() {
-    const template = await loadTemplate('app');
+    const template = await loadTemplate('templates/app');
     App.template = template;
     createApp(App).mount('body');
 }
