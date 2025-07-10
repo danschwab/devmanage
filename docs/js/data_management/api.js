@@ -1,4 +1,4 @@
-import { Database, Analytics, CacheManager, applyTracking, InventoryUtils, PackListUtils, ProductionUtils } from '../index.js';
+import { Database, Analytics, CacheManager, applyTracking, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from '../index.js';
 
 class RequestsBase {
     /**
@@ -244,6 +244,41 @@ class RequestsBase {
             console.error(`Failed to find overlapping projects:`, error);
             Analytics.trackEvent?.('data_error', { action: 'get_overlapping', parameters: typeof parameters === 'string' ? parameters : 'date_range' });
             throw new Error(`Could not find overlapping projects. Please try again.`);
+        }
+    }
+    
+    /**
+     * Store user-specific application data
+     * @param {string} username - The username to store data for
+     * @param {string} id - The ID to associate with the data
+     * @param {Array} data - Array of data to store
+     * @returns {Promise<boolean>} Success status
+     */
+    static async storeUserData(username, id, data) {
+        try {
+            const trackingId = CacheManager.getCurrentTrackingId();
+            return await ApplicationUtils.storeUserData(username, id, data, trackingId);
+        } catch (error) {
+            console.error(`Failed to store user data for ${username}:`, error);
+            Analytics.trackEvent?.('data_error', { action: 'store_user_data', username });
+            throw new Error(`Could not store user data. Please try again.`);
+        }
+    }
+    
+    /**
+     * Retrieve user-specific application data
+     * @param {string} username - The username to retrieve data for
+     * @param {string} id - The ID to retrieve data for
+     * @returns {Promise<Array|null>} Array of data or null if not found
+     */
+    static async getUserData(username, id) {
+        try {
+            const trackingId = CacheManager.getCurrentTrackingId();
+            return await ApplicationUtils.getUserData(username, id, trackingId);
+        } catch (error) {
+            console.error(`Failed to get user data for ${username}:`, error);
+            Analytics.trackEvent?.('data_error', { action: 'get_user_data', username });
+            throw new Error(`Could not retrieve user data. Please try again.`);
         }
     }
 }
