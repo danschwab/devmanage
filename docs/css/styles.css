@@ -281,16 +281,16 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     color: var(--color-text);
 }
-.breadcrumb-path .breadcrumb-segment:hover {
-    text-decoration: underline;
-    cursor: pointer;
+.breadcrumb-path .breadcrumb-segment:not(.active) {
+    color: var(--color-text-light);
 }
 .breadcrumb-path .breadcrumb-segment:not(.active):hover {
     text-decoration: underline;
+    color: var(--color-text);
     cursor: pointer;
 }
 .breadcrumb-path .breadcrumb-separator {
-    color: var(--color-text-light);
+    color: var(--color-gray);
     font-weight: 200;
 }
 
