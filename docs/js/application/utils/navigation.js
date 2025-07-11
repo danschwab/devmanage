@@ -2,86 +2,8 @@
  * Centralized navigation configuration and utilities
  */
 export const NavigationConfig = {
-    // Human-readable names for all navigation segments
-    segmentNames: {
-        // Main pages
-        'dashboard': 'Dashboard',
-        'inventory': 'Inventory', 
-        'packlist': 'Pack Lists',
-        'interfaces': 'Test',
-        'overview': 'Overview',
-        'stats': 'Quick Stats',
-        'actions': 'Quick Actions',
-        
-        // Inventory sections
-        'categories': 'Categories',
-        'search': 'Search',
-        'reports': 'Reports',
-        
-        // Categories
-        'furniture': 'Furniture',
-        'electronics': 'Electronics',
-        'signage': 'Signage',
-        
-        // Generic
-        'main': 'Overview'
-    },
-
     // Primary navigation items (just IDs)
-    navigationItems: ['dashboard', 'packlist', 'inventory', 'overview', 'stats', 'actions', 'interfaces'],
-
-    // Page-to-container mapping for navigation
-    pageContainerMapping: {
-        'dashboard': [
-            { type: 'overview', cardStyle: true, containerPath: 'overview' },
-            { type: 'stats', cardStyle: true, containerPath: 'stats' },
-            { type: 'actions', cardStyle: true, containerPath: 'actions' },
-            { type: 'inventory', cardStyle: true, containerPath: 'inventory' }
-        ],
-        'overview': [
-            { type: 'overview', containerPath: 'overview' }
-        ],
-        'stats': [
-            { type: 'stats', containerPath: 'stats' }
-        ],
-        'actions': [
-            { type: 'actions', containerPath: 'actions' }
-        ],
-        'packlist': [
-            { type: 'packlist', containerPath: 'packlist' }
-        ],
-        'inventory': [
-            { type: 'inventory', containerPath: 'inventory' }
-        ],
-        'interfaces': [
-            { type: 'test', containerPath: 'interfaces' }
-        ]
-    },
-
-    /**
-     * Get human-readable name for a segment ID
-     */
-    getSegmentName(segmentId) {
-        return this.segmentNames[segmentId] || segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-    },
-
-    /**
-     * Get navigation item title by file name
-     */
-    getNavigationTitle(file) {
-        return this.getSegmentName(file);
-    },
-
-    /**
-     * Get base navigation map for containers
-     */
-    getBaseNavigationMap() {
-        const baseMap = {};
-        this.navigationItems.forEach(itemId => {
-            baseMap[itemId] = this.getSegmentName(itemId);
-        });
-        return baseMap;
-    },
+    navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
 
     /**
      * Get container configurations for a specific page
@@ -89,9 +11,15 @@ export const NavigationConfig = {
      * @returns {Array} Array of container configurations
      */
     getContainersForPage(pageFile) {
-        return this.pageContainerMapping[pageFile] || [
-            { type: 'default', containerPath: pageFile }
-        ];
+        if (pageFile === 'dashboard') {
+            return [
+                { type: 'overview', containerPath: 'dashboard/overview' },
+                { type: 'stats', containerPath: 'dashboard/stats' },
+                { type: 'actions', containerPath: 'dashboard/actions' },
+                { type: 'inventory', containerPath: 'inventory' }
+            ];
+        }
+        return [{ type: pageFile, containerPath: pageFile }];
     },
 
     /**
@@ -117,8 +45,7 @@ export const NavigationConfig = {
                 ...config,
                 title: config.title || '',
                 options: {
-                    ...config,
-                    navigationMap: this.getBaseNavigationMap()
+                    ...config
                 }
             }))
         };
@@ -167,18 +94,19 @@ export const NavigationConfig = {
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
-            if (parentPath) {
+            // If previous location is dashboard, remove the container (close button behavior)
+            if (parentPath === 'dashboard' || !parentPath) {
+                appContext.removeContainer(containerId);
+                return {
+                    action: 'remove_container',
+                    containerId
+                };
+            } else {
                 container.containerPath = parentPath;
                 return {
                     action: 'update_path',
                     containerId,
                     newPath: parentPath
-                };
-            } else {
-                appContext.removeContainer(containerId);
-                return {
-                    action: 'remove_container',
-                    containerId
                 };
             }
         }
@@ -197,6 +125,16 @@ export const NavigationConfig = {
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
+            // If navigating to dashboard, navigate to dashboard page instead of updating path
+            if (targetPath === 'dashboard') {
+                this.navigateToPage('dashboard', appContext);
+                return {
+                    action: 'navigate_to_dashboard',
+                    containerId,
+                    targetPage: 'dashboard'
+                };
+            }
+            
             container.containerPath = targetPath;
             
             // Update container's navigation map if provided

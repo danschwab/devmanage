@@ -34,7 +34,7 @@ const App = {
         return {
             isMenuOpen: false,
             navigationItems: NavigationConfig.navigationItems.map(itemId => ({
-                title: NavigationConfig.getNavigationTitle(itemId),
+                title: itemId.charAt(0).toUpperCase() + itemId.slice(1),
                 file: itemId
             })),
             currentPage: 'dashboard',
@@ -106,9 +106,7 @@ const App = {
             NavigationConfig.navigateToPage(pageFile, this);
         },
         async addContainer(type = 'default', title = '', options = {}) {
-            // Use centralized base navigation map
-            const navigationMap = { ...NavigationConfig.getBaseNavigationMap(), ...(options.navigationMap || {}) };
-            const containerOptions = { ...options, navigationMap };
+            const containerOptions = { ...options };
             
             const container = containerManager.createContainer(type, title, containerOptions);
             
@@ -392,10 +390,10 @@ const App = {
                     :title="container.title"
                     :container-path="container.containerPath"
                     :navigation-map="container.navigationMap"
-                    :card-style="container.cardStyle"
-                    :show-close-button="container.containerType !== 'dashboard-overview'"
+                    :card-style="currentPage === 'dashboard'"
+                    :show-close-button="container.containerType !== 'overview'"
                     :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
-                    :show-expand-button="container.cardStyle"
+                    :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'overview'"
                     :page-location="container.pageLocation"
                     :hamburger-menu-content="getHamburgerMenuContent(container.containerType)"
                     :container-data="container"
@@ -442,9 +440,9 @@ const App = {
                             :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </inventory-content>
                         
-                        <!-- Test/Interfaces Content -->
+                        <!-- Interfaces Content -->
                         <interfaces-content 
-                            v-else-if="container.containerType === 'test'">
+                            v-else-if="container.containerType === 'interfaces'">
                         </interfaces-content>
                         
                         <!-- Default Content -->
