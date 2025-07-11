@@ -2,6 +2,7 @@ import { ContainerComponent, containerManager } from './components/containerComp
 import { TestTableComponent } from './components/testTableComponent.js';
 import { ModalComponent, modalManager } from './components/modalComponent.js';
 import { Auth, authState } from './utils/auth.js';
+import { NavigationConfig } from './utils/navigation.js';
 import { html } from './utils/template-helpers.js';
 import { 
     DashboardOverview, 
@@ -30,12 +31,10 @@ const App = {
     data() {
         return {
             isMenuOpen: false,
-            navigationItems: [
-                { title: 'Dashboard', file: 'dashboard' },
-                { title: 'Pack Lists', file: 'packlist' },
-                { title: 'Inventory', file: 'inventory' },
-                { title: 'Test', file: 'interfaces' }
-            ],
+            navigationItems: NavigationConfig.navigationItems.map(itemId => ({
+                title: NavigationConfig.getNavigationTitle(itemId),
+                file: itemId
+            })),
             currentPage: 'dashboard',
             containers: [],
             modals: []
@@ -108,7 +107,11 @@ const App = {
             this.updateContainersForPage(pageFile);
         },
         async addContainer(type = 'default', title = '', options = {}) {
-            const container = containerManager.createContainer(type, title, options);
+            // Use centralized base navigation map
+            const navigationMap = { ...NavigationConfig.getBaseNavigationMap(), ...(options.navigationMap || {}) };
+            const containerOptions = { ...options, navigationMap };
+            
+            const container = containerManager.createContainer(type, title, containerOptions);
             
             // Set container type and page for content determination
             container.containerType = type;
@@ -139,22 +142,22 @@ const App = {
             // Add containers based on the current page when authenticated
             switch(pageFile) {
                 case 'dashboard':
-                    // Create dashboard cards with paths that terminate on their target pages
+                    // Create dashboard cards using centralized configuration
                     await this.addContainer('dashboard-overview', '', { 
                         cardStyle: true, 
-                        containerPath: 'dashboard' 
+                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-overview')
                     });
                     await this.addContainer('dashboard-stats', '', { 
                         cardStyle: true, 
-                        containerPath: 'inventory' 
+                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-stats')
                     });
                     await this.addContainer('dashboard-actions', '', { 
                         cardStyle: true, 
-                        containerPath: 'dashboard' 
+                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-actions')
                     });
                     await this.addContainer('dashboard-inventory', '', { 
                         cardStyle: true, 
-                        containerPath: 'inventory' 
+                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-inventory')
                     });
                     break;
                 case 'packlist':
@@ -388,17 +391,8 @@ const App = {
                 return;
             }
             
-            // Map dashboard containers to their corresponding pages
-            const pageMapping = {
-                'dashboard-overview': 'dashboard',
-                'dashboard-stats': 'inventory',
-                'dashboard-actions': 'dashboard',
-                'dashboard-inventory': 'inventory',
-                'test': 'interfaces'
-            };
-            
-            // Get target page from mapping, or use container type as fallback
-            const targetPage = pageMapping[containerData.containerType] || containerData.containerType;
+            // Use centralized component page mapping
+            const targetPage = NavigationConfig.getExpandTargetPage(containerData.containerType);
             
             if (targetPage !== this.currentPage) {
                 // Navigate to the target page
@@ -432,11 +426,16 @@ const App = {
             }
         },
         handleNavigateToPath(navigationData) {
-            const { containerId, targetPath } = navigationData;
+            const { containerId, targetPath, navigationMap } = navigationData;
             const container = this.containers.find(c => c.id === containerId);
             
             if (container) {
                 container.containerPath = targetPath;
+                
+                // Update container's navigation map if provided
+                if (navigationMap) {
+                    container.navigationMap = { ...container.navigationMap, ...navigationMap };
+                }
             }
         },
         createNavigateToPathHandler(containerId) {
@@ -446,7 +445,16 @@ const App = {
                     targetPath: path
                 });
             };
-        }
+        },
+        /**
+         * Handle navigation mapping added by a container
+         */
+        handleNavigationMappingAdded(mappingData) {
+            const { segmentId, displayName } = mappingData;
+            
+            // Add to container manager's global map
+            containerManager.addGlobalNavigationMapping(segmentId, displayName);
+        },
     },
     template: html `
         <div id="app">
@@ -500,6 +508,7 @@ const App = {
                     :container-type="container.containerType"
                     :title="container.title"
                     :container-path="container.containerPath"
+                    :navigation-map="container.navigationMap"
                     :card-style="container.cardStyle"
                     :show-close-button="container.containerType !== 'dashboard-overview'"
                     :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
@@ -510,6 +519,7 @@ const App = {
                     @close-container="removeContainer"
                     @navigate-back="handleNavigateBack"
                     @navigate-to-path="handleNavigateToPath"
+                    @navigation-mapping-added="handleNavigationMappingAdded"
                     @show-hamburger-menu="showHamburgerMenuModal"
                     @expand-container="expandContainer">
                     <template #content>

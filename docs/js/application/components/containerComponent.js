@@ -46,6 +46,10 @@ export const ContainerComponent = {
         containerData: {
             type: Object,
             default: () => ({})
+        },
+        navigationMap: {
+            type: Object,
+            default: () => ({})
         }
     },
     data() {
@@ -55,8 +59,21 @@ export const ContainerComponent = {
                 header: '',
                 main: '',
                 footer: ''
-            }
+            },
+            // Local navigation map that can be extended at runtime
+            localNavigationMap: {}
         };
+    },
+    mounted() {
+        // Initialize local navigation map with props
+        this.localNavigationMap = { ...this.navigationMap };
+        
+        // Add any segments from current path that aren't already mapped
+        this.pathSegments.forEach(segment => {
+            if (!this.localNavigationMap[segment]) {
+                this.addNavigationMapping(segment);
+            }
+        });
     },
     computed: {
         pathSegments() {
@@ -66,36 +83,9 @@ export const ContainerComponent = {
         pathSegmentsWithNames() {
             if (!this.pathSegments.length) return [];
             
-            // Map of segment IDs to human-readable names
-            const segmentNames = {
-                // Main pages
-                'dashboard': 'Dashboard',
-                'inventory': 'Inventory',
-                'packlist': 'Pack Lists',
-                'interfaces': 'Test Interface',
-                
-                // Dashboard sections
-                'overview': 'Overview',
-                'stats': 'Quick Stats',
-                'actions': 'Quick Actions',
-                
-                // Inventory sections
-                'categories': 'Categories',
-                'search': 'Search',
-                'reports': 'Reports',
-                
-                // Categories
-                'furniture': 'Furniture',
-                'electronics': 'Electronics',
-                'signage': 'Signage',
-                
-                // Generic
-                'main': 'Overview'
-            };
-            
             return this.pathSegments.map((segment, index) => ({
                 id: segment,
-                name: segmentNames[segment] || segment.charAt(0).toUpperCase() + segment.slice(1),
+                name: this.getSegmentName(segment),
                 index: index
             }));
         },
@@ -177,13 +167,57 @@ export const ContainerComponent = {
                 this.closeContainer();
             }
         },
+        /**
+         * Get human-readable name for a segment, building it if not found
+         */
+        getSegmentName(segmentId) {
+            if (this.localNavigationMap[segmentId]) {
+                return this.localNavigationMap[segmentId];
+            }
+            
+            // Auto-generate name if not found
+            const generatedName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
+            this.addNavigationMapping(segmentId, generatedName);
+            return generatedName;
+        },
+        /**
+         * Add a new navigation mapping
+         */
+        addNavigationMapping(segmentId, displayName = null) {
+            if (!displayName) {
+                displayName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
+            }
+            this.localNavigationMap[segmentId] = displayName;
+            
+            // Emit event to parent to share this mapping
+            this.$emit('navigation-mapping-added', {
+                containerId: this.containerId,
+                segmentId: segmentId,
+                displayName: displayName
+            });
+        },
+        /**
+         * Update navigation mapping from external source
+         */
+        updateNavigationMapping(segmentId, displayName) {
+            this.localNavigationMap[segmentId] = displayName;
+        },
         navigateToBreadcrumb(index) {
             if (index < this.pathSegments.length - 1) {
                 const targetPath = this.pathSegments.slice(0, index + 1).join('/');
+                
+                // Ensure all segments in target path have mappings
+                this.pathSegments.slice(0, index + 1).forEach(segment => {
+                    if (!this.localNavigationMap[segment]) {
+                        this.addNavigationMapping(segment);
+                    }
+                });
+                
                 this.$emit('navigate-to-path', {
                     containerId: this.containerId,
                     targetPath: targetPath,
-                    currentPath: this.containerPath
+                    currentPath: this.containerPath,
+                    navigationMap: this.localNavigationMap
                 });
             }
         }
@@ -263,6 +297,8 @@ export class ContainerManager {
     constructor() {
         this.containers = new Map();
         this.nextId = 1;
+        // Shared navigation mappings across all containers
+        this.globalNavigationMap = {};
     }
 
     createContainer(type = 'default', title = '', options = {}) {
@@ -274,16 +310,32 @@ export class ContainerManager {
             title: title,
             options: options,
             cardStyle: options.cardStyle || false,
-            showCloseButton: options.showCloseButton !== false, // default true
+            showCloseButton: options.showCloseButton !== false,
             showHamburgerMenu: options.showHamburgerMenu || false,
             hamburgerMenuContent: options.hamburgerMenuContent || '',
             showExpandButton: options.showExpandButton || false,
             pageLocation: options.pageLocation || '',
+            // Pass current global navigation map to new container
+            navigationMap: { ...this.globalNavigationMap, ...(options.navigationMap || {}) },
             created: new Date()
         };
 
         this.containers.set(containerId, containerData);
         return containerData;
+    }
+
+    /**
+     * Add navigation mapping to global map and propagate to all containers
+     */
+    addGlobalNavigationMapping(segmentId, displayName) {
+        this.globalNavigationMap[segmentId] = displayName;
+        
+        // Propagate to all existing containers
+        this.containers.forEach(container => {
+            if (container.navigationMap) {
+                container.navigationMap[segmentId] = displayName;
+            }
+        });
     }
 
     removeContainer(containerId) {
