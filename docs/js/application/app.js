@@ -188,58 +188,6 @@ const App = {
             this.showModal(modal.id);
         },
         
-        getHamburgerMenuContent(containerType) {
-            switch (containerType) {
-                case 'welcome':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshWelcomeContent()">Refresh Content</button></li>
-                            <li><button onclick="window.vueApp.showSystemInfo()">System Information</button></li>
-                            <li><button onclick="window.vueApp.viewLogs()">View Logs</button></li>
-                        </ul>
-                    `;
-                case 'actions':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.exportData()">Export Data</button></li>
-                            <li><button onclick="window.vueApp.importData()">Import Data</button></li>
-                            <li><button onclick="window.vueApp.clearCache()">Clear Cache</button></li>
-                        </ul>
-                    `;
-                case 'stats':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshStats()">Refresh Statistics</button></li>
-                            <li><button onclick="window.vueApp.exportReport()">Export Report</button></li>
-                            <li><button onclick="window.vueApp.scheduleReport()">Schedule Report</button></li>
-                        </ul>
-                    `;
-                case 'test':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshTestData()">Refresh Test Data</button></li>
-                            <li><button onclick="window.vueApp.exportTestResults()">Export Results</button></li>
-                            <li><button onclick="window.vueApp.runDiagnostics()">Run Diagnostics</button></li>
-                        </ul>
-                    `;
-                case 'dynamic':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.editContainer()">Edit Container</button></li>
-                            <li><button onclick="window.vueApp.duplicateContainer()">Duplicate</button></li>
-                            <li><button onclick="window.vueApp.containerSettings()">Settings</button></li>
-                        </ul>
-                    `;
-                default:
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshContainer()">Refresh</button></li>
-                            <li><button onclick="window.vueApp.containerInfo()">Container Info</button></li>
-                        </ul>
-                    `;
-            }
-        },
-
         // Hamburger menu action handlers
         refreshWelcomeContent() {
             console.log('Refreshing welcome content...');
@@ -395,7 +343,6 @@ const App = {
                     :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
                     :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'overview'"
                     :page-location="container.pageLocation"
-                    :hamburger-menu-content="getHamburgerMenuContent(container.containerType)"
                     :container-data="container"
                     @close-container="removeContainer"
                     @navigate-back="handleNavigateBack"
@@ -437,7 +384,8 @@ const App = {
                             v-else-if="container.containerType === 'inventory'"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
-                            :navigate-to-path="createNavigateToPathHandler(container.id)">
+                            :navigate-to-path="createNavigateToPathHandler(container.id)"
+                            @custom-hamburger-content="container.customHamburgerContent = $event">
                         </inventory-content>
                         
                         <!-- Interfaces Content -->

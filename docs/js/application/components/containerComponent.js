@@ -65,7 +65,9 @@ export const ContainerComponent = {
                 footer: ''
             },
             // Local navigation map that can be extended at runtime
-            localNavigationMap: {}
+            localNavigationMap: {},
+            // Store custom hamburger content from child components
+            customHamburgerContent: null
         };
     },
     mounted() {
@@ -111,8 +113,13 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
-            // Check if container has custom hamburger content, otherwise use default
-            const customContent = this.containerData?.customHamburgerContent || this.hamburgerMenuContent;
+            // Check for custom content in priority order:
+            // 1. Runtime custom content from child components
+            // 2. Container data custom content
+            // 3. Prop hamburger content
+            const customContent = this.customHamburgerContent || 
+                                 this.containerData?.customHamburgerContent || 
+                                 this.hamburgerMenuContent;
             
             // Emit event to parent to show modal in centralized modal-space
             this.$emit('show-hamburger-menu', {
@@ -120,6 +127,14 @@ export const ContainerComponent = {
                 title: `${this.title} Menu`,
                 content: customContent
             });
+        },
+        // Method for child components to set custom hamburger content
+        setCustomHamburgerContent(content) {
+            this.customHamburgerContent = content;
+        },
+        // Handle custom hamburger content from child components
+        onCustomHamburgerContent(content) {
+            this.setCustomHamburgerContent(content);
         },
         expandContainer() {
             // Emit event to parent to open container as a page

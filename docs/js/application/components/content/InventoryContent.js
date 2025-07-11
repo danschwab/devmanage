@@ -22,6 +22,63 @@ export const InventoryContent = {
         },
         currentCategory() {
             return this.pathSegments[2] || '';
+        },
+        customHamburgerContent() {
+            switch (this.currentView) {
+                case 'main':
+                    return `
+                        <ul style="list-style: none; padding: 0;">
+                            <li><button onclick="window.vueApp.refreshInventory()">Refresh Inventory</button></li>
+                            <li><button onclick="window.vueApp.addInventoryItem()">Add New Item</button></li>
+                            <li><button onclick="window.vueApp.exportInventory()">Export All Items</button></li>
+                            <li><button onclick="window.vueApp.inventorySettings()">Inventory Settings</button></li>
+                        </ul>
+                    `;
+                case 'categories':
+                    return `
+                        <ul style="list-style: none; padding: 0;">
+                            <li><button onclick="window.vueApp.addNewCategory()">Add New Category</button></li>
+                            <li><button onclick="window.vueApp.manageCategoryOrder()">Manage Category Order</button></li>
+                            <li><button onclick="window.vueApp.exportCategoryReport()">Export Category Report</button></li>
+                            <li><button onclick="window.vueApp.categorySettings()">Category Settings</button></li>
+                        </ul>
+                    `;
+                case 'search':
+                    return `
+                        <ul style="list-style: none; padding: 0;">
+                            <li><button onclick="window.vueApp.saveSearchCriteria()">Save Search Criteria</button></li>
+                            <li><button onclick="window.vueApp.loadSavedSearch()">Load Saved Search</button></li>
+                            <li><button onclick="window.vueApp.exportSearchResults()">Export Search Results</button></li>
+                            <li><button onclick="window.vueApp.clearSearchHistory()">Clear Search History</button></li>
+                        </ul>
+                    `;
+                case 'reports':
+                    return `
+                        <ul style="list-style: none; padding: 0;">
+                            <li><button onclick="window.vueApp.scheduleReport()">Schedule Automatic Reports</button></li>
+                            <li><button onclick="window.vueApp.customReportBuilder()">Custom Report Builder</button></li>
+                            <li><button onclick="window.vueApp.emailReports()">Email Reports</button></li>
+                            <li><button onclick="window.vueApp.reportSettings()">Report Settings</button></li>
+                        </ul>
+                    `;
+                default:
+                    return `
+                        <ul style="list-style: none; padding: 0;">
+                            <li><button onclick="window.vueApp.refreshInventory()">Refresh</button></li>
+                            <li><button onclick="window.vueApp.inventoryHelp()">Help</button></li>
+                        </ul>
+                    `;
+            }
+        }
+    },
+    mounted() {
+        // Emit custom hamburger content on mount
+        this.$emit('custom-hamburger-content', this.customHamburgerContent);
+    },
+    watch: {
+        // Watch for changes in current view and emit updated hamburger content
+        currentView() {
+            this.$emit('custom-hamburger-content', this.customHamburgerContent);
         }
     },
     methods: {
