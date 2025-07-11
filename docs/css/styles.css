@@ -239,7 +239,7 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-text);
 }
 
-/* Dashboard Card Containers */
+/* Card Containers */
 .container.dashboard-card {
     max-width: var(--page-width-card);
     max-height: var(--page-height-card);

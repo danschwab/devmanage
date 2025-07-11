@@ -9,8 +9,6 @@ export const NavigationConfig = {
         'inventory': 'Inventory', 
         'packlist': 'Pack Lists',
         'interfaces': 'Test',
-        
-        // Dashboard sections
         'overview': 'Overview',
         'stats': 'Quick Stats',
         'actions': 'Quick Actions',
@@ -31,23 +29,6 @@ export const NavigationConfig = {
 
     // Primary navigation items (just IDs)
     navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
-
-    // Component type to page mapping for expansion
-    componentPageMapping: {
-        'dashboard-overview': 'dashboard',
-        'dashboard-stats': 'inventory',
-        'dashboard-actions': 'dashboard',
-        'dashboard-inventory': 'inventory',
-        'test': 'interfaces'
-    },
-
-    // Component type to container path mapping for dashboard cards
-    dashboardComponentPaths: {
-        'dashboard-overview': 'dashboard',
-        'dashboard-stats': 'inventory',
-        'dashboard-actions': 'dashboard',
-        'dashboard-inventory': 'inventory'
-    },
 
     /**
      * Get human-readable name for a segment ID
@@ -72,19 +53,5 @@ export const NavigationConfig = {
             baseMap[itemId] = this.getSegmentName(itemId);
         });
         return baseMap;
-    },
-
-    /**
-     * Get target page for component expansion
-     */
-    getExpandTargetPage(containerType) {
-        return this.componentPageMapping[containerType] || containerType;
-    },
-
-    /**
-     * Get dashboard component path
-     */
-    getDashboardComponentPath(containerType) {
-        return this.dashboardComponentPaths[containerType] || 'dashboard';
     }
 };

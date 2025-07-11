@@ -8,7 +8,7 @@ export const DashboardActions = {
         showConfirm: Function
     },
     template: html `
-        <div class="dashboard-actions" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div class="actions-content" style="display: flex; flex-direction: column; gap: 0.5rem;">
             <button @click="navigateToPage('inventory')">Manage Inventory</button>
             <button @click="navigateToPage('packlist')">Create Pack List</button>
             <button @click="addContainer('dynamic', 'New Card', { cardStyle: true })">Add Card</button>
@@ -17,3 +17,6 @@ export const DashboardActions = {
         </div>
     `
 };
+
+// Also export as ActionsContent for the new naming convention
+export const ActionsContent = DashboardActions;

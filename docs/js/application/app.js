@@ -145,23 +145,32 @@ const App = {
             // Add containers based on the current page when authenticated
             switch(pageFile) {
                 case 'dashboard':
-                    // Create dashboard cards using centralized configuration
-                    await this.addContainer('dashboard-overview', '', { 
+                    // Create overview, stats, and actions as dashboard cards for the dashboard page
+                    await this.addContainer('overview', '', { 
                         cardStyle: true, 
-                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-overview')
+                        containerPath: 'overview'
                     });
-                    await this.addContainer('dashboard-stats', '', { 
+                    await this.addContainer('stats', '', { 
                         cardStyle: true, 
-                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-stats')
+                        containerPath: 'stats'
                     });
-                    await this.addContainer('dashboard-actions', '', { 
+                    await this.addContainer('actions', '', { 
                         cardStyle: true, 
-                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-actions')
+                        containerPath: 'actions'
                     });
-                    await this.addContainer('dashboard-inventory', '', { 
+                    await this.addContainer('inventory', '', { 
                         cardStyle: true, 
-                        containerPath: NavigationConfig.getDashboardComponentPath('dashboard-inventory')
+                        containerPath: 'inventory'
                     });
+                    break;
+                case 'overview':
+                    await this.addContainer('overview', '', { containerPath: 'overview' });
+                    break;
+                case 'stats':
+                    await this.addContainer('stats', '', { containerPath: 'stats' });
+                    break;
+                case 'actions':
+                    await this.addContainer('actions', '', { containerPath: 'actions' });
                     break;
                 case 'packlist':
                     await this.addContainer('packlist', '', { containerPath: 'packlist' });
@@ -394,8 +403,8 @@ const App = {
                 return;
             }
             
-            // Use centralized component page mapping
-            const targetPage = NavigationConfig.getExpandTargetPage(containerData.containerType);
+            // For dashboard cards, navigate to the container type as a page
+            const targetPage = containerData.containerType;
             
             if (targetPage !== this.currentPage) {
                 // Navigate to the target page
@@ -505,33 +514,25 @@ const App = {
                     @show-hamburger-menu="showHamburgerMenuModal"
                     @expand-container="expandContainer">
                     <template #content>
-                        <!-- Dashboard Overview Content -->
+                        <!-- Overview Content -->
                         <dashboard-overview 
-                            v-if="container.containerType === 'dashboard-overview'"
+                            v-if="container.containerType === 'overview'"
                             :current-user="currentUser">
                         </dashboard-overview>
                         
-                        <!-- Dashboard Stats Content -->
+                        <!-- Stats Content -->
                         <dashboard-stats 
-                            v-else-if="container.containerType === 'dashboard-stats'">
+                            v-else-if="container.containerType === 'stats'">
                         </dashboard-stats>
                         
-                        <!-- Dashboard Actions Content -->
+                        <!-- Actions Content -->
                         <dashboard-actions 
-                            v-else-if="container.containerType === 'dashboard-actions'"
+                            v-else-if="container.containerType === 'actions'"
                             :navigate-to-page="navigateToPage"
                             :add-container="addContainer"
                             :show-alert="showAlert"
                             :show-confirm="showConfirm">
                         </dashboard-actions>
-                        
-                        <!-- Dashboard Inventory Content -->
-                        <inventory-content 
-                            v-else-if="container.containerType === 'dashboard-inventory'"
-                            :show-alert="showAlert"
-                            :container-path="container.containerPath"
-                            :navigate-to-path="createNavigateToPathHandler(container.id)">
-                        </inventory-content>
                         
                         <!-- Packlist Content -->
                         <packlist-content 
