@@ -1,6 +1,7 @@
 import { ContainerComponent, containerManager } from './components/containerComponent.js';
 import { TestTableComponent } from './components/testTableComponent.js';
 import { ModalComponent, modalManager } from './components/modalComponent.js';
+import { PrimaryNavComponent } from './components/navigation/primaryNavComponent.js';
 import { Auth, authState } from './utils/auth.js';
 import { NavigationConfig } from './utils/navigation.js';
 import { html } from './utils/template-helpers.js';
@@ -21,6 +22,7 @@ const App = {
         'app-container': ContainerComponent,
         'test-table': TestTableComponent,
         'app-modal': ModalComponent,
+        'primary-nav': PrimaryNavComponent,
         'dashboard-overview': DashboardOverview,
         'dashboard-stats': DashboardStats,
         'dashboard-actions': DashboardActions,
@@ -102,6 +104,7 @@ const App = {
         },
         navigateToPage(pageFile) {
             this.currentPage = pageFile;
+            this.isMenuOpen = false; // Close menu when navigating
             console.log(`Navigating to: ${pageFile}`);
             // Update containers based on current page
             this.updateContainersForPage(pageFile);
@@ -458,40 +461,19 @@ const App = {
     },
     template: html `
         <div id="app">
-            <header>
-                <nav :class="{ 'open': isMenuOpen }">
-                    <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-                    
-                    <span id="navbar">
-                        <template v-if="isAuthenticated">
-                            <a v-for="item in navigationItems" 
-                               :key="item.file"
-                               :class="{ 'active': currentPage === item.file }"
-                               @click="navigateToPage(item.file); isMenuOpen = false"
-                               href="#">
-                                {{ item.title }}
-                            </a>
-                        </template>
-                        
-                        <button v-if="!isAuthenticated" 
-                                @click="login" 
-                                :disabled="isAuthLoading"
-                                class="login-out-button active">
-                            {{ isAuthLoading ? 'Loading...' : 'Login' }}
-                        </button>
-                        <button v-else 
-                                @click="logout" 
-                                :disabled="isAuthLoading"
-                                class="login-out-button">
-                            {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
-                        </button>
-                    </span>
-                    
-                    <button class="button-symbol gray" @click="toggleMenu">
-                        {{ isMenuOpen ? '×' : '≡' }}
-                    </button>
-                </nav>
-            </header>
+            <!-- Primary Navigation Component -->
+            <primary-nav
+                :is-menu-open="isMenuOpen"
+                :navigation-items="navigationItems"
+                :current-page="currentPage"
+                :is-authenticated="isAuthenticated"
+                :is-auth-loading="isAuthLoading"
+                :current-user="currentUser"
+                @toggle-menu="toggleMenu"
+                @navigate-to-page="navigateToPage"
+                @login="login"
+                @logout="logout">
+            </primary-nav>
 
             <div id="app-content">
                 <!-- Show auth error if present -->
