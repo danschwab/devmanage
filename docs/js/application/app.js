@@ -103,11 +103,7 @@ const App = {
             }
         },
         navigateToPage(pageFile) {
-            this.currentPage = pageFile;
-            this.isMenuOpen = false; // Close menu when navigating
-            console.log(`Navigating to: ${pageFile}`);
-            // Update containers based on current page
-            this.updateContainersForPage(pageFile);
+            NavigationConfig.navigateToPage(pageFile, this);
         },
         async addContainer(type = 'default', title = '', options = {}) {
             // Use centralized base navigation map
@@ -134,25 +130,7 @@ const App = {
             }
         },
         async updateContainersForPage(pageFile) {
-            // Clear existing containers
-            this.containers = [];
-            
-            // Use centralized navigation logic
-            const navigationResult = NavigationConfig.navigateToPage(pageFile, this.isAuthenticated);
-            
-            // Create containers based on navigation result
-            for (const containerConfig of navigationResult.containers) {
-                await this.addContainer(
-                    containerConfig.type,
-                    containerConfig.title,
-                    containerConfig.options
-                );
-            }
-            
-            // If authenticated and no containers were added, navigate to dashboard
-            if (this.isAuthenticated && this.containers.length === 0) {
-                this.navigateToPage('dashboard');
-            }
+            await NavigationConfig.updateContainersForPage(pageFile, this);
         },
         handleKeyDown(event) {
             if (event.key === 'Escape') {
@@ -359,68 +337,18 @@ const App = {
         },
 
         expandContainer(containerData) {
-            console.log('Expanding container:', containerData);
-            
-            // If the container has a specific page location, navigate to it
-            if (containerData.pageLocation) {
-                this.navigateToPage(containerData.pageLocation);
-                return;
-            }
-            
-            // For dashboard cards, navigate to the container type as a page
-            const targetPage = containerData.containerType;
-            
-            if (targetPage !== this.currentPage) {
-                // Navigate to the target page
-                this.navigateToPage(targetPage);
-                
-                // If the container has a path, update the new container to that path
-                if (containerData.containerPath) {
-                    this.$nextTick(() => {
-                        const expandedContainer = this.containers.find(c => c.containerType === targetPage);
-                        if (expandedContainer) {
-                            expandedContainer.containerPath = containerData.containerPath;
-                        }
-                    });
-                }
-            } else {
-                // Already on the target page, show a message
-                this.showAlert(`You are already viewing the ${containerData.title} page.`, 'Already Here');
-            }
+            NavigationConfig.expandContainer(containerData, this);
         },
         handleNavigateBack(navigationData) {
-            const { containerId, parentPath } = navigationData;
-            const container = this.containers.find(c => c.id === containerId);
-            
-            if (container) {
-                if (parentPath) {
-                    container.containerPath = parentPath;
-                } else {
-                    // If no parent path, remove the container
-                    this.removeContainer(containerId);
-                }
-            }
+            NavigationConfig.handleNavigateBack(navigationData, this);
         },
         handleNavigateToPath(navigationData) {
-            const { containerId, targetPath, navigationMap } = navigationData;
-            const container = this.containers.find(c => c.id === containerId);
-            
-            if (container) {
-                container.containerPath = targetPath;
-                
-                // Update container's navigation map if provided
-                if (navigationMap) {
-                    container.navigationMap = { ...container.navigationMap, ...navigationMap };
-                }
-            }
+            NavigationConfig.handleNavigateToPath(navigationData, this);
         },
         createNavigateToPathHandler(containerId) {
-            return (path) => {
-                this.handleNavigateToPath({
-                    containerId: containerId,
-                    targetPath: path
-                });
-            };
+            return NavigationConfig.createNavigateToPathHandler(containerId, (navigationData) => {
+                NavigationConfig.handleNavigateToPath(navigationData, this);
+            });
         },
         /**
          * Handle navigation mapping added by a container
