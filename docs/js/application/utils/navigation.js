@@ -9,7 +9,7 @@ export const NavigationConfig = {
         'inventory': 'Inventory', 
         'packlist': 'Pack Lists',
         'interfaces': 'Test',
-        'overview': 'Overview',
+        'overview': 'Dashboard Overview',
         'stats': 'Quick Stats',
         'actions': 'Quick Actions',
         
@@ -22,13 +22,38 @@ export const NavigationConfig = {
         'furniture': 'Furniture',
         'electronics': 'Electronics',
         'signage': 'Signage',
-        
-        // Generic
-        'main': 'Overview'
     },
 
     // Primary navigation items (just IDs)
     navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
+
+    // Page-to-container mapping for navigation
+    pageContainerMapping: {
+        'dashboard': [
+            { type: 'overview', cardStyle: true, containerPath: 'overview' },
+            { type: 'stats', cardStyle: true, containerPath: 'stats' },
+            { type: 'actions', cardStyle: true, containerPath: 'actions' },
+            { type: 'inventory', cardStyle: true, containerPath: 'inventory' }
+        ],
+        'overview': [
+            { type: 'overview', containerPath: 'overview' }
+        ],
+        'stats': [
+            { type: 'stats', containerPath: 'stats' }
+        ],
+        'actions': [
+            { type: 'actions', containerPath: 'actions' }
+        ],
+        'packlist': [
+            { type: 'packlist', containerPath: 'packlist' }
+        ],
+        'inventory': [
+            { type: 'inventory', containerPath: 'inventory' }
+        ],
+        'interfaces': [
+            { type: 'test', containerPath: 'interfaces' }
+        ]
+    },
 
     /**
      * Get human-readable name for a segment ID
@@ -53,5 +78,46 @@ export const NavigationConfig = {
             baseMap[itemId] = this.getSegmentName(itemId);
         });
         return baseMap;
+    },
+
+    /**
+     * Get container configurations for a specific page
+     * @param {string} pageFile - The page identifier
+     * @returns {Array} Array of container configurations
+     */
+    getContainersForPage(pageFile) {
+        return this.pageContainerMapping[pageFile] || [
+            { type: 'default', containerPath: pageFile }
+        ];
+    },
+
+    /**
+     * Navigate to a page and return container configurations
+     * @param {string} pageFile - The page to navigate to
+     * @param {boolean} isAuthenticated - Whether user is authenticated
+     * @returns {Object} Navigation result with containers
+     */
+    navigateToPage(pageFile, isAuthenticated = true) {
+        // If not authenticated, return empty containers
+        if (!isAuthenticated) {
+            return {
+                page: pageFile,
+                containers: []
+            };
+        }
+
+        const containers = this.getContainersForPage(pageFile);
+        
+        return {
+            page: pageFile,
+            containers: containers.map(config => ({
+                ...config,
+                title: config.title || '',
+                options: {
+                    ...config,
+                    navigationMap: this.getBaseNavigationMap()
+                }
+            }))
+        };
     }
 };

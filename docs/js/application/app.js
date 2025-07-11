@@ -137,52 +137,16 @@ const App = {
             // Clear existing containers
             this.containers = [];
             
-            // If not authenticated, don't show any containers
-            if (!this.isAuthenticated) {
-                return;
-            }
+            // Use centralized navigation logic
+            const navigationResult = NavigationConfig.navigateToPage(pageFile, this.isAuthenticated);
             
-            // Add containers based on the current page when authenticated
-            switch(pageFile) {
-                case 'dashboard':
-                    // Create overview, stats, and actions as dashboard cards for the dashboard page
-                    await this.addContainer('overview', '', { 
-                        cardStyle: true, 
-                        containerPath: 'overview'
-                    });
-                    await this.addContainer('stats', '', { 
-                        cardStyle: true, 
-                        containerPath: 'stats'
-                    });
-                    await this.addContainer('actions', '', { 
-                        cardStyle: true, 
-                        containerPath: 'actions'
-                    });
-                    await this.addContainer('inventory', '', { 
-                        cardStyle: true, 
-                        containerPath: 'inventory'
-                    });
-                    break;
-                case 'overview':
-                    await this.addContainer('overview', '', { containerPath: 'overview' });
-                    break;
-                case 'stats':
-                    await this.addContainer('stats', '', { containerPath: 'stats' });
-                    break;
-                case 'actions':
-                    await this.addContainer('actions', '', { containerPath: 'actions' });
-                    break;
-                case 'packlist':
-                    await this.addContainer('packlist', '', { containerPath: 'packlist' });
-                    break;
-                case 'inventory':
-                    await this.addContainer('inventory', '', { containerPath: 'inventory' });
-                    break;
-                case 'interfaces':
-                    await this.addContainer('test', '', { containerPath: 'interfaces' });
-                    break;
-                default:
-                    await this.addContainer('default', '', { containerPath: pageFile });
+            // Create containers based on navigation result
+            for (const containerConfig of navigationResult.containers) {
+                await this.addContainer(
+                    containerConfig.type,
+                    containerConfig.title,
+                    containerConfig.options
+                );
             }
             
             // If authenticated and no containers were added, navigate to dashboard
