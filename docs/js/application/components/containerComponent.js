@@ -128,8 +128,17 @@ export const ContainerComponent = {
             }
             
             return null;
+        },
+        backButtonIcon() {
+            // If we can go back, show back arrow; otherwise show close X
+            return this.canGoBack ? 'arrow_back' : '×';
+        },
+        backButtonTitle() {
+            // If we can go back, show "Go back"; otherwise show "Close"
+            return this.canGoBack ? 'Go back' : 'Close';
         }
     },
+    
     watch: {
         // Watch for changes in hamburger component data passed as prop
         hamburgerComponentData: {
@@ -299,8 +308,12 @@ export const ContainerComponent = {
                     currentPath: this.containerPath
                 });
             } else {
-                // If no parent path, close the container
-                this.closeContainer();
+                // If no parent path, navigate to dashboard
+                this.$emit('navigate-to-path', {
+                    containerId: this.containerId,
+                    targetPath: 'dashboard',
+                    currentPath: this.containerPath
+                });
             }
         },
         // Handle events from breadcrumb component
@@ -318,7 +331,7 @@ export const ContainerComponent = {
              :data-container-id="containerId" 
              :data-container-type="containerType"
              :data-container-path="containerPath">
-            <div v-if="containerPath || title || showCloseButton || shouldShowHamburgerMenu || showExpandButton" class="container-header">
+            <div v-if="containerPath || title || cardStyle || shouldShowHamburgerMenu || showExpandButton || !cardStyle" class="container-header">
                 <!-- Breadcrumb Navigation Component -->
                 <BreadcrumbComponent
                     :container-path="containerPath"
@@ -329,7 +342,7 @@ export const ContainerComponent = {
                     @navigation-mapping-added="onNavigationMappingAdded"
                     @navigate-to-path="onNavigateToPath" />
                 
-                <div v-if="shouldShowHamburgerMenu || showExpandButton || showCloseButton || containerPath" class="header-buttons">
+                <div v-if="shouldShowHamburgerMenu || showExpandButton || cardStyle || !cardStyle" class="header-buttons">
                     <button v-if="shouldShowHamburgerMenu" 
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
@@ -338,15 +351,20 @@ export const ContainerComponent = {
                             class="button-symbol white" 
                             @click="expandContainer" 
                             title="Expand to page"><span class="material-symbols-outlined">expand_content</span></button>
-                    <button v-if="(containerPath && canGoBack) || showCloseButton" 
-                        class="button-symbol white back-button" 
-                        @click="goBack" 
-                        :title="canGoBack ? 'Go back' : 'Close container'">
-                        <span v-if="canGoBack" class="material-symbols-outlined">arrow_back</span>
-                        <span v-else>×</span>
+                    <button v-if="!cardStyle" 
+                            class="button-symbol white back-button" 
+                            @click="goBack" 
+                            :title="backButtonTitle">
+                        <span v-if="canGoBack" class="material-symbols-outlined">{{ backButtonIcon }}</span>
+                        <span v-else>{{ backButtonIcon }}</span>
                     </button>
+                    <button v-if="cardStyle" 
+                            class="button-symbol white" 
+                            @click="closeContainer" 
+                            title="Close">×</button>
                 </div>
             </div>
+            
             <div class="content">
                 <slot name="content" @custom-hamburger-component="onCustomHamburgerComponent">
                     <div>
