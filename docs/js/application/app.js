@@ -389,16 +389,55 @@ const App = {
         showHamburgerMenuModal(menuData) {
             console.log('showHamburgerMenuModal called with:', menuData);
             
-            // Create modal using standard Vue component
+            let modalComponent;
+            let componentProps;
+            
+            if (menuData.menuType === 'combined' && menuData.customComponent) {
+                // Create a combined component with both custom content and dashboard toggle
+                modalComponent = {
+                    components: {
+                        CustomContent: menuData.customComponent.component,
+                        DashboardToggleComponent
+                    },
+                    inject: ['appContext'],
+                    template: html`
+                        <div>
+                            <CustomContent v-bind="customProps" />
+                            <DashboardToggleComponent 
+                                :container-path="containerPath"
+                                :title="title" />
+                        </div>
+                    `,
+                    data() {
+                        return {
+                            customProps: menuData.customComponent.props || {},
+                            containerPath: menuData.containerPath,
+                            title: menuData.title
+                        };
+                    }
+                };
+                componentProps = {};
+            } else if (menuData.customComponent && menuData.customComponent.component) {
+                // Use custom component only
+                modalComponent = menuData.customComponent.component;
+                componentProps = menuData.customComponent.props || {};
+                console.log('Using custom component:', modalComponent);
+                console.log('With props:', componentProps);
+            } else {
+                // Fallback to the combined menu component
+                modalComponent = CombinedMenuComponent;
+                componentProps = {
+                    containerPath: menuData.containerPath,
+                    title: menuData.title,
+                    menuType: menuData.menuType
+                };
+            }
+            
             const modal = this.addModal(
                 menuData.title,
-                CombinedMenuComponent,
+                modalComponent,
                 {
-                    componentProps: {
-                        containerPath: menuData.containerPath,
-                        title: menuData.title,
-                        menuType: menuData.menuType
-                    }
+                    componentProps: componentProps
                 }
             );
             console.log('Modal created:', modal);

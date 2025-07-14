@@ -164,6 +164,8 @@ export const InventoryContent = {
             
             console.log('InventoryContent: Emitting custom-hamburger-component with:', componentData);
             console.log('Current view:', this.currentView);
+            console.log('Container path:', this.containerPath);
+            console.log('Path segments:', this.pathSegments);
             this.$emit('custom-hamburger-component', componentData);
         },
         navigateToView(viewName) {
@@ -273,6 +275,7 @@ export const InventoryContent = {
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
+                    <h4>Items in this Category</h4>
                     <test-table></test-table>
                 </div>
             </div>
@@ -280,50 +283,43 @@ export const InventoryContent = {
             <!-- Search View -->
             <div v-else-if="currentView === 'search'">
                 <h3>Advanced Search</h3>
-                <p>Search and filter inventory items with advanced criteria.</p>
+                <p>Search for inventory items using various criteria.</p>
                 
-                <div style="margin: 1rem 0; display: flex; flex-direction: column; gap: 1rem; max-width: 500px;">
-                    <input type="text" placeholder="Search by item name or description..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <select style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <option value="">All Categories</option>
-                        <option value="furniture">Furniture</option>
-                        <option value="electronics">Electronics</option>
-                        <option value="signage">Signage</option>
-                    </select>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button style="flex: 1;">Search</button>
-                        <button style="flex: 1;" @click="showAlert('Clear filters functionality coming soon!', 'Info')">Clear</button>
-                    </div>
+                <div style="margin: 1rem 0;">
+                    <button @click="showAlert('Save search criteria functionality coming soon!', 'Info')">Save Current Criteria</button>
+                    <button @click="showAlert('Load saved search functionality coming soon!', 'Info')">Load Saved Search</button>
+                    <button @click="showAlert('Export search results functionality coming soon!', 'Info')">Export Results</button>
+                    <button @click="showAlert('Clear search history functionality coming soon!', 'Info')">Clear History</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Search Results</h4>
-                    <p style="color: #666;">Enter search criteria to see results.</p>
+                    <test-table></test-table>
                 </div>
             </div>
             
             <!-- Reports View -->
             <div v-else-if="currentView === 'reports'">
-                <h3>Inventory Reports</h3>
-                <p>Generate and view various inventory reports.</p>
+                <h3>Reports</h3>
+                <p>View and manage inventory reports.</p>
                 
-                <div style="margin: 1rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-                    <div style="padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <h4 style="margin: 0 0 0.5rem 0;">Stock Levels</h4>
-                        <p style="margin: 0 0 1rem 0; color: #666;">Current inventory levels and low stock alerts.</p>
-                        <button @click="showAlert('Stock levels report functionality coming soon!', 'Info')">Generate Report</button>
-                    </div>
-                    <div style="padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <h4 style="margin: 0 0 0.5rem 0;">Usage History</h4>
-                        <p style="margin: 0 0 1rem 0; color: #666;">Track item usage and movement history.</p>
-                        <button @click="showAlert('Usage history report functionality coming soon!', 'Info')">Generate Report</button>
-                    </div>
-                    <div style="padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <h4 style="margin: 0 0 0.5rem 0;">Maintenance Schedule</h4>
-                        <p style="margin: 0 0 1rem 0; color: #666;">Upcoming maintenance and inspection dates.</p>
-                        <button @click="showAlert('Maintenance schedule report functionality coming soon!', 'Info')">Generate Report</button>
-                    </div>
+                <div style="margin: 1rem 0;">
+                    <button @click="showAlert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
+                    <button @click="showAlert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
+                    <button @click="showAlert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
+                    <button @click="showAlert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
                 </div>
+                
+                <div style="margin-top: 1.5rem;">
+                    <h4>Recent Reports</h4>
+                    <test-table></test-table>
+                </div>
+            </div>
+            
+            <!-- Default / Not Found -->
+            <div v-else>
+                <h3>Welcome to Inventory Management</h3>
+                <p>Select a view from the menu to get started.</p>
             </div>
         </div>
     `

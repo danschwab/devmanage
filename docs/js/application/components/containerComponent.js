@@ -155,32 +155,50 @@ export const ContainerComponent = {
     },
     methods: {
         closeContainer() {
-            // Emit an event to parent component to handle container removal
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
             console.log('ContainerComponent: openHamburgerMenu called');
+            console.log('ContainerComponent: customHamburgerComponent:', this.customHamburgerComponent);
+            console.log('ContainerComponent: dashboardToggleComponent:', this.dashboardToggleComponent);
             
-            // Create menu data for the modal
-            const menuData = {
-                containerId: this.containerId,
-                title: `${this.title} Menu`,
-                containerPath: this.containerPath,
-                menuType: this.getMenuType()
-            };
+            // Always try to combine custom component with dashboard toggle
+            const hasCustom = !!this.customHamburgerComponent;
+            const hasDashboard = !!this.dashboardToggleComponent;
             
-            console.log('ContainerComponent: Emitting show-hamburger-menu with:', menuData);
-            this.$emit('show-hamburger-menu', menuData);
-        },
-        
-        getMenuType() {
-            // Determine which type of menu to show based on container type
-            if (this.containerType === 'overview') {
-                return 'dashboard-management';
-            } else if (this.containerType === 'inventory' || this.containerPath?.startsWith('inventory')) {
-                return 'inventory-menu';
+            if (hasCustom && hasDashboard) {
+                // Combine both custom content and dashboard toggle
+                const menuData = {
+                    containerId: this.containerId,
+                    title: `${this.title} Menu`,
+                    containerPath: this.containerPath,
+                    customComponent: this.customHamburgerComponent,
+                    dashboardToggle: this.dashboardToggleComponent,
+                    menuType: 'combined'
+                };
+                console.log('ContainerComponent: Emitting combined hamburger menu:', menuData);
+                this.$emit('show-hamburger-menu', menuData);
+            } else if (hasCustom) {
+                // Only custom component
+                const menuData = {
+                    containerId: this.containerId,
+                    title: `${this.title} Menu`,
+                    containerPath: this.containerPath,
+                    customComponent: this.customHamburgerComponent,
+                    menuType: 'custom'
+                };
+                console.log('ContainerComponent: Emitting custom hamburger menu:', menuData);
+                this.$emit('show-hamburger-menu', menuData);
             } else {
-                return 'dashboard-toggle';
+                // Fallback to basic menu
+                const menuData = {
+                    containerId: this.containerId,
+                    title: `${this.title} Menu`,
+                    containerPath: this.containerPath,
+                    menuType: 'dashboard-toggle'
+                };
+                console.log('ContainerComponent: Emitting basic hamburger menu:', menuData);
+                this.$emit('show-hamburger-menu', menuData);
             }
         },
 
@@ -196,16 +214,14 @@ export const ContainerComponent = {
         },
 
         createDashboardToggleComponent() {
-            // Don't create dashboard toggle for overview containers
             if (this.containerType === 'overview') {
                 this.dashboardToggleComponent = null;
                 return;
             }
             
-            // This method is no longer needed with the new approach
             this.dashboardToggleComponent = {
                 containerPath: this.containerPath || this.containerType,
-                title: this.title || NavigationConfig.getDisplayNameForPath(this.containerPath || this.containerType)
+                title: this.title
             };
         },
 
