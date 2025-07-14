@@ -7,84 +7,110 @@ import { NavigationConfig } from './navigation.js';
  */
 export const DashboardManagement = {
     /**
-     * Add a container to the dashboard
-     * @param {string} containerType - The container type
-     * @param {string} containerPath - The path/location for the container
+     * Add a path to the dashboard
+     * @param {string} containerPath - The path to add to dashboard
+     * @param {string} title - Optional title for the dashboard card
      * @param {Object} appContext - App context with methods
      */
-    addToDashboard(containerType, containerPath, appContext) {
+    addToDashboard(containerPath, title, appContext) {
+        console.log('DashboardManagement.addToDashboard called:', containerPath, title);
         if (appContext.addToDashboard) {
-            appContext.addToDashboard(containerType, containerPath);
+            appContext.addToDashboard(containerPath, title);
         }
     },
 
     /**
-     * Remove a container from the dashboard
-     * @param {string} containerType - The container type to remove
+     * Remove a path from the dashboard
+     * @param {string} containerPath - The path to remove from dashboard
      * @param {Object} appContext - App context with methods
      */
-    removeFromDashboard(containerType, appContext) {
+    removeFromDashboard(containerPath, appContext) {
+        console.log('DashboardManagement.removeFromDashboard called:', containerPath);
         if (appContext.removeDashboardContainer) {
-            appContext.removeDashboardContainer(containerType);
+            appContext.removeDashboardContainer(containerPath);
         }
     },
 
     /**
-     * Check if a container is on the dashboard
-     * @param {string} containerType - The container type to check
+     * Check if a path is on the dashboard
+     * @param {string} containerPath - The path to check
      * @param {Object} appContext - App context with dashboard data
-     * @returns {boolean} Whether the container is on dashboard
+     * @returns {boolean} Whether the path is on dashboard
      */
-    isOnDashboard(containerType, appContext) {
+    isOnDashboard(containerPath, appContext) {
         if (appContext.dashboardContainers) {
-            return appContext.dashboardContainers.some(dc => dc.type === containerType);
+            return appContext.dashboardContainers.some(dc => dc.path === containerPath);
         }
-        return NavigationConfig.hasDashboardContainer(containerType);
-    },
-
-    /**
-     * Create a dashboard toggle button component
-     * @param {string} containerType - The container type
-     * @param {string} containerPath - The path for the container
-     * @param {Object} appContext - App context
-     * @returns {Object} Vue component for dashboard toggle
-     */
-    createDashboardToggleComponent(containerType, containerPath, appContext) {
-        return {
-            data() {
-                return {
-                    localIsOnDashboard: DashboardManagement.isOnDashboard(containerType, appContext)
-                };
-            },
-            methods: {
-                toggleDashboardPresence() {
-                    if (this.localIsOnDashboard) {
-                        DashboardManagement.removeFromDashboard(containerType, appContext);
-                        this.localIsOnDashboard = false;
-                    } else {
-                        DashboardManagement.addToDashboard(containerType, containerPath, appContext);
-                        this.localIsOnDashboard = true;
-                    }
-                }
-            },
-            template: html`
-                <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
-                    <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
-                    <button 
-                        @click="toggleDashboardPresence"
-                        :style="{
-                            width: '100%',
-                            padding: '8px 12px',
-                            background: localIsOnDashboard ? '#f44336' : '#4CAF50',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer'
-                        }">
-                        {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
-                    </button>
-                </div>
-            `
-        };
+        return NavigationConfig.hasDashboardContainer(containerPath);
     }
+};
+
+/**
+ * Standard Vue component for dashboard toggle functionality
+ */
+export const DashboardToggleComponent = {
+    props: {
+        containerPath: {
+            type: String,
+            required: true
+        },
+        title: {
+            type: String,
+            required: true
+        }
+    },
+    inject: ['appContext'],
+    computed: {
+        dashboardContainers() {
+            return this.appContext.dashboardContainers || [];
+        },
+        isOnDashboard() {
+            const result = this.dashboardContainers.some(dc => dc.path === this.containerPath);
+            console.log('DashboardToggle: isOnDashboard computed for', this.containerPath, ':', result);
+            console.log('DashboardToggle: Available dashboard paths:', this.dashboardContainers.map(dc => dc.path));
+            return result;
+        }
+    },
+    methods: {
+        toggleDashboardPresence() {
+            console.log('DashboardToggle: toggleDashboardPresence called');
+            console.log('DashboardToggle: Current path:', this.containerPath);
+            console.log('DashboardToggle: Current state (before toggle):', this.isOnDashboard);
+            
+            if (this.isOnDashboard) {
+                console.log('DashboardToggle: Removing from dashboard');
+                DashboardManagement.removeFromDashboard(this.containerPath, this.appContext);
+            } else {
+                console.log('DashboardToggle: Adding to dashboard');
+                DashboardManagement.addToDashboard(this.containerPath, this.title, this.appContext);
+            }
+        }
+    },
+    template: html`
+        <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
+            <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
+            <p style="margin: 0 0 5px 0; font-size: 0.9em; color: #666;">
+                Current: {{ containerPath }}
+            </p>
+            <button 
+                @click="toggleDashboardPresence"
+                :style="{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: isOnDashboard ? '#f44336' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer'
+                }">
+                {{ isOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
+            </button>
+            <p style="margin: 5px 0 0 0; font-size: 0.8em; color: #999;">
+                Status: {{ isOnDashboard ? 'On Dashboard' : 'Not on Dashboard' }}
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 0.7em; color: #ccc;">
+                Debug: {{ dashboardContainers.length }} containers
+            </p>
+        </div>
+    `
 };

@@ -134,11 +134,23 @@ export const ContainerComponent = {
         // Watch for changes in hamburger component data passed as prop
         hamburgerComponentData: {
             handler(newData) {
-                console.log('ContainerComponent: hamburgerComponentData prop changed:', newData);
                 // Force reactivity update for shouldShowHamburgerMenu
                 this.$forceUpdate();
             },
             deep: true
+        },
+        // Watch for path changes and recreate dashboard toggle
+        containerPath(newPath, oldPath) {
+            if (newPath !== oldPath) {
+                console.log('ContainerComponent: Container path changed from', oldPath, 'to', newPath);
+                this.createDashboardToggleComponent();
+            }
+        },
+        title(newTitle, oldTitle) {
+            if (newTitle !== oldTitle) {
+                console.log('ContainerComponent: Container title changed from', oldTitle, 'to', newTitle);
+                this.createDashboardToggleComponent();
+            }
         }
     },
     methods: {
@@ -148,40 +160,36 @@ export const ContainerComponent = {
         },
         openHamburgerMenu() {
             console.log('ContainerComponent: openHamburgerMenu called');
-            console.log('customHamburgerComponent:', this.customHamburgerComponent);
-            console.log('dashboardToggleComponent:', this.dashboardToggleComponent);
-            console.log('combinedHamburgerComponent:', this.combinedHamburgerComponent);
-            console.log('hamburgerComponentData prop:', this.hamburgerComponentData);
             
-            // Priority: hamburgerComponentData (passed from parent) > combinedHamburgerComponent (internal)
-            const componentData = this.hamburgerComponentData || this.combinedHamburgerComponent;
+            // Create menu data for the modal
+            const menuData = {
+                containerId: this.containerId,
+                title: `${this.title} Menu`,
+                containerPath: this.containerPath,
+                menuType: this.getMenuType()
+            };
             
-            if (componentData) {
-                const menuData = {
-                    containerId: this.containerId,
-                    title: `${this.title} Menu`,
-                    component: componentData.component,
-                    componentProps: componentData.props || {},
-                    containerType: this.containerType
-                };
-                
-                console.log('ContainerComponent: Emitting show-hamburger-menu with:', menuData);
-                this.$emit('show-hamburger-menu', menuData);
+            console.log('ContainerComponent: Emitting show-hamburger-menu with:', menuData);
+            this.$emit('show-hamburger-menu', menuData);
+        },
+        
+        getMenuType() {
+            // Determine which type of menu to show based on container type
+            if (this.containerType === 'overview') {
+                return 'dashboard-management';
+            } else if (this.containerType === 'inventory' || this.containerPath?.startsWith('inventory')) {
+                return 'inventory-menu';
             } else {
-                console.log('ContainerComponent: No hamburger component available');
+                return 'dashboard-toggle';
             }
         },
+
         // Handle custom hamburger component from child components
         onCustomHamburgerComponent(componentData) {
             console.log('ContainerComponent: Received custom-hamburger-component:', componentData);
             console.log('Container ID:', this.containerId, 'Type:', this.containerType);
             
             this.customHamburgerComponent = componentData;
-            
-            console.log('ContainerComponent: Stored customHamburgerComponent:', this.customHamburgerComponent);
-            console.log('Current dashboardToggleComponent:', this.dashboardToggleComponent);
-            console.log('Combined component will be:', this.combinedHamburgerComponent);
-            console.log('shouldShowHamburgerMenu will be:', this.shouldShowHamburgerMenu);
             
             // Force update to trigger reactivity
             this.$forceUpdate();
@@ -191,26 +199,14 @@ export const ContainerComponent = {
             // Don't create dashboard toggle for overview containers
             if (this.containerType === 'overview') {
                 this.dashboardToggleComponent = null;
-                console.log('Skipping dashboard toggle for overview container');
                 return;
             }
             
-            try {
-                const containerPath = this.containerPath || this.containerType;
-                this.dashboardToggleComponent = {
-                    component: DashboardManagement.createDashboardToggleComponent(
-                        this.containerType,
-                        containerPath,
-                        this.appContext
-                    ),
-                    props: {}
-                };
-                
-                console.log('Created dashboard toggle component for:', this.containerType, this.dashboardToggleComponent);
-            } catch (error) {
-                console.error('Error creating dashboard toggle component:', error);
-                this.dashboardToggleComponent = null;
-            }
+            // This method is no longer needed with the new approach
+            this.dashboardToggleComponent = {
+                containerPath: this.containerPath || this.containerType,
+                title: this.title || NavigationConfig.getDisplayNameForPath(this.containerPath || this.containerType)
+            };
         },
 
         createCombinedComponent() {
@@ -219,11 +215,22 @@ export const ContainerComponent = {
             const customProps = this.customHamburgerComponent.props || {};
             const dashboardProps = this.dashboardToggleComponent.props || {};
             
+            console.log('ContainerComponent: Creating combined component');
+            console.log('ContainerComponent: Dashboard props:', dashboardProps);
+            
             return {
                 component: {
                     components: {
                         CustomContent: customComponent,
                         DashboardToggle: dashboardComponent
+                    },
+                    props: {
+                        containerPath: String,
+                        title: String,
+                        dashboardContainers: {
+                            type: Array,
+                            default: () => []
+                        }
                     },
                     data() {
                         return {
@@ -231,14 +238,30 @@ export const ContainerComponent = {
                             dashboardProps: dashboardProps
                         };
                     },
+                    computed: {
+                        effectiveContainerPath() {
+                            return this.containerPath || this.dashboardProps.containerPath;
+                        },
+                        effectiveTitle() {
+                            return this.title || this.dashboardProps.title;
+                        }
+                    },
                     template: html`
                         <div>
                             <CustomContent v-bind="customProps" />
-                            <DashboardToggle v-bind="dashboardProps" />
+                            <DashboardToggle 
+                                v-bind="dashboardProps" 
+                                :container-path="effectiveContainerPath"
+                                :title="effectiveTitle"
+                                :dashboard-containers="dashboardContainers" />
                         </div>
                     `
                 },
-                props: {}
+                props: {
+                    containerPath: this.containerPath,
+                    title: this.title,
+                    dashboardContainers: this.appContext?.dashboardContainers || []
+                }
             };
         },
 

@@ -152,15 +152,6 @@ export const InventoryContent = {
             return this.pathSegments[2] || '';
         }
     },
-    mounted() {
-        // Emit only the inventory-specific menu component
-        this.updateHamburgerMenuComponent();
-    },
-    watch: {
-        currentView() {
-            this.updateHamburgerMenuComponent();
-        }
-    },
     methods: {
         updateHamburgerMenuComponent() {
             const componentData = {
@@ -196,6 +187,35 @@ export const InventoryContent = {
                 'signage': 'Signage'
             };
             return names[segmentId] || segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
+        },
+        emitCurrentPathInfo() {
+            // Emit the current path and title for dashboard management
+            this.$emit('path-info', {
+                path: this.containerPath,
+                title: this.getDisplayName(this.currentView || 'inventory')
+            });
+        }
+    },
+    mounted() {
+        // Ensure we emit hamburger component for the initial view
+        this.$nextTick(() => {
+            this.updateHamburgerMenuComponent();
+            this.emitCurrentPathInfo();
+        });
+    },
+    watch: {
+        currentView: {
+            handler() {
+                this.updateHamburgerMenuComponent();
+                this.emitCurrentPathInfo();
+            },
+            immediate: true
+        },
+        containerPath: {
+            handler() {
+                this.emitCurrentPathInfo();
+            },
+            immediate: true
         }
     },
     template: html `

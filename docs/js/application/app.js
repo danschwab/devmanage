@@ -13,6 +13,7 @@ import {
     InventoryContent, 
     InterfacesContent 
 } from './components/content/index.js';
+import { DashboardToggleComponent } from './utils/DashboardManagement.js';
 
 const { createApp } = Vue;
 
@@ -50,6 +51,91 @@ const SystemInfoComponent = {
     `
 };
 
+// Create combined menu components using standard Vue patterns
+const CombinedMenuComponent = {
+    props: {
+        containerPath: String,
+        title: String,
+        menuType: String
+    },
+    components: {
+        DashboardToggleComponent
+    },
+    inject: ['appContext'],
+    computed: {
+        currentView() {
+            if (this.containerPath) {
+                const segments = this.containerPath.split('/').filter(s => s.length > 0);
+                return segments[1] || 'main';
+            }
+            return 'main';
+        }
+    },
+    methods: {
+        handleInventoryAction(action) {
+            // Handle inventory-specific actions
+            this.appContext.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
+        }
+    },
+    template: html`
+        <div>
+            <!-- Dashboard Management Menu -->
+            <div v-if="menuType === 'dashboard-management'" style="text-align: left;">
+                <h4>Dashboard Management</h4>
+                <p><strong>Available Paths:</strong></p>
+                <div v-for="{ path, isAdded, displayName } in appContext.getAllPathsWithStatus()" :key="path">
+                    <button 
+                        @click="isAdded ? appContext.removeDashboardContainer(path) : appContext.addToDashboard(path, displayName)"
+                        :style="{
+                            margin: '5px',
+                            padding: '5px 10px',
+                            background: isAdded ? '#f44336' : '#4CAF50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer'
+                        }">
+                        {{ isAdded ? 'Remove' : 'Add' }} {{ displayName }}
+                    </button>
+                    <br>
+                </div>
+            </div>
+            
+            <!-- Inventory Menu -->
+            <div v-else-if="menuType === 'inventory-menu'" style="text-align: left;">
+                <h4>Inventory Actions</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 5px;">
+                        <button 
+                            @click="handleInventoryAction('refresh')"
+                            style="width: 100%; padding: 8px 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; text-align: left;">
+                            Refresh Inventory
+                        </button>
+                    </li>
+                    <li style="margin-bottom: 5px;">
+                        <button 
+                            @click="handleInventoryAction('add')"
+                            style="width: 100%; padding: 8px 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; text-align: left;">
+                            Add New Item
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Add dashboard toggle for inventory -->
+                <DashboardToggleComponent 
+                    :container-path="containerPath"
+                    :title="title" />
+            </div>
+            
+            <!-- Default Dashboard Toggle -->
+            <DashboardToggleComponent 
+                v-else
+                :container-path="containerPath"
+                :title="title" />
+        </div>
+    `
+};
+
 // Vue app with inline template
 const App = {
     components: {
@@ -64,7 +150,14 @@ const App = {
         'inventory-content': InventoryContent,
         'interfaces-content': InterfacesContent,
         AlertComponent,
-        SystemInfoComponent
+        SystemInfoComponent,
+        CombinedMenuComponent,
+        DashboardToggleComponent
+    },
+    provide() {
+        return {
+            appContext: this
+        };
     },
     data() {
         return {
@@ -175,12 +268,17 @@ const App = {
 
         /**
          * Remove a container from the dashboard and refresh if on dashboard
-         * @param {string} containerType - The container type to remove
+         * @param {string} containerPath - The container path to remove
          */
-        removeDashboardContainer(containerType) {
+        removeDashboardContainer(containerPath) {
+            console.log('App: removeDashboardContainer called with:', containerPath);
+            console.log('App: Dashboard containers before removal:', this.dashboardContainers);
+            
             // Update both the NavigationConfig and reactive data
-            NavigationConfig.removeDashboardContainer(containerType);
+            NavigationConfig.removeDashboardContainer(containerPath);
             this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+            
+            console.log('App: Dashboard containers after removal:', this.dashboardContainers);
             
             // If currently on dashboard, refresh to remove the container
             if (this.currentPage === 'dashboard') {
@@ -190,15 +288,18 @@ const App = {
 
         /**
          * Add a container to the dashboard and refresh if on dashboard
-         * @param {string} containerType - The container type to add
-         * @param {string} containerPath - The container path (optional, defaults to containerType)
+         * @param {string} containerPath - The container path to add
+         * @param {string} title - The title for the container (optional)
          */
-        addToDashboard(containerType, containerPath = null) {
-            const path = containerPath || containerType;
+        addToDashboard(containerPath, title = null) {
+            console.log('App: addToDashboard called with:', containerPath, title);
+            console.log('App: Dashboard containers before addition:', this.dashboardContainers);
             
             // Update both the NavigationConfig and reactive data
-            NavigationConfig.addDashboardContainer(containerType, path);
+            NavigationConfig.addDashboardContainer(containerPath, title);
             this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+            
+            console.log('App: Dashboard containers after addition:', this.dashboardContainers);
             
             // If currently on dashboard, refresh to show the new container
             if (this.currentPage === 'dashboard') {
@@ -207,24 +308,24 @@ const App = {
         },
 
         /**
-         * Get container types that can be added to dashboard
-         * @returns {Array} Array of addable container types
+         * Get paths that can be added to dashboard
+         * @returns {Array} Array of addable paths
          */
-        getAddableContainerTypes() {
-            return NavigationConfig.getAddableContainerTypes();
+        getAddablePaths() {
+            return NavigationConfig.getAddablePaths();
         },
 
         /**
-         * Get all available container types with their status
-         * @returns {Array} Array of container types with isAdded status
+         * Get all available paths with their status
+         * @returns {Array} Array of paths with isAdded status
          */
-        getAllContainerTypesWithStatus() {
-            const allTypes = NavigationConfig.getAvailableContainerTypes();
+        getAllPathsWithStatus() {
+            const allPaths = NavigationConfig.getAvailablePaths();
             // Use reactive dashboardContainers instead of NavigationConfig directly
-            return allTypes.map(type => ({
-                type,
-                isAdded: this.dashboardContainers.some(container => container.type === type),
-                displayName: type.charAt(0).toUpperCase() + type.slice(1)
+            return allPaths.map(path => ({
+                path,
+                isAdded: this.dashboardContainers.some(container => container.path === path),
+                displayName: NavigationConfig.getDisplayNameForPath(path)
             }));
         },
 
@@ -291,12 +392,17 @@ const App = {
         },
         showHamburgerMenuModal(menuData) {
             console.log('showHamburgerMenuModal called with:', menuData);
-            // Create modal with reactive Vue component
+            
+            // Create modal using standard Vue component
             const modal = this.addModal(
                 menuData.title,
-                menuData.component,
+                CombinedMenuComponent,
                 {
-                    componentProps: menuData.componentProps
+                    componentProps: {
+                        containerPath: menuData.containerPath,
+                        title: menuData.title,
+                        menuType: menuData.menuType
+                    }
                 }
             );
             console.log('Modal created:', modal);
@@ -389,7 +495,7 @@ const App = {
                         <dashboard-overview 
                             v-if="container.containerType === 'overview'"
                             :current-user="currentUser"
-                            :get-all-container-types-with-status="getAllContainerTypesWithStatus"
+                            :get-all-paths-with-status="getAllPathsWithStatus"
                             :add-to-dashboard="addToDashboard"
                             :remove-dashboard-container="removeDashboardContainer"
                             @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from overview:', $event); container.customHamburgerContent = $event; }"
@@ -420,7 +526,7 @@ const App = {
                         
                         <!-- Inventory Content -->
                         <inventory-content 
-                            v-else-if="container.containerType === 'inventory'"
+                            v-else-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"

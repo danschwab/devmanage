@@ -5,64 +5,106 @@ export const NavigationConfig = {
     // Primary navigation items (just IDs)
     navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
 
-    // Dynamic list of dashboard containers (component, location pairs)
+    // Dynamic list of dashboard containers (now path-based)
     allDashboardContainers: [
-        { type: 'overview', containerPath: 'dashboard/overview' },
-        { type: 'stats', containerPath: 'dashboard/stats' },
-        { type: 'actions', containerPath: 'dashboard/actions' },
-        { type: 'inventory', containerPath: 'inventory' }
+        { path: 'dashboard/overview', title: 'Overview' },
+        { path: 'dashboard/stats', title: 'Stats' },
+        { path: 'dashboard/actions', title: 'Actions' },
+        { path: 'inventory', title: 'Inventory' }
     ],
 
     /**
-     * Add a dashboard container
-     * @param {string} containerType - The container type to add
-     * @param {string} containerPath - The container path
+     * Add a dashboard container by path
+     * @param {string} containerPath - The container path to add
+     * @param {string} title - Display title for the container
      */
-    addDashboardContainer(containerType, containerPath) {
+    addDashboardContainer(containerPath, title = null) {
         // Check if container already exists
         const exists = this.allDashboardContainers.some(container => 
-            container.type === containerType && container.containerPath === containerPath
+            container.path === containerPath
         );
         
         if (!exists) {
-            this.allDashboardContainers.push({ type: containerType, containerPath: containerPath });
+            const displayTitle = title || this.getDisplayNameForPath(containerPath);
+            this.allDashboardContainers.push({ 
+                path: containerPath, 
+                title: displayTitle 
+            });
         }
     },
 
     /**
-     * Remove a dashboard container
-     * @param {string} containerType - The container type to remove
+     * Remove a dashboard container by path
+     * @param {string} containerPath - The container path to remove
      */
-    removeDashboardContainer(containerType) {
+    removeDashboardContainer(containerPath) {
         this.allDashboardContainers = this.allDashboardContainers.filter(container => 
-            container.type !== containerType
+            container.path !== containerPath
         );
     },
 
     /**
-     * Check if a dashboard container exists
-     * @param {string} containerType - The container type to check
+     * Check if a dashboard container exists for a path
+     * @param {string} containerPath - The container path to check
      * @returns {boolean} Whether the container exists
      */
-    hasDashboardContainer(containerType) {
-        return this.allDashboardContainers.some(container => container.type === containerType);
+    hasDashboardContainer(containerPath) {
+        return this.allDashboardContainers.some(container => container.path === containerPath);
     },
 
     /**
-     * Get all available container types that can be added to dashboard
-     * @returns {Array} Array of available container types
+     * Get display name for a path
+     * @param {string} path - The path to get display name for
+     * @returns {string} Display name
      */
-    getAvailableContainerTypes() {
-        return ['overview', 'stats', 'actions', 'inventory', 'packlist', 'interfaces'];
+    getDisplayNameForPath(path) {
+        const segments = path.split('/').filter(segment => segment.length > 0);
+        const names = {
+            'dashboard': 'Dashboard',
+            'overview': 'Overview',
+            'stats': 'Stats',
+            'actions': 'Actions',
+            'inventory': 'Inventory',
+            'categories': 'Categories',
+            'search': 'Search',
+            'reports': 'Reports',
+            'packlist': 'Packlist',
+            'interfaces': 'Interfaces',
+            'furniture': 'Furniture',
+            'electronics': 'Electronics',
+            'signage': 'Signage'
+        };
+        
+        // Return the last segment's display name, or generate one
+        const lastSegment = segments[segments.length - 1];
+        return names[lastSegment] || lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
     },
 
     /**
-     * Get container types not currently on dashboard
-     * @returns {Array} Array of container types that can be added
+     * Get all paths that can be added to dashboard
+     * @returns {Array} Array of available paths
      */
-    getAddableContainerTypes() {
-        const currentTypes = this.allDashboardContainers.map(container => container.type);
-        return this.getAvailableContainerTypes().filter(type => !currentTypes.includes(type));
+    getAvailablePaths() {
+        return [
+            'dashboard/overview',
+            'dashboard/stats', 
+            'dashboard/actions',
+            'inventory',
+            'inventory/categories',
+            'inventory/search',
+            'inventory/reports',
+            'packlist',
+            'interfaces'
+        ];
+    },
+
+    /**
+     * Get paths not currently on dashboard
+     * @returns {Array} Array of paths that can be added
+     */
+    getAddablePaths() {
+        const currentPaths = this.allDashboardContainers.map(container => container.path);
+        return this.getAvailablePaths().filter(path => !currentPaths.includes(path));
     },
 
     /**
@@ -83,22 +125,42 @@ export const NavigationConfig = {
         // Get container configurations based on page type
         let containerConfigs;
         if (pageFile === 'dashboard') {
-            // Return copy of current dashboard containers
-            containerConfigs = [...this.allDashboardContainers];
+            // Return copy of current dashboard containers with proper structure
+            containerConfigs = this.allDashboardContainers.map(container => ({
+                path: container.path,
+                title: container.title,
+                containerPath: container.path,
+                type: this.getTypeFromPath(container.path)
+            }));
         } else {
-            containerConfigs = [{ type: pageFile, containerPath: pageFile }];
+            containerConfigs = [{ 
+                path: pageFile, 
+                title: this.getDisplayNameForPath(pageFile),
+                containerPath: pageFile,
+                type: this.getTypeFromPath(pageFile)
+            }];
         }
         
         return {
             page: pageFile,
             containers: containerConfigs.map(config => ({
                 ...config,
-                title: config.title || '',
                 options: {
-                    ...config
+                    containerPath: config.containerPath,
+                    title: config.title
                 }
             }))
         };
+    },
+
+    /**
+     * Get container type from path
+     * @param {string} path - The container path
+     * @returns {string} Container type
+     */
+    getTypeFromPath(path) {
+        const segments = path.split('/').filter(segment => segment.length > 0);
+        return segments[segments.length - 1];
     },
 
     /**
@@ -108,22 +170,15 @@ export const NavigationConfig = {
      * @returns {Object} Expansion result with target page and action
      */
     handleContainerExpansion(containerData, currentPage) {
-        // If the container has a specific page location, navigate to it
-        if (containerData.pageLocation) {
-            return {
-                action: 'navigate',
-                targetPage: containerData.pageLocation
-            };
-        }
-        
-        // For dashboard cards, navigate to the container type as a page
-        const targetPage = containerData.containerType;
+        // For dashboard cards, navigate to the specific path
+        const targetPath = containerData.containerPath || containerData.path;
+        const targetPage = targetPath.split('/')[0];
         
         if (targetPage !== currentPage) {
             return {
                 action: 'navigate',
                 targetPage: targetPage,
-                containerPath: containerData.containerPath
+                containerPath: targetPath
             };
         } else {
             return {
@@ -183,9 +238,11 @@ export const NavigationConfig = {
                 
                 this.navigateToPage(basePage, appContext);
                 
-                // After navigation, update the container path to the full target path
+                // After navigation, find the container that matches the target path exactly
                 appContext.$nextTick(() => {
-                    const expandedContainer = appContext.containers.find(c => c.containerType === basePage);
+                    const expandedContainer = appContext.containers.find(c => 
+                        c.containerPath === basePage || c.containerType === basePage
+                    );
                     if (expandedContainer) {
                         expandedContainer.containerPath = targetPath;
                     }
@@ -299,7 +356,11 @@ export const NavigationConfig = {
                 // If the container has a path, update the new container to that path
                 if (expansionResult.containerPath) {
                     appContext.$nextTick(() => {
-                        const expandedContainer = appContext.containers.find(c => c.containerType === expansionResult.targetPage);
+                        // Find the container that matches the base page and update its path
+                        const basePage = expansionResult.containerPath.split('/')[0];
+                        const expandedContainer = appContext.containers.find(c => 
+                            c.containerType === basePage || c.containerPath === basePage
+                        );
                         if (expandedContainer) {
                             expandedContainer.containerPath = expansionResult.containerPath;
                         }

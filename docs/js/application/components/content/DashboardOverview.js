@@ -3,20 +3,20 @@ import { html } from '../../utils/template-helpers.js';
 // Dashboard Management Component (fully reactive)
 const DashboardManagementComponent = {
     props: {
-        getAllContainerTypesWithStatus: Function,
+        getAllPathsWithStatus: Function,
         addToDashboard: Function,
         removeDashboardContainer: Function
     },
     data() {
         return {
-            containerTypes: []
+            availablePaths: []
         };
     },
     mounted() {
-        this.updateContainerTypes();
+        this.updateAvailablePaths();
         // Poll for changes to ensure reactivity
         this.interval = setInterval(() => {
-            this.updateContainerTypes();
+            this.updateAvailablePaths();
         }, 100);
     },
     beforeUnmount() {
@@ -25,35 +25,35 @@ const DashboardManagementComponent = {
         }
     },
     methods: {
-        updateContainerTypes() {
-            const newTypes = this.getAllContainerTypesWithStatus?.() || [];
+        updateAvailablePaths() {
+            const newPaths = this.getAllPathsWithStatus?.() || [];
             // Only update if actually changed to avoid unnecessary re-renders
-            if (JSON.stringify(newTypes) !== JSON.stringify(this.containerTypes)) {
-                this.containerTypes = newTypes;
+            if (JSON.stringify(newPaths) !== JSON.stringify(this.availablePaths)) {
+                this.availablePaths = newPaths;
             }
         },
-        handleAddContainer(type) {
-            this.addToDashboard?.(type);
+        handleAddPath(path, title) {
+            this.addToDashboard?.(path, title);
             // Force immediate update
             this.$nextTick(() => {
-                this.updateContainerTypes();
+                this.updateAvailablePaths();
             });
         },
-        handleRemoveContainer(type) {
-            this.removeDashboardContainer?.(type);
+        handleRemovePath(path) {
+            this.removeDashboardContainer?.(path);
             // Force immediate update
             this.$nextTick(() => {
-                this.updateContainerTypes();
+                this.updateAvailablePaths();
             });
         }
     },
     template: html`
         <div style="text-align: left;">
             <h4>Dashboard Management</h4>
-            <p><strong>Container Types:</strong></p>
-            <div v-for="{ type, isAdded, displayName } in containerTypes" :key="type">
+            <p><strong>Available Paths:</strong></p>
+            <div v-for="{ path, isAdded, displayName } in availablePaths" :key="path">
                 <button 
-                    @click="isAdded ? handleRemoveContainer(type) : handleAddContainer(type)"
+                    @click="isAdded ? handleRemovePath(path) : handleAddPath(path, displayName)"
                     :style="{
                         margin: '5px',
                         padding: '5px 10px',
@@ -77,7 +77,7 @@ export const DashboardOverview = {
     },
     props: {
         currentUser: Object,
-        getAllContainerTypesWithStatus: Function,
+        getAllPathsWithStatus: Function,
         addToDashboard: Function,
         removeDashboardContainer: Function
     },
@@ -90,7 +90,7 @@ export const DashboardOverview = {
             this.$emit('custom-hamburger-component', {
                 component: DashboardManagementComponent,
                 props: {
-                    getAllContainerTypesWithStatus: this.getAllContainerTypesWithStatus,
+                    getAllPathsWithStatus: this.getAllPathsWithStatus,
                     addToDashboard: this.addToDashboard,
                     removeDashboardContainer: this.removeDashboardContainer
                 }
