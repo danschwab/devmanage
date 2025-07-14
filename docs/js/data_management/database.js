@@ -144,15 +144,21 @@ export class Database {
     }
     
     /**
-     * Creates a new sheet tab by copying a template tab
+     * Creates a new sheet tab by copying a template tab or creating a blank tab
      * @param {string} tableId - Identifier for the table
-     * @param {{title: string, sheetId: number}} templateTab - Template tab to copy
+     * @param {{title: string, sheetId: number}|null} templateTab - Template tab to copy (null for blank tab)
      * @param {string} newTabName - Name for the new tab
      * @returns {Promise<void>}
      */
     static async createTab(tableId, templateTab, newTabName) {
         try {
-            await GoogleSheetsService.copySheetTab(tableId, templateTab, newTabName);
+            if (templateTab && templateTab.sheetId) {
+                // Copy from template
+                await GoogleSheetsService.copySheetTab(tableId, templateTab, newTabName);
+            } else {
+                // Create blank tab
+                await GoogleSheetsService.createBlankTab(tableId, newTabName);
+            }
             
             // Invalidate cache for this table's tabs
             CacheManager.invalidate(CacheManager.NAMESPACES.SHEET_TABS, tableId);
@@ -218,5 +224,26 @@ export class Database {
     static async findTabByName(tableId, tabName, trackingId = null) {
         const tabs = await this.getTabs(tableId, true, trackingId);
         return tabs.find(tab => tab.title === tabName) || null;
+    }
+    
+    /**
+     * Register dependencies between cache entries based on the predefined dependency map
+     * @param {string} namespace - The namespace that changed
+     * @param {string} key - The key that changed
+     * @private
+     */
+    static _registerStandardDependencies(namespace, key) {
+        const dependencyMap = CacheManager.getDependencyMap();
+        const entry = dependencyMap[namespace];
+        
+        if (entry && entry.affects) {
+            // Register that changes to this namespace affect the listed namespaces
+            const dependencies = entry.affects.map(affectedNamespace => ({
+                namespace: affectedNamespace,
+                key: '*' // Wildcard to affect all keys in the namespace
+            }));
+            
+            CacheManager.registerDependencies(namespace, key, dependencies);
+        }
     }
 }

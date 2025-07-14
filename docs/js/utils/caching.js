@@ -1,5 +1,5 @@
 /**
- * Caching system for application data
+ * Simplified caching system for application data
  */
 export class CacheManager {
     // Global cache storage
@@ -40,82 +40,30 @@ export class CacheManager {
     // Track active cache operations for dependency tracking
     static _activeOperations = new Map();
     
-    // Use an AsyncLocalStorage-like approach for tracking context
-    static _asyncTracking = new Map();
-    
     /**
-     * Start tracking cache operations for a function call with thread safety
+     * Start tracking cache operations for a function call
      * @param {string} trackingId - Unique ID for the function call
      * @returns {string} The tracking ID
      */
     static beginTracking(trackingId = null) {
         trackingId = trackingId || `op_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
         
-        // Create a new tracking context that's isolated to this execution flow
         const trackingContext = {
             accessed: new Set(),
-            created: new Set(),
-            childContexts: new Set(), // Track child contexts for nested operations
-            parentContext: null // Reference to parent context if this is nested
+            created: new Set()
         };
         
         this._activeOperations.set(trackingId, trackingContext);
-        
-        // Store the tracking ID in the current execution context
-        // Use a unique Symbol as a key to avoid collisions
-        this._setCurrentTrackingId(trackingId);
-        
         return trackingId;
     }
     
     /**
-     * Associate this async execution context with a tracking ID
-     * @private
-     */
-    static _setCurrentTrackingId(trackingId) {
-        const asyncKey = this._getAsyncExecutionId();
-        if (asyncKey) {
-            this._asyncTracking.set(asyncKey, trackingId);
-        }
-    }
-    
-    /**
-     * Get a unique identifier for the current execution context
-     * @private
-     */
-    static _getAsyncExecutionId() {
-        // In a true concurrent environment, this would use AsyncLocalStorage
-        // For our browser context, we generate a unique ID for the current call stack
-        const error = new Error();
-        const stack = error.stack || '';
-        // Create a hash of the current call stack
-        return this._hashString(stack);
-    }
-    
-    /**
-     * Simple hash function for strings
-     * @private
-     */
-    static _hashString(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return 'exec_' + Math.abs(hash).toString(36);
-    }
-    
-    /**
-     * Get the tracking ID for the current execution context
+     * Get the current tracking ID (simplified - just return the most recent one)
      * @returns {string|null} Current tracking ID or null
      */
     static getCurrentTrackingId() {
-        const asyncKey = this._getAsyncExecutionId();
-        if (asyncKey && this._asyncTracking.has(asyncKey)) {
-            return this._asyncTracking.get(asyncKey);
-        }
-        return null;
+        const keys = Array.from(this._activeOperations.keys());
+        return keys.length > 0 ? keys[keys.length - 1] : null;
     }
     
     /**
@@ -127,58 +75,18 @@ export class CacheManager {
         const operation = this._activeOperations.get(trackingId);
         if (!operation) return [];
         
-        // Merge any child contexts into this one
-        this._mergeChildContexts(operation);
-        
         const dependencies = Array.from(operation.accessed).map(entry => {
             const [namespace, key] = entry.split(':::');
             return { namespace, key };
         });
         
-        // Clean up
         this._activeOperations.delete(trackingId);
-        
-        // Remove from async tracking
-        for (const [key, id] of this._asyncTracking.entries()) {
-            if (id === trackingId) {
-                this._asyncTracking.delete(key);
-            }
-        }
-        
         return dependencies;
     }
     
     /**
-     * Recursively merge child contexts into the parent
-     * @private
-     */
-    static _mergeChildContexts(context) {
-        if (!context || !context.childContexts) return;
-        
-        for (const childId of context.childContexts) {
-            const childContext = this._activeOperations.get(childId);
-            if (childContext) {
-                // First merge any deeper children
-                this._mergeChildContexts(childContext);
-                
-                // Then merge this child's accesses into parent
-                for (const access of childContext.accessed) {
-                    context.accessed.add(access);
-                }
-                
-                for (const created of childContext.created) {
-                    context.created.add(created);
-                }
-                
-                // Remove the child context
-                this._activeOperations.delete(childId);
-            }
-        }
-    }
-    
-    /**
-     * Set a value in cache with thread-safe dependency tracking
-     * @param {string} namespace - Cache namespace (e.g., 'sheets', 'inventory')
+     * Set a value in cache with dependency tracking
+     * @param {string} namespace - Cache namespace
      * @param {string} key - Cache key
      * @param {any} value - Value to store
      * @param {number} [expiration] - Expiration time in milliseconds
@@ -188,47 +96,9 @@ export class CacheManager {
     static set(namespace, key, value, expiration = this.DEFAULT_EXPIRATION, dependencies = [], trackingId = null) {
         if (!namespace || !key) return;
         
-        // Use the current tracking ID if not explicitly provided
-        trackingId = trackingId || this.getCurrentTrackingId();
-        
         const namespaceCache = this._getNamespace(namespace);
         const cacheKey = this._formatKey(key);
         
-        // Create mutex to prevent concurrent writes to the same key
-        const mutexKey = `${namespace}:::${cacheKey}`;
-        if (!this._cacheMutexes) this._cacheMutexes = new Map();
-        
-        // Simple mutex implementation
-        let mutex = this._cacheMutexes.get(mutexKey);
-        if (!mutex) {
-            mutex = { locked: false, queue: [] };
-            this._cacheMutexes.set(mutexKey, mutex);
-        }
-        
-        // Acquire mutex
-        if (mutex.locked) {
-            // Wait for mutex to be available
-            const waitPromise = new Promise(resolve => mutex.queue.push(resolve));
-            waitPromise.then(() => this._doSet(namespace, key, cacheKey, value, expiration, dependencies, trackingId, namespaceCache));
-            return;
-        }
-        
-        mutex.locked = true;
-        this._doSet(namespace, key, cacheKey, value, expiration, dependencies, trackingId, namespaceCache);
-        
-        // Release mutex
-        mutex.locked = false;
-        if (mutex.queue.length > 0) {
-            const next = mutex.queue.shift();
-            next();
-        }
-    }
-    
-    /**
-     * Actual set implementation (protected by mutex)
-     * @private
-     */
-    static _doSet(namespace, key, cacheKey, value, expiration, dependencies, trackingId, namespaceCache) {
         namespaceCache.set(cacheKey, {
             value,
             timestamp: Date.now(),
@@ -236,6 +106,7 @@ export class CacheManager {
         });
         
         // Register the entry in active operations if tracking
+        trackingId = trackingId || this.getCurrentTrackingId();
         if (trackingId && this._activeOperations.has(trackingId)) {
             this._activeOperations.get(trackingId).created.add(`${namespace}:::${cacheKey}`);
         }
@@ -252,7 +123,7 @@ export class CacheManager {
     }
     
     /**
-     * Get a value from cache with thread-safe dependency tracking
+     * Get a value from cache with dependency tracking
      * @param {string} namespace - Cache namespace
      * @param {string} key - Cache key
      * @param {string} [trackingId] - Optional tracking ID for automatic dependency detection
@@ -260,9 +131,6 @@ export class CacheManager {
      */
     static get(namespace, key, trackingId = null) {
         if (!namespace || !key) return null;
-        
-        // Use the current tracking ID if not explicitly provided
-        trackingId = trackingId || this.getCurrentTrackingId();
         
         const namespaceCache = this._getNamespace(namespace);
         const cacheKey = this._formatKey(key);
@@ -277,6 +145,7 @@ export class CacheManager {
         }
         
         // Register the access in active operations if tracking
+        trackingId = trackingId || this.getCurrentTrackingId();
         if (trackingId && this._activeOperations.has(trackingId)) {
             this._activeOperations.get(trackingId).accessed.add(`${namespace}:::${cacheKey}`);
         }
@@ -319,10 +188,7 @@ export class CacheManager {
         const namespaceCache = this._getNamespace(namespace);
         const cacheKey = this._formatKey(key);
         
-        // Remove the cache entry
         namespaceCache.delete(cacheKey);
-        
-        // Invalidate dependent caches
         this._invalidateDependents(namespace, cacheKey);
     }
     
@@ -337,7 +203,6 @@ export class CacheManager {
         const namespaceCache = this._getNamespace(namespace);
         const prefix = this._formatKey(keyPrefix);
         
-        // Collect keys to invalidate
         const keysToInvalidate = [];
         for (const key of namespaceCache.keys()) {
             if (key.startsWith(prefix)) {
@@ -345,7 +210,6 @@ export class CacheManager {
             }
         }
         
-        // Delete each key and its dependents
         for (const key of keysToInvalidate) {
             namespaceCache.delete(key);
             this._invalidateDependents(namespace, key);
@@ -360,59 +224,13 @@ export class CacheManager {
         if (!namespace) return;
         
         const namespaceCache = this._getNamespace(namespace);
-        
-        // Collect all keys to invalidate dependents
         const keys = [...namespaceCache.keys()];
         
-        // Clear the namespace
         namespaceCache.clear();
         
-        // Invalidate namespace-level dependents
         this._invalidateDependents(namespace, '*');
-        
-        // Invalidate key-level dependents
         for (const key of keys) {
             this._invalidateDependents(namespace, key);
-        }
-    }
-    
-    /**
-     * Invalidate all caches that depend on the given namespace and key
-     * @param {string} namespace - Dependency namespace
-     * @param {string} key - Dependency key
-     * @private
-     */
-    static _invalidateDependents(namespace, key) {
-        // Check if there are any dependents for this namespace
-        const nsMap = this._dependencyMap.get(namespace);
-        if (!nsMap) return;
-        
-        // Get dependents for this specific key
-        const keyDependents = nsMap.get(key) || [];
-        
-        // Also get namespace-level dependents
-        const namespaceDependents = nsMap.get('*') || [];
-        
-        // Combine dependents and remove duplicates
-        const allDependents = [...keyDependents, ...namespaceDependents];
-        
-        // Process each dependent, avoiding circular references
-        const processed = new Set();
-        for (const dep of allDependents) {
-            const depKey = `${dep.namespace}:${dep.key}`;
-            if (processed.has(depKey)) continue;
-            processed.add(depKey);
-            
-            // Get the dependent's namespace cache
-            const depNamespaceCache = this._getNamespace(dep.namespace);
-            
-            // Invalidate the dependent
-            if (depNamespaceCache.has(dep.key)) {
-                depNamespaceCache.delete(dep.key);
-                
-                // Recursively invalidate dependents of this dependent
-                this._invalidateDependents(dep.namespace, dep.key);
-            }
         }
     }
     
@@ -425,72 +243,110 @@ export class CacheManager {
     }
     
     /**
-     * Get statistics about cache usage and dependencies
-     * @returns {Object} Cache statistics
+     * Register explicit dependencies between cache entries
+     * @param {string} sourceNamespace - The namespace that other caches depend on
+     * @param {string} sourceKey - The key that other caches depend on
+     * @param {Array<{namespace: string, key: string}>} dependentCaches - Caches that depend on this entry
      */
-    static getStats() {
-        const stats = {
-            namespaces: [],
-            totalEntries: 0,
-            totalExpired: 0,
-            totalDependencies: 0
+    static registerDependencies(sourceNamespace, sourceKey, dependentCaches) {
+        if (!this._dependencyMap.has(sourceNamespace)) {
+            this._dependencyMap.set(sourceNamespace, new Map());
+        }
+        
+        const nsMap = this._dependencyMap.get(sourceNamespace);
+        const formattedKey = this._formatKey(sourceKey);
+        
+        if (!nsMap.has(formattedKey)) {
+            nsMap.set(formattedKey, []);
+        }
+        
+        const existingDeps = nsMap.get(formattedKey);
+        
+        for (const dep of dependentCaches) {
+            const exists = existingDeps.some(existing => 
+                existing.namespace === dep.namespace && existing.key === dep.key
+            );
+            
+            if (!exists) {
+                existingDeps.push({
+                    namespace: dep.namespace,
+                    key: this._formatKey(dep.key)
+                });
+            }
+        }
+    }
+    
+    /**
+     * Apply tracked dependencies to a cache entry
+     * @param {string} namespace - Target cache namespace
+     * @param {string} key - Target cache key
+     * @param {string} trackingId - The tracking ID with recorded dependencies
+     */
+    static applyTrackedDependencies(namespace, key, trackingId) {
+        const operation = this._activeOperations.get(trackingId);
+        if (!operation) return;
+        
+        const dependencies = [];
+        for (const access of operation.accessed) {
+            const [depNamespace, depKey] = access.split(':::');
+            dependencies.push({ namespace: depNamespace, key: depKey });
+        }
+        
+        if (dependencies.length > 0) {
+            for (const dep of dependencies) {
+                this.registerDependencies(dep.namespace, dep.key, [{ namespace, key }]);
+            }
+        }
+    }
+    
+    /**
+     * Wraps a method with automatic tracking
+     * @param {Function} method - The method to wrap
+     * @param {string} methodName - Name of the method for tracking ID
+     * @returns {Function} Wrapped method with automatic tracking
+     */
+    static withTracking(method, methodName) {
+        return async function(...args) {
+            const argsIdentifier = args.length > 0 
+                ? (typeof args[0] === 'string' ? args[0] : JSON.stringify(args.slice(0, 2)).substring(0, 20)) 
+                : 'noargs';
+            const trackingId = CacheManager.beginTracking(`${methodName}_${argsIdentifier}_${Date.now()}`);
+            
+            try {
+                return await method.apply(this, args);
+            } finally {
+                CacheManager.endTracking(trackingId);
+            }
         };
+    }
+    
+    /**
+     * Applies tracking to all methods of a class
+     * @param {Object} classObj - The class to apply tracking to
+     * @returns {Object} Class with tracked methods
+     */
+    static applyTracking(classObj) {
+        const TrackedClass = {};
         
-        for (const [namespace, cache] of this._cacheStore.entries()) {
-            let entries = 0;
-            let expired = 0;
-            
-            for (const [key, entry] of cache.entries()) {
-                entries++;
-                if (Date.now() - entry.timestamp > entry.expiration) {
-                    expired++;
-                }
-            }
-            
-            // Count dependencies for this namespace
-            let dependencies = 0;
-            const nsDepMap = this._dependencyMap.get(namespace);
-            if (nsDepMap) {
-                for (const deps of nsDepMap.values()) {
-                    dependencies += deps.length;
-                }
-            }
-            
-            stats.namespaces.push({
-                name: namespace,
-                entries,
-                expired,
-                dependencies
+        const methodNames = Object.getOwnPropertyNames(classObj)
+            .filter(name => {
+                return typeof classObj[name] === 'function' && 
+                       name !== 'constructor' &&
+                       name !== 'length' &&
+                       name !== 'prototype' &&
+                       name !== 'name';
             });
-            
-            stats.totalEntries += entries;
-            stats.totalExpired += expired;
-            stats.totalDependencies += dependencies;
+        
+        for (const methodName of methodNames) {
+            const originalMethod = classObj[methodName];
+            if (originalMethod.constructor.name === 'AsyncFunction') {
+                TrackedClass[methodName] = this.withTracking(originalMethod, methodName);
+            } else {
+                TrackedClass[methodName] = originalMethod;
+            }
         }
         
-        return stats;
-    }
-    
-    /**
-     * Get a namespace Map, creating it if it doesn't exist
-     * @private
-     */
-    static _getNamespace(namespace) {
-        if (!this._cacheStore.has(namespace)) {
-            this._cacheStore.set(namespace, new Map());
-        }
-        return this._cacheStore.get(namespace);
-    }
-    
-    /**
-     * Format a key to ensure it's a string
-     * @private
-     */
-    static _formatKey(key) {
-        if (typeof key === 'object') {
-            return JSON.stringify(key);
-        }
-        return String(key);
+        return TrackedClass;
     }
     
     /**
@@ -499,7 +355,6 @@ export class CacheManager {
      */
     static getDependencyMap() {
         return {
-            // Sheet data dependencies
             [this.NAMESPACES.SHEET_DATA]: {
                 affects: [
                     this.NAMESPACES.QUERY_RESULTS,
@@ -508,8 +363,6 @@ export class CacheManager {
                     this.NAMESPACES.PROD_SCHEDULE
                 ]
             },
-            
-            // Tab changes affect data queries and pack lists
             [this.NAMESPACES.SHEET_TABS]: {
                 affects: [
                     this.NAMESPACES.SHEET_DATA,
@@ -517,32 +370,58 @@ export class CacheManager {
                     this.NAMESPACES.PACK_LISTS
                 ]
             },
-            
-            // Production schedule affects pack lists and inventory
             [this.NAMESPACES.PROD_SCHEDULE]: {
-                affects: [
-                    this.NAMESPACES.PACK_LISTS,
-                    this.NAMESPACES.INVENTORY
-                ]
+                affects: [this.NAMESPACES.PACK_LISTS, this.NAMESPACES.INVENTORY]
             },
-            
-            // Pack list changes affect quantity checks
             [this.NAMESPACES.PACK_LISTS]: {
-                affects: [
-                    this.NAMESPACES.INVENTORY
-                ]
+                affects: [this.NAMESPACES.INVENTORY]
             },
-            
-            // Inventory changes affect quantity checks
             [this.NAMESPACES.INVENTORY]: {
                 affects: []
             }
         };
     }
+    
+    // Private helper methods
+    static _invalidateDependents(namespace, key) {
+        const nsMap = this._dependencyMap.get(namespace);
+        if (!nsMap) return;
+        
+        const keyDependents = nsMap.get(key) || [];
+        const namespaceDependents = nsMap.get('*') || [];
+        const allDependents = [...keyDependents, ...namespaceDependents];
+        
+        const processed = new Set();
+        for (const dep of allDependents) {
+            const depKey = `${dep.namespace}:${dep.key}`;
+            if (processed.has(depKey)) continue;
+            processed.add(depKey);
+            
+            const depNamespaceCache = this._getNamespace(dep.namespace);
+            if (depNamespaceCache.has(dep.key)) {
+                depNamespaceCache.delete(dep.key);
+                this._invalidateDependents(dep.namespace, dep.key);
+            }
+        }
+    }
+    
+    static _getNamespace(namespace) {
+        if (!this._cacheStore.has(namespace)) {
+            this._cacheStore.set(namespace, new Map());
+        }
+        return this._cacheStore.get(namespace);
+    }
+    
+    static _formatKey(key) {
+        if (typeof key === 'object') {
+            return JSON.stringify(key);
+        }
+        return String(key);
+    }
 }
 
 /**
- * Enhanced cache decorator with thread-safe dependency tracking
+ * Enhanced cache decorator with dependency tracking
  * @param {string} namespace - Cache namespace
  * @param {Function} keyGenerator - Function to generate cache key from arguments
  * @param {number} [expiration] - Cache expiration time in ms
@@ -557,17 +436,14 @@ export function cached(namespace, keyGenerator, expiration, explicitDependencies
             // Generate cache key
             const key = keyGenerator ? keyGenerator(...args) : args.join(':');
             
-            // Check cache first (don't track this access as a dependency)
+            // Check cache first
             const cachedValue = CacheManager.get(namespace, key);
             if (cachedValue !== null) {
                 return cachedValue;
             }
             
-            // Create a tracking ID specific to this method call
-            // Include a reference to the "this" context and args to make it more unique
-            const contextRef = this ? Object.prototype.toString.call(this) : 'global';
-            const argsRef = args.length > 0 ? JSON.stringify(args[0]).substring(0, 20) : 'noargs';
-            const trackingId = CacheManager.beginTracking(`${methodName}_${contextRef}_${argsRef}_${Date.now()}`);
+            // Create a tracking ID for this method call
+            const trackingId = CacheManager.beginTracking(`${methodName}_${Date.now()}`);
             
             try {
                 // Execute the original method, tracking all cache accesses
@@ -597,85 +473,7 @@ export function cached(namespace, keyGenerator, expiration, explicitDependencies
     };
 }
 
-/**
- * Wraps a method with automatic tracking
- * @param {Function} method - The method to wrap
- * @param {string} methodName - Name of the method for tracking ID
- * @returns {Function} Wrapped method with automatic tracking
- */
-export function withTracking(method, methodName) {
-    return async function(...args) {
-        // Generate a tracking ID based on the method name and arguments
-        const argsIdentifier = args.length > 0 
-            ? (typeof args[0] === 'string' ? args[0] : JSON.stringify(args.slice(0, 2)).substring(0, 20)) 
-            : 'noargs';
-        const trackingId = CacheManager.beginTracking(`${methodName}_${argsIdentifier}_${Date.now()}`);
-        
-        try {
-            // Call the original method with the tracking ID
-            return await method.apply(this, args);
-        } finally {
-            // Always end tracking, even if there's an error
-            CacheManager.endTracking(trackingId);
-        }
-    };
-}
-
-/**
- * Applies tracking to all methods of a class
- * @param {Object} classObj - The class to apply tracking to
- * @returns {Object} Class with tracked methods
- */
-export function applyTracking(classObj) {
-    // Create a new class that extends the original
-    const TrackedClass = {};
-    
-    // Get all static methods
-    const methodNames = Object.getOwnPropertyNames(classObj)
-        .filter(name => {
-            // Filter out non-methods
-            return typeof classObj[name] === 'function' && 
-                   name !== 'constructor' &&
-                   name !== 'length' &&
-                   name !== 'prototype' &&
-                   name !== 'name';
-        });
-    
-    // Wrap each method with tracking
-    for (const methodName of methodNames) {
-        const originalMethod = classObj[methodName];
-        // Check if the method is async
-        if (originalMethod.constructor.name === 'AsyncFunction') {
-            // For async methods, apply tracking wrapper
-            TrackedClass[methodName] = withTracking(originalMethod, methodName);
-        } else {
-            // For non-async methods, keep as is
-            TrackedClass[methodName] = originalMethod;
-        }
-    }
-    
-    return TrackedClass;
-}
-
-/**
- * Get currently active tracking ID (for manual dependency tracking)
- * @returns {string|null} Current tracking ID or null
- */
-export function getCurrentTrackingId() {
-    return CacheManager.getCurrentTrackingId();
-}
-
-/**
- * Record a cache access for dependency tracking
- * @param {string} namespace - Cache namespace
- * @param {string} key - Cache key
- * @param {string} trackingId - The tracking ID
- */
-export function trackCacheAccess(namespace, key, trackingId) {
-    if (!trackingId) return;
-    
-    const operation = CacheManager._activeOperations.get(trackingId);
-    if (operation) {
-        operation.accessed.add(`${namespace}:::${CacheManager._formatKey(key)}`);
-    }
-}
+// Export convenience functions that delegate to CacheManager
+export const applyTracking = (classObj) => CacheManager.applyTracking(classObj);
+export const withTracking = (method, methodName) => CacheManager.withTracking(method, methodName);
+export const getCurrentTrackingId = () => CacheManager.getCurrentTrackingId();

@@ -552,13 +552,31 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
+            // Handle range-based updates (like "A1:B1" with values array)
+            if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+                console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
+                
+                // Ensure the sheet exists in mock data
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+
+                const sheetData = this.mockData[tableId][tabName];
+                
+                // Replace/add rows starting from row 0
+                updates.forEach((rowData, rowIndex) => {
+                    sheetData[rowIndex] = [...rowData]; // Create a copy of the row data
+                });
+                
+                return true;
+            }
+            
             // Handle cell-by-cell updates
-            if (Array.isArray(updates)) {
+            if (Array.isArray(updates) && updates.length > 0 && updates[0].hasOwnProperty('row')) {
                 console.log(`FakeGoogleSheetsService: Applying ${updates.length} cell updates`);
                 
                 // Ensure the sheet exists in mock data
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
-                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [[]];
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
 
                 const sheetData = this.mockData[tableId][tabName];
                 
@@ -642,7 +660,6 @@ export class FakeGoogleSheetsService {
     }
 
     static async copySheetTab(tableId, sourceTab, newTabName) {
-        FakeGoogleSheetsService.initializeMockData();
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -653,24 +670,20 @@ export class FakeGoogleSheetsService {
 
         // Handle case where sourceTab is null or undefined
         if (!sourceTab || !sourceTab.title) {
-            console.warn(`FakeGoogleSheetsService: Source tab is null, creating empty tab ${newTabName}`);
-            
-            // Create an empty tab with basic structure
-            if (!this.mockData[tableId]) this.mockData[tableId] = {};
-            this.mockData[tableId][newTabName] = [
-                ['Key', 'Value', 'Timestamp'], // Default header for user data
-                // Empty data rows will be added as needed
-            ];
+            throw new Error('Source tab is required for copying');
+        }
+
+        // Ensure mock data structure exists
+        if (!this.mockData[tableId]) this.mockData[tableId] = {};
+
+        // Normal copy operation
+        if (this.mockData[tableId] && this.mockData[tableId][sourceTab.title]) {
+            this.mockData[tableId][newTabName] = JSON.parse(JSON.stringify(this.mockData[tableId][sourceTab.title]));
         } else {
-            // Normal copy operation
-            if (this.mockData[tableId] && this.mockData[tableId][sourceTab.title]) {
-                this.mockData[tableId][newTabName] = JSON.parse(JSON.stringify(this.mockData[tableId][sourceTab.title]));
-            } else {
-                console.warn(`FakeGoogleSheetsService: Source data not found for ${sourceTab.title}, creating empty tab`);
-                this.mockData[tableId][newTabName] = [
-                    ['Key', 'Value', 'Timestamp']
-                ];
-            }
+            console.warn(`FakeGoogleSheetsService: Source data not found for ${sourceTab.title}, creating empty tab`);
+            this.mockData[tableId][newTabName] = [
+                ['Key', 'Value', 'Timestamp']
+            ];
         }
 
         // Add new tab to tabs list
@@ -689,6 +702,41 @@ export class FakeGoogleSheetsService {
         }
 
         console.log(`FakeGoogleSheetsService: Successfully created tab ${newTabName}`);
+    }
+
+    static async createBlankTab(tableId, newTabName) {
+        await FakeGoogleSheetsAuth.checkAuth();
+
+        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+
+        console.log(`FakeGoogleSheetsService: Creating blank tab ${newTabName} in ${tableId}`);
+        await this.delay(150);
+
+        // Ensure mock data structure exists
+        if (!this.mockData[tableId]) this.mockData[tableId] = {};
+        
+        // Create empty tab with basic structure for user data
+        this.mockData[tableId][newTabName] = [
+            ['ID', 'Data1', 'Data2', 'Data3'] // Default headers for user data tabs
+        ];
+
+        // Add new tab to tabs list
+        if (this.mockTabs[tableId]) {
+            const newSheetId = Math.max(...this.mockTabs[tableId].map(t => t.sheetId)) + 1;
+            this.mockTabs[tableId].push({
+                title: newTabName,
+                sheetId: newSheetId
+            });
+        } else {
+            // Initialize tabs array if it doesn't exist
+            this.mockTabs[tableId] = [{
+                title: newTabName,
+                sheetId: 0
+            }];
+        }
+
+        console.log(`FakeGoogleSheetsService: Successfully created blank tab ${newTabName}`);
     }
 
     static async querySheetData(tableId, query) {

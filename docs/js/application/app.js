@@ -330,6 +330,8 @@ const App = {
                 console.log('Dashboard state saved successfully');
             } catch (error) {
                 console.warn('Failed to save dashboard state (continuing without saving):', error.message);
+                // Show a non-intrusive notification to the user
+                this.showAlert?.('Dashboard preferences could not be saved. Your changes will apply for this session only.', 'Warning');
                 // Don't throw the error - let the application continue functioning
                 // The dashboard state will still work in memory for the current session
             }

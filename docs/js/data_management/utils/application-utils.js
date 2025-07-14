@@ -21,12 +21,26 @@ export class ApplicationUtils {
             // Check if tab exists, create if not
             let userTab = await Database.findTabByName('CACHE', tabName, trackingId);
             if (!userTab) {
-                // Create new tab based on a template or with basic structure
-                await Database.createTab('CACHE', null, tabName);
+                // Try to find a template tab first, fallback to creating without template
+                let templateTab = await Database.findTabByName('CACHE', 'UserTemplate', trackingId);
                 
-                // Initialize with headers: ID, Data1, Data2, Data3, etc.
-                const headers = ['ID', ...data.map((_, index) => `Data${index + 1}`)];
-                await Database.setData('CACHE', `${tabName}!A1:${String.fromCharCode(64 + headers.length)}1`, [headers]);
+                if (templateTab) {
+                    // Create new tab based on template
+                    await Database.createTab('CACHE', templateTab, tabName);
+                } else {
+                    // Create new tab without template and initialize with headers
+                    await Database.createTab('CACHE', null, tabName);
+                    
+                    // Initialize with headers: ID, Data1, Data2, Data3, etc.
+                    const headers = ['ID', ...data.map((_, index) => `Data${index + 1}`)];
+                    await Database.setData('CACHE', `${tabName}!A1:${String.fromCharCode(64 + headers.length)}1`, [headers]);
+                }
+                
+                // Verify tab was created
+                userTab = await Database.findTabByName('CACHE', tabName, trackingId);
+                if (!userTab) {
+                    throw new Error(`Failed to create or find user tab: ${tabName}`);
+                }
             }
             
             // Get current tab data to find or create the row
@@ -53,7 +67,8 @@ export class ApplicationUtils {
             }
             
             // Clear cache for this tab to ensure fresh data on next read
-            Database.clearCache('CACHE', tabName);
+            CacheManager.invalidateByPrefix(CacheManager.NAMESPACES.SHEET_DATA, `CACHE:${tabName}`);
+            CacheManager.invalidate(CacheManager.NAMESPACES.SHEET_TABS, 'CACHE');
             
             return true;
         } catch (error) {
