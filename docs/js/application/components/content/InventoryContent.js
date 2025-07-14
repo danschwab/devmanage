@@ -111,16 +111,7 @@ const InventoryMenuComponent = {
             <ul style="list-style: none; padding: 0;">
                 <li v-for="item in menuItems" :key="item.action" style="margin-bottom: 5px;">
                     <button 
-                        @click="handleAction(item.action)"
-                        :style="{
-                            width: '100%',
-                            padding: '8px 12px',
-                            background: '#f5f5f5',
-                            border: '1px solid #ddd',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            textAlign: 'left'
-                        }">
+                        @click="handleAction(item.action)">
                         {{ item.label }}
                     </button>
                 </li>

@@ -6,9 +6,7 @@ import { Auth, authState } from './utils/auth.js';
 import { NavigationConfig } from './utils/navigation.js';
 import { html } from './utils/template-helpers.js';
 import { 
-    DashboardOverview, 
-    DashboardStats, 
-    DashboardActions, 
+    DashboardSettings, 
     PacklistContent, 
     InventoryContent, 
     InterfacesContent 
@@ -52,91 +50,6 @@ const SystemInfoComponent = {
     `
 };
 
-// Create combined menu components using standard Vue patterns
-const CombinedMenuComponent = {
-    props: {
-        containerPath: String,
-        title: String,
-        menuType: String
-    },
-    components: {
-        DashboardToggleComponent
-    },
-    inject: ['appContext'],
-    computed: {
-        currentView() {
-            if (this.containerPath) {
-                const segments = this.containerPath.split('/').filter(s => s.length > 0);
-                return segments[1] || 'main';
-            }
-            return 'main';
-        }
-    },
-    methods: {
-        handleInventoryAction(action) {
-            // Handle inventory-specific actions
-            this.appContext.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
-        }
-    },
-    template: html`
-        <div>
-            <!-- Dashboard Management Menu -->
-            <div v-if="menuType === 'dashboard-management'" style="text-align: left;">
-                <h4>Dashboard Management</h4>
-                <p><strong>Available Paths:</strong></p>
-                <div v-for="{ path, isAdded, displayName } in appContext.getAllPathsWithStatus()" :key="path">
-                    <button 
-                        @click="isAdded ? appContext.removeDashboardContainer(path) : appContext.addToDashboard(path, displayName)"
-                        :style="{
-                            margin: '5px',
-                            padding: '5px 10px',
-                            background: isAdded ? '#f44336' : '#4CAF50',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer'
-                        }">
-                        {{ isAdded ? 'Remove' : 'Add' }} {{ displayName }}
-                    </button>
-                    <br>
-                </div>
-            </div>
-            
-            <!-- Inventory Menu -->
-            <div v-else-if="menuType === 'inventory-menu'" style="text-align: left;">
-                <h4>Inventory Actions</h4>
-                <ul style="list-style: none; padding: 0;">
-                    <li style="margin-bottom: 5px;">
-                        <button 
-                            @click="handleInventoryAction('refresh')"
-                            style="width: 100%; padding: 8px 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; text-align: left;">
-                            Refresh Inventory
-                        </button>
-                    </li>
-                    <li style="margin-bottom: 5px;">
-                        <button 
-                            @click="handleInventoryAction('add')"
-                            style="width: 100%; padding: 8px 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; text-align: left;">
-                            Add New Item
-                        </button>
-                    </li>
-                </ul>
-                
-                <!-- Add dashboard toggle for inventory -->
-                <DashboardToggleComponent 
-                    :container-path="containerPath"
-                    :title="title" />
-            </div>
-            
-            <!-- Default Dashboard Toggle -->
-            <DashboardToggleComponent 
-                v-else
-                :container-path="containerPath"
-                :title="title" />
-        </div>
-    `
-};
-
 // Vue app with inline template
 const App = {
     components: {
@@ -144,15 +57,12 @@ const App = {
         'test-table': TestTableComponent,
         'app-modal': ModalComponent,
         'primary-nav': PrimaryNavComponent,
-        'dashboard-overview': DashboardOverview,
-        'dashboard-stats': DashboardStats,
-        'dashboard-actions': DashboardActions,
+        'dashboard-settings': DashboardSettings,
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
         'interfaces-content': InterfacesContent,
         AlertComponent,
         SystemInfoComponent,
-        CombinedMenuComponent,
         DashboardToggleComponent
     },
     provide() {
@@ -254,6 +164,17 @@ const App = {
             container.containerType = type;
             container.currentPage = this.currentPage;
             container.containerPath = options.containerPath || '';
+            
+            // Debug logging for dashboard-settings containers
+            if (type === 'dashboard-settings' || title.includes('Settings') || (options.containerPath && options.containerPath.includes('dashboard-settings'))) {
+                console.log('Adding dashboard-settings container:', {
+                    type,
+                    title,
+                    containerType: container.containerType,
+                    containerPath: container.containerPath,
+                    options
+                });
+            }
             
             this.containers.push(container);
             return container;
@@ -500,14 +421,6 @@ const App = {
                 componentProps = menuData.customComponent.props || {};
                 console.log('Using custom component:', modalComponent);
                 console.log('With props:', componentProps);
-            } else {
-                // Fallback to the combined menu component
-                modalComponent = CombinedMenuComponent;
-                componentProps = {
-                    containerPath: menuData.containerPath,
-                    title: menuData.title,
-                    menuType: menuData.menuType
-                };
             }
             
             const modal = this.addModal(
@@ -584,9 +497,9 @@ const App = {
                     :container-path="container.containerPath"
                     :navigation-map="container.navigationMap"
                     :card-style="currentPage === 'dashboard'"
-                    :show-close-button="container.containerType !== 'overview'"
+                    :show-close-button="container.containerType !== 'dashboard-settings'"
                     :show-hamburger-menu="true"
-                    :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'overview'"
+                    :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'dashboard-settings'"
                     :page-location="container.pageLocation"
                     :container-data="container"
                     :app-context="{ 
@@ -603,30 +516,16 @@ const App = {
                     @expand-container="expandContainer">
 
                     <template #content>
-                        <!-- Overview Content -->
-                        <dashboard-overview 
-                            v-if="container.containerType === 'overview'"
+                        <!-- dashboard-settings Content -->
+                        <dashboard-settings 
+                            v-if="container.containerType === 'dashboard-settings'"
                             :current-user="currentUser"
                             :get-all-paths-with-status="getAllPathsWithStatus"
                             :add-to-dashboard="addToDashboard"
                             :remove-dashboard-container="removeDashboardContainer"
-                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from overview:', $event); container.customHamburgerContent = $event; }"
-                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from overview:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
-                        </dashboard-overview>
-                        
-                        <!-- Stats Content -->
-                        <dashboard-stats 
-                            v-else-if="container.containerType === 'stats'">
-                        </dashboard-stats>
-                        
-                        <!-- Actions Content -->
-                        <dashboard-actions 
-                            v-else-if="container.containerType === 'actions'"
-                            :navigate-to-page="navigateToPage"
-                            :add-container="addContainer"
-                            :show-alert="showAlert"
-                            :show-confirm="showConfirm">
-                        </dashboard-actions>
+                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from settings:', $event); container.customHamburgerContent = $event; }"
+                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from settings:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
+                        </dashboard-settings>
                         
                         <!-- Packlist Content -->
                         <packlist-content 

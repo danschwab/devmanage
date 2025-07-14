@@ -88,21 +88,9 @@ export const DashboardToggleComponent = {
     },
     template: html`
         <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
-            <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
-            <p style="margin: 0 0 5px 0; font-size: 0.9em; color: #666;">
-                Current: {{ containerPath }}
-            </p>
             <button 
                 @click="toggleDashboardPresence"
-                :style="{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: isOnDashboard ? '#f44336' : '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: 'pointer'
-                }">
+                :class="{ 'red': isOnDashboard, 'green': !isOnDashboard }">
                 {{ isOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
             </button>
         </div>

@@ -7,10 +7,7 @@ export const NavigationConfig = {
 
     // Dynamic list of dashboard containers (now path-based)
     allDashboardContainers: [
-        { path: 'dashboard/overview', title: 'Overview' },
-        { path: 'dashboard/stats', title: 'Stats' },
-        { path: 'dashboard/actions', title: 'Actions' },
-        { path: 'inventory', title: 'Inventory' }
+        { path: 'dashboard/dashboard-settings', title: 'Dashboard Settings' }
     ],
 
     /**
@@ -61,9 +58,7 @@ export const NavigationConfig = {
         const segments = path.split('/').filter(segment => segment.length > 0);
         const names = {
             'dashboard': 'Dashboard',
-            'overview': 'Overview',
-            'stats': 'Stats',
-            'actions': 'Actions',
+            'dashboard-settings': 'Dashboard',
             'inventory': 'Inventory',
             'categories': 'Categories',
             'search': 'Search',
@@ -86,15 +81,7 @@ export const NavigationConfig = {
      */
     getAvailablePaths() {
         return [
-            'dashboard/overview',
-            'dashboard/stats', 
-            'dashboard/actions',
-            'inventory',
-            'inventory/categories',
-            'inventory/search',
-            'inventory/reports',
-            'packlist',
-            'interfaces'
+            'dashboard/dashboard-settings',
         ];
     },
 

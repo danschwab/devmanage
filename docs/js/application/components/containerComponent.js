@@ -1,6 +1,5 @@
 import { html } from '../utils/template-helpers.js';
 import { BreadcrumbComponent } from './navigation/breadcrumbComponent.js';
-import { DashboardManagement } from '../utils/DashboardManagement.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -136,6 +135,14 @@ export const ContainerComponent = {
         backButtonTitle() {
             // If we can go back, show "Go back"; otherwise show "Close"
             return this.canGoBack ? 'Go back' : 'Close';
+        },
+        shouldShowCloseButton() {
+            // Don't show close button for dashboard-settings containers
+            if (this.containerType === 'dashboard-settings') return false;
+            if (this.containerPath && this.containerPath.startsWith('dashboard-settings')) return false;
+            
+            // Use the showCloseButton prop for other containers
+            return this.showCloseButton;
         }
     },
     
@@ -223,7 +230,7 @@ export const ContainerComponent = {
         },
 
         createDashboardToggleComponent() {
-            if (this.containerType === 'overview') {
+            if (this.containerType === 'dashboard-settings') {
                 this.dashboardToggleComponent = null;
                 return;
             }
@@ -342,7 +349,7 @@ export const ContainerComponent = {
                     @navigation-mapping-added="onNavigationMappingAdded"
                     @navigate-to-path="onNavigateToPath" />
                 
-                <div v-if="shouldShowHamburgerMenu || showExpandButton || cardStyle || !cardStyle" class="header-buttons">
+                <div v-if="shouldShowHamburgerMenu || showExpandButton || shouldShowCloseButton || (!cardStyle && canGoBack)" class="header-buttons">
                     <button v-if="shouldShowHamburgerMenu" 
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
@@ -358,7 +365,7 @@ export const ContainerComponent = {
                         <span v-if="canGoBack" class="material-symbols-outlined">{{ backButtonIcon }}</span>
                         <span v-else>{{ backButtonIcon }}</span>
                     </button>
-                    <button v-if="cardStyle" 
+                    <button v-if="cardStyle && shouldShowCloseButton" 
                             class="button-symbol white" 
                             @click="closeContainer" 
                             title="Close">×</button>

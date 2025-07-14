@@ -54,15 +54,7 @@ const DashboardManagementComponent = {
             <div v-for="{ path, isAdded, displayName } in availablePaths" :key="path">
                 <button 
                     @click="isAdded ? handleRemovePath(path) : handleAddPath(path, displayName)"
-                    :style="{
-                        margin: '5px',
-                        padding: '5px 10px',
-                        background: isAdded ? '#f44336' : '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer'
-                    }">
+                    :class="{ 'red': isAdded, 'green': !isAdded }">
                     {{ isAdded ? 'Remove' : 'Add' }} {{ displayName }}
                 </button>
                 <br>
@@ -71,7 +63,7 @@ const DashboardManagementComponent = {
     `
 };
 
-export const DashboardOverview = {
+export const DashboardSettings = {
     components: {
         DashboardManagementComponent
     },
@@ -82,7 +74,7 @@ export const DashboardOverview = {
         removeDashboardContainer: Function
     },
     mounted() {
-        console.log('DashboardOverview mounted, emitting hamburger component');
+        console.log('DashboardSettings mounted, emitting hamburger component');
         this.emitHamburgerComponent();
     },
     methods: {
@@ -98,8 +90,8 @@ export const DashboardOverview = {
         }
     },
     template: html `
-        <div class="overview-content">
-            <p>Welcome to your overview, {{ currentUser?.name || 'User' }}!</p>
+        <div class="settings-content">
+            <p>Welcome to your settings, {{ currentUser?.name || 'User' }}!</p>
             <p>System Status: <span style="color: green;">Online</span></p>
             <p>Last Login: Today, 9:30 AM</p>
             <p>Active Sessions: 3</p>
