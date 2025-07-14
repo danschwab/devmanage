@@ -50,105 +50,6 @@ const SystemInfoComponent = {
     `
 };
 
-// Create a default hamburger menu component for dashboard cards
-const DefaultDashboardCardMenuComponent = {
-    props: {
-        containerType: String,
-        isOnDashboard: Boolean,
-        addToDashboard: Function,
-        removeDashboardContainer: Function
-    },
-    data() {
-        return {
-            localIsOnDashboard: this.isOnDashboard
-        };
-    },
-    watch: {
-        isOnDashboard(newVal) {
-            this.localIsOnDashboard = newVal;
-        }
-    },
-    methods: {
-        toggleDashboardPresence() {
-            if (this.localIsOnDashboard) {
-                this.removeDashboardContainer?.(this.containerType);
-                this.localIsOnDashboard = false;
-            } else {
-                this.addToDashboard?.(this.containerType);
-                this.localIsOnDashboard = true;
-            }
-        }
-    },
-    template: html`
-        <div style="text-align: left;">
-            <h4>Dashboard Options</h4>
-            <button 
-                @click="toggleDashboardPresence"
-                :style="{
-                    margin: '5px',
-                    padding: '8px 12px',
-                    background: localIsOnDashboard ? '#f44336' : '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: 'pointer',
-                    width: '100%'
-                }">
-                {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
-            </button>
-        </div>
-    `
-};
-
-// Dashboard toggle button component (for adding to custom menus)
-const DashboardToggleButtonComponent = {
-    props: {
-        containerType: String,
-        isOnDashboard: Boolean,
-        addToDashboard: Function,
-        removeDashboardContainer: Function
-    },
-    data() {
-        return {
-            localIsOnDashboard: this.isOnDashboard
-        };
-    },
-    watch: {
-        isOnDashboard(newVal) {
-            this.localIsOnDashboard = newVal;
-        }
-    },
-    methods: {
-        toggleDashboardPresence() {
-            if (this.localIsOnDashboard) {
-                this.removeDashboardContainer?.(this.containerType);
-                this.localIsOnDashboard = false;
-            } else {
-                this.addToDashboard?.(this.containerType);
-                this.localIsOnDashboard = true;
-            }
-        }
-    },
-    template: html`
-        <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
-            <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
-            <button 
-                @click="toggleDashboardPresence"
-                :style="{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: localIsOnDashboard ? '#f44336' : '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: 'pointer'
-                }">
-                {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
-            </button>
-        </div>
-    `
-};
-
 // Vue app with inline template
 const App = {
     components: {
@@ -163,9 +64,7 @@ const App = {
         'inventory-content': InventoryContent,
         'interfaces-content': InterfacesContent,
         AlertComponent,
-        SystemInfoComponent,
-        DefaultDashboardCardMenuComponent,
-        DashboardToggleButtonComponent
+        SystemInfoComponent
     },
     data() {
         return {
@@ -511,43 +410,7 @@ const App = {
             
             // Add to container manager's global map
             containerManager.addGlobalNavigationMapping(segmentId, displayName);
-        },
-        /**
-         * Get default hamburger component for dashboard cards
-         * @param {Object} container - Container object
-         * @returns {Object} Default hamburger component data
-         */
-        getDefaultHamburgerComponent(container) {
-            // For overview, return null (it provides its own component)
-            if (container.containerType === 'overview') {
-                return null;
-            }
-            
-            // For all other containers, provide default dashboard toggle
-            return {
-                component: DefaultDashboardCardMenuComponent,
-                props: {
-                    containerType: container.containerType,
-                    isOnDashboard: this.dashboardContainers.some(dc => dc.type === container.containerType),
-                    addToDashboard: this.addToDashboard,
-                    removeDashboardContainer: this.removeDashboardContainer
-                }
-            };
-        },
-
-        /**
-         * Get dashboard toggle props for a container
-         * @param {Object} container - Container object
-         * @returns {Object} Dashboard toggle props
-         */
-        getDashboardToggleProps(container) {
-            return {
-                containerType: container.containerType,
-                isOnDashboard: this.dashboardContainers.some(dc => dc.type === container.containerType),
-                addToDashboard: this.addToDashboard,
-                removeDashboardContainer: this.removeDashboardContainer
-            };
-        },
+        }
     },
     template: html `
         <div id="app">
@@ -587,7 +450,12 @@ const App = {
                     :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'overview'"
                     :page-location="container.pageLocation"
                     :container-data="container"
-                    :hamburger-component-data="container.customHamburgerComponent || getDefaultHamburgerComponent(container)"
+                    :app-context="{ 
+                        addToDashboard, 
+                        removeDashboardContainer, 
+                        dashboardContainers,
+                        showAlert
+                    }"
                     @close-container="removeContainer"
                     @navigate-back="handleNavigateBack"
                     @navigate-to-path="handleNavigateToPath"
@@ -635,9 +503,16 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
-                            :dashboard-toggle-props="getDashboardToggleProps(container)"
-                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from inventory:', $event); container.customHamburgerContent = $event; }"
-                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from inventory:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
+                            @custom-hamburger-component="$event => { 
+                                console.log('App: Received custom-hamburger-component from inventory:', $event);
+                                const containerRef = $refs['container-' + container.id];
+                                if (containerRef && containerRef.length > 0) {
+                                    console.log('App: Calling onCustomHamburgerComponent on container');
+                                    containerRef[0].onCustomHamburgerComponent($event);
+                                } else {
+                                    console.error('App: Could not find container ref for', container.id);
+                                }
+                            }">
                         </inventory-content>
                         
                         <!-- Interfaces Content -->

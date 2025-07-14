@@ -1,28 +1,11 @@
 import { TestTableComponent } from '../testTableComponent.js';
 import { html } from '../../utils/template-helpers.js';
 
-// Inventory Hamburger Menu Component (reactive)
+// Inventory Hamburger Menu Component (content only)
 const InventoryMenuComponent = {
     props: {
         currentView: String,
-        showAlert: Function,
-        addInventoryItem: Function,
-        refreshInventory: Function,
-        // Dashboard toggle props
-        containerType: String,
-        isOnDashboard: Boolean,
-        addToDashboard: Function,
-        removeDashboardContainer: Function
-    },
-    data() {
-        return {
-            localIsOnDashboard: this.isOnDashboard
-        };
-    },
-    watch: {
-        isOnDashboard(newVal) {
-            this.localIsOnDashboard = newVal;
-        }
+        showAlert: Function
     },
     computed: {
         menuItems() {
@@ -120,15 +103,6 @@ const InventoryMenuComponent = {
                 default:
                     this.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
             }
-        },
-        toggleDashboardPresence() {
-            if (this.localIsOnDashboard) {
-                this.removeDashboardContainer?.(this.containerType);
-                this.localIsOnDashboard = false;
-            } else {
-                this.addToDashboard?.(this.containerType);
-                this.localIsOnDashboard = true;
-            }
         }
     },
     template: html`
@@ -151,32 +125,13 @@ const InventoryMenuComponent = {
                     </button>
                 </li>
             </ul>
-            
-            <!-- Dashboard Toggle Section -->
-            <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
-                <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
-                <button 
-                    @click="toggleDashboardPresence"
-                    :style="{
-                        width: '100%',
-                        padding: '8px 12px',
-                        background: localIsOnDashboard ? '#f44336' : '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer'
-                    }">
-                    {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
-                </button>
-            </div>
         </div>
     `
 };
 
 export const InventoryContent = {
     components: {
-        'test-table': TestTableComponent,
-        InventoryMenuComponent
+        'test-table': TestTableComponent
     },
     props: {
         showAlert: Function,
@@ -184,11 +139,7 @@ export const InventoryContent = {
             type: String,
             default: 'inventory'
         },
-        navigateToPath: Function,
-        dashboardToggleProps: {
-            type: Object,
-            default: () => ({})
-        }
+        navigateToPath: Function
     },
     computed: {
         pathSegments() {
@@ -202,11 +153,10 @@ export const InventoryContent = {
         }
     },
     mounted() {
-        // Emit the reactive menu component instead of static HTML
+        // Emit only the inventory-specific menu component
         this.updateHamburgerMenuComponent();
     },
     watch: {
-        // Watch for changes in current view and emit updated hamburger component
         currentView() {
             this.updateHamburgerMenuComponent();
         }
@@ -217,19 +167,12 @@ export const InventoryContent = {
                 component: InventoryMenuComponent,
                 props: {
                     currentView: this.currentView,
-                    showAlert: this.showAlert,
-                    // Add dashboard toggle props from parent
-                    containerType: this.dashboardToggleProps.containerType || 'inventory',
-                    isOnDashboard: this.dashboardToggleProps.isOnDashboard || false,
-                    addToDashboard: this.dashboardToggleProps.addToDashboard,
-                    removeDashboardContainer: this.dashboardToggleProps.removeDashboardContainer
+                    showAlert: this.showAlert
                 }
             };
             
             console.log('InventoryContent: Emitting custom-hamburger-component with:', componentData);
             console.log('Current view:', this.currentView);
-            console.log('Dashboard toggle props:', this.dashboardToggleProps);
-            
             this.$emit('custom-hamburger-component', componentData);
         },
         navigateToView(viewName) {

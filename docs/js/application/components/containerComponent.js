@@ -1,5 +1,6 @@
 import { html } from '../utils/template-helpers.js';
 import { BreadcrumbComponent } from './navigation/breadcrumbComponent.js';
+import { DashboardManagement } from '../utils/DashboardManagement.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -58,6 +59,10 @@ export const ContainerComponent = {
         hamburgerComponentData: {
             type: Object,
             default: null
+        },
+        appContext: {
+            type: Object,
+            default: () => ({})
         }
     },
     data() {
@@ -71,12 +76,16 @@ export const ContainerComponent = {
             // Local navigation map that can be extended at runtime
             localNavigationMap: {},
             // Only store custom hamburger component from child components
-            customHamburgerComponent: null
+            customHamburgerComponent: null,
+            dashboardToggleComponent: null
         };
     },
     mounted() {
         // Container component is now ready
         // Breadcrumb navigation is handled by the BreadcrumbComponent
+
+        // Create dashboard toggle component for this container
+        this.createDashboardToggleComponent();
     },
     computed: {
         canGoBack() {
@@ -98,10 +107,36 @@ export const ContainerComponent = {
             if (pathSegments.length <= 1) return '';
             return pathSegments.slice(0, -1).join('/');
         },
-        // Show hamburger menu only if there's a custom component available
+        // Show hamburger menu if there's any component available OR if we have dashboard toggle
         shouldShowHamburgerMenu() {
-            const hasComponent = this.customHamburgerComponent || this.hamburgerComponentData;
-            return this.showHamburgerMenu && hasComponent;
+            const hasCustomComponent = this.customHamburgerComponent || this.hamburgerComponentData;
+            const hasDashboardToggle = this.dashboardToggleComponent;
+            const hasCombinedComponent = this.combinedHamburgerComponent;
+            
+            return this.showHamburgerMenu && (hasCustomComponent || hasDashboardToggle || hasCombinedComponent);
+        },
+        // Combine custom menu with dashboard toggle
+        combinedHamburgerComponent() {
+            if (!this.customHamburgerComponent && !this.dashboardToggleComponent) {
+                return null;
+            }
+            
+            // If only dashboard toggle, return it
+            if (!this.customHamburgerComponent && this.dashboardToggleComponent) {
+                return this.dashboardToggleComponent;
+            }
+            
+            // If only custom component and no dashboard toggle needed (overview), return custom
+            if (this.customHamburgerComponent && !this.dashboardToggleComponent) {
+                return this.customHamburgerComponent;
+            }
+            
+            // Combine both custom content and dashboard toggle
+            if (this.customHamburgerComponent && this.dashboardToggleComponent) {
+                return this.createCombinedComponent();
+            }
+            
+            return null;
         }
     },
     watch: {
@@ -135,26 +170,26 @@ export const ContainerComponent = {
         openHamburgerMenu() {
             console.log('ContainerComponent: openHamburgerMenu called');
             console.log('customHamburgerComponent:', this.customHamburgerComponent);
+            console.log('dashboardToggleComponent:', this.dashboardToggleComponent);
+            console.log('combinedHamburgerComponent:', this.combinedHamburgerComponent);
             console.log('hamburgerComponentData prop:', this.hamburgerComponentData);
-            console.log('showHamburgerMenu prop:', this.showHamburgerMenu);
             
-            // Use prop data or internal data
-            const componentData = this.hamburgerComponentData || this.customHamburgerComponent;
+            // Priority: hamburgerComponentData (passed from parent) > combinedHamburgerComponent (internal)
+            const componentData = this.hamburgerComponentData || this.combinedHamburgerComponent;
             
-            // Only emit if we have a custom component
             if (componentData) {
                 const menuData = {
                     containerId: this.containerId,
                     title: `${this.title} Menu`,
                     component: componentData.component,
-                    componentProps: componentData.props,
+                    componentProps: componentData.props || {},
                     containerType: this.containerType
                 };
                 
                 console.log('ContainerComponent: Emitting show-hamburger-menu with:', menuData);
                 this.$emit('show-hamburger-menu', menuData);
             } else {
-                console.log('ContainerComponent: No custom hamburger component available');
+                console.log('ContainerComponent: No hamburger component available');
             }
         },
         // Handle custom hamburger component from child components
@@ -165,7 +200,67 @@ export const ContainerComponent = {
             this.customHamburgerComponent = componentData;
             
             console.log('ContainerComponent: Stored customHamburgerComponent:', this.customHamburgerComponent);
-            console.log('shouldShowHamburgerMenu will be:', this.showHamburgerMenu && this.customHamburgerComponent);
+            console.log('Current dashboardToggleComponent:', this.dashboardToggleComponent);
+            console.log('Combined component will be:', this.combinedHamburgerComponent);
+            console.log('shouldShowHamburgerMenu will be:', this.shouldShowHamburgerMenu);
+            
+            // Force update to trigger reactivity
+            this.$forceUpdate();
+        },
+
+        createDashboardToggleComponent() {
+            // Don't create dashboard toggle for overview containers
+            if (this.containerType === 'overview') {
+                this.dashboardToggleComponent = null;
+                console.log('Skipping dashboard toggle for overview container');
+                return;
+            }
+            
+            try {
+                const containerPath = this.containerPath || this.containerType;
+                this.dashboardToggleComponent = {
+                    component: DashboardManagement.createDashboardToggleComponent(
+                        this.containerType,
+                        containerPath,
+                        this.appContext
+                    ),
+                    props: {}
+                };
+                
+                console.log('Created dashboard toggle component for:', this.containerType, this.dashboardToggleComponent);
+            } catch (error) {
+                console.error('Error creating dashboard toggle component:', error);
+                this.dashboardToggleComponent = null;
+            }
+        },
+
+        createCombinedComponent() {
+            const customComponent = this.customHamburgerComponent.component;
+            const dashboardComponent = this.dashboardToggleComponent.component;
+            const customProps = this.customHamburgerComponent.props || {};
+            const dashboardProps = this.dashboardToggleComponent.props || {};
+            
+            return {
+                component: {
+                    components: {
+                        CustomContent: customComponent,
+                        DashboardToggle: dashboardComponent
+                    },
+                    data() {
+                        return {
+                            customProps: customProps,
+                            dashboardProps: dashboardProps
+                        };
+                    },
+                    template: html`
+                        <div>
+                            <CustomContent v-bind="customProps" />
+                            <DashboardToggle v-bind="dashboardProps" />
+                        </div>
+                    `
+                },
+                props: {}
+            };
         },
 
         expandContainer() {
