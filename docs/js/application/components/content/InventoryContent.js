@@ -1,9 +1,182 @@
 import { TestTableComponent } from '../testTableComponent.js';
 import { html } from '../../utils/template-helpers.js';
 
+// Inventory Hamburger Menu Component (reactive)
+const InventoryMenuComponent = {
+    props: {
+        currentView: String,
+        showAlert: Function,
+        addInventoryItem: Function,
+        refreshInventory: Function,
+        // Dashboard toggle props
+        containerType: String,
+        isOnDashboard: Boolean,
+        addToDashboard: Function,
+        removeDashboardContainer: Function
+    },
+    data() {
+        return {
+            localIsOnDashboard: this.isOnDashboard
+        };
+    },
+    watch: {
+        isOnDashboard(newVal) {
+            this.localIsOnDashboard = newVal;
+        }
+    },
+    computed: {
+        menuItems() {
+            switch (this.currentView) {
+                case 'main':
+                    return [
+                        { label: 'Refresh Inventory', action: 'refreshInventory' },
+                        { label: 'Add New Item', action: 'addInventoryItem' },
+                        { label: 'Export All Items', action: 'exportInventory' },
+                        { label: 'Inventory Settings', action: 'inventorySettings' }
+                    ];
+                case 'categories':
+                    return [
+                        { label: 'Add New Category', action: 'addNewCategory' },
+                        { label: 'Manage Category Order', action: 'manageCategoryOrder' },
+                        { label: 'Export Category Report', action: 'exportCategoryReport' },
+                        { label: 'Category Settings', action: 'categorySettings' }
+                    ];
+                case 'search':
+                    return [
+                        { label: 'Save Search Criteria', action: 'saveSearchCriteria' },
+                        { label: 'Load Saved Search', action: 'loadSavedSearch' },
+                        { label: 'Export Search Results', action: 'exportSearchResults' },
+                        { label: 'Clear Search History', action: 'clearSearchHistory' }
+                    ];
+                case 'reports':
+                    return [
+                        { label: 'Schedule Automatic Reports', action: 'scheduleReport' },
+                        { label: 'Custom Report Builder', action: 'customReportBuilder' },
+                        { label: 'Email Reports', action: 'emailReports' },
+                        { label: 'Report Settings', action: 'reportSettings' }
+                    ];
+                default:
+                    return [
+                        { label: 'Refresh', action: 'refreshInventory' },
+                        { label: 'Help', action: 'inventoryHelp' }
+                    ];
+            }
+        }
+    },
+    methods: {
+        handleAction(action) {
+            switch (action) {
+                case 'refreshInventory':
+                    this.showAlert?.('Refreshing inventory...', 'Info');
+                    break;
+                case 'addInventoryItem':
+                    this.showAlert?.('Add new item functionality coming soon!', 'Info');
+                    break;
+                case 'exportInventory':
+                    this.showAlert?.('Export all items functionality coming soon!', 'Info');
+                    break;
+                case 'inventorySettings':
+                    this.showAlert?.('Inventory settings functionality coming soon!', 'Info');
+                    break;
+                case 'addNewCategory':
+                    this.showAlert?.('Add new category functionality coming soon!', 'Info');
+                    break;
+                case 'manageCategoryOrder':
+                    this.showAlert?.('Manage category order functionality coming soon!', 'Info');
+                    break;
+                case 'exportCategoryReport':
+                    this.showAlert?.('Export category report functionality coming soon!', 'Info');
+                    break;
+                case 'categorySettings':
+                    this.showAlert?.('Category settings functionality coming soon!', 'Info');
+                    break;
+                case 'saveSearchCriteria':
+                    this.showAlert?.('Save search criteria functionality coming soon!', 'Info');
+                    break;
+                case 'loadSavedSearch':
+                    this.showAlert?.('Load saved search functionality coming soon!', 'Info');
+                    break;
+                case 'exportSearchResults':
+                    this.showAlert?.('Export search results functionality coming soon!', 'Info');
+                    break;
+                case 'clearSearchHistory':
+                    this.showAlert?.('Clear search history functionality coming soon!', 'Info');
+                    break;
+                case 'scheduleReport':
+                    this.showAlert?.('Schedule automatic reports functionality coming soon!', 'Info');
+                    break;
+                case 'customReportBuilder':
+                    this.showAlert?.('Custom report builder functionality coming soon!', 'Info');
+                    break;
+                case 'emailReports':
+                    this.showAlert?.('Email reports functionality coming soon!', 'Info');
+                    break;
+                case 'reportSettings':
+                    this.showAlert?.('Report settings functionality coming soon!', 'Info');
+                    break;
+                case 'inventoryHelp':
+                    this.showAlert?.('Inventory help functionality coming soon!', 'Info');
+                    break;
+                default:
+                    this.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
+            }
+        },
+        toggleDashboardPresence() {
+            if (this.localIsOnDashboard) {
+                this.removeDashboardContainer?.(this.containerType);
+                this.localIsOnDashboard = false;
+            } else {
+                this.addToDashboard?.(this.containerType);
+                this.localIsOnDashboard = true;
+            }
+        }
+    },
+    template: html`
+        <div style="text-align: left;">
+            <h4>Inventory Actions</h4>
+            <ul style="list-style: none; padding: 0;">
+                <li v-for="item in menuItems" :key="item.action" style="margin-bottom: 5px;">
+                    <button 
+                        @click="handleAction(item.action)"
+                        :style="{
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: '#f5f5f5',
+                            border: '1px solid #ddd',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                        }">
+                        {{ item.label }}
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- Dashboard Toggle Section -->
+            <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
+                <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
+                <button 
+                    @click="toggleDashboardPresence"
+                    :style="{
+                        width: '100%',
+                        padding: '8px 12px',
+                        background: localIsOnDashboard ? '#f44336' : '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer'
+                    }">
+                    {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
+                </button>
+            </div>
+        </div>
+    `
+};
+
 export const InventoryContent = {
     components: {
-        'test-table': TestTableComponent
+        'test-table': TestTableComponent,
+        InventoryMenuComponent
     },
     props: {
         showAlert: Function,
@@ -11,7 +184,11 @@ export const InventoryContent = {
             type: String,
             default: 'inventory'
         },
-        navigateToPath: Function
+        navigateToPath: Function,
+        dashboardToggleProps: {
+            type: Object,
+            default: () => ({})
+        }
     },
     computed: {
         pathSegments() {
@@ -22,66 +199,39 @@ export const InventoryContent = {
         },
         currentCategory() {
             return this.pathSegments[2] || '';
-        },
-        customHamburgerContent() {
-            switch (this.currentView) {
-                case 'main':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshInventory()">Refresh Inventory</button></li>
-                            <li><button onclick="window.vueApp.addInventoryItem()">Add New Item</button></li>
-                            <li><button onclick="window.vueApp.exportInventory()">Export All Items</button></li>
-                            <li><button onclick="window.vueApp.inventorySettings()">Inventory Settings</button></li>
-                        </ul>
-                    `;
-                case 'categories':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.addNewCategory()">Add New Category</button></li>
-                            <li><button onclick="window.vueApp.manageCategoryOrder()">Manage Category Order</button></li>
-                            <li><button onclick="window.vueApp.exportCategoryReport()">Export Category Report</button></li>
-                            <li><button onclick="window.vueApp.categorySettings()">Category Settings</button></li>
-                        </ul>
-                    `;
-                case 'search':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.saveSearchCriteria()">Save Search Criteria</button></li>
-                            <li><button onclick="window.vueApp.loadSavedSearch()">Load Saved Search</button></li>
-                            <li><button onclick="window.vueApp.exportSearchResults()">Export Search Results</button></li>
-                            <li><button onclick="window.vueApp.clearSearchHistory()">Clear Search History</button></li>
-                        </ul>
-                    `;
-                case 'reports':
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.scheduleReport()">Schedule Automatic Reports</button></li>
-                            <li><button onclick="window.vueApp.customReportBuilder()">Custom Report Builder</button></li>
-                            <li><button onclick="window.vueApp.emailReports()">Email Reports</button></li>
-                            <li><button onclick="window.vueApp.reportSettings()">Report Settings</button></li>
-                        </ul>
-                    `;
-                default:
-                    return `
-                        <ul style="list-style: none; padding: 0;">
-                            <li><button onclick="window.vueApp.refreshInventory()">Refresh</button></li>
-                            <li><button onclick="window.vueApp.inventoryHelp()">Help</button></li>
-                        </ul>
-                    `;
-            }
         }
     },
     mounted() {
-        // Emit custom hamburger content on mount
-        this.$emit('custom-hamburger-content', this.customHamburgerContent);
+        // Emit the reactive menu component instead of static HTML
+        this.updateHamburgerMenuComponent();
     },
     watch: {
-        // Watch for changes in current view and emit updated hamburger content
+        // Watch for changes in current view and emit updated hamburger component
         currentView() {
-            this.$emit('custom-hamburger-content', this.customHamburgerContent);
+            this.updateHamburgerMenuComponent();
         }
     },
     methods: {
+        updateHamburgerMenuComponent() {
+            const componentData = {
+                component: InventoryMenuComponent,
+                props: {
+                    currentView: this.currentView,
+                    showAlert: this.showAlert,
+                    // Add dashboard toggle props from parent
+                    containerType: this.dashboardToggleProps.containerType || 'inventory',
+                    isOnDashboard: this.dashboardToggleProps.isOnDashboard || false,
+                    addToDashboard: this.dashboardToggleProps.addToDashboard,
+                    removeDashboardContainer: this.dashboardToggleProps.removeDashboardContainer
+                }
+            };
+            
+            console.log('InventoryContent: Emitting custom-hamburger-component with:', componentData);
+            console.log('Current view:', this.currentView);
+            console.log('Dashboard toggle props:', this.dashboardToggleProps);
+            
+            this.$emit('custom-hamburger-component', componentData);
+        },
         navigateToView(viewName) {
             if (this.navigateToPath) {
                 this.navigateToPath(`inventory/${viewName}`);

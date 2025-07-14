@@ -5,21 +5,64 @@ export const NavigationConfig = {
     // Primary navigation items (just IDs)
     navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
 
+    // Dynamic list of dashboard containers (component, location pairs)
+    allDashboardContainers: [
+        { type: 'overview', containerPath: 'dashboard/overview' },
+        { type: 'stats', containerPath: 'dashboard/stats' },
+        { type: 'actions', containerPath: 'dashboard/actions' },
+        { type: 'inventory', containerPath: 'inventory' }
+    ],
+
     /**
-     * Get container configurations for a specific page
-     * @param {string} pageFile - The page identifier
-     * @returns {Array} Array of container configurations
+     * Add a dashboard container
+     * @param {string} containerType - The container type to add
+     * @param {string} containerPath - The container path
      */
-    getContainersForPage(pageFile) {
-        if (pageFile === 'dashboard') {
-            return [
-                { type: 'overview', containerPath: 'dashboard/overview' },
-                { type: 'stats', containerPath: 'dashboard/stats' },
-                { type: 'actions', containerPath: 'dashboard/actions' },
-                { type: 'inventory', containerPath: 'inventory' }
-            ];
+    addDashboardContainer(containerType, containerPath) {
+        // Check if container already exists
+        const exists = this.allDashboardContainers.some(container => 
+            container.type === containerType && container.containerPath === containerPath
+        );
+        
+        if (!exists) {
+            this.allDashboardContainers.push({ type: containerType, containerPath: containerPath });
         }
-        return [{ type: pageFile, containerPath: pageFile }];
+    },
+
+    /**
+     * Remove a dashboard container
+     * @param {string} containerType - The container type to remove
+     */
+    removeDashboardContainer(containerType) {
+        this.allDashboardContainers = this.allDashboardContainers.filter(container => 
+            container.type !== containerType
+        );
+    },
+
+    /**
+     * Check if a dashboard container exists
+     * @param {string} containerType - The container type to check
+     * @returns {boolean} Whether the container exists
+     */
+    hasDashboardContainer(containerType) {
+        return this.allDashboardContainers.some(container => container.type === containerType);
+    },
+
+    /**
+     * Get all available container types that can be added to dashboard
+     * @returns {Array} Array of available container types
+     */
+    getAvailableContainerTypes() {
+        return ['overview', 'stats', 'actions', 'inventory', 'packlist', 'interfaces'];
+    },
+
+    /**
+     * Get container types not currently on dashboard
+     * @returns {Array} Array of container types that can be added
+     */
+    getAddableContainerTypes() {
+        const currentTypes = this.allDashboardContainers.map(container => container.type);
+        return this.getAvailableContainerTypes().filter(type => !currentTypes.includes(type));
     },
 
     /**
@@ -37,11 +80,18 @@ export const NavigationConfig = {
             };
         }
 
-        const containers = this.getContainersForPage(pageFile);
+        // Get container configurations based on page type
+        let containerConfigs;
+        if (pageFile === 'dashboard') {
+            // Return copy of current dashboard containers
+            containerConfigs = [...this.allDashboardContainers];
+        } else {
+            containerConfigs = [{ type: pageFile, containerPath: pageFile }];
+        }
         
         return {
             page: pageFile,
-            containers: containers.map(config => ({
+            containers: containerConfigs.map(config => ({
                 ...config,
                 title: config.title || '',
                 options: {

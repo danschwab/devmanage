@@ -77,7 +77,7 @@ export const PrimaryNavComponent = {
                     </button>
                 </span>
                 
-                <button class="button-symbol gray" @click="toggleMenu">
+                <button class="button-symbol white" @click="toggleMenu">
                     {{ isMenuOpen ? '×' : '≡' }}
                 </button>
             </nav>

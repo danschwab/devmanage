@@ -385,7 +385,7 @@ button:hover {
     z-index: 1000;
 }
 
-.modal {
+.modal-overlay {
     position: fixed; /* Stay in place */
     z-index: 1000; /* Sit on top */
     left: 0;
@@ -400,18 +400,18 @@ button:hover {
     /* Ensure transitions work properly */
     opacity: 1;
 }
-.modal-content {
+.modal {
     background-color: var(--background-color);
     margin: 15% auto 0 auto; /* 15% from the top and centered */
     border: 1px solid var(--color-border);
-    width: 50%; /* Could be more or less, depending on screen size */
-    min-width: 300px;
-    max-width: 500px;
+    width: 80%; /* Could be more or less, depending on screen size */
+    min-width: 250px;
+    max-width: var(--page-width-card);
     box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: var(--radius-lg);
     overflow: hidden;
 }
-.modal-content:has(.modal-header) {
+.modal:has(.modal-header) {
     padding-top: 0px;
 }
 .modal-header {
@@ -430,27 +430,39 @@ button:hover {
     width: 100%;
     text-align: center;
 }
-.modal-close {
+.close-button {
     /*transform: translateX(80%);*/
+    background-color: transparent;
+    display: block;
+    color: var(--color-text-light);
     width: 16px;
+    padding:0;
     height: 16px;
-    line-height: 18px;
+    line-height: 16px;
+    box-shadow: none;
+    min-width: 16px;
     text-align: center;
     justify-content: center;
     border-radius: 50%;
     cursor: pointer;
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
-.modal-close:only-child {
+.close-button:only-child {
     margin-left:auto;
 }
 
-.modal-close:hover {
+.close-button:hover {
     background-color: var(--color-gray-bg-hover);
     color: var(--color-text-inverted);
 }
-.modal-body {
+.modal-content {
     margin: 20px;
+}
+.modal-content button {
+    margin: 0;
+    margin-top: 4px;
+    width: 100%;
+    max-width: 100%;
 }
 
 /* Tab Navigation */

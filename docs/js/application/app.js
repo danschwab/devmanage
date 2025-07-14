@@ -16,6 +16,139 @@ import {
 
 const { createApp } = Vue;
 
+// Create simple alert and confirm components
+const AlertComponent = {
+    props: {
+        message: String
+    },
+    template: html`
+        <div style="text-align: center; padding: 1rem;">
+            <p>{{ message }}</p>
+        </div>
+    `
+};
+
+const SystemInfoComponent = {
+    computed: {
+        systemInfo() {
+            return {
+                browser: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                online: navigator.onLine ? 'Yes' : 'No'
+            };
+        }
+    },
+    template: html`
+        <div style="text-align: left;">
+            <h4>System Information</h4>
+            <p><strong>Browser:</strong> {{ systemInfo.browser }}</p>
+            <p><strong>Platform:</strong> {{ systemInfo.platform }}</p>
+            <p><strong>Language:</strong> {{ systemInfo.language }}</p>
+            <p><strong>Online:</strong> {{ systemInfo.online }}</p>
+        </div>
+    `
+};
+
+// Create a default hamburger menu component for dashboard cards
+const DefaultDashboardCardMenuComponent = {
+    props: {
+        containerType: String,
+        isOnDashboard: Boolean,
+        addToDashboard: Function,
+        removeDashboardContainer: Function
+    },
+    data() {
+        return {
+            localIsOnDashboard: this.isOnDashboard
+        };
+    },
+    watch: {
+        isOnDashboard(newVal) {
+            this.localIsOnDashboard = newVal;
+        }
+    },
+    methods: {
+        toggleDashboardPresence() {
+            if (this.localIsOnDashboard) {
+                this.removeDashboardContainer?.(this.containerType);
+                this.localIsOnDashboard = false;
+            } else {
+                this.addToDashboard?.(this.containerType);
+                this.localIsOnDashboard = true;
+            }
+        }
+    },
+    template: html`
+        <div style="text-align: left;">
+            <h4>Dashboard Options</h4>
+            <button 
+                @click="toggleDashboardPresence"
+                :style="{
+                    margin: '5px',
+                    padding: '8px 12px',
+                    background: localIsOnDashboard ? '#f44336' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    width: '100%'
+                }">
+                {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
+            </button>
+        </div>
+    `
+};
+
+// Dashboard toggle button component (for adding to custom menus)
+const DashboardToggleButtonComponent = {
+    props: {
+        containerType: String,
+        isOnDashboard: Boolean,
+        addToDashboard: Function,
+        removeDashboardContainer: Function
+    },
+    data() {
+        return {
+            localIsOnDashboard: this.isOnDashboard
+        };
+    },
+    watch: {
+        isOnDashboard(newVal) {
+            this.localIsOnDashboard = newVal;
+        }
+    },
+    methods: {
+        toggleDashboardPresence() {
+            if (this.localIsOnDashboard) {
+                this.removeDashboardContainer?.(this.containerType);
+                this.localIsOnDashboard = false;
+            } else {
+                this.addToDashboard?.(this.containerType);
+                this.localIsOnDashboard = true;
+            }
+        }
+    },
+    template: html`
+        <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
+            <h5 style="margin: 0 0 5px 0;">Dashboard</h5>
+            <button 
+                @click="toggleDashboardPresence"
+                :style="{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: localIsOnDashboard ? '#f44336' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer'
+                }">
+                {{ localIsOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
+            </button>
+        </div>
+    `
+};
+
 // Vue app with inline template
 const App = {
     components: {
@@ -28,7 +161,11 @@ const App = {
         'dashboard-actions': DashboardActions,
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
-        'interfaces-content': InterfacesContent
+        'interfaces-content': InterfacesContent,
+        AlertComponent,
+        SystemInfoComponent,
+        DefaultDashboardCardMenuComponent,
+        DashboardToggleButtonComponent
     },
     data() {
         return {
@@ -39,7 +176,9 @@ const App = {
             })),
             currentPage: 'dashboard',
             containers: [],
-            modals: []
+            modals: [],
+            // Make dashboard containers reactive
+            dashboardContainers: [...NavigationConfig.allDashboardContainers]
         };
     },
     computed: {
@@ -119,6 +258,13 @@ const App = {
             return container;
         },
         removeContainer(containerId) {
+            const containerToRemove = this.containers.find(c => c.id === containerId);
+            
+            // If removing a dashboard container, remove it from NavigationConfig
+            if (this.currentPage === 'dashboard' && containerToRemove) {
+                NavigationConfig.removeDashboardContainer(containerToRemove.containerType);
+            }
+            
             this.containers = this.containers.filter(c => c.id !== containerId);
             containerManager.removeContainer(containerId);
             
@@ -127,6 +273,62 @@ const App = {
                 this.navigateToPage('dashboard');
             }
         },
+
+        /**
+         * Remove a container from the dashboard and refresh if on dashboard
+         * @param {string} containerType - The container type to remove
+         */
+        removeDashboardContainer(containerType) {
+            // Update both the NavigationConfig and reactive data
+            NavigationConfig.removeDashboardContainer(containerType);
+            this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+            
+            // If currently on dashboard, refresh to remove the container
+            if (this.currentPage === 'dashboard') {
+                this.updateContainersForPage('dashboard');
+            }
+        },
+
+        /**
+         * Add a container to the dashboard and refresh if on dashboard
+         * @param {string} containerType - The container type to add
+         * @param {string} containerPath - The container path (optional, defaults to containerType)
+         */
+        addToDashboard(containerType, containerPath = null) {
+            const path = containerPath || containerType;
+            
+            // Update both the NavigationConfig and reactive data
+            NavigationConfig.addDashboardContainer(containerType, path);
+            this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+            
+            // If currently on dashboard, refresh to show the new container
+            if (this.currentPage === 'dashboard') {
+                this.updateContainersForPage('dashboard');
+            }
+        },
+
+        /**
+         * Get container types that can be added to dashboard
+         * @returns {Array} Array of addable container types
+         */
+        getAddableContainerTypes() {
+            return NavigationConfig.getAddableContainerTypes();
+        },
+
+        /**
+         * Get all available container types with their status
+         * @returns {Array} Array of container types with isAdded status
+         */
+        getAllContainerTypesWithStatus() {
+            const allTypes = NavigationConfig.getAvailableContainerTypes();
+            // Use reactive dashboardContainers instead of NavigationConfig directly
+            return allTypes.map(type => ({
+                type,
+                isAdded: this.dashboardContainers.some(container => container.type === type),
+                displayName: type.charAt(0).toUpperCase() + type.slice(1)
+            }));
+        },
+
         async updateContainersForPage(pageFile) {
             await NavigationConfig.updateContainersForPage(pageFile, this);
         },
@@ -141,8 +343,8 @@ const App = {
             }
         },
         // Modal management methods
-        addModal(title = '', content = '', options = {}) {
-            const modal = modalManager.createModal(title, content, options);
+        addModal(title = '', component = null, options = {}) {
+            const modal = modalManager.createModal(title, component, options);
             this.modals.push(modal);
             return modal;
         },
@@ -154,6 +356,7 @@ const App = {
                 if (index !== -1) {
                     this.modals[index].isVisible = true;
                 }
+                console.log('Modal shown:', modalId, this.modals[index]);
             }
             return modal;
         },
@@ -174,20 +377,33 @@ const App = {
         },
         // Quick modal creation methods
         showAlert(message, title = 'Alert') {
-            const modal = this.addModal(title, message);
+            const modal = this.addModal(title, AlertComponent, {
+                componentProps: { message }
+            });
             this.showModal(modal.id);
             return modal;
         },
         showConfirm(message, title = 'Confirm') {
-            const modal = this.addModal(title, message);
+            const modal = this.addModal(title, AlertComponent, {
+                componentProps: { message }
+            });
             this.showModal(modal.id);
             return modal;
         },
         showHamburgerMenuModal(menuData) {
-            const modal = this.addModal(menuData.title, menuData.content);
+            console.log('showHamburgerMenuModal called with:', menuData);
+            // Create modal with reactive Vue component
+            const modal = this.addModal(
+                menuData.title,
+                menuData.component,
+                {
+                    componentProps: menuData.componentProps
+                }
+            );
+            console.log('Modal created:', modal);
             this.showModal(modal.id);
         },
-        
+
         // Hamburger menu action handlers
         refreshWelcomeContent() {
             console.log('Refreshing welcome content...');
@@ -195,16 +411,7 @@ const App = {
         },
 
         showSystemInfo() {
-            const systemInfo = `
-                <div style="text-align: left;">
-                    <h4>System Information</h4>
-                    <p><strong>Browser:</strong> ${navigator.userAgent}</p>
-                    <p><strong>Platform:</strong> ${navigator.platform}</p>
-                    <p><strong>Language:</strong> ${navigator.language}</p>
-                    <p><strong>Online:</strong> ${navigator.onLine ? 'Yes' : 'No'}</p>
-                </div>
-            `;
-            this.addModal('System Information', systemInfo);
+            this.addModal('System Information', SystemInfoComponent);
         },
 
         viewLogs() {
@@ -305,6 +512,42 @@ const App = {
             // Add to container manager's global map
             containerManager.addGlobalNavigationMapping(segmentId, displayName);
         },
+        /**
+         * Get default hamburger component for dashboard cards
+         * @param {Object} container - Container object
+         * @returns {Object} Default hamburger component data
+         */
+        getDefaultHamburgerComponent(container) {
+            // For overview, return null (it provides its own component)
+            if (container.containerType === 'overview') {
+                return null;
+            }
+            
+            // For all other containers, provide default dashboard toggle
+            return {
+                component: DefaultDashboardCardMenuComponent,
+                props: {
+                    containerType: container.containerType,
+                    isOnDashboard: this.dashboardContainers.some(dc => dc.type === container.containerType),
+                    addToDashboard: this.addToDashboard,
+                    removeDashboardContainer: this.removeDashboardContainer
+                }
+            };
+        },
+
+        /**
+         * Get dashboard toggle props for a container
+         * @param {Object} container - Container object
+         * @returns {Object} Dashboard toggle props
+         */
+        getDashboardToggleProps(container) {
+            return {
+                containerType: container.containerType,
+                isOnDashboard: this.dashboardContainers.some(dc => dc.type === container.containerType),
+                addToDashboard: this.addToDashboard,
+                removeDashboardContainer: this.removeDashboardContainer
+            };
+        },
     },
     template: html `
         <div id="app">
@@ -340,21 +583,28 @@ const App = {
                     :navigation-map="container.navigationMap"
                     :card-style="currentPage === 'dashboard'"
                     :show-close-button="container.containerType !== 'overview'"
-                    :show-hamburger-menu="!container.containerType.startsWith('dashboard')"
+                    :show-hamburger-menu="true"
                     :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'overview'"
                     :page-location="container.pageLocation"
                     :container-data="container"
+                    :hamburger-component-data="container.customHamburgerComponent || getDefaultHamburgerComponent(container)"
                     @close-container="removeContainer"
                     @navigate-back="handleNavigateBack"
                     @navigate-to-path="handleNavigateToPath"
                     @navigation-mapping-added="handleNavigationMappingAdded"
                     @show-hamburger-menu="showHamburgerMenuModal"
                     @expand-container="expandContainer">
+
                     <template #content>
                         <!-- Overview Content -->
                         <dashboard-overview 
                             v-if="container.containerType === 'overview'"
-                            :current-user="currentUser">
+                            :current-user="currentUser"
+                            :get-all-container-types-with-status="getAllContainerTypesWithStatus"
+                            :add-to-dashboard="addToDashboard"
+                            :remove-dashboard-container="removeDashboardContainer"
+                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from overview:', $event); container.customHamburgerContent = $event; }"
+                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from overview:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
                         </dashboard-overview>
                         
                         <!-- Stats Content -->
@@ -385,7 +635,9 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
-                            @custom-hamburger-content="container.customHamburgerContent = $event">
+                            :dashboard-toggle-props="getDashboardToggleProps(container)"
+                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from inventory:', $event); container.customHamburgerContent = $event; }"
+                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from inventory:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
                         </inventory-content>
                         
                         <!-- Interfaces Content -->
@@ -419,18 +671,16 @@ const App = {
                     :modal-id="modal.id"
                     :title="modal.title"
                     :is-visible="modal.isVisible"
+                    :component="modal.component"
+                    :component-props="modal.componentProps"
                     @close-modal="removeModal">
-                    <template #content>
-                        <div v-if="modal.content" v-html="modal.content"></div>
-                        <div v-else>
-                            <p>Modal {{ modal.id }} content</p>
-                        </div>
-                    </template>
                 </app-modal>
             </transition-group>
         </div>
     `
 };
 
-// Initialize the app directly
-createApp(App).mount('body');
+// Initialize the app and expose it globally for modal buttons
+const app = createApp(App);
+const mountedApp = app.mount('body');
+window.vueApp = mountedApp;

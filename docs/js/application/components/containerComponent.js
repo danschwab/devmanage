@@ -54,6 +54,10 @@ export const ContainerComponent = {
         navigationMap: {
             type: Object,
             default: () => ({})
+        },
+        hamburgerComponentData: {
+            type: Object,
+            default: null
         }
     },
     data() {
@@ -66,8 +70,8 @@ export const ContainerComponent = {
             },
             // Local navigation map that can be extended at runtime
             localNavigationMap: {},
-            // Store custom hamburger content from child components
-            customHamburgerContent: null
+            // Only store custom hamburger component from child components
+            customHamburgerComponent: null
         };
     },
     mounted() {
@@ -93,6 +97,22 @@ export const ContainerComponent = {
             const pathSegments = this.containerPath.split('/').filter(segment => segment.length > 0);
             if (pathSegments.length <= 1) return '';
             return pathSegments.slice(0, -1).join('/');
+        },
+        // Show hamburger menu only if there's a custom component available
+        shouldShowHamburgerMenu() {
+            const hasComponent = this.customHamburgerComponent || this.hamburgerComponentData;
+            return this.showHamburgerMenu && hasComponent;
+        }
+    },
+    watch: {
+        // Watch for changes in hamburger component data passed as prop
+        hamburgerComponentData: {
+            handler(newData) {
+                console.log('ContainerComponent: hamburgerComponentData prop changed:', newData);
+                // Force reactivity update for shouldShowHamburgerMenu
+                this.$forceUpdate();
+            },
+            deep: true
         }
     },
     methods: {
@@ -113,29 +133,41 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
-            // Check for custom content in priority order:
-            // 1. Runtime custom content from child components
-            // 2. Container data custom content
-            // 3. Prop hamburger content
-            const customContent = this.customHamburgerContent || 
-                                 this.containerData?.customHamburgerContent || 
-                                 this.hamburgerMenuContent;
+            console.log('ContainerComponent: openHamburgerMenu called');
+            console.log('customHamburgerComponent:', this.customHamburgerComponent);
+            console.log('hamburgerComponentData prop:', this.hamburgerComponentData);
+            console.log('showHamburgerMenu prop:', this.showHamburgerMenu);
             
-            // Emit event to parent to show modal in centralized modal-space
-            this.$emit('show-hamburger-menu', {
-                containerId: this.containerId,
-                title: `${this.title} Menu`,
-                content: customContent
-            });
+            // Use prop data or internal data
+            const componentData = this.hamburgerComponentData || this.customHamburgerComponent;
+            
+            // Only emit if we have a custom component
+            if (componentData) {
+                const menuData = {
+                    containerId: this.containerId,
+                    title: `${this.title} Menu`,
+                    component: componentData.component,
+                    componentProps: componentData.props,
+                    containerType: this.containerType
+                };
+                
+                console.log('ContainerComponent: Emitting show-hamburger-menu with:', menuData);
+                this.$emit('show-hamburger-menu', menuData);
+            } else {
+                console.log('ContainerComponent: No custom hamburger component available');
+            }
         },
-        // Method for child components to set custom hamburger content
-        setCustomHamburgerContent(content) {
-            this.customHamburgerContent = content;
+        // Handle custom hamburger component from child components
+        onCustomHamburgerComponent(componentData) {
+            console.log('ContainerComponent: Received custom-hamburger-component:', componentData);
+            console.log('Container ID:', this.containerId, 'Type:', this.containerType);
+            
+            this.customHamburgerComponent = componentData;
+            
+            console.log('ContainerComponent: Stored customHamburgerComponent:', this.customHamburgerComponent);
+            console.log('shouldShowHamburgerMenu will be:', this.showHamburgerMenu && this.customHamburgerComponent);
         },
-        // Handle custom hamburger content from child components
-        onCustomHamburgerContent(content) {
-            this.setCustomHamburgerContent(content);
-        },
+
         expandContainer() {
             // Emit event to parent to open container as a page
             this.$emit('expand-container', {
@@ -173,7 +205,7 @@ export const ContainerComponent = {
              :data-container-id="containerId" 
              :data-container-type="containerType"
              :data-container-path="containerPath">
-            <div v-if="containerPath || title || showCloseButton || showHamburgerMenu || showExpandButton" class="container-header">
+            <div v-if="containerPath || title || showCloseButton || shouldShowHamburgerMenu || showExpandButton" class="container-header">
                 <!-- Breadcrumb Navigation Component -->
                 <BreadcrumbComponent
                     :container-path="containerPath"
@@ -184,17 +216,17 @@ export const ContainerComponent = {
                     @navigation-mapping-added="onNavigationMappingAdded"
                     @navigate-to-path="onNavigateToPath" />
                 
-                <div v-if="showHamburgerMenu || showExpandButton || showCloseButton || containerPath" class="header-buttons">
-                    <button v-if="showHamburgerMenu" 
-                            class="button-symbol gray" 
+                <div v-if="shouldShowHamburgerMenu || showExpandButton || showCloseButton || containerPath" class="header-buttons">
+                    <button v-if="shouldShowHamburgerMenu" 
+                            class="button-symbol white" 
                             @click="openHamburgerMenu" 
                             title="Menu">☰</button>
                     <button v-if="showExpandButton" 
-                            class="button-symbol gray" 
+                            class="button-symbol white" 
                             @click="expandContainer" 
                             title="Expand to page"><span class="material-symbols-outlined">expand_content</span></button>
                     <button v-if="(containerPath && canGoBack) || showCloseButton" 
-                        class="button-symbol gray back-button" 
+                        class="button-symbol white back-button" 
                         @click="goBack" 
                         :title="canGoBack ? 'Go back' : 'Close container'">
                         <span v-if="canGoBack" class="material-symbols-outlined">arrow_back</span>
@@ -204,7 +236,7 @@ export const ContainerComponent = {
                 <div v-if="content.header" class="header-content" v-html="content.header"></div>
             </div>
             <div class="content">
-                <slot name="content">
+                <slot name="content" @custom-hamburger-component="onCustomHamburgerComponent">
                     <div v-if="content.main" v-html="content.main"></div>
                     <div v-else>
                         <p>Container {{ containerId }} loaded successfully!</p>

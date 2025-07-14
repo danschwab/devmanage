@@ -28,6 +28,7 @@
     --background-color: #fefefe;
     --background-color-hover: #f0f0f0;
     --color-gray: #aaa;
+    --color-gray-hover: #888;
     --color-gray-bg: #f0f0f0;
     --color-gray-bg-transparent: #3333334d;
     --color-gray-bg-hover: #e0e0e0;
@@ -40,10 +41,12 @@
     --color-red-bg-hover: #f75e5e;
 
     --color-orange: #ff6200;
+    --color-orange-hover: #e65c00;
     --color-orange-bg: #ffbb9d;
     --color-orange-bg-hover: #ff8566;
 
     --color-yellow: yellow;
+    --color-yellow-hover: #e6c200;
     --color-yellow-bg: #ff9;
     --color-yellow-bg-hover: #ff6;
 
@@ -54,6 +57,7 @@
     --color-blue-bg-hover: #aec4ff;
 
     --color-green: #198731;
+    --color-green-hover: #146c1f;
     --color-green-bg: #c3e6c3;
     --color-green-bg-hover: #66cc74;
 
@@ -86,11 +90,13 @@
 /*@media (prefers-color-scheme: dark) {
     :root {
         --background-color: #181a1b;
+        --background-color-hover: #202224;
         --color-text: #b4b4b4;
         --color-text-light: #bbb;
         --color-text-inverted: #111;
 
         --color-gray: #666;
+        --color-gray-hover: #888;
         --color-gray-bg: #23272b;
         --color-gray-bg-transparent: #cccccc33;
         --color-gray-bg-hover: #2c2f34;
@@ -109,10 +115,12 @@
         --color-red-bg-hover: #7a2a2a;
 
         --color-orange: #ffb86c;
+        --color-orange-hover: #ff8c00;
         --color-orange-bg: #4d3923;
         --color-orange-bg-hover: #7a4a2a;
 
         --color-yellow: #ffe066;
+        --color-yellow-hover: #e6c200;
         --color-yellow-bg: #4d4a23;
         --color-yellow-bg-hover: #7a7a2a;
 
@@ -123,6 +131,7 @@
         --color-blue-bg-hover: #2a3a7a;
 
         --color-green: #66cc74;
+        --color-green-hover: #146c1f;
         --color-green-bg: #234d23;
         --color-green-bg-hover: #2a7a2a;
 

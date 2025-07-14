@@ -1,6 +1,5 @@
 import { html } from '../utils/template-helpers.js';
 
-// Modal component functionality
 export const ModalComponent = {
     props: {
         modalId: {
@@ -15,60 +14,61 @@ export const ModalComponent = {
             type: Boolean,
             default: false
         },
+        component: {
+            type: [Object, Function],
+            required: true
+        },
+        componentProps: {
+            type: Object,
+            default: () => ({ })
+        }
     },
     methods: {
         closeModal() {
             this.$emit('close-modal', this.modalId);
-        },
-        onBackdropClick(event) {
-            // Close modal if clicking on backdrop (not modal content)
-            if (event.target === event.currentTarget) {
-                this.closeModal();
-            }
         }
     },
-    template: html `
-            <div v-if="isVisible" 
-                 class="modal" 
-                 @click="onBackdropClick"
-                 :data-modal-id="modalId">
+    template: html`
+        <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
+            <div class="modal" :data-modal-id="modalId">
+                <div class="modal-header">
+                    <h3>{{ title }}</h3>
+                    <button class="close-button" @click="closeModal">&times;</button>
+                </div>
                 <div class="modal-content">
-                    <div v-if="title" class="modal-header">
-                        <h1>{{ title }}</h1>
-                        <div class="modal-close" @click="closeModal">×</div>
-                    </div>
-                    <div v-else class="modal-header">
-                        <div class="modal-close" @click="closeModal">×</div>
-                    </div>
-                    <div class="modal-body">
-                        <slot name="content">
-                            <p>Modal content goes here</p>
-                        </slot>
-                    </div>
+                    <!-- Always render as reactive Vue component with unique key for reactivity -->
+                    <component 
+                        :is="component" 
+                        :key="modalId + '-' + JSON.stringify(componentProps)"
+                        v-bind="componentProps">
+                    </component>
                 </div>
             </div>
+        </div>
     `
 };
 
-// Modal Manager - handles multiple modals
+// Modal Manager - now purely component-based
 export class ModalManager {
     constructor() {
         this.modals = new Map();
         this.nextId = 1;
-        this.zIndexBase = 1000;
     }
 
-    createModal(title = '', content = '', options = {}) {
+    createModal(title = '', component = null, options = {}) {
+        if (!component) {
+            throw new Error('Modal component is required');
+        }
+        
         const modalId = options.id || `modal-${this.nextId++}`;
         
         const modalData = {
             id: modalId,
             title: title,
-            content: content,
             isVisible: false,
-            zIndex: this.zIndexBase,
-            created: new Date(),
-            options: options
+            component: component,
+            componentProps: options.componentProps || {},
+            created: new Date()
         };
 
         this.modals.set(modalId, modalData);
@@ -79,8 +79,6 @@ export class ModalManager {
         const modal = this.modals.get(modalId);
         if (modal) {
             modal.isVisible = true;
-            // Bring to front
-            modal.zIndex = this.zIndexBase;
         }
         return modal;
     }
@@ -97,27 +95,8 @@ export class ModalManager {
         return this.modals.delete(modalId);
     }
 
-    getModal(modalId) {
-        return this.modals.get(modalId);
-    }
-
     getAllModals() {
         return Array.from(this.modals.values());
-    }
-
-    getVisibleModals() {
-        return Array.from(this.modals.values()).filter(modal => modal.isVisible);
-    }
-
-    hideAllModals() {
-        this.modals.forEach(modal => {
-            modal.isVisible = false;
-        });
-    }
-
-    clearAllModals() {
-        this.modals.clear();
-        this.nextId = 1;
     }
 }
 

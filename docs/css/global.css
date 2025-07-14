@@ -68,28 +68,28 @@ button.white, input[type="button"].white, input[type="submit"].white {
     border: 1px solid var(--color-border);
 }
 button.gray, input[type="button"].gray, input[type="submit"].gray {
-    background-color: var(--color-gray-bg);
+    background-color: var(--color-gray);
     color: var(--color-text);
     border: 1px solid var(--color-border);
 }
 button.red, input[type="button"].red, input[type="submit"].red {
-    background-color: var(--color-red-bg);
+    background-color: var(--color-red);
     border: none;
 }
 button.orange, input[type="button"].orange, input[type="submit"].orange {
-    background-color: var(--color-orange-bg);
+    background-color: var(--color-orange);
     border: none;
 }
 button.yellow, input[type="button"].yellow, input[type="submit"].yellow {
-    background-color: var(--color-yellow-bg);
+    background-color: var(--color-yellow);
     border: none;
 }
 button.blue, input[type="button"].blue, input[type="submit"].blue {
-    background-color: var(--color-blue-bg);
+    background-color: var(--color-blue);
     border: none;
 }
 button.green, input[type="button"].green, input[type="submit"].green {
-    background-color: var(--color-green-bg);
+    background-color: var(--color-green);
     border: none;
 }
 
@@ -97,22 +97,22 @@ button.white:hover, input[type="button"].white:hover, input[type="submit"].white
     background-color: var(--background-color-hover);
 }
 button.gray:hover, input[type="button"].gray:hover, input[type="submit"].gray:hover {
-    background-color: var(--color-gray-bg-hover);
+    background-color: var(--color-gray-hover);
 }
 button.red:hover, input[type="button"].red:hover, input[type="submit"].red:hover {
-    background-color: var(--color-red-bg-hover);
+    background-color: var(--color-red-hover);
 }
 button.orange:hover, input[type="button"].orange:hover, input[type="submit"].orange:hover {
-    background-color: var(--color-orange-bg-hover);
+    background-color: var(--color-orange-hover);
 }
 button.yellow:hover, input[type="button"].yellow:hover, input[type="submit"].yellow:hover {
-    background-color: var(--color-yellow-bg-hover);
+    background-color: var(--color-yellow-hover);
 }
 button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:hover {
-    background-color: var(--color-blue-bg-hover);
+    background-color: var(--color-blue-hover);
 }
 button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover {
-    background-color: var(--color-green-bg-hover);
+    background-color: var(--color-green-hover);
 }
 
 
