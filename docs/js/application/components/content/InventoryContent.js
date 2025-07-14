@@ -210,12 +210,6 @@ export const InventoryContent = {
                 this.emitCurrentPathInfo();
             },
             immediate: true
-        },
-        containerPath: {
-            handler() {
-                this.emitCurrentPathInfo();
-            },
-            immediate: true
         }
     },
     template: html `
