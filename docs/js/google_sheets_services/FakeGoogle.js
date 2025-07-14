@@ -642,17 +642,35 @@ export class FakeGoogleSheetsService {
     }
 
     static async copySheetTab(tableId, sourceTab, newTabName) {
+        FakeGoogleSheetsService.initializeMockData();
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Copying tab ${sourceTab.title} to ${newTabName} in ${tableId}`);
+        console.log(`FakeGoogleSheetsService: Copying tab ${sourceTab?.title || 'unknown'} to ${newTabName} in ${tableId}`);
         await this.delay(200);
 
-        // Simulate copying by creating new tab data
-        if (this.mockData[tableId] && this.mockData[tableId][sourceTab.title]) {
-            this.mockData[tableId][newTabName] = JSON.parse(JSON.stringify(this.mockData[tableId][sourceTab.title]));
+        // Handle case where sourceTab is null or undefined
+        if (!sourceTab || !sourceTab.title) {
+            console.warn(`FakeGoogleSheetsService: Source tab is null, creating empty tab ${newTabName}`);
+            
+            // Create an empty tab with basic structure
+            if (!this.mockData[tableId]) this.mockData[tableId] = {};
+            this.mockData[tableId][newTabName] = [
+                ['Key', 'Value', 'Timestamp'], // Default header for user data
+                // Empty data rows will be added as needed
+            ];
+        } else {
+            // Normal copy operation
+            if (this.mockData[tableId] && this.mockData[tableId][sourceTab.title]) {
+                this.mockData[tableId][newTabName] = JSON.parse(JSON.stringify(this.mockData[tableId][sourceTab.title]));
+            } else {
+                console.warn(`FakeGoogleSheetsService: Source data not found for ${sourceTab.title}, creating empty tab`);
+                this.mockData[tableId][newTabName] = [
+                    ['Key', 'Value', 'Timestamp']
+                ];
+            }
         }
 
         // Add new tab to tabs list
@@ -662,9 +680,15 @@ export class FakeGoogleSheetsService {
                 title: newTabName,
                 sheetId: newSheetId
             });
+        } else {
+            // Initialize tabs array if it doesn't exist
+            this.mockTabs[tableId] = [{
+                title: newTabName,
+                sheetId: 0
+            }];
         }
 
-        console.log(`FakeGoogleSheetsService: Successfully copied tab to ${newTabName}`);
+        console.log(`FakeGoogleSheetsService: Successfully created tab ${newTabName}`);
     }
 
     static async querySheetData(tableId, query) {

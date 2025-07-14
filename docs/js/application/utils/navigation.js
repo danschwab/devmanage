@@ -333,8 +333,8 @@ export const NavigationConfig = {
             );
         }
         
-        // If authenticated and no containers were added, navigate to dashboard
-        if (appContext.isAuthenticated && appContext.containers.length === 0) {
+        // If authenticated and no containers were added for non-dashboard pages, navigate to dashboard
+        if (appContext.isAuthenticated && appContext.containers.length === 0 && pageFile !== 'dashboard') {
             this.navigateToPage('dashboard', appContext);
         }
     },

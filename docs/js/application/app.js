@@ -14,6 +14,7 @@ import {
     InterfacesContent 
 } from './components/content/index.js';
 import { DashboardToggleComponent } from './utils/DashboardManagement.js';
+import { Requests } from '../data_management/api.js';
 
 const { createApp } = Vue;
 
@@ -192,6 +193,11 @@ const App = {
         // Initialize authentication on app mount
         await Auth.initialize();
         
+        // Load dashboard state from user data if authenticated
+        if (this.isAuthenticated) {
+            await this.loadDashboardState();
+        }
+        
         // Create containers based on auth state
         this.updateContainersForPage(this.currentPage);
         
@@ -199,7 +205,10 @@ const App = {
         document.addEventListener('keydown', this.handleKeyDown);
         
         // Watch for auth state changes
-        this.$watch('isAuthenticated', (newVal) => {
+        this.$watch('isAuthenticated', async (newVal) => {
+            if (newVal) {
+                await this.loadDashboardState();
+            }
             this.updateContainersForPage(this.currentPage);
         });
     },
@@ -252,17 +261,77 @@ const App = {
         removeContainer(containerId) {
             const containerToRemove = this.containers.find(c => c.id === containerId);
             
-            // If removing a dashboard container, remove it from NavigationConfig
+            // If removing a dashboard container, remove it from NavigationConfig and save state
             if (this.currentPage === 'dashboard' && containerToRemove) {
-                NavigationConfig.removeDashboardContainer(containerToRemove.containerType);
+                console.log('App: Removing dashboard container:', containerToRemove.containerPath || containerToRemove.containerType);
+                
+                // Use the container path if available, otherwise fall back to container type
+                const pathToRemove = containerToRemove.containerPath || containerToRemove.containerType;
+                
+                // Update both the NavigationConfig and reactive data
+                NavigationConfig.removeDashboardContainer(pathToRemove);
+                this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+                
+                // Save the updated dashboard state
+                this.saveDashboardState();
+                
+                console.log('App: Dashboard containers after removal:', this.dashboardContainers);
             }
             
             this.containers = this.containers.filter(c => c.id !== containerId);
             containerManager.removeContainer(containerId);
             
-            // If authenticated and no containers remain, navigate to dashboard
-            if (this.isAuthenticated && this.containers.length === 0) {
+            // If authenticated and no containers remain on a non-dashboard page, navigate to dashboard
+            if (this.isAuthenticated && this.containers.length === 0 && this.currentPage !== 'dashboard') {
                 this.navigateToPage('dashboard');
+            }
+        },
+
+        /**
+         * Load dashboard state from user data
+         */
+        async loadDashboardState() {
+            if (!this.isAuthenticated || !this.currentUser?.email) {
+                return;
+            }
+            
+            try {
+                const savedDashboardData = await Requests.getUserData(this.currentUser.email, 'dashboard_containers');
+                
+                if (savedDashboardData && savedDashboardData.length > 0) {
+                    // Parse the saved dashboard containers
+                    const savedContainers = JSON.parse(savedDashboardData[0] || '[]');
+                    
+                    // Update NavigationConfig and reactive data
+                    NavigationConfig.allDashboardContainers = savedContainers;
+                    this.dashboardContainers = [...savedContainers];
+                    
+                    console.log('Dashboard state loaded:', savedContainers);
+                } else {
+                    console.log('No saved dashboard state found, using defaults');
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard state:', error);
+                // Continue with default dashboard state on error
+            }
+        },
+
+        /**
+         * Save current dashboard state to user data
+         */
+        async saveDashboardState() {
+            if (!this.isAuthenticated || !this.currentUser?.email) {
+                return;
+            }
+            
+            try {
+                const dashboardData = JSON.stringify(this.dashboardContainers);
+                await Requests.storeUserData(this.currentUser.email, 'dashboard_containers', [dashboardData]);
+                console.log('Dashboard state saved successfully');
+            } catch (error) {
+                console.warn('Failed to save dashboard state (continuing without saving):', error.message);
+                // Don't throw the error - let the application continue functioning
+                // The dashboard state will still work in memory for the current session
             }
         },
 
@@ -279,6 +348,9 @@ const App = {
             this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
             
             console.log('App: Dashboard containers after removal:', this.dashboardContainers);
+            
+            // Save the updated state
+            this.saveDashboardState();
             
             // If currently on dashboard, refresh to remove the container
             if (this.currentPage === 'dashboard') {
@@ -300,6 +372,9 @@ const App = {
             this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
             
             console.log('App: Dashboard containers after addition:', this.dashboardContainers);
+            
+            // Save the updated state
+            this.saveDashboardState();
             
             // If currently on dashboard, refresh to show the new container
             if (this.currentPage === 'dashboard') {
@@ -567,19 +642,23 @@ const App = {
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
                             @custom-hamburger-component="$event => { 
                                 console.log('App: Received custom-hamburger-component from inventory:', $event);
-                                const containerRef = $refs['container-' + container.id];
-                                console.log('Container ref lookup result:', containerRef);
-                                if (containerRef && containerRef.length > 0) {
-                                    console.log('App: Calling onCustomHamburgerComponent on container');
-                                    containerRef[0].onCustomHamburgerComponent($event);
-                                } else if (containerRef && typeof containerRef.onCustomHamburgerComponent === 'function') {
-                                    console.log('App: Calling onCustomHamburgerComponent on container (direct ref)');
-                                    containerRef.onCustomHamburgerComponent($event);
-                                } else {
-                                    console.error('App: Could not find container ref or method for', container.id);
+                                $nextTick(() => {
+                                    const refKey = 'container-' + container.id;
+                                    const containerRef = $refs[refKey];
+                                    console.log('Container ref lookup result:', containerRef);
+                                    console.log('Looking for ref key:', refKey);
                                     console.log('Available refs:', Object.keys($refs));
-                                    console.log('ContainerRef type:', typeof containerRef);
-                                }
+                                    
+                                    if (containerRef && containerRef.length > 0) {
+                                        console.log('App: Calling onCustomHamburgerComponent on container (array)');
+                                        containerRef[0].onCustomHamburgerComponent($event);
+                                    } else if (containerRef && typeof containerRef.onCustomHamburgerComponent === 'function') {
+                                        console.log('App: Calling onCustomHamburgerComponent on container (direct)');
+                                        containerRef.onCustomHamburgerComponent($event);
+                                    } else {
+                                        console.error('App: Could not find container ref or method for', container.id);
+                                    }
+                                });
                             }">
                         </inventory-content>
                         
