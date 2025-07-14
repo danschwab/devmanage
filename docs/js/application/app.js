@@ -303,89 +303,9 @@ const App = {
             this.showModal(modal.id);
         },
 
-        // Hamburger menu action handlers
-        refreshWelcomeContent() {
-            console.log('Refreshing welcome content...');
-            this.showAlert('Welcome content refreshed!', 'Success');
-        },
-
+        // Remove all unused hamburger menu action handlers since they're not used anymore
         showSystemInfo() {
             this.addModal('System Information', SystemInfoComponent);
-        },
-
-        viewLogs() {
-            console.log('Opening logs...');
-            this.showAlert('Log viewer functionality coming soon!', 'Info');
-        },
-
-        exportData() {
-            console.log('Exporting data...');
-            this.showAlert('Data export functionality coming soon!', 'Info');
-        },
-
-        importData() {
-            console.log('Importing data...');
-            this.showAlert('Data import functionality coming soon!', 'Info');
-        },
-
-        clearCache() {
-            console.log('Clearing cache...');
-            this.showAlert('Cache cleared successfully!', 'Success');
-        },
-
-        refreshStats() {
-            console.log('Refreshing statistics...');
-            this.showAlert('Statistics refreshed!', 'Success');
-        },
-
-        exportReport() {
-            console.log('Exporting report...');
-            this.showAlert('Report export functionality coming soon!', 'Info');
-        },
-
-        scheduleReport() {
-            console.log('Scheduling report...');
-            this.showAlert('Report scheduling functionality coming soon!', 'Info');
-        },
-
-        refreshTestData() {
-            console.log('Refreshing test data...');
-            this.showAlert('Test data refreshed!', 'Success');
-        },
-
-        exportTestResults() {
-            console.log('Exporting test results...');
-            this.showAlert('Test results export functionality coming soon!', 'Info');
-        },
-
-        runDiagnostics() {
-            console.log('Running diagnostics...');
-            this.showAlert('Diagnostics completed successfully!', 'Success');
-        },
-
-        editContainer() {
-            console.log('Editing container...');
-            this.showAlert('Container editing functionality coming soon!', 'Info');
-        },
-
-        duplicateContainer() {
-            console.log('Duplicating container...');
-            this.showAlert('Container duplicated!', 'Success');
-        },
-
-        containerSettings() {
-            console.log('Opening container settings...');
-            this.showAlert('Container settings functionality coming soon!', 'Info');
-        },
-
-        refreshContainer() {
-            console.log('Refreshing container...');
-            this.showAlert('Container refreshed!', 'Success');
-        },
-
-        containerInfo() {
-            console.log('Showing container info...');
-            this.showAlert('Container information functionality coming soon!', 'Info');
         },
 
         expandContainer(containerData) {

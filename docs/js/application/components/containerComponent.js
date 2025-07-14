@@ -36,10 +36,6 @@ export const ContainerComponent = {
             type: Boolean,
             default: false
         },
-        hamburgerMenuContent: {
-            type: String,
-            default: ''
-        },
         showExpandButton: {
             type: Boolean,
             default: false
@@ -68,11 +64,6 @@ export const ContainerComponent = {
     data() {
         return {
             isLoading: false,
-            content: {
-                header: '',
-                main: '',
-                footer: ''
-            },
             // Local navigation map that can be extended at runtime
             localNavigationMap: {},
             // Only store custom hamburger component from child components
@@ -151,18 +142,6 @@ export const ContainerComponent = {
         }
     },
     methods: {
-        updateContent(section, content) {
-            this.content[section] = content;
-        },
-        setHeaderContent(content) {
-            this.content.header = content;
-        },
-        setMainContent(content) {
-            this.content.main = content;
-        },
-        setFooterContent(content) {
-            this.content.footer = content;
-        },
         closeContainer() {
             // Emit an event to parent component to handle container removal
             this.$emit('close-container', this.containerId);
@@ -328,18 +307,15 @@ export const ContainerComponent = {
                         <span v-else>×</span>
                     </button>
                 </div>
-                <div v-if="content.header" class="header-content" v-html="content.header"></div>
             </div>
             <div class="content">
                 <slot name="content" @custom-hamburger-component="onCustomHamburgerComponent">
-                    <div v-if="content.main" v-html="content.main"></div>
-                    <div v-else>
+                    <div>
                         <p>Container {{ containerId }} loaded successfully!</p>
                         <p>Type: {{ containerType }}</p>
                         <p>Path: {{ containerPath || 'No path' }}</p>
                     </div>
                 </slot>
-                <div v-if="content.footer" class="footer-content" v-html="content.footer"></div>
             </div>
         </div>
         <div v-else class="container" :class="{ 'dashboard-card': cardStyle }">
@@ -370,7 +346,6 @@ export class ContainerManager {
             cardStyle: options.cardStyle || false,
             showCloseButton: options.showCloseButton !== false,
             showHamburgerMenu: options.showHamburgerMenu || false,
-            hamburgerMenuContent: options.hamburgerMenuContent || '',
             showExpandButton: options.showExpandButton || false,
             pageLocation: options.pageLocation || '',
             // Pass current global navigation map to new container
