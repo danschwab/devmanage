@@ -439,6 +439,7 @@ const App = {
                 <app-container 
                     v-for="container in containers" 
                     :key="container.id"
+                    :ref="'container-' + container.id"
                     :container-id="container.id"
                     :container-type="container.containerType"
                     :title="container.title"
@@ -506,11 +507,17 @@ const App = {
                             @custom-hamburger-component="$event => { 
                                 console.log('App: Received custom-hamburger-component from inventory:', $event);
                                 const containerRef = $refs['container-' + container.id];
+                                console.log('Container ref lookup result:', containerRef);
                                 if (containerRef && containerRef.length > 0) {
                                     console.log('App: Calling onCustomHamburgerComponent on container');
                                     containerRef[0].onCustomHamburgerComponent($event);
+                                } else if (containerRef && typeof containerRef.onCustomHamburgerComponent === 'function') {
+                                    console.log('App: Calling onCustomHamburgerComponent on container (direct ref)');
+                                    containerRef.onCustomHamburgerComponent($event);
                                 } else {
-                                    console.error('App: Could not find container ref for', container.id);
+                                    console.error('App: Could not find container ref or method for', container.id);
+                                    console.log('Available refs:', Object.keys($refs));
+                                    console.log('ContainerRef type:', typeof containerRef);
                                 }
                             }">
                         </inventory-content>
