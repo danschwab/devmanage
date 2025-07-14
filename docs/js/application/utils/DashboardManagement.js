@@ -105,12 +105,6 @@ export const DashboardToggleComponent = {
                 }">
                 {{ isOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
             </button>
-            <p style="margin: 5px 0 0 0; font-size: 0.8em; color: #999;">
-                Status: {{ isOnDashboard ? 'On Dashboard' : 'Not on Dashboard' }}
-            </p>
-            <p style="margin: 5px 0 0 0; font-size: 0.7em; color: #ccc;">
-                Debug: {{ dashboardContainers.length }} containers
-            </p>
         </div>
     `
 };

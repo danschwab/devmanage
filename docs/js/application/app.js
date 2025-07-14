@@ -384,11 +384,7 @@ const App = {
             return modal;
         },
         showConfirm(message, title = 'Confirm') {
-            const modal = this.addModal(title, AlertComponent, {
-                componentProps: { message }
-            });
-            this.showModal(modal.id);
-            return modal;
+            return this.showAlert(message, title);
         },
         showHamburgerMenuModal(menuData) {
             console.log('showHamburgerMenuModal called with:', menuData);
@@ -588,7 +584,6 @@ const App = {
     `
 };
 
-// Initialize the app and expose it globally for modal buttons
+// Initialize the app
 const app = createApp(App);
-const mountedApp = app.mount('body');
-window.vueApp = mountedApp;
+app.mount('body');

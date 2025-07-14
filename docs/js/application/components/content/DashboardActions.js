@@ -17,6 +17,3 @@ export const DashboardActions = {
         </div>
     `
 };
-
-// Also export as ActionsContent for the new naming convention
-export const ActionsContent = DashboardActions;

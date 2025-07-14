@@ -106,6 +106,3 @@ export const DashboardOverview = {
         </div>
     `
 };
-
-// Also export as OverviewContent for the new naming convention
-export const OverviewContent = DashboardOverview;

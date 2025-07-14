@@ -103,5 +103,3 @@ export const TestTableComponent = {
         </div>
     `
 };
-
-export default TestTableComponent;

@@ -94,35 +94,14 @@ export class Auth {
  * Vue composable for authentication
  */
 export function useAuth() {
-    const login = async () => {
-        return await Auth.login();
-    };
-
-    const logout = async () => {
-        await Auth.logout();
-    };
-
-    const checkAuth = async () => {
-        return await Auth.checkAuth();
-    };
-
-    const initialize = async () => {
-        await Auth.initialize();
-    };
-
     return {
         // Reactive state
         authState,
-        isAuthenticated: Vue.ref(() => authState.isAuthenticated),
-        isLoading: Vue.ref(() => authState.isLoading),
-        user: Vue.ref(() => authState.user),
-        error: Vue.ref(() => authState.error),
-        isInitialized: Vue.ref(() => authState.isInitialized),
         
         // Methods
-        login,
-        logout,
-        checkAuth,
-        initialize
+        login: () => Auth.login(),
+        logout: () => Auth.logout(),
+        checkAuth: () => Auth.checkAuth(),
+        initialize: () => Auth.initialize()
     };
 }

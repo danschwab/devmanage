@@ -62,7 +62,6 @@ export class InventoryUtils {
 
             // Process each tab
             const results = [];
-            const errors = [];
 
             for (const [tab, items] of Object.entries(itemsByTab)) {
                 try {
@@ -110,7 +109,7 @@ export class InventoryUtils {
                         results.push(obj);
                     });
                 } catch (error) {
-                    errors.push(`Tab ${tab}: ${error.message}`);
+                    console.error(`Tab ${tab}: ${error.message}`);
                     items.forEach(item => {
                         const obj = { itemName: item };
                         infoFields.forEach(field => obj[field] = null);
