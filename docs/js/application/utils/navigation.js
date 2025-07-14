@@ -175,6 +175,30 @@ export const NavigationConfig = {
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
+            // If we're on dashboard and trying to navigate to a different path,
+            // navigate to that path as a new page (like expand button behavior)
+            if (appContext.currentPage === 'dashboard' && targetPath !== 'dashboard') {
+                // Extract the base page from the target path (e.g., 'inventory/items' -> 'inventory')
+                const basePage = targetPath.split('/')[0];
+                
+                this.navigateToPage(basePage, appContext);
+                
+                // After navigation, update the container path to the full target path
+                appContext.$nextTick(() => {
+                    const expandedContainer = appContext.containers.find(c => c.containerType === basePage);
+                    if (expandedContainer) {
+                        expandedContainer.containerPath = targetPath;
+                    }
+                });
+                
+                return {
+                    action: 'navigate_to_new_page',
+                    containerId,
+                    targetPage: basePage,
+                    targetPath: targetPath
+                };
+            }
+            
             // If navigating to dashboard, navigate to dashboard page instead of updating path
             if (targetPath === 'dashboard') {
                 this.navigateToPage('dashboard', appContext);
