@@ -1,4 +1,4 @@
-import { PageBuilder } from '../../index.js';
+import { PageBuilder } from '../../js/index.js';
 
 export class TabManager {
     static tabCounter = 1;

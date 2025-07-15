@@ -1,5 +1,4 @@
-import { html } from '../utils/template-helpers.js';
-import { BreadcrumbComponent } from './navigation/breadcrumbComponent.js';
+import { html, BreadcrumbComponent } from '../../index.js';
 
 // Container component functionality
 export const ContainerComponent = {

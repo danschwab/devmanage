@@ -1,5 +1,4 @@
-import { TestTableComponent } from '../testTableComponent.js';
-import { html } from '../../utils/template-helpers.js';
+import { html, TestTableComponent } from '../../index.js';
 
 // Inventory Hamburger Menu Component (content only)
 const InventoryMenuComponent = {

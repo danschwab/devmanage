@@ -1,19 +1,17 @@
-import { ContainerComponent, containerManager } from './components/containerComponent.js';
-import { TestTableComponent } from './components/testTableComponent.js';
-import { ModalComponent, modalManager } from './components/modalComponent.js';
-import { PrimaryNavComponent } from './components/navigation/primaryNavComponent.js';
-import { Auth, authState } from './utils/auth.js';
-import { NavigationConfig } from './utils/navigation.js';
-import { html } from './utils/template-helpers.js';
+import { ContainerComponent, containerManager } from './index.js';
+import { TestTableComponent } from './index.js';
+import { ModalComponent, modalManager } from './index.js';
+import { PrimaryNavComponent } from './index.js';
+import { Auth, authState } from './index.js';
+import { NavigationConfig } from './index.js';
+import { html } from './index.js';
 import { 
-    DashboardSettings, 
     PacklistContent, 
     InventoryContent, 
     InterfacesContent 
-} from './components/content/index.js';
-import { DashboardToggleComponent } from './utils/DashboardManagement.js';
-import { Requests } from '../data_management/api.js';
-import { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
+} from './index.js';
+import { DashboardToggleComponent, DashboardSettings, hamburgerMenuRegistry } from './index.js';
+import { Requests } from './index.js';
 
 const { createApp } = Vue;
 

@@ -1,4 +1,4 @@
-import { html } from '../../utils/template-helpers.js';
+import { html } from '../../index.js';
 
 export const PacklistContent = {
     props: {

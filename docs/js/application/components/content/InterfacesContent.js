@@ -1,5 +1,4 @@
-import { TestTableComponent } from '../testTableComponent.js';
-import { html } from '../../utils/template-helpers.js';
+import { html, TestTableComponent } from '../../index.js';
 
 export const InterfacesContent = {
     components: {

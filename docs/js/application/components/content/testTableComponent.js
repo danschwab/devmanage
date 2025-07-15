@@ -1,6 +1,5 @@
-import { Requests } from '../../data_management/api.js';
-import { TableComponent } from './tableComponent.js';
-import { html } from '../utils/template-helpers.js';
+import { Requests } from '../../index.js';
+import { html, TableComponent } from '../../index.js';
 
 // Test component that loads real inventory data using the data management API
 export const TestTableComponent = {
