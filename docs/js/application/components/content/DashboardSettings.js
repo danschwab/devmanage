@@ -64,30 +64,11 @@ const DashboardManagementComponent = {
 };
 
 export const DashboardSettings = {
-    components: {
-        DashboardManagementComponent
-    },
     props: {
         currentUser: Object,
         getAllPathsWithStatus: Function,
         addToDashboard: Function,
         removeDashboardContainer: Function
-    },
-    mounted() {
-        console.log('DashboardSettings mounted, emitting hamburger component');
-        this.emitHamburgerComponent();
-    },
-    methods: {
-        emitHamburgerComponent() {
-            this.$emit('custom-hamburger-component', {
-                component: DashboardManagementComponent,
-                props: {
-                    getAllPathsWithStatus: this.getAllPathsWithStatus,
-                    addToDashboard: this.addToDashboard,
-                    removeDashboardContainer: this.removeDashboardContainer
-                }
-            });
-        }
     },
     template: html `
         <div class="settings-content">

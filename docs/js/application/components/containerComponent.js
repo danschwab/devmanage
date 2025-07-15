@@ -51,31 +51,19 @@ export const ContainerComponent = {
             type: Object,
             default: () => ({})
         },
-        hamburgerComponentData: {
-            type: Object,
-            default: null
-        },
         appContext: {
             type: Object,
             default: () => ({})
         }
     },
+    inject: ['hamburgerMenuRegistry'],
     data() {
         return {
-            isLoading: false,
-            // Local navigation map that can be extended at runtime
-            localNavigationMap: {},
-            // Only store custom hamburger component from child components
-            customHamburgerComponent: null,
-            dashboardToggleComponent: null
+            isLoading: false
         };
     },
     mounted() {
-        // Container component is now ready
-        // Breadcrumb navigation is handled by the BreadcrumbComponent
-
-        // Create dashboard toggle component for this container
-        this.createDashboardToggleComponent();
+        console.log('ContainerComponent: Mounted container', this.containerId, 'type:', this.containerType);
     },
     computed: {
         canGoBack() {
@@ -83,7 +71,6 @@ export const ContainerComponent = {
             const pathSegments = this.containerPath.split('/').filter(segment => segment.length > 0);
             if (pathSegments.length <= 1) return false;
             
-            // Don't allow going back if the parent path would be 'dashboard'
             const parentSegments = pathSegments.slice(0, -1);
             if (parentSegments.length === 1 && parentSegments[0] === 'dashboard') {
                 return false;
@@ -97,76 +84,23 @@ export const ContainerComponent = {
             if (pathSegments.length <= 1) return '';
             return pathSegments.slice(0, -1).join('/');
         },
-        // Show hamburger menu if there's any component available OR if we have dashboard toggle
-        shouldShowHamburgerMenu() {
-            const hasCustomComponent = this.customHamburgerComponent || this.hamburgerComponentData;
-            const hasDashboardToggle = this.dashboardToggleComponent;
-            const hasCombinedComponent = this.combinedHamburgerComponent;
-            
-            return this.showHamburgerMenu && (hasCustomComponent || hasDashboardToggle || hasCombinedComponent);
+        shouldShowCloseButton() {
+            if (this.containerType === 'dashboard-settings') return false;
+            if (this.containerPath && this.containerPath.startsWith('dashboard-settings')) return false;
+            return this.showCloseButton;
         },
-        // Combine custom menu with dashboard toggle
-        combinedHamburgerComponent() {
-            if (!this.customHamburgerComponent && !this.dashboardToggleComponent) {
-                return null;
-            }
-            
-            // If only dashboard toggle, return it
-            if (!this.customHamburgerComponent && this.dashboardToggleComponent) {
-                return this.dashboardToggleComponent;
-            }
-            
-            // If only custom component and no dashboard toggle needed (overview), return custom
-            if (this.customHamburgerComponent && !this.dashboardToggleComponent) {
-                return this.customHamburgerComponent;
-            }
-            
-            // Combine both custom content and dashboard toggle
-            if (this.customHamburgerComponent && this.dashboardToggleComponent) {
-                return this.createCombinedComponent();
-            }
-            
-            return null;
+        // Get hamburger menu component from registry
+        hamburgerMenuComponent() {
+            return this.hamburgerMenuRegistry.getMenuComponent(this.containerType, this.containerPath);
+        },
+        shouldShowHamburgerMenu() {
+            return this.showHamburgerMenu && !!this.hamburgerMenuComponent;
         },
         backButtonIcon() {
-            // If we can go back, show back arrow; otherwise show close X
             return this.canGoBack ? 'arrow_back' : '×';
         },
         backButtonTitle() {
-            // If we can go back, show "Go back"; otherwise show "Close"
             return this.canGoBack ? 'Go back' : 'Close';
-        },
-        shouldShowCloseButton() {
-            // Don't show close button for dashboard-settings containers
-            if (this.containerType === 'dashboard-settings') return false;
-            if (this.containerPath && this.containerPath.startsWith('dashboard-settings')) return false;
-            
-            // Use the showCloseButton prop for other containers
-            return this.showCloseButton;
-        }
-    },
-    
-    watch: {
-        // Watch for changes in hamburger component data passed as prop
-        hamburgerComponentData: {
-            handler(newData) {
-                // Force reactivity update for shouldShowHamburgerMenu
-                this.$forceUpdate();
-            },
-            deep: true
-        },
-        // Watch for path changes and recreate dashboard toggle
-        containerPath(newPath, oldPath) {
-            if (newPath !== oldPath) {
-                console.log('ContainerComponent: Container path changed from', oldPath, 'to', newPath);
-                this.createDashboardToggleComponent();
-            }
-        },
-        title(newTitle, oldTitle) {
-            if (newTitle !== oldTitle) {
-                console.log('ContainerComponent: Container title changed from', oldTitle, 'to', newTitle);
-                this.createDashboardToggleComponent();
-            }
         }
     },
     methods: {
@@ -174,131 +108,20 @@ export const ContainerComponent = {
             this.$emit('close-container', this.containerId);
         },
         openHamburgerMenu() {
-            console.log('ContainerComponent: openHamburgerMenu called');
-            console.log('ContainerComponent: customHamburgerComponent:', this.customHamburgerComponent);
-            console.log('ContainerComponent: dashboardToggleComponent:', this.dashboardToggleComponent);
+            console.log('ContainerComponent: Opening hamburger menu for', this.containerType);
             
-            // Always try to combine custom component with dashboard toggle
-            const hasCustom = !!this.customHamburgerComponent;
-            const hasDashboard = !!this.dashboardToggleComponent;
-            
-            if (hasCustom && hasDashboard) {
-                // Combine both custom content and dashboard toggle
+            if (this.hamburgerMenuComponent) {
                 const menuData = {
                     containerId: this.containerId,
                     title: `${this.title} Menu`,
                     containerPath: this.containerPath,
-                    customComponent: this.customHamburgerComponent,
-                    dashboardToggle: this.dashboardToggleComponent,
-                    menuType: 'combined'
+                    component: this.hamburgerMenuComponent.component,
+                    props: this.hamburgerMenuComponent.props
                 };
-                console.log('ContainerComponent: Emitting combined hamburger menu:', menuData);
-                this.$emit('show-hamburger-menu', menuData);
-            } else if (hasCustom) {
-                // Only custom component
-                const menuData = {
-                    containerId: this.containerId,
-                    title: `${this.title} Menu`,
-                    containerPath: this.containerPath,
-                    customComponent: this.customHamburgerComponent,
-                    menuType: 'custom'
-                };
-                console.log('ContainerComponent: Emitting custom hamburger menu:', menuData);
-                this.$emit('show-hamburger-menu', menuData);
-            } else {
-                // Fallback to basic menu
-                const menuData = {
-                    containerId: this.containerId,
-                    title: `${this.title} Menu`,
-                    containerPath: this.containerPath,
-                    menuType: 'dashboard-toggle'
-                };
-                console.log('ContainerComponent: Emitting basic hamburger menu:', menuData);
                 this.$emit('show-hamburger-menu', menuData);
             }
         },
-
-        // Handle custom hamburger component from child components
-        onCustomHamburgerComponent(componentData) {
-            console.log('ContainerComponent: Received custom-hamburger-component:', componentData);
-            console.log('Container ID:', this.containerId, 'Type:', this.containerType);
-            
-            this.customHamburgerComponent = componentData;
-            
-            // Force update to trigger reactivity
-            this.$forceUpdate();
-        },
-
-        createDashboardToggleComponent() {
-            if (this.containerType === 'dashboard-settings') {
-                this.dashboardToggleComponent = null;
-                return;
-            }
-            
-            this.dashboardToggleComponent = {
-                containerPath: this.containerPath || this.containerType,
-                title: this.title
-            };
-        },
-
-        createCombinedComponent() {
-            const customComponent = this.customHamburgerComponent.component;
-            const dashboardComponent = this.dashboardToggleComponent.component;
-            const customProps = this.customHamburgerComponent.props || {};
-            const dashboardProps = this.dashboardToggleComponent.props || {};
-            
-            console.log('ContainerComponent: Creating combined component');
-            console.log('ContainerComponent: Dashboard props:', dashboardProps);
-            
-            return {
-                component: {
-                    components: {
-                        CustomContent: customComponent,
-                        DashboardToggle: dashboardComponent
-                    },
-                    props: {
-                        containerPath: String,
-                        title: String,
-                        dashboardContainers: {
-                            type: Array,
-                            default: () => []
-                        }
-                    },
-                    data() {
-                        return {
-                            customProps: customProps,
-                            dashboardProps: dashboardProps
-                        };
-                    },
-                    computed: {
-                        effectiveContainerPath() {
-                            return this.containerPath || this.dashboardProps.containerPath;
-                        },
-                        effectiveTitle() {
-                            return this.title || this.dashboardProps.title;
-                        }
-                    },
-                    template: html`
-                        <div>
-                            <CustomContent v-bind="customProps" />
-                            <DashboardToggle 
-                                v-bind="dashboardProps" 
-                                :container-path="effectiveContainerPath"
-                                :title="effectiveTitle"
-                                :dashboard-containers="dashboardContainers" />
-                        </div>
-                    `
-                },
-                props: {
-                    containerPath: this.containerPath,
-                    title: this.title,
-                    dashboardContainers: this.appContext?.dashboardContainers || []
-                }
-            };
-        },
-
         expandContainer() {
-            // Emit event to parent to open container as a page
             this.$emit('expand-container', {
                 containerId: this.containerId,
                 title: this.title,
@@ -315,7 +138,6 @@ export const ContainerComponent = {
                     currentPath: this.containerPath
                 });
             } else {
-                // If no parent path, navigate to dashboard
                 this.$emit('navigate-to-path', {
                     containerId: this.containerId,
                     targetPath: 'dashboard',
@@ -323,7 +145,6 @@ export const ContainerComponent = {
                 });
             }
         },
-        // Handle events from breadcrumb component
         onNavigationMappingAdded(event) {
             this.$emit('navigation-mapping-added', event);
         },
@@ -339,7 +160,6 @@ export const ContainerComponent = {
              :data-container-type="containerType"
              :data-container-path="containerPath">
             <div v-if="containerPath || title || cardStyle || shouldShowHamburgerMenu || showExpandButton || !cardStyle" class="container-header">
-                <!-- Breadcrumb Navigation Component -->
                 <BreadcrumbComponent
                     :container-path="containerPath"
                     :title="title"
@@ -373,7 +193,7 @@ export const ContainerComponent = {
             </div>
             
             <div class="content">
-                <slot name="content" @custom-hamburger-component="onCustomHamburgerComponent">
+                <slot name="content">
                     <div>
                         <p>Container {{ containerId }} loaded successfully!</p>
                         <p>Type: {{ containerType }}</p>

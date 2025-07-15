@@ -13,6 +13,7 @@ import {
 } from './components/content/index.js';
 import { DashboardToggleComponent } from './utils/DashboardManagement.js';
 import { Requests } from '../data_management/api.js';
+import { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
 
 const { createApp } = Vue;
 
@@ -67,7 +68,8 @@ const App = {
     },
     provide() {
         return {
-            appContext: this
+            appContext: this,
+            hamburgerMenuRegistry: hamburgerMenuRegistry
         };
     },
     data() {
@@ -387,47 +389,11 @@ const App = {
         showHamburgerMenuModal(menuData) {
             console.log('showHamburgerMenuModal called with:', menuData);
             
-            let modalComponent;
-            let componentProps;
-            
-            if (menuData.menuType === 'combined' && menuData.customComponent) {
-                // Create a combined component with both custom content and dashboard toggle
-                modalComponent = {
-                    components: {
-                        CustomContent: menuData.customComponent.component,
-                        DashboardToggleComponent
-                    },
-                    inject: ['appContext'],
-                    template: html`
-                        <div>
-                            <CustomContent v-bind="customProps" />
-                            <DashboardToggleComponent 
-                                :container-path="containerPath"
-                                :title="title" />
-                        </div>
-                    `,
-                    data() {
-                        return {
-                            customProps: menuData.customComponent.props || {},
-                            containerPath: menuData.containerPath,
-                            title: menuData.title
-                        };
-                    }
-                };
-                componentProps = {};
-            } else if (menuData.customComponent && menuData.customComponent.component) {
-                // Use custom component only
-                modalComponent = menuData.customComponent.component;
-                componentProps = menuData.customComponent.props || {};
-                console.log('Using custom component:', modalComponent);
-                console.log('With props:', componentProps);
-            }
-            
             const modal = this.addModal(
                 menuData.title,
-                modalComponent,
+                menuData.component,
                 {
-                    componentProps: componentProps
+                    componentProps: menuData.props || {}
                 }
             );
             console.log('Modal created:', modal);
@@ -522,9 +488,7 @@ const App = {
                             :current-user="currentUser"
                             :get-all-paths-with-status="getAllPathsWithStatus"
                             :add-to-dashboard="addToDashboard"
-                            :remove-dashboard-container="removeDashboardContainer"
-                            @custom-hamburger-content="$event => { console.log('App: custom-hamburger-content from settings:', $event); container.customHamburgerContent = $event; }"
-                            @custom-hamburger-component="$event => { console.log('App: custom-hamburger-component from settings:', $event); container.customHamburgerComponent = $event; $refs['container-' + container.id]?.[0]?.onCustomHamburgerComponent($event); }">
+                            :remove-dashboard-container="removeDashboardContainer">
                         </dashboard-settings>
                         
                         <!-- Packlist Content -->
@@ -540,27 +504,7 @@ const App = {
                             v-else-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
-                            :navigate-to-path="createNavigateToPathHandler(container.id)"
-                            @custom-hamburger-component="$event => { 
-                                console.log('App: Received custom-hamburger-component from inventory:', $event);
-                                $nextTick(() => {
-                                    const refKey = 'container-' + container.id;
-                                    const containerRef = $refs[refKey];
-                                    console.log('Container ref lookup result:', containerRef);
-                                    console.log('Looking for ref key:', refKey);
-                                    console.log('Available refs:', Object.keys($refs));
-                                    
-                                    if (containerRef && containerRef.length > 0) {
-                                        console.log('App: Calling onCustomHamburgerComponent on container (array)');
-                                        containerRef[0].onCustomHamburgerComponent($event);
-                                    } else if (containerRef && typeof containerRef.onCustomHamburgerComponent === 'function') {
-                                        console.log('App: Calling onCustomHamburgerComponent on container (direct)');
-                                        containerRef.onCustomHamburgerComponent($event);
-                                    } else {
-                                        console.error('App: Could not find container ref or method for', container.id);
-                                    }
-                                });
-                            }">
+                            :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </inventory-content>
                         
                         <!-- Interfaces Content -->
