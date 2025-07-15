@@ -168,7 +168,7 @@ const App = {
             container.containerPath = options.containerPath || '';
             
             // Debug logging for dashboard-settings containers
-            if (type === 'dashboard-settings' || title.includes('Settings') || (options.containerPath && options.containerPath.includes('dashboard-settings'))) {
+            if (type === 'dashboard-settings' || (options.containerPath && options.containerPath.includes('dashboard-settings'))) {
                 console.log('Adding dashboard-settings container:', {
                     type,
                     title,

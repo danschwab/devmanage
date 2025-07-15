@@ -58,7 +58,7 @@ export const NavigationConfig = {
         const segments = path.split('/').filter(segment => segment.length > 0);
         const names = {
             'dashboard': 'Dashboard',
-            'dashboard-settings': 'Dashboard',
+            'dashboard-settings': 'Dashboard', // This ensures the card is titled "Dashboard"
             'inventory': 'Inventory',
             'categories': 'Categories',
             'search': 'Search',
@@ -70,6 +70,11 @@ export const NavigationConfig = {
             'signage': 'Signage'
         };
         
+        // Use special case for dashboard-settings
+        if (segments.includes('dashboard-settings')) {
+            return 'Dashboard';
+        }
+
         // Return the last segment's display name, or generate one
         const lastSegment = segments[segments.length - 1];
         return names[lastSegment] || lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);

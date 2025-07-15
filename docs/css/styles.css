@@ -154,15 +154,11 @@ h1, h2, h3, h4, h5, h6 {
 /* Hamburger Menu etc */
 .button-symbol {
     box-sizing: border-box;
-    font-size: 14pt;
+    /*font-size: 14pt;*/
     width: 28px;
     min-width:0;
     height: 28px;
     padding: 0;
-    cursor: pointer;
-    
-    /*transform: translateY(-50%);*/
-    box-shadow: -1px 1px 6px -2px var(--color-shadow);
 }
 .material-symbols-outlined {
     font-size: 14pt !important;
