@@ -1,4 +1,4 @@
-import { html, DashboardToggleComponent } from '../../index.js';
+import { html, DashboardToggleComponent, InventoryMenuComponent } from '../../index.js';
 
 const { reactive } = Vue;
 
@@ -57,68 +57,6 @@ const DashboardManagementComponent = {
     `
 };
 
-// Inventory Menu Component
-const InventoryMenuComponent = {
-    inject: ['appContext'],
-    props: {
-        currentView: String,
-        containerPath: String,
-        title: String
-    },
-    computed: {
-        menuItems() {
-            switch (this.currentView) {
-                case 'main':
-                    return [
-                        { label: 'Refresh Inventory', action: 'refreshInventory' },
-                        { label: 'Add New Item', action: 'addInventoryItem' },
-                        { label: 'Export All Items', action: 'exportInventory' },
-                        { label: 'Inventory Settings', action: 'inventorySettings' }
-                    ];
-                case 'categories':
-                    return [
-                        { label: 'Add New Category', action: 'addNewCategory' },
-                        { label: 'Manage Category Order', action: 'manageCategoryOrder' },
-                        { label: 'Export Category Report', action: 'exportCategoryReport' },
-                        { label: 'Category Settings', action: 'categorySettings' }
-                    ];
-                default:
-                    return [
-                        { label: 'Refresh', action: 'refreshInventory' },
-                        { label: 'Help', action: 'inventoryHelp' }
-                    ];
-            }
-        }
-    },
-    methods: {
-        handleAction(action) {
-            this.appContext.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
-        }
-    },
-    template: `
-        <div>
-            <div style="text-align: left;">
-                <h4>Inventory Actions</h4>
-                <ul style="list-style: none; padding: 0;">
-                    <li v-for="item in menuItems" :key="item.action" style="margin-bottom: 5px;">
-                        <button 
-                            @click="handleAction(item.action)"
-                            style="width: 100%; padding: 8px 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; text-align: left;">
-                            {{ item.label }}
-                        </button>
-                    </li>
-                </ul>
-            </div>
-            <DashboardToggleComponent 
-                :container-path="containerPath"
-                :title="title" />
-        </div>
-    `,
-    components: {
-        DashboardToggleComponent
-    }
-};
-
 // Hamburger Menu Registry
 export class HamburgerMenuRegistry {
     constructor() {
@@ -129,21 +67,21 @@ export class HamburgerMenuRegistry {
     setupDefaultMenus() {
         // Dashboard Settings gets the management component
         this.registerMenu('dashboard-settings', {
-            component: DashboardManagementComponent,
+            components: [DashboardManagementComponent],
             props: {}
         });
 
         // Inventory gets inventory menu + dashboard toggle
         this.registerMenu('inventory', {
-            component: InventoryMenuComponent,
+            components: [InventoryMenuComponent, DashboardToggleComponent],
             props: {
-                currentView: 'main'
+                currentView: 'inventory',
             }
         });
 
         // Default fallback for other containers
         this.registerDefaultMenu({
-            component: DashboardToggleComponent,
+            components: [DashboardToggleComponent],
             props: {}
         });
     }
@@ -161,7 +99,7 @@ export class HamburgerMenuRegistry {
         if (this.menus.has(containerType)) {
             const menu = this.menus.get(containerType);
             return {
-                component: menu.component,
+                components: menu.components,
                 props: {
                     ...menu.props,
                     containerPath,
@@ -178,7 +116,7 @@ export class HamburgerMenuRegistry {
             if (this.menus.has(basePath)) {
                 const menu = this.menus.get(basePath);
                 return {
-                    component: menu.component,
+                    components: menu.components,
                     props: {
                         ...menu.props,
                         containerPath,
@@ -191,7 +129,7 @@ export class HamburgerMenuRegistry {
         // Return default menu for containers that need dashboard toggle
         if (containerType !== 'dashboard-settings') {
             return {
-                component: this.defaultMenu.component,
+                components: this.defaultMenu.components,
                 props: {
                     ...this.defaultMenu.props,
                     containerPath: containerPath || containerType,
@@ -204,9 +142,9 @@ export class HamburgerMenuRegistry {
     }
 
     getCurrentView(containerPath) {
-        if (!containerPath) return 'main';
+        if (!containerPath) return '';
         const segments = containerPath.split('/').filter(s => s.length > 0);
-        return segments[1] || 'main';
+        return segments.length > 0 ? segments[segments.length - 1] : '';
     }
 }
 

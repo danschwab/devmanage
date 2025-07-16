@@ -1,4 +1,4 @@
-import { html, BreadcrumbComponent } from '../../index.js';
+import { html, BreadcrumbComponent, modalManager } from '../../index.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -83,23 +83,15 @@ export const ContainerComponent = {
             if (pathSegments.length <= 1) return '';
             return pathSegments.slice(0, -1).join('/');
         },
-        shouldShowCloseButton() {
-            if (this.containerType === 'dashboard-settings') return false;
-            if (this.containerPath && this.containerPath.startsWith('dashboard-settings')) return false;
-            return this.showCloseButton;
-        },
         // Get hamburger menu component from registry
         hamburgerMenuComponent() {
             return this.hamburgerMenuRegistry.getMenuComponent(this.containerType, this.containerPath);
-        },
-        shouldShowHamburgerMenu() {
-            return this.showHamburgerMenu && !!this.hamburgerMenuComponent;
         },
         backButtonIcon() {
             return this.canGoBack ? 'arrow_back' : '×';
         },
         backButtonTitle() {
-            return this.canGoBack ? 'Go back' : 'Close';
+            return this.canGoBack ? 'Go back' : 'Close to dashboard';
         }
     },
     methods: {
@@ -114,10 +106,21 @@ export const ContainerComponent = {
                     containerId: this.containerId,
                     title: `${this.title} Menu`,
                     containerPath: this.containerPath,
-                    component: this.hamburgerMenuComponent.component,
+                    components: this.hamburgerMenuComponent.components,
                     props: this.hamburgerMenuComponent.props
                 };
                 this.$emit('show-hamburger-menu', menuData);
+                console.log('showHamburgerMenuModal called with:', menuData);
+                
+                /*const modal = modalManager.createModal(
+                    `${this.title} Menu`,
+                    this.hamburgerMenuComponent.components,
+                    {
+                        componentProps: this.hamburgerMenuComponent.props || {}
+                    }
+                );
+                console.log('Modal created:', modal);
+                modalManager.showModal(modal.id);*/
             }
         },
         expandContainer() {
@@ -168,8 +171,8 @@ export const ContainerComponent = {
                     @navigation-mapping-added="onNavigationMappingAdded"
                     @navigate-to-path="onNavigateToPath" />
                 
-                <div v-if="shouldShowHamburgerMenu || showExpandButton || shouldShowCloseButton || (!cardStyle && canGoBack)" class="header-buttons">
-                    <button v-if="shouldShowHamburgerMenu" 
+                <div v-if="!!this.hamburgerMenuComponent || showExpandButton || (!cardStyle && canGoBack)" class="header-buttons">
+                    <button v-if="!!this.hamburgerMenuComponent" 
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
                             title="Menu">☰</button>
@@ -184,10 +187,6 @@ export const ContainerComponent = {
                         <span v-if="canGoBack" class="material-symbols-outlined">{{ backButtonIcon }}</span>
                         <span v-else>{{ backButtonIcon }}</span>
                     </button>
-                    <button v-if="cardStyle && shouldShowCloseButton" 
-                            class="button-symbol white" 
-                            @click="closeContainer" 
-                            title="Close">×</button>
                 </div>
             </div>
             

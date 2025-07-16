@@ -1,7 +1,7 @@
 import { html, TestTableComponent } from '../../index.js';
 
 // Inventory Hamburger Menu Component (content only)
-const InventoryMenuComponent = {
+export const InventoryMenuComponent = {
     props: {
         currentView: String,
         showAlert: Function
@@ -145,7 +145,7 @@ export const InventoryContent = {
     methods: {
         updateHamburgerMenuComponent() {
             const componentData = {
-                component: InventoryMenuComponent,
+                components: InventoryMenuComponent,
                 props: {
                     currentView: this.currentView,
                     showAlert: this.showAlert
@@ -168,23 +168,11 @@ export const InventoryContent = {
                 this.navigateToPath(`inventory/categories/${categoryName}`);
             }
         },
-        getDisplayName(segmentId) {
-            const names = {
-                'inventory': 'Inventory',
-                'categories': 'Categories',
-                'search': 'Search',
-                'reports': 'Reports',
-                'furniture': 'Furniture',
-                'electronics': 'Electronics',
-                'signage': 'Signage'
-            };
-            return names[segmentId] || segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-        },
         emitCurrentPathInfo() {
             // Emit the current path and title for dashboard management
             this.$emit('path-info', {
                 path: this.containerPath,
-                title: this.getDisplayName(this.currentView || 'inventory')
+                title: NavigationConfig.getDisplayNameForPath(this.currentView || 'inventory')
             });
         }
     },
@@ -255,8 +243,8 @@ export const InventoryContent = {
             
             <!-- Category View -->
             <div v-else-if="currentView === 'categories' && currentCategory">
-                <h3>{{ getDisplayName(currentCategory) }} Inventory</h3>
-                <p>Items in the {{ getDisplayName(currentCategory).toLowerCase() }} category.</p>
+                <h3>{{ NavigationConfig.getDisplayNameForPath(currentCategory) }} Inventory</h3>
+                <p>Items in the {{ NavigationConfig.getDisplayNameForPath(currentCategory).toLowerCase() }} category.</p>
                 
                 <div style="margin: 1rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button @click="showAlert('Filter functionality coming soon!', 'Info')">Filter Items</button>

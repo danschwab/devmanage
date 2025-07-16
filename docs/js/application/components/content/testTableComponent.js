@@ -44,7 +44,7 @@ export const TestTableComponent = {
             this.error = null;
             
             try {
-                const rawData = await Requests.fetchData('INVENTORY', 'Furniture');
+                const rawData = await Requests.fetchData('INVENTORY', 'FURNITURE');
                 this.tableData = this.transformInventoryData(rawData);
             } catch (error) {
                 this.error = error.message;

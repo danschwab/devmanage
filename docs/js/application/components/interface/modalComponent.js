@@ -14,8 +14,8 @@ export const ModalComponent = {
             type: Boolean,
             default: false
         },
-        component: {
-            type: [Object, Function],
+        components: {
+            type: Array,
             required: true
         },
         componentProps: {
@@ -25,8 +25,40 @@ export const ModalComponent = {
     },
     methods: {
         closeModal() {
+            console.log('[ModalComponent] closeModal called for', this.modalId);
             this.$emit('close-modal', this.modalId);
         }
+    },
+    created() {
+        // Vue 2: this.$options.propsData, Vue 3: this.$props
+        // Log all props received by the component
+        console.log('[ModalComponent] created, props:', this.$props || this.$options?.propsData);
+        if (!this.components) {
+            console.warn('[ModalComponent] created: components prop is undefined!', this.$props || this.$options?.propsData);
+        } else if (!Array.isArray(this.components)) {
+            console.warn('[ModalComponent] created: components prop is not an array!', this.components);
+        }
+    },
+    mounted() {
+        console.log('[ModalComponent] mounted', {
+            modalId: this.modalId,
+            isVisible: this.isVisible,
+            components: this.components,
+            componentProps: this.componentProps
+        });
+        if (!this.components) {
+            console.warn('[ModalComponent] mounted: components prop is undefined!');
+        } else if (!Array.isArray(this.components)) {
+            console.warn('[ModalComponent] mounted: components prop is not an array!', this.components);
+        }
+    },
+    updated() {
+        console.log('[ModalComponent] updated', {
+            modalId: this.modalId,
+            isVisible: this.isVisible,
+            components: this.components,
+            componentProps: this.componentProps
+        });
     },
     template: html`
         <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
@@ -36,12 +68,12 @@ export const ModalComponent = {
                     <button class="close-button" @click="closeModal">&times;</button>
                 </div>
                 <div class="modal-content">
-                    <!-- Always render as reactive Vue component with unique key for reactivity -->
-                    <component 
-                        :is="component" 
-                        :key="modalId + '-' + JSON.stringify(componentProps)"
-                        v-bind="componentProps">
-                    </component>
+                    <component
+                        v-for="(comp, idx) in components"
+                        :is="comp"
+                        :key="modalId + '-' + idx + '-' + JSON.stringify(componentProps)"
+                        v-bind="componentProps"
+                    ></component>
                 </div>
             </div>
         </div>
@@ -55,21 +87,29 @@ export class ModalManager {
         this.nextId = 1;
     }
 
-    createModal(title = '', component = null, options = {}) {
-        if (!component) {
-            throw new Error('Modal component is required');
+    createModal(title = '', componentsOrSingle = null, options = {}) {
+        if (!componentsOrSingle) {
+            console.error('[ModalManager] No component(s) provided to createModal');
+            throw new Error('Modal component(s) is required');
         }
-        
+
         const modalId = options.id || `modal-${this.nextId++}`;
-        
+
+        // Always wrap as array
+        const components = Array.isArray(componentsOrSingle)
+            ? componentsOrSingle
+            : [componentsOrSingle];
+
         const modalData = {
             id: modalId,
             title: title,
             isVisible: false,
-            component: component,
+            components: components,
             componentProps: options.componentProps || {},
             created: new Date()
         };
+
+        console.log('[ModalManager] createModal', modalData);
 
         this.modals.set(modalId, modalData);
         return modalData;
@@ -79,6 +119,9 @@ export class ModalManager {
         const modal = this.modals.get(modalId);
         if (modal) {
             modal.isVisible = true;
+            console.log('[ModalManager] showModal', modalId, modal);
+        } else {
+            console.warn('[ModalManager] showModal: modal not found', modalId);
         }
         return modal;
     }
@@ -87,16 +130,23 @@ export class ModalManager {
         const modal = this.modals.get(modalId);
         if (modal) {
             modal.isVisible = false;
+            console.log('[ModalManager] hideModal', modalId, modal);
+        } else {
+            console.warn('[ModalManager] hideModal: modal not found', modalId);
         }
         return modal;
     }
 
     removeModal(modalId) {
-        return this.modals.delete(modalId);
+        const existed = this.modals.delete(modalId);
+        console.log('[ModalManager] removeModal', modalId, 'removed:', existed);
+        return existed;
     }
 
     getAllModals() {
-        return Array.from(this.modals.values());
+        const all = Array.from(this.modals.values());
+        console.log('[ModalManager] getAllModals', all);
+        return all;
     }
 }
 

@@ -157,11 +157,6 @@ export const NavigationConfig = {
             'electronics': 'Electronics',
             'signage': 'Signage'
         };
-        
-        // Use special case for dashboard-settings
-        if (segments.includes('dashboard-settings')) {
-            return 'Dashboard';
-        }
 
         // Return the last segment's display name, or generate one
         const lastSegment = segments[segments.length - 1];

@@ -347,6 +347,7 @@ const App = {
             return modal;
         },
         showModal(modalId) {
+            console.log('App: showModal called with:', modalId);
             const modal = modalManager.showModal(modalId);
             if (modal) {
                 // Update the modal in the reactive array
@@ -389,7 +390,7 @@ const App = {
             
             const modal = this.addModal(
                 menuData.title,
-                menuData.component,
+                menuData.components,
                 {
                     componentProps: menuData.props || {}
                 }
@@ -444,12 +445,6 @@ const App = {
             </primary-nav>
 
             <div id="app-content">
-                <!-- Show auth error if present -->
-                <div v-if="authError" class="error-message" style="background: #ffebee; border: 1px solid #f44336; padding: 1rem; margin: 1rem; border-radius: 4px; color: #c62828;">
-                    <strong>Authentication Error:</strong> {{ authError }}
-                    <button @click="authError = null" style="float: right; background: none; border: none; font-size: 1.2em; cursor: pointer;">&times;</button>
-                </div>
-
                 <!-- Dynamic containers inserted directly here -->
                 <app-container 
                     v-for="container in containers" 
@@ -536,7 +531,7 @@ const App = {
                     :modal-id="modal.id"
                     :title="modal.title"
                     :is-visible="modal.isVisible"
-                    :component="modal.component"
+                    :components="modal.components"
                     :component-props="modal.componentProps"
                     @close-modal="removeModal">
                 </app-modal>

@@ -94,7 +94,26 @@ export class FakeGoogleSheetsService {
     // Mock data for different sheets
     static mockData = {
         'INVENTORY': {
-            'Furniture': [
+            'INDEX': [
+                // Added mock INDEX data based on provided mapping
+                ['PREFIX', 'INVENTORY', 'ROWS-PER-ITEM', 'NOTES'],
+                ['CAB', 'CABINETS', '1', ''],
+                ['HS', 'HANGING SIGNS', '1', ''],
+                ['C', 'CEILING TILES', '1', ''],
+                ['P', 'CEILING TRIM', '2', ''],
+                ['T', 'CEILING TRIM', '2', ''],
+                ['S', 'CEILING TRIM', '2', ''],
+                ['LB', 'LIGHTBOXES', '1', ''],
+                ['CNTR', 'COUNTERTOPS', '1', 'NEW'],
+                ['SHLF', 'SHELVES', '1', 'NEW'],
+                ['STOOL', 'FURNITURE', '1', ''],
+                ['CHAIR', 'FURNITURE', '1', ''],
+                ['COUCH', 'FURNITURE', '1', ''],
+                ['TABLE', 'FURNITURE', '1', ''],
+                ['TTOP', 'FURNITURE', '1', ''],
+                ['TBASE', 'FURNITURE', '1', '']
+            ],
+            'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],
                 ['TABLE-001', '', '2', '', '', 'Conference room table black 30 x 76 x 30', ''],
                 ['TABLE-002', '', '2', '', '', 'Glass-top square end table w/ metal bases 18x18x16', ''],
@@ -110,11 +129,13 @@ export class FakeGoogleSheetsService {
                 ['TTOP-001', '', '15', '', '', '30" white cocktail table tops-round', ''],
                 ['TBASE-001', '', '8', '', '', 'cocktail table bases', '']
             ],
-            'Archive': [
-                ['Archived Item', 'Date Archived', 'Reason'],
-                ['Old Widget', '2025-06-01', 'Discontinued'],
-                ['Legacy Tool', '2025-05-15', 'Obsolete']
-            ]
+            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'HANGING SIGNS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'CEILING TILES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'CEILING TRIM': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'LIGHTBOXES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'COUNTERTOPS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
+            'SHELVES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['ITEM-001', '', '0', '', '', 'Blah blah blah', '']],
         },
         'PACK_LISTS': {
             'TEMPLATE': [
