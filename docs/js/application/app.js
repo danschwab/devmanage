@@ -106,6 +106,8 @@ const App = {
                 const success = await Auth.login();
                 if (success) {
                     console.log('Login successful');
+                    // Always set location to dashboard after login
+                    this.currentPage = 'dashboard';
                     // Containers will update automatically via watcher
                 } else {
                     console.error('Login failed');
