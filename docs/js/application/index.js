@@ -19,7 +19,7 @@ export { DashboardManagement, DashboardToggleComponent, DashboardManagementCompo
 export { hamburgerMenuRegistry } from './components/dashboard/HamburgerMenuRegistry.js';
 
 // Content components export
-export { TestTableComponent } from './components/content/testTableComponent.js';
+export { InventoryTableComponent } from './components/content/InventoryTable.js';
 export { PacklistContent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { InterfacesContent } from './components/content/InterfacesContent.js';

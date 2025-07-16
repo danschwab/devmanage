@@ -1,5 +1,5 @@
 import { ContainerComponent, containerManager } from './index.js';
-import { TestTableComponent } from './index.js';
+import { InventoryTableComponent } from './index.js';
 import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
 import { Auth, authState } from './index.js';
@@ -19,7 +19,7 @@ const { createApp } = Vue;
 const App = {
     components: {
         'app-container': ContainerComponent,
-        'test-table': TestTableComponent,
+        'inventory-table': InventoryTableComponent,
         'app-modal': ModalComponent,
         'primary-nav': PrimaryNavComponent,
         'dashboard-settings': DashboardSettings,

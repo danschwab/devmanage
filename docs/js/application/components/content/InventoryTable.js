@@ -1,8 +1,8 @@
 import { Requests } from '../../index.js';
 import { html, TableComponent } from '../../index.js';
 
-// Test component that loads real inventory data using the data management API
-export const TestTableComponent = {
+// Inventory component that loads real inventory data using the data management API
+export const InventoryTableComponent = {
     components: {
         TableComponent
     },
@@ -88,7 +88,7 @@ export const TestTableComponent = {
         }
     },
     template: html `
-        <div class="test-table-component">
+        <div class="inventory-table-component">
             <TableComponent
                 :data="tableData"
                 :columns="columns"

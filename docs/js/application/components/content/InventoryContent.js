@@ -1,4 +1,4 @@
-import { html, TestTableComponent, hamburgerMenuRegistry, NavigationConfig } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationConfig } from '../../index.js';
 import { modalManager } from '../interface/modalComponent.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -123,7 +123,7 @@ export const InventoryMenuComponent = {
 
 export const InventoryContent = {
     components: {
-        'test-table': TestTableComponent
+        'inventory-table': InventoryTableComponent
     },
     props: {
         containerPath: {
@@ -190,7 +190,7 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Inventory</h4>
-                    <test-table></test-table>
+                    <inventory-table></inventory-table>
                 </div>
             </div>
             
@@ -228,7 +228,7 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Items in this Category</h4>
-                    <test-table></test-table>
+                    <inventory-table></inventory-table>
                 </div>
             </div>
             
@@ -246,7 +246,7 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Search Results</h4>
-                    <test-table></test-table>
+                    <inventory-table></inventory-table>
                 </div>
             </div>
             
@@ -264,7 +264,7 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Reports</h4>
-                    <test-table></test-table>
+                    <inventory-table></inventory-table>
                 </div>
             </div>
             
