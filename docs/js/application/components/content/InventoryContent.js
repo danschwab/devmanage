@@ -1,4 +1,4 @@
-import { html, TestTableComponent } from '../../index.js';
+import { html, TestTableComponent, hamburgerMenuRegistry, NavigationConfig } from '../../index.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
@@ -9,7 +9,7 @@ export const InventoryMenuComponent = {
     computed: {
         menuItems() {
             switch (this.currentView) {
-                case 'main':
+                case 'inventory':
                     return [
                         { label: 'Refresh Inventory', action: 'refreshInventory' },
                         { label: 'Add New Item', action: 'addInventoryItem' },
@@ -105,17 +105,14 @@ export const InventoryMenuComponent = {
         }
     },
     template: html`
-        <div style="text-align: left;">
-            <h4>Inventory Actions</h4>
-            <ul style="list-style: none; padding: 0;">
-                <li v-for="item in menuItems" :key="item.action" style="margin-bottom: 5px;">
-                    <button 
-                        @click="handleAction(item.action)">
-                        {{ item.label }}
-                    </button>
-                </li>
-            </ul>
-        </div>
+        <ul>
+            <li v-for="item in menuItems" :key="item.action">
+                <button 
+                    @click="handleAction(item.action)">
+                    {{ item.label }}
+                </button>
+            </li>
+        </ul>
     `
 };
 
@@ -136,66 +133,35 @@ export const InventoryContent = {
             return this.containerPath.split('/').filter(segment => segment.length > 0);
         },
         currentView() {
-            return this.pathSegments[1] || 'main';
+            return this.pathSegments[1] || 'inventory';
         },
         currentCategory() {
             return this.pathSegments[2] || '';
+        },
+        // Expose NavigationConfig to the template
+        NavigationConfig() {
+            return NavigationConfig;
         }
     },
     methods: {
-        updateHamburgerMenuComponent() {
-            const componentData = {
-                components: InventoryMenuComponent,
-                props: {
-                    currentView: this.currentView,
-                    showAlert: this.showAlert
-                }
-            };
-            
-            console.log('InventoryContent: Emitting custom-hamburger-component with:', componentData);
-            console.log('Current view:', this.currentView);
-            console.log('Container path:', this.containerPath);
-            console.log('Path segments:', this.pathSegments);
-            this.$emit('custom-hamburger-component', componentData);
-        },
-        navigateToView(viewName) {
-            if (this.navigateToPath) {
-                this.navigateToPath(`inventory/${viewName}`);
-            }
-        },
-        navigateToCategory(categoryName) {
-            if (this.navigateToPath) {
-                this.navigateToPath(`inventory/categories/${categoryName}`);
-            }
-        },
-        emitCurrentPathInfo() {
-            // Emit the current path and title for dashboard management
-            this.$emit('path-info', {
-                path: this.containerPath,
-                title: NavigationConfig.getDisplayNameForPath(this.currentView || 'inventory')
-            });
+        exampleMethod() {
+            // Example method logic
+            this.showAlert('Example method called!', 'Info');
         }
     },
     mounted() {
         // Ensure we emit hamburger component for the initial view
-        this.$nextTick(() => {
-            this.updateHamburgerMenuComponent();
-            this.emitCurrentPathInfo();
+        hamburgerMenuRegistry.registerMenu('inventory', {
+            components: [InventoryMenuComponent],
+            props: {
+                currentView: 'inventory',
+            }
         });
-    },
-    watch: {
-        currentView: {
-            handler() {
-                this.updateHamburgerMenuComponent();
-                this.emitCurrentPathInfo();
-            },
-            immediate: true
-        }
     },
     template: html `
         <div class="inventory-page">
             <!-- Main Inventory View -->
-            <div v-if="currentView === 'main'">
+            <div v-if="currentView === 'inventory'">
                 <h3>Inventory Management</h3>
                 <p>Manage and track all inventory items, conditions, and locations.</p>
                 
@@ -208,9 +174,9 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Quick Actions</h4>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-                        <button @click="navigateToView('categories')">Browse by Category</button>
-                        <button @click="navigateToView('search')">Advanced Search</button>
-                        <button @click="navigateToView('reports')">View Reports</button>
+                        <button @click="navigateToPath('inventory/categories')">Browse by Category</button>
+                        <button @click="navigateToPath('inventory/search')">Advanced Search</button>
+                        <button @click="navigateToPath('inventory/reports')">View Reports</button>
                     </div>
                 </div>
                 
@@ -226,15 +192,15 @@ export const InventoryContent = {
                 <p>Browse inventory items by category.</p>
                 
                 <div style="margin: 1rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                    <button class="category-card" @click="navigateToCategory('furniture')">
+                    <button class="category-card" @click="navigateToPath('inventory/categories/furniture')">
                         <h4 style="margin: 0 0 0.5rem 0;">Furniture</h4>
                         <p style="margin: 0; color: #666;">Tables, chairs, displays</p>
                     </button>
-                    <button class="category-card" @click="navigateToCategory('electronics')">
+                    <button class="category-card" @click="navigateToPath('inventory/categories/electronics')">
                         <h4 style="margin: 0 0 0.5rem 0;">Electronics</h4>
                         <p style="margin: 0; color: #666;">AV equipment, lighting</p>
                     </button>
-                    <button class="category-card" @click="navigateToCategory('signage')">
+                    <button class="category-card" @click="navigateToPath('inventory/categories/signage')">
                         <h4 style="margin: 0 0 0.5rem 0;">Signage</h4>
                         <p style="margin: 0; color: #666;">Banners, displays, graphics</p>
                     </button>

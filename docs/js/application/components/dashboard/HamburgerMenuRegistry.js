@@ -1,4 +1,4 @@
-import { html, DashboardToggleComponent, InventoryMenuComponent } from '../../index.js';
+import { html, DashboardToggleComponent } from '../../index.js';
 
 const { reactive } = Vue;
 
@@ -66,32 +66,26 @@ export class HamburgerMenuRegistry {
 
     setupDefaultMenus() {
         // Dashboard Settings gets the management component
-        this.registerMenu('dashboard-settings', {
+        this.menus.set('dashboard-settings', {
             components: [DashboardManagementComponent],
             props: {}
         });
 
-        // Inventory gets inventory menu + dashboard toggle
-        this.registerMenu('inventory', {
-            components: [InventoryMenuComponent, DashboardToggleComponent],
-            props: {
-                currentView: 'inventory',
-            }
-        });
-
         // Default fallback for other containers
-        this.registerDefaultMenu({
+        this.defaultMenu = {
             components: [DashboardToggleComponent],
             props: {}
-        });
+        };
     }
 
     registerMenu(containerType, menuConfig) {
+        // Ensure all components from defaultMenu are included
+        this.defaultMenu.components.forEach(component => {
+            if (!menuConfig.components.includes(component)) {
+                menuConfig.components = [...menuConfig.components, component];
+            }
+        });
         this.menus.set(containerType, menuConfig);
-    }
-
-    registerDefaultMenu(menuConfig) {
-        this.defaultMenu = menuConfig;
     }
 
     getMenuComponent(containerType, containerPath = '') {

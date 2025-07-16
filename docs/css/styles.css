@@ -468,6 +468,12 @@ button:hover {
     width: 100%;
     max-width: 100%;
 }
+.modal-content ul {
+    list-style: none;
+    padding: 0;
+}
+
+
 
 /* Tab Navigation */
 .tabs {
