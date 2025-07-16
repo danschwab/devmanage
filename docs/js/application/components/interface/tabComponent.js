@@ -18,8 +18,9 @@ export const TabComponent = {
     },
     emits: ['tab-change', 'tab-close', 'new-tab', 'hamburger-menu'],
     data() {
+        const tabs = this.tabs || [];
         return {
-            internalActiveTab: this.activeTab || (this.tabs[0]?.name || ''),
+            internalActiveTab: this.activeTab || (tabs[0]?.name || ''),
             isOverflowing: false
         };
     },

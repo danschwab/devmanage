@@ -47,19 +47,27 @@ export const PacklistContent = {
         TabComponent
     },
     props: {
-        showAlert: Function
+        showAlert: Function,
+        containerPath: String,
+        navigateToPath: Function
     },
     data() {
+        // Use $root property system for initial state
+        const root = this.$root || {};
+        const cached = root.getProperty?.('tabSystems', 'packlist', { tabs: [], activeTab: '' }) || { tabs: [], activeTab: '' };
+        // If no tabs, create a default tab
+        if (!cached.tabs || cached.tabs.length === 0) {
+            cached.tabs = [{
+                name: 'main-packlist',
+                label: 'Main Packlist',
+                closable: false,
+                content: '<div><p>Main packlist content goes here.</p></div>'
+            }];
+            cached.activeTab = 'main-packlist';
+        }
         return {
-            tabs: [
-                {
-                    name: 'main-packlist',
-                    label: 'Main Packlist',
-                    closable: false,
-                    content: '<div><p>Main packlist content goes here.</p></div>'
-                }
-            ],
-            activeTab: 'main-packlist'
+            tabs: cached.tabs,
+            activeTab: cached.activeTab
         };
     },
     computed: {
@@ -84,6 +92,10 @@ export const PacklistContent = {
     methods: {
         handleTabChange(tabName) {
             this.activeTab = tabName;
+            this.$root.setProperty('tabSystems', 'packlist', {
+                tabs: this.tabs,
+                activeTab: tabName
+            });
         },
         handleTabClose(tabName) {
             const idx = this.tabs.findIndex(t => t.name === tabName);
@@ -99,6 +111,10 @@ export const PacklistContent = {
                         this.activeTab = this.tabs[0].name;
                     }
                 }
+                this.$root.setProperty('tabSystems', 'packlist', {
+                    tabs: this.tabs,
+                    activeTab: this.activeTab
+                });
             }
         },
         handleNewTab() {
@@ -116,6 +132,10 @@ export const PacklistContent = {
                 content: `<div><p>New packlist tab #${newTabIdx}.</p></div>`
             });
             this.activeTab = newTabName;
+            this.$root.setProperty('tabSystems', 'packlist', {
+                tabs: this.tabs,
+                activeTab: newTabName
+            });
         }
     },
     template: html `

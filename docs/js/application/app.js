@@ -45,7 +45,10 @@ const App = {
             containers: [],
             // Make dashboard containers reactive
             dashboardContainers: [...NavigationConfig.allDashboardContainers],
-            modals: [] // Start with empty array, make reactive below
+            modals: [], // Start with empty array, make reactive below
+            tabSystems: {
+                // Example: 'packlist': { tabs: [], activeTab: '' }
+            }
         };
     },
     computed: {
@@ -320,7 +323,30 @@ const App = {
             
             // Add to container manager's global map
             containerManager.addGlobalNavigationMapping(segmentId, displayName);
-        }
+        },
+
+        /**
+         * Generic property getter for module state
+         * @param {string} module - Module name/key
+         * @param {string} prop - Property name
+         * @param {*} defaultValue - Value to return if not set
+         */
+        getProperty(module, prop, defaultValue = undefined) {
+            if (this[module] && prop in this[module]) {
+                return this[module][prop];
+            }
+            return defaultValue;
+        },
+        /**
+         * Generic property setter for module state
+         * @param {string} module - Module name/key
+         * @param {string} prop - Property name
+         * @param {*} value - Value to set
+         */
+        setProperty(module, prop, value) {
+            if (!this[module]) this[module] = {};
+            this[module][prop] = value;
+        },
     },
     setup() {
         return { modalManager };
