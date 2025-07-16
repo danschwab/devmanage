@@ -1,4 +1,4 @@
-import { html, modalManager } from '../../index.js';
+import { html, modalManager, hamburgerMenuRegistry } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -45,13 +45,32 @@ export const PacklistContent = {
     props: {
         showAlert: Function
     },
+    computed: {
+        // Expose NavigationConfig to the template
+        NavigationConfig() {
+            return NavigationConfig;
+        },
+        // Add modalManager reference for template access
+        modalManager() {
+            return modalManager;
+        }
+    },
+    mounted() {
+        // Ensure we emit hamburger component for the initial view
+        hamburgerMenuRegistry.registerMenu('packlist', {
+            components: [PacklistMenuComponent],
+            props: {
+                currentView: 'packlist',
+            }
+        });
+    },
     template: html `
         <div class="packlist-page">
             <h3>Pack List Management</h3>
             <p>Create and manage pack lists for exhibits and events.</p>
             <div style="margin-top: 1rem;">
-                <button @click="showAlert('Create new pack list functionality coming soon!', 'Info')">Create New Pack List</button>
-                <button @click="showAlert('Import from Inventor functionality coming soon!', 'Info')">Import from Inventor</button>
+                <button @click="modalManager.showAlert('Create new pack list functionality coming soon!', 'Info')">Create New Pack List</button>
+                <button @click="modalManager.showAlert('Import from Inventor functionality coming soon!', 'Info')">Import from Inventor</button>
             </div>
         </div>
     `
