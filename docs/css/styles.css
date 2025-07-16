@@ -513,6 +513,10 @@ button:hover {
     display: none;
     width: 50%;
 }
+.dashboard-card .tabs.dropdown-mode .tab-button {
+    display: none;
+    width: calc(100% - 1rem);
+}
 
 .tabs.dropdown-mode .tab-button.active {
     display: inline-block;
@@ -536,6 +540,10 @@ button:hover {
     padding-left: 25px;  /* Center content while making room for close button */
 }
 
+
+.tabs.dropdown-mode .new-tab-button {
+    display: none;
+}
 .tabs.dropdown-mode.menu-open .new-tab-button {
     display: block;
     width: 50%;
@@ -545,6 +553,11 @@ button:hover {
     border-radius: 0 0 var(--radius-md) var(--radius-md);
     max-width: 100%;
 }
+
+.dashboard-card .tabs.dropdown-mode.menu-open .new-tab-button {
+    width: calc(100% - 1rem);
+}
+
 
 .tab-button {
     display: inline-block;
@@ -595,7 +608,7 @@ button:hover {
 }
 
 .tab-content {
-    display: none;
+    /* display: none; */
     padding: none;
 }
 

@@ -31,7 +31,7 @@ export const TableComponent = {
             default: 'No data available'
         }
     },
-    emits: ['refresh'],
+    emits: ['refresh', 'cell-edit', 'row-move'],
     methods: {
         handleRefresh() {
             this.$emit('refresh');
@@ -84,6 +84,12 @@ export const TableComponent = {
         
         getColumnWidth(column) {
             return column.width ? `${column.width}px` : 'auto';
+        },
+        handleCellEdit(rowIndex, colIndex, value) {
+            this.$emit('cell-edit', rowIndex, colIndex, value);
+        },
+        handleRowMove() {
+            this.$emit('row-move');
         }
     },
     template: html `
@@ -122,7 +128,7 @@ export const TableComponent = {
                     <thead>
                         <tr>
                             <th 
-                                v-for="column in columns" 
+                                v-for="(column, colIdx) in columns" 
                                 :key="column.key"
                                 :style="{ width: getColumnWidth(column) }"
                                 :class="column.headerClass"
@@ -134,12 +140,24 @@ export const TableComponent = {
                     <tbody>
                         <tr v-for="(row, rowIndex) in data" :key="rowIndex">
                             <td 
-                                v-for="column in columns" 
+                                v-for="(column, colIndex) in columns" 
                                 :key="column.key"
                                 :class="getCellClass(row[column.key], column)"
                             >
-                                <div v-if="column.component" v-html="column.component(row[column.key], row)"></div>
-                                <div v-else>{{ formatCellValue(row[column.key], column) }}</div>
+                                <div v-if="column.editable">
+                                    <div
+                                        contenteditable="true"
+                                        :data-row-index="rowIndex"
+                                        :data-col-index="colIndex"
+                                        @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
+                                        class="table-edit-textarea"
+                                    >{{ row[column.key] }}</div>
+                                </div>
+                                <div v-else>
+                                    <slot :row="row" :rowIndex="rowIndex" :column="column">
+                                        {{ formatCellValue(row[column.key], column) }}
+                                    </slot>
+                                </div>
                             </td>
                         </tr>
                     </tbody>

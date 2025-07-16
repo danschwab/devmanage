@@ -218,6 +218,49 @@ export class FakeGoogleSheetsService {
                 ['13', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
                 ['14', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
                 ['15', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list']
+            ],
+            'GEARFIRE 2025 SHOT': [
+                ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
+                ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
+                ['1', 'Skid', '72', '32', '48', '800', '', '', '(1) straight-section reception counter (one of two sections). Test lighting', 'Sintra logo- last CES 2025'],
+                ['', '', '', '', '', '', '', '', 'Client junk', ''],
+                ['2', 'Skid', '120', '48', '48', '1200', '', '', '(3) rolls 10\'x70\' SLATE gray carpeting', ''],
+                ['3', 'Skid', '120', '48', '48', '600', '', '', 'Padding for 30x70', ''],
+                ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067'],
+                ['4', 'Crate', '72', '48', '48', '800', '', '', '(4) CAB-004 Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', ''],
+                ['', '', '', '', '', '', '', '', 'SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Blank SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Client Packages', ''],
+                ['', '', '', '', '', '', '', '', 'Front office items and other inbound client items', ''],
+                ['', '', '', '', '', '', '', '', 'All Sintra/foamcore signs', 'New from Olympus'],
+                ['', '', '', '', '', '', '', '', 'Set top graphics (paper or foamcore)', 'New from Olympus'],
+                ['', '', '', '', '', '', '', '', 'Package (all) cardboard easelbacks prints', 'Office'],
+                ['', '', '', '', '', '', '', '', '5" carboard easelbacks packet', 'Inbound purchase'],
+                ['', '', '', '', '', '', '', '', '(6) Acrylic wedge blocks/frames 3"x10"', 'Office. Add new prints prior to packing'],
+                ['5', 'Crate', '72', '48', '48', '800', '', '', '(4) CAB-004 Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', ''],
+                ['', '', '', '', '', '', '', '', 'TEJAS ITEMS- AS RECEIVED', ''],
+                ['6', 'Crate', '72', '48', '48', '800', '', '', '(3) CAB-004 Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', ''],
+                ['7', 'Coffin Crate', '', '', '', '', '', '', 'On Top: Hanging sign frame 18\'x18\'x5\'', '32 horizontal members; 4 corner posts (54") 12 spreaders (54"+); 8 corner blocks, eye bolts and connectors'],
+                ['', '', '', '', '', '', '', '', 'On Top: Hangiing sign fabric cover- ATSC', 'Last- CES 2025'],
+                ['', '', '', '', '', '', '', '', 'Sintra prints- all elevations', 'New from Olympus'],
+                ['', '', '', '', '', '', '', '', 'Sintra prints existing', 'From CES/NAB'],
+                ['', '', '', '', '', '', '', '', 'BeMatrix H/W', ''],
+                ['', '', '', '', '', '', '', '', '(10) extra blocking boards for 992 frames', 'Not on BeMatrix pick list'],
+                ['', '', '', '', '', '', '', '', '(24) extra metal drop in brackets', 'Not on BeMatrix pick list'],
+                ['', '', '', '', '', '', '', '', '(1) Yamaha powered speakers with cords', ''],
+                ['', '', '', '', '', '', '', '', 'Corded microphone kit', ''],
+                ['', '', '', '', '', '', '', '', 'Wireless presenter\'s kit', ''],
+                ['', '', '', '', '', '', '', '', 'White demo counter top @ 48" wide x 20" deep', '3/4"; cut down from a larger oversized top. Drill holes for standoffs for demo cabinet'],
+                ['', '', '', '', '', '', '', '', 'Grey countertop with existing grommet caps (black) all in place and taped down', 'Last-CES. Verify size vs. drawing'],
+                ['', '', '', '', '', '', '', '', '(2) white counter sections @ 95"x18" for hospitality bar', ''],
+                ['', '', '', '', '', '', '', '', '(16) heavy L brackets for shelf supports', 'Packed with Hardware'],
+                ['', '', '', '', '', '', '', '', '8.5x11 lit acrylic lit pockets (6)', 'Clean/matching'],
+                ['', '', '', '', '', '', '', '', '(6) 19" TV\'s with small mount kits', ''],
+                ['', '', '', '', '', '', '', '', 'Square glass cocktail table kit', ''],
+                ['', '', '', '', '', '', '', '', '(1) laminated riser from MOJO SHOT show', '30"x30"x12"'],
+                ['', '', '', '', '', '', '', '', '(2) 55" Samsung TV screen', 'Top Shelf rentals'],
+                ['', '', '', '', '', '', '', '', 'Power cord', '']
             ]
         },
         'PROD_SCHED': {
@@ -510,20 +553,25 @@ export class FakeGoogleSheetsService {
 
     static mockTabs = {
         'INVENTORY': [
-            { title: 'Sheet1', sheetId: 0 },
-            { title: 'Archive', sheetId: 1 },
-            { title: 'Temp_Sheet_1', sheetId: 2 }
+            { title: 'INDEX', sheetId: 0 },
+            { title: 'FURNITURE', sheetId: 1 },
+            { title: 'CABINETS', sheetId: 2 },
+            { title: 'HANGING SIGNS', sheetId: 3 },
+            { title: 'CEILING TILES', sheetId: 4 },
+            { title: 'CEILING TRIM', sheetId: 5 },
+            { title: 'LIGHTBOXES', sheetId: 6 },
+            { title: 'COUNTERTOPS', sheetId: 7 },
+            { title: 'SHELVES', sheetId: 8 }
         ],
         'PACK_LISTS': [
-            { title: 'Current', sheetId: 0 },
             { title: 'TEMPLATE', sheetId: 1 },
-            { title: 'ATSC 2025 NAB', sheetId: 2 }
+            { title: 'ATSC 2025 NAB', sheetId: 2 },
+            { title: 'GEARFIRE 2025 SHOT', sheetId: 3 }
         ],
         'PROD_SCHED': [
-            { title: 'Schedule', sheetId: 0 },
-            { title: 'Completed', sheetId: 1 },
-            { title: 'Clients', sheetId: 2 },
-            { title: 'Shows', sheetId: 3 }
+            { title: 'ProductionSchedule', sheetId: 0 },
+            { title: 'Clients', sheetId: 1 },
+            { title: 'Shows', sheetId: 2 }
         ],
         'CACHE': [
             { title: 'CacheData', sheetId: 0 }

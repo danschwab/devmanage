@@ -1,5 +1,4 @@
-import { html, modalManager, hamburgerMenuRegistry } from '../../index.js';
-import { TabComponent } from '../interface/tabComponent.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, TabComponent, PacklistTable } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -42,9 +41,42 @@ export const PacklistMenuComponent = {
 
 
 
+export const PacklistTabsComponent = {
+    props: {
+        tabs: {
+            type: Array,
+            required: true
+        },
+        onSelect: {
+            type: Function,
+            required: true
+        }
+    },
+    methods: {
+        selectTab(tabName) {
+            this.onSelect(tabName);
+        }
+    },
+    template: html`
+        <div>
+            <h3>Select a Packlist Tab</h3>
+            <ul>
+                <li v-for="tab in tabs" :key="tab.title">
+                    <button @click="selectTab(tab.title)">
+                        {{ tab.title }}
+                    </button>
+                </li>
+            </ul>
+        </div>
+    `
+};
+
+
+
 export const PacklistContent = {
     components: {
-        TabComponent
+        TabComponent,
+        PacklistTabsComponent
     },
     props: {
         showAlert: Function,
@@ -57,12 +89,7 @@ export const PacklistContent = {
         const cached = root.getProperty?.('tabSystems', 'packlist', { tabs: [], activeTab: '' }) || { tabs: [], activeTab: '' };
         // If no tabs, create a default tab
         if (!cached.tabs || cached.tabs.length === 0) {
-            cached.tabs = [{
-                name: 'main-packlist',
-                label: 'Main Packlist',
-                closable: false,
-                content: '<div><p>Main packlist content goes here.</p></div>'
-            }];
+            cached.tabs = [];
             cached.activeTab = 'main-packlist';
         }
         return {
@@ -117,31 +144,55 @@ export const PacklistContent = {
                 });
             }
         },
-        handleNewTab() {
-            // Ensure unique tab name
-            let newTabIdx = this.tabs.length + 1;
-            let newTabName = `packlist-${newTabIdx}`;
-            while (this.tabs.some(tab => tab.name === newTabName)) {
-                newTabIdx++;
-                newTabName = `packlist-${newTabIdx}`;
+        async handleNewTab() {
+            let tabs = [];
+            try {
+                tabs = await Requests.getAvailableTabs('PACK_LISTS');
+                // Remove "Current" tab if present
+                tabs = tabs.filter(tab => tab.title !== 'TEMPLATE');
+            } catch (err) {
+                this.modalManager.showAlert('Failed to load packlist tabs: ' + err.message, 'Error');
+                return;
             }
-            this.tabs.push({
-                name: newTabName,
-                label: `Packlist ${newTabIdx}`,
-                closable: true,
-                content: `<div><p>New packlist tab #${newTabIdx}.</p></div>`
-            });
-            this.activeTab = newTabName;
-            this.$root.setProperty('tabSystems', 'packlist', {
-                tabs: this.tabs,
-                activeTab: newTabName
-            });
+            const self = this;
+            const handleSelect = async function(tabName) {
+                let content;
+                try {
+                    content = await Requests.getPackList(tabName);
+                } catch (err) {
+                    self.modalManager.showAlert('Failed to load packlist: ' + err.message, 'Error');
+                    return;
+                }
+                self.tabs.push({
+                    name: tabName,
+                    label: tabName,
+                    closable: true,
+                    component: PacklistTable,
+                    props: { content, tabName }
+                });
+                self.activeTab = tabName;
+                self.$root.setProperty('tabSystems', 'packlist', {
+                    tabs: self.tabs,
+                    activeTab: tabName
+                });
+                self.modalManager.removeModal && self.modalManager.removeModal('packlist-tabs-modal');
+            };
+            const modal = modalManager.createModal(
+                'Open Packlist',
+                PacklistTabsComponent,
+                {
+                    id: 'packlist-tabs-modal',
+                    componentProps: {
+                        tabs,
+                        onSelect: handleSelect
+                    }
+                }
+            );
+            modalManager.showModal(modal.id);
         }
     },
     template: html `
         <div class="packlist-page">
-            <h3>Pack List Management</h3>
-            <p>Create and manage pack lists for exhibits and events.</p>
             <TabComponent
                 :tabs="tabs"
                 :active-tab="activeTab"
