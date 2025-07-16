@@ -15,40 +15,6 @@ import { Requests } from './index.js';
 
 const { createApp } = Vue;
 
-// Create simple alert and confirm components
-const AlertComponent = {
-    props: {
-        message: String
-    },
-    template: html`
-        <div style="text-align: center; padding: 1rem;">
-            <p>{{ message }}</p>
-        </div>
-    `
-};
-
-const SystemInfoComponent = {
-    computed: {
-        systemInfo() {
-            return {
-                browser: navigator.userAgent,
-                platform: navigator.platform,
-                language: navigator.language,
-                online: navigator.onLine ? 'Yes' : 'No'
-            };
-        }
-    },
-    template: html`
-        <div style="text-align: left;">
-            <h4>System Information</h4>
-            <p><strong>Browser:</strong> {{ systemInfo.browser }}</p>
-            <p><strong>Platform:</strong> {{ systemInfo.platform }}</p>
-            <p><strong>Language:</strong> {{ systemInfo.language }}</p>
-            <p><strong>Online:</strong> {{ systemInfo.online }}</p>
-        </div>
-    `
-};
-
 // Vue app with inline template
 const App = {
     components: {
@@ -60,8 +26,6 @@ const App = {
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
         'interfaces-content': InterfacesContent,
-        AlertComponent,
-        SystemInfoComponent,
         DashboardToggleComponent
     },
     provide() {
@@ -79,9 +43,9 @@ const App = {
             })),
             currentPage: 'dashboard',
             containers: [],
-            modals: [],
             // Make dashboard containers reactive
-            dashboardContainers: [...NavigationConfig.allDashboardContainers]
+            dashboardContainers: [...NavigationConfig.allDashboardContainers],
+            modals: [] // Start with empty array, make reactive below
         };
     },
     computed: {
@@ -121,10 +85,14 @@ const App = {
             }
             this.updateContainersForPage(this.currentPage);
         });
+
+        // Pass the reactive modals array to modalManager for all modal operations
+        modalManager.setReactiveModals(this.modals);
     },
     beforeUnmount() {
         // Clean up event listener
         document.removeEventListener('keydown', this.handleKeyDown);
+        // No interval to clear
     },
     methods: {
         toggleMenu() {
@@ -330,80 +298,6 @@ const App = {
         async updateContainersForPage(pageFile) {
             await NavigationConfig.updateContainersForPage(pageFile, this);
         },
-        handleKeyDown(event) {
-            if (event.key === 'Escape') {
-                // Close all modals on ESC
-                this.modals.forEach(modal => {
-                    if (modal.isVisible) {
-                        this.hideModal(modal.id);
-                    }
-                });
-            }
-        },
-        // Modal management methods
-        addModal(title = '', component = null, options = {}) {
-            const modal = modalManager.createModal(title, component, options);
-            this.modals.push(modal);
-            return modal;
-        },
-        showModal(modalId) {
-            console.log('App: showModal called with:', modalId);
-            const modal = modalManager.showModal(modalId);
-            if (modal) {
-                // Update the modal in the reactive array
-                const index = this.modals.findIndex(m => m.id === modalId);
-                if (index !== -1) {
-                    this.modals[index].isVisible = true;
-                }
-                console.log('Modal shown:', modalId, this.modals[index]);
-            }
-            return modal;
-        },
-        hideModal(modalId) {
-            const modal = modalManager.hideModal(modalId);
-            if (modal) {
-                // Update the modal in the reactive array
-                const index = this.modals.findIndex(m => m.id === modalId);
-                if (index !== -1) {
-                    this.modals[index].isVisible = false;
-                }
-            }
-            return modal;
-        },
-        removeModal(modalId) {
-            this.modals = this.modals.filter(m => m.id !== modalId);
-            modalManager.removeModal(modalId);
-        },
-        // Quick modal creation methods
-        showAlert(message, title = 'Alert') {
-            const modal = this.addModal(title, AlertComponent, {
-                componentProps: { message }
-            });
-            this.showModal(modal.id);
-            return modal;
-        },
-        showConfirm(message, title = 'Confirm') {
-            return this.showAlert(message, title);
-        },
-        showHamburgerMenuModal(menuData) {
-            console.log('showHamburgerMenuModal called with:', menuData);
-            
-            const modal = this.addModal(
-                menuData.title,
-                menuData.components,
-                {
-                    componentProps: menuData.props || {}
-                }
-            );
-            console.log('Modal created:', modal);
-            this.showModal(modal.id);
-        },
-
-        // Remove all unused hamburger menu action handlers since they're not used anymore
-        showSystemInfo() {
-            this.addModal('System Information', SystemInfoComponent);
-        },
-
         expandContainer(containerData) {
             NavigationConfig.expandContainer(containerData, this);
         },
@@ -427,6 +321,9 @@ const App = {
             // Add to container manager's global map
             containerManager.addGlobalNavigationMapping(segmentId, displayName);
         }
+    },
+    setup() {
+        return { modalManager };
     },
     template: html `
         <div id="app">
@@ -521,21 +418,21 @@ const App = {
                     </p>
                 </footer>
             </div>
-        </div>
-        <!-- Modal Space -->
-        <div id="modal-space">
-            <transition-group name="fade">
-                <app-modal 
-                    v-for="modal in modals" 
-                    :key="modal.id"
-                    :modal-id="modal.id"
-                    :title="modal.title"
-                    :is-visible="modal.isVisible"
-                    :components="modal.components"
-                    :component-props="modal.componentProps"
-                    @close-modal="removeModal">
-                </app-modal>
-            </transition-group>
+            <!-- Modal Space -->
+            <div id="modal-space">
+                <transition-group name="fade">
+                    <app-modal 
+                        v-for="modal in modals" 
+                        :key="modal.id"
+                        :modal-id="modal.id"
+                        :title="modal.title"
+                        :is-visible="modal.isVisible"
+                        :components="modal.components"
+                        :component-props="modal.componentProps"
+                        @close-modal="modalManager.removeModal(modal.id)"
+                    ></app-modal>
+                </transition-group>
+            </div>
         </div>
     `
 };

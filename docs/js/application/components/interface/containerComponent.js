@@ -102,7 +102,7 @@ export const ContainerComponent = {
             console.log('ContainerComponent: Opening hamburger menu for', this.containerType);
             
             if (this.hamburgerMenuComponent) {
-                const menuData = {
+                /*const menuData = {
                     containerId: this.containerId,
                     title: `${this.title} Menu`,
                     containerPath: this.containerPath,
@@ -110,9 +110,9 @@ export const ContainerComponent = {
                     props: this.hamburgerMenuComponent.props
                 };
                 this.$emit('show-hamburger-menu', menuData);
-                console.log('showHamburgerMenuModal called with:', menuData);
+                console.log('showHamburgerMenuModal called with:', menuData);*/
                 
-                /*const modal = modalManager.createModal(
+                const modal = modalManager.createModal(
                     `${this.title} Menu`,
                     this.hamburgerMenuComponent.components,
                     {
@@ -120,7 +120,7 @@ export const ContainerComponent = {
                     }
                 );
                 console.log('Modal created:', modal);
-                modalManager.showModal(modal.id);*/
+                modalManager.showModal(modal.id);
             }
         },
         expandContainer() {

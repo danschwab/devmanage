@@ -1,10 +1,10 @@
 import { html, TestTableComponent, hamburgerMenuRegistry, NavigationConfig } from '../../index.js';
+import { modalManager } from '../interface/modalComponent.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
     props: {
-        currentView: String,
-        showAlert: Function
+        currentView: String
     },
     computed: {
         menuItems() {
@@ -49,58 +49,63 @@ export const InventoryMenuComponent = {
         handleAction(action) {
             switch (action) {
                 case 'refreshInventory':
-                    this.showAlert?.('Refreshing inventory...', 'Info');
+                    modalManager.showAlert('Refreshing inventory...', 'Info');
                     break;
                 case 'addInventoryItem':
-                    this.showAlert?.('Add new item functionality coming soon!', 'Info');
+                    modalManager.showConfirm(
+                        'Do you want to add a new inventory item?',
+                        () => modalManager.showAlert('Item added!', 'Success'),
+                        () => modalManager.showAlert('Add cancelled.', 'Info'),
+                        'Add Item'
+                    );
                     break;
                 case 'exportInventory':
-                    this.showAlert?.('Export all items functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Export all items functionality coming soon!', 'Info');
                     break;
                 case 'inventorySettings':
-                    this.showAlert?.('Inventory settings functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Inventory settings functionality coming soon!', 'Info');
                     break;
                 case 'addNewCategory':
-                    this.showAlert?.('Add new category functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Add new category functionality coming soon!', 'Info');
                     break;
                 case 'manageCategoryOrder':
-                    this.showAlert?.('Manage category order functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Manage category order functionality coming soon!', 'Info');
                     break;
                 case 'exportCategoryReport':
-                    this.showAlert?.('Export category report functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Export category report functionality coming soon!', 'Info');
                     break;
                 case 'categorySettings':
-                    this.showAlert?.('Category settings functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Category settings functionality coming soon!', 'Info');
                     break;
                 case 'saveSearchCriteria':
-                    this.showAlert?.('Save search criteria functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Save search criteria functionality coming soon!', 'Info');
                     break;
                 case 'loadSavedSearch':
-                    this.showAlert?.('Load saved search functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Load saved search functionality coming soon!', 'Info');
                     break;
                 case 'exportSearchResults':
-                    this.showAlert?.('Export search results functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Export search results functionality coming soon!', 'Info');
                     break;
                 case 'clearSearchHistory':
-                    this.showAlert?.('Clear search history functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Clear search history functionality coming soon!', 'Info');
                     break;
                 case 'scheduleReport':
-                    this.showAlert?.('Schedule automatic reports functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Schedule automatic reports functionality coming soon!', 'Info');
                     break;
                 case 'customReportBuilder':
-                    this.showAlert?.('Custom report builder functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Custom report builder functionality coming soon!', 'Info');
                     break;
                 case 'emailReports':
-                    this.showAlert?.('Email reports functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Email reports functionality coming soon!', 'Info');
                     break;
                 case 'reportSettings':
-                    this.showAlert?.('Report settings functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Report settings functionality coming soon!', 'Info');
                     break;
                 case 'inventoryHelp':
-                    this.showAlert?.('Inventory help functionality coming soon!', 'Info');
+                    modalManager.showAlert?.('Inventory help functionality coming soon!', 'Info');
                     break;
                 default:
-                    this.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
+                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },
@@ -121,7 +126,6 @@ export const InventoryContent = {
         'test-table': TestTableComponent
     },
     props: {
-        showAlert: Function,
         containerPath: {
             type: String,
             default: 'inventory'
@@ -141,12 +145,16 @@ export const InventoryContent = {
         // Expose NavigationConfig to the template
         NavigationConfig() {
             return NavigationConfig;
+        },
+        // Add modalManager reference for template access
+        modalManager() {
+            return modalManager;
         }
     },
     methods: {
         exampleMethod() {
             // Example method logic
-            this.showAlert('Example method called!', 'Info');
+            modalManager.showAlert('Example method called!', 'Info');
         }
     },
     mounted() {
@@ -166,9 +174,9 @@ export const InventoryContent = {
                 <p>Manage and track all inventory items, conditions, and locations.</p>
                 
                 <div style="margin: 1rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button @click="showAlert('Add new item functionality coming soon!', 'Info')">Add New Item</button>
-                    <button @click="showAlert('QR code scanning functionality coming soon!', 'Info')">Scan QR Code</button>
-                    <button @click="showAlert('Bulk import functionality coming soon!', 'Info')">Bulk Import</button>
+                    <button @click="modalManager.showAlert('Add new item functionality coming soon!', 'Info')">Add New Item</button>
+                    <button @click="modalManager.showAlert('QR code scanning functionality coming soon!', 'Info')">Scan QR Code</button>
+                    <button @click="modalManager.showAlert('Bulk import functionality coming soon!', 'Info')">Bulk Import</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
@@ -213,9 +221,9 @@ export const InventoryContent = {
                 <p>Items in the {{ NavigationConfig.getDisplayNameForPath(currentCategory).toLowerCase() }} category.</p>
                 
                 <div style="margin: 1rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button @click="showAlert('Filter functionality coming soon!', 'Info')">Filter Items</button>
-                    <button @click="showAlert('Sort functionality coming soon!', 'Info')">Sort Options</button>
-                    <button @click="showAlert('Export functionality coming soon!', 'Info')">Export List</button>
+                    <button @click="modalManager.showAlert('Filter functionality coming soon!', 'Info')">Filter Items</button>
+                    <button @click="modalManager.showAlert('Sort functionality coming soon!', 'Info')">Sort Options</button>
+                    <button @click="modalManager.showAlert('Export functionality coming soon!', 'Info')">Export List</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
@@ -230,10 +238,10 @@ export const InventoryContent = {
                 <p>Search for inventory items using various criteria.</p>
                 
                 <div style="margin: 1rem 0;">
-                    <button @click="showAlert('Save search criteria functionality coming soon!', 'Info')">Save Current Criteria</button>
-                    <button @click="showAlert('Load saved search functionality coming soon!', 'Info')">Load Saved Search</button>
-                    <button @click="showAlert('Export search results functionality coming soon!', 'Info')">Export Results</button>
-                    <button @click="showAlert('Clear search history functionality coming soon!', 'Info')">Clear History</button>
+                    <button @click="modalManager.showAlert('Save search criteria functionality coming soon!', 'Info')">Save Current Criteria</button>
+                    <button @click="modalManager.showAlert('Load saved search functionality coming soon!', 'Info')">Load Saved Search</button>
+                    <button @click="modalManager.showAlert('Export search results functionality coming soon!', 'Info')">Export Results</button>
+                    <button @click="modalManager.showAlert('Clear search history functionality coming soon!', 'Info')">Clear History</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
@@ -248,10 +256,10 @@ export const InventoryContent = {
                 <p>View and manage inventory reports.</p>
                 
                 <div style="margin: 1rem 0;">
-                    <button @click="showAlert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
-                    <button @click="showAlert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
-                    <button @click="showAlert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
-                    <button @click="showAlert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
+                    <button @click="modalManager.showAlert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
+                    <button @click="modalManager.showAlert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
+                    <button @click="modalManager.showAlert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
+                    <button @click="modalManager.showAlert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">

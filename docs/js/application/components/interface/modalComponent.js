@@ -1,5 +1,51 @@
 import { html } from '../../index.js';
 
+// Create simple alert and confirm components
+const AlertComponent = {
+    props: {
+        message: String,
+        timeout: {
+            type: Number,
+            default: 1300 // milliseconds
+        }
+    },
+    mounted() {
+        setTimeout(() => {
+            this.$emit('close-modal');
+        }, this.timeout);
+    },
+    template: html`
+        <div style="text-align: center; padding: 1rem;">
+            <p>{{ message }}</p>
+        </div>
+    `
+};
+
+const ConfirmComponent = {
+    props: {
+        message: String,
+        onConfirm: Function,
+        onCancel: Function
+    },
+    methods: {
+        handleConfirm() {
+            this.onConfirm?.();
+            this.$emit('close-modal');
+        },
+        handleCancel() {
+            this.onCancel?.();
+            this.$emit('close-modal');
+        }
+    },
+    template: html`
+        <div style="text-align: center; padding: 1rem;">
+            <p>{{ message }}</p>
+            <button @click="handleConfirm">Confirm</button>
+            <button @click="handleCancel">Cancel</button>
+        </div>
+    `
+};
+
 export const ModalComponent = {
     props: {
         modalId: {
@@ -26,6 +72,10 @@ export const ModalComponent = {
     methods: {
         closeModal() {
             console.log('[ModalComponent] closeModal called for', this.modalId);
+            this.$emit('close-modal', this.modalId);
+        },
+        handleChildClose() {
+            // Always emit with this modal's id
             this.$emit('close-modal', this.modalId);
         }
     },
@@ -73,6 +123,7 @@ export const ModalComponent = {
                         :is="comp"
                         :key="modalId + '-' + idx + '-' + JSON.stringify(componentProps)"
                         v-bind="componentProps"
+                        @close-modal="handleChildClose"
                     ></component>
                 </div>
             </div>
@@ -83,8 +134,16 @@ export const ModalComponent = {
 // Modal Manager - now purely component-based
 export class ModalManager {
     constructor() {
-        this.modals = new Map();
         this.nextId = 1;
+        this._reactiveModals = null;
+    }
+
+    setReactiveModals(reactiveArray) {
+        this._reactiveModals = reactiveArray;
+    }
+
+    get modals() {
+        return this._reactiveModals || [];
     }
 
     createModal(title = '', componentsOrSingle = null, options = {}) {
@@ -92,14 +151,10 @@ export class ModalManager {
             console.error('[ModalManager] No component(s) provided to createModal');
             throw new Error('Modal component(s) is required');
         }
-
         const modalId = options.id || `modal-${this.nextId++}`;
-
-        // Always wrap as array
         const components = Array.isArray(componentsOrSingle)
             ? componentsOrSingle
             : [componentsOrSingle];
-
         const modalData = {
             id: modalId,
             title: title,
@@ -108,15 +163,13 @@ export class ModalManager {
             componentProps: options.componentProps || {},
             created: new Date()
         };
-
         console.log('[ModalManager] createModal', modalData);
-
-        this.modals.set(modalId, modalData);
+        this.modals.push(modalData);
         return modalData;
     }
 
     showModal(modalId) {
-        const modal = this.modals.get(modalId);
+        const modal = this.modals.find(m => m.id === modalId);
         if (modal) {
             modal.isVisible = true;
             console.log('[ModalManager] showModal', modalId, modal);
@@ -126,27 +179,38 @@ export class ModalManager {
         return modal;
     }
 
-    hideModal(modalId) {
-        const modal = this.modals.get(modalId);
-        if (modal) {
-            modal.isVisible = false;
-            console.log('[ModalManager] hideModal', modalId, modal);
-        } else {
-            console.warn('[ModalManager] hideModal: modal not found', modalId);
-        }
-        return modal;
-    }
-
     removeModal(modalId) {
-        const existed = this.modals.delete(modalId);
-        console.log('[ModalManager] removeModal', modalId, 'removed:', existed);
-        return existed;
+        const index = this.modals.findIndex(m => m.id === modalId);
+        if (index !== -1) {
+            this.modals.splice(index, 1);
+            console.log('[ModalManager] removeModal', modalId, 'removed: true');
+            return true;
+        }
+        console.log('[ModalManager] removeModal', modalId, 'removed: false');
+        return false;
     }
 
     getAllModals() {
-        const all = Array.from(this.modals.values());
-        console.log('[ModalManager] getAllModals', all);
-        return all;
+        console.log('[ModalManager] getAllModals', this.modals);
+        return this.modals;
+    }
+
+    // Show an alert modal with a message and optional title
+    showAlert(message, title = 'Alert') {
+        const modal = this.createModal(title, AlertComponent, {
+            componentProps: { message }
+        });
+        this.showModal(modal.id);
+        return modal;
+    }
+
+    // Show a confirm modal with message, confirm/cancel callbacks, and optional title
+    showConfirm(message, onConfirm, onCancel, title = 'Confirm') {
+        const modal = this.createModal(title, ConfirmComponent, {
+            componentProps: { message, onConfirm, onCancel }
+        });
+        this.showModal(modal.id);
+        return modal;
     }
 }
 

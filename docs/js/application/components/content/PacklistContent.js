@@ -1,4 +1,4 @@
-import { html } from '../../index.js';
+import { html, modalManager } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -20,10 +20,10 @@ export const PacklistMenuComponent = {
         handleAction(action) {
             switch (action) {
                 case 'button':
-                    this.showAlert?.('Button action triggered!', 'Info');
+                    modalManager.showAlert?.('Button action triggered!', 'Info');
                     break;
                 default:
-                    this.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
+                    modalManager.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },
