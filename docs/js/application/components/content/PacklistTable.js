@@ -43,7 +43,8 @@ export const PacklistTable = {
                 })),
                 data: crate.items || [],
                 showRefresh: false,
-                emptyMessage: 'No items'
+                emptyMessage: 'No items',
+                hideColumns: ['Pack', 'Check']
             };
         },
         // Build main table data with Piece # as sequential numbers
@@ -116,8 +117,11 @@ export const PacklistTable = {
                 :title="tabName"
                 :showRefresh="false"
                 :emptyMessage="'No crates'"
+                :draggable="true"
+                :newRow="true"
                 @cell-edit="handleCellEdit"
                 @row-move="handleRowMove"
+                @new-row="handleAddCrate"
             >
                 <template #default="{ row, rowIndex, column }">
                     <template v-if="column && column.isIndex">
@@ -128,9 +132,14 @@ export const PacklistTable = {
                             v-if="row.Items"
                             :data="row.Items"
                             :columns="content.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
+                            :hide-columns="['Pack','Check']"
                             :showRefresh="false"
                             :emptyMessage="'No items'"
+                            :draggable="true"
+                            :newRow="true"
+                            :showFooter="false"
                             @cell-edit="() => handleCellEdit(rowIndex, null, null, 'item')"
+                            @new-row="() => handleAddItem(rowIndex)"
                         />
                         <button @click="handleAddItem(rowIndex)">Add Item</button>
                     </template>

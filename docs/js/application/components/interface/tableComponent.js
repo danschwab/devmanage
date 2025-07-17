@@ -29,9 +29,27 @@ export const TableComponent = {
         emptyMessage: {
             type: String,
             default: 'No data available'
+        },
+        draggable: {
+            type: Boolean,
+            default: false
+        },
+        newRow: {
+            type: Boolean,
+            default: false
+        },
+        showFooter: {
+            type: Boolean,
+            default: true
         }
     },
-    emits: ['refresh', 'cell-edit', 'row-move'],
+    emits: ['refresh', 'cell-edit', 'row-move', 'new-row'],
+    data() {
+        return {
+            dragIndex: null,
+            dragOverIndex: null
+        };
+    },
     methods: {
         handleRefresh() {
             this.$emit('refresh');
@@ -90,6 +108,25 @@ export const TableComponent = {
         },
         handleRowMove() {
             this.$emit('row-move');
+        },
+        handleDragStart(rowIndex) {
+            this.dragIndex = rowIndex;
+        },
+        handleDragOver(rowIndex, event) {
+            event.preventDefault();
+            this.dragOverIndex = rowIndex;
+        },
+        handleDrop(rowIndex) {
+            if (this.dragIndex !== null && this.dragIndex !== rowIndex) {
+                const movedRow = this.data.splice(this.dragIndex, 1)[0];
+                this.data.splice(rowIndex, 0, movedRow);
+                this.$emit('row-move', this.dragIndex, rowIndex);
+            }
+            this.dragIndex = null;
+            this.dragOverIndex = null;
+        },
+        handleNewRow() {
+            this.$emit('new-row');
         }
     },
     template: html `
@@ -127,6 +164,7 @@ export const TableComponent = {
                 <table>
                     <thead>
                         <tr>
+                            <th v-if="draggable" class="spacer-cell"></th>
                             <th 
                                 v-for="(column, colIdx) in columns" 
                                 :key="column.key"
@@ -138,7 +176,15 @@ export const TableComponent = {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(row, rowIndex) in data" :key="rowIndex">
+                        <tr v-for="(row, rowIndex) in data" 
+                            :key="rowIndex"
+                            :draggable="draggable"
+                            @dragstart="draggable ? handleDragStart(rowIndex) : null"
+                            @dragover="draggable ? handleDragOver(rowIndex, $event) : null"
+                            @drop="draggable ? handleDrop(rowIndex) : null"
+                            :class="{ 'dragging': dragIndex === rowIndex, 'drag-over': dragOverIndex === rowIndex }"
+                        >
+                            <td v-if="draggable" class="row-drag-handle"></td>
                             <td 
                                 v-for="(column, colIndex) in columns" 
                                 :key="column.key"
@@ -161,6 +207,12 @@ export const TableComponent = {
                             </td>
                         </tr>
                     </tbody>
+                    <tfoot v-if="newRow && showFooter">
+                        <tr>
+                            <td :colspan="draggable ? columns.length + 1 : columns.length" class="new-row-button" @click="handleNewRow">
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
             
