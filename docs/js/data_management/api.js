@@ -143,7 +143,14 @@ class RequestsBase {
      */
     static clearCache(tableId = null, range = null) {
         try {
-            Database.clearCache(tableId, range);
+            // Correct usage for sheet data cache
+            if (tableId) {
+                const prefix = range ? `${tableId}:${range}` : `${tableId}:`;
+                CacheManager.invalidateByPrefix(CacheManager.NAMESPACES.SHEET_DATA, prefix);
+            } else {
+                // If no tableId, clear all sheet data cache
+                CacheManager.clearNamespace(CacheManager.NAMESPACES.SHEET_DATA);
+            }
             return true;
         } catch (error) {
             console.error('Failed to clear cache:', error);
