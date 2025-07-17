@@ -139,8 +139,10 @@ export class FakeGoogleSheetsService {
         },
         'PACK_LISTS': {
             'TEMPLATE': [
-                ['Pack ID', 'Product ID', 'Quantity', 'Destination', 'Status'],
-                ['', '', '', '', '']
+                ['', '', 'Pack List:', '', '<CLIENT YEAR SHOW>', '', '', '', '', 'Ship: ?'],
+                ['', '', '', '', '', '', '', '', '', 'Setup in shop: ?'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
+                ['1', '', '', '', '', '', '', '', '', '']
             ],
             'ATSC 2025 NAB': [
                 ['', '', 'Pack List:', '', 'ATSC 2025 NAB', '', '', '', '', 'Ship: Fri. Mar, 28'],
@@ -218,6 +220,19 @@ export class FakeGoogleSheetsService {
                 ['13', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
                 ['14', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
                 ['15', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list']
+            ],
+            'TULIP 2025 NRF': [
+                ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
+                ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
+                ['1', 'Skid', '72', '32', '48', '800', '', '', '(1) straight-section reception counter (one of two sections). Test lighting', 'Sintra logo- last CES 2025'],
+                ['', '', '', '', '', '', '', '', 'Client junk', ''],
+                ['2', 'Skid', '120', '48', '48', '1200', '', '', '(3) rolls 10\'x70\' SLATE gray carpeting', ''],
+                ['3', 'Skid', '120', '48', '48', '600', '', '', 'Padding for 30x70', ''],
+                ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067'],
+                ['', '', '', '', '', '', '', '', 'SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Blank SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Client Packages', '']
             ],
             'GEARFIRE 2025 SHOT': [
                 ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
@@ -566,7 +581,8 @@ export class FakeGoogleSheetsService {
         'PACK_LISTS': [
             { title: 'TEMPLATE', sheetId: 1 },
             { title: 'ATSC 2025 NAB', sheetId: 2 },
-            { title: 'GEARFIRE 2025 SHOT', sheetId: 3 }
+            { title: 'TULIP 2025 NRF', sheetId: 3 },
+            { title: 'GEARFIRE 2025 SHOT', sheetId: 4 }
         ],
         'PROD_SCHED': [
             { title: 'ProductionSchedule', sheetId: 0 },
@@ -579,6 +595,7 @@ export class FakeGoogleSheetsService {
     };
 
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         console.log('FakeGoogleSheetsService: Simulating exponential backoff...');
         await this.delay(Math.random() * 100 + 50); // Random delay between 50-150ms
         try {
@@ -590,6 +607,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async getSheetData(tableId, range) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -612,6 +630,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async setSheetData(tableId, tabName, updates) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -684,6 +703,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async getSheetTabs(tableId) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -697,6 +717,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async hideTabs(tableId, tabs) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -713,6 +734,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async showTabs(tableId, tabs) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -729,6 +751,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async copySheetTab(tableId, sourceTab, newTabName) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -774,6 +797,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async createBlankTab(tableId, newTabName) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -809,6 +833,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async querySheetData(tableId, query) {
+        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
         console.log(`FakeGoogleSheetsService: Executing query on ${tableId}: ${query}`);

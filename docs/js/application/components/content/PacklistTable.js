@@ -28,7 +28,7 @@ export const PacklistTable = {
                 if (label === 'Piece #') {
                     return { key: label, label, editable: false, isIndex: true };
                 }
-                return { key: label, label, editable: ['Type','L','W','H','Weight','Notes'].includes(label) };
+                return { key: label, label, editable: ['Type','L','W','H','Weight','Notes'].includes(label), hidden: []};
             });
         }
     },
@@ -109,7 +109,6 @@ export const PacklistTable = {
             <div class="packlist-actions">
                 <button @click="handlePrint" :disabled="isPrinting">Print</button>
                 <button @click="handleSave" :disabled="saveDisabled || isSaving">Save</button>
-                <button @click="handleAddCrate">Add Crate</button>
             </div>
             <TableComponent
                 :data="mainTableData"
@@ -138,10 +137,10 @@ export const PacklistTable = {
                             :draggable="true"
                             :newRow="true"
                             :showFooter="false"
+                            :showHeader="false"
                             @cell-edit="() => handleCellEdit(rowIndex, null, null, 'item')"
                             @new-row="() => handleAddItem(rowIndex)"
                         />
-                        <button @click="handleAddItem(rowIndex)">Add Item</button>
                     </template>
                     <template v-else>
                         {{ row[column.key] }}

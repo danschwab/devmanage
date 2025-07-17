@@ -41,6 +41,10 @@ export const TableComponent = {
         showFooter: {
             type: Boolean,
             default: true
+        },
+        showHeader: {
+            type: Boolean,
+            default: true
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row'],
@@ -131,7 +135,7 @@ export const TableComponent = {
     },
     template: html `
         <div class="dynamic-table">
-            <div class="content-header" v-if="title || showRefresh">
+            <div class="content-header" v-if="showHeader && (title || showRefresh)">
                 <h3 v-if="title">{{ title }}</h3>
                 <button 
                     v-if="showRefresh" 
@@ -190,24 +194,21 @@ export const TableComponent = {
                                 :key="column.key"
                                 :class="getCellClass(row[column.key], column)"
                             >
-                                <div v-if="column.editable">
-                                    <div
-                                        contenteditable="true"
-                                        :data-row-index="rowIndex"
-                                        :data-col-index="colIndex"
-                                        @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
-                                        class="table-edit-textarea"
-                                    >{{ row[column.key] }}</div>
-                                </div>
-                                <div v-else>
-                                    <slot :row="row" :rowIndex="rowIndex" :column="column">
-                                        {{ formatCellValue(row[column.key], column) }}
-                                    </slot>
-                                </div>
+                                <div
+                                    v-if="column.editable"
+                                    contenteditable="true"
+                                    :data-row-index="rowIndex"
+                                    :data-col-index="colIndex"
+                                    @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
+                                    class="table-edit-textarea"
+                                >{{ row[column.key] }}</div>
+                                <slot v-else :row="row" :rowIndex="rowIndex" :column="column">
+                                    {{ formatCellValue(row[column.key], column) }}
+                                </slot>
                             </td>
                         </tr>
                     </tbody>
-                    <tfoot v-if="newRow && showFooter">
+                    <tfoot v-if="newRow">
                         <tr>
                             <td :colspan="draggable ? columns.length + 1 : columns.length" class="new-row-button" @click="handleNewRow">
                             </td>
@@ -217,7 +218,7 @@ export const TableComponent = {
             </div>
             
             <!-- Data Summary -->
-            <div v-if="data && data.length > 0" class="content-footer">
+            <div v-if="showFooter && data && data.length > 0" class="content-footer">
                 <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
             </div>
         </div>
