@@ -49,14 +49,30 @@ export const PacklistTable = {
         },
         // Build main table data with Piece # as sequential numbers
         buildMainTableData() {
+            // Map crate.info (array) to object using headers.main
+            const mainHeaders = this.content.headers?.main || [];
+            const itemHeaders = this.content.headers?.items || [];
             return (this.content.crates || []).map((crate, crateIdx) => {
-                const info = { ...crate.info };
-                if (this.content.headers?.main?.includes('Piece #')) {
-                    info['Piece #'] = crateIdx + 1;
+                // Map info array to object
+                const infoObj = {};
+                mainHeaders.forEach((label, i) => {
+                    infoObj[label] = crate.info[i];
+                });
+                // Add Piece # if not present
+                if (mainHeaders.includes('Piece #')) {
+                    infoObj['Piece #'] = crateIdx + 1;
                 }
+                // Map items arrays to objects
+                const items = (crate.items || []).map(itemArr => {
+                    const itemObj = {};
+                    itemHeaders.forEach((label, i) => {
+                        itemObj[label] = itemArr[i];
+                    });
+                    return itemObj;
+                });
                 return {
-                    ...info,
-                    Items: crate.items
+                    ...infoObj,
+                    Items: items
                 };
             });
         },
@@ -102,7 +118,10 @@ export const PacklistTable = {
         }
     },
     mounted() {
-        this.mainTableData = this.buildMainTableData();
+        console.log('[PacklistTable] content:', this.content);
+        // Use Vue 3's reactive for mainTableData
+        this.mainTableData = Vue.reactive(this.buildMainTableData());
+        console.log('[PacklistTable] mainTableData:', this.mainTableData);
     },
     template: html`
         <div class="packlist-table">

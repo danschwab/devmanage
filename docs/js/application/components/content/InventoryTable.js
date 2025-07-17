@@ -45,7 +45,10 @@ export const InventoryTableComponent = {
             
             try {
                 const rawData = await Requests.fetchData('INVENTORY', 'FURNITURE');
-                this.tableData = this.transformInventoryData(rawData);
+                console.log('[InventoryTableComponent] rawData:', rawData);
+                // Use Vue 3's reactive for tableData
+                this.tableData = Vue.reactive(this.transformInventoryData(rawData));
+                console.log('[InventoryTableComponent] transformed tableData:', this.tableData);
             } catch (error) {
                 this.error = error.message;
                 console.error('Error loading inventory data:', error);

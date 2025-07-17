@@ -13,7 +13,10 @@ class RequestsBase {
             const fullRange = range ? `${tabName}!${range}` : `${tabName}`;
             // Get current tracking ID from context
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await Database.getData(tableId, fullRange, true, trackingId);
+            console.log('[API] fetchData called:', { tableId, tabName, fullRange, trackingId });
+            const result = await Database.getData(tableId, fullRange, true, trackingId);
+            console.log('[API] fetchData result:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to fetch data from ${tableId}/${tabName}:`, error);
             Analytics.trackEvent?.('data_error', { action: 'fetch', tableId, tabName });
