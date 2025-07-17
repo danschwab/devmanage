@@ -43,12 +43,10 @@ const App = {
             })),
             currentPage: 'dashboard',
             containers: [],
-            // Make dashboard containers reactive
             dashboardContainers: [...NavigationConfig.allDashboardContainers],
-            modals: [], // Start with empty array, make reactive below
-            tabSystems: {
-                // Example: 'packlist': { tabs: [], activeTab: '' }
-            }
+            modals: [],
+            tabSystems: {},
+            dashboardLoading: false // <-- add dashboard loading flag
         };
     },
     computed: {
@@ -69,12 +67,18 @@ const App = {
     async mounted() {
         // Initialize authentication on app mount
         await Auth.initialize();
-        
+
+        // Show dashboard loading indicator before loading state
+        this.dashboardLoading = true;
+
         // Load dashboard state from user data if authenticated
         if (this.isAuthenticated) {
             await this.loadDashboardState();
         }
-        
+
+        // Hide dashboard loading indicator after state is loaded
+        this.dashboardLoading = false;
+
         // Create containers based on auth state
         this.updateContainersForPage(this.currentPage);
         
@@ -188,26 +192,21 @@ const App = {
             if (!this.isAuthenticated || !this.currentUser?.email) {
                 return;
             }
-            
+            this.dashboardLoading = true; // <-- set loading before async
             try {
                 const savedDashboardData = await Requests.getUserData(this.currentUser.email, 'dashboard_containers');
-                
                 if (savedDashboardData && savedDashboardData.length > 0) {
-                    // Parse the saved dashboard containers
                     const savedContainers = JSON.parse(savedDashboardData[0] || '[]');
-                    
-                    // Update NavigationConfig and reactive data
                     NavigationConfig.allDashboardContainers = savedContainers;
                     this.dashboardContainers = [...savedContainers];
-                    
                     console.log('Dashboard state loaded:', savedContainers);
                 } else {
                     console.log('No saved dashboard state found, using defaults');
                 }
             } catch (error) {
                 console.error('Failed to load dashboard state:', error);
-                // Continue with default dashboard state on error
             }
+            this.dashboardLoading = false; // <-- unset loading after async
         },
 
         /**
@@ -370,6 +369,13 @@ const App = {
             </primary-nav>
 
             <div id="app-content">
+                <!-- Dashboard loading indicator -->
+                <div v-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
+                    <div class="loading-message">
+                        <img src="images/loading.gif" alt="..."/>
+                        <p>Loading dashboard cards...</p>
+                    </div>
+                </div>
                 <!-- Dynamic containers inserted directly here -->
                 <app-container 
                     v-for="container in containers" 
@@ -397,8 +403,9 @@ const App = {
                     @navigate-to-path="handleNavigateToPath"
                     @navigation-mapping-added="handleNavigationMappingAdded"
                     @show-hamburger-menu="showHamburgerMenuModal"
-                    @expand-container="expandContainer">
-
+                    @expand-container="expandContainer"
+                    v-if="!dashboardLoading || currentPage !== 'dashboard'"
+                >
                     <template #content>
                         <!-- dashboard-settings Content -->
                         <dashboard-settings 

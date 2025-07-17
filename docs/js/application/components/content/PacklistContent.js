@@ -115,7 +115,20 @@ export const PacklistContent = {
                 });
             }
         },
-        async handleNewTab() {
+        async handleNewTab(tabName) {
+            // If tabName is provided and tab already exists, fire open-tab instead
+            if (tabName) {
+                const existingTabIdx = this.tabs.findIndex(t => t.name === tabName);
+                if (existingTabIdx !== -1) {
+                    this.activeTab = tabName;
+                    this.$emit && this.$emit('open-tab', tabName);
+                    this.$root.setProperty('tabSystems', 'packlist', {
+                        tabs: this.tabs,
+                        activeTab: tabName
+                    });
+                    return;
+                }
+            }
             // Make modal tabs reactive
             const modalTabs = Vue.reactive([]);
             // Use a reactive loading flag
@@ -150,26 +163,38 @@ export const PacklistContent = {
             modalLoading.value = false;
             modal.componentProps.isLoading = modalLoading.value;
             modalTabs.splice(0, modalTabs.length, ...tabs);
-            modal.componentProps.onSelect = async (tabName) => {
+            modal.componentProps.onSelect = async (selectedTabName) => {
+                // Prevent duplicate tab creation
+                const existingTabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
+                if (existingTabIdx !== -1) {
+                    modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
+                    this.activeTab = selectedTabName;
+                    this.$emit && this.$emit('open-tab', selectedTabName);
+                    this.$root.setProperty('tabSystems', 'packlist', {
+                        tabs: this.tabs,
+                        activeTab: selectedTabName
+                    });
+                    return;
+                }
                 modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
                 // Add tab with loading state
                 this.tabs.push({
-                    name: tabName,
-                    label: tabName,
+                    name: selectedTabName,
+                    label: selectedTabName,
                     closable: true,
                     component: PacklistTable,
-                    props: { content: {}, tabName, isLoading: true },
+                    props: { content: {}, tabName: selectedTabName, isLoading: true },
                     isLoading: true
                 });
-                this.activeTab = tabName;
+                this.activeTab = selectedTabName;
                 this.$root.setProperty('tabSystems', 'packlist', {
                     tabs: this.tabs,
-                    activeTab: tabName
+                    activeTab: selectedTabName
                 });
                 // Load data asynchronously and update tab/component loading flags
-                Requests.getPackList(tabName)
+                Requests.getPackList(selectedTabName)
                     .then(content => {
-                        const tabIdx = this.tabs.findIndex(t => t.name === tabName);
+                        const tabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
                         if (tabIdx !== -1) {
                             this.tabs[tabIdx].props.content = content;
                             this.tabs[tabIdx].props.isLoading = false;
@@ -177,12 +202,12 @@ export const PacklistContent = {
                         }
                         this.$root.setProperty('tabSystems', 'packlist', {
                             tabs: this.tabs,
-                            activeTab: tabName
+                            activeTab: selectedTabName
                         });
                     })
                     .catch(err => {
                         this.modalManager.showAlert('Failed to load packlist: ' + err.message, 'Error');
-                        const tabIdx = this.tabs.findIndex(t => t.name === tabName);
+                        const tabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
                         if (tabIdx !== -1) {
                             this.tabs[tabIdx].props.isLoading = false;
                             this.tabs[tabIdx].isLoading = false;
