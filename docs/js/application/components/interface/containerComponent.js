@@ -58,7 +58,7 @@ export const ContainerComponent = {
     inject: ['hamburgerMenuRegistry'],
     data() {
         return {
-            isLoading: false
+            isLoading: false // now managed reactively by this component
         };
     },
     mounted() {
@@ -95,6 +95,9 @@ export const ContainerComponent = {
         }
     },
     methods: {
+        setLoading(val) {
+            this.isLoading = val;
+        },
         closeContainer() {
             this.$emit('close-container', this.containerId);
         },
@@ -155,54 +158,50 @@ export const ContainerComponent = {
         }
     },
     template: html `
-        <div v-if="!isLoading" 
-             class="container" 
-             :class="{ 'dashboard-card': cardStyle }"
-             :data-container-id="containerId" 
-             :data-container-type="containerType"
-             :data-container-path="containerPath">
-            <div v-if="containerPath || title || cardStyle || shouldShowHamburgerMenu || showExpandButton || !cardStyle" class="container-header">
-                <BreadcrumbComponent
-                    :container-path="containerPath"
-                    :title="title"
-                    :card-style="cardStyle"
-                    :navigation-map="navigationMap"
-                    :container-id="containerId"
-                    @navigation-mapping-added="onNavigationMappingAdded"
-                    @navigate-to-path="onNavigateToPath" />
-                
-                <div v-if="!!this.hamburgerMenuComponent || showExpandButton || (!cardStyle && canGoBack)" class="header-buttons">
-                    <button v-if="!!this.hamburgerMenuComponent" 
-                            class="button-symbol white" 
-                            @click="openHamburgerMenu" 
-                            title="Menu">☰</button>
-                    <button v-if="showExpandButton" 
-                            class="button-symbol white" 
-                            @click="expandContainer" 
-                            title="Expand to page"><span class="material-symbols-outlined">expand_content</span></button>
-                    <button v-if="!cardStyle" 
-                            class="button-symbol white back-button" 
-                            @click="goBack" 
-                            :title="backButtonTitle">
-                        <span v-if="canGoBack" class="material-symbols-outlined">{{ backButtonIcon }}</span>
-                        <span v-else>{{ backButtonIcon }}</span>
-                    </button>
-                </div>
+        <div class="container" :class="{ 'dashboard-card': cardStyle }">
+            <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
+                <img src="images/loading.gif" alt="..."/>
+                <p>Loading data...</p>
             </div>
-            
-            <div class="content">
-                <slot name="content">
-                    <div>
-                        <p>Container {{ containerId }} loaded successfully!</p>
-                        <p>Type: {{ containerType }}</p>
-                        <p>Path: {{ containerPath || 'No path' }}</p>
+            <div v-else>
+                <div v-if="containerPath || title || cardStyle || shouldShowHamburgerMenu || showExpandButton || !cardStyle" class="container-header">
+                    <BreadcrumbComponent
+                        :container-path="containerPath"
+                        :title="title"
+                        :card-style="cardStyle"
+                        :navigation-map="navigationMap"
+                        :container-id="containerId"
+                        @navigation-mapping-added="onNavigationMappingAdded"
+                        @navigate-to-path="onNavigateToPath" />
+                    
+                    <div v-if="!!this.hamburgerMenuComponent || showExpandButton || (!cardStyle && canGoBack)" class="header-buttons">
+                        <button v-if="!!this.hamburgerMenuComponent" 
+                                class="button-symbol white" 
+                                @click="openHamburgerMenu" 
+                                title="Menu">☰</button>
+                        <button v-if="showExpandButton" 
+                                class="button-symbol white" 
+                                @click="expandContainer" 
+                                title="Expand to page"><span class="material-symbols-outlined">expand_content</span></button>
+                        <button v-if="!cardStyle" 
+                                class="button-symbol white back-button" 
+                                @click="goBack" 
+                                :title="backButtonTitle">
+                            <span v-if="canGoBack" class="material-symbols-outlined">{{ backButtonIcon }}</span>
+                            <span v-else>{{ backButtonIcon }}</span>
+                        </button>
                     </div>
-                </slot>
-            </div>
-        </div>
-        <div v-else class="container" :class="{ 'dashboard-card': cardStyle }">
-            <div class="content">
-                <div class="loading-message">Loading container...</div>
+                </div>
+                
+                <div class="content">
+                    <slot name="content">
+                        <div>
+                            <p>Container {{ containerId }} loaded successfully!</p>
+                            <p>Type: {{ containerType }}</p>
+                            <p>Path: {{ containerPath || 'No path' }}</p>
+                        </div>
+                    </slot>
+                </div>
             </div>
         </div>
     `

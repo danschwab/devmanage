@@ -13,7 +13,7 @@ export { PrimaryNavComponent, NavigationConfig } from './components/navigation/n
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
 export { TableComponent } from './components/interface/tableComponent.js';
-export { TabComponent } from './components/interface/tabComponent.js';
+export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
 
 // Dashboard components export
 export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent, DashboardSettings } from './components/dashboard/DashboardManagement.js';

@@ -69,7 +69,15 @@ export const ModalComponent = {
             default: () => ({ })
         }
     },
+    data() {
+        return {
+            isLoading: false // reactive loading state
+        };
+    },
     methods: {
+        setLoading(val) {
+            this.isLoading = val;
+        },
         closeModal() {
             console.log('[ModalComponent] closeModal called for', this.modalId);
             this.$emit('close-modal', this.modalId);
@@ -118,13 +126,19 @@ export const ModalComponent = {
                     <button class="close-button" @click="closeModal">&times;</button>
                 </div>
                 <div class="modal-content">
-                    <component
-                        v-for="(comp, idx) in components"
-                        :is="comp"
-                        :key="modalId + '-' + idx + '-' + JSON.stringify(componentProps)"
-                        v-bind="componentProps"
-                        @close-modal="handleChildClose"
-                    ></component>
+                    <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
+                        <img src="images/loading.gif" alt="..."/>
+                        <p>{{ componentProps.loadingMessage || 'Loading data...' }}</p>
+                    </div>
+                    <div v-else>
+                        <component
+                            v-for="(comp, idx) in components"
+                            :is="comp"
+                            :key="modalId + '-' + idx + '-' + JSON.stringify(componentProps)"
+                            v-bind="componentProps"
+                            @close-modal="handleChildClose"
+                        ></component>
+                    </div>
                 </div>
             </div>
         </div>

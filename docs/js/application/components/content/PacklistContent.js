@@ -1,4 +1,4 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, TabComponent, PacklistTable } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, TabComponent, TabsListComponent, PacklistTable } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -41,42 +41,12 @@ export const PacklistMenuComponent = {
 
 
 
-export const PacklistTabsComponent = {
-    props: {
-        tabs: {
-            type: Array,
-            required: true
-        },
-        onSelect: {
-            type: Function,
-            required: true
-        }
-    },
-    methods: {
-        selectTab(tabName) {
-            this.onSelect(tabName);
-        }
-    },
-    template: html`
-        <div>
-            <h3>Select a Packlist Tab</h3>
-            <ul>
-                <li v-for="tab in tabs" :key="tab.title">
-                    <button @click="selectTab(tab.title)">
-                        {{ tab.title }}
-                    </button>
-                </li>
-            </ul>
-        </div>
-    `
-};
-
 
 
 export const PacklistContent = {
     components: {
         TabComponent,
-        PacklistTabsComponent
+        TabsListComponent // Use TabsListComponent instead of PacklistTabsComponent
     },
     props: {
         showAlert: Function,
@@ -94,7 +64,8 @@ export const PacklistContent = {
         }
         return {
             tabs: cached.tabs,
-            activeTab: cached.activeTab
+            activeTab: cached.activeTab,
+            globalLoading: false // only for initial tab list loading
         };
     },
     computed: {
@@ -145,50 +116,80 @@ export const PacklistContent = {
             }
         },
         async handleNewTab() {
-            let tabs = [];
-            try {
-                tabs = await Requests.getAvailableTabs('PACK_LISTS');
-                // Remove "Current" tab if present
-                tabs = tabs.filter(tab => tab.title !== 'TEMPLATE');
-            } catch (err) {
-                this.modalManager.showAlert('Failed to load packlist tabs: ' + err.message, 'Error');
-                return;
-            }
-            const self = this;
-            const handleSelect = async function(tabName) {
-                let content;
-                try {
-                    content = await Requests.getPackList(tabName);
-                } catch (err) {
-                    self.modalManager.showAlert('Failed to load packlist: ' + err.message, 'Error');
-                    return;
-                }
-                self.tabs.push({
-                    name: tabName,
-                    label: tabName,
-                    closable: true,
-                    component: PacklistTable,
-                    props: { content, tabName }
-                });
-                self.activeTab = tabName;
-                self.$root.setProperty('tabSystems', 'packlist', {
-                    tabs: self.tabs,
-                    activeTab: tabName
-                });
-                self.modalManager.removeModal && self.modalManager.removeModal('packlist-tabs-modal');
-            };
+            // Make modal tabs reactive
+            const modalTabs = Vue.reactive([]);
+            // Use a reactive loading flag
+            const modalLoading = Vue.ref(true);
+
             const modal = modalManager.createModal(
                 'Open Packlist',
-                PacklistTabsComponent,
+                TabsListComponent,
                 {
                     id: 'packlist-tabs-modal',
                     componentProps: {
-                        tabs,
-                        onSelect: handleSelect
+                        tabs: modalTabs,
+                        onSelect: () => { },
+                        isLoading: modalLoading.value,
+                        loadingMessage: 'Getting shows from production schedule...'
                     }
                 }
             );
             modalManager.showModal(modal.id);
+
+            let tabs = [];
+            try {
+                tabs = await Requests.getAvailableTabs('PACK_LISTS');
+                tabs = tabs.filter(tab => tab.title !== 'TEMPLATE');
+            } catch (err) {
+                this.modalManager.showAlert('Failed to load packlist tabs: ' + err.message, 'Error');
+                modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
+                return;
+            }
+
+            // Update modal to remove loading and show tab selection
+            modalLoading.value = false;
+            modal.componentProps.isLoading = modalLoading.value;
+            modalTabs.splice(0, modalTabs.length, ...tabs);
+            modal.componentProps.onSelect = async (tabName) => {
+                modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
+                // Add tab with loading state
+                this.tabs.push({
+                    name: tabName,
+                    label: tabName,
+                    closable: true,
+                    component: PacklistTable,
+                    props: { content: {}, tabName, isLoading: true },
+                    isLoading: true
+                });
+                this.activeTab = tabName;
+                this.$root.setProperty('tabSystems', 'packlist', {
+                    tabs: this.tabs,
+                    activeTab: tabName
+                });
+                // Load data asynchronously and update tab/component loading flags
+                Requests.getPackList(tabName)
+                    .then(content => {
+                        const tabIdx = this.tabs.findIndex(t => t.name === tabName);
+                        if (tabIdx !== -1) {
+                            this.tabs[tabIdx].props.content = content;
+                            this.tabs[tabIdx].props.isLoading = false;
+                            this.tabs[tabIdx].isLoading = false;
+                        }
+                        this.$root.setProperty('tabSystems', 'packlist', {
+                            tabs: this.tabs,
+                            activeTab: tabName
+                        });
+                    })
+                    .catch(err => {
+                        this.modalManager.showAlert('Failed to load packlist: ' + err.message, 'Error');
+                        const tabIdx = this.tabs.findIndex(t => t.name === tabName);
+                        if (tabIdx !== -1) {
+                            this.tabs[tabIdx].props.isLoading = false;
+                            this.tabs[tabIdx].isLoading = false;
+                            this.tabs[tabIdx].props.content = { error: err.message };
+                        }
+                    });
+            };
         }
     },
     template: html `

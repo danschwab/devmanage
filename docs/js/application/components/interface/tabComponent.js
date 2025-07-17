@@ -21,7 +21,8 @@ export const TabComponent = {
         const tabs = this.tabs || [];
         return {
             internalActiveTab: this.activeTab || (tabs[0]?.name || ''),
-            isOverflowing: false
+            isOverflowing: false,
+            isLoading: false // reactive loading state
         };
     },
     watch: {
@@ -47,6 +48,9 @@ export const TabComponent = {
         window.removeEventListener('resize', this.checkOverflow);
     },
     methods: {
+        setLoading(val) {
+            this.isLoading = val;
+        },
         selectTab(tabName) {
             this.internalActiveTab = tabName;
             this.$emit('tab-change', tabName);
@@ -114,22 +118,78 @@ export const TabComponent = {
                 >+</button>
             </div>
             <div class="tab-container">
-                <div
-                    v-for="tab in tabs"
-                    :key="tab.name + '-content'"
-                    v-show="tab.name === internalActiveTab"
-                    class="tab-content"
-                    :id="tab.name"
-                >
-                    <component
-                        v-if="tab.component"
-                        :is="tab.component"
-                        v-bind="tab.props || {}"
-                    ></component>
-                    <template v-else>
-                        <div v-html="tab.content"></div>
-                    </template>
+                <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
+                    <img src="images/loading.gif" alt="..."/>
+                    <p>Loading data...</p>
                 </div>
+                <div v-else>
+                    <div
+                        v-for="tab in tabs"
+                        :key="tab.name + '-content'"
+                        v-show="tab.name === internalActiveTab"
+                        class="tab-content"
+                        :id="tab.name"
+                    >
+                        <component
+                            v-if="tab.component"
+                            :is="tab.component"
+                            v-bind="tab.props || {}"
+                        ></component>
+                        <template v-else>
+                            <div v-html="tab.content"></div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `
+};
+
+// Generic Tabs List Component with loading pattern
+export const TabsListComponent = {
+    props: {
+        tabs: {
+            type: Array,
+            required: true
+        },
+        onSelect: {
+            type: Function,
+            required: true
+        },
+        loadingMessage: {
+            type: String,
+            default: 'Loading data...'
+        },
+        isLoading: {
+            type: Boolean,
+            default: false
+        }
+    },
+    computed: {
+        computedIsLoading() {
+            // Show loading if isLoading is true or tabs are empty
+            return this.isLoading || !this.tabs || this.tabs.length === 0;
+        }
+    },
+    methods: {
+        selectTab(tabName) {
+            this.onSelect(tabName);
+        }
+    },
+    template: html`
+        <div class="tabs-list">
+            <div v-if="computedIsLoading" class="loading-message">
+                <img src="images/loading.gif" alt="..."/>
+                <p>{{ loadingMessage }}</p>
+            </div>
+            <div v-else>
+                <button 
+                    v-for="tab in tabs"
+                    class="tab-button"
+                    :key="tab.title"
+                    @click="selectTab(tab.title)">
+                    {{ tab.title }}
+                </button>
             </div>
         </div>
     `

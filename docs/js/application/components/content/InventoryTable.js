@@ -6,9 +6,14 @@ export const InventoryTableComponent = {
     components: {
         TableComponent
     },
+    props: {
+        isLoading: {
+            type: Boolean,
+            default: false
+        }
+    },
     data() {
         return {
-            isLoading: false,
             tableData: [],
             error: null,
             columns: [
@@ -40,37 +45,29 @@ export const InventoryTableComponent = {
     },
     methods: {
         async loadTestData() {
-            this.isLoading = true;
+            this.$emit('update:isLoading', true);
             this.error = null;
-            
             try {
                 const rawData = await Requests.fetchData('INVENTORY', 'FURNITURE');
-                console.log('[InventoryTableComponent] rawData:', rawData);
-                // Use Vue 3's reactive for tableData
-                this.tableData = Vue.reactive(this.transformInventoryData(rawData));
-                console.log('[InventoryTableComponent] transformed tableData:', this.tableData);
+                this.tableData = this.transformInventoryData(rawData);
             } catch (error) {
                 this.error = error.message;
                 console.error('Error loading inventory data:', error);
             } finally {
-                this.isLoading = false;
+                this.$emit('update:isLoading', false);
             }
         },
-        
         transformInventoryData(rawData) {
             if (!rawData || rawData.length < 2) return [];
-            
             const headers = rawData[0];
             const rows = rawData.slice(1);
             const headerMap = this.createHeaderMap(headers);
-            
             return rows.map((row, index) => ({
                 itemNumber: row[headerMap.itemNumber] || '',
                 description: row[headerMap.description] || '',
                 quantity: parseInt(row[headerMap.quantity]) || 0
             })).filter(item => item.itemNumber && item.description);
         },
-        
         createHeaderMap(headers) {
             const map = {};
             headers.forEach((header, index) => {
@@ -85,7 +82,6 @@ export const InventoryTableComponent = {
             });
             return map;
         },
-        
         handleRefresh() {
             this.loadTestData();
         }

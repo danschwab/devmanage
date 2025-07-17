@@ -149,6 +149,7 @@ export const TableComponent = {
             
             <!-- Loading State -->
             <div v-if="isLoading" class="loading-message">
+                <img src="images/loading.gif" alt="..."/>
                 <p>Loading data...</p>
             </div>
             

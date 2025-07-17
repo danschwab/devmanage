@@ -5,7 +5,8 @@ export const PacklistTable = {
     props: {
         content: { type: Object, required: true }, // { crates, headers }
         tabName: { type: String, default: '' },
-        sheetId: { type: String, default: '' }
+        sheetId: { type: String, default: '' },
+        isLoading: { type: Boolean, default: false }
     },
     data() {
         return {
@@ -13,10 +14,24 @@ export const PacklistTable = {
             moved: false,
             isSaving: false,
             isPrinting: false,
-            mainTableData: [],
+            mainTableData: null, // <-- start as null
             itemTables: [],
-            saveDisabled: true
+            saveDisabled: true,
+            internalLoading: this.isLoading // local loading state
         };
+    },
+    watch: {
+        content: {
+            handler(newVal) {
+                console.log('[PacklistTable] content changed:', newVal);
+                this.loadTableData();
+            },
+            deep: true,
+            immediate: true
+        },
+        isLoading(val) {
+            this.internalLoading = val;
+        }
     },
     computed: {
         mainHeaders() {
@@ -76,6 +91,23 @@ export const PacklistTable = {
                 };
             });
         },
+        loadTableData() {
+            // Only show loading if content is missing or empty
+            if (!this.content || !this.content.headers || !Array.isArray(this.content.crates)) {
+                this.internalLoading = true;
+                this.mainTableData = null;
+                return;
+            }
+            // If crates are loading, show loading
+            if (this.content.crates.length === 0) {
+                this.internalLoading = true;
+                this.mainTableData = null;
+                return;
+            }
+            // Data is present, stop loading and show table
+            this.internalLoading = false;
+            this.mainTableData = Vue.reactive(this.buildMainTableData());
+        },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             this.dirty = true;
             this.saveDisabled = false;
@@ -117,18 +149,8 @@ export const PacklistTable = {
             this.isPrinting = false;
         }
     },
-    mounted() {
-        console.log('[PacklistTable] content:', this.content);
-        // Use Vue 3's reactive for mainTableData
-        this.mainTableData = Vue.reactive(this.buildMainTableData());
-        console.log('[PacklistTable] mainTableData:', this.mainTableData);
-    },
     template: html`
         <div class="packlist-table">
-            <div class="packlist-actions">
-                <button @click="handlePrint" :disabled="isPrinting">Print</button>
-                <button @click="handleSave" :disabled="saveDisabled || isSaving">Save</button>
-            </div>
             <TableComponent
                 :data="mainTableData"
                 :columns="mainColumns"
@@ -137,6 +159,7 @@ export const PacklistTable = {
                 :emptyMessage="'No crates'"
                 :draggable="true"
                 :newRow="true"
+                :isLoading="internalLoading"
                 @cell-edit="handleCellEdit"
                 @row-move="handleRowMove"
                 @new-row="handleAddCrate"
@@ -157,6 +180,7 @@ export const PacklistTable = {
                             :newRow="true"
                             :showFooter="false"
                             :showHeader="false"
+                            :isLoading="internalLoading"
                             @cell-edit="() => handleCellEdit(rowIndex, null, null, 'item')"
                             @new-row="() => handleAddItem(rowIndex)"
                         />
