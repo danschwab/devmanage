@@ -21,6 +21,15 @@ export const PacklistTable = {
     computed: {
         mainHeaders() {
             return [...(this.content.headers?.main || []), 'Items'];
+        },
+        mainColumns() {
+            // "Piece #" is always the first column if present
+            return this.mainHeaders.map((label, idx) => {
+                if (label === 'Piece #') {
+                    return { key: label, label, editable: false, isIndex: true };
+                }
+                return { key: label, label, editable: ['Type','L','W','H','Weight','Notes'].includes(label) };
+            });
         }
     },
     methods: {
@@ -37,11 +46,15 @@ export const PacklistTable = {
                 emptyMessage: 'No items'
             };
         },
-        // Build main table data
+        // Build main table data with Piece # as sequential numbers
         buildMainTableData() {
             return (this.content.crates || []).map((crate, crateIdx) => {
+                const info = { ...crate.info };
+                if (this.content.headers?.main?.includes('Piece #')) {
+                    info['Piece #'] = crateIdx + 1;
+                }
                 return {
-                    ...crate.info,
+                    ...info,
                     Items: crate.items
                 };
             });
@@ -57,7 +70,7 @@ export const PacklistTable = {
         handleAddCrate() {
             // Add a new crate row
             this.content.crates.push({
-                info: { Type: '', L: '', W: '', H: '', Weight: '', Notes: '' },
+                info: { 'Piece #': '', Type: '', L: '', W: '', H: '', Weight: '', Notes: '' },
                 items: []
             });
             this.dirty = true;
@@ -99,23 +112,31 @@ export const PacklistTable = {
             </div>
             <TableComponent
                 :data="mainTableData"
-                :columns="mainHeaders.map(label => ({ key: label, label, editable: ['Type','L','W','H','Weight','Notes'].includes(label) }))"
+                :columns="mainColumns"
                 :title="tabName"
                 :showRefresh="false"
                 :emptyMessage="'No crates'"
                 @cell-edit="handleCellEdit"
                 @row-move="handleRowMove"
             >
-                <template #default="{ row, rowIndex }">
-                    <TableComponent
-                        v-if="row.Items"
-                        :data="row.Items"
-                        :columns="content.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
-                        :showRefresh="false"
-                        :emptyMessage="'No items'"
-                        @cell-edit="() => handleCellEdit(rowIndex, null, null, 'item')"
-                    />
-                    <button @click="handleAddItem(rowIndex)">Add Item</button>
+                <template #default="{ row, rowIndex, column }">
+                    <template v-if="column && column.isIndex">
+                        {{ rowIndex + 1 }}
+                    </template>
+                    <template v-else-if="column && column.key === 'Items'">
+                        <TableComponent
+                            v-if="row.Items"
+                            :data="row.Items"
+                            :columns="content.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
+                            :showRefresh="false"
+                            :emptyMessage="'No items'"
+                            @cell-edit="() => handleCellEdit(rowIndex, null, null, 'item')"
+                        />
+                        <button @click="handleAddItem(rowIndex)">Add Item</button>
+                    </template>
+                    <template v-else>
+                        {{ row[column.key] }}
+                    </template>
                 </template>
             </TableComponent>
         </div>
