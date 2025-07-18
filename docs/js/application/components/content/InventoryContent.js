@@ -1,5 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationConfig } from '../../index.js';
-import { modalManager } from '../interface/modalComponent.js';
+import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationConfig, Requests } from '../../index.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
@@ -130,7 +129,15 @@ export const InventoryContent = {
             type: String,
             default: 'inventory'
         },
-        navigateToPath: Function
+        navigateToPath: Function,
+        reactiveTableData: Object, // <-- add prop
+        setReactiveTableData: Function, // <-- add prop
+        getReactiveTableData: Function // <-- add prop
+    },
+    data() {
+        return {
+            categories: [] // loaded from spreadsheet
+        };
     },
     computed: {
         pathSegments() {
@@ -149,15 +156,39 @@ export const InventoryContent = {
         // Add modalManager reference for template access
         modalManager() {
             return modalManager;
+        },
+        categoryList() {
+            // Return loaded categories with formatted name
+            return this.categories.map(cat => ({
+                id: cat.id,
+                name: cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : (cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase())
+            }));
+        },
+        currentCategoryName() {
+            // Find the display name for the current category from loaded categories
+            const match = this.categoryList.find(c => {
+                // Match by formatted name (case-insensitive)
+                return c.name.toLowerCase() === this.currentCategory.toLowerCase();
+            });
+            return match ? match.name : (this.currentCategory.charAt(0).toUpperCase() + this.currentCategory.slice(1).toLowerCase());
         }
     },
     methods: {
         exampleMethod() {
             // Example method logic
             modalManager.showAlert('Example method called!', 'Info');
+        },
+        async loadCategories() {
+            // Use API to get all tabs for INVENTORY, filter out INDEX
+            const tabs = await Requests.getAvailableTabs('INVENTORY');
+            // tabs: [{title, sheetId}]
+            this.categories = tabs.filter(tab => tab.title !== 'INDEX').map(tab => ({
+                id: tab.sheetId,
+                title: tab.title
+            }));
         }
     },
-    mounted() {
+    async mounted() {
         // Ensure we emit hamburger component for the initial view
         hamburgerMenuRegistry.registerMenu('inventory', {
             components: [InventoryMenuComponent],
@@ -165,6 +196,7 @@ export const InventoryContent = {
                 currentView: 'inventory',
             }
         });
+        await this.loadCategories();
     },
     template: html `
         <div class="inventory-page">
@@ -190,7 +222,14 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Inventory</h4>
-                    <inventory-table></inventory-table>
+                    <inventory-table
+                        :reactive-table-data="reactiveTableData"
+                        :set-reactive-table-data="setReactiveTableData"
+                        :get-reactive-table-data="getReactiveTableData"
+                        :container-path="containerPath"
+                        tab-name="furniture"
+                        tab-title="FURNITURE"
+                    ></inventory-table>
                 </div>
             </div>
             
@@ -200,25 +239,21 @@ export const InventoryContent = {
                 <p>Browse inventory items by category.</p>
                 
                 <div style="margin: 1rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                    <button class="category-card" @click="navigateToPath('inventory/categories/furniture')">
-                        <h4 style="margin: 0 0 0.5rem 0;">Furniture</h4>
-                        <p style="margin: 0; color: #666;">Tables, chairs, displays</p>
-                    </button>
-                    <button class="category-card" @click="navigateToPath('inventory/categories/electronics')">
-                        <h4 style="margin: 0 0 0.5rem 0;">Electronics</h4>
-                        <p style="margin: 0; color: #666;">AV equipment, lighting</p>
-                    </button>
-                    <button class="category-card" @click="navigateToPath('inventory/categories/signage')">
-                        <h4 style="margin: 0 0 0.5rem 0;">Signage</h4>
-                        <p style="margin: 0; color: #666;">Banners, displays, graphics</p>
+                    <button
+                        v-for="cat in categoryList"
+                        :key="cat.id"
+                        class="category-card"
+                        @click="navigateToPath('inventory/categories/' + cat.name)"
+                    >
+                        {{ cat.name }}
                     </button>
                 </div>
             </div>
             
             <!-- Category View -->
             <div v-else-if="currentView === 'categories' && currentCategory">
-                <h3>{{ NavigationConfig.getDisplayNameForPath(currentCategory) }} Inventory</h3>
-                <p>Items in the {{ NavigationConfig.getDisplayNameForPath(currentCategory).toLowerCase() }} category.</p>
+                <h3>{{ currentCategoryName }} Inventory</h3>
+                <p>Items in the {{ currentCategoryName.toLowerCase() }} category.</p>
                 
                 <div style="margin: 1rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button @click="modalManager.showAlert('Filter functionality coming soon!', 'Info')">Filter Items</button>
@@ -228,7 +263,14 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Items in this Category</h4>
-                    <inventory-table></inventory-table>
+                    <inventory-table
+                        :reactive-table-data="reactiveTableData"
+                        :set-reactive-table-data="setReactiveTableData"
+                        :get-reactive-table-data="getReactiveTableData"
+                        :container-path="containerPath"
+                        :tab-name="currentCategoryName.toLowerCase()"
+                        :tab-title="currentCategoryName.toUpperCase()"
+                    ></inventory-table>
                 </div>
             </div>
             
@@ -246,7 +288,12 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Search Results</h4>
-                    <inventory-table></inventory-table>
+                    <inventory-table
+                        :reactive-table-data="reactiveTableData"
+                        :set-reactive-table-data="setReactiveTableData"
+                        :get-reactive-table-data="getReactiveTableData"
+                        :container-path="containerPath"
+                    ></inventory-table>
                 </div>
             </div>
             
@@ -264,7 +311,12 @@ export const InventoryContent = {
                 
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Reports</h4>
-                    <inventory-table></inventory-table>
+                    <inventory-table
+                        :reactive-table-data="reactiveTableData"
+                        :set-reactive-table-data="setReactiveTableData"
+                        :get-reactive-table-data="getReactiveTableData"
+                        :container-path="containerPath"
+                    ></inventory-table>
                 </div>
             </div>
             

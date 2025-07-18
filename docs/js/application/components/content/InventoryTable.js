@@ -1,5 +1,7 @@
-import { Requests } from '../../index.js';
-import { html, TableComponent } from '../../index.js';
+import { html, Requests, TableComponent } from '../../index.js';
+
+// Global reactive store for inventory tables
+const inventoryTableStore = Vue.reactive({});
 
 // Inventory component that loads real inventory data using the data management API
 export const InventoryTableComponent = {
@@ -10,6 +12,18 @@ export const InventoryTableComponent = {
         isLoading: {
             type: Boolean,
             default: false
+        },
+        containerPath: {
+            type: String,
+            default: 'inventory'
+        },
+        tabName: {
+            type: String,
+            default: 'furniture'
+        },
+        tabTitle: {
+            type: String,
+            default: 'FURNITURE'
         }
     },
     data() {
@@ -24,7 +38,8 @@ export const InventoryTableComponent = {
                 },
                 { 
                     key: 'description', 
-                    label: 'Description'
+                    label: 'Description',
+                    editable: true
                 },
                 { 
                     key: 'quantity', 
@@ -37,24 +52,43 @@ export const InventoryTableComponent = {
                         return 'green';
                     }
                 }
-            ]
+            ],
+            internalLoading: false,
+            loadingMessage: 'Loading data...' // <-- add loading message state
         };
     },
     mounted() {
-        this.loadTestData();
+        // Use global reactive store if present
+        const saved = inventoryTableStore[this.containerPath];
+        if (saved) {
+            this.tableData = saved;
+        } else {
+            this.loadInventoryData();
+        }
     },
     methods: {
-        async loadTestData() {
+        setLoading(loading, message = 'Loading data...') {
+            this.internalLoading = loading;
+            this.loadingMessage = message;
+        },
+        async loadInventoryData() {
+            this.setLoading(true, 'Loading data...');
             this.$emit('update:isLoading', true);
             this.error = null;
             try {
-                const rawData = await Requests.fetchData('INVENTORY', 'FURNITURE');
+                Requests.clearCache('INVENTORY', this.tabTitle);
+                const rawData = await Requests.fetchData('INVENTORY', this.tabTitle);
                 this.tableData = this.transformInventoryData(rawData);
+                inventoryTableStore[this.containerPath] = this.tableData;
             } catch (error) {
                 this.error = error.message;
                 console.error('Error loading inventory data:', error);
             } finally {
+                this.setLoading(false);
                 this.$emit('update:isLoading', false);
+                this.$nextTick(() => {
+                    this.refreshEditableCells();
+                });
             }
         },
         transformInventoryData(rawData) {
@@ -83,20 +117,57 @@ export const InventoryTableComponent = {
             return map;
         },
         handleRefresh() {
-            this.loadTestData();
+            this.setLoading(true, 'Clearing Cache...');
+            Requests.clearCache('INVENTORY', this.tabTitle);
+            this.loadInventoryData();
+        },
+        handleCellEdit(rowIdx, colIdx, value) {
+            // Update tableData and global store
+            const colKey = this.columns[colIdx]?.key;
+            if (colKey) {
+                this.tableData[rowIdx][colKey] = value;
+                inventoryTableStore[this.containerPath] = this.tableData;
+            }
+        },
+        async handleSave() {
+            this.setLoading(true, 'Saving data...');
+            try {
+                // Convert tableData to 2D array with headers for Google Sheets
+                const headers = this.columns.map(col => col.label);
+                const rows = this.tableData.map(row => [
+                    row.itemNumber,
+                    row.description,
+                    row.quantity
+                ]);
+                const sheetData = [headers, ...rows];
+                await Requests.saveData('INVENTORY', this.tabTitle, sheetData);
+                await this.loadInventoryData();
+            } catch (error) {
+                this.error = error.message || 'Failed to save data';
+                console.error('Error saving inventory data:', error);
+            }
+        },
+        refreshEditableCells() {
+            // Call refreshEditableCells on child TableComponent via ref
+            if (this.$refs.tableComponent && this.$refs.tableComponent.refreshEditableCells) {
+                this.$refs.tableComponent.refreshEditableCells();
+            }
         }
     },
     template: html `
         <div class="inventory-table-component">
             <TableComponent
+                ref="tableComponent"
                 :data="tableData"
                 :columns="columns"
-                :isLoading="isLoading"
+                :isLoading="internalLoading || isLoading"
                 :error="error"
-                title="Inventory Data Test"
                 :showRefresh="true"
                 emptyMessage="No inventory items found"
+                :loading-message="loadingMessage"
                 @refresh="handleRefresh"
+                @cell-edit="handleCellEdit"
+                @on-save="handleSave"
             />
         </div>
     `

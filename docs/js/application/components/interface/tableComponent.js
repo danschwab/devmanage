@@ -45,14 +45,55 @@ export const TableComponent = {
         showHeader: {
             type: Boolean,
             default: true
+        },
+        dragId: {
+            type: String,
+            default: null
+        },
+        loadingMessage: {
+            type: String,
+            default: 'Loading data...'
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row'],
     data() {
         return {
             dragIndex: null,
-            dragOverIndex: null
+            dragOverIndex: null,
+            dragActive: false,
+            dragSourceTableId: null,
+            originalData: [],
+            dirtyCells: {}, // {rowIndex: {colIndex: true}}
+            allowSaveEvent: false // <-- renamed from showSaveButton
         };
+    },
+    computed: {
+        showSaveButton() {
+            // True if any editable cell, movable row, or add row button is present
+            const hasEditable = this.columns.some(col => col.editable);
+            const hasMovable = !!this.draggable;
+            const hasAddRow = !!this.newRow;
+            return hasEditable || hasMovable || hasAddRow;
+        }
+    },
+    mounted() {
+        // Store a deep copy of the original data for dirty checking
+        this.originalData = JSON.parse(JSON.stringify(this.data));
+        this.$nextTick(() => {
+            this.updateAllEditableCells();
+        });
+    },
+    watch: {
+        data: {
+            handler(newVal) {
+                // Update originalData only if data length changes (e.g., after refresh)
+                if (newVal.length !== this.originalData.length) {
+                    this.originalData = JSON.parse(JSON.stringify(newVal));
+                }
+                this.checkDirtyCells();
+            },
+            deep: true
+        }
     },
     methods: {
         handleRefresh() {
@@ -81,12 +122,11 @@ export const TableComponent = {
             return value;
         },
         
-        getCellClass(value, column) {
-            if (!column.cellClass) return '';
-            
+        getCellClass(value, column, rowIndex, colIndex) {
+            let baseClass = '';
             // Support function-based cell classes
             if (typeof column.cellClass === 'function') {
-                return column.cellClass(value);
+                baseClass = column.cellClass(value);
             }
             
             // Support object-based cell classes
@@ -101,7 +141,11 @@ export const TableComponent = {
                 }
             }
             
-            return column.cellClass;
+            // Add dirty class if cell is dirty
+            if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][colIndex]) {
+                baseClass += ' dirty-cell';
+            }
+            return baseClass;
         },
         
         getColumnWidth(column) {
@@ -109,118 +153,214 @@ export const TableComponent = {
         },
         handleCellEdit(rowIndex, colIndex, value) {
             this.$emit('cell-edit', rowIndex, colIndex, value);
+            // Dirty check
+            if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
+            const originalValue = this.originalData[rowIndex]?.[this.columns[colIndex].key];
+            if (value !== originalValue) {
+                this.dirtyCells[rowIndex][colIndex] = true;
+            } else {
+                delete this.dirtyCells[rowIndex][colIndex];
+            }
+            this.checkDirtyCells();
+        },
+        checkDirtyCells() {
+            // If any cell is dirty, allow save event
+            this.allowSaveEvent = Object.keys(this.dirtyCells).some(row =>
+                Object.keys(this.dirtyCells[row]).length > 0
+            );
+        },
+        handleSave() {
+            this.$emit('on-save');
+            // After save, reset dirty state
+            this.originalData = JSON.parse(JSON.stringify(this.data));
+            this.dirtyCells = {};
+            this.allowSaveEvent = false;
         },
         handleRowMove() {
             this.$emit('row-move');
         },
-        handleDragStart(rowIndex) {
-            this.dragIndex = rowIndex;
+        handleDragHandleDown(rowIndex, event) {
+            console.log('[TableComponent] Drag handle mousedown:', { rowIndex, event });
+            this.dragActive = true;
+            // Store drag source table id for cross-table dragging
+            this.dragSourceTableId = this.dragId;
+        },
+        handleDragStart(rowIndex, event) {
+            console.log('[TableComponent] Drag start:', { rowIndex, dragActive: this.dragActive, eventTarget: event.target });
+            if (this.dragActive && event.target.classList.contains('row-drag-handle')) {
+                this.dragIndex = rowIndex;
+                this.dragSourceTableId = this.dragId;
+                console.log('[TableComponent] Drag initiated:', { dragIndex: this.dragIndex, dragSourceTableId: this.dragSourceTableId });
+            } else {
+                console.log('[TableComponent] Drag start ignored (not drag handle)');
+            }
+            this.dragActive = false;
         },
         handleDragOver(rowIndex, event) {
             event.preventDefault();
-            this.dragOverIndex = rowIndex;
+            // Only log drag-over if a valid drag is in progress and drag-ids match
+            if (this.dragIndex !== null && this.dragSourceTableId === this.dragId) {
+                this.dragOverIndex = rowIndex;
+                console.log('[TableComponent] Drag over:', { rowIndex, dragOverIndex: this.dragOverIndex, dragId: this.dragId });
+            }
         },
         handleDrop(rowIndex) {
-            if (this.dragIndex !== null && this.dragIndex !== rowIndex) {
-                const movedRow = this.data.splice(this.dragIndex, 1)[0];
-                this.data.splice(rowIndex, 0, movedRow);
-                this.$emit('row-move', this.dragIndex, rowIndex);
+            // Only process drop if a valid drag is in progress and drag-ids match
+            if (this.dragIndex !== null && this.dragSourceTableId === this.dragId) {
+                console.log('[TableComponent] Drop:', { dragIndex: this.dragIndex, dropIndex: rowIndex, dragId: this.dragId });
+                if (this.dragIndex !== rowIndex) {
+                    const movedRow = this.data[this.dragIndex];
+                    this.data.splice(this.dragIndex, 1);
+                    let insertIndex = rowIndex;
+                    if (this.dragIndex < rowIndex) {
+                        insertIndex = rowIndex;
+                    }
+                    this.data.splice(insertIndex, 0, movedRow);
+                    // Emit dragIndex, dropIndex, and the new array
+                    this.$emit('row-move', this.dragIndex, insertIndex, [...this.data]);
+                } else {
+                    console.log('[TableComponent] Drop ignored (same index)');
+                }
             }
+            // Always reset drag state
             this.dragIndex = null;
             this.dragOverIndex = null;
+            this.dragSourceTableId = null;
         },
         handleNewRow() {
             this.$emit('new-row');
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+            });
+        },
+        refreshEditableCells() {
+            this.updateAllEditableCells();
+        },
+        updateAllEditableCells() {
+            // Set contenteditable text for all editable cells to match data (only on mount or new row)
+            this.data.forEach((row, rowIndex) => {
+                this.columns.forEach((column, colIndex) => {
+                    if (column.editable) {
+                        const refName = 'editable_' + rowIndex + '_' + colIndex;
+                        const cell = this.$refs[refName];
+                        if (cell && cell instanceof HTMLElement) {
+                            cell.textContent = row[column.key] || '';
+                        } else if (Array.isArray(cell)) {
+                            cell.forEach(el => {
+                                if (el instanceof HTMLElement) {
+                                    el.textContent = row[column.key] || '';
+                                }
+                            });
+                        }
+                    }
+                });
+            });
         }
     },
     template: html `
         <div class="dynamic-table">
-            <div class="content-header" v-if="showHeader && (title || showRefresh)">
-                <h3 v-if="title">{{ title }}</h3>
-                <button 
-                    v-if="showRefresh" 
-                    @click="handleRefresh" 
-                    :disabled="isLoading" 
-                    class="refresh-button"
-                >
-                    {{ isLoading ? 'Loading...' : 'Refresh' }}
-                </button>
-            </div>
-            
-            <!-- Loading State -->
-            <div v-if="isLoading" class="loading-message">
-                <img src="images/loading.gif" alt="..."/>
-                <p>Loading data...</p>
-            </div>
-            
-            <!-- Error State -->
-            <div v-else-if="error" class="error-message">
-                <p>Error: {{ error }}</p>
-                <button v-if="showRefresh" @click="handleRefresh">Try Again</button>
-            </div>
-            
-            <!-- Empty State -->
-            <div v-else-if="!data || data.length === 0" class="empty-message">
-                <p>{{ emptyMessage }}</p>
-            </div>
-            
-            <!-- Data Table -->
-            <div v-else class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th v-if="draggable" class="spacer-cell"></th>
-                            <th 
-                                v-for="(column, colIdx) in columns" 
-                                :key="column.key"
-                                :style="{ width: getColumnWidth(column) }"
-                                :class="column.headerClass"
-                            >
-                                {{ column.label }}
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(row, rowIndex) in data" 
-                            :key="rowIndex"
-                            :draggable="draggable"
-                            @dragstart="draggable ? handleDragStart(rowIndex) : null"
-                            @dragover="draggable ? handleDragOver(rowIndex, $event) : null"
-                            @drop="draggable ? handleDrop(rowIndex) : null"
-                            :class="{ 'dragging': dragIndex === rowIndex, 'drag-over': dragOverIndex === rowIndex }"
+            <div :class="dragId ? 'drag-id-' + dragId : ''">
+                <div class="content-header" v-if="showHeader && (title || showRefresh)">
+                    <h3 v-if="title">{{ title }}</h3>
+                    <div v-if="showSaveButton || showRefresh" class="button-bar">
+                        <button
+                            v-if="showSaveButton"
+                            @click="handleSave"
+                            :disabled="isLoading || !allowSaveEvent"
+                            class="save-button green"
                         >
-                            <td v-if="draggable" class="row-drag-handle"></td>
-                            <td 
-                                v-for="(column, colIndex) in columns" 
-                                :key="column.key"
-                                :class="getCellClass(row[column.key], column)"
+                            Save
+                        </button>
+                        <button 
+                            v-if="showRefresh" 
+                            @click="handleRefresh" 
+                            :disabled="isLoading" 
+                            :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
+                        >
+                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div v-if="isLoading" class="loading-message">
+                    <img src="images/loading.gif" alt="..."/>
+                    <p>{{ loadingMessage }}</p>
+                </div>
+                
+                <!-- Error State -->
+                <div v-else-if="error" class="error-message">
+                    <p>Error: {{ error }}</p>
+                    <button v-if="showRefresh" @click="handleRefresh">Try Again</button>
+                </div>
+                
+                <!-- Empty State -->
+                <div v-else-if="!data || data.length === 0" class="empty-message">
+                    <p>{{ emptyMessage }}</p>
+                </div>
+                
+                <!-- Data Table -->
+                <div v-else class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th v-if="draggable" class="spacer-cell"></th>
+                                <th 
+                                    v-for="(column, colIdx) in columns" 
+                                    :key="column.key"
+                                    :style="{ width: getColumnWidth(column) }"
+                                    :class="column.headerClass"
+                                >
+                                    {{ column.label }}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(row, rowIndex) in data" 
+                                :key="rowIndex"
+                                :class="{ 'dragging': dragIndex === rowIndex, 'drag-over': dragOverIndex === rowIndex }"
                             >
-                                <div
-                                    v-if="column.editable"
-                                    contenteditable="true"
-                                    :data-row-index="rowIndex"
-                                    :data-col-index="colIndex"
-                                    @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
-                                    class="table-edit-textarea"
-                                >{{ row[column.key] }}</div>
-                                <slot v-else :row="row" :rowIndex="rowIndex" :column="column">
-                                    {{ formatCellValue(row[column.key], column) }}
-                                </slot>
-                            </td>
-                        </tr>
-                    </tbody>
-                    <tfoot v-if="newRow">
-                        <tr>
-                            <td :colspan="draggable ? columns.length + 1 : columns.length" class="new-row-button" @click="handleNewRow">
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            
-            <!-- Data Summary -->
-            <div v-if="showFooter && data && data.length > 0" class="content-footer">
-                <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                                <td v-if="draggable"
+                                    class="row-drag-handle"
+                                    draggable="true"
+                                    @mousedown="handleDragHandleDown(rowIndex, $event)"
+                                    @dragstart="handleDragStart(rowIndex, $event)"
+                                    @dragover="handleDragOver(rowIndex, $event)"
+                                    @drop="handleDrop(rowIndex)"
+                                ></td>
+                                <td 
+                                    v-for="(column, colIndex) in columns" 
+                                    :key="column.key"
+                                    :class="getCellClass(row[column.key], column, rowIndex, colIndex)"
+                                >
+                                    <div
+                                        v-if="column.editable"
+                                        contenteditable="true"
+                                        :data-row-index="rowIndex"
+                                        :data-col-index="colIndex"
+                                        @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
+                                        class="table-edit-textarea"
+                                        :ref="'editable_' + rowIndex + '_' + colIndex"
+                                    ></div>
+                                    <slot v-else :row="row" :rowIndex="rowIndex" :column="column">
+                                        {{ formatCellValue(row[column.key], column) }}
+                                    </slot>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot v-if="newRow">
+                            <tr>
+                                <td :colspan="draggable ? columns.length + 1 : columns.length" class="new-row-button" @click="handleNewRow">
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <!-- Data Summary -->
+                <div v-if="showFooter && data && data.length > 0" class="content-footer">
+                    <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                </div>
             </div>
         </div>
     `

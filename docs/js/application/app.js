@@ -26,7 +26,6 @@ const App = {
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
         'interfaces-content': InterfacesContent,
-        DashboardToggleComponent
     },
     provide() {
         return {
@@ -46,7 +45,8 @@ const App = {
             dashboardContainers: [...NavigationConfig.allDashboardContainers],
             modals: [],
             tabSystems: {},
-            dashboardLoading: false // <-- add dashboard loading flag
+            dashboardLoading: false, // <-- add dashboard loading flag
+            reactiveTableData: {} // <-- add central reactive table data store
         };
     },
     computed: {
@@ -348,6 +348,19 @@ const App = {
             if (!this[module]) this[module] = {};
             this[module][prop] = value;
         },
+        /**
+         * Set reactive table data for a given container path
+         */
+        setReactiveTableData(containerPath, tableData) {
+            // Vue 3: direct assignment is reactive
+            this.reactiveTableData[containerPath] = tableData;
+        },
+        /**
+         * Get reactive table data for a given container path
+         */
+        getReactiveTableData(containerPath) {
+            return this.reactiveTableData[containerPath];
+        },
     },
     setup() {
         return { modalManager };
@@ -416,21 +429,28 @@ const App = {
                             :remove-dashboard-container="removeDashboardContainer">
                         </dashboard-settings>
                         
-                        <!-- Packlist Content -->
-                        <packlist-content 
-                            v-else-if="container.containerType === 'packlist'"
-                            :show-alert="showAlert"
-                            :container-path="container.containerPath"
-                            :navigate-to-path="createNavigateToPathHandler(container.id)">
-                        </packlist-content>
-                        
                         <!-- Inventory Content -->
                         <inventory-content 
                             v-else-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
-                            :navigate-to-path="createNavigateToPathHandler(container.id)">
+                            :navigate-to-path="createNavigateToPathHandler(container.id)"
+                            :reactive-table-data="reactiveTableData"
+                            :set-reactive-table-data="setReactiveTableData"
+                            :get-reactive-table-data="getReactiveTableData"
+                        >
                         </inventory-content>
+                        <!-- Packlist Content -->
+                        <packlist-content 
+                            v-else-if="container.containerType === 'packlist'"
+                            :show-alert="showAlert"
+                            :container-path="container.containerPath"
+                            :navigate-to-path="createNavigateToPathHandler(container.id)"
+                            :reactive-table-data="reactiveTableData"
+                            :set-reactive-table-data="setReactiveTableData"
+                            :get-reactive-table-data="getReactiveTableData"
+                        >
+                        </packlist-content>
                         
                         <!-- Interfaces Content -->
                         <interfaces-content 
