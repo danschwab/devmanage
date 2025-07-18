@@ -18,6 +18,7 @@ export const PacklistTable = {
             isSaving: false,
             isPrinting: false,
             mainTableData: null, // local reactive table data
+            originalData: [], // <-- add this
             saveDisabled: true,
             internalLoading: this.isLoading // local loading state
         };
@@ -27,8 +28,8 @@ export const PacklistTable = {
             handler(newVal) {
                 console.log('[PacklistTable] content changed:', newVal);
                 this.loadTableData();
+                this.loadOriginalDataFromApi();
                 Vue.nextTick(() => {
-                    // Force rerender after async data arrives
                     this.$forceUpdate && this.$forceUpdate();
                 });
             },
@@ -111,6 +112,27 @@ export const PacklistTable = {
         setReactiveTableData(data) {
             packlistTableStore[this.tabName] = data;
         },
+        async loadOriginalDataFromApi() {
+            // Simulate API call: replace with your actual API fetch logic
+            if (!this.content || !this.content.headers || !Array.isArray(this.content.crates)) {
+                this.originalData = [];
+                return;
+            }
+            if (this.content.crates.length === 0) {
+                this.originalData = [];
+                return;
+            }
+            // Build originalData from API payload (simulate with buildMainTableData)
+            // Replace with actual API call if available
+            const built = this.buildMainTableData();
+            this.originalData = JSON.parse(JSON.stringify(built));
+            // Recalculate dirty state after originalData is updated
+            this.$nextTick(() => {
+                if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
+                    this.$refs.mainTableComponent.checkDirtyCells();
+                }
+            });
+        },
         loadTableData() {
             if (!this.content || !this.content.headers || !Array.isArray(this.content.crates)) {
                 this.internalLoading = true;
@@ -123,15 +145,14 @@ export const PacklistTable = {
                 return;
             }
             this.internalLoading = false;
-            // Use global reactive store
             let saved = this.getReactiveTableData();
             if (saved) {
                 this.mainTableData = saved;
             } else {
-                this.mainTableData = Vue.reactive(this.buildMainTableData());
+                const built = this.buildMainTableData();
+                this.mainTableData = Vue.reactive(built);
                 this.setReactiveTableData(this.mainTableData);
             }
-            // Wait a tick to ensure child tables update, then refresh editable cells
             Vue.nextTick(() => {
                 if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
                     this.$refs.mainTableComponent.refreshEditableCells();
@@ -226,6 +247,7 @@ export const PacklistTable = {
             <TableComponent
                 ref="mainTableComponent"
                 :data="mainTableData"
+                :originalData="originalData"
                 :columns="mainColumns"
                 :title="tabName"
                 :showRefresh="false"
@@ -246,6 +268,7 @@ export const PacklistTable = {
                         <TableComponent
                             v-if="row.Items"
                             :data="row.Items"
+                            :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
                             :columns="content.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
                             :hide-columns="['Pack','Check']"
                             :showRefresh="false"

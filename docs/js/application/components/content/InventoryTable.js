@@ -29,6 +29,7 @@ export const InventoryTableComponent = {
     data() {
         return {
             tableData: [],
+            originalData: [], // <-- add this
             error: null,
             columns: [
                 { 
@@ -58,11 +59,14 @@ export const InventoryTableComponent = {
         };
     },
     mounted() {
-        // Use global reactive store if present
+        // Use global reactive store for editable table, but always update originalData from API
         const saved = inventoryTableStore[this.containerPath];
-        if (saved) {
+        if (saved && saved.length > 0) {
             this.tableData = saved;
+            // Fetch originalData for dirty checking, but don't overwrite tableData
+            this.loadOriginalDataFromApi();
         } else {
+            // If no store, fetch from API and set both tableData and originalData
             this.loadInventoryData();
         }
     },
@@ -71,6 +75,24 @@ export const InventoryTableComponent = {
             this.internalLoading = loading;
             this.loadingMessage = message;
         },
+        async loadOriginalDataFromApi() {
+            try {
+                const rawData = await Requests.fetchData('INVENTORY', this.tabTitle);
+                const transformed = this.transformInventoryData(rawData);
+                // Only update originalData, not tableData
+                this.originalData = JSON.parse(JSON.stringify(transformed));
+                // Recalculate dirty state after originalData is updated
+                this.$nextTick(() => {
+                    if (this.$refs.tableComponent && this.$refs.tableComponent.checkDirtyCells) {
+                        this.$refs.tableComponent.refreshEditableCells();
+                        this.$refs.tableComponent.compareAllCellsDirty();
+                    }
+                });
+            } catch (error) {
+                // Only set error for originalData fetch, do not clear tableData
+                console.error('Error loading original inventory data:', error);
+            }
+        },
         async loadInventoryData() {
             this.setLoading(true, 'Loading data...');
             this.$emit('update:isLoading', true);
@@ -78,7 +100,9 @@ export const InventoryTableComponent = {
             try {
                 Requests.clearCache('INVENTORY', this.tabTitle);
                 const rawData = await Requests.fetchData('INVENTORY', this.tabTitle);
-                this.tableData = this.transformInventoryData(rawData);
+                const transformed = this.transformInventoryData(rawData);
+                this.tableData = transformed;
+                this.originalData = JSON.parse(JSON.stringify(transformed));
                 inventoryTableStore[this.containerPath] = this.tableData;
             } catch (error) {
                 this.error = error.message;
@@ -159,6 +183,7 @@ export const InventoryTableComponent = {
             <TableComponent
                 ref="tableComponent"
                 :data="tableData"
+                :originalData="originalData"
                 :columns="columns"
                 :isLoading="internalLoading || isLoading"
                 :error="error"

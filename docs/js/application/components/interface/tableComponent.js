@@ -53,6 +53,10 @@ export const TableComponent = {
         loadingMessage: {
             type: String,
             default: 'Loading data...'
+        },
+        originalData: {
+            type: Array,
+            required: true
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row'],
@@ -62,7 +66,6 @@ export const TableComponent = {
             dragOverIndex: null,
             dragActive: false,
             dragSourceTableId: null,
-            originalData: [],
             dirtyCells: {}, // {rowIndex: {colIndex: true}}
             allowSaveEvent: false // <-- renamed from showSaveButton
         };
@@ -77,23 +80,10 @@ export const TableComponent = {
         }
     },
     mounted() {
-        // Store a deep copy of the original data for dirty checking
-        this.originalData = JSON.parse(JSON.stringify(this.data));
         this.$nextTick(() => {
             this.updateAllEditableCells();
+            this.compareAllCellsDirty();
         });
-    },
-    watch: {
-        data: {
-            handler(newVal) {
-                // Update originalData only if data length changes (e.g., after refresh)
-                if (newVal.length !== this.originalData.length) {
-                    this.originalData = JSON.parse(JSON.stringify(newVal));
-                }
-                this.checkDirtyCells();
-            },
-            deep: true
-        }
     },
     methods: {
         handleRefresh() {
@@ -153,7 +143,7 @@ export const TableComponent = {
         },
         handleCellEdit(rowIndex, colIndex, value) {
             this.$emit('cell-edit', rowIndex, colIndex, value);
-            // Dirty check
+            // Dirty check for single cell
             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
             const originalValue = this.originalData[rowIndex]?.[this.columns[colIndex].key];
             if (value !== originalValue) {
@@ -161,6 +151,27 @@ export const TableComponent = {
             } else {
                 delete this.dirtyCells[rowIndex][colIndex];
             }
+            this.checkDirtyCells();
+        },
+        compareAllCellsDirty() {
+            // Compare all cells in data vs originalData and update dirtyCells
+            this.dirtyCells = {};
+            if (!Array.isArray(this.data) || !Array.isArray(this.originalData)) return;
+            this.data.forEach((row, rowIndex) => {
+                const originalRow = this.originalData[rowIndex];
+                if (!originalRow) return;
+                this.columns.forEach((column, colIndex) => {
+                    const key = column.key;
+                    if (column.editable) {
+                        const currentValue = row[key];
+                        const originalValue = originalRow[key];
+                        if (currentValue !== originalValue) {
+                            if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
+                            this.dirtyCells[rowIndex][colIndex] = true;
+                        }
+                    }
+                });
+            });
             this.checkDirtyCells();
         },
         checkDirtyCells() {
@@ -172,7 +183,6 @@ export const TableComponent = {
         handleSave() {
             this.$emit('on-save');
             // After save, reset dirty state
-            this.originalData = JSON.parse(JSON.stringify(this.data));
             this.dirtyCells = {};
             this.allowSaveEvent = false;
         },
@@ -208,6 +218,7 @@ export const TableComponent = {
             // Only process drop if a valid drag is in progress and drag-ids match
             if (this.dragIndex !== null && this.dragSourceTableId === this.dragId) {
                 console.log('[TableComponent] Drop:', { dragIndex: this.dragIndex, dropIndex: rowIndex, dragId: this.dragId });
+                console.log('[TableComponent] Original data before move:', JSON.parse(JSON.stringify(this.originalData)));
                 if (this.dragIndex !== rowIndex) {
                     const movedRow = this.data[this.dragIndex];
                     this.data.splice(this.dragIndex, 1);
@@ -238,6 +249,7 @@ export const TableComponent = {
         },
         updateAllEditableCells() {
             // Set contenteditable text for all editable cells to match data (only on mount or new row)
+            if (!Array.isArray(this.data)) return; // <-- guard against null/undefined
             this.data.forEach((row, rowIndex) => {
                 this.columns.forEach((column, colIndex) => {
                     if (column.editable) {
