@@ -1,6 +1,7 @@
 import { html } from '../../index.js';
 
 export const TableComponent = {
+    name: 'TableComponent',
     props: {
         data: {
             type: Array,
@@ -59,7 +60,7 @@ export const TableComponent = {
             required: true
         }
     },
-    emits: ['refresh', 'cell-edit', 'row-move', 'new-row'],
+    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty'],
     data() {
         return {
             dragIndex: null,
@@ -77,6 +78,13 @@ export const TableComponent = {
             const hasMovable = !!this.draggable;
             const hasAddRow = !!this.newRow;
             return hasEditable || hasMovable || hasAddRow;
+        }
+    },
+    watch: {
+        allowSaveEvent(val) {
+            // Emit to parent if dirty state changes
+            console.log('[TableComponent] allowSaveEvent changed:', val);
+            this.$emit('inner-table-dirty', val);
         }
     },
     mounted() {
@@ -179,6 +187,64 @@ export const TableComponent = {
             this.allowSaveEvent = Object.keys(this.dirtyCells).some(row =>
                 Object.keys(this.dirtyCells[row]).length > 0
             );
+            // Check nested TableComponents for dirty state
+            if (!this.allowSaveEvent) {
+                // If no dirty cells, check for dirty nested tables
+                this.allowSaveEvent = this.checkNestedTableDirty();
+            }
+        },
+        checkNestedTableDirty() {
+            // Recursively search for nested TableComponents and return true if any are dirty
+            function findNestedTableComponents(obj, refKeyPath = []) {
+                if (!obj) return false;
+                let compName = 'unknown';
+                if (obj.$options && obj.$options.name) compName = obj.$options.name;
+                else if (obj.tagName) compName = obj.tagName;
+                else if (obj.constructor && obj.constructor.name) compName = obj.constructor.name;
+                const isVueComponent = !!obj.$options;
+
+                // Identify TableComponent by name or by presence of allowSaveEvent on Vue components
+                if (
+                    isVueComponent &&
+                    (
+                        compName === 'TableComponent' ||
+                        typeof obj.allowSaveEvent !== 'undefined'
+                    )
+                ) {
+                    if (obj.allowSaveEvent) {
+                        return true;
+                    }
+                }
+                // Search $refs of this component
+                if (obj.$refs) {
+                    for (const subRefKey of Object.keys(obj.$refs)) {
+                        const subRef = obj.$refs[subRefKey];
+                        if (Array.isArray(subRef)) {
+                            for (let idx = 0; idx < subRef.length; idx++) {
+                                if (findNestedTableComponents(subRef[idx], refKeyPath.concat([subRefKey, idx]))) {
+                                    return true;
+                                }
+                            }
+                        } else {
+                            if (findNestedTableComponents(subRef, refKeyPath.concat([subRefKey]))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Search $children (Vue 2) for dynamically created components
+                if (obj.$children && obj.$children.length) {
+                    for (let child of obj.$children) {
+                        if (findNestedTableComponents(child, refKeyPath.concat(['$child']))) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            const foundDirty = findNestedTableComponents(this, []);
+            console.log('[TableComponent] checkNestedTableDirty: found dirty state:', foundDirty);
+            return foundDirty;
         },
         handleSave() {
             this.$emit('on-save');

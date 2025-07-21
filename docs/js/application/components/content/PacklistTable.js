@@ -17,37 +17,14 @@ export const PacklistTable = {
             moved: false,
             isSaving: false,
             isPrinting: false,
-            mainTableData: null, // local reactive table data
-            originalData: [], // <-- add this
+            mainTableData: null,
+            originalData: [],
             saveDisabled: true,
-            internalLoading: this.isLoading // local loading state
+            internalLoading: this.isLoading,
+            dirtyCrateRows: {} // Track dirty state for each crate row (items table)
         };
     },
     watch: {
-        content: {
-            handler(newVal) {
-                console.log('[PacklistTable] content changed:', newVal);
-                this.loadTableData();
-                this.loadOriginalDataFromApi();
-                Vue.nextTick(() => {
-                    this.$forceUpdate && this.$forceUpdate();
-                });
-            },
-            deep: true,
-            immediate: true
-        },
-        'content.crates': {
-            handler(newVal) {
-                // Watch specifically for crates array changes (async population)
-                if (Array.isArray(newVal) && newVal.length > 0) {
-                    this.loadTableData();
-                    Vue.nextTick(() => {
-                        this.$forceUpdate && this.$forceUpdate();
-                    });
-                }
-            },
-            deep: true
-        },
         isLoading(val) {
             this.internalLoading = val;
         }
@@ -111,53 +88,6 @@ export const PacklistTable = {
         },
         setReactiveTableData(data) {
             packlistTableStore[this.tabName] = data;
-        },
-        async loadOriginalDataFromApi() {
-            // Simulate API call: replace with your actual API fetch logic
-            if (!this.content || !this.content.headers || !Array.isArray(this.content.crates)) {
-                this.originalData = [];
-                return;
-            }
-            if (this.content.crates.length === 0) {
-                this.originalData = [];
-                return;
-            }
-            // Build originalData from API payload (simulate with buildMainTableData)
-            // Replace with actual API call if available
-            const built = this.buildMainTableData();
-            this.originalData = JSON.parse(JSON.stringify(built));
-            // Recalculate dirty state after originalData is updated
-            this.$nextTick(() => {
-                if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
-                    this.$refs.mainTableComponent.checkDirtyCells();
-                }
-            });
-        },
-        loadTableData() {
-            if (!this.content || !this.content.headers || !Array.isArray(this.content.crates)) {
-                this.internalLoading = true;
-                this.mainTableData = null;
-                return;
-            }
-            if (this.content.crates.length === 0) {
-                this.internalLoading = true;
-                this.mainTableData = null;
-                return;
-            }
-            this.internalLoading = false;
-            let saved = this.getReactiveTableData();
-            if (saved) {
-                this.mainTableData = saved;
-            } else {
-                const built = this.buildMainTableData();
-                this.mainTableData = Vue.reactive(built);
-                this.setReactiveTableData(this.mainTableData);
-            }
-            Vue.nextTick(() => {
-                if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
-                    this.$refs.mainTableComponent.refreshEditableCells();
-                }
-            });
         },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             this.dirty = true;
@@ -233,6 +163,7 @@ export const PacklistTable = {
             this.dirty = false;
             this.moved = false;
             this.saveDisabled = true;
+            this.dirtyCrateRows = {}; // Reset dirty crate rows after save
             this.isSaving = false;
         },
         async handlePrint() {
@@ -240,6 +171,26 @@ export const PacklistTable = {
             // Implement print logic (open sheet, etc.)
             // ...existing code...
             this.isPrinting = false;
+        },
+        handleInnerTableDirty(isDirty, rowIndex) {
+            // Bubble up dirty state from nested TableComponent (items table)
+            if (typeof rowIndex === 'number') {
+                if (isDirty) {
+                    this.dirtyCrateRows[rowIndex] = true;
+                } else {
+                    delete this.dirtyCrateRows[rowIndex];
+                }
+            }
+            // If any crate row is dirty, set parent dirty/save state
+            const anyDirty = Object.keys(this.dirtyCrateRows).length > 0;
+            if (anyDirty) {
+                this.dirty = true;
+                this.saveDisabled = false;
+            }
+            // Run checkDirtyCells on the outer table to ensure state is updated
+            if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
+                this.$refs.mainTableComponent.checkDirtyCells();
+            }
         }
     },
     template: html`
@@ -276,12 +227,13 @@ export const PacklistTable = {
                             :draggable="true"
                             :newRow="true"
                             :showFooter="false"
-                            :showHeader="false"
+                            :showHeader="true"
                             :isLoading="internalLoading"
                             :drag-id="'packlist-items'"
                             @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][content.headers.items[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
                             @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'item', rowIndex)"
                             @new-row="() => handleAddItem(rowIndex)"
+                            @inner-table-dirty="(isDirty) => handleInnerTableDirty(isDirty, rowIndex)"
                         />
                     </template>
                     <template v-else>
