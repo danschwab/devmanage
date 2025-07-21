@@ -8,11 +8,11 @@
  */
 
 // Use fake/mock services for testing and development
- export { GoogleSheetsAuth, GoogleSheetsService } from './FakeGoogle.js';
+ //export { GoogleSheetsAuth, GoogleSheetsService } from './FakeGoogle.js';
 
 // Use real Google Sheets services for production
-// export { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
-// export { GoogleSheetsService } from './GoogleSheetsData.js';
+ export { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
+ export { GoogleSheetsService } from './GoogleSheetsData.js';
 
 // Also export the query functionality
 export { SheetSql } from './sheetSql.js';
