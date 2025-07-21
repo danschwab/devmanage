@@ -16,6 +16,8 @@ class RequestsBase {
             console.log('[API] fetchData called:', { tableId, tabName, fullRange, trackingId });
             const result = await Database.getData(tableId, fullRange, true, trackingId);
             console.log('[API] fetchData result:', result);
+            // Log the actual data returned
+            console.log('[API] fetchData returned data:', result);
             return result;
         } catch (error) {
             console.error(`Failed to fetch data from ${tableId}/${tabName}:`, error);
@@ -52,6 +54,7 @@ class RequestsBase {
             // Get current tracking ID from context
             const trackingId = CacheManager.getCurrentTrackingId();
             const tabs = await Database.getTabs(tableId, true, trackingId);
+            console.log('[API] getAvailableTabs returned data:', tabs);
             return includeHidden ? tabs : tabs.filter(tab => !tab.title.startsWith('_'));
         } catch (error) {
             console.error(`Failed to get tabs for ${tableId}:`, error);
@@ -183,7 +186,9 @@ class RequestsBase {
     static async getItemQuantities(projectIdentifier) {
         try {
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await PackListUtils.extractItems(projectIdentifier, trackingId);
+            const result = await PackListUtils.extractItems(projectIdentifier, trackingId);
+            console.log('[API] getItemQuantities returned data:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to extract item quantities for ${projectIdentifier}:`, error);
             Analytics.trackEvent?.('data_error', { action: 'extract_quantities', projectIdentifier });
@@ -216,7 +221,9 @@ class RequestsBase {
     static async getInventoryInfo(itemName, fields) {
         try {
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await InventoryUtils.getItemInfo(itemName, fields, trackingId);
+            const result = await InventoryUtils.getItemInfo(itemName, fields, trackingId);
+            console.log('[API] getInventoryInfo returned data:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to get inventory information:`, error);
             Analytics.trackEvent?.('data_error', { action: 'get_inventory_info', items: Array.isArray(itemName) ? itemName.length : 1 });
@@ -233,7 +240,9 @@ class RequestsBase {
     static async getPackList(projectIdentifier, itemColumnsStart = "Pack") {
         try {
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await PackListUtils.getContent(projectIdentifier, itemColumnsStart, trackingId);
+            const result = await PackListUtils.getContent(projectIdentifier, itemColumnsStart, trackingId);
+            console.log('[API] getPackList returned data:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to get pack list for ${projectIdentifier}:`, error);
             Analytics.trackEvent?.('data_error', { action: 'get_pack_list', projectIdentifier });
@@ -249,7 +258,9 @@ class RequestsBase {
     static async getOverlappingProjects(parameters) {
         try {
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await ProductionUtils.getOverlappingShows(parameters, trackingId);
+            const result = await ProductionUtils.getOverlappingShows(parameters, trackingId);
+            console.log('[API] getOverlappingProjects returned data:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to find overlapping projects:`, error);
             Analytics.trackEvent?.('data_error', { action: 'get_overlapping', parameters: typeof parameters === 'string' ? parameters : 'date_range' });
@@ -284,7 +295,9 @@ class RequestsBase {
     static async getUserData(username, id) {
         try {
             const trackingId = CacheManager.getCurrentTrackingId();
-            return await ApplicationUtils.getUserData(username, id, trackingId);
+            const result = await ApplicationUtils.getUserData(username, id, trackingId);
+            console.log('[API] getUserData returned data:', result);
+            return result;
         } catch (error) {
             console.error(`Failed to get user data for ${username}:`, error);
             Analytics.trackEvent?.('data_error', { action: 'get_user_data', username });
