@@ -1,27 +1,30 @@
-import { html, TableComponent } from '../../index.js';
+import { html, TableComponent, Requests } from '../../index.js';
 
 const packlistTableStore = Vue.reactive({}); // global reactive store
 
 export const PacklistTable = {
     components: { TableComponent },
     props: {
-        content: { type: Object, required: true }, // { crates, headers }
+        content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
         isLoading: { type: Boolean, default: false }
-        // Removed reactiveTableData, setReactiveTableData, getReactiveTableData
     },
     data() {
+        // Load table data from store if available
+        const storeData = packlistTableStore[this.tabName];
         return {
             dirty: false,
             moved: false,
             isSaving: false,
             isPrinting: false,
-            mainTableData: null,
-            originalData: [],
+            mainTableData: storeData ? storeData.mainTableData : null,
+            originalData: storeData ? storeData.originalData : [],
             saveDisabled: true,
             internalLoading: this.isLoading,
-            dirtyCrateRows: {} // Track dirty state for each crate row (items table)
+            dirtyCrateRows: storeData ? storeData.dirtyCrateRows || {} : {},
+            loadedContent: storeData ? storeData.loadedContent || (this.content || {}) : (this.content || {}),
+            error: storeData ? storeData.error : null
         };
     },
     watch: {
@@ -31,10 +34,9 @@ export const PacklistTable = {
     },
     computed: {
         mainHeaders() {
-            return [...(this.content.headers?.main || []), 'Items'];
+            return [...(this.loadedContent.headers?.main || []), 'Items'];
         },
         mainColumns() {
-            // "Piece #" is always the first column if present
             return this.mainHeaders.map((label, idx) => {
                 if (label === 'Piece #') {
                     return { key: label, label, editable: false, isIndex: true };
@@ -43,11 +45,123 @@ export const PacklistTable = {
             });
         }
     },
+    mounted() {
+        // If table data is already in store, use it and ensure loading is false
+        if (packlistTableStore[this.tabName] && packlistTableStore[this.tabName].mainTableData) {
+            this.mainTableData = packlistTableStore[this.tabName].mainTableData;
+            this.originalData = packlistTableStore[this.tabName].originalData;
+            this.loadedContent = packlistTableStore[this.tabName].loadedContent;
+            this.dirtyCrateRows = packlistTableStore[this.tabName].dirtyCrateRows || {};
+            this.error = packlistTableStore[this.tabName].error;
+            this.internalLoading = false;
+            this.$nextTick(() => {
+                if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
+                    this.$refs.mainTableComponent.refreshEditableCells();
+                }
+            });
+            // Always fetch originalData from API for dirty checking
+            this.loadOriginalDataFromApi();
+            return;
+        }
+        // Otherwise, fetch from API if needed
+        if ((!this.content || Object.keys(this.content).length === 0) && this.tabName) {
+            this.internalLoading = true;
+            Requests.getPackList(this.tabName)
+                .then(content => {
+                    this.loadedContent = content;
+                    this.error = null;
+                    this.internalLoading = false;
+                    this.initializeTableData();
+                    // Always fetch originalData from API for dirty checking
+                    this.loadOriginalDataFromApi();
+                })
+                .catch(err => {
+                    this.error = err.message || 'Failed to load packlist';
+                    this.internalLoading = false;
+                    this.initializeTableData();
+                    this.loadOriginalDataFromApi();
+                });
+        } else {
+            this.loadedContent = this.content;
+            this.internalLoading = false;
+            this.initializeTableData();
+            this.loadOriginalDataFromApi();
+        }
+    },
     methods: {
-        // Build item table for each crate
+        async loadOriginalDataFromApi() {
+            try {
+                const content = await Requests.getPackList(this.tabName);
+                // Build originalData from API content
+                if (content && content.crates) {
+                    const mainHeaders = content.headers?.main || [];
+                    const itemHeaders = content.headers?.items || [];
+                    const originalData = (content.crates || []).map((crate, crateIdx) => {
+                        const infoObj = {};
+                        mainHeaders.forEach((label, i) => {
+                            infoObj[label] = crate.info[i];
+                        });
+                        if (mainHeaders.includes('Piece #')) {
+                            infoObj['Piece #'] = crateIdx + 1;
+                        }
+                        const items = (crate.items || []).map(itemArr => {
+                            const itemObj = {};
+                            itemHeaders.forEach((label, i) => {
+                                itemObj[label] = itemArr[i];
+                            });
+                            return itemObj;
+                        });
+                        return {
+                            ...infoObj,
+                            Items: items
+                        };
+                    });
+                    this.originalData = JSON.parse(JSON.stringify(originalData));
+                    this.saveTableState();
+                    this.$nextTick(() => {
+                        if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.compareAllCellsDirty) {
+                            this.$refs.mainTableComponent.compareAllCellsDirty();
+                        }
+                    });
+                }
+            } catch (error) {
+                // Only set error for originalData fetch, do not clear mainTableData
+                console.error('Error loading original packlist data:', error);
+            }
+        },
+        initializeTableData() {
+            if (!this.loadedContent || !this.loadedContent.crates) {
+                this.mainTableData = [];
+                this.originalData = [];
+                this.saveTableState();
+                this.$nextTick(() => {
+                    if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
+                        this.$refs.mainTableComponent.refreshEditableCells();
+                    }
+                });
+                return;
+            }
+            this.mainTableData = this.buildMainTableData();
+            // Do not set originalData here, always fetch from API
+            this.saveTableState();
+            this.$nextTick(() => {
+                if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
+                    this.$refs.mainTableComponent.refreshEditableCells();
+                }
+            });
+        },
+        saveTableState() {
+            packlistTableStore[this.tabName] = {
+                mainTableData: this.mainTableData,
+                originalData: this.originalData,
+                dirtyCrateRows: this.dirtyCrateRows,
+                loadedContent: this.loadedContent,
+                error: this.error
+            };
+        },
         buildItemTable(crate, crateIdx) {
             return {
-                columns: (this.content.headers?.items || []).map(label => ({
+                columns: (this.loadedContent.headers?.items || []).map(label => ({
                     key: label,
                     label,
                     editable: ['Description','Packing/shop notes'].includes(label)
@@ -58,11 +172,10 @@ export const PacklistTable = {
                 hideColumns: ['Pack', 'Check']
             };
         },
-        // Build main table data with Piece # as sequential numbers
         buildMainTableData() {
-            const mainHeaders = this.content.headers?.main || [];
-            const itemHeaders = this.content.headers?.items || [];
-            return (this.content.crates || []).map((crate, crateIdx) => {
+            const mainHeaders = this.loadedContent.headers?.main || [];
+            const itemHeaders = this.loadedContent.headers?.items || [];
+            return (this.loadedContent.crates || []).map((crate, crateIdx) => {
                 const infoObj = {};
                 mainHeaders.forEach((label, i) => {
                     infoObj[label] = crate.info[i];
@@ -98,30 +211,27 @@ export const PacklistTable = {
                     this.mainTableData[rowIdx][colKey] = value;
                 }
             }
-            // No need for localStorage, changes are reactive in the global store
+            this.saveTableState();
         },
         handleRowMove(dragIndex, dropIndex, newData, type = 'main', crateIdx = null) {
             this.moved = true;
             this.saveDisabled = false;
             if (type === 'main') {
-                // Reorder crates
                 if (Array.isArray(newData)) {
                     this.mainTableData.splice(0, this.mainTableData.length, ...newData);
                 }
-                // Refresh editable cells after crate row move
+                this.saveTableState();
                 Vue.nextTick(() => {
                     if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.refreshEditableCells) {
                         this.$refs.mainTableComponent.refreshEditableCells();
                     }
                 });
             } else if (type === 'item' && crateIdx !== null) {
-                // Reorder items in the correct crate
                 if (Array.isArray(newData) && this.mainTableData[crateIdx] && Array.isArray(this.mainTableData[crateIdx].Items)) {
                     this.mainTableData[crateIdx].Items.splice(0, this.mainTableData[crateIdx].Items.length, ...newData);
                 }
-                // Refresh editable cells after item row move
+                this.saveTableState();
                 Vue.nextTick(() => {
-                    // Find the correct TableComponent for the item table using crateIdx
                     const itemTableRef = this.$refs.mainTableComponent?.$refs?.[`tableComponent-items-${crateIdx}`];
                     if (itemTableRef && itemTableRef.refreshEditableCells) {
                         itemTableRef.refreshEditableCells();
@@ -130,8 +240,7 @@ export const PacklistTable = {
             }
         },
         handleAddCrate() {
-            // Add a new crate row
-            const mainHeaders = this.content.headers?.main || [];
+            const mainHeaders = this.loadedContent.headers?.main || [];
             const infoObj = {};
             mainHeaders.forEach(label => {
                 infoObj[label] = '';
@@ -143,9 +252,10 @@ export const PacklistTable = {
             });
             this.dirty = true;
             this.saveDisabled = false;
+            this.saveTableState();
         },
         handleAddItem(crateIdx) {
-            const itemHeaders = this.content.headers?.items || [];
+            const itemHeaders = this.loadedContent.headers?.items || [];
             const itemObj = {};
             itemHeaders.forEach(label => {
                 itemObj[label] = '';
@@ -155,6 +265,7 @@ export const PacklistTable = {
             }
             this.dirty = true;
             this.saveDisabled = false;
+            this.saveTableState();
         },
         async handleSave() {
             this.isSaving = true;
@@ -163,8 +274,9 @@ export const PacklistTable = {
             this.dirty = false;
             this.moved = false;
             this.saveDisabled = true;
-            this.dirtyCrateRows = {}; // Reset dirty crate rows after save
+            this.dirtyCrateRows = {};
             this.isSaving = false;
+            this.saveTableState();
         },
         async handlePrint() {
             this.isPrinting = true;
@@ -173,7 +285,6 @@ export const PacklistTable = {
             this.isPrinting = false;
         },
         handleInnerTableDirty(isDirty, rowIndex) {
-            // Bubble up dirty state from nested TableComponent (items table)
             if (typeof rowIndex === 'number') {
                 if (isDirty) {
                     this.dirtyCrateRows[rowIndex] = true;
@@ -181,20 +292,22 @@ export const PacklistTable = {
                     delete this.dirtyCrateRows[rowIndex];
                 }
             }
-            // If any crate row is dirty, set parent dirty/save state
             const anyDirty = Object.keys(this.dirtyCrateRows).length > 0;
             if (anyDirty) {
                 this.dirty = true;
                 this.saveDisabled = false;
             }
-            // Run checkDirtyCells on the outer table to ensure state is updated
             if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
                 this.$refs.mainTableComponent.checkDirtyCells();
             }
+            this.saveTableState();
         }
     },
     template: html`
         <div class="packlist-table">
+            <div v-if="error" class="error-message">
+                <p>Error: {{ error }}</p>
+            </div>
             <TableComponent
                 ref="mainTableComponent"
                 :data="mainTableData"
@@ -220,7 +333,7 @@ export const PacklistTable = {
                             v-if="row.Items"
                             :data="row.Items"
                             :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
-                            :columns="content.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
+                            :columns="loadedContent.headers.items.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
                             :hide-columns="['Pack','Check']"
                             :showRefresh="false"
                             :emptyMessage="'No items'"
@@ -230,9 +343,9 @@ export const PacklistTable = {
                             :showHeader="true"
                             :isLoading="internalLoading"
                             :drag-id="'packlist-items'"
-                            @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][content.headers.items[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
+                            @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][loadedContent.headers.items[itemColIdx]] = value; dirty = true; saveDisabled = false; saveTableState(); }"
                             @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'item', rowIndex)"
-                            @new-row="() => handleAddItem(rowIndex)"
+                            @new-row="() => { handleAddItem(rowIndex); saveTableState(); }"
                             @inner-table-dirty="(isDirty) => handleInnerTableDirty(isDirty, rowIndex)"
                         />
                     </template>

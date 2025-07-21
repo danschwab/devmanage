@@ -177,13 +177,13 @@ export const PacklistContent = {
                     return;
                 }
                 modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
-                // Add tab with loading state
+                // Add tab with loading state, let PacklistTable fetch its own data
                 this.tabs.push({
                     name: selectedTabName,
                     label: selectedTabName,
                     closable: true,
                     component: PacklistTable,
-                    props: { content: {}, tabName: selectedTabName, isLoading: true },
+                    props: { tabName: selectedTabName, isLoading: true },
                     isLoading: true
                 });
                 this.activeTab = selectedTabName;
@@ -191,29 +191,6 @@ export const PacklistContent = {
                     tabs: this.tabs,
                     activeTab: selectedTabName
                 });
-                // Load data asynchronously and update tab/component loading flags
-                Requests.getPackList(selectedTabName)
-                    .then(content => {
-                        const tabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
-                        if (tabIdx !== -1) {
-                            this.tabs[tabIdx].props.content = content;
-                            this.tabs[tabIdx].props.isLoading = false;
-                            this.tabs[tabIdx].isLoading = false;
-                        }
-                        this.$root.setProperty('tabSystems', 'packlist', {
-                            tabs: this.tabs,
-                            activeTab: selectedTabName
-                        });
-                    })
-                    .catch(err => {
-                        this.modalManager.showAlert('Failed to load packlist: ' + err.message, 'Error');
-                        const tabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
-                        if (tabIdx !== -1) {
-                            this.tabs[tabIdx].props.isLoading = false;
-                            this.tabs[tabIdx].isLoading = false;
-                            this.tabs[tabIdx].props.content = { error: err.message };
-                        }
-                    });
             };
         }
     },
