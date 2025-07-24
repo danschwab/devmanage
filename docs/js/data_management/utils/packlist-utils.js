@@ -49,10 +49,10 @@ class packListUtils {
                 if (currentCrate) {
                     crates.push(currentCrate);
                 }
-                // Map crate info to object with header keys
+                // Map crate info to object with header keys (always include all headers)
                 const crateInfoObj = {};
                 mainHeaders.forEach((label, idx) => {
-                    crateInfoObj[label] = crateInfoArr[idx];
+                    crateInfoObj[label] = idx < crateInfoArr.length && crateInfoArr[idx] !== undefined ? crateInfoArr[idx] : null;
                 });
                 currentCrate = {
                     ...crateInfoObj,
@@ -64,7 +64,7 @@ class packListUtils {
             if (crateContentsArr.some(cell => cell) && currentCrate) {
                 const itemObj = {};
                 itemHeaders.forEach((label, idx) => {
-                    itemObj[label] = crateContentsArr[idx];
+                    itemObj[label] = idx < crateContentsArr.length && crateContentsArr[idx] !== undefined ? crateContentsArr[idx] : null;
                 });
                 currentCrate.Items.push(itemObj);
             }

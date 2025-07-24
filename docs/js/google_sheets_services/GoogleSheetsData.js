@@ -369,4 +369,35 @@ export class GoogleSheetsService {
             throw new Error(`Failed to execute query: ${error.message}`);
         }
     }
+
+    /**
+     * Creates a new blank sheet tab in the spreadsheet.
+     * @param {string} tableId - The identifier for the table (e.g., 'INVENTORY').
+     * @param {string} newTabName - The name for the new tab.
+     * @returns {Promise<void>}
+     */
+    static async createBlankTab(tableId, newTabName) {
+        await GoogleSheetsAuth.checkAuth();
+
+        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+
+        // Add the new sheet/tab
+        await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                resource: {
+                    requests: [
+                        {
+                            addSheet: {
+                                properties: {
+                                    title: newTabName
+                                }
+                            }
+                        }
+                    ]
+                }
+            })
+        );
+    }
 }
