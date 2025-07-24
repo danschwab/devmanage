@@ -1,4 +1,32 @@
-import { GoogleSheetsService } from '../google_sheets_services/index.js';
+// Dynamic Google Sheets Service selection
+let GoogleSheetsService, GoogleSheetsAuth;
+let usingFakeGoogle = false;
+
+function isLocalhost() {
+    return (
+        typeof window !== 'undefined' &&
+        (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.protocol === 'file:'
+        )
+    );
+}
+
+if (isLocalhost()) {
+    // Use fake services for local development
+    usingFakeGoogle = true;
+    // Dynamically import fake services
+    // Note: This import must match the actual path and export names
+    // If using a bundler, you may need to adjust this to static imports
+    // eslint-disable-next-line no-undef
+    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../google_sheets_services/FakeGoogle.js'));
+} else {
+    // Use real services for production
+    // eslint-disable-next-line no-undef
+    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../google_sheets_services/index.js'));
+}
+
 import { wrapMethods, CacheManager } from '../index.js';
 
 class database {
@@ -107,3 +135,5 @@ const getAffectedKeysFn = {
 
 // Export
 export const Database = wrapMethods(database, 'database', mutationKeys, getAffectedKeysFn);
+// Optionally export which service is being used for debugging
+export const DatabaseUsesFakeGoogle = usingFakeGoogle;

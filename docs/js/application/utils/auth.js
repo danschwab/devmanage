@@ -1,4 +1,22 @@
-import { GoogleSheetsAuth } from '../../google_sheets_services/index.js';
+// Dynamically select GoogleSheetsAuth based on environment
+let GoogleSheetsAuth;
+function isLocalhost() {
+    return (
+        typeof window !== 'undefined' &&
+        (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.protocol === 'file:'
+        )
+    );
+}
+if (isLocalhost()) {
+    // eslint-disable-next-line no-undef
+    ({ GoogleSheetsAuth } = await import('../../google_sheets_services/FakeGoogle.js'));
+} else {
+    // eslint-disable-next-line no-undef
+    ({ GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
+}
 
 /**
  * Reactive authentication state
@@ -18,10 +36,8 @@ export class Auth {
     static async initialize() {
         authState.isLoading = true;
         authState.error = null;
-        
         try {
             await GoogleSheetsAuth.initialize();
-            
             // Check if user is already authenticated
             const isAuth = await GoogleSheetsAuth.checkAuth();
             if (isAuth) {
@@ -29,7 +45,6 @@ export class Auth {
                 authState.user = { email, name: email?.split('@')[0] || 'User' };
                 authState.isAuthenticated = true;
             }
-            
             authState.isInitialized = true;
         } catch (error) {
             console.error('Auth initialization failed:', error);
