@@ -4,6 +4,7 @@ export { Requests } from '../data_management/api.js';
 // Utils
 export { html } from './utils/template-helpers.js';
 export { Auth, authState, useAuth } from './utils/auth.js';
+export { getReactiveStore } from './utils/reactiveStores.js';
 
 // Navigation components
 export { BreadcrumbComponent } from './components/navigation/breadcrumbComponent.js';

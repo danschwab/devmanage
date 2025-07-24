@@ -130,9 +130,6 @@ export const InventoryContent = {
             default: 'inventory'
         },
         navigateToPath: Function,
-        reactiveTableData: Object, // <-- add prop
-        setReactiveTableData: Function, // <-- add prop
-        getReactiveTableData: Function // <-- add prop
     },
     data() {
         return {
@@ -223,9 +220,6 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Inventory</h4>
                     <inventory-table
-                        :reactive-table-data="reactiveTableData"
-                        :set-reactive-table-data="setReactiveTableData"
-                        :get-reactive-table-data="getReactiveTableData"
                         :container-path="containerPath"
                         tab-name="furniture"
                         tab-title="FURNITURE"
@@ -264,9 +258,6 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Items in this Category</h4>
                     <inventory-table
-                        :reactive-table-data="reactiveTableData"
-                        :set-reactive-table-data="setReactiveTableData"
-                        :get-reactive-table-data="getReactiveTableData"
                         :container-path="containerPath"
                         :tab-name="currentCategoryName.toLowerCase()"
                         :tab-title="currentCategoryName.toUpperCase()"
@@ -289,9 +280,6 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Search Results</h4>
                     <inventory-table
-                        :reactive-table-data="reactiveTableData"
-                        :set-reactive-table-data="setReactiveTableData"
-                        :get-reactive-table-data="getReactiveTableData"
                         :container-path="containerPath"
                     ></inventory-table>
                 </div>
@@ -312,9 +300,6 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Recent Reports</h4>
                     <inventory-table
-                        :reactive-table-data="reactiveTableData"
-                        :set-reactive-table-data="setReactiveTableData"
-                        :get-reactive-table-data="getReactiveTableData"
                         :container-path="containerPath"
                     ></inventory-table>
                 </div>

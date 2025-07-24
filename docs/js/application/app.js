@@ -219,7 +219,7 @@ const App = {
             
             try {
                 const dashboardData = JSON.stringify(this.dashboardContainers);
-                await Requests.storeUserData(this.currentUser.email, 'dashboard_containers', [dashboardData]);
+                await Requests.storeUserData([dashboardData], this.currentUser.email, 'dashboard_containers');
                 console.log('Dashboard state saved successfully');
             } catch (error) {
                 console.warn('Failed to save dashboard state (continuing without saving):', error.message);
@@ -347,20 +347,7 @@ const App = {
         setProperty(module, prop, value) {
             if (!this[module]) this[module] = {};
             this[module][prop] = value;
-        },
-        /**
-         * Set reactive table data for a given container path
-         */
-        setReactiveTableData(containerPath, tableData) {
-            // Vue 3: direct assignment is reactive
-            this.reactiveTableData[containerPath] = tableData;
-        },
-        /**
-         * Get reactive table data for a given container path
-         */
-        getReactiveTableData(containerPath) {
-            return this.reactiveTableData[containerPath];
-        },
+        }
     },
     setup() {
         return { modalManager };
@@ -435,9 +422,6 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
-                            :reactive-table-data="reactiveTableData"
-                            :set-reactive-table-data="setReactiveTableData"
-                            :get-reactive-table-data="getReactiveTableData"
                         >
                         </inventory-content>
                         <!-- Packlist Content -->
@@ -446,9 +430,6 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
-                            :reactive-table-data="reactiveTableData"
-                            :set-reactive-table-data="setReactiveTableData"
-                            :get-reactive-table-data="getReactiveTableData"
                         >
                         </packlist-content>
                         

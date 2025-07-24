@@ -1,18 +1,38 @@
-import { html, Requests, TableComponent } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
-// Global reactive store for inventory tables
-const inventoryTableStore = Vue.reactive({});
+// Use Vue's defineComponent if available (Vue 3)
+const InventoryTableMenuComponent = Vue.defineComponent
+    ? Vue.defineComponent({
+        methods: {
+            hideRows() {
+                modalManager.showAlert('Hide rows clicked!', 'Info');
+            }
+        },
+        template: html`
+            <div style="padding:1rem;">
+                <button @click="hideRows">Hide rows</button>
+            </div>
+        `
+    })
+    : {
+        methods: {
+            hideRows() {
+                modalManager.showAlert('Hide rows clicked!', 'Info');
+            }
+        },
+        template: html`
+            <div style="padding:1rem;">
+                <button @click="hideRows">Hide rows</button>
+            </div>
+        `
+    };
 
-// Inventory component that loads real inventory data using the data management API
 export const InventoryTableComponent = {
     components: {
-        TableComponent
+        TableComponent,
+        InventoryTableMenuComponent // <-- register here
     },
     props: {
-        isLoading: {
-            type: Boolean,
-            default: false
-        },
         containerPath: {
             type: String,
             default: 'inventory'
@@ -28,9 +48,6 @@ export const InventoryTableComponent = {
     },
     data() {
         return {
-            tableData: [],
-            originalData: [], // <-- add this
-            error: null,
             columns: [
                 { 
                     key: 'itemNumber', 
@@ -54,128 +71,67 @@ export const InventoryTableComponent = {
                     }
                 }
             ],
-            internalLoading: false,
-            loadingMessage: 'Loading data...' // <-- add loading message state
+            inventoryTableStore: null
         };
     },
-    mounted() {
-        // Use global reactive store for editable table, but always update originalData from API
-        const saved = inventoryTableStore[this.containerPath];
-        if (saved && saved.length > 0) {
-            this.tableData = saved;
-            // Fetch originalData for dirty checking, but don't overwrite tableData
-            this.loadOriginalDataFromApi();
-        } else {
-            // If no store, fetch from API and set both tableData and originalData
-            this.loadInventoryData();
+    computed: {
+        tableData() {
+            return this.inventoryTableStore ? this.inventoryTableStore.data : [];
+        },
+        originalData() {
+            // Use the originalData from the store, not a copy of the reactive data
+            return this.inventoryTableStore && Array.isArray(this.inventoryTableStore.originalData)
+                ? JSON.parse(JSON.stringify(this.inventoryTableStore.originalData))
+                : [];
+        },
+        error() {
+            return this.inventoryTableStore ? this.inventoryTableStore.error : null;
+        },
+        loadingMessage() {
+            return this.inventoryTableStore ? (this.inventoryTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
+        },
+        isLoading() {
+            return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
         }
     },
+    async mounted() {
+        // Defensive: always set up the store before using it
+        this.inventoryTableStore = getReactiveStore(
+            Requests.getInventoryTabData,
+            Requests.saveInventoryTabData,
+            [this.tabTitle]
+        );
+    },
     methods: {
-        setLoading(loading, message = 'Loading data...') {
-            this.internalLoading = loading;
-            this.loadingMessage = message;
-        },
-        async loadOriginalDataFromApi() {
-            try {
-                const rawData = await Requests.fetchData('INVENTORY', this.tabTitle);
-                const transformed = this.transformInventoryData(rawData);
-                // Only update originalData, not tableData
-                this.originalData = JSON.parse(JSON.stringify(transformed));
-                // Recalculate dirty state after originalData is updated
-                this.$nextTick(() => {
-                    if (this.$refs.tableComponent && this.$refs.tableComponent.checkDirtyCells) {
-                        this.$refs.tableComponent.refreshEditableCells();
-                        this.$refs.tableComponent.compareAllCellsDirty();
-                    }
-                });
-            } catch (error) {
-                // Only set error for originalData fetch, do not clear tableData
-                console.error('Error loading original inventory data:', error);
-            }
-        },
-        async loadInventoryData() {
-            this.setLoading(true, 'Loading data...');
-            this.$emit('update:isLoading', true);
-            this.error = null;
-            try {
-                Requests.clearCache('INVENTORY', this.tabTitle);
-                const rawData = await Requests.fetchData('INVENTORY', this.tabTitle);
-                const transformed = this.transformInventoryData(rawData);
-                this.tableData = transformed;
-                this.originalData = JSON.parse(JSON.stringify(transformed));
-                inventoryTableStore[this.containerPath] = this.tableData;
-            } catch (error) {
-                this.error = error.message;
-                console.error('Error loading inventory data:', error);
-            } finally {
-                this.setLoading(false);
-                this.$emit('update:isLoading', false);
-                this.$nextTick(() => {
-                    this.refreshEditableCells();
-                });
-            }
-        },
-        transformInventoryData(rawData) {
-            if (!rawData || rawData.length < 2) return [];
-            const headers = rawData[0];
-            const rows = rawData.slice(1);
-            const headerMap = this.createHeaderMap(headers);
-            return rows.map((row, index) => ({
-                itemNumber: row[headerMap.itemNumber] || '',
-                description: row[headerMap.description] || '',
-                quantity: parseInt(row[headerMap.quantity]) || 0
-            })).filter(item => item.itemNumber && item.description);
-        },
-        createHeaderMap(headers) {
-            const map = {};
-            headers.forEach((header, index) => {
-                const cleanHeader = header.trim();
-                if (cleanHeader === 'ITEM#') {
-                    map.itemNumber = index;
-                } else if (cleanHeader === 'Description') {
-                    map.description = index;
-                } else if (cleanHeader === 'QTY') {
-                    map.quantity = index;
-                }
-            });
-            return map;
-        },
-        handleRefresh() {
-            this.setLoading(true, 'Clearing Cache...');
+        async handleRefresh() {
             Requests.clearCache('INVENTORY', this.tabTitle);
-            this.loadInventoryData();
+            if (this.inventoryTableStore) {
+                await this.inventoryTableStore.load('Reloading inventory...');
+            }
         },
         handleCellEdit(rowIdx, colIdx, value) {
-            // Update tableData and global store
             const colKey = this.columns[colIdx]?.key;
-            if (colKey) {
-                this.tableData[rowIdx][colKey] = value;
-                inventoryTableStore[this.containerPath] = this.tableData;
+            if (colKey && this.inventoryTableStore) {
+                this.inventoryTableStore.data[rowIdx][colKey] = value;
             }
         },
         async handleSave() {
-            this.setLoading(true, 'Saving data...');
-            try {
-                // Convert tableData to 2D array with headers for Google Sheets
-                const headers = this.columns.map(col => col.label);
-                const rows = this.tableData.map(row => [
-                    row.itemNumber,
-                    row.description,
-                    row.quantity
-                ]);
-                const sheetData = [headers, ...rows];
-                await Requests.saveData('INVENTORY', this.tabTitle, sheetData);
-                await this.loadInventoryData();
-            } catch (error) {
-                this.error = error.message || 'Failed to save data';
-                console.error('Error saving inventory data:', error);
-            }
+            // Only use the store's save method if this is called from the on-save event
+            if (this.inventoryTableStore) {
+                console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
+                await this.inventoryTableStore.save('Saving inventory...');            }
         },
-        refreshEditableCells() {
-            // Call refreshEditableCells on child TableComponent via ref
-            if (this.$refs.tableComponent && this.$refs.tableComponent.refreshEditableCells) {
-                this.$refs.tableComponent.refreshEditableCells();
-            }
+        handleShowHamburgerMenu({ menuComponent, tableId }) {
+            // Pass the actual component reference, not an object literal
+            const menuComp = InventoryTableMenuComponent;
+            const modal = modalManager.createModal(
+                'Inventory Table Menu',
+                [menuComp], // <-- pass as array of component references
+                {
+                    componentProps: menuComponent?.props || {}
+                }
+            );
+            modalManager.showModal(modal.id);
         }
     },
     template: html `
@@ -185,14 +141,19 @@ export const InventoryTableComponent = {
                 :data="tableData"
                 :originalData="originalData"
                 :columns="columns"
-                :isLoading="internalLoading || isLoading"
+                :isLoading="isLoading"
                 :error="error"
                 :showRefresh="true"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
+                :hamburger-menu-component="{
+                    components: [InventoryTableMenuComponent],
+                    props: {}
+                }"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
+                @show-hamburger-menu="handleShowHamburgerMenu"
             />
         </div>
     `

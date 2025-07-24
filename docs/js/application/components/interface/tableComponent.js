@@ -1,5 +1,9 @@
 import { html } from '../../index.js';
 
+// Global drag state for cross-table row dragging
+let globalDragRow = null;
+let globalDragSourceTable = null;
+
 export const TableComponent = {
     name: 'TableComponent',
     props: {
@@ -58,17 +62,28 @@ export const TableComponent = {
         originalData: {
             type: Array,
             required: true
+        },
+        hamburgerMenuComponent: {
+            type: Object,
+            default: null
+        },
+        hideColumns: {
+            type: Array,
+            default: () => []
         }
     },
-    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty'],
+    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu'],
     data() {
         return {
             dragIndex: null,
             dragOverIndex: null,
             dragActive: false,
             dragSourceTableId: null,
-            dirtyCells: {}, // {rowIndex: {colIndex: true}}
-            allowSaveEvent: false // <-- renamed from showSaveButton
+            dragMoved: false,
+            dirtyCells: {},
+            allowSaveEvent: false,
+            rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
+            nestedTableDirtyCells: {} // Track dirty state for nested tables by [row][col]
         };
     },
     computed: {
@@ -78,6 +93,22 @@ export const TableComponent = {
             const hasMovable = !!this.draggable;
             const hasAddRow = !!this.newRow;
             return hasEditable || hasMovable || hasAddRow;
+        },
+        hideSet() {
+            // Hide columns listed in hideColumns prop and always hide 'marked-for-deletion'
+            return new Set([...(this.hideColumns || []), 'marked-for-deletion']);
+        },
+        visibleRows() {
+            // Only show rows not marked for deletion
+            return this.data
+                .map((row, idx) => ({ row, idx }))
+                .filter(({ row }) => !row['marked-for-deletion']);
+        },
+        deletedRows() {
+            // Show rows marked for deletion in tfoot
+            return this.data
+                .map((row, idx) => ({ row, idx }))
+                .filter(({ row }) => row['marked-for-deletion']);
         }
     },
     watch: {
@@ -85,17 +116,45 @@ export const TableComponent = {
             // Emit to parent if dirty state changes
             console.log('[TableComponent] allowSaveEvent changed:', val);
             this.$emit('inner-table-dirty', val);
+        },
+        data: {
+            handler() {
+                console.log('[TableComponent] originalData:', this.originalData);
+                this.$nextTick(() => {
+                    this.updateAllEditableCells();
+                    this.compareAllCellsDirty();
+                });
+            },
+            deep: true
+        },
+        isLoading(val) {
+            // When loading state changes, update cells and compare dirty
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+                this.compareAllCellsDirty();
+            });
         }
     },
     mounted() {
+        console.log('[TableComponent] originalData:', this.originalData);
         this.$nextTick(() => {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();
         });
+        // Listen for mouseup globally to end drag
+        window.addEventListener('mouseup', this.handleGlobalMouseUp);
+        // Listen for dragend globally to ensure drag state is always cleared
+        window.addEventListener('dragend', this.handleGlobalMouseUp);
+    },
+    beforeUnmount() {
+        window.removeEventListener('mouseup', this.handleGlobalMouseUp);
+        window.removeEventListener('dragend', this.handleGlobalMouseUp);
     },
     methods: {
         handleRefresh() {
             this.$emit('refresh');
+            // Also clear dirty state for nested tables on refresh
+            this.nestedTableDirtyCells = {};
         },
         
         formatCellValue(value, column) {
@@ -126,7 +185,6 @@ export const TableComponent = {
             if (typeof column.cellClass === 'function') {
                 baseClass = column.cellClass(value);
             }
-            
             // Support object-based cell classes
             if (typeof column.cellClass === 'object') {
                 for (const [className, condition] of Object.entries(column.cellClass)) {
@@ -138,10 +196,13 @@ export const TableComponent = {
                     }
                 }
             }
-            
             // Add dirty class if cell is dirty
             if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][colIndex]) {
-                baseClass += ' dirty-cell';
+                baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';
+            }
+            // Add dirty class if nested table in this cell is dirty
+            if (this.nestedTableDirtyCells[rowIndex] && this.nestedTableDirtyCells[rowIndex][colIndex]) {
+                baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';
             }
             return baseClass;
         },
@@ -167,12 +228,13 @@ export const TableComponent = {
             if (!Array.isArray(this.data) || !Array.isArray(this.originalData)) return;
             this.data.forEach((row, rowIndex) => {
                 const originalRow = this.originalData[rowIndex];
-                if (!originalRow) return;
+                // Treat undefined originalRow as an object with all nulls for dirty checking
                 this.columns.forEach((column, colIndex) => {
                     const key = column.key;
                     if (column.editable) {
                         const currentValue = row[key];
-                        const originalValue = originalRow[key];
+                        // If originalRow is undefined, treat as null
+                        const originalValue = originalRow ? originalRow[key] : null;
                         if (currentValue !== originalValue) {
                             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
                             this.dirtyCells[rowIndex][colIndex] = true;
@@ -182,136 +244,264 @@ export const TableComponent = {
             });
             this.checkDirtyCells();
         },
+        // Called by slot from nested TableComponent
+        handleInnerTableDirty(isDirty, rowIndex, colIndex) {
+            if (!this.nestedTableDirtyCells[rowIndex]) this.nestedTableDirtyCells[rowIndex] = {};
+            if (isDirty) {
+                this.nestedTableDirtyCells[rowIndex][colIndex] = true;
+            } else {
+                delete this.nestedTableDirtyCells[rowIndex][colIndex];
+                if (Object.keys(this.nestedTableDirtyCells[rowIndex]).length === 0) {
+                    delete this.nestedTableDirtyCells[rowIndex];
+                }
+            }
+            this.checkDirtyCells();
+        },
         checkDirtyCells() {
             // If any cell is dirty, allow save event
-            this.allowSaveEvent = Object.keys(this.dirtyCells).some(row =>
+            const hasDirtyCell = Object.keys(this.dirtyCells).some(row =>
                 Object.keys(this.dirtyCells[row]).length > 0
             );
-            // Check nested TableComponents for dirty state
-            if (!this.allowSaveEvent) {
-                // If no dirty cells, check for dirty nested tables
-                this.allowSaveEvent = this.checkNestedTableDirty();
+            // If any nested table cell is dirty, allow save event
+            const hasNestedDirty = Object.keys(this.nestedTableDirtyCells).some(row =>
+                Object.keys(this.nestedTableDirtyCells[row]).length > 0
+            );
+            this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
+            // Also, if any row is marked for deletion, allow save event
+            if (!this.allowSaveEvent && Array.isArray(this.data)) {
+                this.allowSaveEvent = this.data.some(row => row && row['marked-for-deletion']);
             }
-        },
-        checkNestedTableDirty() {
-            // Recursively search for nested TableComponents and return true if any are dirty
-            function findNestedTableComponents(obj, refKeyPath = []) {
-                if (!obj) return false;
-                let compName = 'unknown';
-                if (obj.$options && obj.$options.name) compName = obj.$options.name;
-                else if (obj.tagName) compName = obj.tagName;
-                else if (obj.constructor && obj.constructor.name) compName = obj.constructor.name;
-                const isVueComponent = !!obj.$options;
-
-                // Identify TableComponent by name or by presence of allowSaveEvent on Vue components
-                if (
-                    isVueComponent &&
-                    (
-                        compName === 'TableComponent' ||
-                        typeof obj.allowSaveEvent !== 'undefined'
-                    )
-                ) {
-                    if (obj.allowSaveEvent) {
-                        return true;
-                    }
-                }
-                // Search $refs of this component
-                if (obj.$refs) {
-                    for (const subRefKey of Object.keys(obj.$refs)) {
-                        const subRef = obj.$refs[subRefKey];
-                        if (Array.isArray(subRef)) {
-                            for (let idx = 0; idx < subRef.length; idx++) {
-                                if (findNestedTableComponents(subRef[idx], refKeyPath.concat([subRefKey, idx]))) {
-                                    return true;
-                                }
-                            }
-                        } else {
-                            if (findNestedTableComponents(subRef, refKeyPath.concat([subRefKey]))) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-                // Search $children (Vue 2) for dynamically created components
-                if (obj.$children && obj.$children.length) {
-                    for (let child of obj.$children) {
-                        if (findNestedTableComponents(child, refKeyPath.concat(['$child']))) {
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
-            const foundDirty = findNestedTableComponents(this, []);
-            console.log('[TableComponent] checkNestedTableDirty: found dirty state:', foundDirty);
-            return foundDirty;
         },
         handleSave() {
+            // Remove rows marked for deletion before emitting on-save
+            if (this.data.some(row => row['marked-for-deletion'])) {
+                // Remove marked rows using the store's removeMarkedRows if available
+                if (typeof this.$parent?.removeMarkedRows === 'function') {
+                    this.$parent.removeMarkedRows();
+                } else if (typeof this.removeMarkedRows === 'function') {
+                    this.removeMarkedRows();
+                } else {
+                    // fallback: remove in-place
+                    this.data = this.data.filter(row => !row['marked-for-deletion']);
+                }
+            }
             this.$emit('on-save');
             // After save, reset dirty state
             this.dirtyCells = {};
+            this.nestedTableDirtyCells = {}; // <-- clear nested dirty state on save
             this.allowSaveEvent = false;
         },
         handleRowMove() {
             this.$emit('row-move');
         },
-        handleDragHandleDown(rowIndex, event) {
-            console.log('[TableComponent] Drag handle mousedown:', { rowIndex, event });
-            this.dragActive = true;
-            // Store drag source table id for cross-table dragging
-            this.dragSourceTableId = this.dragId;
-        },
-        handleDragStart(rowIndex, event) {
-            console.log('[TableComponent] Drag start:', { rowIndex, dragActive: this.dragActive, eventTarget: event.target });
-            if (this.dragActive && event.target.classList.contains('row-drag-handle')) {
-                this.dragIndex = rowIndex;
-                this.dragSourceTableId = this.dragId;
-                console.log('[TableComponent] Drag initiated:', { dragIndex: this.dragIndex, dragSourceTableId: this.dragSourceTableId });
-            } else {
-                console.log('[TableComponent] Drag start ignored (not drag handle)');
-            }
-            this.dragActive = false;
-        },
-        handleDragOver(rowIndex, event) {
-            event.preventDefault();
-            // Only log drag-over if a valid drag is in progress and drag-ids match
-            if (this.dragIndex !== null && this.dragSourceTableId === this.dragId) {
-                this.dragOverIndex = rowIndex;
-                console.log('[TableComponent] Drag over:', { rowIndex, dragOverIndex: this.dragOverIndex, dragId: this.dragId });
-            }
-        },
-        handleDrop(rowIndex) {
-            // Only process drop if a valid drag is in progress and drag-ids match
-            if (this.dragIndex !== null && this.dragSourceTableId === this.dragId) {
-                console.log('[TableComponent] Drop:', { dragIndex: this.dragIndex, dropIndex: rowIndex, dragId: this.dragId });
-                console.log('[TableComponent] Original data before move:', JSON.parse(JSON.stringify(this.originalData)));
-                if (this.dragIndex !== rowIndex) {
-                    const movedRow = this.data[this.dragIndex];
-                    this.data.splice(this.dragIndex, 1);
-                    let insertIndex = rowIndex;
-                    if (this.dragIndex < rowIndex) {
-                        insertIndex = rowIndex;
-                    }
-                    this.data.splice(insertIndex, 0, movedRow);
-                    // Emit dragIndex, dropIndex, and the new array
-                    this.$emit('row-move', this.dragIndex, insertIndex, [...this.data]);
-                } else {
-                    console.log('[TableComponent] Drop ignored (same index)');
-                }
-            }
-            // Always reset drag state
+        handleGlobalMouseUp() {
+            // End drag state on any mouseup or dragend
             this.dragIndex = null;
             this.dragOverIndex = null;
             this.dragSourceTableId = null;
+            this.dragMoved = false;
+            // Reset global drag state
+            globalDragRow = null;
+            globalDragSourceTable = null;
+        },
+        handleDragStart(rowIndex, event) {
+            if (!event.target.classList.contains('row-drag-handle')) {
+                event.preventDefault();
+                return;
+            }
+            this.dragIndex = rowIndex;
+            this.dragSourceTableId = this.dragId;
+            this.dragMoved = false;
+            // Set global drag state for cross-table dragging
+            globalDragRow = this.data[rowIndex];
+            globalDragSourceTable = this;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', rowIndex);
+            if (event.dataTransfer.setDragImage) {
+                let tr = event.target.closest('tr');
+                if (tr) {
+                    const clone = tr.cloneNode(true);
+                    clone.style.background = '#fff';
+                    clone.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                    clone.style.width = `${tr.offsetWidth}px`;
+                    clone.style.position = 'absolute';
+                    clone.style.top = '-9999px';
+                    document.body.appendChild(clone);
+                    event.dataTransfer.setDragImage(clone, 0, 0);
+                    setTimeout(() => document.body.removeChild(clone), 0);
+                } else {
+                    event.dataTransfer.setDragImage(event.target, 0, 0);
+                }
+            }
+        },
+        handleDragOverRow(rowIndex, event) {
+            event.preventDefault();
+            // Allow auto-scrolling while dragging
+            const scrollMargin = 40;
+            const scrollSpeed = 20;
+            const y = event.clientY;
+            const winHeight = window.innerHeight;
+            if (y < scrollMargin) {
+                window.scrollBy({ top: -scrollSpeed, behavior: 'auto' });
+            } else if (y > winHeight - scrollMargin) {
+                window.scrollBy({ top: scrollSpeed, behavior: 'auto' });
+            }
+            // If the dragged row is marked for deletion, unmark it when dragged over tbody
+            if (
+                this.dragIndex !== null &&
+                this.data[this.dragIndex] &&
+                this.data[this.dragIndex]['marked-for-deletion']
+            ) {
+                this.data[this.dragIndex]['marked-for-deletion'] = false;
+            }
+
+            // Cross-table drag logic
+            if (
+                globalDragRow &&
+                globalDragSourceTable &&
+                globalDragSourceTable !== this &&
+                globalDragSourceTable.dragId === this.dragId &&
+                !this.dragMoved
+            ) {
+                // Insert the row at the drop position
+                let insertIndex = rowIndex;
+                const rowEl = event.currentTarget;
+                const rect = rowEl.getBoundingClientRect();
+                const mouseY = event.clientY;
+                const midpoint = rect.top + rect.height / 2;
+                if (mouseY > midpoint) {
+                    insertIndex = rowIndex + 1;
+                }
+                // Prevent duplicate insert if already present
+                if (!this.data.includes(globalDragRow)) {
+                    // Remove marked-for-deletion state before inserting into new table
+                    if (globalDragRow && globalDragRow['marked-for-deletion']) {
+                        delete globalDragRow['marked-for-deletion'];
+                    }
+                    this.data.splice(insertIndex, 0, globalDragRow);
+                    // Remove from source table
+                    const srcIdx = globalDragSourceTable.data.indexOf(globalDragRow);
+                    if (srcIdx !== -1) {
+                        globalDragSourceTable.data.splice(srcIdx, 1);
+                    }
+                    // End drag in both tables to clear drag state and row highlight
+                    if (typeof globalDragSourceTable.handleGlobalMouseUp === 'function') {
+                        globalDragSourceTable.handleGlobalMouseUp();
+                    }
+                    this.handleGlobalMouseUp();
+                    this.$emit('row-move', null, insertIndex, [...this.data]);
+                }
+                // Clear global drag state
+                globalDragRow = null;
+                globalDragSourceTable = null;
+                return;
+            }
+            // ...existing drop-target logic...
+            if (
+                this.dragIndex !== null &&
+                this.dragSourceTableId === this.dragId &&
+                this.dragIndex !== rowIndex &&
+                !this.dragMoved
+            ) {
+                const rowEl = event.currentTarget;
+                const rect = rowEl.getBoundingClientRect();
+                const mouseY = event.clientY;
+                const midpoint = rect.top + rect.height / 2;
+                let insertIndex = rowIndex;
+                if (mouseY > midpoint) {
+                    insertIndex = rowIndex + 1;
+                }
+                if (insertIndex > this.dragIndex) insertIndex--;
+                if (insertIndex !== this.dragIndex) {
+                    const movedRow = this.data[this.dragIndex];
+                    this.data.splice(this.dragIndex, 1);
+                    this.data.splice(insertIndex, 0, movedRow);
+                    this.$emit('row-move', this.dragIndex, insertIndex, [...this.data]);
+                    this.dragIndex = insertIndex;
+                    this.dragMoved = true;
+                    setTimeout(() => { this.dragMoved = false; }, 50);
+                }
+            }
+            this.dragOverIndex = rowIndex;
+        },
+        handleDropOnRow(rowIndex, event) {
+            event.preventDefault();
+            // End drag state on drop
+            this.handleGlobalMouseUp();
+        },
+        handleDragOverThead(event) {
+            event.preventDefault();
+            // Allow auto-scrolling while dragging
+            const scrollMargin = 40;
+            const scrollSpeed = 20;
+            const y = event.clientY;
+            if (y < scrollMargin) {
+                window.scrollBy({ top: -scrollSpeed, behavior: 'auto' });
+            }
+            // If dragging a row marked for deletion over thead, unmark it
+            if (
+                this.dragIndex !== null &&
+                this.data[this.dragIndex] &&
+                this.data[this.dragIndex]['marked-for-deletion']
+            ) {
+                this.data[this.dragIndex]['marked-for-deletion'] = false;
+            }
+            // ...existing code...
+            if (
+                this.dragIndex !== null &&
+                this.dragSourceTableId === this.dragId &&
+                this.dragIndex !== 0 &&
+                !this.dragMoved
+            ) {
+                const movedRow = this.data[this.dragIndex];
+                this.data.splice(this.dragIndex, 1);
+                this.data.splice(0, 0, movedRow);
+                this.$emit('row-move', this.dragIndex, 0, [...this.data]);
+                this.dragIndex = 0;
+                this.dragMoved = true;
+                setTimeout(() => { this.dragMoved = false; }, 50);
+            }
+            this.dragOverIndex = -1;
+        },
+        handleDropOnThead(event) {
+            event.preventDefault();
+            this.handleGlobalMouseUp();
+        },
+        handleDragOverTfoot(event) {
+            event.preventDefault();
+            // Allow auto-scrolling while dragging
+            const scrollMargin = 40;
+            const scrollSpeed = 20;
+            const y = event.clientY;
+            const winHeight = window.innerHeight;
+            if (y > winHeight - scrollMargin) {
+                window.scrollBy({ top: scrollSpeed, behavior: 'auto' });
+            }
+            // Mark row for deletion if dragging over tfoot
+            if (
+                this.dragIndex !== null &&
+                this.dragSourceTableId === this.dragId &&
+                !this.dragMoved &&
+                this.data[this.dragIndex] &&
+                !this.data[this.dragIndex]['marked-for-deletion']
+            ) {
+                this.data[this.dragIndex]['marked-for-deletion'] = true;
+            }
+            this.dragOverIndex = this.data.length;
+        },
+        handleDropOnTfoot(event) {
+            event.preventDefault();
+            this.handleGlobalMouseUp();
         },
         handleNewRow() {
             this.$emit('new-row');
-            this.$nextTick(() => {
-                this.updateAllEditableCells();
-            });
         },
-        refreshEditableCells() {
-            this.updateAllEditableCells();
+        handleHamburgerMenu() {
+            // Emit event to parent to show hamburger menu
+            this.$emit('show-hamburger-menu', {
+                menuComponent: this.hamburgerMenuComponent,
+                tableId: this.dragId
+            });
         },
         updateAllEditableCells() {
             // Set contenteditable text for all editable cells to match data (only on mount or new row)
@@ -321,12 +511,16 @@ export const TableComponent = {
                     if (column.editable) {
                         const refName = 'editable_' + rowIndex + '_' + colIndex;
                         const cell = this.$refs[refName];
+                        const value = row[column.key] || '';
                         if (cell && cell instanceof HTMLElement) {
-                            cell.textContent = row[column.key] || '';
+                            // Only update if cell is not focused
+                            if (document.activeElement !== cell) {
+                                cell.textContent = value;
+                            }
                         } else if (Array.isArray(cell)) {
                             cell.forEach(el => {
-                                if (el instanceof HTMLElement) {
-                                    el.textContent = row[column.key] || '';
+                                if (el instanceof HTMLElement && document.activeElement !== el) {
+                                    el.textContent = value;
                                 }
                             });
                         }
@@ -340,7 +534,7 @@ export const TableComponent = {
             <div :class="dragId ? 'drag-id-' + dragId : ''">
                 <div class="content-header" v-if="showHeader && (title || showRefresh)">
                     <h3 v-if="title">{{ title }}</h3>
-                    <div v-if="showSaveButton || showRefresh" class="button-bar">
+                    <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent" :class="{'button-bar': showSaveButton || showRefresh}">
                         <button
                             v-if="showSaveButton"
                             @click="handleSave"
@@ -357,19 +551,25 @@ export const TableComponent = {
                         >
                             {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
                         </button>
+                        <button
+                            v-if="hamburgerMenuComponent"
+                            @click="handleHamburgerMenu"
+                            class="button-symbol white"
+                        >
+                            ☰
+                        </button>
                     </div>
+                </div>
+                
+                <!-- Error State -->
+                <div v-if="error">
+                    <span class="table-cell-card red">Error: {{ error }}</span>
                 </div>
                 
                 <!-- Loading State -->
                 <div v-if="isLoading" class="loading-message">
                     <img src="images/loading.gif" alt="..."/>
                     <p>{{ loadingMessage }}</p>
-                </div>
-                
-                <!-- Error State -->
-                <div v-else-if="error" class="error-message">
-                    <p>Error: {{ error }}</p>
-                    <button v-if="showRefresh" @click="handleRefresh">Try Again</button>
                 </div>
                 
                 <!-- Empty State -->
@@ -380,55 +580,104 @@ export const TableComponent = {
                 <!-- Data Table -->
                 <div v-else class="table-wrapper">
                     <table>
-                        <thead>
+                        <thead
+                            @dragover="handleDragOverThead"
+                            @drop="handleDropOnThead"
+                        >
                             <tr>
                                 <th v-if="draggable" class="spacer-cell"></th>
                                 <th 
                                     v-for="(column, colIdx) in columns" 
                                     :key="column.key"
                                     :style="{ width: getColumnWidth(column) }"
-                                    :class="column.headerClass"
+                                    :class="[column.headerClass, hideSet.has(column.key) ? 'hide' : '']"
                                 >
                                     {{ column.label }}
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(row, rowIndex) in data" 
-                                :key="rowIndex"
-                                :class="{ 'dragging': dragIndex === rowIndex, 'drag-over': dragOverIndex === rowIndex }"
+                            <tr v-for="({ row, idx }, visibleIdx) in visibleRows" 
+                                :key="idx"
+                                :class="{
+                                    'dragging': dragIndex === idx,
+                                    'drag-over': dragOverIndex === idx
+                                }"
+                                @dragover="handleDragOverRow(idx, $event)"
+                                @drop="handleDropOnRow(idx, $event)"
                             >
                                 <td v-if="draggable"
                                     class="row-drag-handle"
                                     draggable="true"
-                                    @mousedown="handleDragHandleDown(rowIndex, $event)"
-                                    @dragstart="handleDragStart(rowIndex, $event)"
-                                    @dragover="handleDragOver(rowIndex, $event)"
-                                    @drop="handleDrop(rowIndex)"
+                                    @dragstart="handleDragStart(idx, $event)"
                                 ></td>
                                 <td 
                                     v-for="(column, colIndex) in columns" 
                                     :key="column.key"
-                                    :class="getCellClass(row[column.key], column, rowIndex, colIndex)"
+                                    :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
                                     <div
                                         v-if="column.editable"
                                         contenteditable="true"
-                                        :data-row-index="rowIndex"
+                                        :data-row-index="idx"
                                         :data-col-index="colIndex"
-                                        @input="handleCellEdit(rowIndex, colIndex, $event.target.textContent)"
+                                        @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
                                         class="table-edit-textarea"
-                                        :ref="'editable_' + rowIndex + '_' + colIndex"
+                                        :ref="'editable_' + idx + '_' + colIndex"
                                     ></div>
-                                    <slot v-else :row="row" :rowIndex="rowIndex" :column="column">
+                                    <slot 
+                                        v-else 
+                                        :row="row" 
+                                        :rowIndex="idx" 
+                                        :column="column"
+                                        :cellRowIndex="idx"
+                                        :cellColIndex="colIndex"
+                                        :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
+                                    >
                                         {{ formatCellValue(row[column.key], column) }}
                                     </slot>
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot v-if="newRow">
+                        <tfoot v-if="newRow"
+                            @dragover="handleDragOverTfoot"
+                            @drop="handleDropOnTfoot"
+                        >
+                            <tr v-for="({ row, idx }, delIdx) in deletedRows"
+                                :key="'del-' + idx"
+                                class="marked-for-deletion"
+                            >
+                                <td v-if="draggable"
+                                    class="row-drag-handle"
+                                    draggable="true"
+                                    @dragstart="handleDragStart(idx, $event)"
+                                ></td>
+                                <td 
+                                    v-for="(column, colIndex) in columns" 
+                                    :key="column.key"
+                                    :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
+                                >
+                                    <div
+                                        v-if="column.editable"
+                                        contenteditable="true"
+                                        :data-row-index="idx"
+                                        :data-col-index="colIndex"
+                                        @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                        class="table-edit-textarea"
+                                        :ref="'editable_' + idx + '_' + colIndex"
+                                    ></div>
+                                    <slot v-else :row="row" :rowIndex="idx" :column="column">
+                                        {{ formatCellValue(row[column.key], column) }}
+                                    </slot>
+                                </td>
+                            </tr>
                             <tr>
-                                <td :colspan="draggable ? columns.length + 1 : columns.length" class="new-row-button" @click="handleNewRow">
+                                <td v-if="draggable" class="spacer-cell"></td>
+                                <td 
+                                    :colspan="draggable ? columns.length : columns.length" 
+                                    class="new-row-button" 
+                                    @click="handleNewRow"
+                                >
                                 </td>
                             </tr>
                         </tfoot>
@@ -436,7 +685,10 @@ export const TableComponent = {
                 </div>
                 
                 <!-- Data Summary -->
-                <div v-if="showFooter && data && data.length > 0" class="content-footer">
+                <div v-if="showFooter && allowSaveEvent && !isLoading" class="content-footer red">
+                    <p>There are unsaved changes in this table.</p>
+                </div>
+                <div v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
                     <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                 </div>
             </div>

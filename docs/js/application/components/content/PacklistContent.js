@@ -204,10 +204,6 @@ export const PacklistContent = {
                 @tab-close="handleTabClose"
                 @new-tab="handleNewTab"
             />
-            <div style="margin-top: 1rem;">
-                <button @click="modalManager.showAlert('Create new pack list functionality coming soon!', 'Info')">Create New Pack List</button>
-                <button @click="modalManager.showAlert('Import from Inventor functionality coming soon!', 'Info')">Import from Inventor</button>
-            </div>
         </div>
     `
 };
