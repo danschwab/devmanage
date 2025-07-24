@@ -1,479 +1,178 @@
 /**
- * Simplified caching system for application data
+ * Default cache expiration in milliseconds
  */
-export class CacheManager {
-    // Global cache storage
-    static _cacheStore = new Map();
+const DEFAULT_CACHE_EXPIRATION_MS = 5 * 60 * 1000;
+
+class SimpleCacheManager {
+    static DEFAULT_CACHE_EXPIRATION_MS = DEFAULT_CACHE_EXPIRATION_MS;
     
-    // Cache dependency map: { namespace: { key: [dependentCaches] } }
-    static _dependencyMap = new Map();
-    
-    // Default cache expiration (5 minutes)
-    static DEFAULT_EXPIRATION = 5 * 60 * 1000;
-    
-    // Global namespace definitions
-    static NAMESPACES = {
-        // Database related
-        SHEET_TABS: 'sheet_tabs',      // For tab metadata
-        SHEET_DATA: 'sheet_data',       // For raw sheet data
-        QUERY_RESULTS: 'query_results', // For SQL query results
-        
-        // Analytics related
-        PROD_SCHEDULE: 'prod_schedule', // Production schedule data
-        FUZZY_MATCHING: 'fuzzy_matching', // Fuzzy matching reference data
-        INVENTORY: 'inventory',         // Inventory information
-        PACK_LISTS: 'pack_lists',       // Pack list content
-        
-        // Application related
-        UI_STATE: 'ui_state',           // UI state information
-        USER_PREFS: 'user_prefs'        // User preferences
-    };
-    
-    // Common expiration times
-    static EXPIRATIONS = {
-        SHORT: 2 * 60 * 1000,     // 2 minutes
-        MEDIUM: 5 * 60 * 1000,    // 5 minutes
-        LONG: 15 * 60 * 1000,     // 15 minutes
-        VERY_LONG: 60 * 60 * 1000 // 1 hour
-    };
-    
-    // Track active cache operations for dependency tracking
-    static _activeOperations = new Map();
-    
-    /**
-     * Start tracking cache operations for a function call
-     * @param {string} trackingId - Unique ID for the function call
-     * @returns {string} The tracking ID
-     */
-    static beginTracking(trackingId = null) {
-        trackingId = trackingId || `op_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-        
-        const trackingContext = {
-            accessed: new Set(),
-            created: new Set()
-        };
-        
-        this._activeOperations.set(trackingId, trackingContext);
-        return trackingId;
+    static _store = new Map();
+    static _deps = new Map();
+
+    static _activeTrack = null;
+    static _trackStack = [];
+
+    static _startTracking() {
+        const deps = new Set();
+        this._trackStack.push(deps);
+        this._activeTrack = deps;
     }
-    
-    /**
-     * Get the current tracking ID (simplified - just return the most recent one)
-     * @returns {string|null} Current tracking ID or null
-     */
-    static getCurrentTrackingId() {
-        const keys = Array.from(this._activeOperations.keys());
-        return keys.length > 0 ? keys[keys.length - 1] : null;
+
+    static _stopTracking() {
+        const deps = this._trackStack.pop();
+        this._activeTrack = this._trackStack[this._trackStack.length - 1] || null;
+        return deps ? Array.from(deps) : [];
     }
-    
-    /**
-     * End tracking and get the dependencies
-     * @param {string} trackingId - The tracking ID
-     * @returns {Array<{namespace: string, key: string}>} Dependencies detected
-     */
-    static endTracking(trackingId) {
-        const operation = this._activeOperations.get(trackingId);
-        if (!operation) return [];
-        
-        const dependencies = Array.from(operation.accessed).map(entry => {
-            const [namespace, key] = entry.split(':::');
-            return { namespace, key };
-        });
-        
-        this._activeOperations.delete(trackingId);
-        return dependencies;
-    }
-    
-    /**
-     * Set a value in cache with dependency tracking
-     * @param {string} namespace - Cache namespace
-     * @param {string} key - Cache key
-     * @param {any} value - Value to store
-     * @param {number} [expiration] - Expiration time in milliseconds
-     * @param {Array<{namespace: string, key?: string}>} [dependencies] - Other caches this cache depends on
-     * @param {string} [trackingId] - Optional tracking ID for automatic dependency detection
-     */
-    static set(namespace, key, value, expiration = this.DEFAULT_EXPIRATION, dependencies = [], trackingId = null) {
-        if (!namespace || !key) return;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const cacheKey = this._formatKey(key);
-        
-        namespaceCache.set(cacheKey, {
-            value,
-            timestamp: Date.now(),
-            expiration
-        });
-        
-        // Register the entry in active operations if tracking
-        trackingId = trackingId || this.getCurrentTrackingId();
-        if (trackingId && this._activeOperations.has(trackingId)) {
-            this._activeOperations.get(trackingId).created.add(`${namespace}:::${cacheKey}`);
-        }
-        
-        // Register explicit dependencies
-        if (dependencies.length > 0) {
-            this.registerDependencies(namespace, cacheKey, dependencies);
-        }
-        
-        // Register tracked dependencies
-        if (trackingId) {
-            this.applyTrackedDependencies(namespace, cacheKey, trackingId);
-        }
-    }
-    
-    /**
-     * Get a value from cache with dependency tracking
-     * @param {string} namespace - Cache namespace
-     * @param {string} key - Cache key
-     * @param {string} [trackingId] - Optional tracking ID for automatic dependency detection
-     * @returns {any|null} - Cached value or null if not found/expired
-     */
-    static get(namespace, key, trackingId = null) {
-        if (!namespace || !key) return null;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const cacheKey = this._formatKey(key);
-        
-        const entry = namespaceCache.get(cacheKey);
-        if (!entry) return null;
-        
-        // Check if expired
-        if (Date.now() - entry.timestamp > entry.expiration) {
-            namespaceCache.delete(cacheKey);
+
+    static get(namespace, key) {
+        const ns = this._store.get(namespace);
+        // Track dependency (always, even on miss)
+        if (this._activeTrack) this._activeTrack.add(`${namespace}:${key}`);
+        if (!ns) {
+            console.log(`[CacheManager] GET MISS (namespace missing): ${namespace}:${key}`);
             return null;
         }
-        
-        // Register the access in active operations if tracking
-        trackingId = trackingId || this.getCurrentTrackingId();
-        if (trackingId && this._activeOperations.has(trackingId)) {
-            this._activeOperations.get(trackingId).accessed.add(`${namespace}:::${cacheKey}`);
+        const entry = ns.get(key);
+        if (!entry) {
+            console.log(`[CacheManager] GET MISS: ${namespace}:${key}`);
+            return null;
         }
-        
+        if (entry.expire && entry.expire < Date.now()) {
+            ns.delete(key);
+            console.log(`[CacheManager] GET EXPIRED: ${namespace}:${key}`);
+            return null;
+        }
+        console.log(`[CacheManager] GET HIT: ${namespace}:${key}`);
         return entry.value;
     }
-    
-    /**
-     * Check if a key exists in cache and is not expired
-     * @param {string} namespace - Cache namespace
-     * @param {string} key - Cache key
-     * @returns {boolean}
-     */
-    static has(namespace, key) {
-        if (!namespace || !key) return false;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const cacheKey = this._formatKey(key);
-        
-        const entry = namespaceCache.get(cacheKey);
-        if (!entry) return false;
-        
-        // Check if expired
-        if (Date.now() - entry.timestamp > entry.expiration) {
-            namespaceCache.delete(cacheKey);
-            return false;
+
+    static set(namespace, key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS, dependencies = []) {
+        if (
+            (Array.isArray(value) && value.length === 0) ||
+            (typeof value === 'object' && value !== null && Object.keys(value).length === 0)
+        ) {
+            // Don't cache empty results
+            console.log(`[CacheManager] SKIP SET (empty): ${namespace}:${key}`);
+            return;
         }
-        
-        return true;
-    }
-    
-    /**
-     * Remove a specific key from cache and invalidate its dependents
-     * @param {string} namespace - Cache namespace
-     * @param {string} key - Cache key
-     */
-    static invalidate(namespace, key) {
-        if (!namespace || !key) return;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const cacheKey = this._formatKey(key);
-        
-        namespaceCache.delete(cacheKey);
-        this._invalidateDependents(namespace, cacheKey);
-    }
-    
-    /**
-     * Remove all keys in a namespace that match a prefix and invalidate dependents
-     * @param {string} namespace - Cache namespace
-     * @param {string} keyPrefix - Key prefix to match
-     */
-    static invalidateByPrefix(namespace, keyPrefix) {
-        if (!namespace || !keyPrefix) return;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const prefix = this._formatKey(keyPrefix);
-        
-        const keysToInvalidate = [];
-        for (const key of namespaceCache.keys()) {
-            if (key.startsWith(prefix)) {
-                keysToInvalidate.push(key);
-            }
-        }
-        
-        for (const key of keysToInvalidate) {
-            namespaceCache.delete(key);
-            this._invalidateDependents(namespace, key);
-        }
-    }
-    
-    /**
-     * Clear an entire namespace and invalidate all dependents
-     * @param {string} namespace - Cache namespace to clear
-     */
-    static clearNamespace(namespace) {
-        if (!namespace) return;
-        
-        const namespaceCache = this._getNamespace(namespace);
-        const keys = [...namespaceCache.keys()];
-        
-        namespaceCache.clear();
-        
-        this._invalidateDependents(namespace, '*');
-        for (const key of keys) {
-            this._invalidateDependents(namespace, key);
-        }
-    }
-    
-    /**
-     * Clear the entire cache across all namespaces
-     */
-    static clearAll() {
-        this._cacheStore.clear();
-        this._dependencyMap.clear();
-    }
-    
-    /**
-     * Register explicit dependencies between cache entries
-     * @param {string} sourceNamespace - The namespace that other caches depend on
-     * @param {string} sourceKey - The key that other caches depend on
-     * @param {Array<{namespace: string, key: string}>} dependentCaches - Caches that depend on this entry
-     */
-    static registerDependencies(sourceNamespace, sourceKey, dependentCaches) {
-        if (!this._dependencyMap.has(sourceNamespace)) {
-            this._dependencyMap.set(sourceNamespace, new Map());
-        }
-        
-        const nsMap = this._dependencyMap.get(sourceNamespace);
-        const formattedKey = this._formatKey(sourceKey);
-        
-        if (!nsMap.has(formattedKey)) {
-            nsMap.set(formattedKey, []);
-        }
-        
-        const existingDeps = nsMap.get(formattedKey);
-        
-        for (const dep of dependentCaches) {
-            const exists = existingDeps.some(existing => 
-                existing.namespace === dep.namespace && existing.key === dep.key
-            );
-            
-            if (!exists) {
-                existingDeps.push({
-                    namespace: dep.namespace,
-                    key: this._formatKey(dep.key)
-                });
-            }
-        }
-    }
-    
-    /**
-     * Apply tracked dependencies to a cache entry
-     * @param {string} namespace - Target cache namespace
-     * @param {string} key - Target cache key
-     * @param {string} trackingId - The tracking ID with recorded dependencies
-     */
-    static applyTrackedDependencies(namespace, key, trackingId) {
-        const operation = this._activeOperations.get(trackingId);
-        if (!operation) return;
-        
-        const dependencies = [];
-        for (const access of operation.accessed) {
-            const [depNamespace, depKey] = access.split(':::');
-            dependencies.push({ namespace: depNamespace, key: depKey });
-        }
-        
+        if (!this._store.has(namespace)) this._store.set(namespace, new Map());
+        this._store.get(namespace).set(key, {
+            value,
+            expire: expirationMs ? Date.now() + expirationMs : null
+        });
+        console.log(`[CacheManager] SET: ${namespace}:${key} (expires in ${expirationMs}ms)`);
+        // Register dependencies
         if (dependencies.length > 0) {
-            for (const dep of dependencies) {
-                this.registerDependencies(dep.namespace, dep.key, [{ namespace, key }]);
-            }
-        }
-    }
-    
-    /**
-     * Wraps a method with automatic tracking
-     * @param {Function} method - The method to wrap
-     * @param {string} methodName - Name of the method for tracking ID
-     * @returns {Function} Wrapped method with automatic tracking
-     */
-    static withTracking(method, methodName) {
-        return async function(...args) {
-            const argsIdentifier = args.length > 0 
-                ? (typeof args[0] === 'string' ? args[0] : JSON.stringify(args.slice(0, 2)).substring(0, 20)) 
-                : 'noargs';
-            const trackingId = CacheManager.beginTracking(`${methodName}_${argsIdentifier}_${Date.now()}`);
-            
-            try {
-                return await method.apply(this, args);
-            } finally {
-                CacheManager.endTracking(trackingId);
-            }
-        };
-    }
-    
-    /**
-     * Applies tracking to all methods of a class
-     * @param {Object} classObj - The class to apply tracking to
-     * @returns {Object} Class with tracked methods
-     */
-    static applyTracking(classObj) {
-        const TrackedClass = {};
-        
-        const methodNames = Object.getOwnPropertyNames(classObj)
-            .filter(name => {
-                return typeof classObj[name] === 'function' && 
-                       name !== 'constructor' &&
-                       name !== 'length' &&
-                       name !== 'prototype' &&
-                       name !== 'name';
+            this._deps.set(`${namespace}:${key}`, dependencies);
+            console.log(`[CacheManager] SET DEPS: ${namespace}:${key} -> [${dependencies.join(', ')}]`);
+            dependencies.forEach(dep => {
+                console.log(`[CacheManager] REGISTER DEPENDENCY: ${namespace}:${key} depends on ${dep}`);
             });
-        
-        for (const methodName of methodNames) {
-            const originalMethod = classObj[methodName];
-            if (originalMethod.constructor.name === 'AsyncFunction') {
-                TrackedClass[methodName] = this.withTracking(originalMethod, methodName);
-            } else {
-                TrackedClass[methodName] = originalMethod;
+        }
+    }
+
+    static invalidate(namespace, key) {
+        const ns = this._store.get(namespace);
+        if (ns) ns.delete(key);
+        console.log(`[CacheManager] INVALIDATE: ${namespace}:${key}`);
+        // Invalidate dependents
+        const dependents = [];
+        for (const [depKey, deps] of this._deps.entries()) {
+            if (deps.includes(`${namespace}:${key}`)) {
+                dependents.push(depKey);
             }
         }
-        
-        return TrackedClass;
+        if (dependents.length > 0) {
+            console.log(`[CacheManager] INVALIDATE: ${namespace}:${key} has dependents: [${dependents.join(', ')}]`);
+        }
+        for (const depKey of dependents) {
+            const [depNs, depK] = depKey.split(':');
+            console.log(`[CacheManager] INVALIDATE DEPENDENT: ${depKey} because of ${namespace}:${key}`);
+            this.invalidate(depNs, depK);
+        }
+        this._deps.delete(`${namespace}:${key}`);
+    }
+
+    static invalidateByPrefix(namespace, prefix) {
+        const ns = this._store.get(namespace);
+        if (!ns) return;
+        for (const key of Array.from(ns.keys())) {
+            if (key.startsWith(prefix)) {
+                this.invalidate(namespace, key);
+            }
+        }
+        console.log(`[CacheManager] INVALIDATE BY PREFIX: ${namespace}:${prefix}`);
+    }
+
+    static clearNamespace(namespace) {
+        this._store.delete(namespace);
+        // Remove all dependencies for this namespace
+        for (const depKey of Array.from(this._deps.keys())) {
+            if (depKey.startsWith(namespace + ':')) {
+                this._deps.delete(depKey);
+            }
+        }
+        console.log(`[CacheManager] CLEAR NAMESPACE: ${namespace}`);
     }
     
     /**
-     * Defines standard dependency relationships between caches
-     * @returns {Object} Map of dependencies
+     * Decorator/wrapper for automatic caching and dependency tracking.
+     * Usage: const cachedFn = autoCache(namespace, keyGen, expirationMs)(fn)
      */
-    static getDependencyMap() {
-        return {
-            [this.NAMESPACES.SHEET_DATA]: {
-                affects: [
-                    this.NAMESPACES.QUERY_RESULTS,
-                    this.NAMESPACES.INVENTORY,
-                    this.NAMESPACES.PACK_LISTS,
-                    this.NAMESPACES.PROD_SCHEDULE
-                ]
-            },
-            [this.NAMESPACES.SHEET_TABS]: {
-                affects: [
-                    this.NAMESPACES.SHEET_DATA,
-                    this.NAMESPACES.QUERY_RESULTS,
-                    this.NAMESPACES.PACK_LISTS
-                ]
-            },
-            [this.NAMESPACES.PROD_SCHEDULE]: {
-                affects: [this.NAMESPACES.PACK_LISTS, this.NAMESPACES.INVENTORY]
-            },
-            [this.NAMESPACES.PACK_LISTS]: {
-                affects: [this.NAMESPACES.INVENTORY]
-            },
-            [this.NAMESPACES.INVENTORY]: {
-                affects: []
-            }
+    static autoCache(namespace, keyGen, expirationMs = DEFAULT_CACHE_EXPIRATION_MS) {
+        return function(fn) {
+            return async function(...args) {
+                const key = keyGen ? keyGen(...args) : JSON.stringify(args);
+                // Try cache
+                const cached = SimpleCacheManager.get(namespace, key);
+                if (cached !== null) return cached;
+                // Track dependencies during execution
+                SimpleCacheManager._startTracking();
+                const result = await fn.apply(this, args);
+                const deps = SimpleCacheManager._stopTracking();
+                SimpleCacheManager.set(namespace, key, result, expirationMs, deps);
+                return result;
+            };
         };
     }
     
-    // Private helper methods
-    static _invalidateDependents(namespace, key) {
-        const nsMap = this._dependencyMap.get(namespace);
-        if (!nsMap) return;
-        
-        const keyDependents = nsMap.get(key) || [];
-        const namespaceDependents = nsMap.get('*') || [];
-        const allDependents = [...keyDependents, ...namespaceDependents];
-        
-        const processed = new Set();
-        for (const dep of allDependents) {
-            const depKey = `${dep.namespace}:${dep.key}`;
-            if (processed.has(depKey)) continue;
-            processed.add(depKey);
-            
-            const depNamespaceCache = this._getNamespace(dep.namespace);
-            if (depNamespaceCache.has(dep.key)) {
-                depNamespaceCache.delete(dep.key);
-                this._invalidateDependents(dep.namespace, dep.key);
+    /**
+     * Decorator/wrapper for mutation methods that should invalidate caches.
+     * Usage: const invalidateFn = autoInvalidate(fn, getAffectedKeys)
+     */
+    static autoInvalidate(fn, getAffectedKeys) {
+        return async function(...args) {
+            const result = await fn.apply(this, args);
+            const affectedKeys = getAffectedKeys(...args);
+            for (const { namespace, key } of affectedKeys) {
+                SimpleCacheManager.invalidate(namespace, key);
             }
-        }
-    }
-    
-    static _getNamespace(namespace) {
-        if (!this._cacheStore.has(namespace)) {
-            this._cacheStore.set(namespace, new Map());
-        }
-        return this._cacheStore.get(namespace);
-    }
-    
-    static _formatKey(key) {
-        if (typeof key === 'object') {
-            return JSON.stringify(key);
-        }
-        return String(key);
+            return result;
+        };
     }
 }
+
 
 /**
- * Enhanced cache decorator with dependency tracking
- * @param {string} namespace - Cache namespace
- * @param {Function} keyGenerator - Function to generate cache key from arguments
- * @param {number} [expiration] - Cache expiration time in ms
- * @param {Array<string>} [explicitDependencies] - Array of namespaces this cache explicitly depends on
+ * Helper to wrap all static methods of a class/object with autoCache,
+ * and mutation methods with autoInvalidate if mutationKeys and getAffectedKeysFn are provided.
+ * Usage: export const MyUtils = wrapMethods(MyUtilsClass, 'namespace', mutationKeys, getAffectedKeysFn);
  */
-export function cached(namespace, keyGenerator, expiration, explicitDependencies = []) {
-    return function(target, propertyKey, descriptor) {
-        const originalMethod = descriptor.value;
-        const methodName = propertyKey || originalMethod.name || 'anonymous';
-        
-        descriptor.value = async function(...args) {
-            // Generate cache key
-            const key = keyGenerator ? keyGenerator(...args) : args.join(':');
-            
-            // Check cache first
-            const cachedValue = CacheManager.get(namespace, key);
-            if (cachedValue !== null) {
-                return cachedValue;
+export function wrapMethods(cls, namespace, mutationKeys = [], getAffectedKeysFn = {}) {
+    const wrapped = {};
+    for (const key of Object.getOwnPropertyNames(cls)) {
+        if (typeof cls[key] === 'function') {
+            if (mutationKeys.includes(key)) {
+                // Wrap mutation methods with autoInvalidate if getAffectedKeysFn provided, else just pass through
+                const getKeys = getAffectedKeysFn[key] || (() => []);
+                wrapped[key] = SimpleCacheManager.autoInvalidate(cls[key], getKeys);
+            } else {
+                wrapped[key] = SimpleCacheManager.autoCache(namespace, (...args) => key + ':' + JSON.stringify(args))(cls[key]);
             }
-            
-            // Create a tracking ID for this method call
-            const trackingId = CacheManager.beginTracking(`${methodName}_${Date.now()}`);
-            
-            try {
-                // Execute the original method, tracking all cache accesses
-                const result = await originalMethod.apply(this, args);
-                
-                // Add explicit dependencies
-                const explicitDeps = explicitDependencies.map(ns => ({ namespace: ns }));
-                
-                // Get tracked dependencies
-                const trackedDeps = CacheManager.endTracking(trackingId);
-                
-                // Combine explicit and tracked dependencies
-                const allDependencies = [...explicitDeps, ...trackedDeps];
-                
-                // Cache the result with all dependencies
-                CacheManager.set(namespace, key, result, expiration, allDependencies);
-                
-                return result;
-            } catch (error) {
-                // End tracking even if there's an error
-                CacheManager.endTracking(trackingId);
-                throw error;
-            }
-        };
-        
-        return descriptor;
-    };
+        }
+    }
+    return wrapped;
 }
 
-// Export convenience functions that delegate to CacheManager
-export const applyTracking = (classObj) => CacheManager.applyTracking(classObj);
-export const withTracking = (method, methodName) => CacheManager.withTracking(method, methodName);
-export const getCurrentTrackingId = () => CacheManager.getCurrentTrackingId();
+// Export the cache manager for manual invalidation if needed
+export const CacheManager = SimpleCacheManager;
