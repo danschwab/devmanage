@@ -629,7 +629,7 @@ export class FakeGoogleSheetsService {
         return JSON.parse(JSON.stringify(sheetData));
     }
 
-    static async setSheetData(tableId, tabName, updates) {
+    static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
         await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
@@ -640,6 +640,17 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
+            // If removeRowsBelow is specified, delete all rows below that row before saving
+            if (typeof removeRowsBelow === 'number') {
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                const sheetData = this.mockData[tableId][tabName];
+                if (sheetData.length > removeRowsBelow) {
+                    // Remove rows from removeRowsBelow (0-based) to end
+                    this.mockData[tableId][tabName] = sheetData.slice(0, removeRowsBelow);
+                }
+            }
+
             // Handle range-based updates (like "A1:B1" with values array)
             if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
                 console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
@@ -688,9 +699,28 @@ export class FakeGoogleSheetsService {
                 
                 // Ensure the sheet exists in mock data
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
-                
-                // Replace the entire sheet data
-                this.mockData[tableId][tabName] = JSON.parse(JSON.stringify(updates.values));
+
+                const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
+                const values = updates.values;
+
+                // If startRow is 0, just replace the entire sheet data
+                if (startRow === 0) {
+                    this.mockData[tableId][tabName] = JSON.parse(JSON.stringify(values));
+                } else {
+                    // Insert values at startRow, preserving rows before startRow
+                    if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                    const sheetData = this.mockData[tableId][tabName];
+                    // Ensure sheetData has at least startRow rows
+                    while (sheetData.length < startRow) {
+                        sheetData.push([]);
+                    }
+                    // Overwrite rows from startRow onward with new values
+                    for (let i = 0; i < values.length; ++i) {
+                        sheetData[startRow + i] = JSON.parse(JSON.stringify(values[i]));
+                    }
+                    // Remove any rows after the last inserted row
+                    sheetData.length = startRow + values.length;
+                }
                 
                 return true;
             }

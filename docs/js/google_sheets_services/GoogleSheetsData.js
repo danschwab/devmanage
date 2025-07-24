@@ -66,13 +66,50 @@ export class GoogleSheetsService {
         return response.result.values;
     }
 
-    static async setSheetData(tableId, tabName, updates) {
+    static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
         try {
+            // If removeRowsBelow is specified, delete all rows below that row before saving
+            if (typeof removeRowsBelow === 'number') {
+                // Get sheet info to find current row count and sheetId
+                const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.get({
+                        spreadsheetId,
+                        ranges: [tabName],
+                        includeGridData: false
+                    })
+                );
+                const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+                if (sheet) {
+                    const sheetRowCount = sheet.properties.gridProperties.rowCount;
+                    if (sheetRowCount > removeRowsBelow) {
+                        await GoogleSheetsService.withExponentialBackoff(() =>
+                            gapi.client.sheets.spreadsheets.batchUpdate({
+                                spreadsheetId,
+                                resource: {
+                                    requests: [
+                                        {
+                                            deleteDimension: {
+                                                range: {
+                                                    sheetId: sheet.properties.sheetId,
+                                                    dimension: 'ROWS',
+                                                    startIndex: removeRowsBelow, // 0-based
+                                                    endIndex: sheetRowCount
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            })
+                        );
+                    }
+                }
+            }
+
             // Handle cell-by-cell updates
             if (Array.isArray(updates)) {
                 const data = updates.map(({row, col, value}) => ({

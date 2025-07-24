@@ -1,13 +1,12 @@
-import { CacheManager, InventoryUtils, PackListUtils, ProductionUtils } from '../index.js';
+import { wrapMethods, InventoryUtils, PackListUtils, ProductionUtils } from '../index.js';
 
-export class Analytics {
+class analytics {
     /**
      * Check item quantities for a project
      * @param {string} projectIdentifier - The project identifier
-     * @param {string} [trackingId] - Optional tracking ID for dependency tracking
      * @returns {Promise<object>} Inventory status for all items
      */
-    static async checkItemQuantities(projectIdentifier, trackingId = null) {
+    static async checkItemQuantities(projectIdentifier) {
         // Generate cache key
         const cacheKey = `quantities:${projectIdentifier}`;
         
@@ -26,7 +25,7 @@ export class Analytics {
         try {
             // 1. Get pack list items
             console.log('1. Getting pack list items...');
-            const itemMap = await PackListUtils.extractItems(projectIdentifier, trackingId);
+            const itemMap = await PackListUtils.extractItems(projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If there are no items in the pack list, return
@@ -40,7 +39,7 @@ export class Analytics {
             console.log('2. Getting inventory quantities...');
             let inventoryInfo;
             try {
-                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY", trackingId);
+                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY");
             } catch (err) {
                 console.error('Error getting inventory:', err);
                 throw new Error('Failed to get inventory information');
@@ -70,7 +69,7 @@ export class Analytics {
             console.log('4. Checking for overlapping shows...');
             let overlappingIds;
             try {
-                overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier }, trackingId);
+                overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
             } catch (err) {
                 console.error('Error getting overlapping shows:', err);
                 throw new Error('Failed to get overlapping shows');
@@ -81,7 +80,7 @@ export class Analytics {
             for (const otherId of overlappingIds) {
                 if (otherId === projectIdentifier) continue;
                 try {
-                    const otherItemMap = await PackListUtils.extractItems(otherId, trackingId);
+                    const otherItemMap = await PackListUtils.extractItems(otherId);
                     Object.entries(otherItemMap).forEach(([id, qty]) => {
                         if (result[id]) {
                             result[id].remaining -= qty;
@@ -98,16 +97,6 @@ export class Analytics {
             console.log('Final results:', result);
             console.groupEnd();
             
-            // Cache the result
-            CacheManager.set(
-                CacheManager.NAMESPACES.INVENTORY,
-                cacheKey,
-                result,
-                CacheManager.EXPIRATIONS.SHORT,
-                [],
-                trackingId
-            );
-            
             return result;
         } catch (error) {
             console.error('Failed to check quantities:', error);
@@ -119,10 +108,9 @@ export class Analytics {
     /**
      * Check item availability for a project
      * @param {string} projectIdentifier - Project identifier
-     * @param {string} [trackingId] - Optional tracking ID for dependency tracking
      * @returns {Promise<Object>} Item availability map
      */
-    static async checkItemAvailability(projectIdentifier, trackingId = null) {
+    static async checkItemAvailability(projectIdentifier) {
         // Generate cache key
         const cacheKey = `quantities:${projectIdentifier}`;
         
@@ -142,7 +130,7 @@ export class Analytics {
         try {
             // 1. Get pack list items
             console.log('1. Getting pack list items...');
-            const itemMap = await PackListUtils.extractItems(projectIdentifier, trackingId);
+            const itemMap = await PackListUtils.extractItems(projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If no items, return empty result
@@ -154,7 +142,7 @@ export class Analytics {
 
             // Get inventory quantities
             console.log('2. Getting inventory quantities...');
-            let inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY", trackingId);
+            let inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY");
             
             // Filter valid items and build result
             const result = {};
@@ -167,36 +155,26 @@ export class Analytics {
 
             // Get overlapping shows
             console.log('4. Checking for overlapping shows...');
-            let overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier }, trackingId);
+            let overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
             
             // Process overlapping shows
             for (const { identifier: overlapId } of overlappingIds) {
                 if (overlapId === projectIdentifier) continue;
                 
                 console.log(` - Checking overlap with project: ${overlapId}`);
-                const overlapInfo = await Requests.getItemQuantities(overlapId);
+                const overlapInfo = await PackListUtils.extractItems(overlapId);
                 
                 for (const itemId of Object.keys(overlapInfo)) {
                     if (!result[itemId]) continue;
                     
-                    const allocated = result[itemId].allocated + overlapInfo[itemId].allocated;
-                    const onOrder = result[itemId].onOrder + overlapInfo[itemId].onOrder;
+                    const allocated = result[itemId].allocated + (overlapInfo[itemId].allocated || 0);
+                    const onOrder = result[itemId].onOrder + (overlapInfo[itemId].onOrder || 0);
                     result[itemId] = { ...result[itemId], allocated, onOrder };
                 }
             }
             
             console.log('Final results:', result);
             console.groupEnd();
-            
-            // Cache the result
-            CacheManager.set(
-                CacheManager.NAMESPACES.INVENTORY,
-                cacheKey,
-                result,
-                CacheManager.EXPIRATIONS.SHORT,
-                [],
-                trackingId
-            );
             
             return result;
         } catch (error) {
@@ -208,41 +186,8 @@ export class Analytics {
 
     // Event tracking method for analytics
     static trackEvent(eventName, eventData = {}) {
-        console.log(`Analytics Event: ${eventName}`, eventData);
         // Implement your analytics tracking logic here
     }
-
-    /**
-     * Clears analytics-related caches
-     * @param {string} [type] - Optional cache type to clear (inventory, packlists, etc)
-     */
-    static clearCache(type = null) {
-        if (!type) {
-            // Clear all analytics caches
-            CacheManager.clearNamespace(CacheManager.NAMESPACES.INVENTORY);
-            CacheManager.clearNamespace(CacheManager.NAMESPACES.PACK_LISTS);
-            CacheManager.clearNamespace(CacheManager.NAMESPACES.PROD_SCHEDULE);
-            CacheManager.clearNamespace(CacheManager.NAMESPACES.FUZZY_MATCHING);
-            return;
-        }
-        
-        // Clear specific cache namespace
-        switch (type.toLowerCase()) {
-            case 'inventory':
-                CacheManager.clearNamespace(CacheManager.NAMESPACES.INVENTORY);
-                break;
-            case 'packlists':
-            case 'pack_lists':
-                CacheManager.clearNamespace(CacheManager.NAMESPACES.PACK_LISTS);
-                break;
-            case 'schedule':
-            case 'prod_schedule':
-                CacheManager.clearNamespace(CacheManager.NAMESPACES.PROD_SCHEDULE);
-                break;
-            case 'fuzzy':
-            case 'fuzzy_matching':
-                CacheManager.clearNamespace(CacheManager.NAMESPACES.FUZZY_MATCHING);
-                break;
-        }
-    }
 }
+
+export const Analytics = wrapMethods(analytics, 'analytics');
