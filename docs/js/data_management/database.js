@@ -120,6 +120,11 @@ class database {
             // Remove the property so it's not sent as part of the update
             delete updates.removeRowsBelow;
         }
+        // Validate cell update array if applicable
+        if (Array.isArray(updates) && updates.length > 0 && typeof updates[0] === 'object' && updates[0].hasOwnProperty('row')) {
+            updates = updates.filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0);
+            if (updates.length === 0) throw new Error('No valid cell updates: row/col must be non-negative integers');
+        }
         return await GoogleSheetsService.setSheetData(tableId, tabName, updates, removeRowsBelow);
     }
 }

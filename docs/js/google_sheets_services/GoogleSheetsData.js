@@ -112,11 +112,15 @@ export class GoogleSheetsService {
 
             // Handle cell-by-cell updates
             if (Array.isArray(updates)) {
-                const data = updates.map(({row, col, value}) => ({
-                    range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
-                    values: [[value]]
-                }));
-                
+                const data = updates
+                    .filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0)
+                    .map(({row, col, value}) => ({
+                        range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
+                        values: [[value]]
+                    }));
+                if (data.length === 0) {
+                    throw new Error('No valid cell updates: row/col must be non-negative integers');
+                }
                 await GoogleSheetsService.withExponentialBackoff(() =>
                     gapi.client.sheets.spreadsheets.values.batchUpdate({
                         spreadsheetId,

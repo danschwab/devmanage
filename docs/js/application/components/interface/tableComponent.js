@@ -273,18 +273,6 @@ export const TableComponent = {
             }
         },
         handleSave() {
-            // Remove rows marked for deletion before emitting on-save
-            if (this.data.some(row => row['marked-for-deletion'])) {
-                // Remove marked rows using the store's removeMarkedRows if available
-                if (typeof this.$parent?.removeMarkedRows === 'function') {
-                    this.$parent.removeMarkedRows();
-                } else if (typeof this.removeMarkedRows === 'function') {
-                    this.removeMarkedRows();
-                } else {
-                    // fallback: remove in-place
-                    this.data = this.data.filter(row => !row['marked-for-deletion']);
-                }
-            }
             this.$emit('on-save');
             // After save, reset dirty state
             this.dirtyCells = {};

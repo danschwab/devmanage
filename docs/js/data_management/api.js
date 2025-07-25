@@ -22,6 +22,11 @@ export const Requests = {
      * @returns {Promise<boolean>} - Success status
      */
     saveData: async (tableId, tabName, data) => {
+        // Validate cell update array if applicable
+        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0].hasOwnProperty('row')) {
+            data = data.filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0);
+            if (data.length === 0) throw new Error('No valid cell updates: row/col must be non-negative integers');
+        }
         return await Database.setData(tableId, tabName, data);
     },
     
