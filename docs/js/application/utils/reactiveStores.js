@@ -128,10 +128,14 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         removeMarkedRows() {
             this.data = removeMarkedForDeletion(this.data);
         },
-        addRow(row) {
+        addRow(row, fieldNames = null) {
             // Ensure marked-for-deletion is set and nested arrays are initialized
             if (row && typeof row === 'object') {
                 if (!('marked-for-deletion' in row)) row['marked-for-deletion'] = false;
+                // Initialize fields to empty string if fieldNames provided
+                if (Array.isArray(fieldNames)) {
+                    row = initializeRowFields(row, fieldNames);
+                }
                 Object.keys(row).forEach(key => {
                     if (Array.isArray(row[key])) {
                         row[key] = markForDeletionInit(row[key]);
@@ -140,7 +144,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
             this.data.push(row);
         },
-        addNestedRow(parentIdx, key, row) {
+        addNestedRow(parentIdx, key, row, fieldNames = null) {
             // Add a row to a nested array (e.g., Items)
             if (
                 Array.isArray(this.data) &&
@@ -149,6 +153,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             ) {
                 if (row && typeof row === 'object') {
                     if (!('marked-for-deletion' in row)) row['marked-for-deletion'] = false;
+                    // Initialize fields to empty string if fieldNames provided
+                    if (Array.isArray(fieldNames)) {
+                        row = initializeRowFields(row, fieldNames);
+                    }
                     Object.keys(row).forEach(k => {
                         if (Array.isArray(row[k])) {
                             row[k] = markForDeletionInit(row[k]);
@@ -177,6 +185,15 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 }
                 return obj;
             });
+    }
+
+    // Helper to initialize all fields in a row with empty strings
+    function initializeRowFields(row, fieldNames) {
+        if (!row || typeof row !== 'object' || !Array.isArray(fieldNames)) return row;
+        fieldNames.forEach(field => {
+            if (!(field in row)) row[field] = '';
+        });
+        return row;
     }
 
     return store;
