@@ -1,4 +1,4 @@
-import { Database, GetTopFuzzyMatch, parseDate, wrapMethods } from '../../index.js';
+import { Database, GetTopFuzzyMatch, parseDate, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -11,20 +11,21 @@ class productionUtils {
      */
     static async getOverlappingShows(parameters) {
         const tabName = "ProductionSchedule";
-        const data = await Database.getData('PROD_SCHED', `${tabName}!A:J`);
-        const headers = data[0];
-        const idxShowName = headers.findIndex(h => h.toLowerCase() === "show name" || h.toLowerCase() === "show");
-        const idxClient = headers.findIndex(h => h.toLowerCase() === "client");
-        const idxYear = headers.findIndex(h => h.toLowerCase() === "year");
-        const idxShip = headers.findIndex(h => h.toLowerCase() === "ship");
-        const idxReturn = headers.findIndex(h => h.toLowerCase() === "expected return date");
-        const idxSStart = headers.findIndex(h => h.toLowerCase() === "s. start");
-        const idxSEnd = headers.findIndex(h => h.toLowerCase() === "s. end");
+        const mapping = {
+            showName: "Show Name",
+            client: "Client",
+            year: "Year",
+            ship: "Ship",
+            expectedReturnDate: "Expected Return Date",
+            sStart: "S. Start",
+            sEnd: "S. End"
+        };
+        const data = await Database.getData('PROD_SCHED', tabName, mapping);
         const identifierCache = {};
         for (const row of data) {
-            const showName = row[idxShowName];
-            const client = row[idxClient];
-            const yearVal = row[idxYear];
+            const showName = row.showName;
+            const client = row.client;
+            const yearVal = row.year;
             if (showName && client && yearVal) {
                 const key = `${showName}|||${client}|||${yearVal}`;
                 identifierCache[key] = await productionUtils.computeIdentifier(showName, client, yearVal);
@@ -69,16 +70,16 @@ class productionUtils {
         if (!year || !startDate || !endDate) return [];
         const rowInfos = [];
         for (const row of data) {
-            if (!row[idxYear] || row[idxYear] != year) continue;
-            const showName = row[idxShowName];
-            const client = row[idxClient];
-            const yearVal = row[idxYear];
+            if (!row.year || row.year != year) continue;
+            const showName = row.showName;
+            const client = row.client;
+            const yearVal = row.year;
             const key = `${showName}|||${client}|||${yearVal}`;
             const computedIdentifier = identifierCache[key];
-            let ship = parseDate(row[idxShip]) ||
-                (parseDate(row[idxSStart]) ? new Date(parseDate(row[idxSStart]).getTime() - 10 * 86400000) : null);
-            let ret = parseDate(row[idxReturn]) ||
-                (parseDate(row[idxSEnd]) ? new Date(parseDate(row[idxSEnd]).getTime() + 10 * 86400000) : null);
+            let ship = parseDate(row.ship) ||
+                (parseDate(row.sStart) ? new Date(parseDate(row.sStart).getTime() - 10 * 86400000) : null);
+            let ret = parseDate(row.expectedReturnDate) ||
+                (parseDate(row.sEnd) ? new Date(parseDate(row.sEnd).getTime() + 10 * 86400000) : null);
             if (ship && ship.getFullYear() != year) ship.setFullYear(Number(year));
             if (ret && ret.getFullYear() != year) ret.setFullYear(Number(year));
             if (ship && ret && ret <= ship) ret.setFullYear(ret.getFullYear() + 1);
@@ -143,16 +144,16 @@ class productionUtils {
      * @private
      */
     static async _getReferenceData() {
-        const clientsData = await Database.getData('PROD_SCHED', 'Clients!A2:B');
-        const showsData = await Database.getData('PROD_SCHED', 'Shows!A2:B');
+        const clientsData = await Database.getData('PROD_SCHED', 'Clients', { name: 'Name', abbr: 'Abbr' });
+        const showsData = await Database.getData('PROD_SCHED', 'Shows', { name: 'Name', abbr: 'Abbr' });
         return {
             clients: {
-                names: clientsData.map(row => row[0] || ''),
-                abbrs: clientsData.map(row => row[1] || '')
+                names: clientsData.map(row => row.name || ''),
+                abbrs: clientsData.map(row => row.abbr || '')
             },
             shows: {
-                names: showsData.map(row => row[0] || ''),
-                abbrs: showsData.map(row => row[1] || '')
+                names: showsData.map(row => row.name || ''),
+                abbrs: showsData.map(row => row.abbr || '')
             }
         };
     }

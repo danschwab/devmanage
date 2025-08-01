@@ -1,4 +1,4 @@
-import { Database, wrapMethods } from '../../index.js';
+import { Database, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -12,38 +12,30 @@ class packListUtils {
      */
     static async getContent(projectIdentifier, itemColumnsStart = "Pack") {
         // First verify the tab exists
-        const tabs = await Database.getTabs('PACK_LISTS', true);
+        const tabs = await Database.getTabs('PACK_LISTS');
         const tabExists = tabs.some(tab => tab.title === projectIdentifier);
-        
         if (!tabExists) {
             console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
             return null;
         }
-        
-        // Fetch the data directly from Database
-        const sheetData = await Database.getData('PACK_LISTS', projectIdentifier);
-        console.log('[PackListUtils.getContent] Loaded sheet data:', sheetData);
-
+        // Fetch the raw sheet data (2D array)
+        const sheetData = await Database.getData('PACK_LISTS', projectIdentifier, null);
+        if (!sheetData || sheetData.length < 4) return [];
         // Extract headers (typically row 3)
         const headerRow = sheetData[2] || [];
         const itemStartIndex = headerRow.findIndex(header => header === itemColumnsStart);
-
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
         }
-
         const mainHeaders = headerRow.slice(0, itemStartIndex);
         const itemHeaders = headerRow.slice(itemStartIndex);
-
         const crates = [];
         let currentCrate = null;
-
         // Process rows starting from row 4
         for (let i = 3; i < sheetData.length; i++) {
             const rowValues = sheetData[i] || [];
             const crateInfoArr = rowValues.slice(0, itemStartIndex);
             const crateContentsArr = rowValues.slice(itemStartIndex);
-
             // If crate info row, start a new crate
             if (crateInfoArr.some(cell => cell)) {
                 if (currentCrate) {
@@ -59,7 +51,6 @@ class packListUtils {
                     Items: []
                 };
             }
-
             // If item row, add to current crate's Items array
             if (crateContentsArr.some(cell => cell) && currentCrate) {
                 const itemObj = {};
@@ -69,16 +60,11 @@ class packListUtils {
                 currentCrate.Items.push(itemObj);
             }
         }
-
         if (currentCrate) {
             crates.push(currentCrate);
         }
-
-        // Log the array of crate objects
-        console.log('[PackListUtils.getContent] crates array:', crates);
-
-        // Return just the array of crate objects
         return crates;
+    // ...existing code...
     }
 
     /**
@@ -126,7 +112,6 @@ class packListUtils {
     static async savePackList(tabName, crates, headers = null) {
         // Minimal logging of input data
         console.log('[PackListUtils.savePackList] crates input:', crates);
-
         // Remove all objects marked for deletion recursively
         function removeMarkedForDeletion(arr) {
             if (!Array.isArray(arr)) return arr;
@@ -147,10 +132,8 @@ class packListUtils {
                     return obj;
                 });
         }
-
         // Remove marked-for-deletion from crates and nested items
         const cleanCrates = removeMarkedForDeletion(crates);
-
         // If headers not provided, infer from first crate
         if (!headers && Array.isArray(cleanCrates) && cleanCrates.length > 0) {
             const firstCrate = cleanCrates[0];
@@ -163,45 +146,30 @@ class packListUtils {
         }
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
-        // Format data for Google Sheets: header row (row 3), then crate rows, then item rows, starting at row 4
-        const result = [];
-        // Header row (row 3 in sheet, so index 2)
-        result.push([...headers.main, ...headers.items]);
-
-        // For each crate, add crate info row and item rows
+        // Read the original sheet data to get metadata and header row
+        const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
+        // Preserve metadata rows (rows 0 and 1)
+        const metadataRows = originalSheetData.slice(0, 2);
+        // Use the original header row (row 2)
+        const headerRow = originalSheetData[2] || [];
+        const sheetData = [...metadataRows, headerRow];
+        // Row 4+: crate/item data
         cleanCrates.forEach(crate => {
-            // Crate info row (main headers)
-            const crateInfo = headers.main.map(label => crate[label]);
-            result.push([...crateInfo, ...Array(headers.items.length).fill('')]);
-            // Each item row (items headers)
-            (crate.Items || []).forEach(itemObj => {
-                const itemRow = headers.items.map(label => itemObj[label]);
-                result.push([...Array(headers.main.length).fill(''), ...itemRow]);
-            });
-            // Spacer row: fill with as many empty strings as there are headers
-            result.push(Array(headers.main.length + headers.items.length).fill(''));
+            // Crate info row
+            const crateInfoArr = headers.main.map(h => crate[h] !== undefined ? crate[h] : '');
+            const crateContentsArr = headers.items.map(h => '');
+            sheetData.push([...crateInfoArr, ...crateContentsArr]);
+            // Item rows
+            if (Array.isArray(crate.Items)) {
+                crate.Items.forEach(itemObj => {
+                    const itemInfoArr = headers.main.map(() => '');
+                    const itemContentsArr = headers.items.map(h => itemObj[h] !== undefined ? itemObj[h] : '');
+                    sheetData.push([...itemInfoArr, ...itemContentsArr]);
+                });
+            }
         });
-
-        // Remove trailing empty row if present
-        if (
-            result.length &&
-            result[result.length - 1].every(cell => cell === '')
-        ) {
-            result.pop();
-        }
-
-        // Minimal logging of output data
-        console.log('[PackListUtils.savePackList] Final array to save:', result);
-
-        // Write to sheet starting at row 3 (1-based for Sheets API)
-        await Database.setData('PACK_LISTS', tabName, {
-            type: 'full-table',
-            values: result,
-            startRow: 2, // 1-based for Sheets API, so row 3
-            removeRowsBelow: 4
-        });
-
-        return true;
+        // Save the sheet data (2D array), overwriting the whole tab
+        return await Database.setData('PACK_LISTS', tabName, sheetData, null);
     }
 }
 

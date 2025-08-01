@@ -1,4 +1,4 @@
-import { Database, wrapMethods, transformSheetData, reverseTransformSheetData } from '../../index.js';
+import { Database, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for inventory operations
@@ -31,7 +31,7 @@ class inventoryUtils {
         // Generate cache key
         const itemNames = Array.isArray(itemName) ? itemName : [itemName];
         const infoFields = Array.isArray(fields) ? fields : [fields];
-        const indexData = await Database.getData('INVENTORY', 'INDEX!A:B');
+        const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
         const itemsByTab = {};
         const unmappedItems = [];
         itemNames.forEach(item => {
@@ -47,29 +47,23 @@ class inventoryUtils {
         const results = [];
         for (const [tab, items] of Object.entries(itemsByTab)) {
             try {
-                let tabData = await Database.getData('INVENTORY', `${tab}!A:Z`);
-                const headers = tabData[0];
-                const infoIdxs = infoFields.map(field => {
-                    const idx = headers.findIndex(h => h?.toLowerCase() === field.toLowerCase());
-                    if (idx === -1) throw new Error(`Column '${field}' not found in tab ${tab}`);
-                    return idx;
-                });
+                let tabData = await Database.getData('INVENTORY', tab, inventoryUtils.DEFAULT_INVENTORY_MAPPING);
                 items.forEach(item => {
                     const originalItem = item;
-                    let foundRow = null;
+                    let foundObj = null;
                     if (item.includes('-')) {
                         const itemNumber = item.split('-')[1];
-                        foundRow = tabData.slice(1).find(r => r[0] === itemNumber);
-                        if (!foundRow) {
-                            foundRow = tabData.slice(1).find(r => r[0] === originalItem);
+                        foundObj = tabData.find(obj => obj.itemNumber === itemNumber);
+                        if (!foundObj) {
+                            foundObj = tabData.find(obj => obj.itemNumber === originalItem);
                         }
                     } else {
-                        foundRow = tabData.slice(1).find(r => r[0] === item);
+                        foundObj = tabData.find(obj => obj.itemNumber === item);
                     }
                     const obj = { itemName: originalItem };
-                    if (foundRow) {
-                        infoFields.forEach((field, i) => {
-                            obj[field] = foundRow[infoIdxs[i]] ?? null;
+                    if (foundObj) {
+                        infoFields.forEach(field => {
+                            obj[field] = foundObj[field] ?? null;
                         });
                     } else {
                         infoFields.forEach(field => obj[field] = null);
@@ -94,30 +88,28 @@ class inventoryUtils {
 
     static async getInventoryTabData(tabOrItemName, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING) {
         // Get all tabs on the inventory sheet
-        const allTabs = await Database.getTabs('INVENTORY', true);
+        const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const indexData = await Database.getData('INVENTORY', 'INDEX!A:B');
+            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
             const foundTab = inventoryUtils.getTabNameForItem(tabOrItemName, indexData);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
         }
 
-        // Get raw sheet data
-        const rawData = await Database.getData('INVENTORY', resolvedTabName);
-        // Transform using helper (no caching)
-        return transformSheetData(rawData, mapping);
+        // Get tab data as JS objects
+        return await Database.getData('INVENTORY', resolvedTabName, mapping);
     }
 
     static async saveInventoryTabData(tabOrItemName, mappedData, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING) {
-        const allTabs = await Database.getTabs('INVENTORY', true);
+        const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const indexData = await Database.getData('INVENTORY', 'INDEX!A:B');
+            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
             const foundTab = inventoryUtils.getTabNameForItem(tabOrItemName, indexData);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
@@ -126,9 +118,8 @@ class inventoryUtils {
         if (mappedData && typeof mappedData === 'object' && mappedData.__v_isReactive) {
             mappedData = Array.from(mappedData);
         }
-        const originalData = await Database.getData('INVENTORY', resolvedTabName);
-        const sheetData = reverseTransformSheetData(originalData, mapping, mappedData);
-        return await Database.setData('INVENTORY', resolvedTabName, sheetData);
+        // Save JS objects using mapping
+        return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping);
     }
 }
 

@@ -51,128 +51,139 @@ export class GoogleSheetsService {
         }
     }
 
-    static async getSheetData(tableId, range) {
+    /**
+     * Get sheet data and return as array of JS objects
+     * @param {string} tableId
+     * @param {string} tabName
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<Array<Object>>}
+     */
+    static async getSheetData(tableId, tabName, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
-        
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
-
+        const range = `${tabName}`;
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range,
             })
         );
-        return response.result.values;
+        const rawData = response.result.values;
+        if (!rawData || rawData.length < 2) return [];
+        if (mapping) {
+            return GoogleSheetsService.transformSheetData(rawData, mapping);
+        }
+        const headers = rawData[0];
+        return rawData.slice(1).map(row => {
+            const obj = {};
+            headers.forEach((h, i) => obj[h] = row[i]);
+            return obj;
+        });
     }
 
-    static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
+    /**
+     * Set sheet data from array of JS objects
+     * @param {string} tableId
+     * @param {string} tabName
+     * @param {Array<Object>} updates - Array of JS objects to save
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<boolean>}
+     */
+    static async setSheetData(tableId, tabName, updates, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
-
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
-
-        try {
-            // If removeRowsBelow is specified, delete all rows below that row before saving
-            if (typeof removeRowsBelow === 'number') {
-                // Get sheet info to find current row count and sheetId
-                const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.get({
-                        spreadsheetId,
-                        ranges: [tabName],
-                        includeGridData: false
-                    })
-                );
-                const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
-                if (sheet) {
-                    const sheetRowCount = sheet.properties.gridProperties.rowCount;
-                    if (sheetRowCount > removeRowsBelow) {
-                        await GoogleSheetsService.withExponentialBackoff(() =>
-                            gapi.client.sheets.spreadsheets.batchUpdate({
-                                spreadsheetId,
-                                resource: {
-                                    requests: [
-                                        {
-                                            deleteDimension: {
-                                                range: {
-                                                    sheetId: sheet.properties.sheetId,
-                                                    dimension: 'ROWS',
-                                                    startIndex: removeRowsBelow, // 0-based
-                                                    endIndex: sheetRowCount
-                                                }
-                                            }
-                                        }
-                                    ]
-                                }
-                            })
-                        );
-                    }
-                }
-            }
-
-            // Handle cell-by-cell updates
-            if (Array.isArray(updates)) {
-                const data = updates
-                    .filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0)
-                    .map(({row, col, value}) => ({
-                        range: `${tabName}!${String.fromCharCode(65 + col)}${row + 1}`,
-                        values: [[value]]
-                    }));
-                if (data.length === 0) {
-                    throw new Error('No valid cell updates: row/col must be non-negative integers');
-                }
+        // Convert JS objects to sheet format
+        let values;
+        if (mapping) {
+            values = GoogleSheetsService.reverseTransformSheetData(mapping, updates);
+        } else if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+            values = updates;
+        } else if (Array.isArray(updates) && updates.length > 0) {
+            const headers = Object.keys(updates[0]);
+            values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
+        } else {
+            throw new Error('No valid updates provided');
+        }
+        // Setup range
+        const range = `${tabName}`;
+        // Write new data
+        await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range,
+                valueInputOption: 'USER_ENTERED',
+                resource: { values }
+            })
+        );
+        // Truncate any rows below the new data
+        // Get current sheet row count
+        const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.get({
+                spreadsheetId,
+                ranges: [tabName],
+                includeGridData: false
+            })
+        );
+        const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+        if (sheet) {
+            const sheetRowCount = sheet.properties.gridProperties.rowCount;
+            const newRowCount = values.length;
+            if (sheetRowCount > newRowCount) {
                 await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.values.batchUpdate({
+                    gapi.client.sheets.spreadsheets.batchUpdate({
                         spreadsheetId,
                         resource: {
-                            data: data,
-                            valueInputOption: 'USER_ENTERED'
+                            requests: [{
+                                deleteDimension: {
+                                    range: {
+                                        sheetId: sheet.properties.sheetId,
+                                        dimension: 'ROWS',
+                                        startIndex: newRowCount,
+                                        endIndex: sheetRowCount
+                                    }
+                                }
+                            }]
                         }
                     })
                 );
-                return true;
             }
-            
-            // Handle full-table updates
-            if (updates?.type === 'full-table' && Array.isArray(updates.values)) {
-                const values = updates.values;
-                
-                // Pad rows to consistent length if needed
-                if (values.length > 0) {
-                    const maxCols = Math.max(...values.map(row => row.length), 10);
-                    values.forEach(row => {
-                        while (row.length < maxCols) row.push('');
-                    });
-                }
-                
-                // Setup range parameters
-                const startRow = updates.startRow || 0;
-                const startCol = 0;
-                const numRows = values.length;
-                const numCols = values[0]?.length || 1;
-                const endColLetter = String.fromCharCode(65 + startCol + numCols - 1);
-                const range = `${tabName}!A${startRow + 1}:${endColLetter}${startRow + numRows}`;
-                
-                // Ensure sheet has enough rows
-                await this._ensureSheetSize(spreadsheetId, tabName, startRow + numRows);
-                
-                // Update the sheet
-                await GoogleSheetsService.withExponentialBackoff(() =>
-                    gapi.client.sheets.spreadsheets.values.update({
-                        spreadsheetId,
-                        range,
-                        valueInputOption: 'USER_ENTERED',
-                        resource: { values }
-                    })
-                );
-                return true;
-            }
-            
-            throw new Error('Invalid updates format for setSheetData');
-        } catch (error) {
-            console.error('Error updating sheet:', error);
-            throw error;
         }
+        return true;
+    }
+    /**
+     * Transform raw sheet data to JS objects using mapping
+     */
+    static transformSheetData(rawData, mapping) {
+        if (!rawData || rawData.length < 2 || !mapping) return [];
+        const headers = rawData[0];
+        const rows = rawData.slice(1);
+        const headerIdxMap = {};
+        Object.entries(mapping).forEach(([key, headerName]) => {
+            const idx = headers.findIndex(h => h.trim() === headerName);
+            if (idx !== -1) headerIdxMap[key] = idx;
+        });
+        return rows.map(row => {
+            const obj = {};
+            Object.keys(mapping).forEach(key => {
+                obj[key] = row[headerIdxMap[key]] ?? '';
+            });
+            return obj;
+        }).filter(obj => Object.values(obj).some(val => val !== ''));
+    }
+
+    /**
+     * Reverse transform JS objects to sheet data using mapping
+     */
+    static reverseTransformSheetData(mapping, mappedData) {
+        if (!mappedData || mappedData.length === 0) return [];
+        const headers = Object.values(mapping);
+        const rows = mappedData.map(obj => headers.map(h => {
+            const key = Object.keys(mapping).find(k => mapping[k] === h);
+            return key ? obj[key] ?? '' : '';
+        }));
+        return [headers, ...rows];
     }
     
     /**
@@ -403,5 +414,28 @@ export class GoogleSheetsService {
                 }
             })
         );
+    }
+
+    /**
+     * Converts a 2D array from Google Sheets to array of objects (first row = headers)
+     */
+    static sheetArrayToObjects(sheetArray) {
+        if (!sheetArray || sheetArray.length < 2) return [];
+        const headers = sheetArray[0];
+        return sheetArray.slice(1).map(row => {
+            const obj = {};
+            headers.forEach((h, i) => obj[h] = row[i] ?? '');
+            return obj;
+        });
+    }
+
+    /**
+     * Converts array of objects to 2D array for Google Sheets (first row = headers)
+     */
+    static objectsToSheetArray(data) {
+        if (!Array.isArray(data) || data.length === 0) return [[]];
+        const headers = Array.from(new Set(data.flatMap(obj => Object.keys(obj))));
+        const values = [headers].concat(data.map(obj => headers.map(h => obj[h] ?? '')));
+        return values;
     }
 }

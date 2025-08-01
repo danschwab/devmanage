@@ -1,33 +1,28 @@
-import { CacheManager, Database, Analytics, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from '../index.js';
+import { CacheManager, Database, Analytics, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
 
 // Define all API methods in a single class/object
 export const Requests = {
     /**
-     * Fetch data from a sheet with simplified interface
+     * Fetch data from a table/tab as JS objects
      * @param {string} tableId - Table identifier (INVENTORY, PACK_LISTS, etc.)
      * @param {string} tabName - Tab name
-     * @param {string} [range] - Optional range (e.g., 'A1:C10'), if omitted fetches all data
-     * @returns {Promise<Array>} - 2D array of data
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<Array<Object>>} - Array of JS objects
      */
-    fetchData: async (tableId, tabName, range = null) => {
-        const fullRange = range ? `${tabName}!${range}` : `${tabName}`;
-        return await Database.getData(tableId, fullRange);
+    fetchData: async (tableId, tabName, mapping = null) => {
+        return await Database.getData(tableId, tabName, mapping);
     },
     
     /**
-     * Save data to a sheet
+     * Save JS objects to a table/tab
      * @param {string} tableId - Table identifier
      * @param {string} tabName - Tab name
-     * @param {Array|Object} data - Data to save (cell updates or full table)
+     * @param {Array<Object>} data - Array of JS objects to save
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    saveData: async (tableId, tabName, data) => {
-        // Validate cell update array if applicable
-        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0].hasOwnProperty('row')) {
-            data = data.filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0);
-            if (data.length === 0) throw new Error('No valid cell updates: row/col must be non-negative integers');
-        }
-        return await Database.setData(tableId, tabName, data);
+    saveData: async (tableId, tabName, data, mapping = null) => {
+        return await Database.setData(tableId, tabName, data, mapping);
     },
     
     /**

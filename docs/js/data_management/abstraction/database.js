@@ -20,39 +20,45 @@ if (isLocalhost()) {
     // Note: This import must match the actual path and export names
     // If using a bundler, you may need to adjust this to static imports
     // eslint-disable-next-line no-undef
-    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../google_sheets_services/FakeGoogle.js'));
+    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/FakeGoogle.js'));
 } else {
     // Use real services for production
     // eslint-disable-next-line no-undef
-    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../google_sheets_services/index.js'));
+    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
 }
 
 import { wrapMethods, CacheManager } from '../index.js';
 
 class database {
     /**
-     * Retrieves data from a specific range in a sheet
+     * Retrieves data for a table/tab and returns as array of JS objects
      * @param {string} tableId - Identifier for the table (INVENTORY, PACK_LISTS, etc.)
-     * @param {string} range - Range to retrieve (e.g., 'Sheet1!A1:B10')
-     * @param {boolean} useCache - Whether to use cached data if available
-     * @returns {Promise<Array>} - The data as a 2D array
+     * @param {string} tabName - Tab name or logical identifier
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<Array<Object>>} - Array of JS objects
      */
-    static async getData(tableId, range) {
-        return await GoogleSheetsService.getSheetData(tableId, range);
+    static async getData(tableId, tabName, mapping = null) {
+        // Get raw sheet data from GoogleSheetsService
+        const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
+        // If mapping provided, transform to JS objects
+        if (mapping) {
+            return GoogleSheetsService.transformSheetData(rawData, mapping);
+        }
+        // If no mapping, return raw 2D array
+        return rawData;
     }
     
     /**
-     * Gets all sheet tabs for a table
+     * Gets all logical tabs for a table
      * @param {string} tableId - Identifier for the table
-     * @param {boolean} useCache - Whether to use cached data if available
-     * @returns {Promise<Array<{title: string, sheetId: number}>>} - List of sheet tabs
+     * @returns {Promise<Array<{title: string, sheetId: number}>>} - List of logical tabs
      */
-    static async getTabs(tableId, useCache = true) {
+    static async getTabs(tableId) {
         return await GoogleSheetsService.getSheetTabs(tableId);
     }
     
     /**
-     * Hides specified tabs in a table
+     * Hides specified logical tabs in a table
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to hide
      */
@@ -61,7 +67,7 @@ class database {
     }
     
     /**
-     * Shows specified tabs in a table
+     * Shows specified logical tabs in a table
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to show
      */
@@ -70,7 +76,7 @@ class database {
     }
     
     /**
-     * Creates a new sheet tab by copying a template tab or creating a blank tab
+     * Creates a new logical tab by copying a template or creating blank
      * @param {string} tableId - Identifier for the table
      * @param {{title: string, sheetId: number}|null} templateTab - Template tab to copy (null for blank tab)
      * @param {string} newTabName - Name for the new tab
@@ -78,16 +84,14 @@ class database {
      */
     static async createTab(tableId, templateTab, newTabName) {
         if (templateTab && templateTab.sheetId) {
-            // Copy from template
             await GoogleSheetsService.copySheetTab(tableId, templateTab, newTabName);
         } else {
-            // Create blank tab
             await GoogleSheetsService.createBlankTab(tableId, newTabName);
         }
     }
     
     /**
-     * Executes a SQL-like query against sheet data
+     * Executes a SQL-like query against logical table data
      * @param {string} tableId - The table identifier
      * @param {string} query - SQL-like query string
      * @returns {Promise<Array<Object>>} Query results
@@ -97,35 +101,26 @@ class database {
     }
     
     /**
-     * Helper method to find a tab by name
+     * Helper method to find a logical tab by name
      * @param {string} tableId - Identifier for the table
      * @param {string} tabName - Name of the tab to find
      * @returns {Promise<{title: string, sheetId: number}|null>} - The tab object or null if not found
      */
     static async findTabByName(tableId, tabName) {
-        const tabs = await database.getTabs(tableId, true);
+        const tabs = await database.getTabs(tableId);
         return tabs.find(tab => tab.title === tabName) || null;
     }
     /**
-     * Updates data in a sheet
+     * Updates data for a table/tab using JS objects
      * @param {string} tableId - Identifier for the table
-     * @param {string} tabName - Name of the tab
-     * @param {Array|Object} updates - Updates to apply (cell updates or full-table update)
+     * @param {string} tabName - Tab name or logical identifier
+     * @param {Array<Object>} updates - Array of JS objects to save
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    static async setData(tableId, tabName, updates) {
-        let removeRowsBelow = undefined;
-        if (updates && typeof updates === 'object' && updates.removeRowsBelow !== undefined) {
-            removeRowsBelow = updates.removeRowsBelow;
-            // Remove the property so it's not sent as part of the update
-            delete updates.removeRowsBelow;
-        }
-        // Validate cell update array if applicable
-        if (Array.isArray(updates) && updates.length > 0 && typeof updates[0] === 'object' && updates[0].hasOwnProperty('row')) {
-            updates = updates.filter(({row, col}) => Number.isInteger(row) && Number.isInteger(col) && row >= 0 && col >= 0);
-            if (updates.length === 0) throw new Error('No valid cell updates: row/col must be non-negative integers');
-        }
-        return await GoogleSheetsService.setSheetData(tableId, tabName, updates, removeRowsBelow);
+    static async setData(tableId, tabName, updates, mapping = null) {
+        // Delegate conversion to GoogleSheetsService
+        return await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
     }
 }
 

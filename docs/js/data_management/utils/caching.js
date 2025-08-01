@@ -160,14 +160,23 @@ class SimpleCacheManager {
  */
 export function wrapMethods(cls, namespace, mutationKeys = [], getAffectedKeysFn = {}) {
     const wrapped = {};
-    for (const key of Object.getOwnPropertyNames(cls)) {
-        if (typeof cls[key] === 'function') {
-            if (mutationKeys.includes(key)) {
-                // Wrap mutation methods with autoInvalidate if getAffectedKeysFn provided, else just pass through
-                const getKeys = getAffectedKeysFn[key] || (() => []);
-                wrapped[key] = SimpleCacheManager.autoInvalidate(cls[key], getKeys);
+    for (const methodName of Object.getOwnPropertyNames(cls)) {
+        if (typeof cls[methodName] === 'function') {
+            if (mutationKeys.includes(methodName)) {
+                // Wrap mutation methods with custom invalidation logic
+                const getKeys = getAffectedKeysFn[methodName] || (() => []);
+                wrapped[methodName] = async function(...args) {
+                    const result = await cls[methodName].apply(this, args);
+                    const affectedKeys = getKeys(...args);
+                    for (const { namespace: ns, key } of affectedKeys) {
+                        // Invalidate all cache keys for this namespace/tab prefix
+                        const prefix = key.replace(/(\[.*?\])$/, ''); // Remove trailing array/mapping if present
+                        SimpleCacheManager.invalidateByPrefix(ns, prefix);
+                    }
+                    return result;
+                };
             } else {
-                wrapped[key] = SimpleCacheManager.autoCache(namespace, (...args) => key + ':' + JSON.stringify(args))(cls[key]);
+                wrapped[methodName] = SimpleCacheManager.autoCache(namespace, (...args) => methodName + ':' + JSON.stringify(args))(cls[methodName]);
             }
         }
     }

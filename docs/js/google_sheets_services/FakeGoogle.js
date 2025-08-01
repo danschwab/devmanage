@@ -84,6 +84,39 @@ export class FakeGoogleSheetsAuth {
 }
 
 export class FakeGoogleSheetsService {
+    /**
+     * Transform raw sheet data to JS objects using mapping
+     */
+    static transformSheetData(rawData, mapping) {
+        if (!rawData || rawData.length < 2 || !mapping) return [];
+        const headers = rawData[0];
+        const rows = rawData.slice(1);
+        const headerIdxMap = {};
+        Object.entries(mapping).forEach(([key, headerName]) => {
+            const idx = headers.findIndex(h => h.trim() === headerName);
+            if (idx !== -1) headerIdxMap[key] = idx;
+        });
+        return rows.map(row => {
+            const obj = {};
+            Object.keys(mapping).forEach(key => {
+                obj[key] = row[headerIdxMap[key]] ?? '';
+            });
+            return obj;
+        }).filter(obj => Object.values(obj).some(val => val !== ''));
+    }
+
+    /**
+     * Reverse transform JS objects to sheet data using mapping
+     */
+    static reverseTransformSheetData(mapping, mappedData) {
+        if (!mappedData || mappedData.length === 0) return [];
+        const headers = Object.values(mapping);
+        const rows = mappedData.map(obj => headers.map(h => {
+            const key = Object.keys(mapping).find(k => mapping[k] === h);
+            return key ? obj[key] ?? '' : '';
+        }));
+        return [headers, ...rows];
+    }
     static SPREADSHEET_IDS = {
         'INVENTORY': 'fake_inventory_sheet_id',
         'PACK_LISTS': 'fake_pack_lists_sheet_id',
@@ -651,36 +684,36 @@ export class FakeGoogleSheetsService {
                 }
             }
 
+            // If updates is an array of JS objects and mapping is provided, convert to sheet format
+            if (Array.isArray(updates) && updates.length > 0 && typeof updates[0] === 'object' && !Array.isArray(updates[0])) {
+                if (arguments.length >= 4 && typeof arguments[3] === 'object' && arguments[3] !== null) {
+                    // mapping is passed as 4th argument
+                    const mapping = arguments[3];
+                    const sheetData = FakeGoogleSheetsService.reverseTransformSheetData(mapping, updates);
+                    this.mockData[tableId][tabName] = sheetData;
+                    return true;
+                }
+            }
+
             // Handle range-based updates (like "A1:B1" with values array)
             if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
                 console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
-                
-                // Ensure the sheet exists in mock data
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
-
                 const sheetData = this.mockData[tableId][tabName];
-                
-                // Replace/add rows starting from row 0
                 updates.forEach((rowData, rowIndex) => {
-                    sheetData[rowIndex] = [...rowData]; // Create a copy of the row data
+                    sheetData[rowIndex] = [...rowData];
                 });
-                
                 return true;
             }
-            
+
             // Handle cell-by-cell updates
             if (Array.isArray(updates) && updates.length > 0 && updates[0].hasOwnProperty('row')) {
                 console.log(`FakeGoogleSheetsService: Applying ${updates.length} cell updates`);
-                
-                // Ensure the sheet exists in mock data
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
-
                 const sheetData = this.mockData[tableId][tabName];
-                
                 updates.forEach(({row, col, value}) => {
-                    // Expand sheet if necessary
                     while (sheetData.length <= row) {
                         sheetData.push([]);
                     }
@@ -689,42 +722,36 @@ export class FakeGoogleSheetsService {
                     }
                     sheetData[row][col] = value;
                 });
-                
                 return true;
             }
-            
+
             // Handle full-table updates
             if (updates?.type === 'full-table' && Array.isArray(updates.values)) {
                 console.log(`FakeGoogleSheetsService: Full table update with ${updates.values.length} rows`);
-                
-                // Ensure the sheet exists in mock data
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
-
                 const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
                 const values = updates.values;
-
-                // If startRow is 0, just replace the entire sheet data
                 if (startRow === 0) {
                     this.mockData[tableId][tabName] = JSON.parse(JSON.stringify(values));
                 } else {
-                    // Insert values at startRow, preserving rows before startRow
                     if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
                     const sheetData = this.mockData[tableId][tabName];
-                    // Ensure sheetData has at least startRow rows
                     while (sheetData.length < startRow) {
                         sheetData.push([]);
                     }
-                    // Overwrite rows from startRow onward with new values
                     for (let i = 0; i < values.length; ++i) {
                         sheetData[startRow + i] = JSON.parse(JSON.stringify(values[i]));
                     }
-                    // Remove any rows after the last inserted row
+                    // Truncate any rows below the new data
                     sheetData.length = startRow + values.length;
                 }
-                
+                // Always truncate any rows below the new data for full-table updates
+                if (this.mockData[tableId][tabName].length > (startRow + values.length)) {
+                    this.mockData[tableId][tabName].length = startRow + values.length;
+                }
                 return true;
             }
-            
+
             throw new Error('Invalid updates format for setSheetData');
         } catch (error) {
             console.error('FakeGoogleSheetsService: Error updating sheet:', error);
