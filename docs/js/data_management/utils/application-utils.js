@@ -12,58 +12,23 @@ class applicationUtils {
      * @returns {Promise<boolean>} Success status
      */
     static async storeUserData(username, id, data) {
-        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const tabName = `User_${sanitizedUsername}`;
-        
-        // Check if tab exists, create if not
-        let userTab = await Database.findTabByName('CACHE', tabName);
-        if (!userTab) {
-            // Try to find a template tab first, fallback to creating without template
-            let templateTab = await Database.findTabByName('CACHE', 'UserTemplate');
-            
-            if (templateTab) {
-                // Create new tab based on template
-                await Database.createTab('CACHE', templateTab, tabName);
-            } else {
-                // Create new tab without template and initialize with headers
-                await Database.createTab('CACHE', null, tabName);
-                
-                // Initialize with headers: ID, Data1, Data2, Data3, etc.
-                const headers = ['ID', ...data.map((_, index) => `Data${index + 1}`)];
-                await Database.setData('CACHE', `${tabName}!A1:${String.fromCharCode(64 + headers.length)}1`, [headers]);
-            }
-            
-            // Verify tab was created
-            userTab = await Database.findTabByName('CACHE', tabName);
-            if (!userTab) {
-                throw new Error(`Failed to create or find user tab: ${tabName}`);
-            }
+        // Compose tab name for user data
+        const tabName = `${username}_${id}`;
+        // Ensure tab exists (create blank if not)
+        const allTabs = await Database.getTabs('CACHE', true);
+        let tab = allTabs.find(t => t.title === tabName);
+        if (!tab) {
+            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
         }
-        
-        // Get current tab data to find or create the row
-        const tabData = await Database.getData('CACHE', `${tabName}!A:Z`);
-        const headers = tabData[0] || [];
-        const rows = tabData.slice(1) || [];
-        
-        // Find existing row with the ID
-        let rowIndex = rows.findIndex(row => row[0] === id);
-        
-        // Prepare the row data
-        const rowData = [id, ...data];
-        
-        if (rowIndex !== -1) {
-            // Update existing row
-            const actualRowIndex = rowIndex + 2; // +1 for header, +1 for 1-based indexing
-            const range = `${tabName}!A${actualRowIndex}:${String.fromCharCode(64 + rowData.length)}${actualRowIndex}`;
-            await Database.setData('CACHE', range, [rowData]);
-        } else {
-            // Append new row
-            const newRowIndex = rows.length + 2; // +1 for header, +1 for 1-based indexing
-            const range = `${tabName}!A${newRowIndex}:${String.fromCharCode(64 + rowData.length)}${newRowIndex}`;
-            await Database.setData('CACHE', range, [rowData]);
+        // Prepare values for full-table update
+        let values = Array.isArray(data) ? data : [data];
+        // If tab is newly created, add header row
+        if (!tab) {
+            values = [['ID', 'Value']].concat(values.map((row, i) => [i + 1, row]));
         }
-        
-        return true;
+        // If tab exists and has header, just update values
+        const updates = { type: 'full-table', values };
+        return await Database.setData('CACHE', tabName, updates);
     }
     
     /**

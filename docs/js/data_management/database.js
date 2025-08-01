@@ -130,11 +130,15 @@ class database {
 }
 
 // Mutation cache invalidation logic
-const mutationKeys = ['setData'];
+const mutationKeys = ['setData','createTab','hideTabs','showTabs'];
 const getAffectedKeysFn = {
     setData: (tableId, tabName, updates) => [
         // Invalidate the actual data cache for the tab
         { namespace: 'database', key: `getData:["${tableId}","${tabName}"]` }
+    ],
+    createTab: (tableId, newTabName) => [
+        // Invalidate the tabs cache for the table
+        { namespace: 'database', key: `getTabs:["${tableId}"]` }
     ]
 };
 
