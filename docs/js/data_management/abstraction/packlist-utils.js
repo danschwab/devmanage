@@ -112,39 +112,6 @@ class packListUtils {
     static async savePackList(tabName, crates, headers = null) {
         // Minimal logging of input data
         console.log('[PackListUtils.savePackList] crates input:', crates);
-        // Remove all objects marked for deletion recursively
-        function removeMarkedForDeletion(arr) {
-            if (!Array.isArray(arr)) return arr;
-            return arr
-                .filter(obj => !(obj && obj['marked-for-deletion']))
-                .map(obj => {
-                    if (obj && typeof obj === 'object') {
-                        const newObj = { ...obj };
-                        Object.keys(newObj).forEach(key => {
-                            if (Array.isArray(newObj[key])) {
-                                newObj[key] = removeMarkedForDeletion(newObj[key]);
-                            }
-                        });
-                        // Remove the marker property
-                        delete newObj['marked-for-deletion'];
-                        return newObj;
-                    }
-                    return obj;
-                });
-        }
-        // Remove marked-for-deletion from crates and nested items
-        const cleanCrates = removeMarkedForDeletion(crates);
-        // If headers not provided, infer from first crate
-        if (!headers && Array.isArray(cleanCrates) && cleanCrates.length > 0) {
-            const firstCrate = cleanCrates[0];
-            headers = {
-                main: Object.keys(firstCrate).filter(k => k !== 'Items'),
-                items: (Array.isArray(firstCrate.Items) && firstCrate.Items.length > 0)
-                    ? Object.keys(firstCrate.Items[0])
-                    : []
-            };
-        }
-        if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
         // Read the original sheet data to get metadata and header row
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
@@ -152,6 +119,39 @@ class packListUtils {
         const metadataRows = originalSheetData.slice(0, 2);
         // Use the original header row (row 2)
         const headerRow = originalSheetData[2] || [];
+
+        // Determine headers from original header row
+        const itemColumnsStart = headerRow.findIndex(h => h === 'Pack');
+        const mainHeaders = headerRow.slice(0, itemColumnsStart);
+        const itemHeaders = headerRow.slice(itemColumnsStart);
+
+        // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
+        const cleanCrates = Array.isArray(crates) ? crates.map(crate => {
+            const cleanCrate = {};
+            mainHeaders.forEach(h => {
+                cleanCrate[h] = crate[h] !== undefined ? crate[h] : '';
+            });
+            cleanCrate.Items = Array.isArray(crate.Items)
+                ? crate.Items.map(itemObj => {
+                    const cleanItem = {};
+                    itemHeaders.forEach(h => {
+                        cleanItem[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                    });
+                    return cleanItem;
+                })
+                : [];
+            return cleanCrate;
+        }) : [];
+
+        // If headers not provided, use those from original header row
+        if (!headers) {
+            headers = {
+                main: mainHeaders,
+                items: itemHeaders
+            };
+        }
+        if (!headers) throw new Error('Cannot determine headers for saving packlist');
+
         const sheetData = [...metadataRows, headerRow];
         // Row 4+: crate/item data
         cleanCrates.forEach(crate => {
