@@ -63,23 +63,35 @@ export class GoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
         const range = `${tabName}`;
-        const response = await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range,
-            })
-        );
-        const rawData = response.result.values;
-        if (!rawData || rawData.length < 2) return [];
+        let response;
+        try {
+            response = await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range,
+                })
+            );
+        } catch (err) {
+            // If the tab is empty or doesn't exist, return empty array
+            console.warn('GoogleSheetsService.getSheetData: error fetching data', err);
+            return [];
+        }
+        const rawData = response.result && Array.isArray(response.result.values) ? response.result.values : [];
+        if (!rawData || rawData.length === 0) return [];
+        // Defensive: ensure first row is an array of headers
+        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
+        if (headers.length === 0 || rawData.length < 2) return [];
         if (mapping) {
             return GoogleSheetsService.transformSheetData(rawData, mapping);
         }
-        const headers = rawData[0];
+        // Defensive: ensure all rows are arrays and normalize length
         return rawData.slice(1).map(row => {
             const obj = {};
-            headers.forEach((h, i) => obj[h] = row[i]);
+            headers.forEach((h, i) => {
+                obj[h] = (Array.isArray(row) && row[i] !== undefined) ? String(row[i]) : '';
+            });
             return obj;
-        });
+        }).filter(obj => Object.values(obj).some(val => val !== ''));
     }
 
     /**
@@ -157,17 +169,26 @@ export class GoogleSheetsService {
      */
     static transformSheetData(rawData, mapping) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
-        const headers = rawData[0];
+        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
+        if (headers.length === 0) {
+            console.error('GoogleSheetsService.transformSheetData: headers is not an array or empty', headers, rawData);
+            return [];
+        }
         const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
-            const idx = headers.findIndex(h => h.trim() === headerName);
+            const idx = headers.findIndex(h => typeof h === 'string' && h.trim() === headerName);
+            if (idx === -1) {
+                console.warn(`GoogleSheetsService.transformSheetData: header '${headerName}' not found in sheet headers`, headers);
+            }
             if (idx !== -1) headerIdxMap[key] = idx;
         });
         return rows.map(row => {
             const obj = {};
             Object.keys(mapping).forEach(key => {
-                obj[key] = row[headerIdxMap[key]] ?? '';
+                obj[key] = (Array.isArray(row) && headerIdxMap[key] !== undefined && row[headerIdxMap[key]] !== undefined)
+                    ? String(row[headerIdxMap[key]])
+                    : '';
             });
             return obj;
         }).filter(obj => Object.values(obj).some(val => val !== ''));
