@@ -25,6 +25,7 @@ export { InventoryTableComponent } from './components/content/InventoryTable.js'
 export { PacklistContent } from './components/content/PacklistContent.js';
 export { PacklistTable } from './components/content/PacklistTable.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
-export { InterfacesContent } from './components/content/InterfacesContent.js';
+export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
+export { ScheduleContent } from './components/content/ScheduleContent.js';
 
 

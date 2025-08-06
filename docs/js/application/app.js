@@ -8,7 +8,7 @@ import { html } from './index.js';
 import { 
     PacklistContent, 
     InventoryContent, 
-    InterfacesContent 
+    ScheduleContent 
 } from './index.js';
 import { DashboardToggleComponent, DashboardSettings, hamburgerMenuRegistry } from './index.js';
 import { Requests } from './index.js';
@@ -25,7 +25,7 @@ const App = {
         'dashboard-settings': DashboardSettings,
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
-        'interfaces-content': InterfacesContent,
+        'schedule-content': ScheduleContent,
     },
     provide() {
         return {
@@ -433,10 +433,10 @@ const App = {
                         >
                         </packlist-content>
                         
-                        <!-- Interfaces Content -->
-                        <interfaces-content 
-                            v-else-if="container.containerType === 'interfaces'">
-                        </interfaces-content>
+                        <!-- Schedule Content -->
+                        <schedule-content 
+                            v-else-if="container.containerType === 'schedule'">
+                        </schedule-content>
                         
                         <!-- Default Content -->
                         <div v-else class="default-container">

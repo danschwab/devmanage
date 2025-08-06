@@ -91,7 +91,7 @@ export const PrimaryNavComponent = {
  */
 export const NavigationConfig = {
     // Primary navigation items (just IDs)
-    navigationItems: ['dashboard', 'packlist', 'inventory', 'interfaces'],
+    navigationItems: ['dashboard', 'packlist', 'inventory', 'schedule'],
 
     // Dynamic list of dashboard containers (now path-based)
     allDashboardContainers: [
@@ -146,13 +146,13 @@ export const NavigationConfig = {
         const segments = path.split('/').filter(segment => segment.length > 0);
         const names = {
             'dashboard': 'Dashboard',
-            'dashboard-settings': 'Dashboard', // This ensures the card is titled "Dashboard"
+            'dashboard-settings': 'Dashboard',
             'inventory': 'Inventory',
             'categories': 'Categories',
             'search': 'Search',
             'reports': 'Reports',
             'packlist': 'Packlist',
-            'interfaces': 'Interfaces',
+            'schedule': 'Schedule',
             'furniture': 'Furniture',
             'electronics': 'Electronics',
             'signage': 'Signage'
