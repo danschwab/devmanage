@@ -145,7 +145,6 @@ footer a:visited {
 }
 p {
     margin: 0;
-    color: var(--color-text);
 }
 h1, h2, h3, h4, h5, h6 {
     margin: 0;
@@ -216,16 +215,23 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: var(--padding-md);
+    padding: var(--padding-sm);
+    margin-top: var(--padding-sm);
+    background-color: var(--color-gray-bg);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border: 1px solid var(--color-border);
+    border-bottom: none;
 } 
 
 .content-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: var(--padding-md);
     padding: var(--padding-sm);
     background-color: var(--color-gray-bg);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border: 1px solid var(--color-border);
+    border-top: none;
 }
 
 
@@ -840,6 +846,14 @@ td.spacer-cell, th.spacer-cell {
     min-width: 20px;
     border: none;
     background-color: transparent;
+}
+.content-header + .table-wrapper > table > tfoot > tr > td.spacer-cell {
+    border: 1px solid var(--color-border);
+}
+.content-header + .table-wrapper > table > thead > tr > th.spacer-cell {
+    border-left: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-gray-bg);
+    background-color: var(--color-gray-bg);
 }
 
 .row-drag-handle::before {

@@ -551,17 +551,17 @@ export const TableComponent = {
                 
                 <!-- Error State -->
                 <div v-if="error">
-                    <span class="table-cell-card red">Error: {{ error }}</span>
+                    <span class="content-footer red">Error: {{ error }}</span>
                 </div>
                 
                 <!-- Loading State -->
-                <div v-if="isLoading" class="loading-message">
+                <div v-if="isLoading" class="content-footer loading-message">
                     <img src="images/loading.gif" alt="..."/>
                     <p>{{ loadingMessage }}</p>
                 </div>
                 
                 <!-- Empty State -->
-                <div v-else-if="!data || data.length === 0" class="empty-message">
+                <div v-else-if="!data || data.length === 0" class="content-footer red">
                     <p>{{ emptyMessage }}</p>
                 </div>
                 
