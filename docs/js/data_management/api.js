@@ -210,5 +210,14 @@ export const Requests = {
     savePackList: async (crates, projectIdentifier) => {
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
         return await PackListUtils.savePackList(projectIdentifier, crates);
+    },
+
+    /**
+     * Get production schedule data for the table (all, or filtered by overlap params)
+     * @param {Object|string} [parameters] - Optional: date range or show identifier
+     * @returns {Promise<Array<Object>>}
+     */
+    getProductionScheduleData: async (parameters = null) => {
+        return await ProductionUtils.getOverlappingShows(parameters);
     }
 };
