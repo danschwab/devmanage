@@ -6,6 +6,12 @@
     opacity: 0;
 }
 
+/* other transitions */
+body, div, span, p, h1, h2, h3, h4, h5, h6 {
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out !important;
+}
+
+
 
 /* Main interface defaults */
 

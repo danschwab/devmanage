@@ -218,10 +218,12 @@ h1, h2, h3, h4, h5, h6 {
     padding: var(--padding-sm);
     margin-top: var(--padding-sm);
     background-color: var(--color-gray-bg);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border: 1px solid var(--color-border);
     border-bottom: none;
 } 
+.content-header:first-of-type {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
 
 .content-footer {
     display: flex;
@@ -229,9 +231,11 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     padding: var(--padding-sm);
     background-color: var(--color-gray-bg);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     border: 1px solid var(--color-border);
     border-top: none;
+}
+.content-footer:last-of-type {
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 
