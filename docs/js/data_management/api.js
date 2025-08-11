@@ -181,24 +181,29 @@ export const Requests = {
     },
     
     /**
-     * Get mapped inventory tab data (with default mapping).
+     * Get mapped inventory tab data (with default mapping and optional filters).
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
+     * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<Array<Object>>}
      */
-    getInventoryTabData: async (tabOrItemName, mapping) => {
-        return await InventoryUtils.getInventoryTabData(tabOrItemName, mapping);
+    getInventoryTabData: async (tabOrItemName, mapping, filters) => {
+        console.log('[API] getInventoryTabData called with:', { tabOrItemName, mapping, filters });
+        const data = await InventoryUtils.getInventoryTabData(tabOrItemName, mapping, filters);
+        console.log('[API] getInventoryTabData returned data:', data);
+        return data;
     },
     
     /**
-     * Save mapped inventory tab data (with default mapping).
+     * Save mapped inventory tab data (with default mapping and optional filters).
      * @param {Array<Object>} mappedData - Array of mapped inventory objects
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
+     * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<boolean>}
      */
-    saveInventoryTabData: async (mappedData, tabOrItemName, mapping) => {
-        return await InventoryUtils.saveInventoryTabData(tabOrItemName, mappedData, mapping);
+    saveInventoryTabData: async (mappedData, tabOrItemName, mapping, filters) => {
+        return await InventoryUtils.saveInventoryTabData(tabOrItemName, mappedData, mapping, filters);
     },
     
     /**
@@ -213,11 +218,12 @@ export const Requests = {
     },
 
     /**
-     * Get production schedule data for the table (all, or filtered by overlap params)
+     * Get production schedule data for the table (all, or filtered by overlap params and optional filters).
      * @param {Object|string} [parameters] - Optional: date range or show identifier
+     * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<Array<Object>>}
      */
-    getProductionScheduleData: async (parameters = null) => {
-        return await ProductionUtils.getOverlappingShows(parameters);
+    getProductionScheduleData: async (parameters = null, filters = null) => {
+        return await ProductionUtils.getOverlappingShows(parameters, filters);
     }
 };

@@ -1,4 +1,5 @@
 import { Database, wrapMethods } from '../index.js';
+import { searchFilter } from '../utils/searchFilter.js';
 
 /**
  * Utility functions for inventory operations
@@ -86,7 +87,10 @@ class inventoryUtils {
         return results;
     }
 
-    static async getInventoryTabData(tabOrItemName, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING) {
+    static async getInventoryTabData(tabOrItemName, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING, filters = null) {
+        console.log('[InventoryUtils] getInventoryTabData called with:', { tabOrItemName, mapping, filters });
+        console.log('[InventoryUtils] DEFAULT_INVENTORY_MAPPING:', inventoryUtils.DEFAULT_INVENTORY_MAPPING);
+
         // Get all tabs on the inventory sheet
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
@@ -99,11 +103,21 @@ class inventoryUtils {
             resolvedTabName = foundTab;
         }
 
-        // Get tab data as JS objects
-        return await Database.getData('INVENTORY', resolvedTabName, mapping);
+        console.log('[InventoryUtils] About to call Database.getData with mapping:', mapping);
+        // Get tab data as JS objects (mapping transforms 2D array to objects)
+        let tabData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+        console.log('[InventoryUtils] Transformed tab data (as objects):', tabData);
+
+        // Apply search filter if filters are provided (after transformation to objects)
+        if (filters) {
+            tabData = searchFilter(tabData, filters);
+            console.log('[InventoryUtils] Filtered tab data:', tabData);
+        }
+
+        return tabData;
     }
 
-    static async saveInventoryTabData(tabOrItemName, mappedData, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING) {
+    static async saveInventoryTabData(tabOrItemName, mappedData, mapping = inventoryUtils.DEFAULT_INVENTORY_MAPPING, filters = null) {
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
@@ -115,9 +129,28 @@ class inventoryUtils {
             resolvedTabName = foundTab;
         }
 
+        if (filters) {
+            // Fetch existing data from the tab
+            const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+
+            // Prepare batch updates
+            const updates = mappedData.filter(item => {
+                const existingItem = existingData.find(row => row.itemNumber === item.itemNumber);
+                return existingItem && JSON.stringify(existingItem) !== JSON.stringify(item);
+            });
+
+            // Send updates one by one
+            for (const update of updates) {
+                await Database.updateRow('INVENTORY', resolvedTabName, update, mapping);
+            }
+
+            return true;
+        }
+
         if (mappedData && typeof mappedData === 'object' && mappedData.__v_isReactive) {
             mappedData = Array.from(mappedData);
         }
+
         // Save JS objects using mapping
         return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping);
     }

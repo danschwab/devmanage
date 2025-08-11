@@ -37,13 +37,13 @@ export const InventoryTableComponent = {
             type: String,
             default: 'inventory'
         },
-        tabName: {
+        inventoryName: {
             type: String,
-            default: 'furniture'
+            default: 'Inventory'
         },
         tabTitle: {
             type: String,
-            default: 'FURNITURE'
+            default: undefined
         }
     },
     data() {
@@ -99,7 +99,7 @@ export const InventoryTableComponent = {
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle]
+            [this.tabTitle, undefined, undefined]//{ '$any': 'stacking' }] // Pass undefined to use default mapping
         );
     },
     methods: {

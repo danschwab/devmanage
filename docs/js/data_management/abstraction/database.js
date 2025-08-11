@@ -40,9 +40,14 @@ class database {
     static async getData(tableId, tabName, mapping = null) {
         // Get raw sheet data from GoogleSheetsService
         const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
+        console.log('[Database] Raw data from GoogleSheetsService:', rawData);
+        console.log('[Database] Mapping provided:', mapping);
+        
         // If mapping provided, transform to JS objects
         if (mapping) {
-            return GoogleSheetsService.transformSheetData(rawData, mapping);
+            const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping);
+            console.log('[Database] Transformed data:', transformedData);
+            return transformedData;
         }
         // If no mapping, return raw 2D array
         return rawData;
@@ -121,6 +126,41 @@ class database {
     static async setData(tableId, tabName, updates, mapping = null) {
         // Delegate conversion to GoogleSheetsService
         return await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
+    }
+    
+    /**
+     * Updates a single row in a table/tab using a unique identifier.
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Tab name or logical identifier
+     * @param {Object} update - JS object representing the row to update
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<boolean>} - Success status
+     */
+    static async updateRow(tableId, tabName, update, mapping = null) {
+        // Fetch existing data from the tab
+        const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
+
+        // Transform data if mapping is provided
+        const transformedData = mapping
+            ? GoogleSheetsService.transformSheetData(existingData, mapping)
+            : existingData;
+
+        // Find the row to update using the unique identifier
+        const rowIndex = transformedData.findIndex(row => row[mapping.itemNumber] === update[mapping.itemNumber]);
+        if (rowIndex === -1) {
+            throw new Error(`Row with identifier ${update[mapping.itemNumber]} not found in tab ${tabName}`);
+        }
+
+        // Update the row in the raw data
+        const updatedRow = mapping
+            ? GoogleSheetsService.transformObjectToRow(update, mapping)
+            : Object.values(update);
+        existingData[rowIndex] = updatedRow;
+
+        // Save the updated data back to the sheet
+        await GoogleSheetsService.setSheetData(tableId, tabName, existingData);
+
+        return true;
     }
 }
 

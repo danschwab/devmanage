@@ -550,8 +550,8 @@ export const TableComponent = {
                 </div>
                 
                 <!-- Error State -->
-                <div v-if="error">
-                    <span class="content-footer red">Error: {{ error }}</span>
+                <div v-if="error" class="content-footer red">
+                    <span>Error: {{ error }}</span>
                 </div>
                 
                 <!-- Loading State -->

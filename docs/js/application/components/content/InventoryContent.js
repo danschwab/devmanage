@@ -221,8 +221,6 @@ export const InventoryContent = {
                     <h4>Recent Inventory</h4>
                     <inventory-table
                         :container-path="containerPath"
-                        tab-name="furniture"
-                        tab-title="FURNITURE"
                     ></inventory-table>
                 </div>
             </div>
@@ -259,7 +257,7 @@ export const InventoryContent = {
                     <h4>Items in this Category</h4>
                     <inventory-table
                         :container-path="containerPath"
-                        :tab-name="currentCategoryName.toLowerCase()"
+                        :inventory-name="currentCategoryName.toLowerCase()"
                         :tab-title="currentCategoryName.toUpperCase()"
                     ></inventory-table>
                 </div>

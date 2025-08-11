@@ -1,5 +1,6 @@
 import { Database, parseDate, wrapMethods } from '../index.js';
 import { Analytics } from './analytics.js';
+import { searchFilter } from '../utils/searchFilter.js';
 
 /**
  * Utility functions for production schedule operations
@@ -10,7 +11,7 @@ class productionUtils {
      * @param {string|Object} parameters - Project identifier or date range parameters
      * @returns {Promise<string[]>} Array of overlapping project identifiers
      */
-    static async getOverlappingShows(parameters = null) {
+    static async getOverlappingShows(parameters = null, searchParams = null) {
         console.log('[production-utils] getOverlappingShows called with:', parameters);
         const tabName = "ProductionSchedule";
         const mapping = {
@@ -23,8 +24,13 @@ class productionUtils {
             'S. End': 'S. End',
             Ship: 'Ship'
         };
-        const data = await Database.getData('PROD_SCHED', tabName, mapping);
+        let data = await Database.getData('PROD_SCHED', tabName, mapping);
         console.log('[production-utils] Loaded schedule data:', data);
+
+        if (searchParams) {
+            data = searchFilter(data, searchParams);
+        }
+
         if (!parameters) {
             console.log('[production-utils] No parameters provided, returning all data');
             return data;
