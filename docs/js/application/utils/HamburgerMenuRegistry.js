@@ -1,4 +1,4 @@
-import { html, DashboardToggleComponent } from '../../index.js';
+import { html, DashboardToggleComponent } from '../index.js';
 
 const { reactive } = Vue;
 

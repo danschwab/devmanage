@@ -7,18 +7,25 @@ export { Auth, authState, useAuth } from './utils/auth.js';
 export { getReactiveStore } from './utils/reactiveStores.js';
 
 // Navigation components
-export { BreadcrumbComponent } from './components/navigation/breadcrumbComponent.js';
-export { PrimaryNavComponent, NavigationConfig } from './components/navigation/navigationManagement.js';
+export { 
+    BreadcrumbComponent, 
+    PrimaryNavComponent, 
+    NavigationConfig, 
+    NavigationRegistry, 
+    NavigationInit, 
+    NavigationUtils,
+    autoInitializeNavigation 
+} from './utils/navigationSystem.js';
 
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
 export { TableComponent } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
+export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent, DashboardSettings } from './components/interface/DashboardManagement.js';
 
-// Dashboard components export
-export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent, DashboardSettings } from './components/dashboard/DashboardManagement.js';
-export { hamburgerMenuRegistry } from './components/dashboard/HamburgerMenuRegistry.js';
+// hamburger menus
+export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
 
 // Content components export
 export { InventoryTableComponent } from './components/content/InventoryTable.js';

@@ -418,10 +418,13 @@ input[type="text"] {
     pointer-events: auto;
     /* Ensure transitions work properly */
     opacity: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .modal {
     background-color: var(--background-color);
-    margin: 15% auto 0 auto; /* 15% from the top and centered */
+    /*margin: 15% auto 0 auto; /* 15% from the top and centered */
     border: 1px solid var(--color-border);
     width: 80%; /* Could be more or less, depending on screen size */
     min-width: 250px;
@@ -475,7 +478,9 @@ input[type="text"] {
     color: var(--color-text-inverted);
 }
 .modal-content {
-    margin: 20px;
+    margin: var(--padding-md);
+    max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
+    overflow: auto;
 }
 .modal-content button {
     margin: 0;

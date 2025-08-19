@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationConfig, Requests } from '../../index.js';
+import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationConfig, NavigationRegistry, Requests } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -156,6 +156,10 @@ export const InventoryContent = {
         modalManager() {
             return modalManager;
         },
+        // Get quick actions from NavigationRegistry
+        quickActions() {
+            return NavigationRegistry.getQuickActions('inventory');
+        },
         categoryList() {
             // Return loaded categories with formatted name
             return this.categories.map(cat => ({
@@ -213,9 +217,12 @@ export const InventoryContent = {
                 <div style="margin-top: 1.5rem;">
                     <h4>Quick Actions</h4>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-                        <button @click="navigateToPath('inventory/categories')">Browse by Category</button>
-                        <button @click="navigateToPath('inventory/search')">Advanced Search</button>
-                        <button @click="navigateToPath('inventory/reports')">View Reports</button>
+                        <button 
+                            v-for="action in quickActions" 
+                            :key="action.id"
+                            @click="navigateToPath(action.path)">
+                            {{ action.label }}
+                        </button>
                     </div>
                 </div>
                 
@@ -237,7 +244,7 @@ export const InventoryContent = {
                         v-for="cat in categoryList"
                         :key="cat.id"
                         class="category-card"
-                        @click="navigateToPath('inventory/categories/' + cat.name)"
+                        @click="navigateToPath('inventory/categories/' + (cat.slug || cat.name.toLowerCase()))"
                     >
                         {{ cat.name }}
                     </button>

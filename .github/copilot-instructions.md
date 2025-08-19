@@ -22,6 +22,8 @@ The codebase is organized under `docs/`, with subfolders for CSS, images, JS, an
 - **data_management/**: The API acts as an interface between the application and data manipulation functions. It manages caching and cache invalidation automatically via wrapper methods. All data access and mutation should go through the API, not directly to Google Sheets or the database abstraction.
 - **google_sheets_services/**: This layer contains all direct interaction with Google Sheets, including authentication, queries, and Google-specific logic. All persistent data flows through this layer, and it should not be accessed directly by the UI or application logic.
 
+The VSCode extension LiveServer is running a local server at http://127.0.0.1:5500/docs/#
+
 ## Architecture & Data Flow
 
 - **UI Layer**: Vue components manage their own reactive state and lifecycle. All persistent data operations are performed via the API.

@@ -3,7 +3,7 @@ import { InventoryTableComponent } from './index.js';
 import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
 import { Auth, authState } from './index.js';
-import { NavigationConfig } from './index.js';
+import { NavigationConfig, NavigationRegistry, NavigationInit } from './index.js';
 import { html } from './index.js';
 import { 
     PacklistContent, 
@@ -36,10 +36,7 @@ const App = {
     data() {
         return {
             isMenuOpen: false,
-            navigationItems: NavigationConfig.navigationItems.map(itemId => ({
-                title: itemId.charAt(0).toUpperCase() + itemId.slice(1),
-                file: itemId
-            })),
+            navigationItems: NavigationRegistry.primaryNavigation,
             currentPage: 'dashboard',
             containers: [],
             dashboardContainers: [...NavigationConfig.allDashboardContainers],
@@ -68,12 +65,24 @@ const App = {
     async mounted() {
         // Initialize authentication on app mount
         await Auth.initialize();
-
+    
         // Show dashboard loading indicator before loading state
         this.dashboardLoading = true;
-
-        // Initialize dashboard reactive store if authenticated
+        
         if (this.isAuthenticated) {
+            // Initialize navigation system
+            try {
+                await NavigationInit.initialize({
+                    apiLoader: {
+                        // You can add API loaders here in the future
+                        // getInventoryCategories: () => Requests.getInventoryCategories()
+                    }
+                });
+            } catch (error) {
+                console.warn('Navigation initialization had issues:', error);
+            }
+
+            // Initialize dashboard reactive store if authenticated
             await this.initializeDashboardStore();
         }
 
