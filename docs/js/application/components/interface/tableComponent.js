@@ -31,6 +31,10 @@ export const TableComponent = {
             type: Boolean,
             default: true
         },
+        showSearch: {
+            type: Boolean,
+            default: false
+        },
         emptyMessage: {
             type: String,
             default: 'No data available'
@@ -72,7 +76,7 @@ export const TableComponent = {
             default: () => []
         }
     },
-    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu'],
+    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
     data() {
         return {
             dragIndex: null,
@@ -83,7 +87,8 @@ export const TableComponent = {
             dirtyCells: {},
             allowSaveEvent: false,
             rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
-            nestedTableDirtyCells: {} // Track dirty state for nested tables by [row][col]
+            nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
+            searchValue: '' // Track search input value
         };
     },
     computed: {
@@ -99,10 +104,25 @@ export const TableComponent = {
             return new Set([...(this.hideColumns || []), 'marked-for-deletion']);
         },
         visibleRows() {
-            // Only show rows not marked for deletion
-            return this.data
+            // Filter rows based on search value and deletion status
+            let filteredData = this.data
                 .map((row, idx) => ({ row, idx }))
                 .filter(({ row }) => !row['marked-for-deletion']);
+
+            // Apply search filter if searchValue is provided
+            if (this.searchValue && this.searchValue.trim()) {
+                const searchTerm = this.searchValue.toLowerCase().trim();
+                filteredData = filteredData.filter(({ row }) => {
+                    // Only search visible columns (exclude hidden columns)
+                    const visibleColumns = this.columns.filter(column => !this.hideSet.has(column.key));
+                    return visibleColumns.some(column => {
+                        const value = row[column.key];
+                        return String(value).toLowerCase().includes(searchTerm);
+                    });
+                });
+            }
+
+            return filteredData;
         },
         deletedRows() {
             // Show rows marked for deletion in tfoot
@@ -133,7 +153,12 @@ export const TableComponent = {
                 this.updateAllEditableCells();
                 this.compareAllCellsDirty();
             });
-        }
+        },
+        visibleRows() {
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+            });
+        },
     },
     mounted() {
         console.log('[TableComponent] originalData:', this.originalData);
@@ -166,6 +191,10 @@ export const TableComponent = {
                     case 'currency':
                         return `$${parseFloat(value).toFixed(2)}`;
                     case 'date':
+                        // If value is a string and does not contain a year (4 consecutive digits), skip formatting
+                        if (typeof value === 'string' && !/\d{4}/.test(value)) {
+                            return value;
+                        }
                         return new Date(value).toLocaleDateString();
                     case 'number':
                         return parseFloat(value).toLocaleString();
@@ -178,9 +207,55 @@ export const TableComponent = {
             
             return value;
         },
+
+        highlightSearchText(value, column) {
+            // First format the value
+            const formattedValue = this.formatCellValue(value, column);
+            
+            // If no search value or empty formatted value, return as-is
+            if (!this.searchValue || !this.searchValue.trim() || !formattedValue) {
+                return formattedValue;
+            }
+            
+            // Escape HTML in the formatted value to prevent XSS
+            const escapedValue = String(formattedValue)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+            
+            // Escape the search term for regex
+            const searchTerm = this.searchValue.trim();
+            const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Create case-insensitive regex to find matches
+            const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+            
+            // Replace matches with highlighted version
+            return escapedValue.replace(regex, '<span style="background-color: var(--color-yellow-bg-transparent);">$1</span>');
+        },
+
+        // Check if a value contains the search text (for CSS-based highlighting in inputs)
+        hasSearchMatch(value, column) {
+            if (!this.searchValue || !this.searchValue.trim()) {
+                return false;
+            }
+            
+            const formattedValue = this.formatCellValue(value, column);
+            if (!formattedValue) return false;
+            
+            const searchTerm = this.searchValue.trim().toLowerCase();
+            return String(formattedValue).toLowerCase().includes(searchTerm);
+        },
         
         getCellClass(value, column, rowIndex, colIndex) {
             let baseClass = '';
+            // Centralized autoColor logic for number columns
+            if (column.autoColor && column.format === 'number') {
+                if (value == 0) baseClass = 'red';
+                else if (value < 5) baseClass = 'yellow';
+            }
             // Support function-based cell classes
             if (typeof column.cellClass === 'function') {
                 baseClass = column.cellClass(value);
@@ -520,9 +595,16 @@ export const TableComponent = {
     template: html `
         <div class="dynamic-table">
             <div :class="dragId ? 'drag-id-' + dragId : ''">
-                <div class="content-header" v-if="showHeader && (title || showRefresh)">
+                <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
                     <h3 v-if="title">{{ title }}</h3>
-                    <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent" :class="{'button-bar': showSaveButton || showRefresh}">
+                    <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
+                        <input
+                            v-if="showSearch"
+                            type="text"
+                            v-model="searchValue"
+                            placeholder="Find..."
+                            class="search-input"
+                        />
                         <button
                             v-if="showSaveButton"
                             @click="handleSave"
@@ -604,13 +686,21 @@ export const TableComponent = {
                                     :key="column.key"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
+                                    <input
+                                        v-if="column.editable && column.format === 'number'"    
+                                        type="number"
+                                        :value="row[column.key]"
+                                        @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                    />
                                     <div
-                                        v-if="column.editable"
+                                        v-else-if="column.editable"
                                         contenteditable="true"
                                         :data-row-index="idx"
                                         :data-col-index="colIndex"
                                         @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
                                         class="table-edit-textarea"
+                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                         :ref="'editable_' + idx + '_' + colIndex"
                                     ></div>
                                     <slot 
@@ -622,7 +712,7 @@ export const TableComponent = {
                                         :cellColIndex="colIndex"
                                         :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
                                     >
-                                        {{ formatCellValue(row[column.key], column) }}
+                                        <span v-html="highlightSearchText(row[column.key], column)"></span>
                                     </slot>
                                 </td>
                             </tr>
@@ -645,13 +735,22 @@ export const TableComponent = {
                                     :key="column.key"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
+
+                                    <input
+                                        v-if="column.editable && column.format === 'number'"    
+                                        type="number"
+                                        :value="row[column.key]"
+                                        @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                    />
                                     <div
-                                        v-if="column.editable"
+                                        v-else-if="column.editable"
                                         contenteditable="true"
                                         :data-row-index="idx"
                                         :data-col-index="colIndex"
                                         @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
                                         class="table-edit-textarea"
+                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                         :ref="'editable_' + idx + '_' + colIndex"
                                     ></div>
                                     <slot v-else :row="row" :rowIndex="idx" :column="column">
@@ -677,7 +776,8 @@ export const TableComponent = {
                     <p>There are unsaved changes in this table.</p>
                 </div>
                 <div v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
-                    <p>Showing {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                    <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                    <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                 </div>
             </div>
         </div>

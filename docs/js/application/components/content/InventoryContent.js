@@ -1,4 +1,5 @@
 import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationConfig, Requests } from '../../index.js';
+import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
@@ -122,7 +123,8 @@ export const InventoryMenuComponent = {
 
 export const InventoryContent = {
     components: {
-        'inventory-table': InventoryTableComponent
+        'inventory-table': InventoryTableComponent,
+        'inventory-overview-table': InventoryOverviewTableComponent
     },
     props: {
         containerPath: {
@@ -218,10 +220,10 @@ export const InventoryContent = {
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
-                    <h4>Recent Inventory</h4>
-                    <inventory-table
+                    <inventory-overview-table
                         :container-path="containerPath"
-                    ></inventory-table>
+                        :navigate-to-path="navigateToPath"
+                    ></inventory-overview-table>
                 </div>
             </div>
             
@@ -244,20 +246,10 @@ export const InventoryContent = {
             
             <!-- Category View -->
             <div v-else-if="currentView === 'categories' && currentCategory">
-                <h3>{{ currentCategoryName }} Inventory</h3>
-                <p>Items in the {{ currentCategoryName.toLowerCase() }} category.</p>
-                
-                <div style="margin: 1rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button @click="modalManager.showAlert('Filter functionality coming soon!', 'Info')">Filter Items</button>
-                    <button @click="modalManager.showAlert('Sort functionality coming soon!', 'Info')">Sort Options</button>
-                    <button @click="modalManager.showAlert('Export functionality coming soon!', 'Info')">Export List</button>
-                </div>
-                
                 <div style="margin-top: 1.5rem;">
-                    <h4>Items in this Category</h4>
                     <inventory-table
                         :container-path="containerPath"
-                        :inventory-name="currentCategoryName.toLowerCase()"
+                        :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                         :tab-title="currentCategoryName.toUpperCase()"
                     ></inventory-table>
                 </div>
@@ -299,6 +291,8 @@ export const InventoryContent = {
                     <h4>Recent Reports</h4>
                     <inventory-table
                         :container-path="containerPath"
+                        :tab-title="'FURNITURE'"
+                        :edit-mode="false"
                     ></inventory-table>
                 </div>
             </div>

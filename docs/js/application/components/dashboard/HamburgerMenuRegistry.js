@@ -41,7 +41,7 @@ const DashboardManagementComponent = {
             });
         }
     },
-    template: `
+    template: html`
         <div style="text-align: left;">
             <h4>Dashboard Management</h4>
             <p><strong>Available Paths:</strong></p>

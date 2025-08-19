@@ -11,7 +11,7 @@ import {
     ScheduleContent 
 } from './index.js';
 import { DashboardToggleComponent, DashboardSettings, hamburgerMenuRegistry } from './index.js';
-import { Requests } from './index.js';
+import { Requests, getReactiveStore } from './index.js';
 
 const { createApp } = Vue;
 
@@ -46,7 +46,8 @@ const App = {
             modals: [],
             tabSystems: {},
             dashboardLoading: false, // <-- add dashboard loading flag
-            reactiveTableData: {} // <-- add central reactive table data store
+            reactiveTableData: {}, // <-- add central reactive table data store
+            dashboardStore: null // <-- add reactive store for dashboard state
         };
     },
     computed: {
@@ -71,9 +72,9 @@ const App = {
         // Show dashboard loading indicator before loading state
         this.dashboardLoading = true;
 
-        // Load dashboard state from user data if authenticated
+        // Initialize dashboard reactive store if authenticated
         if (this.isAuthenticated) {
-            await this.loadDashboardState();
+            await this.initializeDashboardStore();
         }
 
         // Hide dashboard loading indicator after state is loaded
@@ -88,7 +89,7 @@ const App = {
         // Watch for auth state changes
         this.$watch('isAuthenticated', async (newVal) => {
             if (newVal) {
-                await this.loadDashboardState();
+                await this.initializeDashboardStore();
             }
             this.updateContainersForPage(this.currentPage);
         });
@@ -186,41 +187,56 @@ const App = {
         },
 
         /**
-         * Load dashboard state from user data
+         * Initialize dashboard reactive store
          */
-        async loadDashboardState() {
-            if (!this.isAuthenticated || !this.currentUser?.email) {
-                return;
-            }
-            this.dashboardLoading = true; // <-- set loading before async
-            try {
-                const savedDashboardData = await Requests.getUserData(this.currentUser.email, 'dashboard_containers');
-                if (savedDashboardData && savedDashboardData.length > 0) {
-                    const savedContainers = JSON.parse(savedDashboardData[0] || '[]');
-                    NavigationConfig.allDashboardContainers = savedContainers;
-                    this.dashboardContainers = [...savedContainers];
-                    console.log('Dashboard state loaded:', savedContainers);
-                } else {
-                    console.log('No saved dashboard state found, using defaults');
-                }
-            } catch (error) {
-                console.error('Failed to load dashboard state:', error);
-            }
-            this.dashboardLoading = false; // <-- unset loading after async
-        },
-
-        /**
-         * Save current dashboard state to user data
-         */
-        async saveDashboardState() {
+        async initializeDashboardStore() {
             if (!this.isAuthenticated || !this.currentUser?.email) {
                 return;
             }
             
+            this.dashboardLoading = true;
             try {
-                const dashboardData = JSON.stringify(this.dashboardContainers);
-                await Requests.storeUserData([dashboardData], this.currentUser.email, 'dashboard_containers');
-                console.log('Dashboard state saved successfully');
+                // Create reactive store for dashboard state
+                this.dashboardStore = getReactiveStore(
+                    Requests.getUserData,
+                    Requests.storeUserData,
+                    [this.currentUser.email, 'dashboard_containers']
+                );
+
+                // Wait for initial load
+                await this.dashboardStore.load('Loading dashboard...');
+
+                // Use store data directly as dashboard containers
+                if (this.dashboardStore.data && this.dashboardStore.data.length > 0) {
+                    NavigationConfig.allDashboardContainers = this.dashboardStore.data;
+                    this.dashboardContainers = this.dashboardStore.data;
+                    console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
+                } else {
+                    // Initialize with defaults and save to store
+                    NavigationConfig.allDashboardContainers = [...NavigationConfig.allDashboardContainers];
+                    this.dashboardContainers = [...NavigationConfig.allDashboardContainers];
+                    this.dashboardStore.data = this.dashboardContainers;
+                    console.log('No saved dashboard state found, using and saving defaults');
+                }
+            } catch (error) {
+                console.error('Failed to initialize dashboard store:', error);
+            }
+            this.dashboardLoading = false;
+        },
+
+        /**
+         * Save current dashboard state using reactive store
+         */
+        async saveDashboardState() {
+            if (!this.dashboardStore || !this.isAuthenticated || !this.currentUser?.email) {
+                return;
+            }
+            
+            try {
+                // Update store data directly with current dashboard containers
+                this.dashboardStore.data = [...this.dashboardContainers];
+                await this.dashboardStore.save('Saving dashboard...');
+                console.log('Dashboard state saved successfully via reactive store');
             } catch (error) {
                 console.warn('Failed to save dashboard state (continuing without saving):', error.message);
                 // Show a non-intrusive notification to the user

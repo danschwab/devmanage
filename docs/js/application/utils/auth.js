@@ -80,11 +80,18 @@ export class Auth {
     static async logout() {
         authState.isLoading = true;
         authState.error = null;
-        
+
         try {
             await GoogleSheetsAuth.logout();
+            // Flush everything in the reactive store
             authState.isAuthenticated = false;
             authState.user = null;
+            authState.error = null;
+            authState.isInitialized = false;
+            // Remove any other keys if added in the future
+            Object.keys(authState).forEach(key => {
+                if (key !== 'isLoading') authState[key] = null;
+            });
         } catch (error) {
             console.error('Logout failed:', error);
             authState.error = error.message;

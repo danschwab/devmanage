@@ -49,16 +49,22 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.reset();
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
+                // Initialize with empty array to allow dynamic property addition
+                this.setOriginalData([]);
+                this.setData([]);
                 return;
             }
             this.setLoading(true, message);
             this.setError(null);
             try {
                 const result = await apiCall(...apiArgs);
-                this.setOriginalData(result);
-                this.setData(result);
+                // Handle null, undefined, or empty results by initializing empty arrays
+                const dataToSet = (result && Array.isArray(result)) ? result : [];
+                this.setOriginalData(dataToSet);
+                this.setData(dataToSet);
             } catch (err) {
                 this.setError(err.message || 'Failed to load data');
+                // Initialize with empty arrays to allow dynamic property addition
                 this.setOriginalData([]);
                 this.setData([]);
             } finally {
@@ -96,8 +102,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
             try {
                 const result = await apiCall(...apiArgs);
-                this.setOriginalData(result);
-                console.log('[ReactiveStore] reloadOriginalData: Loaded', result);
+                // Handle null, undefined, or empty results by initializing empty arrays
+                const dataToSet = (result && Array.isArray(result)) ? result : [];
+                this.setOriginalData(dataToSet);
+                console.log('[ReactiveStore] reloadOriginalData: Loaded', dataToSet);
                 return this.originalData;
             } catch (err) {
                 this.setOriginalData([]);
@@ -209,16 +217,29 @@ const reactiveStoreRegistry = Vue.reactive({});
  * @param {Function} apiCall - The API function to use for loading data
  * @param {Function} saveCall - The API function to use for saving data
  * @param {Array} apiArgs - Arguments to pass to the API function
+ * @param {boolean} autoLoad - Whether to automatically load data on first creation (default: true)
  * @returns {Object} The reactive store instance
  */
-export function getReactiveStore(apiCall, saveCall = null, apiArgs = []) {
+export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], autoLoad = true) {
     const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs);
+    
     if (!reactiveStoreRegistry[key]) {
         reactiveStoreRegistry[key] = createReactiveStore(apiCall, saveCall, apiArgs);
-        reactiveStoreRegistry[key].load('Loading data...'); // Initial load
+        
+        if (autoLoad) {
+            // Initial load with proper error handling for empty/null responses
+            reactiveStoreRegistry[key].load('Loading data...').catch(err => {
+                console.warn('[ReactiveStore] Initial load failed:', err);
+                // Store will have empty arrays initialized, allowing dynamic property addition
+            });
+        } else {
+            // Initialize with empty arrays to allow dynamic property addition
+            reactiveStoreRegistry[key].setOriginalData([]);
+            reactiveStoreRegistry[key].setData([]);
+        }
     }
-    return reactiveStoreRegistry[key];
     
+    return reactiveStoreRegistry[key];
 }
 
 // Example usage:

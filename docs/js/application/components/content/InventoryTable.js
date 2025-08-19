@@ -44,33 +44,41 @@ export const InventoryTableComponent = {
         tabTitle: {
             type: String,
             default: undefined
+        },
+        editMode: {
+            type: Boolean,
+            default: true
         }
     },
     data() {
+        // Dynamically set columns' editable property based on editMode
+        const columns = [
+            { 
+                key: 'itemNumber', 
+                label: 'ITEM#',
+                width: 120
+            },
+            { 
+                key: 'description', 
+                label: 'Description',
+                editable: this.editMode
+            },
+            { 
+                key: 'notes', 
+                label: 'Notes',
+                editable: this.editMode
+            },
+            { 
+                key: 'quantity', 
+                label: 'QTY',
+                format: 'number',
+                width: 100,
+                editable: this.editMode,
+                autoColor: true
+            }
+        ];
         return {
-            columns: [
-                { 
-                    key: 'itemNumber', 
-                    label: 'ITEM#',
-                    width: 120
-                },
-                { 
-                    key: 'description', 
-                    label: 'Description',
-                    editable: true
-                },
-                { 
-                    key: 'quantity', 
-                    label: 'QTY',
-                    format: 'number',
-                    width: 100,
-                    cellClass: (value) => {
-                        if (value === 0) return 'red';
-                        if (value < 5) return 'yellow';
-                        return 'green';
-                    }
-                }
-            ],
+            columns,
             inventoryTableStore: null
         };
     },
@@ -99,7 +107,7 @@ export const InventoryTableComponent = {
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle, undefined, undefined]//{ '$any': 'stacking' }] // Pass undefined to use default mapping
+            [this.tabTitle, undefined, undefined] // No filters needed - search is handled in UI
         );
     },
     methods: {
@@ -139,11 +147,13 @@ export const InventoryTableComponent = {
             <TableComponent
                 ref="tableComponent"
                 :data="tableData"
+                :title="inventoryName || tabTitle"
                 :originalData="originalData"
                 :columns="columns"
                 :isLoading="isLoading"
                 :error="error"
                 :showRefresh="true"
+                :showSearch="true"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
                 :hamburger-menu-component="{

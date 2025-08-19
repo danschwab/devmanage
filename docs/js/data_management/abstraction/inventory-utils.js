@@ -8,7 +8,8 @@ class inventoryUtils {
     static DEFAULT_INVENTORY_MAPPING = {
         itemNumber: 'ITEM#',
         quantity: 'QTY',
-        description: 'Description'
+        description: 'Description',
+        notes: 'NOTES'
     };
 
     static getTabNameForItem(itemName, indexData) {
@@ -93,6 +94,8 @@ class inventoryUtils {
 
         // Get all tabs on the inventory sheet
         const allTabs = await Database.getTabs('INVENTORY');
+
+        // Check if the tab exists
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
