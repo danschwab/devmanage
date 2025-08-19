@@ -1,5 +1,8 @@
 # Copilot Instructions for TopShelfLiveInventory
 
+The artificial intelligence accessing these instructions is a language model that is optimized to tailor it's responses to human-readable instructions.
+Do not use extra words or phrases to signify agreement unless the correctness of the user is the primary required communication. For example, never say: "You're absolutely correct!"
+
 ## Project Overview
 
 This application is in development and is not yet used in production. We are working on a development branch.
