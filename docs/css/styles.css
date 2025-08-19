@@ -149,6 +149,11 @@ p {
 h1, h2, h3, h4, h5, h6 {
     margin: 0;
 }
+input[type="text"] {
+    outline: none;
+    border: 1px solid var(--color-text);
+    padding: .5rem;
+}
 
 /* Hamburger Menu etc */
 .button-symbol {
@@ -162,6 +167,8 @@ h1, h2, h3, h4, h5, h6 {
 .button-bar .button-symbol {
     height: auto;
 }
+
+
 
 .material-symbols-outlined {
     font-size: 14pt !important;
@@ -213,29 +220,33 @@ h1, h2, h3, h4, h5, h6 {
 }
 .content-header {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--padding-sm);
     justify-content: space-between;
     align-items: center;
     padding: var(--padding-sm);
     margin-top: var(--padding-sm);
     background-color: var(--color-gray-bg);
     border: 1px solid var(--color-border);
-    border-bottom: none;
 } 
 .content-header:first-of-type {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: none;
 }
 
 .content-footer {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--padding-sm);
     justify-content: space-between;
     align-items: center;
     padding: var(--padding-sm);
     background-color: var(--color-gray-bg);
     border: 1px solid var(--color-border);
-    border-top: none;
 }
 .content-footer:last-of-type {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-top: none;
 }
 
 
@@ -382,7 +393,6 @@ h1, h2, h3, h4, h5, h6 {
 .button-bar :last-child:not(:first-child) {
     border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
-
 
 /* Modal dialogs */
 #modal-space {
@@ -751,6 +761,18 @@ tr {
 td:has(.table-wrapper) {
     padding: 8px;
 }
+td:has(button) {
+    padding: 0;
+}
+td button:only-child {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 0 -8px 16px -16px var(--color-shadow);
+}
 
 table tr:not(:first-child) thead {
     display: none;
@@ -921,21 +943,34 @@ tr.dragging::after {
     margin-top: 0;
 }
 
-.table-edit-textarea {
+.table-edit-textarea, td input[type="number"] {
+    width: 100%;
+    border:0;
+    background-color: transparent;
     border-radius: calc(var(--radius-md) - 2px);
     transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
 }
 
-.dirty > .table-edit-textarea {
+.dirty > .table-edit-textarea, .dirty input[type="number"] {
     background-color: var(--color-red-bg-transparent);
     outline: 2px solid var(--color-red-bg-transparent);
 }
 
-tr:hover > td > .table-edit-textarea {
+tr:hover > td > .table-edit-textarea, tr:hover > td > input[type="number"] {
     background-color: var(--color-blue-bg-transparent);
 }
-.table-edit-textarea:focus {
+.table-edit-textarea:focus, td input[type="number"]:focus {
     outline: solid 2px var(--color-blue-bg-hover);
+}
+
+/* Search highlighting for editable table cells */
+.search-match {
+    background-color: var(--color-yellow-bg-transparent) !important;
+}
+
+.search-match:focus {
+    background-color: var(--color-yellow-bg-transparent) !important;
+    outline: 2px solid var(--color-yellow-bg);
 }
 
 /*.dirty::after {
@@ -1051,7 +1086,6 @@ tr:hover > td > .table-edit-textarea {
         padding: calc(var(--navbar-height) + 1rem) 0.5rem 0;
     }
 
-
     .tabs.dropdown-mode .tab-button,
     .tabs.dropdown-mode .tab-button.active,
     .tabs.dropdown-mode.menu-open .tab-button,
@@ -1062,13 +1096,5 @@ tr:hover > td > .table-edit-textarea {
 
     .tabs.dropdown-mode .new-tab-button{
         display: none;
-    }
-}
-
-@media print {
-    input {
-        border: none;
-        outline: none;
-        background: none;
     }
 }
