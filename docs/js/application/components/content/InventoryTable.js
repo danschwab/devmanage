@@ -60,12 +60,12 @@ export const InventoryTableComponent = {
             },
             { 
                 key: 'description', 
-                label: 'Description',
+                label: 'Description (visible in pack lists)',
                 editable: this.editMode
             },
             { 
                 key: 'notes', 
-                label: 'Notes',
+                label: 'Notes (internal only)',
                 editable: this.editMode
             },
             { 

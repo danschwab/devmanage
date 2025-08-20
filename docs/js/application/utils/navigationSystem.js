@@ -18,7 +18,8 @@ import { html } from '../index.js';
 
 export const NavigationRegistry = {
     /**
-     * Primary navigation structure - defines the main sections and their hierarchical paths
+     * Main navigation structure - initialized with only main sections
+     * Child routes are registered dynamically by components
      */
     routes: {
         // Dashboard section
@@ -27,13 +28,7 @@ export const NavigationRegistry = {
             displayName: 'Dashboard',
             icon: 'dashboard',
             isMainSection: true,
-            children: {
-                'dashboard-settings': {
-                    path: 'dashboard/dashboard-settings',
-                    displayName: 'Dashboard Settings',
-                    icon: 'settings'
-                }
-            }
+            children: {}
         },
 
         // Inventory section
@@ -42,32 +37,7 @@ export const NavigationRegistry = {
             displayName: 'Inventory',
             icon: 'inventory_2',
             isMainSection: true,
-            children: {
-                categories: {
-                    path: 'inventory/categories',
-                    displayName: 'Categories',
-                    icon: 'category',
-                    children: {
-                        // Dynamic category paths will be added at runtime
-                        // e.g., 'inventory/categories/furniture'
-                    }
-                },
-                search: {
-                    path: 'inventory/search',
-                    displayName: 'Search',
-                    icon: 'search'
-                },
-                reports: {
-                    path: 'inventory/reports',
-                    displayName: 'Reports',
-                    icon: 'assessment'
-                },
-                items: {
-                    path: 'inventory/items',
-                    displayName: 'All Items',
-                    icon: 'list'
-                }
-            }
+            children: {}
         },
 
         // Packlist section
@@ -76,25 +46,7 @@ export const NavigationRegistry = {
             displayName: 'Packlists',
             icon: 'list_alt',
             isMainSection: true,
-            children: {
-                // Dynamic packlist paths will be added at runtime
-                // e.g., 'packlist/{packlist-name}'
-                active: {
-                    path: 'packlist/active',
-                    displayName: 'Active Packlists',
-                    icon: 'play_arrow'
-                },
-                archived: {
-                    path: 'packlist/archived',
-                    displayName: 'Archived Packlists',
-                    icon: 'archive'
-                },
-                templates: {
-                    path: 'packlist/templates',
-                    displayName: 'Templates',
-                    icon: 'content_copy'
-                }
-            }
+            children: {}
         },
 
         // Schedule section
@@ -103,24 +55,31 @@ export const NavigationRegistry = {
             displayName: 'Schedule',
             icon: 'event',
             isMainSection: true,
-            children: {
-                calendar: {
-                    path: 'schedule/calendar',
-                    displayName: 'Calendar View',
-                    icon: 'calendar_month'
-                },
-                events: {
-                    path: 'schedule/events',
-                    displayName: 'Events',
-                    icon: 'event_note'
-                },
-                bookings: {
-                    path: 'schedule/bookings',
-                    displayName: 'Bookings',
-                    icon: 'book_online'
-                }
-            }
+            children: {}
         }
+    },
+
+    /**
+     * Register navigation routes for a section
+     * @param {string} section - Main section (e.g., 'inventory')
+     * @param {Object} navigationConfig - Navigation configuration
+     * @param {Object} navigationConfig.routes - Route definitions
+     * @param {Object} [navigationConfig.quickActions] - Quick action definitions
+     */
+    registerNavigation(section, navigationConfig) {
+        if (!this.routes[section]) {
+            console.warn(`NavigationRegistry: Cannot register routes for unknown section '${section}'`);
+            return;
+        }
+
+        // Add routes to the section's children
+        if (navigationConfig.routes) {
+            Object.entries(navigationConfig.routes).forEach(([routeKey, routeConfig]) => {
+                this.addDynamicRoute(section, routeKey, routeConfig);
+            });
+        }
+
+        console.log(`NavigationRegistry: Registered ${Object.keys(navigationConfig.routes || {}).length} routes for section '${section}'`);
     },
 
     /**
@@ -191,7 +150,7 @@ export const NavigationRegistry = {
             breadcrumbs.push({
                 id: segment,
                 path: currentPath,
-                displayName: route?.displayName || this.getDisplayName(segment),
+                displayName: route?.displayName || this.getDisplayName(currentPath),
                 icon: route?.icon
             });
         }
@@ -296,20 +255,7 @@ export const NavigationRegistry = {
         return this.getDisplayName(path);
     },
 
-    /**
-     * Initialize dynamic routes based on common patterns
-     */
-    initializeDynamicRoutes() {
-        // Add common inventory categories (these could come from API in the future)
-        const commonCategories = ['furniture', 'electronics', 'signage', 'accessories'];
-        
-        commonCategories.forEach(category => {
-            this.addDynamicRoute('inventory/categories', category, {
-                displayName: category.charAt(0).toUpperCase() + category.slice(1),
-                icon: 'folder'
-            });
-        });
-    }
+
 };
 
 // =============================================================================
@@ -349,16 +295,14 @@ export class NavigationInit {
 
         console.log('Initializing navigation system...');
 
-        // Initialize static routes
-        NavigationRegistry.initializeDynamicRoutes();
-
-        // Load dynamic categories if API loader is provided
+        // Only initialize main sections - child routes are registered by components
+        // Load dynamic routes if API loader is provided
         if (options.apiLoader) {
             await this.loadDynamicRoutes(options.apiLoader);
         }
 
         this.initialized = true;
-        console.log('Navigation system initialized');
+        console.log('Navigation system initialized - main sections ready');
     }
 
     /**
@@ -694,9 +638,7 @@ export const NavigationConfig = {
     },
 
     // Dynamic list of dashboard containers (now path-based)
-    allDashboardContainers: [
-        { path: 'dashboard/dashboard-settings', title: 'Dashboard Settings' }
-    ],
+    allDashboardContainers: [],
 
     /**
      * Add a dashboard container by path
@@ -817,6 +759,12 @@ export const NavigationConfig = {
      */
     getTypeFromPath(path) {
         const segments = path.split('/').filter(segment => segment.length > 0);
+        // For main sections (inventory, packlist, schedule), always return the first segment as the type
+        const firstSegment = segments[0];
+        if (NavigationRegistry.routes[firstSegment] && NavigationRegistry.routes[firstSegment].isMainSection) {
+            return firstSegment;
+        }
+        // For other paths, return the last segment
         return segments[segments.length - 1];
     },
 
@@ -887,12 +835,29 @@ export const NavigationConfig = {
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
+            // Extract the base page from the target path (e.g., 'inventory/items' -> 'inventory')
+            const basePage = targetPath.split('/')[0];
+            
+            container.containerPath = targetPath;
+            
+            // Update container's navigation map if provided
+            if (navigationMap) {
+                container.navigationMap = { ...container.navigationMap, ...navigationMap };
+            }
+            
+            // If navigating to dashboard, navigate to dashboard page instead of updating path
+            if (targetPath === 'dashboard') {
+                this.navigateToPage('dashboard', appContext);
+                return {
+                    action: 'navigate_to_dashboard',
+                    containerId,
+                    targetPage: 'dashboard'
+                };
+            }
+            
             // If we're on dashboard and trying to navigate to a different path,
             // navigate to that path as a new page (like expand button behavior)
-            if (appContext.currentPage === 'dashboard' && targetPath !== 'dashboard') {
-                // Extract the base page from the target path (e.g., 'inventory/items' -> 'inventory')
-                const basePage = targetPath.split('/')[0];
-                
+            if (appContext.currentPage !== targetPath) {
                 this.navigateToPage(basePage, appContext);
                 
                 // After navigation, find the container that matches the target path exactly
@@ -913,22 +878,6 @@ export const NavigationConfig = {
                 };
             }
             
-            // If navigating to dashboard, navigate to dashboard page instead of updating path
-            if (targetPath === 'dashboard') {
-                this.navigateToPage('dashboard', appContext);
-                return {
-                    action: 'navigate_to_dashboard',
-                    containerId,
-                    targetPage: 'dashboard'
-                };
-            }
-            
-            container.containerPath = targetPath;
-            
-            // Update container's navigation map if provided
-            if (navigationMap) {
-                container.navigationMap = { ...container.navigationMap, ...navigationMap };
-            }
             
             return {
                 action: 'update_path',

@@ -64,23 +64,6 @@ export const DashboardManagementComponent = {
     `
 };
 
-export const DashboardSettings = {
-    props: {
-        currentUser: Object,
-        getAllPathsWithStatus: Function,
-        addToDashboard: Function,
-        removeDashboardContainer: Function
-    },
-    template: html `
-        <div class="settings-content">
-            <p>Welcome to your settings, {{ currentUser?.name || 'User' }}!</p>
-            <p>System Status: <span style="color: green;">Online</span></p>
-            <p>Last Login: Today, 9:30 AM</p>
-            <p>Active Sessions: 3</p>
-        </div>
-    `
-};
-
 /**
  * Dashboard Management Module
  * Provides modular dashboard functionality that can be used across components

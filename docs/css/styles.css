@@ -29,7 +29,7 @@ div#app-content {
     overflow: auto;
 }
 div#app-content:not(:has(div))::before {
-    content: "open a page to see content";
+    content: "login or open a page to see content";
     color: var(--color-gray-bg-transparent);
     font-size: larger;
     font-style: italic;
@@ -222,7 +222,7 @@ input[type="text"] {
     display: flex;
     flex-wrap: wrap;
     gap: var(--padding-sm);
-    justify-content: space-between;
+    justify-content: right; /*space-between;*/
     align-items: center;
     padding: var(--padding-sm);
     margin-top: var(--padding-sm);
@@ -238,7 +238,7 @@ input[type="text"] {
     display: flex;
     flex-wrap: wrap;
     gap: var(--padding-sm);
-    justify-content: space-between;
+    justify-content: right;/*space-between;*/
     align-items: center;
     padding: var(--padding-sm);
     background-color: var(--color-gray-bg);
@@ -656,7 +656,7 @@ input[type="text"] {
     max-width: 100%;
     margin:0;
     top:0;
-    line-height: 1rem;
+    /*line-height: 1rem;*/
 }
 
 .tab-close {

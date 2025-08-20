@@ -52,8 +52,8 @@ class analytics {
      * @private
      */
     static async computeIdentifierReferenceData() {
-        const clientsData = await Database.getData('PROD_SCHED', 'Clients', { name: 'Name', abbr: 'Abbr' });
-        const showsData = await Database.getData('PROD_SCHED', 'Shows', { name: 'Name', abbr: 'Abbr' });
+        const clientsData = await Database.getData('PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
+        const showsData = await Database.getData('PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
         return {
             clients: {
                 names: clientsData.map(row => row.name || ''),

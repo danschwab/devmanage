@@ -248,13 +248,57 @@ export const TableComponent = {
             const searchTerm = this.searchValue.trim().toLowerCase();
             return String(formattedValue).toLowerCase().includes(searchTerm);
         },
+
+        // Get color class for date values based on proximity to today
+        getDateColorClass(dateValue) {
+            if (!dateValue) return '';
+            
+            // Parse the date - handle various date formats
+            let date;
+            if (dateValue instanceof Date) {
+                date = dateValue;
+            } else {
+                date = new Date(dateValue);
+            }
+            
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                return '';
+            }
+            
+            // Get today's date at midnight for comparison
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // Set the target date to midnight for fair comparison
+            const targetDate = new Date(date);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            // Calculate difference in days
+            const diffTime = targetDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // Apply color based on proximity
+            if (diffDays <= 2) {
+                return 'red';  // Within 2 days (including past dates)
+            } else if (diffDays <= 7) {
+                return 'orange';  // Within 7 days
+            }
+            
+            return '';  // No special coloring for dates more than 7 days away
+        },
         
         getCellClass(value, column, rowIndex, colIndex) {
             let baseClass = '';
             // Centralized autoColor logic for number columns
             if (column.autoColor && column.format === 'number') {
                 if (value == 0) baseClass = 'red';
-                else if (value < 5) baseClass = 'yellow';
+                else if (value < 5) baseClass = 'orange';
+            }
+            // Centralized autoColor logic for date columns
+            if (column.autoColor && column.format === 'date') {
+                const cellClass = this.getDateColorClass(value);
+                if (cellClass) baseClass = cellClass;
             }
             // Support function-based cell classes
             if (typeof column.cellClass === 'function') {
@@ -596,7 +640,7 @@ export const TableComponent = {
         <div class="dynamic-table">
             <div :class="dragId ? 'drag-id-' + dragId : ''">
                 <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
-                    <h3 v-if="title">{{ title }}</h3>
+                    <!--h3 v-if="title">{{ title }}</h3-->
                     <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
                         <input
                             v-if="showSearch"

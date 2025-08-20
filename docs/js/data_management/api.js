@@ -225,5 +225,16 @@ export const Requests = {
      */
     getProductionScheduleData: async (parameters = null, filters = null) => {
         return await ProductionUtils.getOverlappingShows(parameters, filters);
+    },
+
+    /**
+     * Compute Identifier from client, year, and show data
+     * @param {string} showName - The name of the show
+     * @param {string} clientName - The name of the client
+     * @param {number} year - The year of the show
+     * @returns {Promise<string>} The computed identifier
+     */
+    computeIdentifier: async (showName, clientName, year) => {
+        return Analytics.computeIdentifier(showName, clientName, year);
     }
 };

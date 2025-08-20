@@ -2,7 +2,7 @@ import { html, DashboardToggleComponent } from '../index.js';
 
 const { reactive } = Vue;
 
-// Dashboard Management Component for settings
+// Dashboard Management Component
 const DashboardManagementComponent = {
     inject: ['appContext'],
     data() {
@@ -65,13 +65,7 @@ export class HamburgerMenuRegistry {
     }
 
     setupDefaultMenus() {
-        // Dashboard Settings gets the management component
-        this.menus.set('dashboard-settings', {
-            components: [DashboardManagementComponent],
-            props: {}
-        });
-
-        // Default fallback for other containers
+        // Default fallback for containers
         this.defaultMenu = {
             components: [DashboardToggleComponent],
             props: {}
@@ -120,19 +114,15 @@ export class HamburgerMenuRegistry {
             }
         }
 
-        // Return default menu for containers that need dashboard toggle
-        if (containerType !== 'dashboard-settings') {
-            return {
-                components: this.defaultMenu.components,
-                props: {
-                    ...this.defaultMenu.props,
-                    containerPath: containerPath || containerType,
-                    title: containerType.charAt(0).toUpperCase() + containerType.slice(1)
-                }
-            };
-        }
-
-        return null;
+        // Return default menu for all containers
+        return {
+            components: this.defaultMenu.components,
+            props: {
+                ...this.defaultMenu.props,
+                containerPath: containerPath || containerType,
+                title: containerType.charAt(0).toUpperCase() + containerType.slice(1)
+            }
+        };
     }
 
     getCurrentView(containerPath) {

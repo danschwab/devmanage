@@ -10,7 +10,7 @@ import {
     InventoryContent, 
     ScheduleContent 
 } from './index.js';
-import { DashboardToggleComponent, DashboardSettings, hamburgerMenuRegistry } from './index.js';
+import { DashboardToggleComponent, hamburgerMenuRegistry } from './index.js';
 import { Requests, getReactiveStore } from './index.js';
 
 const { createApp } = Vue;
@@ -22,7 +22,6 @@ const App = {
         'inventory-table': InventoryTableComponent,
         'app-modal': ModalComponent,
         'primary-nav': PrimaryNavComponent,
-        'dashboard-settings': DashboardSettings,
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
         'schedule-content': ScheduleContent,
@@ -151,17 +150,6 @@ const App = {
             container.containerType = type;
             container.currentPage = this.currentPage;
             container.containerPath = options.containerPath || '';
-            
-            // Debug logging for dashboard-settings containers
-            if (type === 'dashboard-settings' || (options.containerPath && options.containerPath.includes('dashboard-settings'))) {
-                console.log('Adding dashboard-settings container:', {
-                    type,
-                    title,
-                    containerType: container.containerType,
-                    containerPath: container.containerPath,
-                    options
-                });
-            }
             
             this.containers.push(container);
             return container;
@@ -412,9 +400,9 @@ const App = {
                     :container-path="container.containerPath"
                     :navigation-map="container.navigationMap"
                     :card-style="currentPage === 'dashboard'"
-                    :show-close-button="container.containerType !== 'dashboard-settings'"
+                    :show-close-button="true"
                     :show-hamburger-menu="true"
-                    :show-expand-button="currentPage === 'dashboard' && container.containerType !== 'dashboard-settings'"
+                    :show-expand-button="currentPage === 'dashboard'"
                     :page-location="container.pageLocation"
                     :container-data="container"
                     :app-context="{ 
@@ -432,18 +420,9 @@ const App = {
                     v-if="!dashboardLoading || currentPage !== 'dashboard'"
                 >
                     <template #content>
-                        <!-- dashboard-settings Content -->
-                        <dashboard-settings 
-                            v-if="container.containerType === 'dashboard-settings'"
-                            :current-user="currentUser"
-                            :get-all-paths-with-status="getAllPathsWithStatus"
-                            :add-to-dashboard="addToDashboard"
-                            :remove-dashboard-container="removeDashboardContainer">
-                        </dashboard-settings>
-                        
                         <!-- Inventory Content -->
                         <inventory-content 
-                            v-else-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
+                            v-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
@@ -451,7 +430,7 @@ const App = {
                         </inventory-content>
                         <!-- Packlist Content -->
                         <packlist-content 
-                            v-else-if="container.containerType === 'packlist'"
+                            v-else-if="container.containerType === 'packlist' || container.containerPath?.startsWith('packlist')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
@@ -460,7 +439,8 @@ const App = {
                         
                         <!-- Schedule Content -->
                         <schedule-content 
-                            v-else-if="container.containerType === 'schedule'">
+                            v-else-if="container.containerType === 'schedule'"
+                            :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </schedule-content>
                         
                         <!-- Default Content -->

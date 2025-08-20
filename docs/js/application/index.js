@@ -22,7 +22,7 @@ export { ModalComponent, modalManager } from './components/interface/modalCompon
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
 export { TableComponent } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
-export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent, DashboardSettings } from './components/interface/DashboardManagement.js';
+export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent } from './components/interface/DashboardManagement.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';

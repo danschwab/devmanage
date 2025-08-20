@@ -1,4 +1,4 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, TabComponent } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, NavigationRegistry } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -54,8 +54,7 @@ export const PacklistMenuComponent = {
 export const PacklistContent = {
     components: {
         'packlist-table': PacklistTable,
-        'tabs-list': TabsListComponent,
-        'tab-component': TabComponent
+        'tabs-list': TabsListComponent
     },
     props: {
         showAlert: Function,
@@ -65,9 +64,7 @@ export const PacklistContent = {
     data() {
         return {
             availablePacklists: [], // loaded from API
-            isLoading: false,
-            openTabs: [], // tracks opened packlist tabs
-            activeTabName: '' // currently active tab
+            isLoading: false
         };
     },
     computed: {
@@ -75,10 +72,12 @@ export const PacklistContent = {
             return this.containerPath.split('/').filter(segment => segment.length > 0);
         },
         currentView() {
-            return this.pathSegments[1] || 'packlist';
+            // For packlist paths, the view is always 'packlist'
+            return 'packlist';
         },
         currentPacklist() {
             // Handle direct packlist access: packlist/{name}
+            // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier
             return this.pathSegments[1] || '';
         },
         // Add modalManager reference for template access
@@ -96,28 +95,30 @@ export const PacklistContent = {
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
             return !!this.currentPacklist && this.currentPacklist !== 'packlist';
-        },
-        // Check if we have any open tabs
-        hasOpenTabs() {
-            return this.openTabs.length > 0;
-        },
-        // Current tab should match the current packlist from navigation
-        currentTabName() {
-            return this.currentPacklist;
         }
     },
     watch: {
-        // Watch for navigation changes and sync tabs
-        currentPacklist(newPacklist, oldPacklist) {
-            if (newPacklist && newPacklist !== 'packlist') {
-                this.ensureTabExists(newPacklist);
-                this.activeTabName = newPacklist;
-            } else {
-                this.activeTabName = '';
-            }
-        }
+        // No watchers needed for simplified navigation
     },
     mounted() {
+        // Register packlist navigation routes
+        NavigationRegistry.registerNavigation('packlist', {
+            routes: {
+                active: {
+                    displayName: 'Active Packlists',
+                    icon: 'play_arrow'
+                },
+                archived: {
+                    displayName: 'Archived Packlists',
+                    icon: 'archive'
+                },
+                templates: {
+                    displayName: 'Templates',
+                    icon: 'content_copy'
+                }
+            }
+        });
+
         // Register hamburger menu for packlist
         hamburgerMenuRegistry.registerMenu('packlist', {
             components: [PacklistMenuComponent],
@@ -129,12 +130,6 @@ export const PacklistContent = {
         
         // Load available packlists
         this.loadAvailablePacklists();
-        
-        // If we're already viewing a specific packlist, ensure its tab exists
-        if (this.isViewingPacklist) {
-            this.ensureTabExists(this.currentPacklist);
-            this.activeTabName = this.currentPacklist;
-        }
     },
     methods: {
         async loadAvailablePacklists() {
@@ -150,54 +145,12 @@ export const PacklistContent = {
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
-        },
-        // Tab management methods
-        ensureTabExists(packlistName) {
-            if (!this.openTabs.find(tab => tab.name === packlistName)) {
-                this.openTabs.push({
-                    name: packlistName,
-                    label: packlistName,
-                    closable: true,
-                    component: PacklistTable,
-                    props: {
-                        tabName: packlistName
-                    }
-                });
-            }
-        },
-        handleTabChange(tabName) {
-            // Navigate to the selected packlist
-            this.navigateToPath('packlist/' + tabName);
-        },
-        handleTabClose(tabName) {
-            const tabIndex = this.openTabs.findIndex(tab => tab.name === tabName);
-            if (tabIndex !== -1) {
-                this.openTabs.splice(tabIndex, 1);
-                
-                // If closing the current tab, navigate appropriately
-                if (tabName === this.currentPacklist) {
-                    if (this.openTabs.length > 0) {
-                        // Navigate to the next available tab
-                        const nextTab = this.openTabs[Math.max(0, tabIndex - 1)];
-                        this.navigateToPath('packlist/' + nextTab.name);
-                    } else {
-                        // Navigate back to main packlist page
-                        this.navigateToPath('packlist');
-                    }
-                }
-            }
-        },
-        handleNewTab() {
-            // Navigate back to main packlist page to select a new packlist
-            this.navigateToPath('packlist');
         }
     },
     template: html `
         <div class="packlist-page">
             <!-- Main Packlist View - List of Available Packlists -->
             <div v-if="!isViewingPacklist">
-                <p>Open a packlist to view and manage its contents.</p>
-                
                 <tabs-list
                     :tabs="availablePacklists"
                     :on-select="handlePacklistSelect"
@@ -205,20 +158,10 @@ export const PacklistContent = {
                     loading-message="Loading available packlists..."
                 />
             </div>
-            <!-- Tab Navigation - shown when there are open tabs -->
-            <tab-component v-else-if="hasOpenTabs"
-                :tabs="openTabs"
-                :active-tab="activeTabName"
-                :show-new-tab-button="true"
-                @tab-change="handleTabChange"
-                @tab-close="handleTabClose"
-                @new-tab="handleNewTab"
-            />
             
-            <!-- Default / Not Found -->
-            <div v-else-if="!hasOpenTabs">
-                <h3>Packlist Management</h3>
-                <p>Select a view from the menu to get started.</p>
+            <!-- Individual Packlist View -->
+            <div v-else>
+                <packlist-table :tab-name="currentPacklist" />
             </div>
         </div>
     `

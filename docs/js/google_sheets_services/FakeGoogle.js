@@ -267,6 +267,19 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', 'Blank SEG\'s', ''],
                 ['', '', '', '', '', '', '', '', 'Client Packages', '']
             ],
+            'LOCKHEED MARTIN 2025 NGAUS': [
+                ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
+                ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
+                ['1', 'Skid', '72', '32', '48', '800', '', '', '(1) straight-section reception counter (one of two sections). Test lighting', 'Sintra logo- last CES 2025'],
+                ['', '', '', '', '', '', '', '', 'Client junk', ''],
+                ['2', 'Skid', '120', '48', '48', '1200', '', '', '(3) rolls 10\'x70\' SLATE gray carpeting', ''],
+                ['3', 'Skid', '120', '48', '48', '600', '', '', 'Padding for 30x70', ''],
+                ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067'],
+                ['', '', '', '', '', '', '', '', 'SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Blank SEG\'s', ''],
+                ['', '', '', '', '', '', '', '', 'Client Packages', '']
+            ],
             'GEARFIRE 2025 SHOT': [
                 ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
                 ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
@@ -344,8 +357,8 @@ export class FakeGoogleSheetsService {
                 ,['NGAUS','Lockheed Martin','2025','', 'Milwaukee, WI','30x40','515','8/23','8/25','8/20/2025','','','','','Shepard','Ben','','X','X','X','X','','','','8/19/2025','','7/12','8/6','','X','','X','X','X','X','n/a','n/a','','']
                 ,['EPIC UGM','Microsoft','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
                 ,['EPIC UGM','Codametrix','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
-                ,['Showroom','ASP','2025','', 'Irvine, CA','30x30','N/A','8/25','N/A','8/18/2025','','','','','','','','X','X','','','','','','','','n/a','','','','','','','','','','']
-                ,['CAALA','Steno','2025','', 'Las Vegas, NV','10x20','115','8/28','8/31','8/11/2025','','','','','Freeman','ELITE','','X','X','X','','','','X','','X','','','','','','','','','','']
+                ,['Showroom','ASP','2025','', 'Irvine, CA','30x30','N/A','8/25','N/A','8/24/2025','','','','','','','','X','X','','','','','','','','n/a','','','','','','','','','','']
+                ,['CAALA','Steno','2025','', 'Las Vegas, NV','10x20','115','8/28','8/31','8/23/2025','','','','','Freeman','ELITE','','X','X','X','','','','X','','X','','','','','','','','','','']
                 ,['ACEP','QGenda','2025','', 'Salt Lake City','10x20','1234','9/7','9/10','9/2/2025','','','','','Freeman','Brian','','','X','X','','9/1/2025','','8/19','','X','','','','','','','','','','']
                 ,['Oracle Infocus','F365/NextGen','2025','', 'Denver, CO','10x10','','9/9','9/13','8/18/2025','','','','','GES','Client','','X','','X','X','','8/17/2025','','','','','','','','','','','','']
                 ,['Burger King NA','Marmon','2025','', 'Phoenix, AZ','20x20','709','9/10','9/12','9/5/2025','','','','','Freeman','Brian','','','','','9/4/2025','','','','X','','','','','','','','','','']
@@ -393,6 +406,7 @@ export class FakeGoogleSheetsService {
                 ['KIBO', '', ''],
                 ['KYRUUS', '', ''],
                 ['LEICA', '', ''],
+                ['LOCKHEED MARTIN', '', ''],
                 ['MARMON', '', ''],
                 ['MARUKA USA', 'MARUKA', ''],
                 ['MICROSOFT', '', ''],
@@ -549,6 +563,7 @@ export class FakeGoogleSheetsService {
                 ['NOA', '', ''],
                 ['NPE', '', ''],
                 ['NRF', '', ''],
+                ['NGAUS', '', ''],
                 ['OCHIN', '', ''],
                 ['OCT SOCAL', '', ''],
                 ['OCT WEST', '', ''],
@@ -628,6 +643,7 @@ export class FakeGoogleSheetsService {
             { title: 'TEMPLATE', sheetId: 1 },
             { title: 'ATSC 2025 NAB', sheetId: 2 },
             { title: 'TULIP 2025 NRF', sheetId: 3 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 3 },
             { title: 'GEARFIRE 2025 SHOT', sheetId: 4 }
         ],
         'PROD_SCHED': [

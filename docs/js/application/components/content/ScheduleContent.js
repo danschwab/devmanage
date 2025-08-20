@@ -1,10 +1,12 @@
-import { html } from '../../index.js';
-import { ScheduleTableComponent } from './ScheduleTable.js';
+import { html, ScheduleTableComponent, NavigationRegistry } from '../../index.js';
 
 
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent
+    },
+    props: {
+        navigateToPath: Function
     },
     data() {
         const today = new Date();
@@ -16,10 +18,49 @@ export const ScheduleContent = {
             filter
         };
     },
+    mounted() {
+        // Register schedule navigation routes
+        NavigationRegistry.registerNavigation('schedule', {
+            routes: {
+                calendar: {
+                    displayName: 'Calendar View',
+                    icon: 'calendar_month'
+                },
+                events: {
+                    displayName: 'Events',
+                    icon: 'event_note'
+                },
+                bookings: {
+                    displayName: 'Bookings',
+                    icon: 'book_online'
+                }
+            }
+        });
+    },
+    computed: {
+        // Direct navigation options for schedule
+        scheduleNavigation() {
+            return [
+                { id: 'calendar', label: 'Calendar View', path: 'schedule/calendar' },
+                { id: 'events', label: 'Events', path: 'schedule/events' },
+                { id: 'bookings', label: 'Bookings', path: 'schedule/bookings' }
+            ];
+        }
+    },
     template: html`
         <div class="schedule-page">
-            <p>Shows scheduled for this month and beyond.</p>
-            <ScheduleTableComponent :filter="filter" />
+            <div class="button-bar">
+                <button 
+                    v-for="nav in scheduleNavigation" 
+                    :key="nav.id"
+                    @click="navigateToPath(nav.path)">
+                    {{ nav.label }}
+                </button>
+            </div>
+            <ScheduleTableComponent 
+                :filter="filter" 
+                :navigate-to-path="navigateToPath"
+            />
         </div>
     `
 };
