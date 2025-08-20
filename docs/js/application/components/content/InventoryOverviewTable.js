@@ -148,6 +148,7 @@ export const InventoryOverviewTableComponent = {
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"
+                :sortable="true"
                 :showHeader="true"
                 :showFooter="true"
                 emptyMessage="No inventory items found across all categories"

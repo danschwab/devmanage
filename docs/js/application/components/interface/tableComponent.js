@@ -74,6 +74,10 @@ export const TableComponent = {
         hideColumns: {
             type: Array,
             default: () => []
+        },
+        sortable: {
+            type: Boolean,
+            default: false
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
@@ -88,7 +92,9 @@ export const TableComponent = {
             allowSaveEvent: false,
             rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
-            searchValue: '' // Track search input value
+            searchValue: '', // Track search input value
+            sortColumn: null, // Current sort column key
+            sortDirection: 'asc' // Current sort direction: 'asc' or 'desc'
         };
     },
     computed: {
@@ -119,6 +125,36 @@ export const TableComponent = {
                         const value = row[column.key];
                         return String(value).toLowerCase().includes(searchTerm);
                     });
+                });
+            }
+
+            // Apply sorting if sortColumn is set
+            if (this.sortColumn && this.sortable) {
+                filteredData.sort((a, b) => {
+                    const aValue = a.row[this.sortColumn];
+                    const bValue = b.row[this.sortColumn];
+                    
+                    // Handle null/undefined values
+                    if (aValue === null || aValue === undefined) return 1;
+                    if (bValue === null || bValue === undefined) return -1;
+                    
+                    // Determine if values are numbers
+                    const aNum = parseFloat(aValue);
+                    const bNum = parseFloat(bValue);
+                    const isANum = !isNaN(aNum);
+                    const isBNum = !isNaN(bNum);
+                    
+                    let comparison = 0;
+                    
+                    if (isANum && isBNum) {
+                        // Both are numbers
+                        comparison = aNum - bNum;
+                    } else {
+                        // String comparison
+                        comparison = String(aValue).localeCompare(String(bValue));
+                    }
+                    
+                    return this.sortDirection === 'desc' ? -comparison : comparison;
                 });
             }
 
@@ -181,6 +217,24 @@ export const TableComponent = {
             // Also clear dirty state for nested tables on refresh
             this.nestedTableDirtyCells = {};
         },
+
+        handleSort(columnKey) {
+            if (!this.sortable) return;
+            
+            if (this.sortColumn === columnKey) {
+                // Toggle sort direction if same column
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New column, start with ascending
+                this.sortColumn = columnKey;
+                this.sortDirection = 'asc';
+            }
+        },
+
+        getSortIcon(columnKey) {
+            if (!this.sortable || this.sortColumn !== columnKey) return '';
+            return this.sortDirection === 'asc' ? '↑' : '↓';
+        },
         
         formatCellValue(value, column) {
             if (value === null || value === undefined) return '';
@@ -233,7 +287,7 @@ export const TableComponent = {
             const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
             
             // Replace matches with highlighted version
-            return escapedValue.replace(regex, '<span style="background-color: var(--color-yellow-bg-transparent);">$1</span>');
+            return escapedValue.replace(regex, '<span class="search-match">$1</span>');
         },
 
         // Check if a value contains the search text (for CSS-based highlighting in inputs)
@@ -706,7 +760,16 @@ export const TableComponent = {
                                     :style="{ width: getColumnWidth(column) }"
                                     :class="[column.headerClass, hideSet.has(column.key) ? 'hide' : '']"
                                 >
-                                    {{ column.label }}
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span>{{ column.label }}</span>
+                                        <button 
+                                            v-if="sortable"
+                                            @click="handleSort(column.key)"
+                                            :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
+                                        >
+                                            {{ getSortIcon(column.key) || '↕' }}
+                                        </button>
+                                    </div>
                                 </th>
                             </tr>
                         </thead>

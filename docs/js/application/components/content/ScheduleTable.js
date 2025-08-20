@@ -269,6 +269,7 @@ export const ScheduleTableComponent = {
                 emptyMessage="No shows found."
                 :loading-message="loadingMessage"
                 :showSearch="true"
+                :sortable="true"
                 :hamburger-menu-component="{
                     components: [ScheduleTableMenuComponent],
                     props: {}
