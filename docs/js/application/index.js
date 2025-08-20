@@ -12,9 +12,7 @@ export {
     PrimaryNavComponent, 
     NavigationConfig, 
     NavigationRegistry, 
-    NavigationInit, 
-    NavigationUtils,
-    autoInitializeNavigation 
+    NavigationInit
 } from './utils/navigationSystem.js';
 
 // Interface components export

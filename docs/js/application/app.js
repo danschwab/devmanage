@@ -71,12 +71,7 @@ const App = {
         if (this.isAuthenticated) {
             // Initialize navigation system
             try {
-                await NavigationInit.initialize({
-                    apiLoader: {
-                        // You can add API loaders here in the future
-                        // getInventoryCategories: () => Requests.getInventoryCategories()
-                    }
-                });
+                await NavigationInit.initialize();
             } catch (error) {
                 console.warn('Navigation initialization had issues:', error);
             }

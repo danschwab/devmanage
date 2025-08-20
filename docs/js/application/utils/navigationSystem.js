@@ -5,11 +5,10 @@ import { html } from '../index.js';
  * 
  * Consolidates all navigation-related functionality into a single module:
  * - NavigationRegistry: Central route definitions and path management
- * - NavigationUtils: Helper functions for navigation operations
  * - NavigationConfig: Legacy compatibility layer
  * - PrimaryNavComponent: Main navigation component
  * - BreadcrumbComponent: Breadcrumb navigation component
- * - NavigationInit: Initialization and dynamic route loading
+ * - NavigationInit: Initialization
  */
 
 // =============================================================================
@@ -134,40 +133,6 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Get breadcrumb trail for a path
-     * @param {string} path - The path to generate breadcrumbs for
-     * @returns {Array} Array of breadcrumb items
-     */
-    getBreadcrumbs(path) {
-        const pathSegments = path.split('/').filter(segment => segment.length > 0);
-        const breadcrumbs = [];
-        let currentPath = '';
-        
-        for (const segment of pathSegments) {
-            currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-            const route = this.getRoute(currentPath);
-            
-            breadcrumbs.push({
-                id: segment,
-                path: currentPath,
-                displayName: route?.displayName || this.getDisplayName(currentPath),
-                icon: route?.icon
-            });
-        }
-        
-        return breadcrumbs;
-    },
-
-    /**
-     * Check if a path exists in the registry
-     * @param {string} path - Path to check
-     * @returns {boolean} Whether the path exists
-     */
-    pathExists(path) {
-        return this.getRoute(path) !== null;
-    },
-
-    /**
      * Get the main section for a path (e.g., 'inventory' for 'inventory/categories')
      * @param {string} path - The path to get main section for
      * @returns {string} Main section name
@@ -223,25 +188,6 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Get quick action routes for a section (for content components)
-     * @param {string} section - Main section (e.g., 'inventory')
-     * @returns {Array} Array of quick action routes
-     */
-    getQuickActions(section) {
-        const route = this.getRoute(section);
-        if (!route?.children) return [];
-        
-        return Object.entries(route.children)
-            .filter(([key, child]) => !child.isHidden)
-            .map(([key, child]) => ({
-                id: key,
-                label: child.displayName,
-                path: child.path,
-                icon: child.icon
-            }));
-    },
-
-    /**
      * Legacy compatibility methods (to maintain existing API)
      */
     
@@ -253,29 +199,8 @@ export const NavigationRegistry = {
     // For NavigationConfig.getDisplayNameForPath compatibility  
     getDisplayNameForPath(path) {
         return this.getDisplayName(path);
-    },
-
-
-};
-
-// =============================================================================
-// NAVIGATION UTILITIES - Helper functions
-// =============================================================================
-
-export const NavigationUtils = {
-    /**
-     * Get parent path for navigation back functionality
-     * @param {string} currentPath - Current path
-     * @returns {string|null} Parent path or null if at root
-     */
-    getParentPath(currentPath) {
-        if (!currentPath || currentPath === 'dashboard') return null;
-        
-        const segments = currentPath.split('/').filter(segment => segment.length > 0);
-        if (segments.length <= 1) return 'dashboard';
-        
-        return segments.slice(0, -1).join('/');
     }
+
 };
 
 // =============================================================================
@@ -287,52 +212,12 @@ export class NavigationInit {
 
     /**
      * Initialize the navigation system
-     * @param {Object} options - Configuration options
-     * @param {Function} options.apiLoader - Function to load dynamic data from API
      */
-    static async initialize(options = {}) {
+    static async initialize() {
         if (this.initialized) return;
 
-        console.log('Initializing navigation system...');
-
-        // Only initialize main sections - child routes are registered by components
-        // Load dynamic routes if API loader is provided
-        if (options.apiLoader) {
-            await this.loadDynamicRoutes(options.apiLoader);
-        }
-
+        console.log('Initializing navigation system - main sections ready');
         this.initialized = true;
-        console.log('Navigation system initialized - main sections ready');
-    }
-
-    /**
-     * Load dynamic routes from API or other data sources
-     * @param {Function} apiLoader - Function to load data
-     */
-    static async loadDynamicRoutes(apiLoader) {
-        try {
-            // Example: Load inventory categories from API
-            const categories = await apiLoader.getInventoryCategories?.();
-            
-            if (categories && Array.isArray(categories)) {
-                categories.forEach(category => {
-                    NavigationRegistry.addDynamicRoute(
-                        'inventory/categories',
-                        category.slug || category.name.toLowerCase(),
-                        {
-                            displayName: category.name,
-                            icon: category.icon || 'folder',
-                            metadata: category
-                        }
-                    );
-                });
-                console.log(`Added ${categories.length} dynamic inventory categories`);
-            }
-
-        } catch (error) {
-            console.warn('Failed to load some dynamic routes:', error);
-            // Continue with initialization even if dynamic routes fail
-        }
     }
 
     /**
@@ -340,15 +225,6 @@ export class NavigationInit {
      */
     static get isInitialized() {
         return this.initialized;
-    }
-}
-
-/**
- * Auto-initialize with basic setup if no custom initialization is called
- */
-export function autoInitializeNavigation() {
-    if (!NavigationInit.isInitialized) {
-        NavigationInit.initialize();
     }
 }
 

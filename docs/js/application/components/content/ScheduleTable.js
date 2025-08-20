@@ -214,8 +214,9 @@ export const ScheduleTableComponent = {
                     parseInt(row.Year)
                 );
                 
-                // Check if packlist tab exists
-                const tab = await Requests.findTab('PACK_LISTS', identifier);
+                // Get available tabs and check if packlist exists
+                const availableTabs = await Requests.getAvailableTabs('PACK_LISTS');
+                const tab = availableTabs.find(tab => tab.title === identifier);
                 
                 // Update the status reactively (Vue 3 compatible)
                 Vue.set ? Vue.set(this.packlistStatus, index, !!tab) : (this.packlistStatus[index] = !!tab);
