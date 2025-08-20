@@ -73,10 +73,12 @@ export const NavigationRegistry = {
         // Packlist section
         packlist: {
             path: 'packlist',
-            displayName: 'Packlist',
+            displayName: 'Packlists',
             icon: 'list_alt',
             isMainSection: true,
             children: {
+                // Dynamic packlist paths will be added at runtime
+                // e.g., 'packlist/{packlist-name}'
                 active: {
                     path: 'packlist/active',
                     displayName: 'Active Packlists',

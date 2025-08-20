@@ -1,17 +1,18 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, TabComponent, TabsListComponent, PacklistTable } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, TabComponent } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
         currentView: String,
-        showAlert: Function
+        showAlert: Function,
+        refreshCallback: Function
     },
     computed: {
         menuItems() {
             switch (this.currentView) {
                 default:
                     return [
-                        { label: 'Refresh', action: 'button' },
-                        { label: 'Help', action: '' }
+                        { label: 'Refresh', action: 'refresh' },
+                        { label: 'Help', action: 'help' }
                     ];
             }
         }
@@ -19,8 +20,15 @@ export const PacklistMenuComponent = {
     methods: {
         handleAction(action) {
             switch (action) {
-                case 'button':
-                    modalManager.showAlert?.('Button action triggered!', 'Info');
+                case 'refresh':
+                    if (this.refreshCallback) {
+                        this.refreshCallback();
+                    } else {
+                        modalManager.showAlert?.('Refreshing packlist data...', 'Info');
+                    }
+                    break;
+                case 'help':
+                    modalManager.showAlert?.('Packlist help functionality coming soon!', 'Info');
                     break;
                 default:
                     modalManager.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
@@ -45,8 +53,9 @@ export const PacklistMenuComponent = {
 
 export const PacklistContent = {
     components: {
-        TabComponent,
-        TabsListComponent // Use TabsListComponent instead of PacklistTabsComponent
+        'packlist-table': PacklistTable,
+        'tabs-list': TabsListComponent,
+        'tab-component': TabComponent
     },
     props: {
         showAlert: Function,
@@ -54,156 +63,163 @@ export const PacklistContent = {
         navigateToPath: Function
     },
     data() {
-        // Use $root property system for initial state
-        const root = this.$root || {};
-        const cached = root.getProperty?.('tabSystems', 'packlist', { tabs: [], activeTab: '' }) || { tabs: [], activeTab: '' };
-        // If no tabs, create a default tab
-        if (!cached.tabs || cached.tabs.length === 0) {
-            cached.tabs = [];
-            cached.activeTab = 'main-packlist';
-        }
         return {
-            tabs: cached.tabs,
-            activeTab: cached.activeTab,
-            globalLoading: false // only for initial tab list loading
+            availablePacklists: [], // loaded from API
+            isLoading: false,
+            openTabs: [], // tracks opened packlist tabs
+            activeTabName: '' // currently active tab
         };
     },
     computed: {
-        // Expose NavigationConfig to the template
-        NavigationConfig() {
-            return NavigationConfig;
+        pathSegments() {
+            return this.containerPath.split('/').filter(segment => segment.length > 0);
+        },
+        currentView() {
+            return this.pathSegments[1] || 'packlist';
+        },
+        currentPacklist() {
+            // Handle direct packlist access: packlist/{name}
+            return this.pathSegments[1] || '';
         },
         // Add modalManager reference for template access
         modalManager() {
             return modalManager;
+        },
+        // Get formatted name for current packlist - keep original case
+        currentPacklistName() {
+            if (!this.currentPacklist || this.currentPacklist === 'packlist') return '';
+            const match = this.availablePacklists.find(p => 
+                p.title === this.currentPacklist
+            );
+            return match ? match.title : this.currentPacklist;
+        },
+        // Determine if we're viewing a specific packlist
+        isViewingPacklist() {
+            return !!this.currentPacklist && this.currentPacklist !== 'packlist';
+        },
+        // Check if we have any open tabs
+        hasOpenTabs() {
+            return this.openTabs.length > 0;
+        },
+        // Current tab should match the current packlist from navigation
+        currentTabName() {
+            return this.currentPacklist;
+        }
+    },
+    watch: {
+        // Watch for navigation changes and sync tabs
+        currentPacklist(newPacklist, oldPacklist) {
+            if (newPacklist && newPacklist !== 'packlist') {
+                this.ensureTabExists(newPacklist);
+                this.activeTabName = newPacklist;
+            } else {
+                this.activeTabName = '';
+            }
         }
     },
     mounted() {
-        // Ensure we emit hamburger component for the initial view
+        // Register hamburger menu for packlist
         hamburgerMenuRegistry.registerMenu('packlist', {
             components: [PacklistMenuComponent],
             props: {
-                currentView: 'packlist',
+                currentView: this.currentView,
+                refreshCallback: this.loadAvailablePacklists
             }
         });
+        
+        // Load available packlists
+        this.loadAvailablePacklists();
+        
+        // If we're already viewing a specific packlist, ensure its tab exists
+        if (this.isViewingPacklist) {
+            this.ensureTabExists(this.currentPacklist);
+            this.activeTabName = this.currentPacklist;
+        }
     },
     methods: {
-        handleTabChange(tabName) {
-            this.activeTab = tabName;
-            this.$root.setProperty('tabSystems', 'packlist', {
-                tabs: this.tabs,
-                activeTab: tabName
-            });
-        },
-        handleTabClose(tabName) {
-            const idx = this.tabs.findIndex(t => t.name === tabName);
-            if (idx !== -1) {
-                this.tabs.splice(idx, 1);
-                // Open previous tab if possible, otherwise next tab, otherwise none
-                if (this.activeTab === tabName) {
-                    if (this.tabs.length === 0) {
-                        this.activeTab = '';
-                    } else if (idx > 0) {
-                        this.activeTab = this.tabs[idx - 1].name;
-                    } else {
-                        this.activeTab = this.tabs[0].name;
-                    }
-                }
-                this.$root.setProperty('tabSystems', 'packlist', {
-                    tabs: this.tabs,
-                    activeTab: this.activeTab
-                });
-            }
-        },
-        async handleNewTab(tabName) {
-            // If tabName is provided and tab already exists, fire open-tab instead
-            if (tabName) {
-                const existingTabIdx = this.tabs.findIndex(t => t.name === tabName);
-                if (existingTabIdx !== -1) {
-                    this.activeTab = tabName;
-                    this.$emit && this.$emit('open-tab', tabName);
-                    this.$root.setProperty('tabSystems', 'packlist', {
-                        tabs: this.tabs,
-                        activeTab: tabName
-                    });
-                    return;
-                }
-            }
-            // Make modal tabs reactive
-            const modalTabs = Vue.reactive([]);
-            // Use a reactive loading flag
-            const modalLoading = Vue.ref(true);
-
-            const modal = modalManager.createModal(
-                'Open Packlist',
-                TabsListComponent,
-                {
-                    id: 'packlist-tabs-modal',
-                    componentProps: {
-                        tabs: modalTabs,
-                        onSelect: () => { },
-                        isLoading: modalLoading.value,
-                        loadingMessage: 'Getting shows from production schedule...'
-                    }
-                }
-            );
-            modalManager.showModal(modal.id);
-
-            let tabs = [];
+        async loadAvailablePacklists() {
+            this.isLoading = true;
             try {
-                tabs = await Requests.getAvailableTabs('PACK_LISTS');
-                tabs = tabs.filter(tab => tab.title !== 'TEMPLATE');
-            } catch (err) {
-                this.modalManager.showAlert('Failed to load packlist tabs: ' + err.message, 'Error');
-                modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
-                return;
+                const tabs = await Requests.getAvailableTabs('PACK_LISTS');
+                this.availablePacklists = tabs.filter(tab => tab.title !== 'TEMPLATE');
+            } catch (error) {
+                this.modalManager.showAlert?.('Failed to load available packlists: ' + error.message, 'Error');
+            } finally {
+                this.isLoading = false;
             }
-
-            // Update modal to remove loading and show tab selection
-            modalLoading.value = false;
-            modal.componentProps.isLoading = modalLoading.value;
-            modalTabs.splice(0, modalTabs.length, ...tabs);
-            modal.componentProps.onSelect = async (selectedTabName) => {
-                // Prevent duplicate tab creation
-                const existingTabIdx = this.tabs.findIndex(t => t.name === selectedTabName);
-                if (existingTabIdx !== -1) {
-                    modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
-                    this.activeTab = selectedTabName;
-                    this.$emit && this.$emit('open-tab', selectedTabName);
-                    this.$root.setProperty('tabSystems', 'packlist', {
-                        tabs: this.tabs,
-                        activeTab: selectedTabName
-                    });
-                    return;
-                }
-                modalManager.removeModal && modalManager.removeModal('packlist-tabs-modal');
-                // Add tab with loading state, let PacklistTable fetch its own data
-                this.tabs.push({
-                    name: selectedTabName,
-                    label: selectedTabName,
+        },
+        handlePacklistSelect(packlistName) {
+            this.navigateToPath('packlist/' + packlistName);
+        },
+        // Tab management methods
+        ensureTabExists(packlistName) {
+            if (!this.openTabs.find(tab => tab.name === packlistName)) {
+                this.openTabs.push({
+                    name: packlistName,
+                    label: packlistName,
                     closable: true,
                     component: PacklistTable,
-                    props: { tabName: selectedTabName, isLoading: true },
-                    isLoading: true
+                    props: {
+                        tabName: packlistName
+                    }
                 });
-                this.activeTab = selectedTabName;
-                this.$root.setProperty('tabSystems', 'packlist', {
-                    tabs: this.tabs,
-                    activeTab: selectedTabName
-                });
-            };
+            }
+        },
+        handleTabChange(tabName) {
+            // Navigate to the selected packlist
+            this.navigateToPath('packlist/' + tabName);
+        },
+        handleTabClose(tabName) {
+            const tabIndex = this.openTabs.findIndex(tab => tab.name === tabName);
+            if (tabIndex !== -1) {
+                this.openTabs.splice(tabIndex, 1);
+                
+                // If closing the current tab, navigate appropriately
+                if (tabName === this.currentPacklist) {
+                    if (this.openTabs.length > 0) {
+                        // Navigate to the next available tab
+                        const nextTab = this.openTabs[Math.max(0, tabIndex - 1)];
+                        this.navigateToPath('packlist/' + nextTab.name);
+                    } else {
+                        // Navigate back to main packlist page
+                        this.navigateToPath('packlist');
+                    }
+                }
+            }
+        },
+        handleNewTab() {
+            // Navigate back to main packlist page to select a new packlist
+            this.navigateToPath('packlist');
         }
     },
     template: html `
         <div class="packlist-page">
-            <TabComponent
-                :tabs="tabs"
-                :active-tab="activeTab"
+            <!-- Main Packlist View - List of Available Packlists -->
+            <div v-if="!isViewingPacklist">
+                <p>Open a packlist to view and manage its contents.</p>
+                
+                <tabs-list
+                    :tabs="availablePacklists"
+                    :on-select="handlePacklistSelect"
+                    :is-loading="isLoading"
+                    loading-message="Loading available packlists..."
+                />
+            </div>
+            <!-- Tab Navigation - shown when there are open tabs -->
+            <tab-component v-else-if="hasOpenTabs"
+                :tabs="openTabs"
+                :active-tab="activeTabName"
                 :show-new-tab-button="true"
                 @tab-change="handleTabChange"
                 @tab-close="handleTabClose"
                 @new-tab="handleNewTab"
             />
+            
+            <!-- Default / Not Found -->
+            <div v-else-if="!hasOpenTabs">
+                <h3>Packlist Management</h3>
+                <p>Select a view from the menu to get started.</p>
+            </div>
         </div>
     `
 };
