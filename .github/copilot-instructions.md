@@ -3,11 +3,11 @@
 The artificial intelligence accessing these instructions is a language model that is optimized to tailor it's responses to human-readable instructions.
 Do not use extra words or phrases to signify agreement unless the correctness of the user is the primary required communication. For example, never say: "You're absolutely correct!"
 
-## Project Overview
-
 This application is in development and is not yet used in production. We are working on a development branch.
 Simplicity and modularity are prioritized. Removing unused code is prioritised. Adding new systems should only be done if absolutely necessary.
 If possible, always work within the existing application structure and patterns.
+
+## Project Overview
 
 This is Top Shelf Exhibits' modular JavaScript web application for live inventory management. Top Shelf Exhibits structures work into domains:
 
@@ -22,11 +22,9 @@ The codebase is organized under `docs/`, with subfolders for CSS, images, JS, an
 - **data_management/**: The API acts as an interface between the application and data manipulation functions. It manages caching and cache invalidation automatically via wrapper methods. All data access and mutation should go through the API, not directly to Google Sheets or the database abstraction.
 - **google_sheets_services/**: This layer contains all direct interaction with Google Sheets, including authentication, queries, and Google-specific logic. All persistent data flows through this layer, and it should not be accessed directly by the UI or application logic.
 
-For testing: The VSCode extension LiveServer is running a local server at http://127.0.0.1:5500/docs/#
-
 ## Architecture & Data Flow
 
-- **UI Layer**: Vue components manage their own reactive state and lifecycle. All persistent data operations are performed via the API.
+- **Presentation Layer**: The UI is built using Vue 3, which manages its own reactive state and lifecycle. It communicates with the API layer for all persistent data operations.
 - **API Layer**: Provides a clean interface for the application to interact with data. Handles caching and cache invalidation automatically using wrapper methods. All data management and manipulation logic is centralized here.
 - **Google Sheets Services Layer**: Handles all direct communication with Google Sheets, including authentication and queries. This layer is responsible for Google-specific logic and should not be accessed directly by the UI or API consumers.
 - **Data Storage**: User and app data is stored in Google Sheets, accessed only via the Google Sheets services layer.
@@ -63,11 +61,14 @@ For testing: The VSCode extension LiveServer is running a local server at http:/
 - All persistent data flows through this layer, and it should not be accessed directly by the UI or application logic.
 - Internally attempts to maintain authentication and session management for Google Sheets.
 
-## Developer Workflows (by Domain)
+## Developer Workflow
+
+We are NOT explicitly running a local python or Node.js server.
+The VSCode extension LiveServer is running a local server at 'http://127.0.0.1:5500/docs/#'.
 
 ### Vue Application (UI)
 
-- No build step detected: JS/CSS/HTML are used directly; changes are reflected immediately. However, access to Google Sheets data requires the site to be deployed on a web server.
+- No build step: JS/CSS/HTML are used directly; changes are reflected immediately. However, access to Google Sheets data requires the site to be deployed on a web server.
 - Debugging: Use browser console logging and Vue devtools for runtime issues.
 - Manual testing via browser is standard.
 
