@@ -309,6 +309,7 @@ input[type="text"] {
     font-size: large;
     font-weight: 600;
     color: var(--color-text);
+    line-height: 28px;
 }
 .breadcrumb-path .breadcrumb-segment:not(.active) {
     color: var(--color-text-light);
@@ -321,6 +322,16 @@ input[type="text"] {
 .breadcrumb-path .breadcrumb-separator {
     color: var(--color-gray);
     font-weight: 200;
+}
+
+/* Dashboard card breadcrumb hover functionality */
+.breadcrumb-card-container {
+    position: relative;
+    padding-right: var(--padding-sm)
+}
+
+.breadcrumb-hover-overlay {
+    z-index: 1000;
 }
 
 

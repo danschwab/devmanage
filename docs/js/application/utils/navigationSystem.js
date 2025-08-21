@@ -133,6 +133,21 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Get dashboard title for a path (custom title for dashboard display)
+     * @param {string} path - The path to get dashboard title for
+     * @returns {string} Dashboard title or fallback to display name
+     */
+    getDashboardTitle(path) {
+        const route = this.getRoute(path);
+        if (route && route.dashboardTitle) {
+            return route.dashboardTitle;
+        }
+        
+        // Fallback to display name
+        return this.getDisplayName(path);
+    },
+
+    /**
      * Get the main section for a path (e.g., 'inventory' for 'inventory/categories')
      * @param {string} path - The path to get main section for
      * @returns {string} Main section name
@@ -147,6 +162,9 @@ export const NavigationRegistry = {
      * @param {string} parentPath - Parent path where to add the route
      * @param {string} routeKey - Key for the new route
      * @param {Object} routeConfig - Route configuration
+     * @param {string} [routeConfig.displayName] - Display name for navigation
+     * @param {string} [routeConfig.dashboardTitle] - Custom title for dashboard display
+     * @param {string} [routeConfig.icon] - Icon for the route
      */
     addDynamicRoute(parentPath, routeKey, routeConfig) {
         const parentRoute = this.getRoute(parentPath);
@@ -347,7 +365,8 @@ export const BreadcrumbComponent = {
     data() {
         return {
             // Local navigation map that can be extended at runtime
-            localNavigationMap: {}
+            localNavigationMap: {},
+            showHoverPath: false
         };
     },
     mounted() {
@@ -369,19 +388,32 @@ export const BreadcrumbComponent = {
         pathSegmentsWithNames() {
             if (!this.pathSegments.length) return [];
             
-            return this.pathSegments.map((segment, index) => ({
-                id: segment,
-                name: this.getSegmentName(segment),
-                index: index
-            }));
+            return this.pathSegments.map((segment, index) => {
+                // Build the cumulative path up to this segment
+                const cumulativePath = this.pathSegments.slice(0, index + 1).join('/');
+                
+                return {
+                    id: segment,
+                    name: this.getSegmentName(segment, cumulativePath),
+                    index: index,
+                    path: cumulativePath
+                };
+            });
         },
         breadcrumbTitle() {
             if (this.pathSegmentsWithNames.length === 0) return this.title;
             return this.pathSegmentsWithNames[this.pathSegmentsWithNames.length - 1].name;
         },
         displayTitle() {
-            // Always use breadcrumb title if containerPath exists, otherwise fallback to title
-            return this.containerPath ? this.breadcrumbTitle : this.title;
+            if (this.containerPath) {
+                // For dashboard cards, use dashboard title; for regular breadcrumbs, use display name
+                if (this.cardStyle) {
+                    return NavigationRegistry.getDashboardTitle(this.containerPath);
+                } else {
+                    return this.breadcrumbTitle;
+                }
+            }
+            return this.title;
         },
         currentPage() {
             if (this.pathSegments.length === 0) return '';
@@ -406,14 +438,26 @@ export const BreadcrumbComponent = {
     methods: {
         /**
          * Get human-readable name for a segment, building it if not found
+         * @param {string} segmentId - The segment identifier
+         * @param {string} fullPath - The full path to this segment (for better context)
          */
-        getSegmentName(segmentId) {
+        getSegmentName(segmentId, fullPath = null) {
+            // Check local navigation map first
             if (this.localNavigationMap[segmentId]) {
                 return this.localNavigationMap[segmentId];
             }
             
-            // Try to get from NavigationRegistry first
-            const registryName = NavigationRegistry.getDisplayName(segmentId);
+            // Try to get from NavigationRegistry using full path if available
+            let registryName = 'Unknown';
+            if (fullPath) {
+                registryName = NavigationRegistry.getDisplayName(fullPath);
+            }
+            
+            // If full path didn't work, try just the segment
+            if (registryName === 'Unknown') {
+                registryName = NavigationRegistry.getDisplayName(segmentId);
+            }
+            
             if (registryName !== 'Unknown') {
                 this.addNavigationMapping(segmentId, registryName);
                 return registryName;
@@ -467,6 +511,12 @@ export const BreadcrumbComponent = {
                     navigationMap: this.localNavigationMap
                 });
             }
+        },
+        showHoverBreadcrumb() {
+            this.showHoverPath = true;
+        },
+        hideHoverBreadcrumb() {
+            this.showHoverPath = false;
         }
     },
     template: html`
@@ -486,8 +536,34 @@ export const BreadcrumbComponent = {
                     <span v-if="index < pathSegmentsWithNames.length - 1" class="breadcrumb-separator">/</span>
                 </template>
             </div>
-            <!-- Current location only for dashboard cards -->
-            <h2 v-else class="breadcrumb-current">{{ displayTitle }}</h2>
+            <!-- Current location with hover overlay for dashboard cards -->
+            <div v-else class="breadcrumb-card-container">
+                <h2 v-if="!showHoverPath" class="breadcrumb-current" 
+                    @mouseenter="showHoverBreadcrumb" 
+                    @mouseleave="hideHoverBreadcrumb">
+                    {{ displayTitle }}
+                </h2>
+                
+                <!-- Hover overlay with full breadcrumb path -->
+                <div v-else-if="showHoverPath" class="breadcrumb-hover-overlay"
+                     @mouseenter="showHoverBreadcrumb" 
+                     @mouseleave="hideHoverBreadcrumb">
+                    <div class="breadcrumb-path">
+                        <template v-for="(segment, index) in pathSegmentsWithNames" :key="segment.id">
+                            <span 
+                                class="breadcrumb-segment"
+                                :class="{ 
+                                    'active': index === pathSegmentsWithNames.length - 1,
+                                    'page-highlight': index === 0 
+                                }"
+                                @click="navigateToBreadcrumb(index)">
+                                {{ segment.name }}
+                            </span>
+                            <span v-if="index < pathSegmentsWithNames.length - 1" class="breadcrumb-separator">/</span>
+                        </template>
+                    </div>
+                </div>
+            </div>
         </div>
         <!-- Traditional Title (fallback) -->
         <h2 v-else-if="title">{{ displayTitle }}</h2>
@@ -519,7 +595,7 @@ export const NavigationConfig = {
     /**
      * Add a dashboard container by path
      * @param {string} containerPath - The container path to add
-     * @param {string} title - Display title for the container
+     * @param {string} title - Display title for the container (optional, will use dashboardTitle or displayName)
      */
     addDashboardContainer(containerPath, title = null) {
         // Check if container already exists
@@ -528,7 +604,7 @@ export const NavigationConfig = {
         );
         
         if (!exists) {
-            const displayTitle = title || this.getDisplayNameForPath(containerPath);
+            const displayTitle = title || NavigationRegistry.getDashboardTitle(containerPath);
             this.allDashboardContainers.push({ 
                 path: containerPath, 
                 title: displayTitle 

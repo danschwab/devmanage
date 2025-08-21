@@ -24,14 +24,17 @@ export const ScheduleContent = {
             routes: {
                 calendar: {
                     displayName: 'Calendar View',
+                    dashboardTitle: 'Schedule Calendar',
                     icon: 'calendar_month'
                 },
                 events: {
                     displayName: 'Events',
+                    dashboardTitle: 'Schedule Events',
                     icon: 'event_note'
                 },
                 bookings: {
                     displayName: 'Bookings',
+                    dashboardTitle: 'Event Bookings',
                     icon: 'book_online'
                 }
             }

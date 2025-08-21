@@ -195,15 +195,18 @@ export const InventoryContent = {
             routes: {
                 categories: {
                     displayName: 'Categories',
+                    dashboardTitle: 'Inventory Categories',
                     icon: 'category',
                     children: {}
                 },
                 reports: {
                     displayName: 'Reports',
+                    dashboardTitle: 'Inventory Reports',
                     icon: 'assessment'
                 },
                 new: {
                     displayName: 'New Item',
+                    dashboardTitle: 'Add New Item',
                     icon: 'add'
                 }
             }

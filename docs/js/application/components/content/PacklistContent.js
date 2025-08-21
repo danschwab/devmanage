@@ -106,14 +106,17 @@ export const PacklistContent = {
             routes: {
                 active: {
                     displayName: 'Active Packlists',
+                    dashboardTitle: 'Active Pack Lists',
                     icon: 'play_arrow'
                 },
                 archived: {
                     displayName: 'Archived Packlists',
+                    dashboardTitle: 'Archived Pack Lists',
                     icon: 'archive'
                 },
                 templates: {
                     displayName: 'Templates',
+                    dashboardTitle: 'Pack List Templates',
                     icon: 'content_copy'
                 }
             }
