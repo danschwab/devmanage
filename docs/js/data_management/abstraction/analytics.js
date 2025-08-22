@@ -71,20 +71,6 @@ class analytics {
      * @returns {Promise<object>} Inventory status for all items
      */
     static async checkItemQuantities(projectIdentifier) {
-        // Generate cache key
-        const cacheKey = `quantities:${projectIdentifier}`;
-        
-        // Check cache first
-        const cachedValue = CacheManager.get(
-            CacheManager.NAMESPACES.INVENTORY, 
-            cacheKey, 
-            trackingId
-        );
-        
-        if (cachedValue !== null) {
-            return cachedValue;
-        }
-        
         console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
             // 1. Get pack list items
@@ -103,7 +89,7 @@ class analytics {
             console.log('2. Getting inventory quantities...');
             let inventoryInfo;
             try {
-                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY");
+                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "quantity");
             } catch (err) {
                 console.error('Error getting inventory:', err);
                 throw new Error('Failed to get inventory information');
@@ -112,14 +98,14 @@ class analytics {
             // Remove items with no inventory quantity
             const validItemIds = itemIds.filter(id => {
                 const inventoryObj = inventoryInfo.find(i => i.itemName === id);
-                return inventoryObj && inventoryObj.QTY !== null && inventoryObj.QTY !== undefined && inventoryObj.QTY !== '';
+                return inventoryObj && inventoryObj.quantity !== null && inventoryObj.quantity !== undefined && inventoryObj.quantity !== '';
             });
 
             // 3. Initialize result with inventory and requested, and set remaining to inventory - requested
             const result = {};
             validItemIds.forEach(id => {
                 const inventoryObj = inventoryInfo.find(i => i.itemName === id);
-                const inventoryQty = parseInt(inventoryObj.QTY || "0", 10);
+                const inventoryQty = parseInt(inventoryObj.quantity || "0", 10);
                 const projectQty = itemMap[id] || 0;
                 result[id] = {
                     inventory: inventoryQty,
@@ -141,8 +127,13 @@ class analytics {
 
             // 5. Process overlapping shows
             console.log('5. Processing overlapping shows...');
-            for (const otherId of overlappingIds) {
+            for (const overlapRow of overlappingIds) {
+                // Extract identifier from the row object
+                const otherId = overlapRow.Identifier || 
+                               await analytics.computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                
                 if (otherId === projectIdentifier) continue;
+                
                 try {
                     const otherItemMap = await PackListUtils.extractItems(otherId);
                     Object.entries(otherItemMap).forEach(([id, qty]) => {
@@ -175,20 +166,6 @@ class analytics {
      * @returns {Promise<Object>} Item availability map
      */
     static async checkItemAvailability(projectIdentifier) {
-        // Generate cache key
-        const cacheKey = `quantities:${projectIdentifier}`;
-        
-        // Check cache first
-        const cachedValue = CacheManager.get(
-            CacheManager.NAMESPACES.INVENTORY, 
-            cacheKey, 
-            trackingId
-        );
-        
-        if (cachedValue !== null) {
-            return cachedValue;
-        }
-        
         console.group(`Checking quantities for project: ${projectIdentifier}`);
         
         try {
@@ -211,7 +188,7 @@ class analytics {
             // Filter valid items and build result
             const result = {};
             itemIds.forEach(itemId => {
-                const qty = inventoryInfo.find(i => i.itemName === itemId)?.QTY ?? null;
+                const qty = inventoryInfo.find(i => i.itemName === itemId)?.quantity ?? null;
                 if (qty !== null) {
                     result[itemId] = { available: qty, allocated: 0, onOrder: 0 };
                 }
@@ -222,7 +199,11 @@ class analytics {
             let overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
             
             // Process overlapping shows
-            for (const { identifier: overlapId } of overlappingIds) {
+            for (const overlapRow of overlappingIds) {
+                // Extract identifier from the row object
+                const overlapId = overlapRow.Identifier || 
+                                 await analytics.computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                
                 if (overlapId === projectIdentifier) continue;
                 
                 console.log(` - Checking overlap with project: ${overlapId}`);
@@ -251,7 +232,12 @@ class analytics {
     // Event tracking method for analytics
     static trackEvent(eventName, eventData = {}) {
         // Implement your analytics tracking logic here
+        console.log(`[Analytics] Event: ${eventName}`, eventData);
     }
 }
 
-export const Analytics = wrapMethods(analytics, 'analytics');
+// Configure caching for analytics methods through wrapMethods
+const mutationKeys = []; // Analytics methods don't mutate data, so no mutation keys needed
+const getAnalyticsAffectedKeysFn = {}; // No mutation-based cache invalidation needed
+
+export const Analytics = wrapMethods(analytics, 'analytics', mutationKeys, getAnalyticsAffectedKeysFn);

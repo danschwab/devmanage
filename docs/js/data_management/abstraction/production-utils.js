@@ -66,16 +66,37 @@ class productionUtils {
                 let sEnd = parseDate(foundRow['S. End'], true, year);
                 ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
             }
+            
+            // Additional fallback: if we still have no return date but have S. Start, use S. Start + 1 month
+            if (!ret && !ship) {
+                let sStart = parseDate(foundRow['S. Start'], true, year);
+                if (sStart) {
+                    ship = new Date(sStart.getTime() - 10 * 86400000); // 10 days before show start
+                    ret = new Date(sStart.getTime() + 30 * 86400000); // 30 days after show start
+                    console.log(`[production-utils] Using S. Start fallback: ship=${ship}, ret=${ret}`);
+                }
+            }
+            
             if (ship && ship.getFullYear() != year) ship.setFullYear(Number(year));
             if (ret && ret.getFullYear() != year) ret.setFullYear(Number(year));
             if (ship && ret && ret <= ship) ret.setFullYear(ret.getFullYear() + 1);
             startDate = ship;
             endDate = ret;
             console.log(`[production-utils] Identifier mode: year=${year}, startDate=${startDate}, endDate=${endDate}`);
+            // If startDate exists but no endDate, assume 30 days after startDate
+            if (startDate && !endDate) {
+                endDate = new Date(startDate.getTime() + 30 * 86400000);
+                console.log(`[production-utils] No endDate found, assuming 30 days after startDate: endDate=${endDate}`);
+            }
         } else {
             startDate = parseDate(parameters.startDate, true, parameters.year);
             endDate = parseDate(parameters.endDate, true, parameters.year);
             year = parameters.year || startDate?.getFullYear();
+            // If startDate exists but no endDate, assume 30 days after startDate
+            if (startDate && !endDate) {
+                endDate = new Date(startDate.getTime() + 30 * 86400000);
+                console.log(`[production-utils] No endDate found, assuming 30 days after startDate: endDate=${endDate}`);
+            }
             console.log(`[production-utils] Date range mode: year=${year}, startDate=${startDate}, endDate=${endDate}`);
         }
         if (!year || !startDate || !endDate) {
@@ -89,6 +110,23 @@ class productionUtils {
                 (parseDate(row['S. Start'], true, row.Year) ? new Date(parseDate(row['S. Start'], true, row.Year).getTime() - 10 * 86400000) : null);
             let ret = parseDate(row['Expected Return Date'], true, row.Year) ||
                 (parseDate(row['S. End'], true, row.Year) ? new Date(parseDate(row['S. End'], true, row.Year).getTime() + 10 * 86400000) : null);
+            
+            // Additional fallback: if we still have no ship/return dates but have S. Start, use S. Start + 1 month
+            if (!ship && !ret) {
+                let sStart = parseDate(row['S. Start'], true, row.Year);
+                if (sStart) {
+                    ship = new Date(sStart.getTime() - 10 * 86400000); // 10 days before show start
+                    ret = new Date(sStart.getTime() + 30 * 86400000); // 30 days after show start
+                    console.log(`[production-utils] Using S. Start fallback for ${row.Identifier || row.Show}: ship=${ship}, ret=${ret}`);
+                }
+            }
+            
+            // Fallback: if we have ship date but no return date, assume one month after ship date
+            if (ship && !ret) {
+                ret = new Date(ship.getTime() + 30 * 86400000); // Add 30 days
+                console.log(`[production-utils] No return date for ${row.Identifier || row.Show}, assuming one month after ship: ${ret}`);
+            }
+            
             if (ship && ship.getFullYear() != row.Year) ship.setFullYear(Number(row.Year));
             if (ret && ret.getFullYear() != row.Year) ret.setFullYear(Number(row.Year));
             if (ship && ret && ret <= ship) ret.setFullYear(ret.getFullYear() + 1);

@@ -393,6 +393,8 @@ const App = {
                     :container-type="container.containerType"
                     :title="container.title"
                     :container-path="container.containerPath"
+                    :full-path="container.fullPath"
+                    :navigation-parameters="container.navigationParameters || {}"
                     :navigation-map="container.navigationMap"
                     :card-style="currentPage === 'dashboard'"
                     :show-close-button="true"
@@ -420,6 +422,8 @@ const App = {
                             v-if="container.containerType === 'inventory' || container.containerPath?.startsWith('inventory')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
+                            :full-path="container.fullPath"
+                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
                         >
                         </inventory-content>
@@ -428,6 +432,8 @@ const App = {
                             v-else-if="container.containerType === 'packlist' || container.containerPath?.startsWith('packlist')"
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
+                            :full-path="container.fullPath"
+                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
                         >
                         </packlist-content>
@@ -435,6 +441,8 @@ const App = {
                         <!-- Schedule Content -->
                         <schedule-content 
                             v-else-if="container.containerType === 'schedule'"
+                            :full-path="container.fullPath"
+                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </schedule-content>
                         

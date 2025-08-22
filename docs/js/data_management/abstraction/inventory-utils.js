@@ -13,13 +13,14 @@ class inventoryUtils {
     };
 
     static getTabNameForItem(itemName, indexData) {
-        // Build prefix-to-tab mapping
+        // Build prefix-to-tab mapping from transformed objects
         const prefixToTab = {};
-        indexData.slice(1).forEach(row => {
-            if (row[0] && row[1]) {
-                prefixToTab[row[0]] = row[1];
+        indexData.forEach(row => {
+            if (row.prefix && row.tab) {
+                prefixToTab[row.prefix] = row.tab;
             }
         });
+        
         let [prefix] = itemName.split('-');
         let tab = prefixToTab[prefix];
         if (!tab && prefix?.length > 0) {
@@ -33,7 +34,7 @@ class inventoryUtils {
         // Generate cache key
         const itemNames = Array.isArray(itemName) ? itemName : [itemName];
         const infoFields = Array.isArray(fields) ? fields : [fields];
-        const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
+        const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
         const itemsByTab = {};
         const unmappedItems = [];
         itemNames.forEach(item => {
@@ -100,7 +101,7 @@ class inventoryUtils {
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
+            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
             const foundTab = inventoryUtils.getTabNameForItem(tabOrItemName, indexData);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
@@ -126,7 +127,7 @@ class inventoryUtils {
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'Prefix', tab: 'Tab' });
+            const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
             const foundTab = inventoryUtils.getTabNameForItem(tabOrItemName, indexData);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;

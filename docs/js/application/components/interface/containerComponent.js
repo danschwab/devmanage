@@ -50,6 +50,14 @@ export const ContainerComponent = {
             type: Object,
             default: () => ({})
         },
+        navigationParameters: {
+            type: Object,
+            default: () => ({})
+        },
+        fullPath: {
+            type: String,
+            default: ''
+        },
         appContext: {
             type: Object,
             default: () => ({})

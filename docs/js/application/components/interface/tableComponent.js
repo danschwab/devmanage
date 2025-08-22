@@ -78,6 +78,14 @@ export const TableComponent = {
         sortable: {
             type: Boolean,
             default: false
+        },
+        searchTerm: {
+            type: String,
+            default: ''
+        },
+        hideRowsOnSearch: {
+            type: Boolean,
+            default: true
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
@@ -92,10 +100,16 @@ export const TableComponent = {
             allowSaveEvent: false,
             rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
-            searchValue: '', // Track search input value
+            searchValue: this.searchTerm || '', // Initialize with searchTerm prop
             sortColumn: null, // Current sort column key
             sortDirection: 'asc' // Current sort direction: 'asc' or 'desc'
         };
+    },
+    watch: {
+        // Watch for changes to searchTerm prop and update internal searchValue
+        searchTerm(newValue) {
+            this.searchValue = newValue || '';
+        }
     },
     computed: {
         showSaveButton() {
@@ -106,17 +120,17 @@ export const TableComponent = {
             return hasEditable || hasMovable || hasAddRow;
         },
         hideSet() {
-            // Hide columns listed in hideColumns prop and always hide 'marked-for-deletion'
-            return new Set([...(this.hideColumns || []), 'marked-for-deletion']);
+            // Hide columns listed in hideColumns prop and always hide 'AppData'
+            return new Set([...(this.hideColumns || []), 'AppData']);
         },
         visibleRows() {
             // Filter rows based on search value and deletion status
             let filteredData = this.data
                 .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => !row['marked-for-deletion']);
+                .filter(({ row }) => !(row.AppData && row.AppData['marked-for-deletion']));
 
-            // Apply search filter if searchValue is provided
-            if (this.searchValue && this.searchValue.trim()) {
+            // Apply search filter if searchValue is provided and hideRowsOnSearch is enabled
+            if (this.searchValue && this.searchValue.trim() && this.hideRowsOnSearch) {
                 const searchTerm = this.searchValue.toLowerCase().trim();
                 filteredData = filteredData.filter(({ row }) => {
                     // Only search visible columns (exclude hidden columns)
@@ -164,18 +178,18 @@ export const TableComponent = {
             // Show rows marked for deletion in tfoot
             return this.data
                 .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => row['marked-for-deletion']);
+                .filter(({ row }) => row.AppData && row.AppData['marked-for-deletion']);
         }
     },
     watch: {
         allowSaveEvent(val) {
             // Emit to parent if dirty state changes
-            console.log('[TableComponent] allowSaveEvent changed:', val);
+            //console.log('[TableComponent] allowSaveEvent changed:', val);
             this.$emit('inner-table-dirty', val);
         },
         data: {
             handler() {
-                console.log('[TableComponent] originalData:', this.originalData);
+                console.log('[TableComponent] originalData:', this.data);
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
                     this.compareAllCellsDirty();
@@ -197,7 +211,7 @@ export const TableComponent = {
         },
     },
     mounted() {
-        console.log('[TableComponent] originalData:', this.originalData);
+        //console.log('[TableComponent] originalData:', this.originalData);
         this.$nextTick(() => {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();
@@ -442,7 +456,7 @@ export const TableComponent = {
             this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
             // Also, if any row is marked for deletion, allow save event
             if (!this.allowSaveEvent && Array.isArray(this.data)) {
-                this.allowSaveEvent = this.data.some(row => row && row['marked-for-deletion']);
+                this.allowSaveEvent = this.data.some(row => row && row.AppData && row.AppData['marked-for-deletion']);
             }
         },
         handleSave() {
@@ -511,9 +525,11 @@ export const TableComponent = {
             if (
                 this.dragIndex !== null &&
                 this.data[this.dragIndex] &&
-                this.data[this.dragIndex]['marked-for-deletion']
+                this.data[this.dragIndex].AppData &&
+                this.data[this.dragIndex].AppData['marked-for-deletion']
             ) {
-                this.data[this.dragIndex]['marked-for-deletion'] = false;
+                if (!this.data[this.dragIndex].AppData) this.data[this.dragIndex].AppData = {};
+                this.data[this.dragIndex].AppData['marked-for-deletion'] = false;
             }
 
             // Cross-table drag logic
@@ -536,8 +552,8 @@ export const TableComponent = {
                 // Prevent duplicate insert if already present
                 if (!this.data.includes(globalDragRow)) {
                     // Remove marked-for-deletion state before inserting into new table
-                    if (globalDragRow && globalDragRow['marked-for-deletion']) {
-                        delete globalDragRow['marked-for-deletion'];
+                    if (globalDragRow && globalDragRow.AppData && globalDragRow.AppData['marked-for-deletion']) {
+                        delete globalDragRow.AppData['marked-for-deletion'];
                     }
                     this.data.splice(insertIndex, 0, globalDragRow);
                     // Remove from source table
@@ -603,9 +619,10 @@ export const TableComponent = {
             if (
                 this.dragIndex !== null &&
                 this.data[this.dragIndex] &&
-                this.data[this.dragIndex]['marked-for-deletion']
+                this.data[this.dragIndex].AppData &&
+                this.data[this.dragIndex].AppData['marked-for-deletion']
             ) {
-                this.data[this.dragIndex]['marked-for-deletion'] = false;
+                this.data[this.dragIndex].AppData['marked-for-deletion'] = false;
             }
             // ...existing code...
             if (
@@ -644,9 +661,10 @@ export const TableComponent = {
                 this.dragSourceTableId === this.dragId &&
                 !this.dragMoved &&
                 this.data[this.dragIndex] &&
-                !this.data[this.dragIndex]['marked-for-deletion']
+                !(this.data[this.dragIndex].AppData && this.data[this.dragIndex].AppData['marked-for-deletion'])
             ) {
-                this.data[this.dragIndex]['marked-for-deletion'] = true;
+                if (!this.data[this.dragIndex].AppData) this.data[this.dragIndex].AppData = {};
+                this.data[this.dragIndex].AppData['marked-for-deletion'] = true;
             }
             this.dragOverIndex = this.data.length;
         },
@@ -793,34 +811,50 @@ export const TableComponent = {
                                     :key="column.key"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
-                                    <input
-                                        v-if="column.editable && column.format === 'number'"    
-                                        type="number"
-                                        :value="row[column.key]"
-                                        @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                    />
-                                    <div
-                                        v-else-if="column.editable"
-                                        contenteditable="true"
-                                        :data-row-index="idx"
-                                        :data-col-index="colIndex"
-                                        @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                        class="table-edit-textarea"
-                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                        :ref="'editable_' + idx + '_' + colIndex"
-                                    ></div>
-                                    <slot 
-                                        v-else 
-                                        :row="row" 
-                                        :rowIndex="idx" 
-                                        :column="column"
-                                        :cellRowIndex="idx"
-                                        :cellColIndex="colIndex"
-                                        :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
-                                    >
-                                        <span v-html="highlightSearchText(row[column.key], column)"></span>
-                                    </slot>
+                                    <div class="table-cell-container">
+                                        <!-- Editable number input -->
+                                        <input
+                                            v-if="column.editable && column.format === 'number'"    
+                                            type="number"
+                                            :value="row[column.key]"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                        />
+                                        <!-- Editable text div -->
+                                        <div
+                                            v-else-if="column.editable"
+                                            contenteditable="true"
+                                            :data-row-index="idx"
+                                            :data-col-index="colIndex"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                            class="table-edit-textarea"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                            :ref="'editable_' + idx + '_' + colIndex"
+                                        ></div>
+                                        <!-- Non-editable content (slot) -->
+                                        <slot 
+                                            v-else 
+                                            :row="row" 
+                                            :rowIndex="idx" 
+                                            :column="column"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex"
+                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
+                                        >
+                                            <span v-html="highlightSearchText(row[column.key], column)"></span>
+                                        </slot>
+                                        
+                                        <!-- Additional cell content slot (for warnings, etc.) -->
+                                        <slot 
+                                            name="cell-extra"
+                                            :row="row" 
+                                            :rowIndex="idx" 
+                                            :column="column"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex"
+                                            :isEditable="column.editable"
+                                        ></slot>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -842,27 +876,42 @@ export const TableComponent = {
                                     :key="column.key"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
-
-                                    <input
-                                        v-if="column.editable && column.format === 'number'"    
-                                        type="number"
-                                        :value="row[column.key]"
-                                        @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                    />
-                                    <div
-                                        v-else-if="column.editable"
-                                        contenteditable="true"
-                                        :data-row-index="idx"
-                                        :data-col-index="colIndex"
-                                        @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                        class="table-edit-textarea"
-                                        :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                        :ref="'editable_' + idx + '_' + colIndex"
-                                    ></div>
-                                    <slot v-else :row="row" :rowIndex="idx" :column="column">
-                                        {{ formatCellValue(row[column.key], column) }}
-                                    </slot>
+                                    <div class="table-cell-container">
+                                        <!-- Editable number input -->
+                                        <input
+                                            v-if="column.editable && column.format === 'number'"    
+                                            type="number"
+                                            :value="row[column.key]"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                        />
+                                        <!-- Editable text div -->
+                                        <div
+                                            v-else-if="column.editable"
+                                            contenteditable="true"
+                                            :data-row-index="idx"
+                                            :data-col-index="colIndex"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                            class="table-edit-textarea"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                            :ref="'editable_' + idx + '_' + colIndex"
+                                        ></div>
+                                        <!-- Non-editable content -->
+                                        <slot v-else :row="row" :rowIndex="idx" :column="column">
+                                            {{ formatCellValue(row[column.key], column) }}
+                                        </slot>
+                                        
+                                        <!-- Additional cell content slot (for warnings, etc.) -->
+                                        <slot 
+                                            name="cell-extra"
+                                            :row="row" 
+                                            :rowIndex="idx" 
+                                            :column="column"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex"
+                                            :isEditable="column.editable"
+                                        ></slot>
+                                    </div>
                                 </td>
                             </tr>
                             <tr>

@@ -130,6 +130,15 @@ export const Requests = {
     },
     
     /**
+     * Check item quantities for a project (with overlapping shows analysis)
+     * @param {string} projectIdentifier - The project identifier
+     * @returns {Promise<object>} Detailed inventory status for all items
+     */
+    checkItemQuantities: async (projectIdentifier) => {
+        return await Analytics.checkItemQuantities(projectIdentifier);
+    },
+    
+    /**
      * Get information about specific inventory items
      * @param {string|string[]} itemName - Item ID(s) to look up
      * @param {string|string[]} fields - Field(s) to retrieve

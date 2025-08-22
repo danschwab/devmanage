@@ -17,14 +17,14 @@ export class FakeGoogleSheetsAuth {
     };
 
     static async initialize() {
-        console.log('FakeGoogleSheetsAuth: Initializing...');
+        //console.log('FakeGoogleSheetsAuth: Initializing...');
         await this.delay(100); // Simulate async initialization
         this.isInitialized = true;
         return true;
     }
 
     static async authenticate() {
-        console.log('FakeGoogleSheetsAuth: Authenticating...');
+        //console.log('FakeGoogleSheetsAuth: Authenticating...');
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
         this.storeToken(this.mockToken);
@@ -70,7 +70,7 @@ export class FakeGoogleSheetsAuth {
     }
 
     static async logout() {
-        console.log('FakeGoogleSheetsAuth: Logging out...');
+        //console.log('FakeGoogleSheetsAuth: Logging out...');
         this.userEmail = null;
         this.isAuthenticatedState = false;
         this.clearStoredToken();
@@ -162,7 +162,7 @@ export class FakeGoogleSheetsService {
                 ['TTOP-001', '', '15', '', '', '30" white cocktail table tops-round', ''],
                 ['TBASE-001', '', '8', '', '', 'cocktail table bases', '']
             ],
-            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-001', '', '0', '', '', 'Blah blah blah', '']],
+            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-004', '', '10', '', '', 'Blah blah blah', '']],
             'HANGING SIGNS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'Description', 'Packing/shop notes'],['HS-001', '', '0', '', 'This is a sign', '']],
             'CEILING TILES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['C1', '', '0', '', '', 'Blah blah blah', '']],
             'CEILING TRIM': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['S1', '', '0', '', '', 'Blah blah blah', '']],
@@ -330,6 +330,7 @@ export class FakeGoogleSheetsService {
                 ['SHOT Show', 'Allen Arms', '2025', 'ALLEN ARMS 2025 SHOT', 'Las Vegas, NV', '10x40 & 10x10', '75323 & 75324', '21-Jan', '24-Jan', '1/13/2025', 'X', 'X', 'X', '', '2/3', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', 'in', '1/10', 'X', 'X', '', 'X', 'X', '', '', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['SHOT Show', 'MOJO', '2025', 'MOJO 2025 SHOT', 'Las Vegas, NV', '30x30', '10518', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', '', 'X', '', '', 'X', '', '', '10-Dec', ''],
                 ['SHOT Show', 'Gearfire', '2025', 'GEARFIRE 2025 SHOT', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],
+                ['NAB', 'ATSC', '2025', 'ATSC 2025 NAB', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['NADA', 'AWN', '2025', 'AWNINC 2025 NADA', 'New Orleans', '20x20', '3363', '24-Jan', '26-Jan', '1/7/2024', 'X', 'X', 'X', '', '1/28', 'Freeman', 'ELITE', '', 'X', 'X', 'X', 'X', '', '', 'X', '', 'in', 'done', 'X', 'X', '', 'X', 'X', '', 'X', '', '', '', 'X', 'X', '', ''],
                 ['SLAS', 'BitBio', '2025', 'BITBIO 2025 SLAS', 'San Diego, CA', '20x20', '349', '26-Jan', '30-Jan', '1/9/2024', 'X', 'X', 'X', '', '2/17', 'Freeman', 'WW', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '12/20', '1/8', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '16-Dec', ''],
                 ['Surfaces (TISE)', 'Cyncly', '2025', 'CYNCLY 2025 SURFACES', 'Las Vegas, NV', '40x60', '2057', '28-Jan', '30-Jan', '1/22/2025', 'X', 'X', 'X', '', '2/4', 'Freeman', 'Brian', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', '12/20', '1/20', 'X', 'X', '', 'X', 'X', '', 'X', '', '', '', '', '', '16-Dec', 'X'],
@@ -658,12 +659,12 @@ export class FakeGoogleSheetsService {
 
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
         await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
-        console.log('FakeGoogleSheetsService: Simulating exponential backoff...');
+        //console.log('FakeGoogleSheetsService: Simulating exponential backoff...');
         await this.delay(Math.random() * 100 + 50); // Random delay between 50-150ms
         try {
             return await fn();
         } catch (error) {
-            console.log('FakeGoogleSheetsService: Simulated error caught in backoff');
+            //console.log('FakeGoogleSheetsService: Simulated error caught in backoff');
             throw error;
         }
     }
@@ -675,7 +676,7 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Getting data for ${tableId}, range: ${range}`);
+        //console.log(`FakeGoogleSheetsService: Getting data for ${tableId}, range: ${range}`);
         await this.delay(100);
 
         // Parse range to extract sheet name
@@ -698,7 +699,7 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Setting data for ${tableId}/${tabName}`);
+        //console.log(`FakeGoogleSheetsService: Setting data for ${tableId}/${tabName}`);
         await this.delay(150);
 
         try {
@@ -726,7 +727,7 @@ export class FakeGoogleSheetsService {
 
             // Handle range-based updates (like "A1:B1" with values array)
             if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
-                console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
+                //console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
                 const sheetData = this.mockData[tableId][tabName];
@@ -738,7 +739,7 @@ export class FakeGoogleSheetsService {
 
             // Handle cell-by-cell updates
             if (Array.isArray(updates) && updates.length > 0 && updates[0].hasOwnProperty('row')) {
-                console.log(`FakeGoogleSheetsService: Applying ${updates.length} cell updates`);
+                //console.log(`FakeGoogleSheetsService: Applying ${updates.length} cell updates`);
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
                 const sheetData = this.mockData[tableId][tabName];
@@ -756,7 +757,7 @@ export class FakeGoogleSheetsService {
 
             // Handle full-table updates
             if (updates?.type === 'full-table' && Array.isArray(updates.values)) {
-                console.log(`FakeGoogleSheetsService: Full table update with ${updates.values.length} rows`);
+                //console.log(`FakeGoogleSheetsService: Full table update with ${updates.values.length} rows`);
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
                 const values = updates.values;
@@ -795,7 +796,7 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
         
-        console.log(`FakeGoogleSheetsService: Getting tabs for ${tableId}`);
+        //console.log(`FakeGoogleSheetsService: Getting tabs for ${tableId}`);
         await this.delay(80);
 
         const tabs = this.mockTabs[tableId] || [];
@@ -809,13 +810,13 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Hiding ${tabs.length} tabs in ${tableId}`);
+        //console.log(`FakeGoogleSheetsService: Hiding ${tabs.length} tabs in ${tableId}`);
         await this.delay(120);
 
         // In a real implementation, we'd track hidden state
         // For mock purposes, just log the action
         tabs.forEach(tab => {
-            console.log(`  - Hiding tab: ${tab.title} (ID: ${tab.sheetId})`);
+            //console.log(`  - Hiding tab: ${tab.title} (ID: ${tab.sheetId})`);
         });
     }
 
@@ -826,13 +827,13 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Showing ${tabs.length} tabs in ${tableId}`);
+        //console.log(`FakeGoogleSheetsService: Showing ${tabs.length} tabs in ${tableId}`);
         await this.delay(120);
 
         // In a real implementation, we'd track hidden state
         // For mock purposes, just log the action
         tabs.forEach(tab => {
-            console.log(`  - Showing tab: ${tab.title} (ID: ${tab.sheetId})`);
+            //console.log(`  - Showing tab: ${tab.title} (ID: ${tab.sheetId})`);
         });
     }
 
@@ -843,7 +844,7 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Copying tab ${sourceTab?.title || 'unknown'} to ${newTabName} in ${tableId}`);
+        //console.log(`FakeGoogleSheetsService: Copying tab ${sourceTab?.title || 'unknown'} to ${newTabName} in ${tableId}`);
         await this.delay(200);
 
         // Handle case where sourceTab is null or undefined
@@ -879,7 +880,7 @@ export class FakeGoogleSheetsService {
             }];
         }
 
-        console.log(`FakeGoogleSheetsService: Successfully created tab ${newTabName}`);
+        //console.log(`FakeGoogleSheetsService: Successfully created tab ${newTabName}`);
     }
 
     static async createBlankTab(tableId, newTabName) {
@@ -889,7 +890,7 @@ export class FakeGoogleSheetsService {
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
 
-        console.log(`FakeGoogleSheetsService: Creating blank tab ${newTabName} in ${tableId}`);
+        //console.log(`FakeGoogleSheetsService: Creating blank tab ${newTabName} in ${tableId}`);
         await this.delay(150);
 
         // Ensure mock data structure exists
@@ -915,14 +916,14 @@ export class FakeGoogleSheetsService {
             }];
         }
 
-        console.log(`FakeGoogleSheetsService: Successfully created blank tab ${newTabName}`);
+        //console.log(`FakeGoogleSheetsService: Successfully created blank tab ${newTabName}`);
     }
 
     static async querySheetData(tableId, query) {
         await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
-        console.log(`FakeGoogleSheetsService: Executing query on ${tableId}: ${query}`);
+        //console.log(`FakeGoogleSheetsService: Executing query on ${tableId}: ${query}`);
         await this.delay(100);
 
         try {
@@ -943,7 +944,7 @@ export class FakeGoogleSheetsService {
             // Execute the query against the data using SheetSql
             const results = SheetSql.executeQuery(parsedQuery, data);
             
-            console.log(`FakeGoogleSheetsService: Query returned ${results.length} results`);
+            //console.log(`FakeGoogleSheetsService: Query returned ${results.length} results`);
             return results;
         } catch (error) {
             console.error('FakeGoogleSheetsService: Error executing sheet query:', error);
@@ -958,14 +959,14 @@ export class FakeGoogleSheetsService {
 
     // Method to reset mock data to original state (useful for testing)
     static resetMockData() {
-        console.log('FakeGoogleSheetsService: Resetting mock data to original state');
+        //console.log('FakeGoogleSheetsService: Resetting mock data to original state');
         // This would restore the original mockData structure
         // Implementation left as exercise since it depends on specific testing needs
     }
 
     // Method to add custom mock data for testing
     static setMockData(tableId, sheetName, data) {
-        console.log(`FakeGoogleSheetsService: Setting custom mock data for ${tableId}/${sheetName}`);
+        //console.log(`FakeGoogleSheetsService: Setting custom mock data for ${tableId}/${sheetName}`);
         if (!this.mockData[tableId]) this.mockData[tableId] = {};
         this.mockData[tableId][sheetName] = JSON.parse(JSON.stringify(data));
     }

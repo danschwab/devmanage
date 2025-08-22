@@ -1,15 +1,15 @@
 // Modular reactive store factory for any generic data, with async API calls for load and save
 export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = []) {
-    // Helper to recursively add marked-for-deletion to all objects in an array (and nested arrays)
-    function markForDeletionInit(arr) {
+    // Helper to recursively add AppData to all objects in an array (and nested arrays)
+    function appDataInit(arr) {
         if (!Array.isArray(arr)) return arr;
         return arr.map(obj => {
             if (obj && typeof obj === 'object') {
-                if (!('marked-for-deletion' in obj)) obj['marked-for-deletion'] = false;
-                // Recursively mark nested arrays (e.g., Items)
+                if (!('AppData' in obj)) obj['AppData'] = {};
+                // Recursively initialize nested arrays (e.g., Items)
                 Object.keys(obj).forEach(key => {
                     if (Array.isArray(obj[key])) {
-                        obj[key] = markForDeletionInit(obj[key]);
+                        obj[key] = appDataInit(obj[key]);
                     }
                 });
             }
@@ -24,12 +24,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         loadingMessage: '',
         error: null,
         setData(newData) {
-            // Deep clone and initialize marked-for-deletion
-            this.data = markForDeletionInit(JSON.parse(JSON.stringify(newData)));
+            // Deep clone and initialize AppData
+            this.data = appDataInit(JSON.parse(JSON.stringify(newData)));
         },
         setOriginalData(newOriginalData) {
-            // Deep clone and initialize marked-for-deletion
-            this.originalData = markForDeletionInit(JSON.parse(JSON.stringify(newOriginalData)));
+            // Deep clone and initialize AppData
+            this.originalData = appDataInit(JSON.parse(JSON.stringify(newOriginalData)));
         },
         setError(err) {
             this.error = err;
@@ -105,7 +105,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
                 this.setOriginalData(dataToSet);
-                console.log('[ReactiveStore] reloadOriginalData: Loaded', dataToSet);
+                //console.log('[ReactiveStore] reloadOriginalData: Loaded', dataToSet);
                 return this.originalData;
             } catch (err) {
                 this.setOriginalData([]);
@@ -115,16 +115,17 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setLoading(false, '');
             }
         },
-        // Mark/unmark for deletion by index
+        // Mark/unmark for deletion by index using AppData
         markRowForDeletion(idx, value = true) {
             if (this.data[idx]) {
-                this.data[idx]['marked-for-deletion'] = value;
+                if (!this.data[idx].AppData) this.data[idx].AppData = {};
+                this.data[idx].AppData['marked-for-deletion'] = value;
                 // If marking for deletion and row is empty, remove immediately
                 if (value) {
                     const row = this.data[idx];
-                    // Check if all fields (except 'marked-for-deletion') are empty/falsy
+                    // Check if all fields (except 'AppData') are empty/falsy
                     const hasContent = Object.keys(row).some(
-                        key => key !== 'marked-for-deletion' && !!row[key]
+                        key => key !== 'AppData' && !!row[key]
                     );
                     if (!hasContent) {
                         this.data.splice(idx, 1);
@@ -137,16 +138,16 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.data = removeMarkedForDeletion(this.data);
         },
         addRow(row, fieldNames = null) {
-            // Ensure marked-for-deletion is set and nested arrays are initialized
+            // Ensure AppData is set and nested arrays are initialized
             if (row && typeof row === 'object') {
-                if (!('marked-for-deletion' in row)) row['marked-for-deletion'] = false;
+                if (!('AppData' in row)) row['AppData'] = {};
                 // Initialize fields to empty string if fieldNames provided
                 if (Array.isArray(fieldNames)) {
                     row = initializeRowFields(row, fieldNames);
                 }
                 Object.keys(row).forEach(key => {
                     if (Array.isArray(row[key])) {
-                        row[key] = markForDeletionInit(row[key]);
+                        row[key] = appDataInit(row[key]);
                     }
                 });
             }
@@ -160,19 +161,50 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 Array.isArray(this.data[parentIdx][key])
             ) {
                 if (row && typeof row === 'object') {
-                    if (!('marked-for-deletion' in row)) row['marked-for-deletion'] = false;
+                    if (!('AppData' in row)) row['AppData'] = {};
                     // Initialize fields to empty string if fieldNames provided
                     if (Array.isArray(fieldNames)) {
                         row = initializeRowFields(row, fieldNames);
                     }
                     Object.keys(row).forEach(k => {
                         if (Array.isArray(row[k])) {
-                            row[k] = markForDeletionInit(row[k]);
+                            row[k] = appDataInit(row[k]);
                         }
                     });
                 }
                 this.data[parentIdx][key].push(row);
             }
+        },
+        // AppData utility methods for managing arbitrary key-value pairs
+        setAppData(rowIdx, key, value) {
+            if (this.data[rowIdx]) {
+                if (!this.data[rowIdx].AppData) this.data[rowIdx].AppData = {};
+                this.data[rowIdx].AppData[key] = value;
+            }
+        },
+        getAppData(rowIdx, key = null) {
+            if (!this.data[rowIdx] || !this.data[rowIdx].AppData) return key ? null : {};
+            return key ? this.data[rowIdx].AppData[key] : this.data[rowIdx].AppData;
+        },
+        setNestedAppData(parentIdx, nestedKey, itemIdx, key, value) {
+            if (this.data[parentIdx] && 
+                Array.isArray(this.data[parentIdx][nestedKey]) && 
+                this.data[parentIdx][nestedKey][itemIdx]) {
+                if (!this.data[parentIdx][nestedKey][itemIdx].AppData) {
+                    this.data[parentIdx][nestedKey][itemIdx].AppData = {};
+                }
+                this.data[parentIdx][nestedKey][itemIdx].AppData[key] = value;
+            }
+        },
+        getNestedAppData(parentIdx, nestedKey, itemIdx, key = null) {
+            if (!this.data[parentIdx] || 
+                !Array.isArray(this.data[parentIdx][nestedKey]) || 
+                !this.data[parentIdx][nestedKey][itemIdx] ||
+                !this.data[parentIdx][nestedKey][itemIdx].AppData) {
+                return key ? null : {};
+            }
+            const appData = this.data[parentIdx][nestedKey][itemIdx].AppData;
+            return key ? appData[key] : appData;
         },
     });
 
@@ -180,7 +212,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
     function removeMarkedForDeletion(arr) {
         if (!Array.isArray(arr)) return arr;
         return arr
-            .filter(obj => !(obj && obj['marked-for-deletion']))
+            .filter(obj => !(obj && obj.AppData && obj.AppData['marked-for-deletion']))
             .map(obj => {
                 if (obj && typeof obj === 'object') {
                     const newObj = { ...obj };

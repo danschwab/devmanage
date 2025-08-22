@@ -116,6 +116,58 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Parse path with parameters (supports query string parameters)
+     * @param {string} path - The path with potential parameters (e.g., 'inventory/categories?search=item&hideRows=false')
+     * @returns {Object} Object with path, parameters, and route information
+     */
+    parsePath(path) {
+        // Split path from query parameters
+        const [cleanPath, queryString] = path.split('?');
+        const parameters = {};
+        
+        // Parse query string parameters
+        if (queryString) {
+            const searchParams = new URLSearchParams(queryString);
+            for (const [key, value] of searchParams) {
+                // Try to parse boolean and number values
+                if (value === 'true') parameters[key] = true;
+                else if (value === 'false') parameters[key] = false;
+                else if (!isNaN(value) && !isNaN(parseFloat(value))) parameters[key] = parseFloat(value);
+                else parameters[key] = value;
+            }
+        }
+        
+        const route = this.getRoute(cleanPath);
+        
+        return {
+            path: cleanPath,
+            fullPath: path,
+            parameters,
+            route,
+            hasParameters: Object.keys(parameters).length > 0
+        };
+    },
+
+    /**
+     * Build path with parameters
+     * @param {string} path - The base path
+     * @param {Object} parameters - Parameters to append as query string
+     * @returns {string} Full path with parameters
+     */
+    buildPath(path, parameters = {}) {
+        if (!parameters || Object.keys(parameters).length === 0) {
+            return path;
+        }
+        
+        const queryString = new URLSearchParams();
+        Object.entries(parameters).forEach(([key, value]) => {
+            queryString.append(key, String(value));
+        });
+        
+        return `${path}?${queryString.toString()}`;
+    },
+
+    /**
      * Get display name for a path
      * @param {string} path - The path to get display name for
      * @returns {string} Display name
@@ -787,10 +839,22 @@ export const NavigationConfig = {
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
-            // Extract the base page from the target path (e.g., 'inventory/items' -> 'inventory')
-            const basePage = targetPath.split('/')[0];
+            // Parse path for parameters
+            const pathInfo = NavigationRegistry.parsePath(targetPath);
+            console.log('NavigationConfig: Navigating to path with parameters:', pathInfo);
             
-            container.containerPath = targetPath;
+            // Extract the base page from the clean path (e.g., 'inventory/items' -> 'inventory')
+            const basePage = pathInfo.path.split('/')[0];
+            
+            // Update container with path and parameters
+            container.containerPath = pathInfo.path; // Store clean path for routing
+            container.fullPath = pathInfo.fullPath; // Store full path with parameters
+            container.navigationParameters = pathInfo.parameters; // Store parameters separately
+            
+            // Log parameters for debugging
+            if (pathInfo.hasParameters) {
+                console.log(`NavigationConfig: Navigation parameters for container ${containerId}:`, pathInfo.parameters);
+            }
             
             // Update container's navigation map if provided
             if (navigationMap) {
@@ -798,18 +862,19 @@ export const NavigationConfig = {
             }
             
             // If navigating to dashboard, navigate to dashboard page instead of updating path
-            if (targetPath === 'dashboard') {
+            if (pathInfo.path === 'dashboard') {
                 this.navigateToPage('dashboard', appContext);
                 return {
                     action: 'navigate_to_dashboard',
                     containerId,
-                    targetPage: 'dashboard'
+                    targetPage: 'dashboard',
+                    parameters: pathInfo.parameters
                 };
             }
             
             // If we're on dashboard and trying to navigate to a different path,
             // navigate to that path as a new page (like expand button behavior)
-            if (appContext.currentPage !== targetPath) {
+            if (appContext.currentPage !== pathInfo.path) {
                 this.navigateToPage(basePage, appContext);
                 
                 // After navigation, find the container that matches the target path exactly
@@ -818,7 +883,9 @@ export const NavigationConfig = {
                         c.containerPath === basePage || c.containerType === basePage
                     );
                     if (expandedContainer) {
-                        expandedContainer.containerPath = targetPath;
+                        expandedContainer.containerPath = pathInfo.path;
+                        expandedContainer.fullPath = pathInfo.fullPath;
+                        expandedContainer.navigationParameters = pathInfo.parameters;
                     }
                 });
                 
@@ -826,7 +893,9 @@ export const NavigationConfig = {
                     action: 'navigate_to_new_page',
                     containerId,
                     targetPage: basePage,
-                    targetPath: targetPath
+                    targetPath: pathInfo.path,
+                    fullPath: pathInfo.fullPath,
+                    parameters: pathInfo.parameters
                 };
             }
             
@@ -834,7 +903,9 @@ export const NavigationConfig = {
             return {
                 action: 'update_path',
                 containerId,
-                newPath: targetPath,
+                newPath: pathInfo.path,
+                fullPath: pathInfo.fullPath,
+                parameters: pathInfo.parameters,
                 navigationMap
             };
         }
@@ -846,13 +917,16 @@ export const NavigationConfig = {
      * Create a navigation handler for a specific container
      * @param {string} containerId - Container ID
      * @param {Function} handleNavigateToPath - Navigation handler function
-     * @returns {Function} Path navigation handler
+     * @returns {Function} Path navigation handler that accepts path and optional parameters
      */
     createNavigateToPathHandler(containerId, handleNavigateToPath) {
-        return (path) => {
+        return (path, parameters = null) => {
+            // If parameters are provided as a separate object, build the full path
+            const fullPath = parameters ? NavigationRegistry.buildPath(path, parameters) : path;
+            
             handleNavigateToPath({
                 containerId: containerId,
-                targetPath: path
+                targetPath: fullPath
             });
         };
     },
@@ -931,3 +1005,18 @@ export const NavigationConfig = {
         }
     }
 };
+
+// Global navigation test function for debugging
+window.testNavigation = function(path, parameters = null) {
+    console.log('=== Navigation Test ===');
+    console.log('Testing path:', path);
+    console.log('Testing parameters:', parameters);
+    
+    const pathInfo = NavigationRegistry.parsePath(parameters ? 
+        NavigationRegistry.buildPath(path, parameters) : path);
+    console.log('Parsed path info:', pathInfo);
+    
+    return pathInfo;
+};
+
+console.log('Navigation system loaded. Use testNavigation(path, parameters) to test parameter parsing.');

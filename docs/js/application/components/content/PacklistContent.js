@@ -59,6 +59,11 @@ export const PacklistContent = {
     props: {
         showAlert: Function,
         containerPath: String,
+        fullPath: String,
+        navigationParameters: {
+            type: Object,
+            default: () => ({})
+        },
         navigateToPath: Function
     },
     data() {
@@ -76,9 +81,13 @@ export const PacklistContent = {
             return 'packlist';
         },
         currentPacklist() {
-            // Handle direct packlist access: packlist/{name}
-            // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier
+            // Handle direct packlist access: packlist/{name} or packlist/{name}/details
+            // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier, pathSegments[2] = 'details' (optional)
             return this.pathSegments[1] || '';
+        },
+        isDetailsView() {
+            // Check if we're viewing the details subview
+            return this.pathSegments[2] === 'details';
         },
         // Add modalManager reference for template access
         modalManager() {
@@ -98,9 +107,25 @@ export const PacklistContent = {
         }
     },
     watch: {
-        // No watchers needed for simplified navigation
+        navigationParameters: {
+            handler(newParams, oldParams) {
+                console.log('[PacklistContent] Navigation parameters changed:', {
+                    old: oldParams,
+                    new: newParams
+                });
+            },
+            deep: true
+        }
     },
     mounted() {
+        console.log(`[PacklistContent] Component mounted with path: ${this.containerPath}`);
+        if (this.fullPath) {
+            console.log(`[PacklistContent] Full path with parameters: ${this.fullPath}`);
+        }
+        if (Object.keys(this.navigationParameters).length > 0) {
+            console.log('[PacklistContent] Navigation parameters received:', this.navigationParameters);
+        }
+
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {
             routes: {
@@ -152,7 +177,6 @@ export const PacklistContent = {
     },
     template: html `
         <div class="packlist-page">
-            <!-- Main Packlist View - List of Available Packlists -->
             <div v-if="!isViewingPacklist">
                 <tabs-list
                     :tabs="availablePacklists"
@@ -163,8 +187,22 @@ export const PacklistContent = {
             </div>
             
             <!-- Individual Packlist View -->
-            <div v-else>
-                <packlist-table :tab-name="currentPacklist" />
+            <div v-else-if="isViewingPacklist && !isDetailsView">
+                <packlist-table 
+                    :tab-name="currentPacklist" 
+                    :navigate-to-path="navigateToPath"
+                    :navigation-parameters="navigationParameters"
+                />
+            </div>
+            
+            <!-- Details View for Packlist -->
+            <div v-else-if="isViewingPacklist && isDetailsView">
+                <packlist-table 
+                    :tab-name="currentPacklist" 
+                    :show-details-only="true" 
+                    :navigate-to-path="navigateToPath"
+                    :navigation-parameters="navigationParameters"
+                />
             </div>
         </div>
     `

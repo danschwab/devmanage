@@ -152,6 +152,7 @@ h1, h2, h3, h4, h5, h6 {
 input[type="text"] {
     outline: none;
     border: 1px solid var(--color-text);
+    border-radius: var(--radius-md);
     padding: .5rem;
 }
 
@@ -985,6 +986,9 @@ tr.dragging::after {
 .table-cell-card:only-child {
     margin-top: 0;
 }
+.table-cell-card.clickable {
+    cursor: pointer;
+}
 
 .table-edit-textarea, td input[type="number"] {
     width: 100%;
@@ -994,12 +998,12 @@ tr.dragging::after {
     transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
 }
 
-.dirty > .table-edit-textarea, .dirty input[type="number"] {
+.dirty > .table-cell-container > .table-edit-textarea, .dirty input[type="number"] {
     background-color: var(--color-red-bg-transparent);
     outline: 2px solid var(--color-red-bg-transparent);
 }
 
-tr:hover > td > .table-edit-textarea, tr:hover > td > input[type="number"] {
+tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .table-cell-container > input[type="number"] {
     background-color: var(--color-blue-bg-transparent);
 }
 .table-edit-textarea:focus, td input[type="number"]:focus {

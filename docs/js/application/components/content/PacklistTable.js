@@ -6,7 +6,13 @@ export const PacklistTable = {
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
-        sheetId: { type: String, default: '' }
+        sheetId: { type: String, default: '' },
+        showDetailsOnly: { type: Boolean, default: false },
+        navigateToPath: { type: Function, default: null },
+        navigationParameters: {
+            type: Object,
+            default: () => ({})
+        }
     },
     data() {
         return {
@@ -16,7 +22,11 @@ export const PacklistTable = {
             moved: false,
             isPrinting: false,
             dirtyCrateRows: {},
-            error: null
+            error: null,
+            itemQuantityStatus: {}, // Store item quantity analysis results
+            analyzingQuantities: false,
+            searchTerm: this.navigationParameters?.searchTerm || '', // Initialize from navigation parameters
+            hideRowsOnSearch: this.navigationParameters?.hideRowsOnSearch !== false // Default to true unless explicitly set to false
         };
     },
     computed: {
@@ -70,6 +80,78 @@ export const PacklistTable = {
         },
         loadingMessage() {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
+        },
+        itemWarningDetails() {
+            // Extract all warning data from AppData for detailed view
+            const details = [];
+            
+            if (!this.mainTableData || !Array.isArray(this.mainTableData)) {
+                return details;
+            }
+            
+            this.mainTableData.forEach((crate, crateIndex) => {
+                if (crate && crate.Items && Array.isArray(crate.Items)) {
+                    crate.Items.forEach((item, itemIndex) => {
+                        if (item.AppData && Array.isArray(item.AppData.items)) {
+                            item.AppData.items.forEach(itemData => {
+                                if (itemData.warning) {
+                                    details.push({
+                                        'Crate': crate['Piece #'] || `Crate ${crateIndex + 1}`,
+                                        'Item Index': itemIndex + 1,
+                                        'Field': itemData.field,
+                                        'Item ID': itemData.itemId,
+                                        'Requested Qty': itemData.quantity,
+                                        'Available': itemData.quantityInfo?.inventory || 'N/A',
+                                        'Remaining': itemData.quantityInfo?.remaining || 'N/A',
+                                        'Warning Type': itemData.warning.type,
+                                        'Warning Message': itemData.warning.message.replace(/<[^>]*>/g, ''), // Strip HTML
+                                        'Overlapping Shows': itemData.quantityInfo?.overlapping?.length || 0
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            
+            return details;
+        },
+        detailsTableColumns() {
+            // Define columns for the details table
+            return [
+                //{ key: 'Crate', label: 'Crate', editable: false },
+                //{ key: 'Item Index', label: 'Item #', editable: false },
+                //{ key: 'Field', label: 'Field', editable: false },
+                { key: 'Item ID', label: 'Item ID', editable: false },
+                { key: 'Requested Qty', label: 'Requested', editable: false, format: 'number' },
+                { key: 'Available', label: 'Available', editable: false, format: 'number' },
+                { key: 'Remaining', label: 'Remaining', editable: false, format: 'number', 
+                  cellClass: (value) => {
+                    if (typeof value === 'number') {
+                      return value < 0 ? 'red' : value === 0 ? 'orange' : '';
+                    }
+                    return '';
+                  }
+                },
+                //{ key: 'Warning Type', label: 'Type', editable: false },
+                //{ key: 'Warning Message', label: 'Message', editable: false },
+                { key: 'Overlapping Shows', label: 'Overlaps', editable: false, format: 'number' }
+            ];
+        }
+    },
+    watch: {
+        navigationParameters: {
+            handler(newParams) {
+                console.log('[PacklistTable] Navigation parameters updated:', newParams);
+                if (newParams?.searchTerm) {
+                    this.searchTerm = newParams.searchTerm;
+                }
+                if (newParams?.hideRowsOnSearch !== undefined) {
+                    this.hideRowsOnSearch = newParams.hideRowsOnSearch;
+                }
+            },
+            deep: true,
+            immediate: true
         }
     },
     async mounted() {
@@ -81,12 +163,27 @@ export const PacklistTable = {
         );
         this.error = this.packlistTableStore.error;
         // REMOVE: this.internalLoading = this.isLoading || this.packlistTableStore.isLoading;
+        
+        console.log(`[PacklistTable] Component mounted for tab: ${this.tabName}`);
+        if (Object.keys(this.navigationParameters).length > 0) {
+            console.log('[PacklistTable] Navigation parameters received:', this.navigationParameters);
+        }
+        
+        // Analyze quantities when data loads
+        this.$watch(() => this.mainTableData, () => {
+            if (this.mainTableData.length > 0 && this.tabName) {
+                this.analyzePacklistQuantities();
+            }
+        }, { immediate: true });
     },
     methods: {
         async handleRefresh() {
             if (this.packlistTableStore) {
                 await this.packlistTableStore.load('Reloading packlist...');
             }
+        },
+        async handleAnalyzeQuantities() {
+            await this.analyzePacklistQuantities();
         },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             this.dirty = true;
@@ -148,6 +245,8 @@ export const PacklistTable = {
             // Only use the store's save method if this is called from the on-save event
             if (this.packlistTableStore) {
                 await this.packlistTableStore.save('Saving packlist...');
+                // Re-analyze quantities after successful save
+                await this.analyzePacklistQuantities();
             }
         },
         async handlePrint() {
@@ -159,6 +258,118 @@ export const PacklistTable = {
             if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
                 this.$refs.mainTableComponent.checkDirtyCells();
             }
+        },
+        async analyzePacklistQuantities() {
+            if (!this.tabName || this.analyzingQuantities) {
+                return;
+            }
+            
+            this.analyzingQuantities = true;
+            try {
+                // Use the Analytics API to check item quantities
+                const quantityData = await Requests.checkItemQuantities(this.tabName);
+                this.itemQuantityStatus = quantityData || {};
+                console.log('[PacklistTable] Quantity analysis complete:', this.itemQuantityStatus);
+                
+                // Process the data and store in AppData for each item
+                if (this.packlistTableStore && this.mainTableData) {
+                    // Iterate through each crate in the packlist
+                    this.mainTableData.forEach((crate, crateIndex) => {
+                        if (crate && crate.Items && Array.isArray(crate.Items)) {
+                            // Iterate through each item in the crate
+                            crate.Items.forEach((item, itemIndex) => {
+                                // Reset the AppData items array at the start of analysis
+                                if (!item.AppData) item.AppData = {};
+                                item.AppData.items = []; // Clear existing items before reanalysis
+                                
+                                // Extract item codes from relevant fields
+                                const itemFields = ['Description', 'Packing/shop notes'];
+                                itemFields.forEach(fieldName => {
+                                    if (item[fieldName] && typeof item[fieldName] === 'string') {
+                                        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/g;
+                                        let match;
+                                        
+                                        // Find all item codes in the text
+                                        while ((match = itemRegex.exec(item[fieldName])) !== null) {
+                                            const quantity = match[1] ? parseInt(match[1], 10) : 1;
+                                            const itemId = match[2];
+                                            
+                                            if (itemId) {
+                                                const quantityInfo = this.itemQuantityStatus[itemId];
+                                                
+                                                // Store item and its quantity info in AppData
+                                                const itemData = {
+                                                    itemId,
+                                                    quantity,
+                                                    field: fieldName,
+                                                    quantityInfo
+                                                };
+                                                
+                                                // Add warning information if applicable
+                                                if (quantityInfo) {
+                                                    if (quantityInfo.remaining < 0) {
+                                                        itemData.warning = {
+                                                            type: 'error',
+                                                            message: `<strong>Warning:</strong> Insufficient inventory (${quantityInfo.remaining})`
+                                                        };
+                                                    } else if (quantityInfo.remaining === 0) {
+                                                        itemData.warning = {
+                                                            type: 'warning',
+                                                            message: `<strong>Warning:</strong> No inventory margin`
+                                                        };
+                                                    }
+                                                }
+                                                
+                                                // Store in AppData
+                                                item.AppData.items.push(itemData);
+                                                
+                                                // Use the store's setNestedAppData method if it exists
+                                                if (this.packlistTableStore && typeof this.packlistTableStore.setNestedAppData === 'function') {
+                                                    this.packlistTableStore.setNestedAppData(
+                                                        crateIndex,
+                                                        'Items',
+                                                        itemIndex,
+                                                        'items',
+                                                        item.AppData.items
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('[PacklistTable] Error analyzing quantities:', error);
+                this.itemQuantityStatus = {};
+            } finally {
+                this.analyzingQuantities = false;
+            }
+        },
+        getItemWarnings(itemRow, columnKey) {
+            // Get all warnings from item's AppData
+            if (!itemRow || !itemRow.AppData || !Array.isArray(itemRow.AppData.items)) {
+                return [];
+            }
+            console.log('[PacklistTable] Item warnings:', itemRow.AppData.items);
+
+            // Always show warnings in the "Packing/shop notes" column only
+            if (columnKey !== 'Packing/shop notes') {
+                return [];
+            }
+
+            // Return all warnings regardless of which field they came from
+            const warnings = itemRow.AppData.items
+                .filter(item => item.warning)
+                .map(item => ({
+                    type: item.warning.type,
+                    message: item.warning.message,
+                    itemId: item.itemId
+                }));
+            console.log('[PacklistTable] Warnings for item:', itemRow, warnings);
+            return warnings;
         }
     },
     template: html`
@@ -166,6 +377,44 @@ export const PacklistTable = {
             <div v-if="error" class="error-message">
                 <p>Error: {{ error }}</p>
             </div>
+            
+            <!-- Details View -->
+            <div v-if="showDetailsOnly">
+                <TableComponent
+                    v-if="itemWarningDetails.length > 0"
+                    :data="itemWarningDetails"
+                    :originalData="itemWarningDetails"
+                    :columns="detailsTableColumns"
+                    :title="'Inventory Warnings'"
+                    :showRefresh="false"
+                    :emptyMessage="'No warnings'"
+                    :draggable="false"
+                    :newRow="false"
+                    :isLoading="false"
+                    :searchTerm="searchTerm"
+                    :hideRowsOnSearch="hideRowsOnSearch"
+                    :showSearch="true"
+                />
+            </div>
+            
+            <!-- Main Packlist View -->
+            <div v-else>
+                <!-- Analysis Controls -->
+                <div class="button-bar">
+                    <button 
+                        @click="handleAnalyzeQuantities" 
+                        :disabled="analyzingQuantities || isLoading || !tabName"
+                    >
+                        {{ isLoading ? 'Loading...' : analyzingQuantities ? 'Analyzing...' : 'Analyze Quantities' }}
+                    </button>
+                    <button 
+                        v-if="itemWarningDetails.length > 0" 
+                        @click="() => navigateToPath && tabName ? navigateToPath('packlist/' + tabName + '/details') : null"
+                    >
+                        View Details ({{ itemWarningDetails.length }} warnings)
+                    </button>
+                </div>
+            
             <TableComponent
                 ref="mainTableComponent"
                 :data="mainTableData"
@@ -190,7 +439,7 @@ export const PacklistTable = {
                         <!-- Only count visible (not marked-for-deletion) rows for Piece # -->
                         {{
                             mainTableData
-                                .filter(r => !r['marked-for-deletion'])
+                                .filter(r => !(r.AppData && r.AppData['marked-for-deletion']))
                                 .findIndex(r => r === row) + 1
                         }}
                     </template>
@@ -218,13 +467,36 @@ export const PacklistTable = {
                                 }
                                 handleInnerTableDirty(isDirty, rowIndex);
                             }"
-                        />
+                        >
+                            <template #default="{ row: itemRow, column: itemColumn }">
+                                <div>
+                                    <span>{{ itemRow[itemColumn.key] }}</span>
+                                </div>
+                            </template>
+                            
+                            <template #cell-extra="{ row: itemRow, column: itemColumn }">
+                                <!-- Add quantity warning cards based on AppData -->
+                                <template v-for="warning in getItemWarnings(itemRow, itemColumn.key)" :key="warning.itemId">
+                                    <div 
+                                        class="table-cell-card clickable"
+                                        :class="{
+                                            'red': warning.type === 'error',
+                                            'yellow': warning.type === 'warning'
+                                        }"
+                                        @click="() => navigateToPath('packlist/' + tabName + '/details', { searchTerm: warning.itemId, hideRowsOnSearch: false })"
+                                        v-html="warning.message"
+                                        title="Click to view details and search for this item"
+                                    ></div>
+                                </template>
+                            </template>
+                        </TableComponent>
                     </template>
                     <template v-else>
                         {{ row[column.key] }}
                     </template>
                 </template>
             </TableComponent>
+            </div>
         </div>
     `
 };

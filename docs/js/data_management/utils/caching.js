@@ -29,20 +29,20 @@ class SimpleCacheManager {
         // Track dependency (always, even on miss)
         if (this._activeTrack) this._activeTrack.add(`${namespace}:${key}`);
         if (!ns) {
-            console.log(`[CacheManager] GET MISS (namespace missing): ${namespace}:${key}`);
+            //console.log(`[CacheManager] GET MISS (namespace missing): ${namespace}:${key}`);
             return null;
         }
         const entry = ns.get(key);
         if (!entry) {
-            console.log(`[CacheManager] GET MISS: ${namespace}:${key}`);
+            //console.log(`[CacheManager] GET MISS: ${namespace}:${key}`);
             return null;
         }
         if (entry.expire && entry.expire < Date.now()) {
             ns.delete(key);
-            console.log(`[CacheManager] GET EXPIRED: ${namespace}:${key}`);
+            //console.log(`[CacheManager] GET EXPIRED: ${namespace}:${key}`);
             return null;
         }
-        console.log(`[CacheManager] GET HIT: ${namespace}:${key}`);
+        //console.log(`[CacheManager] GET HIT: ${namespace}:${key}`);
         return entry.value;
     }
 
@@ -52,7 +52,7 @@ class SimpleCacheManager {
             (typeof value === 'object' && value !== null && Object.keys(value).length === 0)
         ) {
             // Don't cache empty results
-            console.log(`[CacheManager] SKIP SET (empty): ${namespace}:${key}`);
+            //console.log(`[CacheManager] SKIP SET (empty): ${namespace}:${key}`);
             return;
         }
         if (!this._store.has(namespace)) this._store.set(namespace, new Map());
@@ -60,13 +60,13 @@ class SimpleCacheManager {
             value,
             expire: expirationMs ? Date.now() + expirationMs : null
         });
-        console.log(`[CacheManager] SET: ${namespace}:${key} (expires in ${expirationMs}ms)`);
+        //console.log(`[CacheManager] SET: ${namespace}:${key} (expires in ${expirationMs}ms)`);
         // Register dependencies
         if (dependencies.length > 0) {
             this._deps.set(`${namespace}:${key}`, dependencies);
-            console.log(`[CacheManager] SET DEPS: ${namespace}:${key} -> [${dependencies.join(', ')}]`);
+            //console.log(`[CacheManager] SET DEPS: ${namespace}:${key} -> [${dependencies.join(', ')}]`);
             dependencies.forEach(dep => {
-                console.log(`[CacheManager] REGISTER DEPENDENCY: ${namespace}:${key} depends on ${dep}`);
+                //console.log(`[CacheManager] REGISTER DEPENDENCY: ${namespace}:${key} depends on ${dep}`);
             });
         }
     }
@@ -74,7 +74,7 @@ class SimpleCacheManager {
     static invalidate(namespace, key) {
         const ns = this._store.get(namespace);
         if (ns) ns.delete(key);
-        console.log(`[CacheManager] INVALIDATE: ${namespace}:${key}`);
+        //console.log(`[CacheManager] INVALIDATE: ${namespace}:${key}`);
         // Invalidate dependents
         const dependents = [];
         for (const [depKey, deps] of this._deps.entries()) {
@@ -83,11 +83,11 @@ class SimpleCacheManager {
             }
         }
         if (dependents.length > 0) {
-            console.log(`[CacheManager] INVALIDATE: ${namespace}:${key} has dependents: [${dependents.join(', ')}]`);
+            //console.log(`[CacheManager] INVALIDATE: ${namespace}:${key} has dependents: [${dependents.join(', ')}]`);
         }
         for (const depKey of dependents) {
             const [depNs, depK] = depKey.split(':');
-            console.log(`[CacheManager] INVALIDATE DEPENDENT: ${depKey} because of ${namespace}:${key}`);
+            //console.log(`[CacheManager] INVALIDATE DEPENDENT: ${depKey} because of ${namespace}:${key}`);
             this.invalidate(depNs, depK);
         }
         this._deps.delete(`${namespace}:${key}`);
@@ -101,7 +101,7 @@ class SimpleCacheManager {
                 this.invalidate(namespace, key);
             }
         }
-        console.log(`[CacheManager] INVALIDATE BY PREFIX: ${namespace}:${prefix}`);
+        //console.log(`[CacheManager] INVALIDATE BY PREFIX: ${namespace}:${prefix}`);
     }
 
     static clearNamespace(namespace) {
@@ -112,7 +112,7 @@ class SimpleCacheManager {
                 this._deps.delete(depKey);
             }
         }
-        console.log(`[CacheManager] CLEAR NAMESPACE: ${namespace}`);
+        //console.log(`[CacheManager] CLEAR NAMESPACE: ${namespace}`);
     }
     
     /**

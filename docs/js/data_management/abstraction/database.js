@@ -40,8 +40,8 @@ class database {
     static async getData(tableId, tabName, mapping = null) {
         // Get raw sheet data from GoogleSheetsService
         const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
-        console.log('[Database] Raw data from GoogleSheetsService:', rawData);
-        console.log('[Database] Mapping provided:', mapping);
+        //console.log('[Database] Raw data from GoogleSheetsService:', rawData);
+        //console.log('[Database] Mapping provided:', mapping);
         
         // If mapping provided, transform to JS objects
         if (mapping) {
