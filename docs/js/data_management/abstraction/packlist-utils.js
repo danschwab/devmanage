@@ -15,7 +15,7 @@ class packListUtils {
         const tabs = await Database.getTabs('PACK_LISTS');
         const tabExists = tabs.some(tab => tab.title === projectIdentifier);
         if (!tabExists) {
-            //console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
+            console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
             return null;
         }
         // Fetch the raw sheet data (2D array)

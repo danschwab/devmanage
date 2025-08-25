@@ -370,7 +370,12 @@ export const TableComponent = {
             }
             // Support function-based cell classes
             if (typeof column.cellClass === 'function') {
-                baseClass = column.cellClass(value);
+                // Pass the full row data if rowIndex is provided and valid
+                if (typeof rowIndex === 'number' && this.data && this.data[rowIndex]) {
+                    baseClass = column.cellClass(value, this.data[rowIndex]);
+                } else {
+                    baseClass = column.cellClass(value);
+                }
             }
             // Support object-based cell classes
             if (typeof column.cellClass === 'object') {

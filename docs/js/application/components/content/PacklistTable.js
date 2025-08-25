@@ -82,7 +82,7 @@ export const PacklistTable = {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
         },
         itemWarningDetails() {
-            // Extract all warning data from AppData for detailed view
+            // Extract all item data from AppData for detailed view (not just warnings)
             const details = [];
             
             if (!this.mainTableData || !Array.isArray(this.mainTableData)) {
@@ -94,20 +94,20 @@ export const PacklistTable = {
                     crate.Items.forEach((item, itemIndex) => {
                         if (item.AppData && Array.isArray(item.AppData.items)) {
                             item.AppData.items.forEach(itemData => {
-                                if (itemData.warning) {
-                                    details.push({
-                                        'Crate': crate['Piece #'] || `Crate ${crateIndex + 1}`,
-                                        'Item Index': itemIndex + 1,
-                                        'Field': itemData.field,
-                                        'Item ID': itemData.itemId,
-                                        'Requested Qty': itemData.quantity,
-                                        'Available': itemData.quantityInfo?.inventory || 'N/A',
-                                        'Remaining': itemData.quantityInfo?.remaining || 'N/A',
-                                        'Warning Type': itemData.warning.type,
-                                        'Warning Message': itemData.warning.message.replace(/<[^>]*>/g, ''), // Strip HTML
-                                        'Overlapping Shows': itemData.quantityInfo?.overlapping?.length || 0
-                                    });
-                                }
+                                // Include ALL items found, not just those with warnings
+                                details.push({
+                                    'Crate': crate['Piece #'] || `Crate ${crateIndex + 1}`,
+                                    'Item Index': itemIndex + 1,
+                                    'Field': itemData.field,
+                                    'Item ID': itemData.itemId,
+                                    'Requested Qty': itemData.quantity,
+                                    'Available': itemData.quantityInfo?.inventory || 'N/A',
+                                    'Remaining': itemData.quantityInfo?.remaining || 'N/A',
+                                    'Warning Type': itemData.warning?.type || '',
+                                    'Warning Message': itemData.warning?.message?.replace(/<[^>]*>/g, '') || '', // Strip HTML
+                                    'Overlapping Shows': itemData.quantityInfo?.overlapping?.length || 0,
+                                    'Has Warning': !!itemData.warning // Flag for styling/filtering
+                                });
                             });
                         }
                     });
@@ -117,26 +117,35 @@ export const PacklistTable = {
             return details;
         },
         detailsTableColumns() {
-            // Define columns for the details table
+            // Define columns for the comprehensive details table
             return [
-                //{ key: 'Crate', label: 'Crate', editable: false },
-                //{ key: 'Item Index', label: 'Item #', editable: false },
-                //{ key: 'Field', label: 'Field', editable: false },
+                { key: 'Crate', label: 'Crate', editable: false },
+                { key: 'Item Index', label: 'Item #', editable: false },
+                { key: 'Field', label: 'Field', editable: false },
                 { key: 'Item ID', label: 'Item ID', editable: false },
                 { key: 'Requested Qty', label: 'Requested', editable: false, format: 'number' },
                 { key: 'Available', label: 'Available', editable: false, format: 'number' },
                 { key: 'Remaining', label: 'Remaining', editable: false, format: 'number', 
-                  cellClass: (value) => {
+                  cellClass: (value, row) => {
+                    // Safety checks for row parameter
+                    if (!row || typeof row !== 'object') return '';
+                    
+                    // Only apply warning colors if there's actually a warning
+                    if (!row['Has Warning']) return '';
                     if (typeof value === 'number') {
                       return value < 0 ? 'red' : value === 0 ? 'orange' : '';
                     }
                     return '';
                   }
                 },
-                //{ key: 'Warning Type', label: 'Type', editable: false },
-                //{ key: 'Warning Message', label: 'Message', editable: false },
+                { key: 'Warning Type', label: 'Type', editable: false },
+                { key: 'Warning Message', label: 'Message', editable: false },
                 { key: 'Overlapping Shows', label: 'Overlaps', editable: false, format: 'number' }
             ];
+        },
+        warningCount() {
+            // Count only items with warnings for button display
+            return this.itemWarningDetails.filter(item => item['Has Warning']).length;
         }
     },
     watch: {
@@ -380,14 +389,21 @@ export const PacklistTable = {
             
             <!-- Details View -->
             <div v-if="showDetailsOnly">
+                <div class="details-header">
+                    <h3>Packlist Items Analysis - {{ tabName }}</h3>
+                    <p v-if="itemWarningDetails.length === 0">No items found in packlist.</p>
+                    <p v-else-if="warningCount === 0">Found {{ itemWarningDetails.length }} items with no inventory warnings.</p>
+                    <p v-else>Found {{ itemWarningDetails.length }} items with {{ warningCount }} inventory warnings.</p>
+                </div>
+                
                 <TableComponent
                     v-if="itemWarningDetails.length > 0"
                     :data="itemWarningDetails"
                     :originalData="itemWarningDetails"
                     :columns="detailsTableColumns"
-                    :title="'Inventory Warnings'"
+                    :title="'Packlist Items'"
                     :showRefresh="false"
-                    :emptyMessage="'No warnings'"
+                    :emptyMessage="'No items'"
                     :draggable="false"
                     :newRow="false"
                     :isLoading="false"
@@ -411,7 +427,12 @@ export const PacklistTable = {
                         v-if="itemWarningDetails.length > 0" 
                         @click="() => navigateToPath && tabName ? navigateToPath('packlist/' + tabName + '/details') : null"
                     >
-                        View Details ({{ itemWarningDetails.length }} warnings)
+                        <template v-if="warningCount > 0">
+                            View Details ({{ warningCount }} warnings, {{ itemWarningDetails.length }} total items)
+                        </template>
+                        <template v-else>
+                            View Details ({{ itemWarningDetails.length }} items)
+                        </template>
                     </button>
                 </div>
             
