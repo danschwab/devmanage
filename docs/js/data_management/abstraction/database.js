@@ -20,6 +20,7 @@ if (isLocalhost()) {
     // Note: This import must match the actual path and export names
     // If using a bundler, you may need to adjust this to static imports
     // eslint-disable-next-line no-undef
+    console.warn('Running locally, using fake Google services.');
     ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/FakeGoogle.js'));
 } else {
     // Use real services for production
@@ -27,7 +28,7 @@ if (isLocalhost()) {
     ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
 }
 
-import { wrapMethods, CacheManager } from '../index.js';
+import { wrapMethods } from '../index.js';
 
 class database {
     /**
@@ -52,7 +53,7 @@ class database {
         // If no mapping, return raw 2D array
         return rawData;
     }
-    
+        
     /**
      * Gets all logical tabs for a table
      * @param {string} tableId - Identifier for the table

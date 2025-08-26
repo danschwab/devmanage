@@ -195,13 +195,6 @@ export const InventoryContent = {
         }
     },
     async mounted() {
-        console.log(`[InventoryContent] Component mounted with path: ${this.containerPath}`);
-        if (this.fullPath) {
-            console.log(`[InventoryContent] Full path with parameters: ${this.fullPath}`);
-        }
-        if (Object.keys(this.navigationParameters).length > 0) {
-            console.log('[InventoryContent] Navigation parameters received:', this.navigationParameters);
-        }
 
         // Register inventory navigation routes
         NavigationRegistry.registerNavigation('inventory', {

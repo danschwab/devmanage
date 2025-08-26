@@ -151,7 +151,6 @@ export const PacklistTable = {
     watch: {
         navigationParameters: {
             handler(newParams) {
-                console.log('[PacklistTable] Navigation parameters updated:', newParams);
                 if (newParams?.searchTerm) {
                     this.searchTerm = newParams.searchTerm;
                 }
@@ -171,13 +170,11 @@ export const PacklistTable = {
             [this.tabName]
         );
         this.error = this.packlistTableStore.error;
-        // REMOVE: this.internalLoading = this.isLoading || this.packlistTableStore.isLoading;
-        
-        console.log(`[PacklistTable] Component mounted for tab: ${this.tabName}`);
-        if (Object.keys(this.navigationParameters).length > 0) {
-            console.log('[PacklistTable] Navigation parameters received:', this.navigationParameters);
+
+        if (!this.packlistTableStore.isLoading) {
+            this.analyzePacklistQuantities();
         }
-        
+
         // Analyze quantities when data loads
         this.$watch(() => this.mainTableData, () => {
             if (this.mainTableData.length > 0 && this.tabName) {
@@ -190,9 +187,6 @@ export const PacklistTable = {
             if (this.packlistTableStore) {
                 await this.packlistTableStore.load('Reloading packlist...');
             }
-        },
-        async handleAnalyzeQuantities() {
-            await this.analyzePacklistQuantities();
         },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             this.dirty = true;
@@ -275,7 +269,7 @@ export const PacklistTable = {
             
             this.analyzingQuantities = true;
             try {
-                // Use the Analytics API to check item quantities
+                // Use the API to check item quantities
                 const quantityData = await Requests.checkItemQuantities(this.tabName);
                 this.itemQuantityStatus = quantityData || {};
                 console.log('[PacklistTable] Quantity analysis complete:', this.itemQuantityStatus);
@@ -362,7 +356,7 @@ export const PacklistTable = {
             if (!itemRow || !itemRow.AppData || !Array.isArray(itemRow.AppData.items)) {
                 return [];
             }
-            console.log('[PacklistTable] Item warnings:', itemRow.AppData.items);
+            //console.log('[PacklistTable] Item warnings:', itemRow.AppData.items);
 
             // Always show warnings in the "Packing/shop notes" column only
             if (columnKey !== 'Packing/shop notes') {
@@ -377,7 +371,7 @@ export const PacklistTable = {
                     message: item.warning.message,
                     itemId: item.itemId
                 }));
-            console.log('[PacklistTable] Warnings for item:', itemRow, warnings);
+            //console.log('[PacklistTable] Warnings for item:', itemRow, warnings);
             return warnings;
         }
     },
@@ -418,7 +412,7 @@ export const PacklistTable = {
                 <!-- Analysis Controls -->
                 <div class="button-bar">
                     <button 
-                        @click="handleAnalyzeQuantities" 
+                        @click="analyzePacklistQuantities" 
                         :disabled="analyzingQuantities || isLoading || !tabName"
                     >
                         {{ isLoading ? 'Loading...' : analyzingQuantities ? 'Analyzing...' : 'Analyze Quantities' }}

@@ -78,7 +78,7 @@ export const NavigationRegistry = {
             });
         }
 
-        console.log(`NavigationRegistry: Registered ${Object.keys(navigationConfig.routes || {}).length} routes for section '${section}'`);
+        //console.log(`NavigationRegistry: Registered ${Object.keys(navigationConfig.routes || {}).length} routes for section '${section}'`);
     },
 
     /**
@@ -286,7 +286,7 @@ export class NavigationInit {
     static async initialize() {
         if (this.initialized) return;
 
-        console.log('Initializing navigation system - main sections ready');
+        //console.log('Initializing navigation system - main sections ready');
         this.initialized = true;
     }
 
@@ -853,7 +853,7 @@ export const NavigationConfig = {
             
             // Log parameters for debugging
             if (pathInfo.hasParameters) {
-                console.log(`NavigationConfig: Navigation parameters for container ${containerId}:`, pathInfo.parameters);
+                //console.log(`NavigationConfig: Navigation parameters for container ${containerId}:`, pathInfo.parameters);
             }
             
             // Update container's navigation map if provided
@@ -977,7 +977,7 @@ export const NavigationConfig = {
      * @param {Object} appContext - App context with currentPage, showAlert
      */
     expandContainer(containerData, appContext) {
-        console.log('Expanding container:', containerData);
+        //console.log('Expanding container:', containerData);
         
         const expansionResult = this.handleContainerExpansion(containerData, appContext.currentPage);
         
@@ -1005,18 +1005,3 @@ export const NavigationConfig = {
         }
     }
 };
-
-// Global navigation test function for debugging
-window.testNavigation = function(path, parameters = null) {
-    console.log('=== Navigation Test ===');
-    console.log('Testing path:', path);
-    console.log('Testing parameters:', parameters);
-    
-    const pathInfo = NavigationRegistry.parsePath(parameters ? 
-        NavigationRegistry.buildPath(path, parameters) : path);
-    console.log('Parsed path info:', pathInfo);
-    
-    return pathInfo;
-};
-
-console.log('Navigation system loaded. Use testNavigation(path, parameters) to test parameter parsing.');

@@ -1,6 +1,4 @@
-import { Database, parseDate, wrapMethods } from '../index.js';
-import { Analytics } from './analytics.js';
-import { searchFilter } from '../utils/searchFilter.js';
+import { Database, parseDate, wrapMethods, searchFilter } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -44,7 +42,7 @@ class productionUtils {
                 const client = row.Client;
                 const yearVal = row.Year;
                 if (showName && client && yearVal) {
-                    const computedIdentifier = await Analytics.computeIdentifier(showName, client, yearVal);
+                    const computedIdentifier = await ProductionUtils.computeIdentifier(showName, client, yearVal);
                     if (computedIdentifier === identifier) {
                         foundRow = row;
                         break;
@@ -136,7 +134,73 @@ class productionUtils {
         console.log(`[production-utils] Filtered overlapping shows:`, filtered);
         return filtered;
     }
-    // ...existing code...
+    
+    
+    /**
+     * Compute the "Identifier" value for a production schedule row
+     * @param {string} showName - Show name
+     * @param {string} clientName - Client name
+     * @param {string} year - Production year
+     * @returns {Promise<string>} The computed identifier string
+     */
+    static async computeIdentifier(showName, clientName, year) {
+        // If showName is blank, return blank
+        if (!showName || !showName.trim()) {
+            return '';
+        }
+
+        // Get reference data
+        const referenceData = await ProductionUtils.computeIdentifierReferenceData();
+        
+        // Fuzzy match client 
+        let clientMatch = '';
+        try {
+            clientMatch = GetTopFuzzyMatch(
+                clientName,
+                referenceData.clients.names,
+                referenceData.clients.abbrs
+            );
+        } catch (e) {
+            clientMatch = clientName || '';
+        }
+
+        // Fuzzy match show
+        let showMatch = '';
+        try {
+            showMatch = GetTopFuzzyMatch(
+                showName,
+                referenceData.shows.names,
+                referenceData.shows.abbrs,
+                2.5
+            );
+        } catch (e) {
+            showMatch = showName || '';
+        }
+
+        // Compose identifier
+        return `${clientMatch} ${year || ''} ${showMatch}`.trim();
+    }
+
+    /**
+     * Helper method to get fuzzy matching reference data
+     * @returns {Promise<Object>} Reference data for fuzzy matching
+     * @private
+     */
+    static async computeIdentifierReferenceData() {
+        const clientsData = await Database.getData('PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
+        const showsData = await Database.getData('PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
+        return {
+            clients: {
+                names: clientsData.map(row => row.name || ''),
+                abbrs: clientsData.map(row => row.abbr || '')
+            },
+            shows: {
+                names: showsData.map(row => row.name || ''),
+                abbrs: showsData.map(row => row.abbr || '')
+            }
+        };
+    }
+
 }
 
 export const ProductionUtils = wrapMethods(productionUtils, 'production_utils');

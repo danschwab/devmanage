@@ -189,7 +189,7 @@ export const TableComponent = {
         },
         data: {
             handler() {
-                console.log('[TableComponent] originalData:', this.data);
+                //console.log('[TableComponent] originalData:', this.data);
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
                     this.compareAllCellsDirty();

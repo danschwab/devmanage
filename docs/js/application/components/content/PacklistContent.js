@@ -106,25 +106,7 @@ export const PacklistContent = {
             return !!this.currentPacklist && this.currentPacklist !== 'packlist';
         }
     },
-    watch: {
-        navigationParameters: {
-            handler(newParams, oldParams) {
-                console.log('[PacklistContent] Navigation parameters changed:', {
-                    old: oldParams,
-                    new: newParams
-                });
-            },
-            deep: true
-        }
-    },
     mounted() {
-        console.log(`[PacklistContent] Component mounted with path: ${this.containerPath}`);
-        if (this.fullPath) {
-            console.log(`[PacklistContent] Full path with parameters: ${this.fullPath}`);
-        }
-        if (Object.keys(this.navigationParameters).length > 0) {
-            console.log('[PacklistContent] Navigation parameters received:', this.navigationParameters);
-        }
 
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {

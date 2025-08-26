@@ -14,7 +14,6 @@ This is Top Shelf Exhibits' modular JavaScript web application for live inventor
 - Inventories: lists of items and current item information. Items are stored in a warehouse in crates. These inventories are used to manage the items available for shows.
 - Pack Lists: lists of items to be packed in crates for a show, including quantities and other details. These lists are used to prepare items to ship to shows and return items from shows.
 - Production Schedule: a schedule of shows and their related production tasks. This schedule is used to manage the timing and logistics of shows.
-- Analytics: a collection of reports and insights based on inventory, pack list, and production schedule data. These analytics are used to inform decisions about resource allocation and show planning.
 
 The codebase is organized under `docs/`, with subfolders for CSS, images, JS, and notes. The main logic resides in `docs/js/`, split into functional domains:
 
@@ -51,7 +50,6 @@ The codebase is organized under `docs/`, with subfolders for CSS, images, JS, an
   - inventory-utils.js: contains data management functions for managing inventory-related data and workflows.
   - packlist-utils.js: contains data management functions for managing pack lists and their items.
   - production-utils.js: contains data management functions for managing production-related data and workflows.
-  - analytics.js: contains functions to generate new data through data combination and analysis.
 - All data access and mutation goes through the API to the abstractions and eventually to Google Sheets if necessary.
 - Beneath the API, the abstraction layer handles caching and cache invalidation automatically using `wrapMethods` for consistent method exposure.
 

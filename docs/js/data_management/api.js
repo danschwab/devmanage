@@ -1,4 +1,4 @@
-import { CacheManager, Database, Analytics, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
+import { CacheManager, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
 
 // Define all API methods in a single class/object
 export const Requests = {
@@ -126,7 +126,7 @@ export const Requests = {
      * @returns {Promise<object>} Inventory status for all items in the project
      */
     checkAvailability: async (projectIdentifier) => {
-        return await Analytics.checkItemAvailability(projectIdentifier);
+        return await InventoryUtils.checkItemAvailability(projectIdentifier);
     },
     
     /**
@@ -135,7 +135,7 @@ export const Requests = {
      * @returns {Promise<object>} Detailed inventory status for all items
      */
     checkItemQuantities: async (projectIdentifier) => {
-        return await Analytics.checkItemQuantities(projectIdentifier);
+        return await InventoryUtils.checkItemQuantities(projectIdentifier);
     },
     
     /**
@@ -244,6 +244,6 @@ export const Requests = {
      * @returns {Promise<string>} The computed identifier
      */
     computeIdentifier: async (showName, clientName, year) => {
-        return Analytics.computeIdentifier(showName, clientName, year);
+        return ProductionUtils.computeIdentifier(showName, clientName, year);
     }
 };
