@@ -52,17 +52,16 @@ export class GoogleSheetsService {
     }
 
     /**
-     * Get sheet data and return as array of JS objects
+     * Get sheet data and return as raw 2D array (matches FakeGoogle interface)
      * @param {string} tableId
-     * @param {string} tabName
-     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
-     * @returns {Promise<Array<Object>>}
+     * @param {string} range - Range including sheet name (e.g., "FURNITURE!" or "INDEX!A1:Z100")
+     * @returns {Promise<Array<Array<string>>>}
      */
-    static async getSheetData(tableId, tabName, mapping = null) {
+    static async getSheetData(tableId, range) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
-        const range = `${tabName}`;
+        
         let response;
         try {
             response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -74,24 +73,13 @@ export class GoogleSheetsService {
         } catch (err) {
             // If the tab is empty or doesn't exist, return empty array
             console.warn('GoogleSheetsService.getSheetData: error fetching data', err);
-            return [];
+            return [[]];
         }
         const rawData = response.result && Array.isArray(response.result.values) ? response.result.values : [];
-        if (!rawData || rawData.length === 0) return [];
-        // Defensive: ensure first row is an array of headers
-        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
-        if (headers.length === 0 || rawData.length < 2) return [];
-        if (mapping) {
-            return GoogleSheetsService.transformSheetData(rawData, mapping);
-        }
-        // Defensive: ensure all rows are arrays and normalize length
-        return rawData.slice(1).map(row => {
-            const obj = {};
-            headers.forEach((h, i) => {
-                obj[h] = (Array.isArray(row) && row[i] !== undefined) ? String(row[i]) : '';
-            });
-            return obj;
-        }).filter(obj => Object.values(obj).some(val => val !== ''));
+        if (!rawData || rawData.length === 0) return [[]];
+        
+        // Return raw 2D array data to match FakeGoogle interface
+        return rawData;
     }
 
     /**
@@ -99,18 +87,15 @@ export class GoogleSheetsService {
      * @param {string} tableId
      * @param {string} tabName
      * @param {Array<Object>} updates - Array of JS objects to save
-     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>}
      */
-    static async setSheetData(tableId, tabName, updates, mapping = null) {
+    static async setSheetData(tableId, tabName, updates) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
         // Convert JS objects to sheet format
         let values;
-        if (mapping) {
-            values = GoogleSheetsService.reverseTransformSheetData(mapping, updates);
-        } else if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+        if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
             values = updates;
         } else if (Array.isArray(updates) && updates.length > 0) {
             const headers = Object.keys(updates[0]);
