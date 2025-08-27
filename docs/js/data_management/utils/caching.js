@@ -8,144 +8,12 @@ class CacheManager {
     static cache = new Map();
     static dependencies = new Map();
     
-    // Context-aware dependency tracking system
-    static _executionContexts = new Map(); // contextId -> { trackStack: [], activeTrack: Set }
-    static _contextIdCounter = 0;
-    static _currentContextId = null; // Track the current context for nested calls
-    
     /**
-     * Generates a unique context ID for this execution
-     * @private
-     * @returns {string} - Unique context identifier
-     */
-    static _generateContextId() {
-        return `ctx_${++this._contextIdCounter}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-    
-    /**
-     * Gets the current context ID (for nested calls)
-     * @private
-     * @returns {string|null} - Current context identifier or null
-     */
-    static _getCurrentContextId() {
-        return this._currentContextId;
-    }
-    
-    /**
-     * Sets the current context ID
-     * @private
-     * @param {string} contextId - Context identifier to set
-     */
-    static _setCurrentContext(contextId) {
-        this._currentContextId = contextId;
-    }
-    
-    /**
-     * Clears the current context
-     * @private
-     */
-    static _clearCurrentContext() {
-        this._currentContextId = null;
-    }
-    
-    /**
-     * Generates a unique context ID for this execution
-     * @private
-     * @returns {string} - Unique context identifier
-     */
-    static _generateContextId() {
-        return `ctx_${++this._contextIdCounter}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-    
-    /**
-     * Starts tracking dependencies for a specific execution context
-     * @private
-     * @param {string} contextId - Unique context identifier
-     */
-    static _startTracking(contextId) {
-        if (!this._executionContexts.has(contextId)) {
-            this._executionContexts.set(contextId, {
-                trackStack: [],
-                activeTrack: null
-            });
-        }
-        
-        const context = this._executionContexts.get(contextId);
-        const deps = new Set();
-        context.trackStack.push(deps);
-        context.activeTrack = deps;
-    }
-    
-    /**
-     * Starts a new tracking level for direct dependencies only (nested calls)
-     * @private
-     * @param {string} contextId - Unique context identifier
-     */
-    static _startTrackingLevel(contextId) {
-        const context = this._executionContexts.get(contextId);
-        if (!context) return;
-        
-        const deps = new Set();
-        context.trackStack.push(deps);
-        context.activeTrack = deps;
-    }
-    
-    /**
-     * Stops tracking and returns collected dependencies for a specific context
-     * @private
-     * @param {string} contextId - Unique context identifier
-     * @returns {Array} - Array of dependency keys
-     */
-    static _stopTracking(contextId) {
-        const context = this._executionContexts.get(contextId);
-        if (!context) return [];
-        
-        const deps = context.trackStack.pop();
-        context.activeTrack = context.trackStack[context.trackStack.length - 1] || null;
-        
-        // Clean up context if no more tracking levels
-        if (context.trackStack.length === 0) {
-            this._executionContexts.delete(contextId);
-        }
-        
-        return deps ? Array.from(deps) : [];
-    }
-    
-    /**
-     * Stops tracking level and returns only direct dependencies (for nested calls)
-     * @private
-     * @param {string} contextId - Unique context identifier
-     * @returns {Array} - Array of direct dependency keys
-     */
-    static _stopTrackingLevel(contextId) {
-        const context = this._executionContexts.get(contextId);
-        if (!context) return [];
-        
-        const deps = context.trackStack.pop();
-        context.activeTrack = context.trackStack[context.trackStack.length - 1] || null;
-        
-        // Return only the direct dependencies collected at this level
-        return deps ? Array.from(deps) : [];
-    }
-    
-    /**
-     * Gets a value from cache with expiration check and context-aware dependency tracking
+     * Gets a value from cache with expiration check
      * @param {string} key - Cache key
-     * @param {string} contextId - Optional execution context ID for dependency tracking
      * @returns {*|null} - Cached value or null if not found/expired
      */
-    static get(key, contextId = null) {
-        // Use current context if no context provided and we're in a tracked execution
-        const actualContextId = contextId || this._currentContextId;
-        
-        // Track dependency for the specific context (if provided or current)
-        if (actualContextId) {
-            const context = this._executionContexts.get(actualContextId);
-            if (context && context.activeTrack) {
-                context.activeTrack.add(key);
-            }
-        }
-        
+    static get(key) {
         const entry = this.cache.get(key);
         if (!entry) {
             return null;
@@ -157,18 +25,17 @@ class CacheManager {
             return null;
         }
         
-        console.log(`[CacheManager] GET HIT: ${key} ${actualContextId ? `(ctx: ${actualContextId})` : ''}`);
+        console.log(`[CacheManager] GET HIT: ${key}`);
         return entry.value;
     }
     
     /**
-     * Sets a value in cache with default timeout and dependency registration
+     * Sets a value in cache with default timeout
      * @param {string} key - Cache key
      * @param {*} value - Value to cache
      * @param {number} expirationMs - Expiration time in milliseconds (defaults to DEFAULT_CACHE_EXPIRATION_MS)
-     * @param {Array} dependencies - Array of dependency keys this cache entry depends on
      */
-    static set(key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS, dependencies = []) {
+    static set(key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS) {
         // Skip caching empty results or booleans
         if (
             (Array.isArray(value) && value.length === 0) ||
@@ -183,13 +50,51 @@ class CacheManager {
             expire: expirationMs ? Date.now() + expirationMs : null
         });
         
-        // Register dependencies
-        if (dependencies.length > 0) {
-            this.dependencies.set(key, dependencies);
-            console.log(`[CacheManager] SET DEPS: ${key} -> [ ${dependencies.join(' | ')} ]`);
-        }
-        
         console.log(`[CacheManager] SET: ${key} (expires in ${expirationMs}ms)`);
+    }
+    
+    /**
+     * Creates a dependency decorator that explicitly tracks function calls as dependencies
+     * @param {string} callerKey - Cache key of the calling function
+     * @returns {Function} - Decorator function
+     */
+    static createDependencyDecorator(callerKey) {
+        return {
+            /**
+             * Calls a wrapped function and registers it as a dependency
+             * @param {Function} wrappedFunction - The wrapped function to call
+             * @param {...any} args - Arguments to pass to the function
+             * @returns {Promise} - Function result
+             */
+            call: async (wrappedFunction, ...args) => {
+                // Execute the wrapped function
+                const result = await wrappedFunction(...args);
+                
+                // Generate the cache key for the called function
+                // This assumes the wrapped function has a _cacheKey property or we can derive it
+                const calledKey = wrappedFunction._lastCacheKey;
+                
+                if (calledKey) {
+                    // Register the called function as a dependency of the caller
+                    CacheManager.addDependency(callerKey, calledKey);
+                }
+                
+                return result;
+            }
+        };
+    }
+    
+    /**
+     * Adds a dependency relationship between two cache entries
+     * @param {string} dependentKey - The cache key that depends on another
+     * @param {string} dependencyKey - The cache key that is depended upon
+     */
+    static addDependency(dependentKey, dependencyKey) {
+        if (!this.dependencies.has(dependentKey)) {
+            this.dependencies.set(dependentKey, new Set());
+        }
+        this.dependencies.get(dependentKey).add(dependencyKey);
+        console.log(`[CacheManager] DEPENDENCY: ${dependentKey} -> ${dependencyKey}`);
     }
     
     /**
@@ -214,7 +119,7 @@ class CacheManager {
         // Find and invalidate all dependent entries
         const dependents = [];
         for (const [depKey, deps] of this.dependencies.entries()) {
-            if (deps.includes(key)) {
+            if (deps.has && deps.has(key)) {
                 dependents.push(depKey);
             }
         }
@@ -296,7 +201,7 @@ class CacheManager {
     }
 
     /**
-     * Wraps all static methods of a class with caching and direct dependency tracking
+     * Wraps all static methods of a class with caching and automatic dependency decorator
      * @param {Object} targetClass - The class to wrap
      * @param {string} namespace - Cache namespace
      * @returns {Object} - Wrapped class with caching and dependency tracking
@@ -312,57 +217,23 @@ class CacheManager {
             wrappedClass[methodName] = async function(...args) {
                 const cacheKey = CacheManager.generateCacheKey(namespace, methodName, args);
                 
-                // Check cache first - use any existing context or create new one
-                let contextId = CacheManager._getCurrentContextId();
-                const isNewContext = !contextId;
+                // Store the cache key on the function for dependency tracking
+                wrappedClass[methodName]._lastCacheKey = cacheKey;
                 
-                if (isNewContext) {
-                    contextId = CacheManager._generateContextId();
-                }
-                
-                const cached = CacheManager.get(cacheKey, contextId);
+                // Check cache first
+                const cached = CacheManager.get(cacheKey);
                 if (cached !== null) {
                     return cached;
                 }
                 
-                // Start tracking dependencies for this specific context (only if new)
-                if (isNewContext) {
-                    CacheManager._startTracking(contextId);
-                } else {
-                    // For nested calls, start a new tracking level to capture only direct dependencies
-                    CacheManager._startTrackingLevel(contextId);
-                }
+                // Create dependency decorator for this function call
+                const deps = CacheManager.createDependencyDecorator(cacheKey);
                 
-                try {
-                    // Set current context for nested calls
-                    CacheManager._setCurrentContext(contextId);
-                    
-                    // Execute method directly
-                    const result = await targetClass[methodName](...args);
-                    
-                    // Stop tracking and get collected dependencies (only direct ones)
-                    const dependencies = isNewContext 
-                        ? CacheManager._stopTracking(contextId)
-                        : CacheManager._stopTrackingLevel(contextId);
-                    
-                    // Cache result with dependencies
-                    CacheManager.set(cacheKey, result, DEFAULT_CACHE_EXPIRATION_MS, dependencies);
-                    
-                    return result;
-                } catch (error) {
-                    // Ensure tracking is stopped even if method fails
-                    if (isNewContext) {
-                        CacheManager._stopTracking(contextId);
-                    } else {
-                        CacheManager._stopTrackingLevel(contextId);
-                    }
-                    throw error;
-                } finally {
-                    // Clear current context if we set it
-                    if (isNewContext) {
-                        CacheManager._clearCurrentContext();
-                    }
-                }
+                // Execute method with dependency decorator as first parameter
+                const result = await targetClass[methodName](deps, ...args);
+                CacheManager.set(cacheKey, result);
+                
+                return result;
             };
         });
         
@@ -373,3 +244,4 @@ class CacheManager {
 export const wrapMethods = CacheManager.wrapMethods;
 export const invalidateCache = CacheManager.invalidateCache;
 export const invalidateByPrefix = CacheManager.invalidateByPrefix;
+export const setCacheDependency = CacheManager.createDependencyDecorator;

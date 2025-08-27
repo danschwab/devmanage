@@ -6,20 +6,21 @@ import { Database, Mutations, InventoryUtils, ProductionUtils, wrapMethods } fro
 class packListUtils_uncached {
     /**
      * Get pack list content
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @param {string} [itemColumnsStart="Pack"] - Column header where item data begins
      * @returns {Promise<Object>} Pack list content
      */
-    static async getContent(projectIdentifier, itemColumnsStart = "Pack") {
+    static async getContent(deps, projectIdentifier, itemColumnsStart = "Pack") {
         // First verify the tab exists
-        const tabs = await Database.getTabs('PACK_LISTS');
+        const tabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const tabExists = tabs.some(tab => tab.title === projectIdentifier);
         if (!tabExists) {
             console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
             return null;
         }
         // Fetch the raw sheet data (2D array)
-        const sheetData = await Database.getData('PACK_LISTS', projectIdentifier, null);
+        const sheetData = await deps.call(Database.getData, 'PACK_LISTS', projectIdentifier, null);
         if (!sheetData || sheetData.length < 4) return [];
         // Extract headers (typically row 3)
         const headerRow = sheetData[2] || [];
@@ -69,12 +70,13 @@ class packListUtils_uncached {
 
     /**
      * Extracts item quantities from a project's pack list
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Map of itemId to quantity
      */
-    static async extractItems(projectIdentifier) {
+    static async extractItems(deps, projectIdentifier) {
         // Get pack list content (array of crate objects with Items arrays)
-        const crates = await PackListUtils.getContent(projectIdentifier, "Pack");
+        const crates = await deps.call(PackListUtils.getContent, projectIdentifier, "Pack");
 
         // Return empty object if pack list not found
         if (!crates) return {};
@@ -104,15 +106,16 @@ class packListUtils_uncached {
 
     /**
      * Save pack list data to the PACK_LISTS sheet.
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The sheet/tab name.
      * @param {Array<Object>} crates - Array of crate objects, each with info and items arrays.
      * @param {Object} [headers] - { main: [...], items: [...] } (optional)
      * @returns {Promise<boolean>} Success status
      */
-    static async savePackList(tabName, crates, headers = null) {
+    static async savePackList(deps, tabName, crates, headers = null) {
         console.log('[PackListUtils.savePackList] crates input:', crates);
 
-        const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
+        const originalSheetData = await deps.call(Database.getData, 'PACK_LISTS', tabName, null);
         const metadataRows = originalSheetData.slice(0, 2);
         const headerRow = originalSheetData[2] || [];
 
@@ -171,15 +174,16 @@ class packListUtils_uncached {
 
         /**
      * Check item quantities for a project
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Inventory status for all items
      */
-    static async checkItemQuantities(projectIdentifier) {
+    static async checkItemQuantities(deps, projectIdentifier) {
         //console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
             // 1. Get pack list items
             //console.log('1. Getting pack list items...');
-            const itemMap = await PackListUtils.extractItems(projectIdentifier);
+            const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If there are no items in the pack list, return
@@ -193,7 +197,7 @@ class packListUtils_uncached {
             //console.log('2. Getting inventory quantities...');
             let inventoryInfo;
             try {
-                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "quantity");
+                inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "quantity");
             } catch (err) {
                 console.error('Error getting inventory:', err);
                 throw new Error('Failed to get inventory information');
@@ -223,7 +227,7 @@ class packListUtils_uncached {
             //console.log('4. Checking for overlapping shows...');
             let overlappingIds;
             try {
-                overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
+                overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, { identifier: projectIdentifier });
             } catch (err) {
                 console.error('Error getting overlapping shows:', err);
                 throw new Error('Failed to get overlapping shows');
@@ -234,12 +238,12 @@ class packListUtils_uncached {
             for (const overlapRow of overlappingIds) {
                 // Extract identifier from the row object
                 const otherId = overlapRow.Identifier || 
-                               await ProductionUtils.computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                               await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
 
                 if (otherId === projectIdentifier) continue;
                 
                 try {
-                    const otherItemMap = await PackListUtils.extractItems(otherId);
+                    const otherItemMap = await deps.call(PackListUtils.extractItems, otherId);
                     Object.entries(otherItemMap).forEach(([id, qty]) => {
                         if (result[id]) {
                             result[id].remaining -= qty;

@@ -6,10 +6,11 @@ import { Database, parseDate, wrapMethods, searchFilter } from '../index.js';
 class productionUtils_uncached {
     /**
      * Get overlapping shows based on parameters
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string|Object} parameters - Project identifier or date range parameters
      * @returns {Promise<string[]>} Array of overlapping project identifiers
      */
-    static async getOverlappingShows(parameters = null, searchParams = null) {
+    static async getOverlappingShows(deps, parameters = null, searchParams = null) {
         console.log('[production-utils] getOverlappingShows called with:', parameters);
         const tabName = "ProductionSchedule";
         const mapping = {
@@ -22,7 +23,7 @@ class productionUtils_uncached {
             'S. End': 'S. End',
             Ship: 'Ship'
         };
-        let data = await Database.getData('PROD_SCHED', tabName, mapping);
+        let data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
         console.log('[production-utils] Loaded schedule data:', data);
 
         if (searchParams) {
@@ -42,7 +43,7 @@ class productionUtils_uncached {
                 const client = row.Client;
                 const yearVal = row.Year;
                 if (showName && client && yearVal) {
-                    const computedIdentifier = await ProductionUtils.computeIdentifier(showName, client, yearVal);
+                    const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
                     if (computedIdentifier === identifier) {
                         foundRow = row;
                         break;
@@ -141,16 +142,17 @@ class productionUtils_uncached {
      * @param {string} showName - Show name
      * @param {string} clientName - Client name
      * @param {string} year - Production year
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @returns {Promise<string>} The computed identifier string
      */
-    static async computeIdentifier(showName, clientName, year) {
+    static async computeIdentifier(deps, showName, clientName, year) {
         // If showName is blank, return blank
         if (!showName || !showName.trim()) {
             return '';
         }
 
         // Get reference data
-        const referenceData = await ProductionUtils.computeIdentifierReferenceData();
+        const referenceData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
         
         // Fuzzy match client 
         let clientMatch = '';
@@ -183,12 +185,13 @@ class productionUtils_uncached {
 
     /**
      * Helper method to get fuzzy matching reference data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @returns {Promise<Object>} Reference data for fuzzy matching
      * @private
      */
-    static async computeIdentifierReferenceData() {
-        const clientsData = await Database.getData('PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
-        const showsData = await Database.getData('PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
+    static async computeIdentifierReferenceData(deps) {
+        const clientsData = await deps.call(Database.getData, 'PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
+        const showsData = await deps.call(Database.getData, 'PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
         return {
             clients: {
                 names: clientsData.map(row => row.name || ''),

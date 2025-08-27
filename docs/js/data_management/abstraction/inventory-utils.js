@@ -11,8 +11,8 @@ class inventoryUtils_uncached {
         notes: 'NOTES'
     };
 
-    static async getTabNameForItem(itemName) {
-        const indexData = await Database.getData('INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
+    static async getTabNameForItem(deps, itemName) {
+        const indexData = await deps.call(Database.getData, 'INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
         // Build prefix-to-tab mapping from transformed objects
         const prefixToTab = {};
         indexData.forEach(row => {
@@ -30,14 +30,14 @@ class inventoryUtils_uncached {
         return tab || null;
     }
 
-    static async getItemInfo(itemName, fields) {
+    static async getItemInfo(deps, itemName, fields) {
         const itemNames = Array.isArray(itemName) ? itemName : [itemName];
         const infoFields = Array.isArray(fields) ? fields : [fields];
         const itemsByTab = {};
         const unmappedItems = [];
         for (const item of itemNames) {
             if (!item) continue;
-            const tab = await InventoryUtils.getTabNameForItem(item);
+            const tab = await deps.call(InventoryUtils.getTabNameForItem, item);
             if (!tab) {
                 unmappedItems.push(item);
                 return;
@@ -48,7 +48,7 @@ class inventoryUtils_uncached {
         const results = [];
         for (const [tab, items] of Object.entries(itemsByTab)) {
             try {
-                let tabData = await Database.getData('INVENTORY', tab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
+                let tabData = await deps.call(Database.getData, 'INVENTORY', tab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
                 items.forEach(item => {
                     const originalItem = item;
                     let foundObj = null;
@@ -87,23 +87,23 @@ class inventoryUtils_uncached {
         return results;
     }
 
-    static async getInventoryTabData(tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
+    static async getInventoryTabData(deps, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
 
         // Get all tabs on the inventory sheet
-        const allTabs = await Database.getTabs('INVENTORY');
+        const allTabs = await deps.call(Database.getTabs, 'INVENTORY');
 
         // Check if the tab exists
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
+            const foundTab = await deps.call(InventoryUtils.getTabNameForItem, tabOrItemName);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
         }
 
         // Get tab data as JS objects (mapping transforms 2D array to objects)
-        let tabData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+        let tabData = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
 
         // Apply search filter if filters are provided (after transformation to objects)
         if (filters) {
@@ -113,20 +113,20 @@ class inventoryUtils_uncached {
         return tabData;
     }
 
-    static async saveInventoryTabData(tabOrItemName, mappedData, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
-        const allTabs = await Database.getTabs('INVENTORY');
+    static async saveInventoryTabData(deps, tabOrItemName, mappedData, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
+        const allTabs = await deps.call(Database.getTabs, 'INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
+            const foundTab = await deps.call(InventoryUtils.getTabNameForItem, tabOrItemName);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
         }
 
         if (filters) {
             // Fetch existing data from the tab
-            const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+            const existingData = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
 
             // Prepare batch updates
             const updates = mappedData.filter(item => {
@@ -153,16 +153,17 @@ class inventoryUtils_uncached {
 
     /**
      * Check item availability for a project
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - Project identifier
      * @returns {Promise<Object>} Item availability map
      */
-    static async checkItemAvailability(projectIdentifier) {
+    static async checkItemAvailability(deps, projectIdentifier) {
         //console.group(`Checking quantities for project: ${projectIdentifier}`);
         
         try {
             // 1. Get pack list items
             //console.log('1. Getting pack list items...');
-            const itemMap = await PackListUtils.extractItems(projectIdentifier);
+            const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If no items, return empty result
@@ -174,7 +175,7 @@ class inventoryUtils_uncached {
 
             // Get inventory quantities
             //console.log('2. Getting inventory quantities...');
-            let inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "QTY");
+            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "QTY");
             
             // Filter valid items and build result
             const result = {};
@@ -187,18 +188,18 @@ class inventoryUtils_uncached {
 
             // Get overlapping shows
             //console.log('4. Checking for overlapping shows...');
-            let overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
+            let overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, { identifier: projectIdentifier });
             
             // Process overlapping shows
             for (const overlapRow of overlappingIds) {
                 // Extract identifier from the row object
                 const overlapId = overlapRow.Identifier || 
-                                 await ProductionUtils.computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                                 await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
                 
                 if (overlapId === projectIdentifier) continue;
                 
                 //console.log(` - Checking overlap with project: ${overlapId}`);
-                const overlapInfo = await PackListUtils.extractItems(overlapId);
+                const overlapInfo = await deps.call(PackListUtils.extractItems, overlapId);
                 
                 for (const itemId of Object.keys(overlapInfo)) {
                     if (!result[itemId]) continue;

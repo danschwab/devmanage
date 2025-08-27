@@ -30,12 +30,13 @@ import { wrapMethods, invalidateCache } from '../index.js';
 class database_uncached {
     /**
      * Retrieves data for a table/tab and returns as array of JS objects
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table (INVENTORY, PACK_LISTS, etc.)
      * @param {string} tabName - Tab name or logical identifier
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<Array<Object>>} - Array of JS objects
      */
-    static async getData(tableId, tabName, mapping = null) {
+    static async getData(deps, tableId, tabName, mapping = null) {
         // Get raw sheet data from GoogleSheetsService
         const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
         //console.log('[Database] Raw data from GoogleSheetsService:', rawData);
@@ -53,31 +54,34 @@ class database_uncached {
         
     /**
      * Gets all logical tabs for a table
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @returns {Promise<Array<{title: string, sheetId: number}>>} - List of logical tabs
      */
-    static async getTabs(tableId) {
+    static async getTabs(deps, tableId) {
         return await GoogleSheetsService.getSheetTabs(tableId);
     }
     
     /**
      * Executes a SQL-like query against logical table data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - The table identifier
      * @param {string} query - SQL-like query string
      * @returns {Promise<Array<Object>>} Query results
      */
-    static async queryData(tableId, query) {
+    static async queryData(deps, tableId, query) {
         return await GoogleSheetsService.querySheetData(tableId, query);
     }
     
     /**
      * Helper method to find a logical tab by name
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {string} tabName - Name of the tab to find
      * @returns {Promise<{title: string, sheetId: number}|null>} - The tab object or null if not found
      */
-    static async findTabByName(tableId, tabName) {
-        const tabs = await Database.getTabs(tableId);
+    static async findTabByName(deps, tableId, tabName) {
+        const tabs = await deps.call(Database.getTabs, tableId);
         return tabs.find(tab => tab.title === tabName) || null;
     }
 }
@@ -87,13 +91,14 @@ class database_uncached {
 class mutations {
     /**
      * Updates data for a table/tab using JS objects
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {string} tabName - Tab name or logical identifier
      * @param {Array<Object>} updates - Array of JS objects to save
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    static async setData(tableId, tabName, updates, mapping = null) {
+    static async setData(deps, tableId, tabName, updates, mapping = null) {
         const result = await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
         
         // Invalidate related caches using prefix to handle custom mapped data
@@ -106,13 +111,14 @@ class mutations {
     
     /**
      * Updates a single row in a table/tab using a unique identifier.
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {string} tabName - Tab name or logical identifier
      * @param {Object} update - JS object representing the row to update
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    static async updateRow(tableId, tabName, update, mapping = null) {
+    static async updateRow(deps, tableId, tabName, update, mapping = null) {
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
         const transformedData = mapping
@@ -141,30 +147,33 @@ class mutations {
     
     /**
      * Hides specified logical tabs in a table
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to hide
      */
-    static async hideTabs(tableId, tabs) {
+    static async hideTabs(deps, tableId, tabs) {
         await GoogleSheetsService.hideTabs(tableId, tabs);
     }
     
     /**
      * Shows specified logical tabs in a table
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to show
      */
-    static async showTabs(tableId, tabs) {
+    static async showTabs(deps, tableId, tabs) {
         await GoogleSheetsService.showTabs(tableId, tabs);
     }
     
     /**
      * Creates a new logical tab by copying a template or creating blank
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Identifier for the table
      * @param {{title: string, sheetId: number}|null} templateTab - Template tab to copy (null for blank tab)
      * @param {string} newTabName - Name for the new tab
      * @returns {Promise<void>}
      */
-    static async createTab(tableId, templateTab, newTabName) {
+    static async createTab(deps, tableId, templateTab, newTabName) {
         if (templateTab && templateTab.sheetId) {
             await GoogleSheetsService.copySheetTab(tableId, templateTab, newTabName);
         } else {
@@ -179,4 +188,4 @@ class mutations {
 }
 
 export const Database = wrapMethods(database_uncached, 'database');
-export const Mutations = mutations;
+export const Mutations = wrapMethods(mutations, 'mutations');

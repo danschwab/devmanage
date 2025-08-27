@@ -1,5 +1,5 @@
 // caching
-export { invalidateCache, wrapMethods } from './utils/caching.js';
+export { invalidateCache, wrapMethods, setCacheDependency } from './utils/caching.js';
 
 // Data management components
 export { Database, Mutations } from './abstraction/database.js';
