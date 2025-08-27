@@ -3,7 +3,7 @@ import { Database, wrapMethods } from '../index.js';
 /**
  * Utility functions for application-specific operations
  */
-class applicationUtils {
+class applicationUtils_uncached {
     /**
      * Store user data in a user-specific tab within the CACHE sheet
      * @param {string} username - The username to create/find a tab for
@@ -22,7 +22,7 @@ class applicationUtils {
         }
         // Prepare JS object for update
         let obj = { ID: id, Value: data };
-        return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
+        return await Mutations.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
     }
     
     /**
@@ -53,4 +53,4 @@ class applicationUtils {
     }
 }
 
-export const ApplicationUtils = wrapMethods(applicationUtils, 'app_utils');
+export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils');

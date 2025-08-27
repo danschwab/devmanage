@@ -108,7 +108,7 @@ export const InventoryOverviewTableComponent = {
             const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
             
             for (const tab of inventoryTabs) {
-                Requests.clearCache('INVENTORY', tab.title);
+                Requests.clearCache('database', 'getData', ['INVENTORY', tab.title]);
             }
             
             await this.loadAllInventoryData();

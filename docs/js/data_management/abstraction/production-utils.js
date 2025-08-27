@@ -3,7 +3,7 @@ import { Database, parseDate, wrapMethods, searchFilter } from '../index.js';
 /**
  * Utility functions for production schedule operations
  */
-class productionUtils {
+class productionUtils_uncached {
     /**
      * Get overlapping shows based on parameters
      * @param {string|Object} parameters - Project identifier or date range parameters
@@ -203,4 +203,4 @@ class productionUtils {
 
 }
 
-export const ProductionUtils = wrapMethods(productionUtils, 'production_utils');
+export const ProductionUtils = wrapMethods(productionUtils_uncached, 'production_utils');

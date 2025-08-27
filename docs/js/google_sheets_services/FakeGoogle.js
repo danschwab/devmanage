@@ -670,7 +670,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async getSheetData(tableId, range) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];

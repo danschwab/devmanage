@@ -1,4 +1,4 @@
-import { CacheManager, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
+import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
 
 // Define all API methods in a single class/object
 export const Requests = {
@@ -22,7 +22,7 @@ export const Requests = {
      * @returns {Promise<boolean>} - Success status
      */
     saveData: async (tableId, tabName, data, mapping = null) => {
-        return await Database.setData(tableId, tabName, data, mapping);
+        return await Mutations.setData(tableId, tabName, data, mapping);
     },
     
     /**
@@ -46,7 +46,7 @@ export const Requests = {
     createNewTab: async (tableId, templateName, newTabName) => {
         const templateTab = await Database.findTabByName(tableId, templateName);
         if (!templateTab) throw new Error(`Template tab "${templateName}" not found`);
-        await Database.createTab(tableId, templateTab, newTabName);
+        await Mutations.createTab(tableId, templateTab, newTabName);
         return true;
     },
     
@@ -59,7 +59,7 @@ export const Requests = {
         const allTabs = await Database.getTabs(tableId);
         const tabsToShow = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToShow.length === 0) return false;
-        await Database.showTabs(tableId, tabsToShow);
+        await Mutations.showTabs(tableId, tabsToShow);
         return true;
     },
     
@@ -72,7 +72,7 @@ export const Requests = {
         const allTabs = await Database.getTabs(tableId);
         const tabsToHide = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToHide.length === 0) return false;
-        await Database.hideTabs(tableId, tabsToHide);
+        await Mutations.hideTabs(tableId, tabsToHide);
         return true;
     },
     
@@ -88,15 +88,22 @@ export const Requests = {
     
     /**
      * Clear cache for specified resources
-     * @param {string} [tableId] - Optional table to clear cache for
-     * @param {string} [range] - Optional range to clear cache for
+     * @param {string} [namespace] - Optional namespace to clear cache for
+     * @param {string} [methodName] - Optional method name to clear cache for
+     * @param {Array} [args] - Optional args to clear specific cache entry
      */
-    clearCache: async (tableId = null, range = null) => {
-        if (tableId) {
-            const prefix = range ? `${tableId}:${range}` : `${tableId}:`;
-            CacheManager.invalidateByPrefix('sheet_data', prefix);
+    clearCache: async (namespace = null, methodName = null, args = null) => {
+        if (namespace && methodName && args) {
+            // Clear specific cache entry
+            invalidateCache([
+                { namespace, methodName, args }
+            ]);
+        } else if (namespace && methodName) {
+            // Clear all entries for a specific method (would need additional logic)
+            console.warn('Clearing by namespace and method not implemented yet');
         } else {
-            CacheManager.clearNamespace('sheet_data');
+            // Clear all cache (would need additional logic)
+            console.warn('Clearing entire cache not implemented yet');
         }
         return true;
     },
@@ -135,7 +142,7 @@ export const Requests = {
      * @returns {Promise<object>} Detailed inventory status for all items
      */
     checkItemQuantities: async (projectIdentifier) => {
-        return await InventoryUtils.checkItemQuantities(projectIdentifier);
+        return await PackListUtils.checkItemQuantities(projectIdentifier);
     },
     
     /**
@@ -197,10 +204,7 @@ export const Requests = {
      * @returns {Promise<Array<Object>>}
      */
     getInventoryTabData: async (tabOrItemName, mapping, filters) => {
-        console.log('[API] getInventoryTabData called with:', { tabOrItemName, mapping, filters });
-        const data = await InventoryUtils.getInventoryTabData(tabOrItemName, mapping, filters);
-        console.log('[API] getInventoryTabData returned data:', data);
-        return data;
+        return await InventoryUtils.getInventoryTabData(tabOrItemName, mapping, filters);
     },
     
     /**

@@ -1,6 +1,5 @@
 // Dynamic Google Sheets Service selection
 let GoogleSheetsService, GoogleSheetsAuth;
-let usingFakeGoogle = false;
 
 function isLocalhost() {
     return (
@@ -14,8 +13,6 @@ function isLocalhost() {
 }
 
 if (isLocalhost()) {
-    // Use fake services for local development
-    usingFakeGoogle = true;
     // Dynamically import fake services
     // Note: This import must match the actual path and export names
     // If using a bundler, you may need to adjust this to static imports
@@ -28,9 +25,9 @@ if (isLocalhost()) {
     ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
 }
 
-import { wrapMethods } from '../index.js';
+import { wrapMethods, invalidateCache } from '../index.js';
 
-class database {
+class database_uncached {
     /**
      * Retrieves data for a table/tab and returns as array of JS objects
      * @param {string} tableId - Identifier for the table (INVENTORY, PACK_LISTS, etc.)
@@ -64,6 +61,85 @@ class database {
     }
     
     /**
+     * Executes a SQL-like query against logical table data
+     * @param {string} tableId - The table identifier
+     * @param {string} query - SQL-like query string
+     * @returns {Promise<Array<Object>>} Query results
+     */
+    static async queryData(tableId, query) {
+        return await GoogleSheetsService.querySheetData(tableId, query);
+    }
+    
+    /**
+     * Helper method to find a logical tab by name
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Name of the tab to find
+     * @returns {Promise<{title: string, sheetId: number}|null>} - The tab object or null if not found
+     */
+    static async findTabByName(tableId, tabName) {
+        const tabs = await Database.getTabs(tableId);
+        return tabs.find(tab => tab.title === tabName) || null;
+    }
+}
+
+
+
+class mutations {
+    /**
+     * Updates data for a table/tab using JS objects
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Tab name or logical identifier
+     * @param {Array<Object>} updates - Array of JS objects to save
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<boolean>} - Success status
+     */
+    static async setData(tableId, tabName, updates, mapping = null) {
+        const result = await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
+        
+        // Invalidate related caches using prefix to handle custom mapped data
+        invalidateCache([
+            { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
+        ], true);
+        
+        return result;
+    }
+    
+    /**
+     * Updates a single row in a table/tab using a unique identifier.
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Tab name or logical identifier
+     * @param {Object} update - JS object representing the row to update
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @returns {Promise<boolean>} - Success status
+     */
+    static async updateRow(tableId, tabName, update, mapping = null) {
+        const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
+
+        const transformedData = mapping
+            ? GoogleSheetsService.transformSheetData(existingData, mapping)
+            : existingData;
+
+        const rowIndex = transformedData.findIndex(row => row[mapping.itemNumber] === update[mapping.itemNumber]);
+        if (rowIndex === -1) {
+            throw new Error(`Row with identifier ${update[mapping.itemNumber]} not found in tab ${tabName}`);
+        }
+
+        const updatedRow = mapping
+            ? GoogleSheetsService.transformObjectToRow(update, mapping)
+            : Object.values(update);
+        existingData[rowIndex] = updatedRow;
+
+        await GoogleSheetsService.setSheetData(tableId, tabName, existingData);
+
+        // Invalidate related caches using prefix to handle custom mapped data
+        invalidateCache([
+            { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
+        ], true);
+
+        return true;
+    }
+    
+    /**
      * Hides specified logical tabs in a table
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to hide
@@ -94,91 +170,13 @@ class database {
         } else {
             await GoogleSheetsService.createBlankTab(tableId, newTabName);
         }
-    }
-    
-    /**
-     * Executes a SQL-like query against logical table data
-     * @param {string} tableId - The table identifier
-     * @param {string} query - SQL-like query string
-     * @returns {Promise<Array<Object>>} Query results
-     */
-    static async queryData(tableId, query) {
-        return await GoogleSheetsService.querySheetData(tableId, query);
-    }
-    
-    /**
-     * Helper method to find a logical tab by name
-     * @param {string} tableId - Identifier for the table
-     * @param {string} tabName - Name of the tab to find
-     * @returns {Promise<{title: string, sheetId: number}|null>} - The tab object or null if not found
-     */
-    static async findTabByName(tableId, tabName) {
-        const tabs = await database.getTabs(tableId);
-        return tabs.find(tab => tab.title === tabName) || null;
-    }
-    /**
-     * Updates data for a table/tab using JS objects
-     * @param {string} tableId - Identifier for the table
-     * @param {string} tabName - Tab name or logical identifier
-     * @param {Array<Object>} updates - Array of JS objects to save
-     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
-     * @returns {Promise<boolean>} - Success status
-     */
-    static async setData(tableId, tabName, updates, mapping = null) {
-        // Delegate conversion to GoogleSheetsService
-        return await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
-    }
-    
-    /**
-     * Updates a single row in a table/tab using a unique identifier.
-     * @param {string} tableId - Identifier for the table
-     * @param {string} tabName - Tab name or logical identifier
-     * @param {Object} update - JS object representing the row to update
-     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
-     * @returns {Promise<boolean>} - Success status
-     */
-    static async updateRow(tableId, tabName, update, mapping = null) {
-        // Fetch existing data from the tab
-        const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
-
-        // Transform data if mapping is provided
-        const transformedData = mapping
-            ? GoogleSheetsService.transformSheetData(existingData, mapping)
-            : existingData;
-
-        // Find the row to update using the unique identifier
-        const rowIndex = transformedData.findIndex(row => row[mapping.itemNumber] === update[mapping.itemNumber]);
-        if (rowIndex === -1) {
-            throw new Error(`Row with identifier ${update[mapping.itemNumber]} not found in tab ${tabName}`);
-        }
-
-        // Update the row in the raw data
-        const updatedRow = mapping
-            ? GoogleSheetsService.transformObjectToRow(update, mapping)
-            : Object.values(update);
-        existingData[rowIndex] = updatedRow;
-
-        // Save the updated data back to the sheet
-        await GoogleSheetsService.setSheetData(tableId, tabName, existingData);
-
-        return true;
+        
+        // Invalidate related caches
+        invalidateCache([
+            { namespace: 'database', methodName: 'getTabs', args: [tableId] }
+        ]);
     }
 }
 
-// Mutation cache invalidation logic
-const mutationKeys = ['setData','createTab','hideTabs','showTabs'];
-const getAffectedKeysFn = {
-    setData: (tableId, tabName, updates) => [
-        // Invalidate the actual data cache for the tab
-        { namespace: 'database', key: `getData:["${tableId}","${tabName}"]` }
-    ],
-    createTab: (tableId, newTabName) => [
-        // Invalidate the tabs cache for the table
-        { namespace: 'database', key: `getTabs:["${tableId}"]` }
-    ]
-};
-
-// Export
-export const Database = wrapMethods(database, 'database', mutationKeys, getAffectedKeysFn);
-// Optionally export which service is being used for debugging
-export const DatabaseUsesFakeGoogle = usingFakeGoogle;
+export const Database = wrapMethods(database_uncached, 'database');
+export const Mutations = mutations;

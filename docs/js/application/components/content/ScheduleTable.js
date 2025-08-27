@@ -171,7 +171,7 @@ export const ScheduleTableComponent = {
     },
     methods: {
         async handleRefresh() {
-            Requests.clearCache('PROD_SCHED', 'ProductionSchedule');
+            Requests.clearCache('database', 'getData', ['PROD_SCHED', 'ProductionSchedule']);
             if (this.scheduleTableStore) {
                 await this.scheduleTableStore.load('Reloading schedule...');
             }

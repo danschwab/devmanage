@@ -1,9 +1,9 @@
-import { Database, wrapMethods } from '../index.js';
+import { Database, Mutations, InventoryUtils, ProductionUtils, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for pack list operations
  */
-class packListUtils {
+class packListUtils_uncached {
     /**
      * Get pack list content
      * @param {string} projectIdentifier - The project identifier
@@ -74,7 +74,7 @@ class packListUtils {
      */
     static async extractItems(projectIdentifier) {
         // Get pack list content (array of crate objects with Items arrays)
-        const crates = await packListUtils.getContent(projectIdentifier, "Pack");
+        const crates = await PackListUtils.getContent(projectIdentifier, "Pack");
 
         // Return empty object if pack list not found
         if (!crates) return {};
@@ -110,17 +110,12 @@ class packListUtils {
      * @returns {Promise<boolean>} Success status
      */
     static async savePackList(tabName, crates, headers = null) {
-        // Minimal logging of input data
         console.log('[PackListUtils.savePackList] crates input:', crates);
 
-        // Read the original sheet data to get metadata and header row
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
-        // Preserve metadata rows (rows 0 and 1)
         const metadataRows = originalSheetData.slice(0, 2);
-        // Use the original header row (row 2)
         const headerRow = originalSheetData[2] || [];
 
-        // Determine headers from original header row
         const itemColumnsStart = headerRow.findIndex(h => h === 'Pack');
         const mainHeaders = headerRow.slice(0, itemColumnsStart);
         const itemHeaders = headerRow.slice(itemColumnsStart);
@@ -169,17 +164,105 @@ class packListUtils {
             }
         });
         // Save the sheet data (2D array), overwriting the whole tab
-        return await Database.setData('PACK_LISTS', tabName, sheetData, null);
+        return await Mutations.setData('PACK_LISTS', tabName, sheetData, null);
+    }
+
+
+
+        /**
+     * Check item quantities for a project
+     * @param {string} projectIdentifier - The project identifier
+     * @returns {Promise<object>} Inventory status for all items
+     */
+    static async checkItemQuantities(projectIdentifier) {
+        //console.group(`Checking quantities for project: ${projectIdentifier}`);
+        try {
+            // 1. Get pack list items
+            //console.log('1. Getting pack list items...');
+            const itemMap = await PackListUtils.extractItems(projectIdentifier);
+            const itemIds = Object.keys(itemMap);
+
+            // If there are no items in the pack list, return
+            if (!itemIds.length) {
+                //console.log('No items found in pack list, returning.');
+                //console.groupEnd();
+                return {};
+            }
+
+            // 2. Get inventory quantities
+            //console.log('2. Getting inventory quantities...');
+            let inventoryInfo;
+            try {
+                inventoryInfo = await InventoryUtils.getItemInfo(itemIds, "quantity");
+            } catch (err) {
+                console.error('Error getting inventory:', err);
+                throw new Error('Failed to get inventory information');
+            }
+
+            // Remove items with no inventory quantity
+            const validItemIds = itemIds.filter(id => {
+                const inventoryObj = inventoryInfo.find(i => i.itemName === id);
+                return inventoryObj && inventoryObj.quantity !== null && inventoryObj.quantity !== undefined && inventoryObj.quantity !== '';
+            });
+
+            // 3. Initialize result with inventory and requested, and set remaining to inventory - requested
+            const result = {};
+            validItemIds.forEach(id => {
+                const inventoryObj = inventoryInfo.find(i => i.itemName === id);
+                const inventoryQty = parseInt(inventoryObj.quantity || "0", 10);
+                const projectQty = itemMap[id] || 0;
+                result[id] = {
+                    inventory: inventoryQty,
+                    requested: projectQty,
+                    overlapping: [],
+                    remaining: inventoryQty - projectQty
+                };
+            });
+
+            // 4. Get overlapping shows
+            //console.log('4. Checking for overlapping shows...');
+            let overlappingIds;
+            try {
+                overlappingIds = await ProductionUtils.getOverlappingShows({ identifier: projectIdentifier });
+            } catch (err) {
+                console.error('Error getting overlapping shows:', err);
+                throw new Error('Failed to get overlapping shows');
+            }
+
+            // 5. Process overlapping shows
+            //console.log('5. Processing overlapping shows...');
+            for (const overlapRow of overlappingIds) {
+                // Extract identifier from the row object
+                const otherId = overlapRow.Identifier || 
+                               await ProductionUtils.computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year);
+
+                if (otherId === projectIdentifier) continue;
+                
+                try {
+                    const otherItemMap = await PackListUtils.extractItems(otherId);
+                    Object.entries(otherItemMap).forEach(([id, qty]) => {
+                        if (result[id]) {
+                            result[id].remaining -= qty;
+                            if (!result[id].overlapping.includes(otherId)) {
+                                result[id].overlapping.push(otherId);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    //console.warn(`Failed to process overlapping show ${otherId}:`, e);
+                }
+            }
+
+            //console.log('Final results:', result);
+            //console.groupEnd();
+            
+            return result;
+        } catch (error) {
+            console.error('Failed to check quantities:', error);
+            //console.groupEnd();
+            throw error;
+        }
     }
 }
 
-// Mutation cache invalidation logic for pack list saves
-const mutationKeys = ['savePackList'];
-const getPackListAffectedKeysFn = {
-    savePackList: (tabName) => [
-        { namespace: 'database', key: `getData:["PACK_LISTS","${tabName}"]` },
-        { namespace: 'packlist_utils', key: `getContent:["${tabName}","Pack"]` }
-    ]
-};
-
-export const PackListUtils = wrapMethods(packListUtils, 'packlist_utils', mutationKeys, getPackListAffectedKeysFn);
+export const PackListUtils = wrapMethods(packListUtils_uncached, 'packlist_utils');
