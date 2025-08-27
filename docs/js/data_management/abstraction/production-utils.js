@@ -1,4 +1,4 @@
-import { Database, parseDate, wrapMethods, searchFilter } from '../index.js';
+import { Database, parseDate, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -132,7 +132,6 @@ class productionUtils_uncached {
             if (!ship || !ret) return false;
             return (ret >= startDate && ship <= endDate);
         });
-        console.log(`[production-utils] Filtered overlapping shows:`, filtered);
         return filtered;
     }
     
@@ -192,6 +191,7 @@ class productionUtils_uncached {
     static async computeIdentifierReferenceData(deps) {
         const clientsData = await deps.call(Database.getData, 'PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
         const showsData = await deps.call(Database.getData, 'PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
+        console.log('[production-utils] Loaded reference data for fuzzy matching:', { clientsData, showsData });
         return {
             clients: {
                 names: clientsData.map(row => row.name || ''),
