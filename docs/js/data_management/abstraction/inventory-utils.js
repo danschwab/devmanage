@@ -40,7 +40,7 @@ class inventoryUtils_uncached {
             const tab = await deps.call(InventoryUtils.getTabNameForItem, item);
             if (!tab) {
                 unmappedItems.push(item);
-                return;
+                continue;
             }
             if (!itemsByTab[tab]) itemsByTab[tab] = [];
             itemsByTab[tab].push(item);

@@ -282,7 +282,7 @@ export const ScheduleTableComponent = {
                         v-if="column.key === 'packlist'"
                         @click="handlePacklistClick(row)"
                         :disabled="isPacklistButtonDisabled(row)"
-                        class="white"
+                        class="table-cell-card"
                     >
                         {{ getPacklistButtonText(row) }}
                     </button>

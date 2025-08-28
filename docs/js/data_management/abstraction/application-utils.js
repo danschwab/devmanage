@@ -1,4 +1,4 @@
-import { Database, wrapMethods } from '../index.js';
+import { Database, Mutations, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for application-specific operations
@@ -13,14 +13,19 @@ class applicationUtils_uncached {
      * @returns {Promise<boolean>} Success status
      */
     static async storeUserData(deps, username, id, data) {
-        // Compose tab name for user data
-        const tabName = `${username}_${id}`;
-        // Ensure tab exists (create blank if not)
+        // Sanitize username and compose tab name consistently with getUserData
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `User_${sanitizedUsername}`;
+        
+        // Ensure tab exists (create with proper structure if not)
         const allTabs = await deps.call(Database.getTabs, 'CACHE');
         let tab = allTabs.find(t => t.title === tabName);
         if (!tab) {
-            await deps.call(Database.createTab, 'CACHE', null, tabName); // create blank tab, no template
+            await Mutations.createTab('CACHE', null, tabName); // create blank tab, no template
+            // Initialize the tab with headers
+            await Mutations.setData('CACHE', tabName, [['ID', 'Value']], null);
         }
+        
         // Prepare JS object for update
         let obj = { ID: id, Value: data };
         return await deps.call(Mutations.setData, 'CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });

@@ -188,4 +188,4 @@ class mutations {
 }
 
 export const Database = wrapMethods(database_uncached, 'database');
-export const Mutations = wrapMethods(mutations, 'mutations');
+export const Mutations = mutations;

@@ -613,7 +613,7 @@ input[type="text"] {
     overflow: auto;
     border: 1px solid var(--color-shadow);
     padding: 0;
-    max-height: 312px;
+    /*max-height: 312px;*/
 }
 
 .tabs-list button.tab-button {
@@ -733,17 +733,9 @@ td:has(.table-wrapper) {
     padding: 8px;
 }
 td:has(button) {
-    padding: 0;
+    padding: 2px;
 }
-td button:only-child {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    box-sizing: border-box;
-    border: none;
-    border-radius: 0;
-    box-shadow: inset 0 -8px 16px -16px var(--color-shadow);
-}
+
 
 
 .sort-button {
@@ -929,18 +921,19 @@ tr.dragging::after {
 
 
 .table-cell-card {
+    font-size: 11pt;
     display: block;
     border: 1px solid var(--color-border);
     padding: .25em;
     margin-top: .5em;
-    background-color: var(--color-gray-bg);
     border-radius: var(--radius-md);
+    width: 100%;
     transition: background-color 0.15s ease-in-out;
 }
-.table-cell-card:only-child {
+.table-cell-card:only-child, .table-cell-card:first-child {
     margin-top: 0;
 }
-.table-cell-card.clickable {
+.table-cell-card.clickable, button.table-cell-card {
     cursor: pointer;
 }
 

@@ -161,7 +161,7 @@ export const InventoryOverviewTableComponent = {
                     <button 
                         v-if="column.key === 'tab'"
                         @click="handleCategoryClick(row.tab)"
-                        class="white"
+                        class="table-cell-card"
                     >
                         {{ formatCategoryLabel(row.tab) }}
                     </button>
