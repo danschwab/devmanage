@@ -7,20 +7,15 @@ export { Auth, authState, useAuth } from './utils/auth.js';
 export { getReactiveStore } from './utils/reactiveStores.js';
 
 // Navigation components
-export { 
-    BreadcrumbComponent, 
-    PrimaryNavComponent, 
-    NavigationConfig, 
-    NavigationRegistry, 
-    NavigationInit
-} from './utils/navigationSystem.js';
+export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';
+export { NavigationRegistry } from './utils/navigationSystem.js';
 
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
 export { TableComponent } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
-export { DashboardManagement, DashboardToggleComponent, DashboardManagementComponent } from './components/interface/DashboardManagement.js';
+export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';

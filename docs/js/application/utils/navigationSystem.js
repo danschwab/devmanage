@@ -1,19 +1,7 @@
 import { html } from '../index.js';
-
-/**
- * Unified Navigation System
- * 
- * Consolidates all navigation-related functionality into a single module:
- * - NavigationRegistry: Central route definitions and path management
- * - NavigationConfig: Legacy compatibility layer
- * - PrimaryNavComponent: Main navigation component
- * - BreadcrumbComponent: Breadcrumb navigation component
- * - NavigationInit: Initialization
- */
-
-// =============================================================================
-// NAVIGATION REGISTRY - Central route definitions
-// =============================================================================
+import { getReactiveStore } from './reactiveStores.js';
+import { Requests } from '../index.js';
+import { authState } from '../index.js';
 
 export const NavigationRegistry = {
     /**
@@ -58,6 +46,50 @@ export const NavigationRegistry = {
         }
     },
 
+    // Dashboard containers reactive store
+    dashboardStore: null,
+    dashboardLoading: false,
+
+    /**
+     * Initialize dashboard reactive store
+     */
+    async initializeDashboardStore() {
+        if (!authState.isAuthenticated || !authState.user?.email) {
+            return;
+        }
+        
+        this.dashboardLoading = true;
+        try {
+            // Create reactive store for dashboard state
+            this.dashboardStore = getReactiveStore(
+                Requests.getUserData,
+                Requests.storeUserData,
+                [authState.user.email, 'dashboard_containers'],
+                false // Don't auto-load
+            );
+
+            // Wait for initial load
+            await this.dashboardStore.load('Loading dashboard...');
+
+            // Use store data directly as dashboard containers
+            if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
+                // Initialize with defaults if no saved data
+                this.dashboardStore.setData([]);
+                console.log('No saved dashboard state found, using defaults');
+            } else {
+                console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
+            }
+        } catch (error) {
+            console.error('Failed to initialize dashboard store:', error);
+            // Initialize with empty data to allow functioning
+            if (!this.dashboardStore) {
+                this.dashboardStore = getReactiveStore(null, null, [], false);
+            }
+            this.dashboardStore.setData([]);
+        }
+        this.dashboardLoading = false;
+    },
+
     /**
      * Register navigation routes for a section
      * @param {string} section - Main section (e.g., 'inventory')
@@ -77,8 +109,6 @@ export const NavigationRegistry = {
                 this.addDynamicRoute(section, routeKey, routeConfig);
             });
         }
-
-        //console.log(`NavigationRegistry: Registered ${Object.keys(navigationConfig.routes || {}).length} routes for section '${section}'`);
     },
 
     /**
@@ -258,478 +288,129 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Legacy compatibility methods (to maintain existing API)
+     * Initialize dashboard state from reactive store
      */
-    
-    // For NavigationConfig.navigationItems compatibility
-    get navigationItems() {
-        return this.primaryNavigation.map(item => item.id);
-    },
-    
-    // For NavigationConfig.getDisplayNameForPath compatibility  
-    getDisplayNameForPath(path) {
-        return this.getDisplayName(path);
-    }
-
-};
-
-// =============================================================================
-// NAVIGATION INITIALIZATION - Setup and dynamic route loading
-// =============================================================================
-
-export class NavigationInit {
-    static initialized = false;
-
-    /**
-     * Initialize the navigation system
-     */
-    static async initialize() {
-        if (this.initialized) return;
-
-        //console.log('Initializing navigation system - main sections ready');
-        this.initialized = true;
-    }
-
-    /**
-     * Get initialization status
-     */
-    static get isInitialized() {
-        return this.initialized;
-    }
-}
-
-// =============================================================================
-// PRIMARY NAVIGATION COMPONENT - Main navigation bar
-// =============================================================================
-
-export const PrimaryNavComponent = {
-    props: {
-        isMenuOpen: {
-            type: Boolean,
-            default: false
-        },
-        navigationItems: {
-            type: Array,
-            default: () => []
-        },
-        currentPage: {
-            type: String,
-            default: 'dashboard'
-        },
-        isAuthenticated: {
-            type: Boolean,
-            default: false
-        },
-        isAuthLoading: {
-            type: Boolean,
-            default: false
-        },
-        currentUser: {
-            type: Object,
-            default: () => null
+    async initDashboardState() {
+        if (!this.dashboardStore) {
+            console.warn('Dashboard store is not initialized');
+            return;
         }
-    },
-    emits: [
-        'toggle-menu',
-        'navigate-to-page',
-        'login',
-        'logout'
-    ],
-    methods: {
-        toggleMenu() {
-            this.$emit('toggle-menu');
-        },
-        navigateToPage(pageFile) {
-            this.$emit('navigate-to-page', pageFile);
-        },
-        login() {
-            this.$emit('login');
-        },
-        logout() {
-            this.$emit('logout');
-        }
-    },
-    template: html`
-        <header>
-            <nav :class="{ 'open': isMenuOpen }">
-                <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-                
-                <span id="navbar">
-                    <template v-if="isAuthenticated">
-                        <a v-for="item in navigationItems" 
-                           :key="item.file"
-                           :class="{ 'active': currentPage === item.file }"
-                           @click="navigateToPage(item.file); $emit('toggle-menu')"
-                           href="#">
-                            {{ item.title }}
-                        </a>
-                    </template>
-                    
-                    <button v-if="!isAuthenticated" 
-                            @click="login" 
-                            :disabled="isAuthLoading"
-                            class="login-out-button active">
-                        {{ isAuthLoading ? 'Loading...' : 'Login' }}
-                    </button>
-                    <button v-else 
-                            @click="logout" 
-                            :disabled="isAuthLoading"
-                            class="login-out-button">
-                        {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
-                    </button>
-                </span>
-                
-                <button class="button-symbol white" @click="toggleMenu">
-                    {{ isMenuOpen ? '×' : '≡' }}
-                </button>
-            </nav>
-        </header>
-    `
-};
-
-// =============================================================================
-// BREADCRUMB COMPONENT - Breadcrumb navigation
-// =============================================================================
-
-export const BreadcrumbComponent = {
-    props: {
-        containerPath: {
-            type: String,
-            default: ''
-        },
-        title: {
-            type: String,
-            default: ''
-        },
-        cardStyle: {
-            type: Boolean,
-            default: false
-        },
-        navigationMap: {
-            type: Object,
-            default: () => ({})
-        },
-        containerId: {
-            type: String,
-            required: true
-        }
-    },
-    data() {
-        return {
-            // Local navigation map that can be extended at runtime
-            localNavigationMap: {},
-            showHoverPath: false
-        };
-    },
-    mounted() {
-        // Initialize local navigation map with props
-        this.localNavigationMap = { ...this.navigationMap };
         
-        // Add any segments from current path that aren't already mapped
-        this.pathSegments.forEach(segment => {
-            if (!this.localNavigationMap[segment]) {
-                this.addNavigationMapping(segment);
-            }
-        });
-    },
-    computed: {
-        pathSegments() {
-            if (!this.containerPath) return [];
-            return this.containerPath.split('/').filter(segment => segment.length > 0);
-        },
-        pathSegmentsWithNames() {
-            if (!this.pathSegments.length) return [];
-            
-            return this.pathSegments.map((segment, index) => {
-                // Build the cumulative path up to this segment
-                const cumulativePath = this.pathSegments.slice(0, index + 1).join('/');
-                
-                return {
-                    id: segment,
-                    name: this.getSegmentName(segment, cumulativePath),
-                    index: index,
-                    path: cumulativePath
-                };
-            });
-        },
-        breadcrumbTitle() {
-            if (this.pathSegmentsWithNames.length === 0) return this.title;
-            return this.pathSegmentsWithNames[this.pathSegmentsWithNames.length - 1].name;
-        },
-        displayTitle() {
-            if (this.containerPath) {
-                // For dashboard cards, use dashboard title; for regular breadcrumbs, use display name
-                if (this.cardStyle) {
-                    return NavigationRegistry.getDashboardTitle(this.containerPath);
-                } else {
-                    return this.breadcrumbTitle;
-                }
-            }
-            return this.title;
-        },
-        currentPage() {
-            if (this.pathSegments.length === 0) return '';
-            return this.pathSegments[0];
-        },
-        canGoBack() {
-            if (this.pathSegments.length <= 1) return false;
-            
-            // Don't allow going back if the parent path would be 'dashboard'
-            const parentSegments = this.pathSegments.slice(0, -1);
-            if (parentSegments.length === 1 && parentSegments[0] === 'dashboard') {
-                return false;
-            }
-            
-            return true;
-        },
-        parentPath() {
-            if (this.pathSegments.length <= 1) return '';
-            return this.pathSegments.slice(0, -1).join('/');
+        // Load initial data from the store
+        await this.dashboardStore.load();
+        
+        // Set default data if store is empty
+        if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
+            this.dashboardStore.setData([]);
+            console.log('No saved dashboard state found, using defaults');
+        } else {
+            console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
         }
     },
-    methods: {
-        /**
-         * Get human-readable name for a segment, building it if not found
-         * @param {string} segmentId - The segment identifier
-         * @param {string} fullPath - The full path to this segment (for better context)
-         */
-        getSegmentName(segmentId, fullPath = null) {
-            // Check local navigation map first
-            if (this.localNavigationMap[segmentId]) {
-                return this.localNavigationMap[segmentId];
-            }
-            
-            // Try to get from NavigationRegistry using full path if available
-            let registryName = 'Unknown';
-            if (fullPath) {
-                registryName = NavigationRegistry.getDisplayName(fullPath);
-            }
-            
-            // If full path didn't work, try just the segment
-            if (registryName === 'Unknown') {
-                registryName = NavigationRegistry.getDisplayName(segmentId);
-            }
-            
-            if (registryName !== 'Unknown') {
-                this.addNavigationMapping(segmentId, registryName);
-                return registryName;
-            }
-            
-            // Auto-generate name if not found
-            const generatedName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-            this.addNavigationMapping(segmentId, generatedName);
-            return generatedName;
-        },
-        /**
-         * Add a new navigation mapping
-         */
-        addNavigationMapping(segmentId, displayName = null) {
-            if (!displayName) {
-                displayName = NavigationRegistry.getDisplayName(segmentId);
-                if (displayName === 'Unknown') {
-                    displayName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-                }
-            }
-            this.localNavigationMap[segmentId] = displayName;
-            
-            // Emit event to parent to share this mapping
-            this.$emit('navigation-mapping-added', {
-                containerId: this.containerId,
-                segmentId: segmentId,
-                displayName: displayName
-            });
-        },
-        /**
-         * Update navigation mapping from external source
-         */
-        updateNavigationMapping(segmentId, displayName) {
-            this.localNavigationMap[segmentId] = displayName;
-        },
-        navigateToBreadcrumb(index) {
-            if (index < this.pathSegments.length - 1) {
-                const targetPath = this.pathSegments.slice(0, index + 1).join('/');
-                
-                // Ensure all segments in target path have mappings
-                this.pathSegments.slice(0, index + 1).forEach(segment => {
-                    if (!this.localNavigationMap[segment]) {
-                        this.addNavigationMapping(segment);
-                    }
-                });
-                
-                this.$emit('navigate-to-path', {
-                    containerId: this.containerId,
-                    targetPath: targetPath,
-                    currentPath: this.containerPath,
-                    navigationMap: this.localNavigationMap
-                });
-            }
-        },
-        showHoverBreadcrumb() {
-            this.showHoverPath = true;
-        },
-        hideHoverBreadcrumb() {
-            this.showHoverPath = false;
-        }
-    },
-    template: html`
-        <div v-if="containerPath" class="breadcrumb-nav">
-            <!-- Full breadcrumb path for non-card containers -->
-            <div v-if="!cardStyle" class="breadcrumb-path">
-                <template v-for="(segment, index) in pathSegmentsWithNames" :key="segment.id">
-                    <span 
-                        class="breadcrumb-segment"
-                        :class="{ 
-                            'active': index === pathSegmentsWithNames.length - 1,
-                            'page-highlight': index === 0 
-                        }"
-                        @click="navigateToBreadcrumb(index)">
-                        {{ segment.name }}
-                    </span>
-                    <span v-if="index < pathSegmentsWithNames.length - 1" class="breadcrumb-separator">/</span>
-                </template>
-            </div>
-            <!-- Current location with hover overlay for dashboard cards -->
-            <div v-else class="breadcrumb-card-container">
-                <h2 v-if="!showHoverPath" class="breadcrumb-current" 
-                    @mouseenter="showHoverBreadcrumb" 
-                    @mouseleave="hideHoverBreadcrumb">
-                    {{ displayTitle }}
-                </h2>
-                
-                <!-- Hover overlay with full breadcrumb path -->
-                <div v-else-if="showHoverPath" class="breadcrumb-hover-overlay"
-                     @mouseenter="showHoverBreadcrumb" 
-                     @mouseleave="hideHoverBreadcrumb">
-                    <div class="breadcrumb-path">
-                        <template v-for="(segment, index) in pathSegmentsWithNames" :key="segment.id">
-                            <span 
-                                class="breadcrumb-segment"
-                                :class="{ 
-                                    'active': index === pathSegmentsWithNames.length - 1,
-                                    'page-highlight': index === 0 
-                                }"
-                                @click="navigateToBreadcrumb(index)">
-                                {{ segment.name }}
-                            </span>
-                            <span v-if="index < pathSegmentsWithNames.length - 1" class="breadcrumb-separator">/</span>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Traditional Title (fallback) -->
-        <h2 v-else-if="title">{{ displayTitle }}</h2>
-    `
-};
-
-// =============================================================================
-// NAVIGATION CONFIG - Legacy compatibility and main navigation logic
-// =============================================================================
-
-/**
- * Centralized navigation configuration and utilities
- * Updated to use NavigationRegistry for unified path management
- */
-export const NavigationConfig = {
-    // Use NavigationRegistry for primary navigation
-    get navigationItems() {
-        return NavigationRegistry.navigationItems;
-    },
-
-    // Use NavigationRegistry for primary navigation data
-    get primaryNavigation() {
-        return NavigationRegistry.primaryNavigation;
-    },
-
-    // Dynamic list of dashboard containers (now path-based)
-    allDashboardContainers: [],
 
     /**
-     * Add a dashboard container by path
-     * @param {string} containerPath - The container path to add
-     * @param {string} title - Display title for the container (optional, will use dashboardTitle or displayName)
+     * Get dashboard containers from reactive store
+     */
+    get allDashboardContainers() {
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return [];
+        }
+        return this.dashboardStore.data;
+    },
+
+    /**
+     * Save dashboard state using reactive store
+     */
+    async saveDashboardState() {
+        if (!this.dashboardStore || !authState.isAuthenticated || !authState.user?.email) {
+            return;
+        }
+        
+        try {
+            await this.dashboardStore.save('Saving dashboard...');
+            console.log('Dashboard state saved successfully via reactive store');
+        } catch (error) {
+            console.warn('Failed to save dashboard state (continuing without saving):', error.message);
+        }
+    },
+
+    /**
+     * Dashboard container management
      */
     addDashboardContainer(containerPath, title = null) {
-        // Check if container already exists
-        const exists = this.allDashboardContainers.some(container => 
-            container.path === containerPath
-        );
+        if (!this.dashboardStore) return;
+        
+        const containers = this.dashboardStore.data;
+        const exists = containers.some(container => container.path === containerPath);
         
         if (!exists) {
-            const displayTitle = title || NavigationRegistry.getDashboardTitle(containerPath);
-            this.allDashboardContainers.push({ 
-                path: containerPath, 
-                title: displayTitle 
-            });
+            const displayTitle = title || this.getDashboardTitle(containerPath);
+            const newContainer = { path: containerPath, title: displayTitle };
+            this.dashboardStore.addRow(newContainer);
         }
     },
 
-    /**
-     * Remove a dashboard container by path
-     * @param {string} containerPath - The container path to remove
-     */
     removeDashboardContainer(containerPath) {
-        this.allDashboardContainers = this.allDashboardContainers.filter(container => 
-            container.path !== containerPath
-        );
+        if (!this.dashboardStore) return;
+        
+        const containers = this.dashboardStore.data;
+        const index = containers.findIndex(container => container.path === containerPath);
+        
+        if (index !== -1) {
+            this.dashboardStore.markRowForDeletion(index, true);
+            this.dashboardStore.removeMarkedRows();
+        }
     },
 
-    /**
-     * Check if a dashboard container exists for a path
-     * @param {string} containerPath - The container path to check
-     * @returns {boolean} Whether the container exists
-     */
     hasDashboardContainer(containerPath) {
-        return this.allDashboardContainers.some(container => container.path === containerPath);
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return false;
+        }
+        return this.dashboardStore.data.some(container => container.path === containerPath);
     },
 
-    /**
-     * Get display name for a path (delegate to NavigationRegistry)
-     * @param {string} path - The path to get display name for
-     * @returns {string} Display name
-     */
-    getDisplayNameForPath(path) {
-        return NavigationRegistry.getDisplayName(path);
-    },
-
-    /**
-     * Get all paths that can be added to dashboard (delegate to NavigationRegistry)
-     * @returns {Array} Array of available paths
-     */
     getAvailablePaths() {
         // Filter to only include non-main-section paths for dashboard
-        return NavigationRegistry.getAllPaths().filter(path => path.includes('/'));
+        return this.getAllPaths().filter(path => path.includes('/'));
     },
 
-    /**
-     * Get paths not currently on dashboard
-     * @returns {Array} Array of paths that can be added
-     */
     getAddablePaths() {
-        const currentPaths = this.allDashboardContainers.map(container => container.path);
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return this.getAvailablePaths();
+        }
+        const currentPaths = this.dashboardStore.data.map(container => container.path);
         return this.getAvailablePaths().filter(path => !currentPaths.includes(path));
     },
 
     /**
-     * Get navigation result for a page (containers configuration)
+     * Get container type from path - consolidated logic
+     * @param {string} path - The container path
+     * @returns {string} Container type
+     */
+    getTypeFromPath(path) {
+        const segments = path.split('/').filter(segment => segment.length > 0);
+        const firstSegment = segments[0];
+        if (this.routes[firstSegment] && this.routes[firstSegment].isMainSection) {
+            return firstSegment;
+        }
+        return segments[segments.length - 1];
+    },
+
+    /**
+     * Get navigation result for a page (containers configuration) - consolidated
      * @param {string} pageFile - The page to navigate to
      * @param {boolean} isAuthenticated - Whether user is authenticated
      * @returns {Object} Navigation result with containers
      */
     getNavigationResult(pageFile, isAuthenticated = true) {
-        // If not authenticated, return empty containers
         if (!isAuthenticated) {
-            return {
-                page: pageFile,
-                containers: []
-            };
+            return { page: pageFile, containers: [] };
         }
 
-        // Get container configurations based on page type
         let containerConfigs;
         if (pageFile === 'dashboard') {
-            // Return copy of current dashboard containers with proper structure
-            containerConfigs = this.allDashboardContainers.map(container => ({
+            const containers = this.dashboardStore?.data || [];
+            containerConfigs = containers.map(container => ({
                 path: container.path,
                 title: container.title,
                 containerPath: container.path,
@@ -738,7 +419,7 @@ export const NavigationConfig = {
         } else {
             containerConfigs = [{ 
                 path: pageFile, 
-                title: this.getDisplayNameForPath(pageFile),
+                title: this.getDisplayName(pageFile),
                 containerPath: pageFile,
                 type: this.getTypeFromPath(pageFile)
             }];
@@ -757,29 +438,9 @@ export const NavigationConfig = {
     },
 
     /**
-     * Get container type from path
-     * @param {string} path - The container path
-     * @returns {string} Container type
-     */
-    getTypeFromPath(path) {
-        const segments = path.split('/').filter(segment => segment.length > 0);
-        // For main sections (inventory, packlist, schedule), always return the first segment as the type
-        const firstSegment = segments[0];
-        if (NavigationRegistry.routes[firstSegment] && NavigationRegistry.routes[firstSegment].isMainSection) {
-            return firstSegment;
-        }
-        // For other paths, return the last segment
-        return segments[segments.length - 1];
-    },
-
-    /**
-     * Handle container expansion logic
-     * @param {Object} containerData - Container data object
-     * @param {string} currentPage - Current page identifier
-     * @returns {Object} Expansion result with target page and action
+     * Navigation handlers - consolidated
      */
     handleContainerExpansion(containerData, currentPage) {
-        // For dashboard cards, navigate to the specific path
         const targetPath = containerData.containerPath || containerData.path;
         const targetPage = targetPath.split('/')[0];
         
@@ -797,166 +458,103 @@ export const NavigationConfig = {
         }
     },
 
-    /**
-     * Handle navigation back logic and execute the action
-     * @param {Object} navigationData - Navigation data with containerId and parentPath
-     * @param {Object} appContext - App context with containers and removeContainer method
-     * @returns {Object} Navigation result with action and data
-     */
     handleNavigateBack(navigationData, appContext) {
         const { containerId, parentPath } = navigationData;
         const container = appContext.containers.find(c => c.id === containerId);
         
         if (container) {
-            // If previous location is dashboard, remove the container (close button behavior)
             if (parentPath === 'dashboard' || !parentPath) {
                 appContext.removeContainer(containerId);
-                return {
-                    action: 'remove_container',
-                    containerId
-                };
+                return { action: 'remove_container', containerId };
             } else {
                 container.containerPath = parentPath;
-                return {
-                    action: 'update_path',
-                    containerId,
-                    newPath: parentPath
-                };
+                return { action: 'update_path', containerId, newPath: parentPath };
             }
         }
         
         return { action: 'no_action' };
     },
 
-    /**
-     * Handle navigation to path logic and execute the action
-     * @param {Object} navigationData - Navigation data with containerId and targetPath
-     * @param {Object} appContext - App context with containers
-     * @returns {Object} Navigation result with action and data
-     */
     handleNavigateToPath(navigationData, appContext) {
         const { containerId, targetPath, navigationMap } = navigationData;
         const container = appContext.containers.find(c => c.id === containerId);
         
-        if (container) {
-            // Parse path for parameters
-            const pathInfo = NavigationRegistry.parsePath(targetPath);
-            console.log('NavigationConfig: Navigating to path with parameters:', pathInfo);
+        if (!container) return { action: 'no_action' };
+        
+        const pathInfo = this.parsePath(targetPath);
+        const basePage = pathInfo.path.split('/')[0];
+        
+        // Update container with path and parameters
+        container.containerPath = pathInfo.path;
+        container.fullPath = pathInfo.fullPath;
+        container.navigationParameters = pathInfo.parameters;
+        
+        if (navigationMap) {
+            container.navigationMap = { ...container.navigationMap, ...navigationMap };
+        }
+        
+        // Handle dashboard navigation
+        if (pathInfo.path === 'dashboard') {
+            this.navigateToPage('dashboard', appContext);
+            return { action: 'navigate_to_dashboard', containerId, targetPage: 'dashboard', parameters: pathInfo.parameters };
+        }
+        
+        // Handle cross-page navigation
+        if (appContext.currentPage !== pathInfo.path) {
+            this.navigateToPage(basePage, appContext);
             
-            // Extract the base page from the clean path (e.g., 'inventory/items' -> 'inventory')
-            const basePage = pathInfo.path.split('/')[0];
-            
-            // Update container with path and parameters
-            container.containerPath = pathInfo.path; // Store clean path for routing
-            container.fullPath = pathInfo.fullPath; // Store full path with parameters
-            container.navigationParameters = pathInfo.parameters; // Store parameters separately
-            
-            // Log parameters for debugging
-            if (pathInfo.hasParameters) {
-                //console.log(`NavigationConfig: Navigation parameters for container ${containerId}:`, pathInfo.parameters);
-            }
-            
-            // Update container's navigation map if provided
-            if (navigationMap) {
-                container.navigationMap = { ...container.navigationMap, ...navigationMap };
-            }
-            
-            // If navigating to dashboard, navigate to dashboard page instead of updating path
-            if (pathInfo.path === 'dashboard') {
-                this.navigateToPage('dashboard', appContext);
-                return {
-                    action: 'navigate_to_dashboard',
-                    containerId,
-                    targetPage: 'dashboard',
-                    parameters: pathInfo.parameters
-                };
-            }
-            
-            // If we're on dashboard and trying to navigate to a different path,
-            // navigate to that path as a new page (like expand button behavior)
-            if (appContext.currentPage !== pathInfo.path) {
-                this.navigateToPage(basePage, appContext);
-                
-                // After navigation, find the container that matches the target path exactly
-                appContext.$nextTick(() => {
-                    const expandedContainer = appContext.containers.find(c => 
-                        c.containerPath === basePage || c.containerType === basePage
-                    );
-                    if (expandedContainer) {
-                        expandedContainer.containerPath = pathInfo.path;
-                        expandedContainer.fullPath = pathInfo.fullPath;
-                        expandedContainer.navigationParameters = pathInfo.parameters;
-                    }
-                });
-                
-                return {
-                    action: 'navigate_to_new_page',
-                    containerId,
-                    targetPage: basePage,
-                    targetPath: pathInfo.path,
-                    fullPath: pathInfo.fullPath,
-                    parameters: pathInfo.parameters
-                };
-            }
-            
+            appContext.$nextTick(() => {
+                const expandedContainer = appContext.containers.find(c => 
+                    c.containerPath === basePage || c.containerType === basePage
+                );
+                if (expandedContainer) {
+                    expandedContainer.containerPath = pathInfo.path;
+                    expandedContainer.fullPath = pathInfo.fullPath;
+                    expandedContainer.navigationParameters = pathInfo.parameters;
+                }
+            });
             
             return {
-                action: 'update_path',
+                action: 'navigate_to_new_page',
                 containerId,
-                newPath: pathInfo.path,
+                targetPage: basePage,
+                targetPath: pathInfo.path,
                 fullPath: pathInfo.fullPath,
-                parameters: pathInfo.parameters,
-                navigationMap
+                parameters: pathInfo.parameters
             };
         }
         
-        return { action: 'no_action' };
-    },
-
-    /**
-     * Create a navigation handler for a specific container
-     * @param {string} containerId - Container ID
-     * @param {Function} handleNavigateToPath - Navigation handler function
-     * @returns {Function} Path navigation handler that accepts path and optional parameters
-     */
-    createNavigateToPathHandler(containerId, handleNavigateToPath) {
-        return (path, parameters = null) => {
-            // If parameters are provided as a separate object, build the full path
-            const fullPath = parameters ? NavigationRegistry.buildPath(path, parameters) : path;
-            
-            handleNavigateToPath({
-                containerId: containerId,
-                targetPath: fullPath
-            });
+        return {
+            action: 'update_path',
+            containerId,
+            newPath: pathInfo.path,
+            fullPath: pathInfo.fullPath,
+            parameters: pathInfo.parameters,
+            navigationMap
         };
     },
 
     /**
-     * Navigate to a specific page (Application-level function)
-     * @param {string} pageFile - Page to navigate to
-     * @param {Object} appContext - App context with currentPage, isMenuOpen, updateContainersForPage
+     * Application-level functions - consolidated
      */
+    createNavigateToPathHandler(containerId, handleNavigateToPath) {
+        return (path, parameters = null) => {
+            const fullPath = parameters ? this.buildPath(path, parameters) : path;
+            handleNavigateToPath({ containerId: containerId, targetPath: fullPath });
+        };
+    },
+
     navigateToPage(pageFile, appContext) {
         appContext.currentPage = pageFile;
-        appContext.isMenuOpen = false; // Close menu when navigating
+        appContext.isMenuOpen = false;
         console.log(`Navigating to: ${pageFile}`);
-        // Update containers based on current page
         this.updateContainersForPage(pageFile, appContext);
     },
 
-    /**
-     * Update containers for a specific page (Application-level function)
-     * @param {string} pageFile - Page file identifier
-     * @param {Object} appContext - App context with containers, isAuthenticated, addContainer
-     */
     async updateContainersForPage(pageFile, appContext) {
-        // Clear existing containers
         appContext.containers = [];
-        
-        // Use centralized navigation logic
         const navigationResult = this.getNavigationResult(pageFile, appContext.isAuthenticated);
         
-        // Create containers based on navigation result
         for (const containerConfig of navigationResult.containers) {
             await appContext.addContainer(
                 containerConfig.type,
@@ -965,30 +563,20 @@ export const NavigationConfig = {
             );
         }
         
-        // If authenticated and no containers were added for non-dashboard pages, navigate to dashboard
         if (appContext.isAuthenticated && appContext.containers.length === 0 && pageFile !== 'dashboard') {
             this.navigateToPage('dashboard', appContext);
         }
     },
 
-    /**
-     * Handle container expansion (Application-level function)
-     * @param {Object} containerData - Container data
-     * @param {Object} appContext - App context with currentPage, showAlert
-     */
     expandContainer(containerData, appContext) {
-        //console.log('Expanding container:', containerData);
-        
         const expansionResult = this.handleContainerExpansion(containerData, appContext.currentPage);
         
         switch (expansionResult.action) {
             case 'navigate':
                 this.navigateToPage(expansionResult.targetPage, appContext);
                 
-                // If the container has a path, update the new container to that path
                 if (expansionResult.containerPath) {
                     appContext.$nextTick(() => {
-                        // Find the container that matches the base page and update its path
                         const basePage = expansionResult.containerPath.split('/')[0];
                         const expandedContainer = appContext.containers.find(c => 
                             c.containerType === basePage || c.containerPath === basePage
@@ -1005,3 +593,6 @@ export const NavigationConfig = {
         }
     }
 };
+
+// Legacy export for backward compatibility
+export const NavigationConfig = NavigationRegistry;

@@ -2,61 +2,6 @@ import { html, DashboardToggleComponent } from '../index.js';
 
 const { reactive } = Vue;
 
-// Dashboard Management Component
-const DashboardManagementComponent = {
-    inject: ['appContext'],
-    data() {
-        return {
-            availablePaths: []
-        };
-    },
-    mounted() {
-        this.updateAvailablePaths();
-        this.interval = setInterval(() => {
-            this.updateAvailablePaths();
-        }, 100);
-    },
-    beforeUnmount() {
-        if (this.interval) {
-            clearInterval(this.interval);
-        }
-    },
-    methods: {
-        updateAvailablePaths() {
-            const newPaths = this.appContext.getAllPathsWithStatus?.() || [];
-            if (JSON.stringify(newPaths) !== JSON.stringify(this.availablePaths)) {
-                this.availablePaths = newPaths;
-            }
-        },
-        handleAddPath(path, title) {
-            this.appContext.addToDashboard?.(path, title);
-            this.$nextTick(() => {
-                this.updateAvailablePaths();
-            });
-        },
-        handleRemovePath(path) {
-            this.appContext.removeDashboardContainer?.(path);
-            this.$nextTick(() => {
-                this.updateAvailablePaths();
-            });
-        }
-    },
-    template: html`
-        <div style="text-align: left;">
-            <h4>Dashboard Management</h4>
-            <p><strong>Available Paths:</strong></p>
-            <div v-for="{ path, isAdded, displayName } in availablePaths" :key="path">
-                <button 
-                    @click="isAdded ? handleRemovePath(path) : handleAddPath(path, displayName)"
-                    :class="{ 'red': isAdded, 'green': !isAdded }">
-                    {{ isAdded ? 'Remove' : 'Add' }} {{ displayName }}
-                </button>
-                <br>
-            </div>
-        </div>
-    `
-};
-
 // Hamburger Menu Registry
 export class HamburgerMenuRegistry {
     constructor() {
