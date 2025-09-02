@@ -80,7 +80,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.setError(null);
             try {
                 // Remove all objects marked for deletion before saving
-                const cleanData = removeMarkedForDeletion(this.data);
+                const cleanData = removeAppData(this.data);
                 const result = await saveCall(cleanData, ...apiArgs);
                 // now remove the rows marked for deletion from live data without breaking reactivity:
                 this.removeMarkedRows();
@@ -135,7 +135,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         // Remove all rows marked for deletion (and nested arrays)
         removeMarkedRows() {
-            this.data = removeMarkedForDeletion(this.data);
+            this.data = removeAppData(this.data);
         },
         addRow(row, fieldNames = null) {
             // Ensure AppData is set and nested arrays are initialized
@@ -208,17 +208,19 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
     });
 
-    // Helper to remove objects marked for deletion recursively
-    function removeMarkedForDeletion(arr) {
+    // Helper to strip AppData from objects (including filtering out items marked for deletion)
+    function removeAppData(arr) {
         if (!Array.isArray(arr)) return arr;
         return arr
-            .filter(obj => !(obj && obj.AppData && obj.AppData['marked-for-deletion']))
             .map(obj => {
                 if (obj && typeof obj === 'object') {
                     const newObj = { ...obj };
+                    // Remove AppData before sending to API
+                    delete newObj.AppData;
+                    // Recursively process nested arrays
                     Object.keys(newObj).forEach(key => {
                         if (Array.isArray(newObj[key])) {
-                            newObj[key] = removeMarkedForDeletion(newObj[key]);
+                            newObj[key] = removeAppData(newObj[key]);
                         }
                     });
                     return newObj;

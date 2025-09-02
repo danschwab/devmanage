@@ -70,13 +70,6 @@ const App = {
         this.dashboardLoading = true;
         
         if (this.isAuthenticated) {
-            // Initialize navigation system
-            try {
-                await NavigationInit.initialize();
-            } catch (error) {
-                console.warn('Navigation initialization had issues:', error);
-            }
-
             // Initialize dashboard reactive store if authenticated
             await NavigationRegistry.initializeDashboardStore();
             this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
