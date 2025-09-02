@@ -1,4 +1,4 @@
-import { Database, Mutations, wrapMethods } from '../index.js';
+import { Database, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for application-specific operations
@@ -12,23 +12,23 @@ class applicationUtils_uncached {
      * @param {Array} data - Array of data to store in the row
      * @returns {Promise<boolean>} Success status
      */
-    static async storeUserData(deps, username, id, data) {
+    static async storeUserData(username, id, data) {
         // Sanitize username and compose tab name consistently with getUserData
         const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
         const tabName = `User_${sanitizedUsername}`;
         
         // Ensure tab exists (create with proper structure if not)
-        const allTabs = await deps.call(Database.getTabs, 'CACHE');
+        const allTabs = await Database.getTabs('CACHE');
         let tab = allTabs.find(t => t.title === tabName);
         if (!tab) {
-            await Mutations.createTab('CACHE', null, tabName); // create blank tab, no template
+            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
             // Initialize the tab with headers
-            await Mutations.setData('CACHE', tabName, [['ID', 'Value']], null);
+            await Database.setData('CACHE', tabName, [['ID', 'Value']], null);
         }
         
         // Prepare JS object for update
         let obj = { ID: id, Value: data };
-        return await deps.call(Mutations.setData, 'CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
+        return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
     }
     
     /**
@@ -60,4 +60,4 @@ class applicationUtils_uncached {
     }
 }
 
-export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils');
+export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData']);

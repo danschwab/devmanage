@@ -204,9 +204,10 @@ class CacheManager {
      * Wraps all static methods of a class with caching and automatic dependency decorator
      * @param {Object} targetClass - The class to wrap
      * @param {string} namespace - Cache namespace
+     * @param {Array<string>} [mutationKeys] - Array of method names to skip wrapping (mutation methods)
      * @returns {Object} - Wrapped class with caching and dependency tracking
      */
-    static wrapMethods(targetClass, namespace) {
+    static wrapMethods(targetClass, namespace, mutationKeys = []) {
         const wrappedClass = {};
         
         // Get all static methods
@@ -214,6 +215,12 @@ class CacheManager {
             .filter(name => typeof targetClass[name] === 'function' && name !== 'constructor');
         
         methods.forEach(methodName => {
+            // Skip wrapping for mutation methods - call them directly
+            if (mutationKeys.includes(methodName)) {
+                wrappedClass[methodName] = targetClass[methodName];
+                return;
+            }
+            
             wrappedClass[methodName] = async function(...args) {
                 const cacheKey = CacheManager.generateCacheKey(namespace, methodName, args);
                 

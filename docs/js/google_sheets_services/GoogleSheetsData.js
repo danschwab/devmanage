@@ -60,8 +60,8 @@ export class GoogleSheetsService {
     static async getSheetData(tableId, range) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
-        
+        if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
+
         let response;
         try {
             response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -92,7 +92,7 @@ export class GoogleSheetsService {
     static async setSheetData(tableId, tabName, updates) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
         // Convert JS objects to sheet format
         let values;
         if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
@@ -239,7 +239,7 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
         
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.get({
@@ -265,7 +265,7 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
         const requests = tabs.map(tab => ({
@@ -295,7 +295,7 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
         const requests = tabs.map(tab => ({
@@ -326,7 +326,7 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId directly
         const sourceSheetId = sourceTab.sheetId;
@@ -401,7 +401,7 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Add the new sheet/tab
         await GoogleSheetsService.withExponentialBackoff(() =>

@@ -1,4 +1,4 @@
-import { Database, Mutations, ProductionUtils, wrapMethods, searchFilter } from '../index.js';
+import { Database, ProductionUtils, wrapMethods, searchFilter } from '../index.js';
 
 /**
  * Utility functions for inventory operations
@@ -113,20 +113,20 @@ class inventoryUtils_uncached {
         return tabData;
     }
 
-    static async saveInventoryTabData(deps, tabOrItemName, mappedData, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
-        const allTabs = await deps.call(Database.getTabs, 'INVENTORY');
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
+        const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
 
         if (!tabExists) {
-            const foundTab = await deps.call(InventoryUtils.getTabNameForItem, tabOrItemName);
+            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
         }
 
         if (filters) {
             // Fetch existing data from the tab
-            const existingData = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
+            const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
 
             // Prepare batch updates
             const updates = mappedData.filter(item => {
@@ -147,7 +147,7 @@ class inventoryUtils_uncached {
         }
 
         // Save JS objects using mapping
-        return await Mutations.setData('INVENTORY', resolvedTabName, mappedData, mapping);
+        return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping);
     }
 
 
@@ -223,4 +223,4 @@ class inventoryUtils_uncached {
 
 }
 
-export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils');
+export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils', ['saveInventoryTabData']);

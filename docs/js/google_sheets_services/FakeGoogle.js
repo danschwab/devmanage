@@ -674,7 +674,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
         
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Getting data for ${tableId}, range: ${range}`);
         await this.delay(100);
@@ -697,7 +697,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Setting data for ${tableId}/${tabName}`);
         await this.delay(150);
@@ -794,8 +794,8 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
-        
+        if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
+
         //console.log(`FakeGoogleSheetsService: Getting tabs for ${tableId}`);
         await this.delay(80);
 
@@ -808,7 +808,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Hiding ${tabs.length} tabs in ${tableId}`);
         await this.delay(120);
@@ -825,7 +825,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Showing ${tabs.length} tabs in ${tableId}`);
         await this.delay(120);
@@ -842,7 +842,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Copying tab ${sourceTab?.title || 'unknown'} to ${newTabName} in ${tableId}`);
         await this.delay(200);
@@ -888,7 +888,7 @@ export class FakeGoogleSheetsService {
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
 
         //console.log(`FakeGoogleSheetsService: Creating blank tab ${newTabName} in ${tableId}`);
         await this.delay(150);

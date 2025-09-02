@@ -1,4 +1,4 @@
-import { Database, Mutations, InventoryUtils, ProductionUtils, wrapMethods } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -112,10 +112,10 @@ class packListUtils_uncached {
      * @param {Object} [headers] - { main: [...], items: [...] } (optional)
      * @returns {Promise<boolean>} Success status
      */
-    static async savePackList(deps, tabName, crates, headers = null) {
-        console.log('[PackListUtils.savePackList] crates input:', crates);
+    static async savePackList(tabName, mappedData, headers = null) {
+        console.log('[PackListUtils.savePackList] crates input:', mappedData);
 
-        const originalSheetData = await deps.call(Database.getData, 'PACK_LISTS', tabName, null);
+        const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
         const metadataRows = originalSheetData.slice(0, 2);
         const headerRow = originalSheetData[2] || [];
 
@@ -124,7 +124,7 @@ class packListUtils_uncached {
         const itemHeaders = headerRow.slice(itemColumnsStart);
 
         // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
-        const cleanCrates = Array.isArray(crates) ? crates.map(crate => {
+        const cleanCrates = Array.isArray(mappedData) ? mappedData.map(crate => {
             const cleanCrate = {};
             mainHeaders.forEach(h => {
                 cleanCrate[h] = crate[h] !== undefined ? crate[h] : '';
@@ -167,7 +167,7 @@ class packListUtils_uncached {
             }
         });
         // Save the sheet data (2D array), overwriting the whole tab
-        return await Mutations.setData('PACK_LISTS', tabName, sheetData, null);
+        return await Database.setData('PACK_LISTS', tabName, sheetData, null);
     }
 
 
@@ -269,4 +269,4 @@ class packListUtils_uncached {
     }
 }
 
-export const PackListUtils = wrapMethods(packListUtils_uncached, 'packlist_utils');
+export const PackListUtils = wrapMethods(packListUtils_uncached, 'packlist_utils', ['savePackList']);

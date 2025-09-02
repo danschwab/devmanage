@@ -1,4 +1,4 @@
-import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, wrapMethods } from './index.js';
+import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from './index.js';
 
 // Define all API methods in a single class/object
 export const Requests = {
@@ -22,7 +22,7 @@ export const Requests = {
      * @returns {Promise<boolean>} - Success status
      */
     saveData: async (tableId, tabName, data, mapping = null) => {
-        return await Mutations.setData(tableId, tabName, data, mapping);
+        return await Database.setData(tableId, tabName, data, mapping);
     },
     
     /**
@@ -32,7 +32,7 @@ export const Requests = {
      * @returns {Promise<Array<{title: string, sheetId: number}>>}
      */
     getAvailableTabs: async (tableId, includeHidden = false) => {
-        const tabs = await Database.getTabs(tableId, true);
+        const tabs = await Database.getTabs(tableId);
         return includeHidden ? tabs : tabs.filter(tab => !tab.title.startsWith('_'));
     },
     
@@ -46,7 +46,7 @@ export const Requests = {
     createNewTab: async (tableId, templateName, newTabName) => {
         const templateTab = await Database.findTabByName(tableId, templateName);
         if (!templateTab) throw new Error(`Template tab "${templateName}" not found`);
-        await Mutations.createTab(tableId, templateTab, newTabName);
+        await Database.createTab(tableId, templateTab, newTabName);
         return true;
     },
     
@@ -59,7 +59,7 @@ export const Requests = {
         const allTabs = await Database.getTabs(tableId);
         const tabsToShow = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToShow.length === 0) return false;
-        await Mutations.showTabs(tableId, tabsToShow);
+        await Database.showTabs(tableId, tabsToShow);
         return true;
     },
     
@@ -72,7 +72,7 @@ export const Requests = {
         const allTabs = await Database.getTabs(tableId);
         const tabsToHide = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToHide.length === 0) return false;
-        await Mutations.hideTabs(tableId, tabsToHide);
+        await Database.hideTabs(tableId, tabsToHide);
         return true;
     },
     
@@ -216,7 +216,7 @@ export const Requests = {
      * @returns {Promise<boolean>}
      */
     saveInventoryTabData: async (mappedData, tabOrItemName, mapping, filters) => {
-        return await InventoryUtils.saveInventoryTabData(tabOrItemName, mappedData, mapping, filters);
+        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters);
     },
     
     /**

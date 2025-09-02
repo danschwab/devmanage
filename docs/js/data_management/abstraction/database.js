@@ -84,11 +84,11 @@ class database_uncached {
         const tabs = await deps.call(Database.getTabs, tableId);
         return tabs.find(tab => tab.title === tabName) || null;
     }
-}
 
 
+    /* MUTATION FUNCTIONS */
 
-class mutations {
+
     /**
      * Updates data for a table/tab using JS objects
      * @param {Object} deps - Dependency decorator for tracking calls
@@ -98,7 +98,7 @@ class mutations {
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    static async setData(deps, tableId, tabName, updates, mapping = null) {
+    static async setData(tableId, tabName, updates, mapping = null) {
         const result = await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
         
         // Invalidate related caches using prefix to handle custom mapped data
@@ -118,7 +118,7 @@ class mutations {
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    static async updateRow(deps, tableId, tabName, update, mapping = null) {
+    static async updateRow(tableId, tabName, update, mapping = null) {
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
         const transformedData = mapping
@@ -151,7 +151,7 @@ class mutations {
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to hide
      */
-    static async hideTabs(deps, tableId, tabs) {
+    static async hideTabs(tableId, tabs) {
         await GoogleSheetsService.hideTabs(tableId, tabs);
     }
     
@@ -161,7 +161,7 @@ class mutations {
      * @param {string} tableId - Identifier for the table
      * @param {Array<{title: string, sheetId: number}>} tabs - Tabs to show
      */
-    static async showTabs(deps, tableId, tabs) {
+    static async showTabs(tableId, tabs) {
         await GoogleSheetsService.showTabs(tableId, tabs);
     }
     
@@ -173,7 +173,7 @@ class mutations {
      * @param {string} newTabName - Name for the new tab
      * @returns {Promise<void>}
      */
-    static async createTab(deps, tableId, templateTab, newTabName) {
+    static async createTab(tableId, templateTab, newTabName) {
         if (templateTab && templateTab.sheetId) {
             await GoogleSheetsService.copySheetTab(tableId, templateTab, newTabName);
         } else {
@@ -187,5 +187,4 @@ class mutations {
     }
 }
 
-export const Database = wrapMethods(database_uncached, 'database');
-export const Mutations = mutations;
+export const Database = wrapMethods(database_uncached, 'database', ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow']);
