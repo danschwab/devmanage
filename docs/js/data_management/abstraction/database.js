@@ -123,19 +123,27 @@ class database_uncached {
 
         const transformedData = mapping
             ? GoogleSheetsService.transformSheetData(existingData, mapping)
-            : existingData;
+            : GoogleSheetsService.sheetArrayToObjects(existingData);
 
-        const rowIndex = transformedData.findIndex(row => row[mapping.itemNumber] === update[mapping.itemNumber]);
+        const rowIndex = transformedData.findIndex(row => {
+            const identifierKey = mapping ? Object.keys(mapping).find(k => k.includes('Number') || k.includes('Id')) : 'id';
+            const updateKey = Object.keys(update).find(k => k.includes('Number') || k.includes('Id')) || Object.keys(update)[0];
+            return row[identifierKey] === update[updateKey];
+        });
+        
         if (rowIndex === -1) {
-            throw new Error(`Row with identifier ${update[mapping.itemNumber]} not found in tab ${tabName}`);
+            throw new Error(`Row with identifier not found in tab ${tabName}`);
         }
 
-        const updatedRow = mapping
-            ? GoogleSheetsService.transformObjectToRow(update, mapping)
-            : Object.values(update);
-        existingData[rowIndex] = updatedRow;
+        // Update the transformed row
+        transformedData[rowIndex] = { ...transformedData[rowIndex], ...update };
 
-        await GoogleSheetsService.setSheetData(tableId, tabName, existingData);
+        // Convert back to sheet format for saving
+        const updatedSheetData = mapping
+            ? GoogleSheetsService.reverseTransformSheetData(mapping, transformedData)
+            : GoogleSheetsService.objectsToSheetArray(transformedData);
+
+        await GoogleSheetsService.setSheetData(tableId, tabName, updatedSheetData);
 
         // Invalidate related caches using prefix to handle custom mapped data
         invalidateCache([

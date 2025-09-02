@@ -87,9 +87,10 @@ export class GoogleSheetsService {
      * @param {string} tableId
      * @param {string} tabName
      * @param {Array<Object>} updates - Array of JS objects to save
+     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>}
      */
-    static async setSheetData(tableId, tabName, updates) {
+    static async setSheetData(tableId, tabName, updates, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
@@ -98,8 +99,13 @@ export class GoogleSheetsService {
         if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
             values = updates;
         } else if (Array.isArray(updates) && updates.length > 0) {
-            const headers = Object.keys(updates[0]);
-            values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
+            // If mapping is provided, use reverse transform to get proper sheet format
+            if (mapping) {
+                values = this.reverseTransformSheetData(mapping, updates);
+            } else {
+                const headers = Object.keys(updates[0]);
+                values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
+            }
         } else {
             throw new Error('No valid updates provided');
         }
