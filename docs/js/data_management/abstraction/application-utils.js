@@ -26,8 +26,16 @@ class applicationUtils_uncached {
             await Database.setData('CACHE', tabName, [['ID', 'Value']], null);
         }
         
+        // Convert data to JSON string if it's not already a string
+        let serializedData;
+        if (typeof data === 'string') {
+            serializedData = data;
+        } else {
+            serializedData = JSON.stringify(data);
+        }
+        
         // Prepare JS object for update
-        let obj = { ID: id, Value: data };
+        let obj = { ID: id, Value: serializedData };
         return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
     }
     
@@ -56,7 +64,17 @@ class applicationUtils_uncached {
         if (!foundObj) {
             return null; // ID not found
         }
-        return foundObj.Value;
+        
+        // Parse the stored value if it's a JSON string, otherwise return as-is
+        let parsedValue;
+        try {
+            parsedValue = JSON.parse(foundObj.Value);
+        } catch (error) {
+            // If parsing fails, return the raw string value
+            parsedValue = foundObj.Value;
+        }
+        
+        return parsedValue;
     }
 }
 
