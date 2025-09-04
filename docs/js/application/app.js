@@ -44,7 +44,8 @@ const App = {
             dashboardLoading: false,
             reactiveTableData: {},
             dashboardStore: null,
-            availablePaths: []
+            availablePaths: [],
+            currentYear: new Date().getFullYear()
         };
     },
     computed: {
@@ -368,7 +369,8 @@ const App = {
                         
                         <!-- Schedule Content -->
                         <schedule-content 
-                            v-else-if="container.containerType === 'schedule'"
+                            v-else-if="container.containerType === 'schedule' || container.containerPath?.startsWith('schedule')"
+                            :container-path="container.containerPath"
                             :full-path="container.fullPath"
                             :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)">
@@ -384,7 +386,7 @@ const App = {
                 </app-container>
                 <footer>
                     <p>
-                        &copy; 2024 Top Shelf Exhibits
+                        &copy; {{ currentYear }} Top Shelf Exhibits
                         <br>
                         <a href="https://topshelfexhibits.com">www.topshelfexhibits.com</a>
                     </p>

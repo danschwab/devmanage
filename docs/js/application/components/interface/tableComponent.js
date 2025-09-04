@@ -718,6 +718,9 @@ export const TableComponent = {
             <div :class="dragId ? 'drag-id-' + dragId : ''">
                 <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
                     <!--h3 v-if="title">{{ title }}</h3-->
+                    <slot 
+                        name="table-header-area"
+                    ></slot>
                     <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
                         <input
                             v-if="showSearch"

@@ -160,11 +160,26 @@ export const ScheduleTableComponent = {
                 }
             },
             immediate: true
+        },
+        // Watch for filter changes and recreate store with new parameters
+        filter: {
+            handler(newFilter, oldFilter) {
+                if (JSON.stringify(newFilter) !== JSON.stringify(oldFilter)) {
+                    // Create a new reactive store with the updated filter
+                    this.scheduleTableStore = getReactiveStore(
+                        Requests.getProductionScheduleData,
+                        null,
+                        [newFilter]
+                    );
+                }
+            },
+            deep: true,
+            immediate: false
         }
     },
     async mounted() {
         this.scheduleTableStore = getReactiveStore(
-            (params) => Requests.getProductionScheduleData(params),
+            Requests.getProductionScheduleData,
             null,
             [this.filter]
         );
@@ -277,6 +292,9 @@ export const ScheduleTableComponent = {
                 @refresh="handleRefresh"
                 @show-hamburger-menu="handleShowHamburgerMenu"
             >
+                <template #table-header-area>
+                    <slot name="table-header-area"></slot>
+                </template>
                 <template #default="{ row, column }">
                     <button 
                         v-if="column.key === 'packlist'"

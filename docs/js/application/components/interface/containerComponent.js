@@ -124,13 +124,12 @@ export const ContainerComponent = {
                 console.log('showHamburgerMenuModal called with:', menuData);*/
                 
                 const modal = modalManager.createModal(
-                    `${this.title} Menu`,
+                    `${this.title}`,
                     this.hamburgerMenuComponent.components,
                     {
                         componentProps: this.hamburgerMenuComponent.props || {}
                     }
                 );
-                console.log('Modal created:', modal);
                 modalManager.showModal(modal.id);
             }
         },

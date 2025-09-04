@@ -98,6 +98,7 @@ class productionUtils_uncached {
             }
             console.log(`[production-utils] Date range mode: year=${year}, startDate=${startDate}, endDate=${endDate}`);
         }
+        
         if (!year || !startDate || !endDate) {
             console.log('[production-utils] Missing year/startDate/endDate, returning empty array');
             return [];
@@ -180,6 +181,23 @@ class productionUtils_uncached {
 
         // Compose identifier
         return `${clientMatch} ${year || ''} ${showMatch}`.trim();
+    }
+
+    /**
+     * Get all available years from the production schedule
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Array<number>>} Array of available years, sorted
+     */
+    static async getAvailableYears(deps) {
+        const tabName = "ProductionSchedule";
+        const mapping = {
+            Year: "Year"
+        };
+        let data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
+        
+        // Extract unique years and sort them
+        const years = [...new Set(data.map(row => parseInt(row.Year)).filter(year => !isNaN(year)))];
+        return years.sort((a, b) => b - a); // Sort descending (newest first)
     }
 
     /**
