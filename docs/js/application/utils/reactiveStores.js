@@ -212,6 +212,13 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
     function removeAppData(arr) {
         if (!Array.isArray(arr)) return arr;
         return arr
+            .filter(obj => {
+                // Filter out items marked for deletion
+                if (obj && typeof obj === 'object' && obj.AppData && obj.AppData['marked-for-deletion']) {
+                    return false;
+                }
+                return true;
+            })
             .map(obj => {
                 if (obj && typeof obj === 'object') {
                     const newObj = { ...obj };
