@@ -7,6 +7,7 @@ const DEFAULT_CACHE_EXPIRATION_MS = 5 * 60 * 1000;
 class CacheManager {
     static cache = new Map();
     static dependencies = new Map();
+    static pendingCalls = new Map(); // Maps cache keys to pending promises to prevent duplicate concurrent calls
     
     /**
      * Gets a value from cache with expiration check
@@ -114,6 +115,13 @@ class CacheManager {
         
         // Remove the cache entry
         this.cache.delete(key);
+        
+        // Also clean up any pending calls for this key
+        if (this.pendingCalls.has(key)) {
+            this.pendingCalls.delete(key);
+            console.log(`[CacheManager] CLEANED UP PENDING CALL: ${key}`);
+        }
+        
         console.log(`[CacheManager] INVALIDATE: ${key}`);
         
         // Find and invalidate all dependent entries
@@ -233,14 +241,33 @@ class CacheManager {
                     return cached;
                 }
                 
-                // Create dependency decorator for this function call
-                const deps = CacheManager.createDependencyDecorator(cacheKey);
+                // Check if there's already a pending call for this cache key
+                if (CacheManager.pendingCalls.has(cacheKey)) {
+                    console.log(`[CacheManager] AWAITING PENDING: ${cacheKey}`);
+                    return await CacheManager.pendingCalls.get(cacheKey);
+                }
                 
-                // Execute method with dependency decorator as first parameter
-                const result = await targetClass[methodName](deps, ...args);
-                CacheManager.set(cacheKey, result);
+                // Create and store the promise for this function call
+                const promise = (async () => {
+                    try {
+                        // Create dependency decorator for this function call
+                        const deps = CacheManager.createDependencyDecorator(cacheKey);
+                        
+                        // Execute method with dependency decorator as first parameter
+                        const result = await targetClass[methodName](deps, ...args);
+                        CacheManager.set(cacheKey, result);
+                        
+                        return result;
+                    } finally {
+                        // Always clean up the pending call when done
+                        CacheManager.pendingCalls.delete(cacheKey);
+                    }
+                })();
                 
-                return result;
+                // Store the promise to prevent duplicate concurrent calls
+                CacheManager.pendingCalls.set(cacheKey, promise);
+                
+                return await promise;
             };
         });
         

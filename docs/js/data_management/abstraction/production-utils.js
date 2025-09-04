@@ -184,23 +184,6 @@ class productionUtils_uncached {
     }
 
     /**
-     * Get all available years from the production schedule
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @returns {Promise<Array<number>>} Array of available years, sorted
-     */
-    static async getAvailableYears(deps) {
-        const tabName = "ProductionSchedule";
-        const mapping = {
-            Year: "Year"
-        };
-        let data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
-        
-        // Extract unique years and sort them
-        const years = [...new Set(data.map(row => parseInt(row.Year)).filter(year => !isNaN(year)))];
-        return years.sort((a, b) => b - a); // Sort descending (newest first)
-    }
-
-    /**
      * Helper method to get fuzzy matching reference data
      * @param {Object} deps - Dependency decorator for tracking calls
      * @returns {Promise<Object>} Reference data for fuzzy matching

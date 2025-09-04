@@ -241,14 +241,6 @@ export const Requests = {
     },
 
     /**
-     * Get all available years from the production schedule
-     * @returns {Promise<Array<number>>} Array of available years, sorted descending
-     */
-    getAvailableYears: async () => {
-        return await ProductionUtils.getAvailableYears();
-    },
-
-    /**
      * Compute Identifier from client, year, and show data
      * @param {string} showName - The name of the show
      * @param {string} clientName - The name of the client
