@@ -151,7 +151,7 @@ export const ScheduleContent = {
         // Direct navigation options for schedule
         scheduleNavigation() {
             return [
-                { id: 'allshows', label: 'Browse by Year', path: 'schedule/allshows' }
+                { id: 'allshows', label: 'Shows by Year', path: 'schedule/allshows' }
             ];
         },
         pathSegments() {

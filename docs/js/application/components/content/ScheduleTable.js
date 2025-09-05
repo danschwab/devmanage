@@ -99,18 +99,23 @@ export const ScheduleTableComponent = {
                 { key: 'Ship', label: 'Ship Date', format: 'date', autoColor: true },
                 { key: 'packlist', label: 'Packlist', width: 120 }
             ],
-            scheduleTableStore: null,
-            packlistStatus: {} // Track packlist existence for each row
+            scheduleTableStore: null
         };
     },
     computed: {
         tableData() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
-            // Add packlist status to each row
+            // Add reactive packlist information to AppData for each row
             return rawData.map((row, index) => ({
                 ...row,
-                packlist: this.packlistStatus[index] !== undefined ? this.packlistStatus[index] : null,
-                _rowIndex: index // Track original index for packlist status
+                AppData: {
+                    ...row.AppData,
+                    packlist: {
+                        loading: row.AppData?.packlist?.loading !== false,
+                        exists: row.AppData?.packlist?.exists || false,
+                        identifier: row.AppData?.packlist?.identifier || null
+                    }
+                }
             }));
         },
         originalData() {
@@ -152,11 +157,11 @@ export const ScheduleTableComponent = {
         }
     },
     watch: {
-        // Watch for data changes and check packlist existence
+        // Watch for data changes and enrich with packlist information
         'scheduleTableStore.data': {
             handler(newData) {
                 if (newData && newData.length > 0) {
-                    this.checkPacklistExistence();
+                    this.enrichWithPacklistData();
                 }
             },
             immediate: true
@@ -203,71 +208,92 @@ export const ScheduleTableComponent = {
             );
             modalManager.showModal(modal.id);
         },
-        async checkPacklistExistence() {
+        async enrichWithPacklistData() {
             if (!this.scheduleTableStore?.data) return;
             
             const data = this.scheduleTableStore.data;
-            const packlistChecks = {};
             
-            // Initialize all as null (loading state)
-            for (let i = 0; i < data.length; i++) {
-                packlistChecks[i] = null;
-            }
-            this.packlistStatus = { ...packlistChecks };
+            // Enrich each row with packlist information in parallel
+            const enrichmentPromises = data.map(async (row, index) => {
+                try {
+                    const identifier = await Requests.computeIdentifier(
+                        row.Show, 
+                        row.Client, 
+                        parseInt(row.Year)
+                    );
+                    
+                    // Get available tabs and check if packlist exists
+                    const availableTabs = await Requests.getAvailableTabs('PACK_LISTS');
+                    const tab = availableTabs.find(tab => tab.title === identifier);
+                    
+                    // Update the row's AppData with packlist information (Vue 3 compatible)
+                    row.AppData = {
+                        ...row.AppData,
+                        packlist: {
+                            loading: false,
+                            exists: !!tab,
+                            identifier: identifier
+                        }
+                    };
+                } catch (error) {
+                    console.warn(`Failed to enrich packlist data for row ${index}:`, error);
+                    row.AppData = {
+                        ...row.AppData,
+                        packlist: {
+                            loading: false,
+                            exists: false,
+                            identifier: null
+                        }
+                    };
+                }
+            });
             
-            // Check each row asynchronously
-            for (let i = 0; i < data.length; i++) {
-                const row = data[i];
-                this.checkRowPacklist(row, i);
-            }
+            await Promise.all(enrichmentPromises);
         },
-        async checkRowPacklist(row, index) {
-            try {
-                const identifier = await Requests.computeIdentifier(
-                    row.Show, 
-                    row.Client, 
-                    parseInt(row.Year)
-                );
-                
-                // Get available tabs and check if packlist exists
-                const availableTabs = await Requests.getAvailableTabs('PACK_LISTS');
-                const tab = availableTabs.find(tab => tab.title === identifier);
-                
-                // Update the status reactively (Vue 3 compatible)
-                Vue.set ? Vue.set(this.packlistStatus, index, !!tab) : (this.packlistStatus[index] = !!tab);
-            } catch (error) {
-                console.warn(`Failed to check packlist for row ${index}:`, error);
-                Vue.set ? Vue.set(this.packlistStatus, index, false) : (this.packlistStatus[index] = false);
-            }
-        },
-        async handlePacklistClick(row) {
+        async handlePacklistClick(packlistInfo) {
             if (!this.navigateToPath) {
                 modalManager.showAlert('Navigation not available', 'Error');
                 return;
             }
             
-            try {
-                const identifier = await Requests.computeIdentifier(
-                    row.Show, 
-                    row.Client, 
-                    parseInt(row.Year)
-                );
-                this.navigateToPath(`packlist/${identifier}`);
-            } catch (error) {
-                console.error('Failed to navigate to packlist:', error);
-                modalManager.showAlert('Failed to navigate to packlist', 'Error');
+            if (!packlistInfo.exists || !packlistInfo.identifier) {
+                modalManager.showAlert('No packlist available for this show', 'Info');
+                return;
             }
+            
+            this.navigateToPath(`packlist/${packlistInfo.identifier}`);
         },
-        getPacklistButtonText(row) {
-            if (row._rowIndex === undefined) return 'loading...';
-            const packlistStatus = this.packlistStatus[row._rowIndex];
-            if (packlistStatus === null) return 'loading...';
-            return packlistStatus ? 'View Packlist' : 'No Packlist';
-        },
-        isPacklistButtonDisabled(row) {
-            if (row._rowIndex === undefined) return true;
-            const packlistStatus = this.packlistStatus[row._rowIndex];
-            return packlistStatus !== true; // Disabled if null (loading) or false (no packlist)
+        getPacklistCards(row, columnKey) {
+            // Only show packlist cards in the packlist column
+            if (columnKey !== 'packlist') {
+                return [];
+            }
+            
+            const packlistInfo = row.AppData?.packlist;
+            if (!packlistInfo) {
+                return [];
+            }
+            
+            // Create a card based on packlist status
+            if (packlistInfo.loading) {
+                return [{
+                    message: 'Loading...',
+                    disabled: true
+                }];
+            }
+            
+            if (packlistInfo.exists) {
+                return [{
+                    message: 'View Packlist',
+                    disabled: false,
+                    action: () => this.handlePacklistClick(packlistInfo)
+                }];
+            } else {
+                return [{
+                    message: 'No Packlist',
+                    disabled: true
+                }];
+            }
         }
     },
     template: html`
@@ -296,14 +322,15 @@ export const ScheduleTableComponent = {
                     <slot name="table-header-area"></slot>
                 </template>
                 <template #default="{ row, column }">
-                    <button 
-                        v-if="column.key === 'packlist'"
-                        @click="handlePacklistClick(row)"
-                        :disabled="isPacklistButtonDisabled(row)"
-                        class="table-cell-card"
-                    >
-                        {{ getPacklistButtonText(row) }}
-                    </button>
+                    <!-- Add packlist cards based on AppData -->
+                    <template v-for="card in getPacklistCards(row, column.key)" :key="card.message">
+                        <button 
+                            class="table-cell-card"
+                            :disabled="card.disabled"
+                            @click="!card.disabled ? card.action() : null"
+                            v-html="card.message"
+                        ></button>
+                    </template>
                 </template>
             </TableComponent>
         </div>
