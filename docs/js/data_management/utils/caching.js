@@ -241,14 +241,15 @@ class CacheManager {
                     return cached;
                 }
                 
-                // Check if there's already a pending call for this cache key
-                if (CacheManager.pendingCalls.has(cacheKey)) {
+                // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
+                let promise = CacheManager.pendingCalls.get(cacheKey);
+                if (promise) {
                     console.log(`[CacheManager] AWAITING PENDING: ${cacheKey}`);
-                    return await CacheManager.pendingCalls.get(cacheKey);
+                    return await promise;
                 }
                 
-                // Create and store the promise for this function call
-                const promise = (async () => {
+                // Create new promise and store it immediately (atomic operation)
+                promise = (async () => {
                     try {
                         // Create dependency decorator for this function call
                         const deps = CacheManager.createDependencyDecorator(cacheKey);
@@ -264,10 +265,17 @@ class CacheManager {
                     }
                 })();
                 
-                // Store the promise to prevent duplicate concurrent calls
-                CacheManager.pendingCalls.set(cacheKey, promise);
-                
-                return await promise;
+
+                // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
+                let promiseFinalCheck = CacheManager.pendingCalls.get(cacheKey);
+                if (promiseFinalCheck) {
+                    console.log(`[CacheManager] AWAITING PENDING: ${cacheKey}`);
+                    return await promiseFinalCheck;
+                } else {
+                    // Store the promise immediately after creation
+                    CacheManager.pendingCalls.set(cacheKey, promise);
+                    return await promise;
+                }
             };
         });
         
