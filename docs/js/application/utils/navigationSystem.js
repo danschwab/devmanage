@@ -254,10 +254,20 @@ export const NavigationRegistry = {
             if (!parentRoute.children) {
                 parentRoute.children = {};
             }
-            parentRoute.children[routeKey] = {
-                path: `${parentPath}/${routeKey}`,
-                ...routeConfig
-            };
+            const routePath = `${parentPath}/${routeKey}`;
+            if (parentRoute.children[routeKey]) {
+                // Update existing route's information
+                Object.assign(parentRoute.children[routeKey], {
+                    path: routePath,
+                    ...routeConfig
+                });
+            } else {
+                // Add new route
+                parentRoute.children[routeKey] = {
+                    path: routePath,
+                    ...routeConfig
+                };
+            }
         }
     },
 
