@@ -1,17 +1,12 @@
+import { html } from './index.js';
 import { ContainerComponent, containerManager } from './index.js';
 import { InventoryTableComponent } from './index.js';
 import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
 import { Auth, authState } from './index.js';
 import { NavigationRegistry } from './index.js';
-import { html } from './index.js';
-import { 
-    PacklistContent, 
-    InventoryContent, 
-    ScheduleContent 
-} from './index.js';
-import { DashboardToggleComponent, hamburgerMenuRegistry } from './index.js';
-import { Requests, getReactiveStore } from './index.js';
+import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
+import { hamburgerMenuRegistry } from './index.js';
 
 const { createApp } = Vue;
 
@@ -100,10 +95,6 @@ const App = {
     beforeUnmount() {
         // Clean up event listener
         document.removeEventListener('keydown', this.handleKeyDown);
-        // No interval to clear
-        if (this.dashboardPathInterval) {
-            clearInterval(this.dashboardPathInterval);
-        }
     },
     methods: {
         toggleMenu() {
@@ -175,56 +166,6 @@ const App = {
         },
 
         /**
-         * Initialize dashboard reactive store
-         */
-        async initializeDashboardStore() {
-            if (!this.isAuthenticated || !this.currentUser?.email) {
-                return;
-            }
-            
-            this.dashboardLoading = true;
-            try {
-                await NavigationRegistry.initializeDashboardStore();
-                this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
-                console.log('Dashboard state loaded from NavigationRegistry store');
-            } catch (error) {
-                console.error('Failed to initialize dashboard store:', error);
-            }
-            this.dashboardLoading = false;
-        },
-
-        /**
-         * Save current dashboard state using reactive store
-         */
-        async saveDashboardState() {
-            try {
-                await NavigationRegistry.saveDashboardState();
-                console.log('Dashboard state saved successfully');
-            } catch (error) {
-                console.warn('Failed to save dashboard state (continuing without saving):', error.message);
-                this.showAlert?.('Dashboard preferences could not be saved. Your changes will apply for this session only.', 'Warning');
-            }
-        },
-
-        removeDashboardContainer(containerPath) {
-            NavigationRegistry.removeDashboardContainer(containerPath);
-            this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
-            NavigationRegistry.saveDashboardState();
-            if (this.currentPage === 'dashboard') {
-                NavigationRegistry.updateContainersForPage('dashboard', this);
-            }
-        },
-
-        addToDashboard(containerPath, title = null) {
-            NavigationRegistry.addDashboardContainer(containerPath, title);
-            this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
-            NavigationRegistry.saveDashboardState();
-            if (this.currentPage === 'dashboard') {
-                NavigationRegistry.updateContainersForPage('dashboard', this);
-            }
-        },
-
-        /**
          * Get all available paths with their status
          * @returns {Array} Array of paths with isAdded status
          */
@@ -236,9 +177,6 @@ const App = {
             }));
         },
 
-        async updateContainersForPage(pageFile) {
-            await NavigationRegistry.updateContainersForPage(pageFile, this);
-        },
         expandContainer(containerData) {
             NavigationRegistry.expandContainer(containerData, this);
         },
@@ -331,9 +269,7 @@ const App = {
                     :show-expand-button="currentPage === 'dashboard'"
                     :page-location="container.pageLocation"
                     :container-data="container"
-                    :app-context="{ 
-                        addToDashboard, 
-                        removeDashboardContainer, 
+                    :app-context="{
                         dashboardContainers,
                         showAlert
                     }"

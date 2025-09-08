@@ -1,75 +1,40 @@
 import { html, Requests, parseDate, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
 // Schedule Table Menu Component
-const ScheduleTableMenuComponent = Vue.defineComponent
-    ? Vue.defineComponent({
-        methods: {
-            exportSchedule() {
-                modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
-            },
-            filterByDateRange() {
-                modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
-            },
-            showCalendarView() {
-                modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
-            },
-            scheduleSettings() {
-                modalManager.showAlert('Schedule settings functionality coming soon!', 'Info');
-            }
+const ScheduleTableMenuComponent = {
+    methods: {
+        setAsDefault() {
+            modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
         },
-        template: html`
-            <div style="padding:1rem;">
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    <button @click="exportSchedule" style="padding: 8px 12px; border: none; background: #007cba; color: white; border-radius: 4px; cursor: pointer;">
-                        Export Schedule
-                    </button>
-                    <button @click="filterByDateRange" style="padding: 8px 12px; border: none; background: #28a745; color: white; border-radius: 4px; cursor: pointer;">
-                        Filter by Date Range
-                    </button>
-                    <button @click="showCalendarView" style="padding: 8px 12px; border: none; background: #ffc107; color: black; border-radius: 4px; cursor: pointer;">
-                        Calendar View
-                    </button>
-                    <button @click="scheduleSettings" style="padding: 8px 12px; border: none; background: #6c757d; color: white; border-radius: 4px; cursor: pointer;">
-                        Schedule Settings
-                    </button>
-                </div>
-            </div>
-        `
-    })
-    : {
-        methods: {
-            exportSchedule() {
-                modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
-            },
-            filterByDateRange() {
-                modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
-            },
-            showCalendarView() {
-                modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
-            },
-            scheduleSettings() {
-                modalManager.showAlert('Schedule settings functionality coming soon!', 'Info');
-            }
+        filterColumns() {
+            modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
         },
-        template: html`
-            <div style="padding:1rem;">
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    <button @click="exportSchedule" style="padding: 8px 12px; border: none; background: #007cba; color: white; border-radius: 4px; cursor: pointer;">
-                        Export Schedule
-                    </button>
-                    <button @click="filterByDateRange" style="padding: 8px 12px; border: none; background: #28a745; color: white; border-radius: 4px; cursor: pointer;">
-                        Filter by Date Range
-                    </button>
-                    <button @click="showCalendarView" style="padding: 8px 12px; border: none; background: #ffc107; color: black; border-radius: 4px; cursor: pointer;">
-                        Calendar View
-                    </button>
-                    <button @click="scheduleSettings" style="padding: 8px 12px; border: none; background: #6c757d; color: white; border-radius: 4px; cursor: pointer;">
-                        Schedule Settings
-                    </button>
-                </div>
-            </div>
-        `
-    };
+        showCalendarView() {
+            modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
+        },
+        showChartView() {
+            modalManager.showAlert('Chart view functionality coming soon!', 'Info');
+        }
+    },
+    template: html`
+        <div>
+            <button @click="showCalendarView">
+                Calendar View
+            </button>
+            <button @click="showChartView">
+                Chart View
+            </button>
+            <button @click="filterColumns">
+                Filter Columns
+            </button>
+            <button @click="setAsDefault">
+                Set Current As Default
+            </button>
+        </div>
+    `
+};
+
+
 
 export const ScheduleTableComponent = {
     components: {

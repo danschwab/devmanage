@@ -89,10 +89,6 @@ export const PacklistContent = {
             // Check if we're viewing the details subview
             return this.pathSegments[2] === 'details';
         },
-        // Add modalManager reference for template access
-        modalManager() {
-            return modalManager;
-        },
         // Get formatted name for current packlist - keep original case
         currentPacklistName() {
             if (!this.currentPacklist || this.currentPacklist === 'packlist') return '';
