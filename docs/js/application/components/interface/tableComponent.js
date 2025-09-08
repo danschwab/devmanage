@@ -1,4 +1,4 @@
-import { html } from '../../index.js';
+import { html, parseDate } from '../../index.js';
 
 // Global drag state for cross-table row dragging
 let globalDragRow = null;
@@ -263,7 +263,9 @@ export const TableComponent = {
                         if (typeof value === 'string' && !/\d{4}/.test(value)) {
                             return value;
                         }
-                        return new Date(value).toLocaleDateString();
+                        // Use parseDate helper to handle all supported date formats
+                        const parsedDate = parseDate(value);
+                        return parsedDate ? parsedDate.toLocaleDateString() : value;
                     case 'number':
                         return parseFloat(value).toLocaleString();
                     case 'percentage':
@@ -321,16 +323,16 @@ export const TableComponent = {
         getDateColorClass(dateValue) {
             if (!dateValue) return '';
             
-            // Parse the date - handle various date formats
+            // Parse the date using the parseDate helper to handle all supported formats
             let date;
             if (dateValue instanceof Date) {
                 date = dateValue;
             } else {
-                date = new Date(dateValue);
+                date = parseDate(dateValue);
             }
             
             // Check if date is valid
-            if (isNaN(date.getTime())) {
+            if (!date || isNaN(date.getTime())) {
                 return '';
             }
             

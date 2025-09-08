@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
+import { html, Requests, parseDate, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
 // Schedule Table Menu Component
 const ScheduleTableMenuComponent = Vue.defineComponent
@@ -136,8 +136,8 @@ export const ScheduleTableComponent = {
             // Helper to format date as 'mmm d, yyyy'
             function formatDate(dateStr) {
                 if (!dateStr) return '';
-                const date = new Date(dateStr);
-                if (isNaN(date)) return dateStr;
+                const date = parseDate(dateStr);
+                if (!date || isNaN(date)) return dateStr;
                 return date.toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',

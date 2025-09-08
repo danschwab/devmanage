@@ -1,5 +1,6 @@
 // API
 export { Requests } from '../data_management/api.js';
+export { parseDate } from '../data_management/utils/helpers.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';
