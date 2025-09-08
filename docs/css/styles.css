@@ -668,7 +668,7 @@ footer a:visited {
 
 .table-wrapper{
     width: 100%;
-    /*overflow-x: auto;*/
+    overflow-x: auto;
     /*margin-top: 1rem;*/
     /*border-radius: var(--radius-md);*/
     /*box-shadow: 0 0 0 1px #dee2e6;*/
@@ -707,6 +707,7 @@ th {
     color: var(--color-text-inverted);
     font-weight: 400;
     position: sticky;
+    text-wrap: nowrap;
     top: 0;
     z-index: 1;
 }
@@ -738,6 +739,7 @@ td:has(button) {
     height:20px;
     line-height: 1px;
     right: 5px;
+    top: 7px;
     padding: 0;
     color: var(--color-text-light);
     margin-left: 4px;

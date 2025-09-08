@@ -53,21 +53,47 @@ export const ScheduleTableComponent = {
     },
     data() {
         return {
-            columns: [
-                { key: 'Show', label: 'Show' },
-                { key: 'Client', label: 'Client' },
-                { key: 'Year', label: 'Year' },
-                { key: 'City', label: 'City' },
-                { key: 'Booth#', label: 'Booth#' },
-                { key: 'S. Start', label: 'Start Date', format: 'date' },
-                { key: 'S. End', label: 'End Date', format: 'date' },
-                { key: 'Ship', label: 'Ship Date', format: 'date', autoColor: true },
-                { key: 'packlist', label: 'Packlist', width: 120 }
-            ],
             scheduleTableStore: null
         };
     },
     computed: {
+        columns() {
+            const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
+            if (!rawData || rawData.length === 0) {
+                // Return a basic set of columns if no data yet (for loading state)
+                return [
+                    { key: 'Show', label: 'Show', width: 200 },
+                    { key: 'Client', label: 'Client', width: 150 },
+                    { key: 'packlist', label: 'Packlist', width: 120 }
+                ];
+            }
+
+            // Get headers from the first row of data
+            const firstRow = rawData[0];
+            const headers = Object.keys(firstRow).filter(header => header !== 'AppData'); // Exclude AppData from columns
+
+            // Generate columns with rational formatting based on column names
+            const dynamicColumns = headers.map(header => {
+                const column = {
+                    key: header,
+                    label: this.formatColumnLabel(header)
+                };
+
+                // Apply rational formatting based on column name patterns
+                this.applyColumnFormatting(column, header);
+
+                return column;
+            });
+
+            // Always add the packlist column at the end
+            dynamicColumns.push({
+                key: 'packlist',
+                label: 'Packlist',
+                width: 120
+            });
+
+            return dynamicColumns;
+        },
         tableData() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
             // Add reactive packlist information to AppData for each row
@@ -172,6 +198,116 @@ export const ScheduleTableComponent = {
                 }
             );
             modalManager.showModal(modal.id);
+        },
+        formatColumnLabel(header) {
+            // Convert header to a more readable label
+            const labelMap = {
+                'S. Start': 'Start Date',
+                'S. End': 'End Date',
+                'Booth#': 'Booth #',
+                'Year': 'Year',
+                'Show': 'Show',
+                'Client': 'Client',
+                'City': 'City',
+                'Location': 'Location',
+                'Ship': 'Ship Date',
+                'Production Manager': 'Production Manager',
+                'Account Manager': 'Account Manager'
+            };
+
+            // Use mapped label if available
+            if (labelMap[header]) {
+                return labelMap[header];
+            }
+
+            // Auto-format common patterns
+            let formatted = header
+                // Handle camelCase and PascalCase
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                // Handle underscores and dashes
+                .replace(/[_-]/g, ' ')
+                // Handle dots followed by letters
+                .replace(/\.([a-zA-Z])/g, '. $1')
+                // Capitalize each word
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+
+            return formatted;
+        },
+        applyColumnFormatting(column, header) {
+            const key = header.toLowerCase();
+
+            // Apply date formatting for date-related columns
+            if (this.isDateColumn(key)) {
+                column.format = 'date';
+                column.width = 120;
+                
+                // Apply auto-coloring for ship dates and other time-sensitive dates
+                if (key === 'ship' || key.includes('ship') || key.includes('due') || key.includes('deadline')) {
+                    column.autoColor = true;
+                }
+            }
+            // Apply number formatting for numeric columns
+            else if (this.isNumberColumn(key)) {
+                column.format = 'number';
+                column.width = 80;
+            }
+            // Apply currency formatting for monetary columns
+            else if (this.isCurrencyColumn(key)) {
+                column.format = 'currency';
+                column.width = 120;
+            }
+            // Apply specific widths for common columns
+            else {
+                column.width = this.getColumnWidth(key);
+            }
+        },
+        isDateColumn(key) {
+            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 's.', 'time'];
+            return dateKeywords.some(keyword => key.includes(keyword));
+        },
+        isNumberColumn(key) {
+            const numberKeywords = ['year', 'count', 'quantity', 'number', 'num', '#', 'id'];
+            return numberKeywords.some(keyword => key.includes(keyword)) || /^\d+$/.test(key);
+        },
+        isCurrencyColumn(key) {
+            const currencyKeywords = ['price', 'cost', 'amount', 'fee', 'rate', 'budget', 'expense', 'revenue', 'total'];
+            return currencyKeywords.some(keyword => key.includes(keyword));
+        },
+        getColumnWidth(key) {
+            // Apply specific widths based on column content type
+            if (key === 'show' || key.includes('title') || key.includes('name')) {
+                return 200;
+            }
+            else if (key === 'client' || key.includes('company')) {
+                return 150;
+            }
+            else if (key === 'city' || key === 'location' || key.includes('address')) {
+                return 150;
+            }
+            else if (key.includes('manager') || key.includes('contact') || key.includes('person')) {
+                return 180;
+            }
+            else if (key.includes('booth') || key.includes('space')) {
+                return 100;
+            }
+            else if (key.includes('email')) {
+                return 200;
+            }
+            else if (key.includes('phone')) {
+                return 140;
+            }
+            else if (key.includes('status') || key.includes('type')) {
+                return 120;
+            }
+            else if (key.includes('notes') || key.includes('description') || key.includes('comment')) {
+                return 250;
+            }
+            // Default width for other columns
+            else {
+                return 140;
+            }
         },
         async enrichWithPacklistData() {
             if (!this.scheduleTableStore?.data) return;

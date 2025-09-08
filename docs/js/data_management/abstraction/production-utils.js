@@ -5,6 +5,42 @@ import { Database, parseDate, wrapMethods, searchFilter, GetTopFuzzyMatch } from
  */
 class productionUtils_uncached {
     /**
+     * Get mapping from ProductionSchedule table headers
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Object>} Mapping object where keys and values are the same (all available headers)
+     */
+    static async GetMappingFromProductionSchedule(deps) {
+        const tabName = "ProductionSchedule";
+        
+        // Get the raw data (2D array) to extract headers from first row
+        const rawData = await deps.call(Database.getData, 'PROD_SCHED', tabName);
+        
+        if (!rawData || rawData.length === 0) {
+            console.log('[production-utils] No data available to generate mapping');
+            return {};
+        }
+        
+        // Get headers from the first row of the 2D array
+        const headers = rawData[0];
+        
+        if (!Array.isArray(headers)) {
+            console.log('[production-utils] Invalid data structure, expected array of headers');
+            return {};
+        }
+        
+        // Create mapping where key equals value (identity mapping for all headers)
+        const mapping = {};
+        headers.forEach(header => {
+            if (header && header.toString().trim()) { // Skip empty headers
+                mapping[header] = header;
+            }
+        });
+        
+        console.log('[production-utils] Generated mapping from ProductionSchedule headers:', mapping);
+        return mapping;
+    }
+
+    /**
      * Get overlapping shows based on parameters
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string|Object} parameters - Project identifier or date range parameters
@@ -13,16 +49,10 @@ class productionUtils_uncached {
     static async getOverlappingShows(deps, parameters = null, searchParams = null) {
         console.log('[production-utils] getOverlappingShows called with:', parameters);
         const tabName = "ProductionSchedule";
-        const mapping = {
-            Show: "Show",
-            Client: "Client",
-            Year: "Year",
-            City: "City",
-            'Booth#': 'Booth#',
-            'S. Start': 'S. Start',
-            'S. End': 'S. End',
-            Ship: 'Ship'
-        };
+        
+        // Get dynamic mapping from ProductionSchedule headers
+        const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+        
         let data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
         console.log('[production-utils] Loaded schedule data:', data);
 

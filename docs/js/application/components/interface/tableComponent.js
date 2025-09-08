@@ -788,7 +788,7 @@ export const TableComponent = {
                                     :style="{ width: getColumnWidth(column) }"
                                     :class="[column.headerClass, hideSet.has(column.key) ? 'hide' : '']"
                                 >
-                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
                                         <span>{{ column.label }}</span>
                                         <button 
                                             v-if="sortable"
