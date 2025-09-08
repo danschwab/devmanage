@@ -27,5 +27,5 @@ export { PacklistTable } from './components/content/PacklistTable.js';
 export { PacklistContent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
-export { ScheduleContent, AllShowsContent } from './components/content/ScheduleContent.js';
+export { ScheduleContent } from './components/content/ScheduleContent.js';
 
