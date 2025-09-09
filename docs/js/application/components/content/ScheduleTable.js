@@ -79,6 +79,11 @@ export const ScheduleTableComponent = {
                     label: this.formatColumnLabel(header)
                 };
 
+                // Mark columns as details if they're not Show, Client, or Ship
+                if (!['Show', 'Client', 'Ship', 'City', 'Size'].includes(header)) {
+                    column.details = true;
+                }
+
                 // Apply rational formatting based on column name patterns
                 this.applyColumnFormatting(column, header);
 
@@ -268,7 +273,7 @@ export const ScheduleTableComponent = {
             return dateKeywords.some(keyword => key.includes(keyword));
         },
         isNumberColumn(key) {
-            const numberKeywords = ['year', 'count', 'quantity', 'number', 'num', '#', 'id'];
+            const numberKeywords = ['year', 'count', 'quantity', 'id'];
             return numberKeywords.some(keyword => key.includes(keyword)) || /^\d+$/.test(key);
         },
         isCurrencyColumn(key) {
@@ -412,6 +417,7 @@ export const ScheduleTableComponent = {
                 :loading-message="loadingMessage"
                 :showSearch="true"
                 :sortable="true"
+                :allowDetails="true"
                 :hamburger-menu-component="{
                     components: [ScheduleTableMenuComponent],
                     props: {}

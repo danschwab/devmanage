@@ -86,6 +86,10 @@ export const TableComponent = {
         hideRowsOnSearch: {
             type: Boolean,
             default: true
+        },
+        allowDetails: {
+            type: Boolean,
+            default: false
         }
     },
     emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
@@ -102,7 +106,8 @@ export const TableComponent = {
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
             searchValue: this.searchTerm || '', // Initialize with searchTerm prop
             sortColumn: null, // Current sort column key
-            sortDirection: 'asc' // Current sort direction: 'asc' or 'desc'
+            sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
+            expandedRows: new Set(), // Track which rows are expanded for details
         };
     },
     watch: {
@@ -122,6 +127,14 @@ export const TableComponent = {
         hideSet() {
             // Hide columns listed in hideColumns prop and always hide 'AppData'
             return new Set([...(this.hideColumns || []), 'AppData']);
+        },
+        mainTableColumns() {
+            // Filter out columns marked as details-only
+            return this.columns.filter(column => !column.details);
+        },
+        detailsColumns() {
+            // Get only columns marked for details display
+            return this.columns.filter(column => column.details);
         },
         visibleRows() {
             // Filter rows based on search value and deletion status
@@ -220,10 +233,16 @@ export const TableComponent = {
         window.addEventListener('mouseup', this.handleGlobalMouseUp);
         // Listen for dragend globally to ensure drag state is always cleared
         window.addEventListener('dragend', this.handleGlobalMouseUp);
+        // Listen for clicks outside details area to close expanded details
+        document.addEventListener('click', this.handleOutsideClick);
+        // Listen for escape key to close expanded details
+        document.addEventListener('keydown', this.handleEscapeKey);
     },
     beforeUnmount() {
         window.removeEventListener('mouseup', this.handleGlobalMouseUp);
         window.removeEventListener('dragend', this.handleGlobalMouseUp);
+        document.removeEventListener('click', this.handleOutsideClick);
+        document.removeEventListener('keydown', this.handleEscapeKey);
     },
     methods: {
         handleRefresh() {
@@ -713,6 +732,41 @@ export const TableComponent = {
                     }
                 });
             });
+        },
+        
+        toggleRowDetails(rowIndex) {
+            if (this.expandedRows.has(rowIndex)) {
+                this.expandedRows.delete(rowIndex);
+            } else {
+                this.expandedRows.add(rowIndex);
+            }
+        },
+        
+        isRowExpanded(rowIndex) {
+            return this.expandedRows.has(rowIndex);
+        },
+        
+        handleOutsideClick(event) {
+            // Only proceed if there are expanded rows
+            if (this.expandedRows.size === 0) return;
+            
+            // Check if the click is outside any details area
+            const clickedElement = event.target;
+            const detailsContainer = clickedElement.closest('.details-container');
+            const detailsButton = clickedElement.closest('.details-toggle');
+            
+            // If click is not on a details button or inside a details container, close all expanded rows
+            if (!detailsContainer && !detailsButton) {
+                this.expandedRows.clear();
+            }
+        },
+        
+        handleEscapeKey(event) {
+            // Close all expanded details when Escape is pressed
+            if (event.key === 'Escape' && this.expandedRows.size > 0) {
+                this.expandedRows.clear();
+                event.preventDefault();
+            }
         }
     },
     template: html `
@@ -783,7 +837,7 @@ export const TableComponent = {
                             <tr>
                                 <th v-if="draggable" class="spacer-cell"></th>
                                 <th 
-                                    v-for="(column, colIdx) in columns" 
+                                    v-for="(column, colIdx) in mainTableColumns" 
                                     :key="column.key"
                                     :style="{ width: getColumnWidth(column) }"
                                     :class="[column.headerClass, hideSet.has(column.key) ? 'hide' : '']"
@@ -799,74 +853,122 @@ export const TableComponent = {
                                         </button>
                                     </div>
                                 </th>
+                                <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;">&#9432;</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="({ row, idx }, visibleIdx) in visibleRows" 
-                                :key="idx"
-                                :class="{
-                                    'dragging': dragIndex === idx,
-                                    'drag-over': dragOverIndex === idx
-                                }"
-                                @dragover="handleDragOverRow(idx, $event)"
-                                @drop="handleDropOnRow(idx, $event)"
-                            >
-                                <td v-if="draggable"
-                                    class="row-drag-handle"
-                                    draggable="true"
-                                    @dragstart="handleDragStart(idx, $event)"
-                                ></td>
-                                <td 
-                                    v-for="(column, colIndex) in columns" 
-                                    :key="column.key"
-                                    :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
+                            <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
+                                <tr 
+                                    :class="{
+                                        'dragging': dragIndex === idx,
+                                        'drag-over': dragOverIndex === idx
+                                    }"
+                                    @dragover="handleDragOverRow(idx, $event)"
+                                    @drop="handleDropOnRow(idx, $event)"
                                 >
-                                    <div class="table-cell-container">
-                                        <!-- Editable number input -->
-                                        <input
-                                            v-if="column.editable && column.format === 'number'"    
-                                            type="number"
-                                            :value="row[column.key]"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                        />
-                                        <!-- Editable text div -->
-                                        <div
-                                            v-else-if="column.editable"
-                                            contenteditable="true"
-                                            :data-row-index="idx"
-                                            :data-col-index="colIndex"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                            class="table-edit-textarea"
-                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                            :ref="'editable_' + idx + '_' + colIndex"
-                                        ></div>
-                                        <!-- Non-editable content (slot) -->
-                                        <slot 
-                                            v-else 
-                                            :row="row" 
-                                            :rowIndex="idx" 
-                                            :column="column"
-                                            :cellRowIndex="idx"
-                                            :cellColIndex="colIndex"
-                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
+                                    <td v-if="draggable"
+                                        class="row-drag-handle"
+                                        draggable="true"
+                                        @dragstart="handleDragStart(idx, $event)"
+                                    ></td>
+                                    <td 
+                                        v-for="(column, colIndex) in mainTableColumns" 
+                                        :key="column.key"
+                                        :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
+                                    >
+                                        <div class="table-cell-container">
+                                            <!-- Editable number input -->
+                                            <input
+                                                v-if="column.editable && column.format === 'number'"    
+                                                type="number"
+                                                :value="row[column.key]"
+                                                @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                            />
+                                            <!-- Editable text div -->
+                                            <div
+                                                v-else-if="column.editable"
+                                                contenteditable="true"
+                                                :data-row-index="idx"
+                                                :data-col-index="colIndex"
+                                                @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                                class="table-edit-textarea"
+                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                                :ref="'editable_' + idx + '_' + colIndex"
+                                            ></div>
+                                            <!-- Non-editable content (slot) -->
+                                            <slot 
+                                                v-else 
+                                                :row="row" 
+                                                :rowIndex="idx" 
+                                                :column="column"
+                                                :cellRowIndex="idx"
+                                                :cellColIndex="colIndex"
+                                                :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
+                                            >
+                                                <span v-html="highlightSearchText(row[column.key], column)"></span>
+                                            </slot>
+                                            
+                                            <!-- Additional cell content slot (for warnings, etc.) -->
+                                            <slot 
+                                                name="cell-extra"
+                                                :row="row" 
+                                                :rowIndex="idx" 
+                                                :column="column"
+                                                :cellRowIndex="idx"
+                                                :cellColIndex="colIndex"
+                                                :isEditable="column.editable"
+                                            ></slot>
+                                        </div>
+                                    </td>
+                                    <td v-if="allowDetails" class="details-cell">
+                                        <button 
+                                            @click="toggleRowDetails(idx)"
+                                            :class="'button-symbol details-toggle ' + (isRowExpanded(idx) ? 'expanded' : 'collapsed')"
                                         >
-                                            <span v-html="highlightSearchText(row[column.key], column)"></span>
-                                        </slot>
+                                            {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Expandable details row with Vue transition -->
+                                <tr v-if="allowDetails" class="details-row-container">
+                                    <td v-if="draggable"></td>
+                                    <td :colspan="mainTableColumns.length + (allowDetails ? 1 : 0)" class="details-container">
                                         
-                                        <!-- Additional cell content slot (for warnings, etc.) -->
-                                        <slot 
-                                            name="cell-extra"
-                                            :row="row" 
-                                            :rowIndex="idx" 
-                                            :column="column"
-                                            :cellRowIndex="idx"
-                                            :cellColIndex="colIndex"
-                                            :isEditable="column.editable"
-                                        ></slot>
-                                    </div>
-                                </td>
-                            </tr>
+                                        <div v-if="isRowExpanded(idx)" class="details-content">
+                                            <!-- Auto-generated details from columns marked with details: true -->
+                                            <div v-if="detailsColumns.length > 0" class="auto-details">
+                                                <div class="details-grid">
+                                                    <div 
+                                                        v-for="column in detailsColumns" 
+                                                        :key="column.key"
+                                                        class="detail-item"
+                                                    >
+                                                        <label>{{ column.label }}:</label>
+                                                        <span>{{ formatCellValue(row[column.key], column) || '—' }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Custom slot content -->
+                                            <slot 
+                                                name="row-details"
+                                                :row="row" 
+                                                :rowIndex="idx"
+                                                :isExpanded="isRowExpanded(idx)"
+                                                :detailsColumns="detailsColumns"
+                                            >
+                                                <!-- Fallback if no details columns and no custom slot -->
+                                                <div v-if="detailsColumns.length === 0" class="default-details">
+                                                    <h4>Row Details</h4>
+                                                    <pre>{{ JSON.stringify(row, null, 2) }}</pre>
+                                                </div>
+                                            </slot>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                         <tfoot v-if="newRow"
                             @dragover="handleDragOverTfoot"
@@ -882,7 +984,7 @@ export const TableComponent = {
                                     @dragstart="handleDragStart(idx, $event)"
                                 ></td>
                                 <td 
-                                    v-for="(column, colIndex) in columns" 
+                                    v-for="(column, colIndex) in mainTableColumns" 
                                     :key="column.key"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                 >
@@ -923,11 +1025,12 @@ export const TableComponent = {
                                         ></slot>
                                     </div>
                                 </td>
+                                <td v-if="allowDetails" class="details-cell"></td>
                             </tr>
                             <tr>
                                 <td v-if="draggable" class="spacer-cell"></td>
                                 <td 
-                                    :colspan="draggable ? columns.length : columns.length" 
+                                    :colspan="(draggable ? 1 : 0) + mainTableColumns.length + (allowDetails ? 1 : 0)" 
                                     class="new-row-button" 
                                     @click="handleNewRow"
                                 >

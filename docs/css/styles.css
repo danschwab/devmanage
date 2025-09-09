@@ -160,15 +160,9 @@ footer a:visited {
 }
 
 
-
 .material-symbols-outlined {
     font-size: 14pt !important;
     line-height: 27px !important;
-}
-
-.button-symbol:hover {
-    background-color: var(--background-color);
-    color: var(--color-text);
 }
 
 
@@ -695,7 +689,7 @@ th, td {
     border: 1px solid var(--color-border);
     text-align: left;
     vertical-align: top;
-    min-width: 30px;
+    /*min-width: 30px;*/
     min-height: 30px;
     max-width: 300px; /* Set maximum width for cells */
     white-space: normal; /* Allow text wrapping */
@@ -931,6 +925,62 @@ tr.dragging::after {
 .table-cell-card.clickable, button.table-cell-card {
     cursor: pointer;
 }
+
+/* Table Details Styling */
+
+.details-toggle {
+    min-width: 0;
+    font-size: 20px;
+    line-height: 10px;
+    transition: transform 0.3s ease-in-out;
+}
+
+.details-row-container {
+    background-color: var(--color-gray-bg);
+}
+
+.details-container {
+    padding: 0;
+    border-top: none;
+}
+
+.details-content {
+    padding: var(--padding-sm);
+    background-color: var(--background-color);
+    margin: 0 0 var(--padding-sm) 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border: 1px solid var(--color-border);
+    border-top: none;
+    overflow: hidden;
+    box-shadow: 0 4px 8px var(--color-shadow);
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--padding-sm);
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--color-gray-bg);
+    padding: 2px;
+    gap: 0.5rem;
+}
+
+.detail-item label {
+    color: var(--color-text-light);
+}
+
+.detail-item span {
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+}
+
+
+
 
 .table-edit-textarea, td input[type="number"] {
     width: 100%;

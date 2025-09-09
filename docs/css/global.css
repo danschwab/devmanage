@@ -5,6 +5,39 @@
 .fade-enter-from, .fade-leave-to {
     opacity: 0;
 }
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.15s ease-in-out;
+}
+
+
+.expand-enter-from {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+}
+.expand-enter-to {
+    max-height: 1000px;
+    opacity: 1;
+}
+.expand-leave-from {
+    max-height: 1000px;
+    opacity: 1;
+}
+.expand-leave-to {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+}
+.expand-enter-active,
+.expand-leave-active {
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+}
 
 /* other transitions */
 body, div, span, p, h1, h2, h3, h4, h5, h6,

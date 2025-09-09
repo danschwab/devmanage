@@ -1,0 +1,9 @@
+@-moz-document url-prefix() {
+    /* Specific CSS rules for Firefox go here */
+    
+    
+    /* firefox doesn't center text for some odd reason. Looks bad in symbol buttons. */
+    .button-symbol {
+        padding-bottom: 1px;
+    }
+}
