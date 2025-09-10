@@ -476,33 +476,38 @@ export class GoogleSheetsService {
                 const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
                 console.log('Drive API query:', query);
                 
-                const response = await gapi.client.request({
-                    path: 'https://www.googleapis.com/drive/v3/files',
-                    method: 'GET',
-                    params: {
-                        q: query,
-                        fields: 'files(id,name,webViewLink,webContentLink)'
-                    }
+                // Use the authenticated Drive API through gapi.client
+                const response = await gapi.client.drive.files.list({
+                    q: query,
+                    fields: 'files(id,name,webViewLink,webContentLink)',
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true
                 });
 
                 if (response.result && response.result.files && response.result.files.length > 0) {
                     const file = response.result.files[0];
                     
-                    // Create direct image URL using the file ID
-                    const directImageUrl = `https://drive.google.com/uc?id=${file.id}&export=view`;
+                    // Try multiple URL formats for better compatibility
+                    const urlOptions = [
+                        `https://drive.google.com/thumbnail?id=${file.id}&sz=w200-h200`, // Thumbnail API
+                        `https://drive.google.com/uc?id=${file.id}&export=view`,         // Direct export
+                        `https://lh3.googleusercontent.com/d/${file.id}`,                // Google User Content
+                        file.webViewLink                                                 // Fallback to web view
+                    ];
                     
                     console.log('Found file:', {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        directImageUrl: directImageUrl
+                        urlOptions: urlOptions
                     });
                     
                     return {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        directImageUrl: directImageUrl
+                        directImageUrl: urlOptions[0], // Use thumbnail as primary
+                        urlOptions: urlOptions         // Provide all options for fallback
                     };
                 }
                 return null;

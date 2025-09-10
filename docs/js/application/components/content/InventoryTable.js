@@ -1,12 +1,14 @@
 import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
-// Image component for dynamic loading
+// Image component for dynamic loading with fallback URLs
 const ItemImageComponent = {
     props: ['itemNumber', 'getImageUrl'],
     data() {
         return {
             imageUrl: 'images/placeholder.png',
-            isLoading: true
+            isLoading: true,
+            urlOptions: [],
+            currentUrlIndex: 0
         };
     },
     async mounted() {
@@ -15,7 +17,16 @@ const ItemImageComponent = {
         if (this.itemNumber && this.getImageUrl) {
             try {
                 console.log('ItemImageComponent calling getImageUrl with:', this.itemNumber);
-                this.imageUrl = await this.getImageUrl(this.itemNumber);
+                const result = await this.getImageUrl(this.itemNumber);
+                
+                // If result is a string, use it directly
+                if (typeof result === 'string') {
+                    this.imageUrl = result;
+                } else if (result && result.directImageUrl) {
+                    // If result has directImageUrl, use it and store options for fallback
+                    this.imageUrl = result.directImageUrl;
+                    this.urlOptions = result.urlOptions || [result.directImageUrl];
+                }
             } catch (error) {
                 console.error('Error loading image:', error);
                 this.imageUrl = 'images/placeholder.png';
@@ -26,13 +37,29 @@ const ItemImageComponent = {
             this.isLoading = false;
         }
     },
+    methods: {
+        handleImageError() {
+            console.log('Image failed to load:', this.imageUrl);
+            
+            // Try next URL option if available
+            if (this.urlOptions && this.currentUrlIndex < this.urlOptions.length - 1) {
+                this.currentUrlIndex++;
+                this.imageUrl = this.urlOptions[this.currentUrlIndex];
+                console.log('Trying fallback URL:', this.imageUrl);
+            } else {
+                // All options exhausted, use placeholder
+                console.log('All URL options failed, using placeholder');
+                this.imageUrl = 'images/placeholder.png';
+            }
+        }
+    },
     template: html`
         <div class="item-image-container" style="position: relative;">
             <img 
                 :src="imageUrl" 
                 alt="Item Image" 
                 :style="isLoading ? 'background-color: var(--color-gray-bg-transparent);' : ''"
-                @error="imageUrl = 'images/placeholder.png'"
+                @error="handleImageError"
             />
         </div>
     `
