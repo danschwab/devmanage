@@ -94,14 +94,15 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
+        
         // Convert JS objects to sheet format
         let values;
         if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
             values = updates;
         } else if (Array.isArray(updates) && updates.length > 0) {
-            // If mapping is provided, use reverse transform to get proper sheet format
+            // If mapping is provided, preserve existing sheet structure
             if (mapping) {
-                values = this.reverseTransformSheetData(mapping, updates);
+                values = await this.preserveSheetStructure(tableId, tabName, mapping, updates);
             } else {
                 const headers = Object.keys(updates[0]);
                 values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
@@ -196,6 +197,75 @@ export class GoogleSheetsService {
             return key ? obj[key] ?? '' : '';
         }));
         return [headers, ...rows];
+    }
+
+    /**
+     * Preserve existing sheet structure when saving mapped data
+     * @param {string} tableId 
+     * @param {string} tabName 
+     * @param {Object} mapping 
+     * @param {Array<Object>} mappedData 
+     * @returns {Promise<Array<Array>>} Sheet data preserving unmapped columns
+     */
+    static async preserveSheetStructure(tableId, tabName, mapping, mappedData) {
+        try {
+            // Get existing sheet data to preserve structure
+            const existingData = await this.getSheetData(tableId, tabName);
+            
+            if (!existingData || existingData.length === 0) {
+                // No existing data, fall back to simple reverse transform
+                return this.reverseTransformSheetData(mapping, mappedData);
+            }
+
+            const existingHeaders = existingData[0] || [];
+            const existingRows = existingData.slice(1);
+
+            // Create mapping from object keys to column indices
+            const mappedColumnIndices = {};
+            Object.entries(mapping).forEach(([key, headerName]) => {
+                const colIndex = existingHeaders.findIndex(h => 
+                    typeof h === 'string' && h.trim() === headerName.trim()
+                );
+                if (colIndex !== -1) {
+                    mappedColumnIndices[key] = colIndex;
+                }
+            });
+
+            // Create new rows preserving existing structure
+            const newRows = [];
+            
+            // Process each mapped data object
+            for (let i = 0; i < mappedData.length; i++) {
+                const obj = mappedData[i];
+                let newRow;
+
+                // If we have an existing row at this index, start with it to preserve unmapped columns
+                if (i < existingRows.length) {
+                    newRow = [...existingRows[i]];
+                    // Ensure the row has the same length as headers
+                    while (newRow.length < existingHeaders.length) {
+                        newRow.push('');
+                    }
+                } else {
+                    // Create a new empty row with correct length
+                    newRow = new Array(existingHeaders.length).fill('');
+                }
+
+                // Update only the mapped columns
+                Object.entries(mappedColumnIndices).forEach(([key, colIndex]) => {
+                    newRow[colIndex] = obj[key] ?? '';
+                });
+
+                newRows.push(newRow);
+            }
+
+            return [existingHeaders, ...newRows];
+            
+        } catch (error) {
+            console.warn(`[preserveSheetStructure] Could not preserve sheet structure for ${tabName}:`, error);
+            // Fall back to simple reverse transform
+            return this.reverseTransformSheetData(mapping, mappedData);
+        }
     }
     
     /**
