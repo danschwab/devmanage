@@ -86,6 +86,45 @@ class database_uncached {
     }
 
 
+    /**
+     * Search for an item image in Google Drive folder
+     * @param {string} itemNumber - The item number to search for
+     * @param {string} folderId - Google Drive folder ID containing the images
+     * @returns {Promise<string|null>} Direct image URL or null if not found
+     */
+    static async getItemImageUrl(itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+        console.log('Database.getItemImageUrl called with:', { itemNumber, folderId });
+        
+        if (!itemNumber) {
+            console.log('No itemNumber provided, returning null');
+            return null;
+        }
+        
+        if (typeof itemNumber !== 'string') {
+            console.error('itemNumber must be a string, received:', typeof itemNumber, itemNumber);
+            return null;
+        }
+                
+        // Try different file extensions
+        const extensions = ['jpg', 'jpeg', 'png', 'gif'];
+        
+        for (const ext of extensions) {
+            const fileName = `${itemNumber}.${ext}`;
+            console.log(`Searching for file: ${fileName} in folder: ${folderId}`);
+            
+            const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
+            
+            if (file && file.directImageUrl) {
+                console.log(`Found image for ${itemNumber}:`, file.directImageUrl);
+                return file.directImageUrl;
+            }
+        }
+        
+        console.log(`No image found for item: ${itemNumber}`);
+        return null; // Return null if no image found
+    }
+
+
     /* MUTATION FUNCTIONS */
 
 
@@ -195,4 +234,4 @@ class database_uncached {
     }
 }
 
-export const Database = wrapMethods(database_uncached, 'database', ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow']);
+export const Database = wrapMethods(database_uncached, 'database', ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'getItemImageUrl']);

@@ -460,11 +460,27 @@ export class GoogleSheetsService {
     static async searchDriveFileInFolder(fileName, folderId) {
         return await this.withExponentialBackoff(async () => {
             try {
+                // Add parameter validation and debugging
+                console.log('GoogleSheetsService.searchDriveFileInFolder called with:', { fileName, folderId });
+                
+                if (typeof fileName !== 'string') {
+                    console.error('fileName must be a string, received:', typeof fileName, fileName);
+                    return null;
+                }
+                
+                if (typeof folderId !== 'string') {
+                    console.error('folderId must be a string, received:', typeof folderId, folderId);
+                    return null;
+                }
+                
+                const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
+                console.log('Drive API query:', query);
+                
                 const response = await gapi.client.request({
                     path: 'https://www.googleapis.com/drive/v3/files',
                     method: 'GET',
                     params: {
-                        q: `name='${fileName}' and parents in '${folderId}' and trashed=false`,
+                        q: query,
                         fields: 'files(id,name,webViewLink,webContentLink)'
                     }
                 });

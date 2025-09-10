@@ -10,8 +10,11 @@ const ItemImageComponent = {
         };
     },
     async mounted() {
+        console.log('ItemImageComponent mounted with props:', { itemNumber: this.itemNumber, getImageUrl: this.getImageUrl });
+        
         if (this.itemNumber && this.getImageUrl) {
             try {
+                console.log('ItemImageComponent calling getImageUrl with:', this.itemNumber);
                 this.imageUrl = await this.getImageUrl(this.itemNumber);
             } catch (error) {
                 console.error('Error loading image:', error);
@@ -185,6 +188,8 @@ export const InventoryTableComponent = {
                 await this.inventoryTableStore.save('Saving inventory...');            }
         },
         async getItemImageUrl(itemNumber) {
+            console.log('InventoryTable.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
+            
             if (!itemNumber) return 'images/placeholder.png';
             
             // Check cache first

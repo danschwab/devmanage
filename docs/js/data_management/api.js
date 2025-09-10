@@ -257,6 +257,7 @@ export const Requests = {
      * @returns {Promise<string|null>} Direct image URL or null if not found
      */
     getItemImageUrl: async (itemNumber) => {
-        return await ApplicationUtils.getItemImageUrl(itemNumber);
+        console.log('API.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
+        return await Database.getItemImageUrl(itemNumber);
     }
 };
