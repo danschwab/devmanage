@@ -6,7 +6,7 @@ export class GoogleSheetsService {
     static SPREADSHEET_IDS = {
         'INVENTORY': '1qHAJ0FgHJjtqXiyCGohzaL1fuzdYQMF2n4YiDSc5uYE',
         'PACK_LISTS': '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0',
-        'PROD_SCHED': '1BacxHxdGXSkS__ZtCv6WqgyxvTs_a2Hsv8NJnNiHU18',
+        'PROD_SCHED': '1lwmzvEIjA99pBztPiudIrxpdW4IFf_xRhOwNzVkBPYk',
         'CACHE': '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw'
     };
 
@@ -476,38 +476,33 @@ export class GoogleSheetsService {
                 const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
                 console.log('Drive API query:', query);
                 
-                // Use the authenticated Drive API through gapi.client
-                const response = await gapi.client.drive.files.list({
-                    q: query,
-                    fields: 'files(id,name,webViewLink,webContentLink)',
-                    supportsAllDrives: true,
-                    includeItemsFromAllDrives: true
+                const response = await gapi.client.request({
+                    path: 'https://www.googleapis.com/drive/v3/files',
+                    method: 'GET',
+                    params: {
+                        q: query,
+                        fields: 'files(id,name,webViewLink,webContentLink)'
+                    }
                 });
 
                 if (response.result && response.result.files && response.result.files.length > 0) {
                     const file = response.result.files[0];
                     
-                    // Try multiple URL formats for better compatibility
-                    const urlOptions = [
-                        `https://drive.google.com/thumbnail?id=${file.id}&sz=w200-h200`, // Thumbnail API
-                        `https://drive.google.com/uc?id=${file.id}&export=view`,         // Direct export
-                        `https://lh3.googleusercontent.com/d/${file.id}`,                // Google User Content
-                        file.webViewLink                                                 // Fallback to web view
-                    ];
+                    // Create direct image URL using the file ID
+                    const directImageUrl = `https://drive.google.com/uc?id=${file.id}&export=view`;
                     
                     console.log('Found file:', {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        urlOptions: urlOptions
+                        directImageUrl: directImageUrl
                     });
                     
                     return {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        directImageUrl: urlOptions[0], // Use thumbnail as primary
-                        urlOptions: urlOptions         // Provide all options for fallback
+                        directImageUrl: directImageUrl
                     };
                 }
                 return null;
