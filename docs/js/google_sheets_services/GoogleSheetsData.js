@@ -487,16 +487,22 @@ export class GoogleSheetsService {
 
                 if (response.result && response.result.files && response.result.files.length > 0) {
                     const file = response.result.files[0];
-                    // Convert webViewLink to a direct image URL for Google Drive
-                    const directLink = file.webViewLink ? 
-                        file.webViewLink.replace('/view?usp=sharing', '').replace('file/d/', 'uc?id=').replace('/view', '') + '&export=view' :
-                        null;
+                    
+                    // Create direct image URL using the file ID
+                    const directImageUrl = `https://drive.google.com/uc?id=${file.id}&export=view`;
+                    
+                    console.log('Found file:', {
+                        id: file.id,
+                        name: file.name,
+                        webViewLink: file.webViewLink,
+                        directImageUrl: directImageUrl
+                    });
                     
                     return {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        directImageUrl: directLink
+                        directImageUrl: directImageUrl
                     };
                 }
                 return null;

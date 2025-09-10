@@ -31,12 +31,9 @@ const ItemImageComponent = {
             <img 
                 :src="imageUrl" 
                 alt="Item Image" 
-                style="width: 64px; height: 64px; object-fit: cover; border-radius: 4px;"
+                :style="isLoading ? 'background-color: var(--color-gray-bg-transparent);' : ''"
                 @error="imageUrl = 'images/placeholder.png'"
             />
-            <div v-if="isLoading" style="position: absolute; top: 0; left: 0; width: 64px; height: 64px; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; border-radius: 4px;">
-                <span style="font-size: 12px; color: #666;">...</span>
-            </div>
         </div>
     `
 };
@@ -97,7 +94,7 @@ export const InventoryTableComponent = {
         const columns = [
             { 
                 key: 'image', 
-                label: 'Thumb',
+                label: 'IMG',
                 width: 1,
             },
             { 
