@@ -37,8 +37,10 @@ class CacheManager {
      * @param {number} expirationMs - Expiration time in milliseconds (defaults to DEFAULT_CACHE_EXPIRATION_MS)
      */
     static set(key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS) {
-        // Skip caching empty results or booleans
+        // Skip caching empty results, null values, or booleans
         if (
+            value === null ||
+            value === undefined ||
             (Array.isArray(value) && value.length === 0) ||
             (typeof value === 'object' && value !== null && Object.keys(value).length === 0) ||
             (typeof value === 'boolean')

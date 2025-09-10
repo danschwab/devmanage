@@ -1,31 +1,36 @@
 import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
-// Image component for dynamic loading with fallback URLs
-const ItemImageComponent = {
-    props: ['itemNumber', 'getImageUrl'],
+
+
+
+// Image component for dynamic loading
+export const ItemImageComponent = {
+    props: {
+        itemNumber: {
+            type: String,
+            required: true
+        },
+        imageSize: {
+            type: Number,
+            default: 64
+        }
+    },
     data() {
         return {
             imageUrl: 'images/placeholder.png',
             isLoading: true,
-            urlOptions: [],
-            currentUrlIndex: 0
+            imageFound: false
         };
     },
     async mounted() {
-        console.log('ItemImageComponent mounted with props:', { itemNumber: this.itemNumber, getImageUrl: this.getImageUrl });
-        
-        if (this.itemNumber && this.getImageUrl) {
+        console.log('ItemImageComponent mounted with props:', { itemNumber: this.itemNumber });
+
+        if (this.itemNumber) {
             try {
-                console.log('ItemImageComponent calling getImageUrl with:', this.itemNumber);
-                const result = await this.getImageUrl(this.itemNumber);
-                
-                // If result is a string, use it directly
-                if (typeof result === 'string') {
-                    this.imageUrl = result;
-                } else if (result && result.directImageUrl) {
-                    // If result has directImageUrl, use it and store options for fallback
-                    this.imageUrl = result.directImageUrl;
-                    this.urlOptions = result.urlOptions || [result.directImageUrl];
+                console.log('ItemImageComponent calling getItemImageUrl with:', this.itemNumber);
+                this.imageUrl = await this.getItemImageUrl(this.itemNumber);
+                if (!(this.imageUrl === null) && this.imageUrl !== 'images/placeholder.png') {
+                    this.imageFound = true;
                 }
             } catch (error) {
                 console.error('Error loading image:', error);
@@ -38,59 +43,81 @@ const ItemImageComponent = {
         }
     },
     methods: {
-        handleImageError() {
-            console.log('Image failed to load:', this.imageUrl);
+        async getItemImageUrl(itemNumber) {
+            console.log('ItemImageComponent.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
             
-            // Try next URL option if available
-            if (this.urlOptions && this.currentUrlIndex < this.urlOptions.length - 1) {
-                this.currentUrlIndex++;
-                this.imageUrl = this.urlOptions[this.currentUrlIndex];
-                console.log('Trying fallback URL:', this.imageUrl);
-            } else {
-                // All options exhausted, use placeholder
-                console.log('All URL options failed, using placeholder');
-                this.imageUrl = 'images/placeholder.png';
+            if (!itemNumber) return 'images/placeholder.png';
+            
+            try {
+                const imageUrl = await Requests.getItemImageUrl(itemNumber);
+                const finalUrl = imageUrl || 'images/placeholder.png';
+                return finalUrl;
+            } catch (error) {
+                console.error('Error loading image for item:', itemNumber, error);
+                const fallbackUrl = 'images/placeholder.png';
+                return fallbackUrl;
+            }
+        },
+        showImageModal() {
+            if (this.imageUrl && this.imageUrl !== 'images/placeholder.png') {
+                // Create a simple image modal component
+                const ImageModalComponent = {
+                    props: ['imageUrl', 'itemNumber'],
+                    template: html`
+                        <div style="text-align: center; padding: 1rem;">
+                            <img
+                                :src="imageUrl" 
+                                alt="Item Image" 
+                                style="max-width: 90vw; max-height: 80vh; object-fit: contain;"
+                            />
+                        </div>
+                    `
+                };
+                
+                const modal = modalManager.createModal(
+                    `Image: ${this.itemNumber}`,
+                    [ImageModalComponent],
+                    {
+                        componentProps: {
+                            imageUrl: this.imageUrl,
+                            itemNumber: this.itemNumber
+                        }
+                    }
+                );
+                modalManager.showModal(modal.id);
             }
         }
     },
     template: html`
-        <div class="item-image-container" style="position: relative;">
+        <div class="item-image-container" :style="{ position: 'relative', width: imageSize + 'px', height: imageSize + 'px' }">
             <img 
                 :src="imageUrl" 
                 alt="Item Image" 
                 :style="isLoading ? 'background-color: var(--color-gray-bg-transparent);' : ''"
-                @error="handleImageError"
+                :style="imageFound ? 'cursor: pointer;' : ''"
+                @click="showImageModal"
+                @error="imageUrl = 'images/placeholder.png'"
             />
         </div>
     `
 };
 
-// Use Vue's defineComponent if available (Vue 3)
-const InventoryTableMenuComponent = Vue.defineComponent
-    ? Vue.defineComponent({
-        methods: {
-            hideRows() {
-                modalManager.showAlert('Hide rows clicked!', 'Info');
-            }
-        },
-        template: html`
-            <div style="padding:1rem;">
-                <button @click="hideRows">Hide rows</button>
-            </div>
-        `
-    })
-    : {
-        methods: {
-            hideRows() {
-                modalManager.showAlert('Hide rows clicked!', 'Info');
-            }
-        },
-        template: html`
-            <div style="padding:1rem;">
-                <button @click="hideRows">Hide rows</button>
-            </div>
-        `
-    };
+
+
+const InventoryTableMenuComponent = {
+    methods: {
+        hideRows() {
+            modalManager.showAlert('Hide rows clicked!', 'Info');
+        }
+    },
+    template: html`
+        <div style="padding:1rem;">
+            <button @click="hideRows">Hide rows</button>
+        </div>
+    `
+};
+
+
 
 export const InventoryTableComponent = {
     components: {
@@ -151,28 +178,17 @@ export const InventoryTableComponent = {
         return {
             columns,
             inventoryTableStore: null,
-            imageCache: new Map() // Cache for loaded images
         };
     },
     computed: {
         tableData() {
-            const data = this.inventoryTableStore ? this.inventoryTableStore.data : [];
-            // Ensure each row has an image property
-            return data.map(row => ({
-                ...row,
-                image: row.image || 'placeholder' // Initialize with placeholder if not set
-            }));
+            return this.inventoryTableStore ? this.inventoryTableStore.data : [];
         },
         originalData() {
             // Use the originalData from the store, not a copy of the reactive data
-            const data = this.inventoryTableStore && Array.isArray(this.inventoryTableStore.originalData)
+            return this.inventoryTableStore && Array.isArray(this.inventoryTableStore.originalData)
                 ? JSON.parse(JSON.stringify(this.inventoryTableStore.originalData))
                 : [];
-            // Ensure each row has an image property
-            return data.map(row => ({
-                ...row,
-                image: row.image || 'placeholder' // Initialize with placeholder if not set
-            }));
         },
         error() {
             return this.inventoryTableStore ? this.inventoryTableStore.error : null;
@@ -210,28 +226,6 @@ export const InventoryTableComponent = {
             if (this.inventoryTableStore) {
                 console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
                 await this.inventoryTableStore.save('Saving inventory...');            }
-        },
-        async getItemImageUrl(itemNumber) {
-            console.log('InventoryTable.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
-            
-            if (!itemNumber) return 'images/placeholder.png';
-            
-            // Check cache first
-            if (this.imageCache.has(itemNumber)) {
-                return this.imageCache.get(itemNumber);
-            }
-            
-            try {
-                const imageUrl = await Requests.getItemImageUrl(itemNumber);
-                const finalUrl = imageUrl || 'images/placeholder.png';
-                this.imageCache.set(itemNumber, finalUrl);
-                return finalUrl;
-            } catch (error) {
-                console.error('Error loading image for item:', itemNumber, error);
-                const fallbackUrl = 'images/placeholder.png';
-                this.imageCache.set(itemNumber, fallbackUrl);
-                return fallbackUrl;
-            }
         },
         handleShowHamburgerMenu({ menuComponent, tableId }) {
             // Pass the actual component reference, not an object literal
@@ -273,7 +267,6 @@ export const InventoryTableComponent = {
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :itemNumber="row.itemNumber"
-                        :getImageUrl="getItemImageUrl"
                     />
                 </template>
             </TableComponent>

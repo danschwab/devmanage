@@ -6,7 +6,7 @@ export class GoogleSheetsService {
     static SPREADSHEET_IDS = {
         'INVENTORY': '1qHAJ0FgHJjtqXiyCGohzaL1fuzdYQMF2n4YiDSc5uYE',
         'PACK_LISTS': '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0',
-        'PROD_SCHED': '1BacxHxdGXSkS__ZtCv6WqgyxvTs_a2Hsv8NJnNiHU18', //1lwmzvEIjA99pBztPiudIrxpdW4IFf_xRhOwNzVkBPYk
+        'PROD_SCHED': '1BacxHxdGXSkS__ZtCv6WqgyxvTs_a2Hsv8NJnNiHU18', //eventually, once DY puts the prod sched under TSExhibits, the real sheet is: 1lwmzvEIjA99pBztPiudIrxpdW4IFf_xRhOwNzVkBPYk
         'CACHE': '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw'
     };
 
@@ -505,10 +505,10 @@ export class GoogleSheetsService {
                         directImageUrl: directImageUrl
                     };
                 }
-                return null;
+                return "";
             } catch (error) {
                 console.error('Error searching Drive file:', error);
-                return null;
+                return "";
             }
         });
     }

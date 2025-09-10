@@ -985,8 +985,7 @@ tr.dragging::after {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 64px;
-    height: 64px;
+    border-radius: var(--radius-sm);
 }
 
 .item-image-container img {

@@ -1,8 +1,9 @@
-import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, modalManager, ItemImageComponent } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
-        TableComponent
+        TableComponent,
+        ItemImageComponent
     },
     props: {
         containerPath: {
@@ -21,6 +22,11 @@ export const InventoryOverviewTableComponent = {
                     key: 'tab', 
                     label: 'Category',
                     width: 120
+                },
+                { 
+                    key: 'image', 
+                    label: 'I',
+                    width: 1,
                 },
                 { 
                     key: 'itemNumber', 
@@ -51,7 +57,8 @@ export const InventoryOverviewTableComponent = {
             allInventoryData: [],
             isLoading: false,
             error: null,
-            loadingMessage: 'Loading all inventory data...'
+            loadingMessage: 'Loading all inventory data...',
+            imageCache: new Map() // Cache for loaded images
         };
     },
     computed: {
@@ -77,7 +84,6 @@ export const InventoryOverviewTableComponent = {
                 const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
 
                 // Load data from each tab
-                const allData = [];
                 for (const tab of inventoryTabs) {
                     try {
                         const tabData = await Requests.getInventoryTabData(tab.title);
@@ -88,7 +94,8 @@ export const InventoryOverviewTableComponent = {
                                 ...item,
                                 tab: tab.title
                             }));
-                            allData.push(...itemsWithTab);
+                            this.allInventoryData.push(...itemsWithTab);
+                            this.isLoading = false;
                         }
                     } catch (tabError) {
                         console.warn(`Failed to load data from tab ${tab.title}:`, tabError);
@@ -96,7 +103,6 @@ export const InventoryOverviewTableComponent = {
                     }
                 }
 
-                this.allInventoryData = allData;
             } catch (error) {
                 console.error('Failed to load inventory overview data:', error);
                 this.error = 'Failed to load inventory data';
@@ -122,6 +128,28 @@ export const InventoryOverviewTableComponent = {
         async handleSave() {
             // No save functionality for overview table
             modalManager.showAlert('This overview table is read-only. No changes to save.', 'Info');
+        },
+        async getItemImageUrl(itemNumber) {
+            console.log('InventoryOverviewTable.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
+            
+            if (!itemNumber) return 'images/placeholder.png';
+            
+            // Check cache first
+            if (this.imageCache.has(itemNumber)) {
+                return this.imageCache.get(itemNumber);
+            }
+            
+            try {
+                const imageUrl = await Requests.getItemImageUrl(itemNumber);
+                const finalUrl = imageUrl || 'images/placeholder.png';
+                this.imageCache.set(itemNumber, finalUrl);
+                return finalUrl;
+            } catch (error) {
+                console.error('Error loading image for item:', itemNumber, error);
+                const fallbackUrl = 'images/placeholder.png';
+                this.imageCache.set(itemNumber, fallbackUrl);
+                return fallbackUrl;
+            }
         },
         handleCategoryClick(tabName) {
             // Navigate to the specific category view
@@ -168,6 +196,11 @@ export const InventoryOverviewTableComponent = {
                     >
                         {{ formatCategoryLabel(row.tab) }}
                     </button>
+                    <ItemImageComponent 
+                        v-if="column.key === 'image'"
+                        :imageSize="32"
+                        :itemNumber="row.itemNumber"
+                    />
                 </template>
             </TableComponent>
         </div>

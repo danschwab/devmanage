@@ -994,12 +994,12 @@ export class FakeGoogleSheetsService {
         
         // Create fake image URLs for common item numbers for testing
         const mockImages = {
-            'A001.jpg': 'images/placeholder.png',
-            'A002.jpg': 'images/placeholder.png',
-            'B001.jpg': 'images/placeholder.png',
-            'C001.jpg': 'images/placeholder.png',
-            'TEST123.jpg': 'images/placeholder.png',
-            'ITEM001.jpg': 'images/placeholder.png'
+            'CHAIR-001.jpg': 'images/logo.png',
+            'CHAIR-002.jpg': 'images/logo.png',
+            'CHAIR-003.jpg': 'images/logo.png',
+            'TABLE-001.jpg': 'images/logo.png',
+            'TABLE-002.jpg': 'images/logo.png',
+            'TABLE-003.jpg': 'images/logo.png'
         };
         
         if (mockImages[fileName]) {
@@ -1011,7 +1011,7 @@ export class FakeGoogleSheetsService {
             };
         }
         
-        return null; // File not found
+        return ""; // File not found
     }
 
     /**

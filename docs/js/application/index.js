@@ -22,7 +22,7 @@ export { DashboardToggleComponent } from './components/interface/navigationCompo
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
 
 // Content components export
-export { InventoryTableComponent } from './components/content/InventoryTable.js';
+export { InventoryTableComponent, ItemImageComponent } from './components/content/InventoryTable.js';
 export { PacklistTable } from './components/content/PacklistTable.js';
 export { PacklistContent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
