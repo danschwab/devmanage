@@ -489,8 +489,7 @@ export class GoogleSheetsService {
                     const file = response.result.files[0];
                     
                     // Create direct image URL using the file ID
-                    const directImageUrl = `https://drive.google.com/uc?id=${file.id}&export=view`;
-                    
+                    const directImageUrl = `https://lh3.googleusercontent.com/d/${file.id}?authuser=1/view`;//`https://drive.google.com/uc?id=${file.id}&export=view`;
                     console.log('Found file:', {
                         id: file.id,
                         name: file.name,
