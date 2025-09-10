@@ -117,75 +117,6 @@ export class FakeGoogleSheetsService {
         }));
         return [headers, ...rows];
     }
-
-    /**
-     * Preserve existing sheet structure when saving mapped data
-     * @param {string} tableId 
-     * @param {string} tabName 
-     * @param {Object} mapping 
-     * @param {Array<Object>} mappedData 
-     * @returns {Promise<Array<Array>>} Sheet data preserving unmapped columns
-     */
-    static async preserveSheetStructure(tableId, tabName, mapping, mappedData) {
-        try {
-            // Get existing sheet data to preserve structure
-            const existingData = await this.getSheetData(tableId, tabName);
-            
-            if (!existingData || existingData.length === 0) {
-                // No existing data, fall back to simple reverse transform
-                return this.reverseTransformSheetData(mapping, mappedData);
-            }
-
-            const existingHeaders = existingData[0] || [];
-            const existingRows = existingData.slice(1);
-
-            // Create mapping from object keys to column indices
-            const mappedColumnIndices = {};
-            Object.entries(mapping).forEach(([key, headerName]) => {
-                const colIndex = existingHeaders.findIndex(h => 
-                    typeof h === 'string' && h.trim() === headerName.trim()
-                );
-                if (colIndex !== -1) {
-                    mappedColumnIndices[key] = colIndex;
-                }
-            });
-
-            // Create new rows preserving existing structure
-            const newRows = [];
-            
-            // Process each mapped data object
-            for (let i = 0; i < mappedData.length; i++) {
-                const obj = mappedData[i];
-                let newRow;
-
-                // If we have an existing row at this index, start with it to preserve unmapped columns
-                if (i < existingRows.length) {
-                    newRow = [...existingRows[i]];
-                    // Ensure the row has the same length as headers
-                    while (newRow.length < existingHeaders.length) {
-                        newRow.push('');
-                    }
-                } else {
-                    // Create a new empty row with correct length
-                    newRow = new Array(existingHeaders.length).fill('');
-                }
-
-                // Update only the mapped columns
-                Object.entries(mappedColumnIndices).forEach(([key, colIndex]) => {
-                    newRow[colIndex] = obj[key] ?? '';
-                });
-
-                newRows.push(newRow);
-            }
-
-            return [existingHeaders, ...newRows];
-            
-        } catch (error) {
-            console.warn(`[preserveSheetStructure] Could not preserve sheet structure for ${tabName}:`, error);
-            // Fall back to simple reverse transform
-            return this.reverseTransformSheetData(mapping, mappedData);
-        }
-    }
     static SPREADSHEET_IDS = {
         'INVENTORY': 'fake_inventory_sheet_id',
         'PACK_LISTS': 'fake_pack_lists_sheet_id',
@@ -198,22 +129,22 @@ export class FakeGoogleSheetsService {
         'INVENTORY': {
             'INDEX': [
                 // Added mock INDEX data based on provided mapping
-                ['PREFIX', 'INVENTORY', 'ROWS-PER-ITEM', 'NOTES'],
-                ['CAB', 'CABINETS', '1', ''],
-                ['HS', 'HANGING SIGNS', '1', ''],
-                ['C', 'CEILING TILES', '1', ''],
-                ['P', 'CEILING TRIM', '2', ''],
-                ['T', 'CEILING TRIM', '2', ''],
-                ['S', 'CEILING TRIM', '2', ''],
-                ['LB', 'LIGHTBOXES', '1', ''],
-                ['CNTR', 'COUNTERTOPS', '1', 'NEW'],
-                ['SHLF', 'SHELVES', '1', 'NEW'],
-                ['STOOL', 'FURNITURE', '1', ''],
-                ['CHAIR', 'FURNITURE', '1', ''],
-                ['COUCH', 'FURNITURE', '1', ''],
-                ['TABLE', 'FURNITURE', '1', ''],
-                ['TTOP', 'FURNITURE', '1', ''],
-                ['TBASE', 'FURNITURE', '1', '']
+                ['PREFIX', 'INVENTORY', 'NOTES'],
+                ['CAB', 'CABINETS', ''],
+                ['HS', 'HANGING SIGNS', ''],
+                ['C', 'CEILING TILES', ''],
+                ['P', 'CEILING TRIM', ''],
+                ['T', 'CEILING TRIM', ''],
+                ['S', 'CEILING TRIM', ''],
+                ['LB', 'LIGHTBOXES', ''],
+                ['CNTR', 'COUNTERTOPS', 'NEW'],
+                ['SHLF', 'SHELVES', 'NEW'],
+                ['STOOL', 'FURNITURE', ''],
+                ['CHAIR', 'FURNITURE', ''],
+                ['COUCH', 'FURNITURE', ''],
+                ['TABLE', 'FURNITURE', ''],
+                ['TTOP', 'FURNITURE', ''],
+                ['TBASE', 'FURNITURE', '']
             ],
             'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],
@@ -761,7 +692,7 @@ export class FakeGoogleSheetsService {
         return JSON.parse(JSON.stringify(sheetData));
     }
 
-    static async setSheetData(tableId, tabName, updates, mapping = null) {
+    static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
         await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
@@ -772,27 +703,86 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
-            // Convert JS objects to sheet format
-            let values;
-            if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
-                values = updates;
-            } else if (Array.isArray(updates) && updates.length > 0) {
-                // If mapping is provided, preserve existing sheet structure
-                if (mapping) {
-                    values = await this.preserveSheetStructure(tableId, tabName, mapping, updates);
-                } else {
-                    const headers = Object.keys(updates[0]);
-                    values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
+            // If removeRowsBelow is specified, delete all rows below that row before saving
+            if (typeof removeRowsBelow === 'number') {
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                const sheetData = this.mockData[tableId][tabName];
+                if (sheetData.length > removeRowsBelow) {
+                    // Remove rows from removeRowsBelow (0-based) to end
+                    this.mockData[tableId][tabName] = sheetData.slice(0, removeRowsBelow);
                 }
-            } else {
-                throw new Error('No valid updates provided');
             }
 
-            // Store the sheet data
-            if (!this.mockData[tableId]) this.mockData[tableId] = {};
-            this.mockData[tableId][tabName] = JSON.parse(JSON.stringify(values));
-            
-            return true;
+            // If updates is an array of JS objects and mapping is provided, convert to sheet format
+            if (Array.isArray(updates) && updates.length > 0 && typeof updates[0] === 'object' && !Array.isArray(updates[0])) {
+                if (arguments.length >= 4 && typeof arguments[3] === 'object' && arguments[3] !== null) {
+                    // mapping is passed as 4th argument
+                    const mapping = arguments[3];
+                    const sheetData = FakeGoogleSheetsService.reverseTransformSheetData(mapping, updates);
+                    this.mockData[tableId][tabName] = sheetData;
+                    return true;
+                }
+            }
+
+            // Handle range-based updates (like "A1:B1" with values array)
+            if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+                //console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                const sheetData = this.mockData[tableId][tabName];
+                updates.forEach((rowData, rowIndex) => {
+                    sheetData[rowIndex] = [...rowData];
+                });
+                return true;
+            }
+
+            // Handle cell-by-cell updates
+            if (Array.isArray(updates) && updates.length > 0 && updates[0].hasOwnProperty('row')) {
+                //console.log(`FakeGoogleSheetsService: Applying ${updates.length} cell updates`);
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                const sheetData = this.mockData[tableId][tabName];
+                updates.forEach(({row, col, value}) => {
+                    while (sheetData.length <= row) {
+                        sheetData.push([]);
+                    }
+                    while (sheetData[row].length <= col) {
+                        sheetData[row].push('');
+                    }
+                    sheetData[row][col] = value;
+                });
+                return true;
+            }
+
+            // Handle full-table updates
+            if (updates?.type === 'full-table' && Array.isArray(updates.values)) {
+                //console.log(`FakeGoogleSheetsService: Full table update with ${updates.values.length} rows`);
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                const startRow = typeof updates.startRow === 'number' ? updates.startRow : 0;
+                const values = updates.values;
+                if (startRow === 0) {
+                    this.mockData[tableId][tabName] = JSON.parse(JSON.stringify(values));
+                } else {
+                    if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
+                    const sheetData = this.mockData[tableId][tabName];
+                    while (sheetData.length < startRow) {
+                        sheetData.push([]);
+                    }
+                    for (let i = 0; i < values.length; ++i) {
+                        sheetData[startRow + i] = JSON.parse(JSON.stringify(values[i]));
+                    }
+                    // Truncate any rows below the new data
+                    sheetData.length = startRow + values.length;
+                }
+                // Always truncate any rows below the new data for full-table updates
+                if (this.mockData[tableId][tabName].length > (startRow + values.length)) {
+                    this.mockData[tableId][tabName].length = startRow + values.length;
+                }
+                return true;
+            }
+
+            throw new Error('Invalid updates format for setSheetData');
         } catch (error) {
             console.error('FakeGoogleSheetsService: Error updating sheet:', error);
             throw error;
@@ -991,6 +981,46 @@ export class FakeGoogleSheetsService {
         return this.mockData[tableId] 
             ? JSON.parse(JSON.stringify(this.mockData[tableId]))
             : null;
+    }
+
+    /**
+     * Fake implementation of Google Drive file search
+     * @param {string} fileName - Name of the file to search for
+     * @param {string} folderId - ID of the folder to search in
+     * @returns {Promise<Object|null>} Fake file object or null
+     */
+    static async searchDriveFileInFolder(fileName, folderId) {
+        await this.delay(200); // Simulate API delay
+        
+        // Create fake image URLs for common item numbers for testing
+        const mockImages = {
+            'A001.jpg': 'images/placeholder.png',
+            'A002.jpg': 'images/placeholder.png',
+            'B001.jpg': 'images/placeholder.png',
+            'C001.jpg': 'images/placeholder.png',
+            'TEST123.jpg': 'images/placeholder.png',
+            'ITEM001.jpg': 'images/placeholder.png'
+        };
+        
+        if (mockImages[fileName]) {
+            return {
+                id: `fake_id_${fileName.replace('.', '_')}`,
+                name: fileName,
+                webViewLink: `https://drive.google.com/fake/${fileName}`,
+                directImageUrl: mockImages[fileName]
+            };
+        }
+        
+        return null; // File not found
+    }
+
+    /**
+     * Fake implementation of getting Drive image URL
+     * @param {string} fileId - Google Drive file ID
+     * @returns {string} Direct image URL
+     */
+    static getDriveImageUrl(fileId) {
+        return `images/placeholder.png`; // Always return placeholder for fake implementation
     }
 }
 

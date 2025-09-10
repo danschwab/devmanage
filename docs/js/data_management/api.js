@@ -249,5 +249,14 @@ export const Requests = {
      */
     computeIdentifier: async (showName, clientName, year) => {
         return ProductionUtils.computeIdentifier(showName, clientName, year);
+    },
+
+    /**
+     * Get item image URL from Google Drive
+     * @param {string} itemNumber - The item number to search for
+     * @returns {Promise<string|null>} Direct image URL or null if not found
+     */
+    getItemImageUrl: async (itemNumber) => {
+        return await ApplicationUtils.getItemImageUrl(itemNumber);
     }
 };

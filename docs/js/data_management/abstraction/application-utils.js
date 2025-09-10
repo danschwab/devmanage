@@ -76,6 +76,32 @@ class applicationUtils_uncached {
         
         return parsedValue;
     }
+
+    /**
+     * Search for an item image in Google Drive folder
+     * @param {string} itemNumber - The item number to search for
+     * @param {string} folderId - Google Drive folder ID containing the images
+     * @returns {Promise<string|null>} Direct image URL or null if not found
+     */
+    static async getItemImageUrl(itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+        if (!itemNumber) return null;
+        
+        const { GoogleSheetsService } = await import('../../google_sheets_services/index.js');
+        
+        // Try different file extensions
+        const extensions = ['jpg', 'jpeg', 'png', 'gif'];
+        
+        for (const ext of extensions) {
+            const fileName = `${itemNumber}.${ext}`;
+            const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
+            
+            if (file && file.directImageUrl) {
+                return file.directImageUrl;
+            }
+        }
+        
+        return null; // Return null if no image found
+    }
 }
 
 export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData']);

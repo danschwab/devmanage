@@ -688,7 +688,7 @@ th, td {
     padding: 0.5rem;
     border: 1px solid var(--color-border);
     text-align: left;
-    vertical-align: top;
+    /*vertical-align: top;*/
     /*min-width: 30px;*/
     min-height: 30px;
     max-width: 300px; /* Set maximum width for cells */
@@ -723,7 +723,9 @@ td:has(.table-wrapper) {
 td:has(button) {
     padding: 2px;
 }
-
+td:has(img) {
+    padding: 0;
+}
 
 
 .sort-button {

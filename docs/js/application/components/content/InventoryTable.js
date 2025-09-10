@@ -1,5 +1,43 @@
 import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
+// Image component for dynamic loading
+const ItemImageComponent = {
+    props: ['itemNumber', 'getImageUrl'],
+    data() {
+        return {
+            imageUrl: 'images/placeholder.png',
+            isLoading: true
+        };
+    },
+    async mounted() {
+        if (this.itemNumber && this.getImageUrl) {
+            try {
+                this.imageUrl = await this.getImageUrl(this.itemNumber);
+            } catch (error) {
+                console.error('Error loading image:', error);
+                this.imageUrl = 'images/placeholder.png';
+            } finally {
+                this.isLoading = false;
+            }
+        } else {
+            this.isLoading = false;
+        }
+    },
+    template: html`
+        <div class="item-image-container" style="position: relative;">
+            <img 
+                :src="imageUrl" 
+                alt="Item Image" 
+                style="width: 64px; height: 64px; object-fit: cover; border-radius: 4px;"
+                @error="imageUrl = 'images/placeholder.png'"
+            />
+            <div v-if="isLoading" style="position: absolute; top: 0; left: 0; width: 64px; height: 64px; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                <span style="font-size: 12px; color: #666;">...</span>
+            </div>
+        </div>
+    `
+};
+
 // Use Vue's defineComponent if available (Vue 3)
 const InventoryTableMenuComponent = Vue.defineComponent
     ? Vue.defineComponent({
@@ -30,7 +68,8 @@ const InventoryTableMenuComponent = Vue.defineComponent
 export const InventoryTableComponent = {
     components: {
         TableComponent,
-        InventoryTableMenuComponent // <-- register here
+        InventoryTableMenuComponent, // <-- register here
+        ItemImageComponent
     },
     props: {
         containerPath: {
@@ -53,6 +92,11 @@ export const InventoryTableComponent = {
     data() {
         // Dynamically set columns' editable property based on editMode
         const columns = [
+            { 
+                key: 'image', 
+                label: 'Thumb',
+                width: 1,
+            },
             { 
                 key: 'itemNumber', 
                 label: 'ITEM#',
@@ -79,18 +123,29 @@ export const InventoryTableComponent = {
         ];
         return {
             columns,
-            inventoryTableStore: null
+            inventoryTableStore: null,
+            imageCache: new Map() // Cache for loaded images
         };
     },
     computed: {
         tableData() {
-            return this.inventoryTableStore ? this.inventoryTableStore.data : [];
+            const data = this.inventoryTableStore ? this.inventoryTableStore.data : [];
+            // Ensure each row has an image property
+            return data.map(row => ({
+                ...row,
+                image: row.image || 'placeholder' // Initialize with placeholder if not set
+            }));
         },
         originalData() {
             // Use the originalData from the store, not a copy of the reactive data
-            return this.inventoryTableStore && Array.isArray(this.inventoryTableStore.originalData)
+            const data = this.inventoryTableStore && Array.isArray(this.inventoryTableStore.originalData)
                 ? JSON.parse(JSON.stringify(this.inventoryTableStore.originalData))
                 : [];
+            // Ensure each row has an image property
+            return data.map(row => ({
+                ...row,
+                image: row.image || 'placeholder' // Initialize with placeholder if not set
+            }));
         },
         error() {
             return this.inventoryTableStore ? this.inventoryTableStore.error : null;
@@ -129,6 +184,26 @@ export const InventoryTableComponent = {
                 console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
                 await this.inventoryTableStore.save('Saving inventory...');            }
         },
+        async getItemImageUrl(itemNumber) {
+            if (!itemNumber) return 'images/placeholder.png';
+            
+            // Check cache first
+            if (this.imageCache.has(itemNumber)) {
+                return this.imageCache.get(itemNumber);
+            }
+            
+            try {
+                const imageUrl = await Requests.getItemImageUrl(itemNumber);
+                const finalUrl = imageUrl || 'images/placeholder.png';
+                this.imageCache.set(itemNumber, finalUrl);
+                return finalUrl;
+            } catch (error) {
+                console.error('Error loading image for item:', itemNumber, error);
+                const fallbackUrl = 'images/placeholder.png';
+                this.imageCache.set(itemNumber, fallbackUrl);
+                return fallbackUrl;
+            }
+        },
         handleShowHamburgerMenu({ menuComponent, tableId }) {
             // Pass the actual component reference, not an object literal
             const menuComp = InventoryTableMenuComponent;
@@ -164,7 +239,15 @@ export const InventoryTableComponent = {
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
                 @show-hamburger-menu="handleShowHamburgerMenu"
-            />
+            >
+                <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
+                    <ItemImageComponent 
+                        v-if="column.key === 'image'"
+                        :itemNumber="row.itemNumber"
+                        :getImageUrl="getItemImageUrl"
+                    />
+                </template>
+            </TableComponent>
         </div>
     `
 };
