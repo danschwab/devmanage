@@ -30,12 +30,14 @@ export const InventoryOverviewTableComponent = {
                 { 
                     key: 'description', 
                     label: 'Description',
-                    editable: false
+                    editable: false,
+                    details: true
                 },
                 { 
                     key: 'notes', 
                     label: 'Notes',
-                    editable: false
+                    editable: false,
+                    details: true
                 },
                 { 
                     key: 'quantity', 
@@ -151,6 +153,7 @@ export const InventoryOverviewTableComponent = {
                 :sortable="true"
                 :showHeader="true"
                 :showFooter="true"
+                :allowDetails="true"
                 emptyMessage="No inventory items found across all categories"
                 :loading-message="loadingMessage"
                 @refresh="handleRefresh"
