@@ -277,7 +277,6 @@ const App = {
                     @navigate-back="handleNavigateBack"
                     @navigate-to-path="handleNavigateToPath"
                     @navigation-mapping-added="handleNavigationMappingAdded"
-                    @show-hamburger-menu="showHamburgerMenuModal"
                     @expand-container="expandContainer"
                     v-if="!dashboardLoading || currentPage !== 'dashboard'"
                 >
