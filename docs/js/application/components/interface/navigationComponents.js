@@ -306,14 +306,10 @@ export const BreadcrumbComponent = {
  */
 export const DashboardToggleComponent = {
     props: {
-        containerPath: {
-            type: String,
-            required: true
-        },
-        title: {
-            type: String,
-            required: true
-        }
+        containerPath: String,
+        containerType: String,
+        currentView: String,
+        title: String
     },
     inject: ['appContext'],
     computed: {

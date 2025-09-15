@@ -1,4 +1,62 @@
-import { html, ScheduleTableComponent } from '../../index.js';
+import { html, ScheduleTableComponent, modalManager, hamburgerMenuRegistry, DashboardToggleComponent } from '../../index.js';
+
+// Schedule Hamburger Menu Component
+export const ScheduleMenuComponent = {
+    props: {
+        containerPath: String,
+        containerType: String,
+        currentView: String,
+        title: String
+    },
+    computed: {
+        menuItems() {
+            return [
+                { label: 'Calendar View', action: 'showCalendarView' },
+                { label: 'Chart View', action: 'showChartView' },
+                { label: 'Info Priority', action: 'filterColumns' },
+                { label: 'Set Current As Default', action: 'setAsDefault' },
+                { label: 'Refresh', action: 'refresh' },
+                { label: 'Help', action: 'help' }
+            ];
+        }
+    },
+    methods: {
+        handleAction(action) {
+            switch (action) {
+                case 'showCalendarView':
+                    modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
+                    break;
+                case 'showChartView':
+                    modalManager.showAlert('Chart view functionality coming soon!', 'Info');
+                    break;
+                case 'filterColumns':
+                    modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
+                    break;
+                case 'setAsDefault':
+                    modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
+                    break;
+                case 'refresh':
+                    modalManager.showAlert('Refreshing schedule data...', 'Info');
+                    break;
+                case 'help':
+                    modalManager.showAlert('Schedule help functionality coming soon!', 'Info');
+                    break;
+                default:
+                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
+            }
+        }
+    },
+    template: html`
+        <ul>
+            <li v-for="item in menuItems" :key="item.action">
+                <button 
+                    @click="handleAction(item.action)">
+                    {{ item.label }}
+                </button>
+            </li>
+        </ul>
+    `
+};
 
 export const ScheduleContent = {
     components: {
@@ -25,6 +83,12 @@ export const ScheduleContent = {
         };
     },
     mounted() {
+        // Register hamburger menu for schedule
+        hamburgerMenuRegistry.registerMenu('schedule', {
+            components: [ScheduleMenuComponent, DashboardToggleComponent],
+            props: {}
+        });
+        
         this.loadAvailableYears();
         this.handleYearSelection(); // Set initial filter
     },

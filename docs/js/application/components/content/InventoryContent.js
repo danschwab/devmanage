@@ -1,10 +1,13 @@
-import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent } from '../../index.js';
+import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, DashboardToggleComponent } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
     props: {
-        currentView: String
+        containerPath: String,
+        containerType: String, 
+        currentView: String,
+        title: String
     },
     computed: {
         menuItems() {
@@ -216,10 +219,8 @@ export const InventoryContent = {
 
         // Register hamburger menu for inventory
         hamburgerMenuRegistry.registerMenu('inventory', {
-            components: [InventoryMenuComponent],
-            props: {
-                currentView: 'inventory',
-            }
+            components: [InventoryMenuComponent, DashboardToggleComponent],
+            props: {}
         });
         
         await this.loadCategories();

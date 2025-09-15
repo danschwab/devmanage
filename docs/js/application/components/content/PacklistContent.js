@@ -1,9 +1,11 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, NavigationRegistry } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
+        containerPath: String,
+        containerType: String,
         currentView: String,
-        showAlert: Function,
+        title: String,
         refreshCallback: Function
     },
     computed: {
@@ -127,9 +129,8 @@ export const PacklistContent = {
 
         // Register hamburger menu for packlist
         hamburgerMenuRegistry.registerMenu('packlist', {
-            components: [PacklistMenuComponent],
+            components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
-                currentView: this.currentView,
                 refreshCallback: this.loadAvailablePacklists
             }
         });

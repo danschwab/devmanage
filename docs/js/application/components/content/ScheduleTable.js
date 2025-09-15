@@ -1,45 +1,8 @@
 import { html, Requests, parseDate, TableComponent, getReactiveStore, modalManager } from '../../index.js';
 
-// Schedule Table Menu Component
-const ScheduleTableMenuComponent = {
-    methods: {
-        setAsDefault() {
-            modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
-        },
-        filterColumns() {
-            modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
-        },
-        showCalendarView() {
-            modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
-        },
-        showChartView() {
-            modalManager.showAlert('Chart view functionality coming soon!', 'Info');
-        }
-    },
-    template: html`
-        <div>
-            <button @click="showCalendarView">
-                Calendar View
-            </button>
-            <button @click="showChartView">
-                Chart View
-            </button>
-            <button @click="filterColumns">
-                Info Priority
-            </button>
-            <button @click="setAsDefault">
-                Set Current As Default
-            </button>
-        </div>
-    `
-};
-
-
-
 export const ScheduleTableComponent = {
     components: {
-        TableComponent,
-        ScheduleTableMenuComponent
+        TableComponent
     },
     props: {
         filter: {
@@ -187,18 +150,6 @@ export const ScheduleTableComponent = {
             if (this.scheduleTableStore) {
                 await this.scheduleTableStore.load('Reloading schedule...');
             }
-        },
-        handleShowHamburgerMenu({ menuComponent, tableId }) {
-            // Pass the actual component reference, not an object literal
-            const menuComp = ScheduleTableMenuComponent;
-            const modal = modalManager.createModal(
-                'Schedule Table Menu',
-                [menuComp], // <-- pass as array of component references
-                {
-                    componentProps: menuComponent?.props || {}
-                }
-            );
-            modalManager.showModal(modal.id);
         },
         formatColumnLabel(header) {
             // Convert header to a more readable label
@@ -409,12 +360,7 @@ export const ScheduleTableComponent = {
                 :showSearch="true"
                 :sortable="true"
                 :allowDetails="true"
-                :hamburger-menu-component="{
-                    components: [ScheduleTableMenuComponent],
-                    props: {}
-                }"
                 @refresh="handleRefresh"
-                @show-hamburger-menu="handleShowHamburgerMenu"
             >
                 <template #table-header-area>
                     <slot name="table-header-area"></slot>

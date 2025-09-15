@@ -18,27 +18,36 @@ export class HamburgerMenuRegistry {
     }
 
     registerMenu(containerType, menuConfig) {
-        // Ensure all components from defaultMenu are included
-        this.defaultMenu.components.forEach(component => {
-            if (!menuConfig.components.includes(component)) {
-                menuConfig.components = [...menuConfig.components, component];
-            }
-        });
+        // Validate that DashboardToggleComponent is included
+        if (!menuConfig.components.includes(DashboardToggleComponent)) {
+            console.warn(`Menu for ${containerType} should include DashboardToggleComponent`);
+        }
         this.menus.set(containerType, menuConfig);
     }
 
     getMenuComponent(containerType, containerPath = '') {
+        const menu = this.getMenuConfig(containerType, containerPath);
+        
+        // Always provide standardized props
+        const standardProps = {
+            containerPath,
+            containerType,
+            currentView: this.getCurrentView(containerPath),
+            title: this.getDisplayTitle(containerPath, containerType),
+            // Merge with menu-specific props
+            ...menu.props
+        };
+        
+        return {
+            components: menu.components,
+            props: standardProps
+        };
+    }
+
+    getMenuConfig(containerType, containerPath = '') {
         // Check for exact container type match first
         if (this.menus.has(containerType)) {
-            const menu = this.menus.get(containerType);
-            return {
-                components: menu.components,
-                props: {
-                    ...menu.props,
-                    containerPath,
-                    currentView: this.getCurrentView(containerPath)
-                }
-            };
+            return this.menus.get(containerType);
         }
 
         // Check for path-based matches
@@ -47,27 +56,22 @@ export class HamburgerMenuRegistry {
             const basePath = segments[0];
             
             if (this.menus.has(basePath)) {
-                const menu = this.menus.get(basePath);
-                return {
-                    components: menu.components,
-                    props: {
-                        ...menu.props,
-                        containerPath,
-                        currentView: this.getCurrentView(containerPath)
-                    }
-                };
+                return this.menus.get(basePath);
             }
         }
 
         // Return default menu for all containers
-        return {
-            components: this.defaultMenu.components,
-            props: {
-                ...this.defaultMenu.props,
-                containerPath: containerPath || containerType,
-                title: containerType.charAt(0).toUpperCase() + containerType.slice(1)
-            }
-        };
+        return this.defaultMenu;
+    }
+
+    getDisplayTitle(containerPath, containerType) {
+        if (containerPath) {
+            // Try to get title from path segments
+            const segments = containerPath.split('/').filter(s => s.length > 0);
+            const lastSegment = segments[segments.length - 1];
+            return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : containerType;
+        }
+        return containerType ? containerType.charAt(0).toUpperCase() + containerType.slice(1) : 'Container';
     }
 
     getCurrentView(containerPath) {
