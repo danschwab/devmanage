@@ -170,7 +170,7 @@ const App = {
          * @returns {Array} Array of paths with isAdded status
          */
         getAllPathsWithStatus() {
-            return NavigationRegistry.getAvailablePaths().map(path => ({
+            return NavigationRegistry.getAllPaths(true).map(path => ({
                 path,
                 isAdded: NavigationRegistry.hasDashboardContainer(path),
                 displayName: NavigationRegistry.getDisplayName(path)

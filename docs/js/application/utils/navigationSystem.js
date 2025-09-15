@@ -200,11 +200,15 @@ export const NavigationRegistry = {
     /**
      * Get display name for a path
      * @param {string} path - The path to get display name for
-     * @returns {string} Display name
+     * @param {boolean} [preferDashboardTitle=false] - If true, prefer dashboardTitle over displayName
+     * @returns {string} Display name or dashboard title
      */
-    getDisplayName(path) {
+    getDisplayName(path, preferDashboardTitle = false) {
         const route = this.getRoute(path);
         if (route) {
+            if (preferDashboardTitle && route.dashboardTitle) {
+                return route.dashboardTitle;
+            }
             return route.displayName;
         }
         
@@ -220,13 +224,7 @@ export const NavigationRegistry = {
      * @returns {string} Dashboard title or fallback to display name
      */
     getDashboardTitle(path) {
-        const route = this.getRoute(path);
-        if (route && route.dashboardTitle) {
-            return route.dashboardTitle;
-        }
-        
-        // Fallback to display name
-        return this.getDisplayName(path);
+        return this.getDisplayName(path, true);
     },
 
     /**
@@ -273,9 +271,10 @@ export const NavigationRegistry = {
 
     /**
      * Get all available paths (for dashboard container configuration)
-     * @returns {Array} Array of all available paths
+     * @param {boolean} [subPathsOnly=false] - If true, only return paths with sub-sections (containing '/')
+     * @returns {Array} Array of available paths
      */
-    getAllPaths() {
+    getAllPaths(subPathsOnly = false) {
         const paths = [];
         
         const collectPaths = (routeObj, currentPath = '') => {
@@ -294,28 +293,7 @@ export const NavigationRegistry = {
             collectPaths(route);
         });
         
-        return paths;
-    },
-
-    /**
-     * Initialize dashboard state from reactive store
-     */
-    async initDashboardState() {
-        if (!this.dashboardStore) {
-            console.warn('Dashboard store is not initialized');
-            return;
-        }
-        
-        // Load initial data from the store
-        await this.dashboardStore.load();
-        
-        // Set default data if store is empty
-        if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
-            this.dashboardStore.setData([]);
-            console.log('No saved dashboard state found, using defaults');
-        } else {
-            console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
-        }
+        return subPathsOnly ? paths.filter(path => path.includes('/')) : paths;
     },
 
     /**
@@ -379,17 +357,12 @@ export const NavigationRegistry = {
         return this.dashboardStore.data.some(container => container.path === containerPath);
     },
 
-    getAvailablePaths() {
-        // Filter to only include non-main-section paths for dashboard
-        return this.getAllPaths().filter(path => path.includes('/'));
-    },
-
     getAddablePaths() {
         if (!this.dashboardStore || !this.dashboardStore.data) {
-            return this.getAvailablePaths();
+            return this.getAllPaths(true); // Get sub-paths only
         }
         const currentPaths = this.dashboardStore.data.map(container => container.path);
-        return this.getAvailablePaths().filter(path => !currentPaths.includes(path));
+        return this.getAllPaths(true).filter(path => !currentPaths.includes(path));
     },
 
     /**
