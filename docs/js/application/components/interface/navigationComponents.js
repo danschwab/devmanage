@@ -33,20 +33,6 @@ export const PrimaryNavComponent = {
         'login',
         'logout'
     ],
-    methods: {
-        toggleMenu() {
-            this.$emit('toggle-menu');
-        },
-        navigateToPage(pageFile) {
-            this.$emit('navigate-to-page', pageFile);
-        },
-        login() {
-            this.$emit('login');
-        },
-        logout() {
-            this.$emit('logout');
-        }
-    },
     template: html`
         <header>
             <nav :class="{ 'open': isMenuOpen }">
@@ -57,27 +43,27 @@ export const PrimaryNavComponent = {
                         <a v-for="item in navigationItems" 
                            :key="item.file"
                            :class="{ 'active': currentPage === item.file }"
-                           @click="navigateToPage(item.file); $emit('toggle-menu')"
+                           @click="$emit('navigate-to-page', item.file); $emit('toggle-menu')"
                            href="#">
                             {{ item.title }}
                         </a>
                     </template>
                     
                     <button v-if="!isAuthenticated" 
-                            @click="login" 
+                            @click="$emit('login')" 
                             :disabled="isAuthLoading"
                             class="login-out-button active">
                         {{ isAuthLoading ? 'Loading...' : 'Login' }}
                     </button>
                     <button v-else 
-                            @click="logout" 
+                            @click="$emit('logout')" 
                             :disabled="isAuthLoading"
                             class="login-out-button">
                         {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
                     </button>
                 </span>
                 
-                <button class="button-symbol white" @click="toggleMenu">
+                <button class="button-symbol white" @click="$emit('toggle-menu')">
                     {{ isMenuOpen ? '×' : '≡' }}
                 </button>
             </nav>

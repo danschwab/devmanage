@@ -695,9 +695,6 @@ export const TableComponent = {
             event.preventDefault();
             this.handleGlobalMouseUp();
         },
-        handleNewRow() {
-            this.$emit('new-row');
-        },
         handleHamburgerMenu() {
             // Emit event to parent to show hamburger menu
             this.$emit('show-hamburger-menu', {
@@ -1029,7 +1026,7 @@ export const TableComponent = {
                                 <td 
                                     :colspan="(draggable ? 1 : 0) + mainTableColumns.length + (allowDetails ? 1 : 0)" 
                                     class="new-row-button" 
-                                    @click="handleNewRow"
+                                    @click="$emit('new-row')"
                                 >
                                 </td>
                             </tr>

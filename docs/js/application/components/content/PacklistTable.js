@@ -8,7 +8,6 @@ export const PacklistTable = {
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
         showDetailsOnly: { type: Boolean, default: false },
-        navigateToPath: { type: Function, default: null },
         navigationParameters: {
             type: Object,
             default: () => ({})
@@ -417,7 +416,7 @@ export const PacklistTable = {
                     </button>
                     <button 
                         v-if="itemWarningDetails.length > 0" 
-                        @click="() => navigateToPath && tabName ? navigateToPath('packlist/' + tabName + '/details') : null"
+                        @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
                     >
                         <template v-if="warningCount > 0">
                             View Details ({{ warningCount }} warnings, {{ itemWarningDetails.length }} total items)
@@ -496,7 +495,7 @@ export const PacklistTable = {
                                             'red': warning.type === 'error',
                                             'yellow': warning.type === 'warning'
                                         }"
-                                        @click="() => navigateToPath('packlist/' + tabName + '/details', { searchTerm: warning.itemId, hideRowsOnSearch: false })"
+                                        @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details', parameters: { searchTerm: warning.itemId, hideRowsOnSearch: false } })"
                                         v-html="warning.message"
                                         title="Click to view details and search for this item"
                                     ></div>

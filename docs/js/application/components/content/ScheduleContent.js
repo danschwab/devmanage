@@ -75,7 +75,7 @@ export const ScheduleContent = {
         <div class="schedule-page">
             <ScheduleTableComponent 
                 :filter="filter" 
-                :navigate-to-path="navigateToPath"
+                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
             >
                 <template #table-header-area>
                     <div class="year-selector-bar">

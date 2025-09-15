@@ -238,7 +238,7 @@ export const InventoryContent = {
                 </div>
                 <inventory-overview-table
                     :container-path="containerPath"
-                    :navigate-to-path="navigateToPath"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
             

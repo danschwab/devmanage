@@ -55,9 +55,6 @@ export const TabComponent = {
             this.internalActiveTab = tabName;
             this.$emit('tab-change', tabName);
         },
-        closeTab(tabName) {
-            this.$emit('tab-close', tabName);
-        },
         addNewTab() {
             this.$emit('new-tab');
             // After adding a tab, verify dropdown mode
@@ -106,7 +103,7 @@ export const TabComponent = {
                     <span
                         v-if="tab.closable"
                         class="tab-close"
-                        @click.stop="closeTab(tab.name)"
+                        @click.stop="$emit('tab-close', tab.name)"
                         title="Close tab"
                     >×</span>
                 </button>

@@ -9,10 +9,6 @@ export const InventoryOverviewTableComponent = {
         containerPath: {
             type: String,
             default: 'inventory'
-        },
-        navigateToPath: {
-            type: Function,
-            required: false
         }
     },
     data() {
@@ -151,12 +147,8 @@ export const InventoryOverviewTableComponent = {
         },
         handleCategoryClick(tabName) {
             // Navigate to the specific category view
-            if (this.navigateToPath) {
-                const categoryName = tabName.toLowerCase();
-                this.navigateToPath(`inventory/categories/${categoryName}`);
-            } else {
-                modalManager.showAlert(`Navigate to ${tabName} category`, 'Info');
-            }
+            const categoryName = tabName.toLowerCase();
+            this.$emit('navigate-to-path', { targetPath: `inventory/categories/${categoryName}` });
         },
         formatCategoryLabel(tabName) {
             if (!tabName) return '';

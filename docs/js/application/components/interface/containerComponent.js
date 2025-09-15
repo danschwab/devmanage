@@ -156,12 +156,6 @@ export const ContainerComponent = {
                     currentPath: this.containerPath
                 });
             }
-        },
-        onNavigationMappingAdded(event) {
-            this.$emit('navigation-mapping-added', event);
-        },
-        onNavigateToPath(event) {
-            this.$emit('navigate-to-path', event);
         }
     },
     template: html `
@@ -173,8 +167,8 @@ export const ContainerComponent = {
                     :card-style="cardStyle"
                     :navigation-map="navigationMap"
                     :container-id="containerId"
-                    @navigation-mapping-added="onNavigationMappingAdded"
-                    @navigate-to-path="onNavigateToPath" />
+                    @navigation-mapping-added="(event) => $emit('navigation-mapping-added', event)"
+                    @navigate-to-path="(event) => $emit('navigate-to-path', event)" />
                 
                 <div v-if="!!this.hamburgerMenuComponent || showExpandButton || (!cardStyle && canGoBack)" class="header-buttons">
                     <button v-if="!!this.hamburgerMenuComponent" 

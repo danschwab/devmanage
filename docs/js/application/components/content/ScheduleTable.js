@@ -45,10 +45,6 @@ export const ScheduleTableComponent = {
         filter: {
             type: [Object, String],
             default: null
-        },
-        navigateToPath: {
-            type: Function,
-            required: false
         }
     },
     data() {
@@ -357,17 +353,12 @@ export const ScheduleTableComponent = {
             await Promise.all(enrichmentPromises);
         },
         async handlePacklistClick(packlistInfo) {
-            if (!this.navigateToPath) {
-                modalManager.showAlert('Navigation not available', 'Error');
-                return;
-            }
-            
             if (!packlistInfo.exists || !packlistInfo.identifier) {
                 modalManager.showAlert('No packlist available for this show', 'Info');
                 return;
             }
             
-            this.navigateToPath(`packlist/${packlistInfo.identifier}`);
+            this.$emit('navigate-to-path', { targetPath: `packlist/${packlistInfo.identifier}` });
         },
         getPacklistCards(row, columnKey) {
             // Only show packlist cards in the packlist column

@@ -168,8 +168,8 @@ export const PacklistContent = {
             <div v-else-if="isViewingPacklist && !isDetailsView">
                 <packlist-table 
                     :tab-name="currentPacklist" 
-                    :navigate-to-path="navigateToPath"
                     :navigation-parameters="navigationParameters"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath, event.parameters)"
                 />
             </div>
             
@@ -178,8 +178,8 @@ export const PacklistContent = {
                 <packlist-table 
                     :tab-name="currentPacklist" 
                     :show-details-only="true" 
-                    :navigate-to-path="navigateToPath"
                     :navigation-parameters="navigationParameters"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath, event.parameters)"
                 />
             </div>
         </div>
