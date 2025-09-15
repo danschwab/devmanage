@@ -105,7 +105,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
                 this.setOriginalData(dataToSet);
-                //console.log('[ReactiveStore] reloadOriginalData: Loaded', dataToSet);
                 return this.originalData;
             } catch (err) {
                 this.setOriginalData([]);

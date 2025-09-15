@@ -197,12 +197,10 @@ export const TableComponent = {
     watch: {
         allowSaveEvent(val) {
             // Emit to parent if dirty state changes
-            //console.log('[TableComponent] allowSaveEvent changed:', val);
             this.$emit('inner-table-dirty', val);
         },
         data: {
             handler() {
-                //console.log('[TableComponent] originalData:', this.data);
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
                     this.compareAllCellsDirty();
@@ -224,7 +222,6 @@ export const TableComponent = {
         },
     },
     mounted() {
-        //console.log('[TableComponent] originalData:', this.originalData);
         this.$nextTick(() => {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();

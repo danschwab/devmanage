@@ -25,7 +25,7 @@ const ScheduleTableMenuComponent = {
                 Chart View
             </button>
             <button @click="filterColumns">
-                Filter Columns
+                Info Priority
             </button>
             <button @click="setAsDefault">
                 Set Current As Default

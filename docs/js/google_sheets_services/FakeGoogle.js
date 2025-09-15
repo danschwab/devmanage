@@ -17,14 +17,12 @@ export class FakeGoogleSheetsAuth {
     };
 
     static async initialize() {
-        //console.log('FakeGoogleSheetsAuth: Initializing...');
         await this.delay(100); // Simulate async initialization
         this.isInitialized = true;
         return true;
     }
 
     static async authenticate() {
-        //console.log('FakeGoogleSheetsAuth: Authenticating...');
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
         this.storeToken(this.mockToken);
@@ -70,7 +68,6 @@ export class FakeGoogleSheetsAuth {
     }
 
     static async logout() {
-        //console.log('FakeGoogleSheetsAuth: Logging out...');
         this.userEmail = null;
         this.isAuthenticatedState = false;
         this.clearStoredToken();

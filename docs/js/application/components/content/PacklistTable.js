@@ -356,7 +356,6 @@ export const PacklistTable = {
             if (!itemRow || !itemRow.AppData || !Array.isArray(itemRow.AppData.items)) {
                 return [];
             }
-            //console.log('[PacklistTable] Item warnings:', itemRow.AppData.items);
 
             // Always show warnings in the "Packing/shop notes" column only
             if (columnKey !== 'Packing/shop notes') {
@@ -371,7 +370,6 @@ export const PacklistTable = {
                     message: item.warning.message,
                     itemId: item.itemId
                 }));
-            //console.log('[PacklistTable] Warnings for item:', itemRow, warnings);
             return warnings;
         }
     },

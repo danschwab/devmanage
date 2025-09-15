@@ -104,25 +104,9 @@ export const ItemImageComponent = {
 
 
 
-const InventoryTableMenuComponent = {
-    methods: {
-        hideRows() {
-            modalManager.showAlert('Hide rows clicked!', 'Info');
-        }
-    },
-    template: html`
-        <div style="padding:1rem;">
-            <button @click="hideRows">Hide rows</button>
-        </div>
-    `
-};
-
-
-
 export const InventoryTableComponent = {
     components: {
         TableComponent,
-        InventoryTableMenuComponent, // <-- register here
         ItemImageComponent
     },
     props: {
@@ -157,6 +141,13 @@ export const InventoryTableComponent = {
                 width: 120
             },
             { 
+                key: 'quantity', 
+                label: 'QTY',
+                format: 'number',
+                editable: this.editMode,
+                autoColor: true
+            },
+            { 
                 key: 'description', 
                 label: 'Description (visible in pack lists)',
                 editable: this.editMode
@@ -165,14 +156,6 @@ export const InventoryTableComponent = {
                 key: 'notes', 
                 label: 'Notes (internal only)',
                 editable: this.editMode
-            },
-            { 
-                key: 'quantity', 
-                label: 'QTY',
-                format: 'number',
-                width: 100,
-                editable: this.editMode,
-                autoColor: true
             }
         ];
         return {
@@ -226,18 +209,6 @@ export const InventoryTableComponent = {
             if (this.inventoryTableStore) {
                 console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
                 await this.inventoryTableStore.save('Saving inventory...');            }
-        },
-        handleShowHamburgerMenu({ menuComponent, tableId }) {
-            // Pass the actual component reference, not an object literal
-            const menuComp = InventoryTableMenuComponent;
-            const modal = modalManager.createModal(
-                'Inventory Table Menu',
-                [menuComp], // <-- pass as array of component references
-                {
-                    componentProps: menuComponent?.props || {}
-                }
-            );
-            modalManager.showModal(modal.id);
         }
     },
     template: html `
@@ -254,14 +225,9 @@ export const InventoryTableComponent = {
                 :showSearch="true"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
-                :hamburger-menu-component="{
-                    components: [InventoryTableMenuComponent],
-                    props: {}
-                }"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
-                @show-hamburger-menu="handleShowHamburgerMenu"
             >
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <ItemImageComponent 

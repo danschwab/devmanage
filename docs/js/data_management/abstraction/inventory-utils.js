@@ -158,23 +158,18 @@ class inventoryUtils_uncached {
      * @returns {Promise<Object>} Item availability map
      */
     static async checkItemAvailability(deps, projectIdentifier) {
-        //console.group(`Checking quantities for project: ${projectIdentifier}`);
         
         try {
             // 1. Get pack list items
-            //console.log('1. Getting pack list items...');
             const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If no items, return empty result
             if (!itemIds.length) {
-                //console.log('No items found in pack list');
-                //console.groupEnd();
                 return {};
             }
 
             // Get inventory quantities
-            //console.log('2. Getting inventory quantities...');
             let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "QTY");
             
             // Filter valid items and build result
@@ -187,7 +182,6 @@ class inventoryUtils_uncached {
             });
 
             // Get overlapping shows
-            //console.log('4. Checking for overlapping shows...');
             let overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, { identifier: projectIdentifier });
             
             // Process overlapping shows
@@ -198,7 +192,6 @@ class inventoryUtils_uncached {
                 
                 if (overlapId === projectIdentifier) continue;
                 
-                //console.log(` - Checking overlap with project: ${overlapId}`);
                 const overlapInfo = await deps.call(PackListUtils.extractItems, overlapId);
                 
                 for (const itemId of Object.keys(overlapInfo)) {
@@ -210,13 +203,9 @@ class inventoryUtils_uncached {
                 }
             }
             
-            //console.log('Final results:', result);
-            //console.groupEnd();
-            
             return result;
         } catch (error) {
             console.error('Failed to check quantities:', error);
-            //console.groupEnd();
             throw error;
         }
     }

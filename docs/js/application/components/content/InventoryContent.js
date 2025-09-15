@@ -177,10 +177,6 @@ export const InventoryContent = {
         }
     },
     methods: {
-        exampleMethod() {
-            // Example method logic
-            modalManager.showAlert('Example method called!', 'Info');
-        },
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
         },

@@ -79,7 +79,6 @@ export const ModalComponent = {
             this.isLoading = val;
         },
         closeModal() {
-            console.log('[ModalComponent] closeModal called for', this.modalId);
             this.$emit('close-modal', this.modalId);
         },
         handleChildClose() {
@@ -90,7 +89,6 @@ export const ModalComponent = {
     created() {
         // Vue 2: this.$options.propsData, Vue 3: this.$props
         // Log all props received by the component
-        console.log('[ModalComponent] created, props:', this.$props || this.$options?.propsData);
         if (!this.components) {
             console.warn('[ModalComponent] created: components prop is undefined!', this.$props || this.$options?.propsData);
         } else if (!Array.isArray(this.components)) {
@@ -98,25 +96,11 @@ export const ModalComponent = {
         }
     },
     mounted() {
-        console.log('[ModalComponent] mounted', {
-            modalId: this.modalId,
-            isVisible: this.isVisible,
-            components: this.components,
-            componentProps: this.componentProps
-        });
         if (!this.components) {
             console.warn('[ModalComponent] mounted: components prop is undefined!');
         } else if (!Array.isArray(this.components)) {
             console.warn('[ModalComponent] mounted: components prop is not an array!', this.components);
         }
-    },
-    updated() {
-        console.log('[ModalComponent] updated', {
-            modalId: this.modalId,
-            isVisible: this.isVisible,
-            components: this.components,
-            componentProps: this.componentProps
-        });
     },
     template: html`
         <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
@@ -177,7 +161,6 @@ export class ModalManager {
             componentProps: options.componentProps || {},
             created: new Date()
         };
-        console.log('[ModalManager] createModal', modalData);
         this.modals.push(modalData);
         return modalData;
     }

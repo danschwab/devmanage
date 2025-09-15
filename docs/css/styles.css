@@ -930,6 +930,9 @@ tr.dragging::after {
 
 /* Table Details Styling */
 
+.details-cell {
+    width: 0px;
+}
 .details-toggle {
     min-width: 0;
     font-size: 20px;

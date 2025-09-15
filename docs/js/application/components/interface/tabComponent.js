@@ -44,7 +44,7 @@ export const TabComponent = {
         window.addEventListener('resize', this.checkOverflow);
         this.$nextTick(() => this.checkOverflow());
     },
-    beforeDestroy() {
+    beforeUnmount() {
         window.removeEventListener('resize', this.checkOverflow);
     },
     methods: {

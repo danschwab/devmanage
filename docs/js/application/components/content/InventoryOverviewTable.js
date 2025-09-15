@@ -31,7 +31,6 @@ export const InventoryOverviewTableComponent = {
                 { 
                     key: 'itemNumber', 
                     label: 'ITEM#',
-                    width: 120
                 },
                 { 
                     key: 'description', 
@@ -49,7 +48,6 @@ export const InventoryOverviewTableComponent = {
                     key: 'quantity', 
                     label: 'QTY',
                     format: 'number',
-                    width: 100,
                     editable: false,
                     autoColor: true
                 }
