@@ -1,8 +1,9 @@
 import { html, TableComponent, Requests, getReactiveStore } from '../../index.js';
+import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    components: { TableComponent },
+    components: { TableComponent, ItemImageComponent },
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
@@ -81,11 +82,11 @@ export const PacklistTable = {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
         },
         itemWarningDetails() {
-            // Extract all item data from AppData for detailed view (not just warnings)
-            const details = [];
+            // Extract all item data from AppData and aggregate by item ID
+            const itemAggregation = {};
             
             if (!this.mainTableData || !Array.isArray(this.mainTableData)) {
-                return details;
+                return [];
             }
             
             this.mainTableData.forEach((crate, crateIndex) => {
@@ -93,37 +94,53 @@ export const PacklistTable = {
                     crate.Items.forEach((item, itemIndex) => {
                         if (item.AppData && Array.isArray(item.AppData.items)) {
                             item.AppData.items.forEach(itemData => {
-                                // Include ALL items found, not just those with warnings
-                                details.push({
-                                    'Crate': crate['Piece #'] || `Crate ${crateIndex + 1}`,
-                                    'Item Index': itemIndex + 1,
-                                    'Field': itemData.field,
-                                    'Item ID': itemData.itemId,
-                                    'Requested Qty': itemData.quantity,
-                                    'Available': itemData.quantityInfo?.inventory || 'N/A',
-                                    'Remaining': itemData.quantityInfo?.remaining || 'N/A',
-                                    'Warning Type': itemData.warning?.type || '',
-                                    'Warning Message': itemData.warning?.message?.replace(/<[^>]*>/g, '') || '', // Strip HTML
-                                    'Overlapping Shows': itemData.quantityInfo?.overlapping?.length || 0,
-                                    'Has Warning': !!itemData.warning // Flag for styling/filtering
-                                });
+                                const itemId = itemData.itemId;
+                                
+                                if (!itemAggregation[itemId]) {
+                                    // First occurrence of this item - initialize
+                                    itemAggregation[itemId] = {
+                                        'Item ID': itemId,
+                                        'Quantity': itemData.quantity,
+                                        'Available': itemData.quantityInfo?.inventory || 'N/A',
+                                        'Remaining': itemData.quantityInfo?.remaining || 'N/A',
+                                        'Warning Message': itemData.warning?.message?.replace(/<[^>]*>/g, '') || '', // Strip HTML
+                                        'Overlapping Shows': itemData.quantityInfo?.overlapping || [], // Store array of show identifiers
+                                        'Has Warning': !!itemData.warning,
+                                        // Use the quantityInfo from API which already accounts for total quantities
+                                        quantityInfo: itemData.quantityInfo
+                                    };
+                                } else {
+                                    // Item already exists - aggregate quantity but keep the API quantityInfo
+                                    // (since API already calculated based on total quantities across all crates)
+                                    itemAggregation[itemId]['Quantity'] += itemData.quantity;
+                                    
+                                    // Keep the most severe warning
+                                    if (itemData.warning && !itemAggregation[itemId]['Has Warning']) {
+                                        itemAggregation[itemId]['Warning Message'] = itemData.warning.message?.replace(/<[^>]*>/g, '') || '';
+                                        itemAggregation[itemId]['Has Warning'] = true;
+                                    }
+                                }
                             });
                         }
                     });
                 }
             });
             
-            return details;
+            // Convert aggregation object to array
+            return Object.values(itemAggregation);
         },
         detailsTableColumns() {
-            // Define columns for the comprehensive details table
+            // Define columns for the comprehensive details table - only show specified columns
             return [
-                { key: 'Crate', label: 'Crate', editable: false },
-                { key: 'Item Index', label: 'Item #', editable: false },
-                { key: 'Field', label: 'Field', editable: false },
-                { key: 'Item ID', label: 'Item ID', editable: false },
-                { key: 'Requested Qty', label: 'Requested', editable: false, format: 'number' },
-                { key: 'Available', label: 'Available', editable: false, format: 'number' },
+                { 
+                    key: 'image', 
+                    label: 'IMG',
+                    width: 1,
+                    editable: false
+                },
+                { key: 'Item ID', label: 'Item#', editable: false },
+                { key: 'Quantity', label: 'Quantity', editable: false, format: 'number' },
+                { key: 'Available', label: 'Inv. Qty.', editable: false, format: 'number' },
                 { key: 'Remaining', label: 'Remaining', editable: false, format: 'number', 
                   cellClass: (value, row) => {
                     // Safety checks for row parameter
@@ -137,9 +154,8 @@ export const PacklistTable = {
                     return '';
                   }
                 },
-                { key: 'Warning Type', label: 'Type', editable: false },
                 { key: 'Warning Message', label: 'Message', editable: false },
-                { key: 'Overlapping Shows', label: 'Overlaps', editable: false, format: 'number' }
+                { key: 'Overlapping Shows', label: 'Overlapping Shows', editable: false }
             ];
         },
         warningCount() {
@@ -370,6 +386,26 @@ export const PacklistTable = {
                     itemId: item.itemId
                 }));
             return warnings;
+        },
+        async handleItemIdClick(itemId) {
+            try {
+                const tabName = await Requests.getTabNameForItem(itemId);
+                if (tabName) {
+                    this.$emit('navigate-to-path', { 
+                        targetPath: `inventory/categories/${tabName}`,
+                        parameters: { searchTerm: itemId }
+                    });
+                } else {
+                    console.warn('No tab found for item:', itemId);
+                }
+            } catch (error) {
+                console.error('Error getting tab name for item:', itemId, error);
+            }
+        },
+        handleOverlappingShowClick(showIdentifier) {
+            this.$emit('navigate-to-path', { 
+                targetPath: `packlist/${showIdentifier}` 
+            });
         }
     },
     template: html`
@@ -380,13 +416,6 @@ export const PacklistTable = {
             
             <!-- Details View -->
             <div v-if="showDetailsOnly">
-                <div class="details-header">
-                    <h3>Packlist Items Analysis - {{ tabName }}</h3>
-                    <p v-if="itemWarningDetails.length === 0">No items found in packlist.</p>
-                    <p v-else-if="warningCount === 0">Found {{ itemWarningDetails.length }} items with no inventory warnings.</p>
-                    <p v-else>Found {{ itemWarningDetails.length }} items with {{ warningCount }} inventory warnings.</p>
-                </div>
-                
                 <TableComponent
                     v-if="itemWarningDetails.length > 0"
                     :data="itemWarningDetails"
@@ -401,113 +430,145 @@ export const PacklistTable = {
                     :searchTerm="searchTerm"
                     :hideRowsOnSearch="hideRowsOnSearch"
                     :showSearch="true"
-                />
+                >
+                    <template #default="{ row, column }">
+                        <!-- Render image for image column -->
+                        <ItemImageComponent 
+                            v-if="column.key === 'image'"
+                            :itemNumber="row['Item ID']"
+                        />
+                        <!-- Make Item ID column a clickable table-cell-card button -->
+                        <button 
+                            v-else-if="column.key === 'Item ID'"
+                            @click="handleItemIdClick(row['Item ID'])"
+                            class="table-cell-card"
+                        >
+                            {{ row['Item ID'] }}
+                        </button>
+                        <!-- Handle Overlapping Shows column with multiple buttons -->
+                        <div v-else-if="column.key === 'Overlapping Shows'">
+                            <template v-if="Array.isArray(row['Overlapping Shows']) && row['Overlapping Shows'].length > 0">
+                                <button 
+                                    v-for="showId in row['Overlapping Shows']" 
+                                    :key="showId"
+                                    @click="handleOverlappingShowClick(showId)"
+                                    class="table-cell-card"
+                                    style="margin: 2px;"
+                                >
+                                    {{ showId }}
+                                </button>
+                            </template>
+                            <span v-else>None</span>
+                        </div>
+                        <!-- Default display for other columns -->
+                        <span v-else>{{ row[column.key] }}</span>
+                    </template>
+                </TableComponent>
             </div>
             
             <!-- Main Packlist View -->
             <div v-else>
-                <!-- Analysis Controls -->
-                <div class="button-bar">
-                    <button 
-                        @click="analyzePacklistQuantities" 
-                        :disabled="analyzingQuantities || isLoading || !tabName"
-                    >
-                        {{ isLoading ? 'Loading...' : analyzingQuantities ? 'Analyzing...' : 'Analyze Quantities' }}
-                    </button>
-                    <button 
-                        v-if="itemWarningDetails.length > 0" 
-                        @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
-                    >
-                        <template v-if="warningCount > 0">
-                            View Details ({{ warningCount }} warnings, {{ itemWarningDetails.length }} total items)
+                <TableComponent
+                    ref="mainTableComponent"
+                    :data="mainTableData"
+                    :originalData="originalData"
+                    :columns="mainColumns"
+                    :title="tabName"
+                    :showRefresh="true"
+                    :emptyMessage="'No crates'"
+                    :draggable="true"
+                    :newRow="true"
+                    :isLoading="isLoading"
+                    :loading-message="loadingMessage"
+                    :drag-id="'packlist-crates'"
+                    @refresh="handleRefresh"
+                    @cell-edit="handleCellEdit"
+                    @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'main')"
+                    @new-row="handleAddCrate"
+                    @on-save="handleSave"
+                >
+                    <template #table-header-area>
+                        <!-- Analysis Controls -->
+                        <div class="button-bar">
+                            <button 
+                                :disabled="analyzingQuantities || isLoading || !tabName"
+                                :class="{ red: warningCount > 0 }"
+                                @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
+                            >
+                                <template v-if="isLoading || analyzingQuantities">
+                                    Analyzing...
+                                </template>
+                                <template v-else-if="warningCount > 0">
+                                    Details &#9888;
+                                </template>
+                                <template v-else>
+                                    Details
+                                </template>
+                            </button>
+                        </div>
+                    </template>
+                    <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">
+                        <template v-if="column && column.isIndex">
+                            <!-- Only count visible (not marked-for-deletion) rows for Piece # -->
+                            {{
+                                mainTableData
+                                    .filter(r => !(r.AppData && r.AppData['marked-for-deletion']))
+                                    .findIndex(r => r === row) + 1
+                            }}
+                        </template>
+                        <template v-else-if="column && column.key === 'Items'">
+                            <TableComponent
+                                v-if="row.Items"
+                                :data="row.Items.length === 0 ? (() => { handleAddItem(rowIndex); return row.Items; })() : row.Items"
+                                :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
+                                :columns="itemHeaders.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
+                                :hide-columns="['Pack','Check']"
+                                :emptyMessage="'No items'"
+                                :draggable="true"
+                                :newRow="true"
+                                :showFooter="false"
+                                :showHeader="false"
+                                :isLoading="isLoading"
+                                :loading-message="loadingMessage"
+                                :drag-id="'packlist-items'"
+                                @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
+                                @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'item', rowIndex)"
+                                @new-row="() => { handleAddItem(rowIndex); }"
+                                @inner-table-dirty="(isDirty) => { 
+                                    if (typeof onInnerTableDirty === 'function') {
+                                        onInnerTableDirty(isDirty, rowIndex, column ? mainColumns.findIndex(c => c.key === column.key) : 0);
+                                    }
+                                    handleInnerTableDirty(isDirty, rowIndex);
+                                }"
+                            >
+                                <template #default="{ row: itemRow, column: itemColumn }">
+                                    <div>
+                                        <span>{{ itemRow[itemColumn.key] }}</span>
+                                    </div>
+                                </template>
+                                
+                                <template #cell-extra="{ row: itemRow, column: itemColumn }">
+                                    <!-- Add quantity warning cards based on AppData -->
+                                    <template v-for="warning in getItemWarnings(itemRow, itemColumn.key)" :key="warning.itemId">
+                                        <div 
+                                            class="table-cell-card clickable"
+                                            :class="{
+                                                'red': warning.type === 'error',
+                                                'yellow': warning.type === 'warning'
+                                            }"
+                                            @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details', parameters: { searchTerm: warning.itemId, hideRowsOnSearch: false } })"
+                                            v-html="warning.message"
+                                            title="Click to view details and search for this item"
+                                        ></div>
+                                    </template>
+                                </template>
+                            </TableComponent>
                         </template>
                         <template v-else>
-                            View Details ({{ itemWarningDetails.length }} items)
+                            {{ row[column.key] }}
                         </template>
-                    </button>
-                </div>
-            
-            <TableComponent
-                ref="mainTableComponent"
-                :data="mainTableData"
-                :originalData="originalData"
-                :columns="mainColumns"
-                :title="tabName"
-                :showRefresh="true"
-                :emptyMessage="'No crates'"
-                :draggable="true"
-                :newRow="true"
-                :isLoading="isLoading"
-                :loading-message="loadingMessage"
-                :drag-id="'packlist-crates'"
-                @refresh="handleRefresh"
-                @cell-edit="handleCellEdit"
-                @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'main')"
-                @new-row="handleAddCrate"
-                @on-save="handleSave"
-            >
-                <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">
-                    <template v-if="column && column.isIndex">
-                        <!-- Only count visible (not marked-for-deletion) rows for Piece # -->
-                        {{
-                            mainTableData
-                                .filter(r => !(r.AppData && r.AppData['marked-for-deletion']))
-                                .findIndex(r => r === row) + 1
-                        }}
                     </template>
-                    <template v-else-if="column && column.key === 'Items'">
-                        <TableComponent
-                            v-if="row.Items"
-                            :data="row.Items.length === 0 ? (() => { handleAddItem(rowIndex); return row.Items; })() : row.Items"
-                            :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
-                            :columns="itemHeaders.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
-                            :hide-columns="['Pack','Check']"
-                            :emptyMessage="'No items'"
-                            :draggable="true"
-                            :newRow="true"
-                            :showFooter="false"
-                            :showHeader="false"
-                            :isLoading="isLoading"
-                            :loading-message="loadingMessage"
-                            :drag-id="'packlist-items'"
-                            @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
-                            @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'item', rowIndex)"
-                            @new-row="() => { handleAddItem(rowIndex); }"
-                            @inner-table-dirty="(isDirty) => { 
-                                if (typeof onInnerTableDirty === 'function') {
-                                    onInnerTableDirty(isDirty, rowIndex, column ? mainColumns.findIndex(c => c.key === column.key) : 0);
-                                }
-                                handleInnerTableDirty(isDirty, rowIndex);
-                            }"
-                        >
-                            <template #default="{ row: itemRow, column: itemColumn }">
-                                <div>
-                                    <span>{{ itemRow[itemColumn.key] }}</span>
-                                </div>
-                            </template>
-                            
-                            <template #cell-extra="{ row: itemRow, column: itemColumn }">
-                                <!-- Add quantity warning cards based on AppData -->
-                                <template v-for="warning in getItemWarnings(itemRow, itemColumn.key)" :key="warning.itemId">
-                                    <div 
-                                        class="table-cell-card clickable"
-                                        :class="{
-                                            'red': warning.type === 'error',
-                                            'yellow': warning.type === 'warning'
-                                        }"
-                                        @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details', parameters: { searchTerm: warning.itemId, hideRowsOnSearch: false } })"
-                                        v-html="warning.message"
-                                        title="Click to view details and search for this item"
-                                    ></div>
-                                </template>
-                            </template>
-                        </TableComponent>
-                    </template>
-                    <template v-else>
-                        {{ row[column.key] }}
-                    </template>
-                </template>
-            </TableComponent>
+                </TableComponent>
             </div>
         </div>
     `

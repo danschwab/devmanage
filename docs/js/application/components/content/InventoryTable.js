@@ -125,6 +125,10 @@ export const InventoryTableComponent = {
         editMode: {
             type: Boolean,
             default: true
+        },
+        navigationParameters: {
+            type: Object,
+            default: () => ({})
         }
     },
     data() {
@@ -225,6 +229,8 @@ export const InventoryTableComponent = {
                 :showSearch="true"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
+                :searchTerm="navigationParameters?.searchTerm || ''"
+                :hideRowsOnSearch="navigationParameters?.hideRowsOnSearch !== false"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"

@@ -259,5 +259,14 @@ export const Requests = {
     getItemImageUrl: async (itemNumber) => {
         console.log('API.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
         return await Database.getItemImageUrl(itemNumber);
+    },
+
+    /**
+     * Get the tab name for a specific item
+     * @param {string} itemName - The item name/ID to search for
+     * @returns {Promise<string|null>} Tab name or null if not found
+     */
+    getTabNameForItem: async (itemName) => {
+        return await InventoryUtils.getTabNameForItem(itemName);
     }
 };

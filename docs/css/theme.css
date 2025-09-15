@@ -85,6 +85,7 @@
         --padding-sm: 8px;
         --padding-md: 8px;
         --padding-lg: 16px;
+        --page-width-card: calc(100vw - 16px);
     }
 }
 

@@ -128,9 +128,7 @@ const App = {
             NavigationRegistry.navigateToPage(pageFile, this);
         },
         async addContainer(type = 'default', title = '', options = {}) {
-            const containerOptions = { ...options };
-            
-            const container = containerManager.createContainer(type, title, containerOptions);
+            const container = containerManager.createContainer(type, title, options);
             
             // Set container type and page for content determination
             container.containerType = type;
@@ -180,9 +178,6 @@ const App = {
         expandContainer(containerData) {
             NavigationRegistry.expandContainer(containerData, this);
         },
-        handleNavigateBack(navigationData) {
-            NavigationRegistry.handleNavigateBack(navigationData, this);
-        },
         handleNavigateToPath(navigationData) {
             NavigationRegistry.handleNavigateToPath(navigationData, this);
         },
@@ -190,15 +185,6 @@ const App = {
             return NavigationRegistry.createNavigateToPathHandler(containerId, (navigationData) => {
                 NavigationRegistry.handleNavigateToPath(navigationData, this);
             });
-        },
-        /**
-         * Handle navigation mapping added by a container
-         */
-        handleNavigationMappingAdded(mappingData) {
-            const { segmentId, displayName } = mappingData;
-            
-            // Add to container manager's global map
-            containerManager.addGlobalNavigationMapping(segmentId, displayName);
         },
 
         /**
@@ -260,23 +246,10 @@ const App = {
                     :container-type="container.containerType"
                     :title="container.title"
                     :container-path="container.containerPath"
-                    :full-path="container.fullPath"
-                    :navigation-parameters="container.navigationParameters || {}"
-                    :navigation-map="container.navigationMap"
                     :card-style="currentPage === 'dashboard'"
-                    :show-close-button="true"
-                    :show-hamburger-menu="true"
                     :show-expand-button="currentPage === 'dashboard'"
-                    :page-location="container.pageLocation"
-                    :container-data="container"
-                    :app-context="{
-                        dashboardContainers,
-                        showAlert
-                    }"
                     @close-container="removeContainer"
-                    @navigate-back="handleNavigateBack"
                     @navigate-to-path="handleNavigateToPath"
-                    @navigation-mapping-added="handleNavigationMappingAdded"
                     @expand-container="expandContainer"
                     v-if="!dashboardLoading || currentPage !== 'dashboard'"
                 >

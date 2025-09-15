@@ -260,6 +260,7 @@ export const InventoryContent = {
                         :container-path="containerPath"
                         :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                         :tab-title="currentCategoryName.toUpperCase()"
+                        :navigationParameters="navigationParameters"
                     ></inventory-table>
                 </div>
             </div>

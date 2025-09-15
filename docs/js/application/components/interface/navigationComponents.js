@@ -33,17 +33,39 @@ export const PrimaryNavComponent = {
         'login',
         'logout'
     ],
+    methods: {
+        handleNavClick(item) {
+            if (this.currentPage === item.file) {
+                this.$emit('toggle-menu');
+            } else {
+                this.$emit('navigate-to-page', item.file);
+            }
+        },
+        handleClickOutside(event) {
+            if (!this.isMenuOpen) return;
+            const nav = this.$el.querySelector('nav');
+            if (nav && !nav.contains(event.target)) {
+                this.$emit('toggle-menu');
+            }
+        }
+    },
+    mounted() {
+        document.addEventListener('mouseup', this.handleClickOutside);
+    },
+    beforeUnmount() {
+        document.removeEventListener('mouseup', this.handleClickOutside);
+    },
     template: html`
         <header>
             <nav :class="{ 'open': isMenuOpen }">
-                <a href="#"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
-                
+                <a href="#" @click="$emit('navigate-to-page', 'dashboard');"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+
                 <span id="navbar">
                     <template v-if="isAuthenticated">
                         <a v-for="item in navigationItems" 
                            :key="item.file"
                            :class="{ 'active': currentPage === item.file }"
-                           @click="$emit('navigate-to-page', item.file); $emit('toggle-menu')"
+                           @click="handleNavClick(item)"
                            href="#">
                             {{ item.title }}
                         </a>
@@ -268,12 +290,12 @@ export const BreadcrumbComponent = {
             </div>
             <!-- Current location with hover overlay for dashboard cards -->
             <div v-else class="breadcrumb-card-container">
-                <h2 v-if="!showHoverPath" class="breadcrumb-current" 
+                <span v-if="!showHoverPath" class="breadcrumb-current" 
                     @mouseenter="showHoverBreadcrumb" 
                     @mouseleave="hideHoverBreadcrumb">
                     {{ displayTitle }}
-                </h2>
-                
+                </span>
+
                 <!-- Hover overlay with full breadcrumb path -->
                 <div v-else-if="showHoverPath" class="breadcrumb-hover-overlay"
                      @mouseenter="showHoverBreadcrumb" 

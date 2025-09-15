@@ -290,14 +290,14 @@ footer a:visited {
 }
 
 /* breadcrumbs */
-.breadcrumb-path {
+.breadcrumb-path, .breadcrumb-current {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: large;
+    font-size: 1rem;
     font-weight: 600;
     color: var(--color-text);
-    line-height: 28px;
+    line-height: .9rem;
 }
 .breadcrumb-path .breadcrumb-segment:not(.active) {
     color: var(--color-text-light);
@@ -379,9 +379,6 @@ footer a:visited {
     background-color: var(--background-color);
     /*margin: 15% auto 0 auto; /* 15% from the top and centered */
     border: 1px solid var(--color-border);
-    width: 80%; /* Could be more or less, depending on screen size */
-    min-width: 250px;
-    max-width: var(--page-width-card);
     box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: var(--radius-lg);
     overflow: hidden;
@@ -392,10 +389,11 @@ footer a:visited {
 .modal-header {
     display: flex;
     flex-direction: row;
-    /*border-bottom: 1px solid var(--color-border);*/
-    margin-bottom: 5px;
+    border-bottom: 1px solid var(--color-border);
     justify-content: space-between;
-    padding: 5px;
+    padding: var(--padding-sm);
+
+    box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
 .modal-header h1 {
     margin: 0;
@@ -431,19 +429,24 @@ footer a:visited {
     color: var(--color-text-inverted);
 }
 .modal-content {
-    margin: var(--padding-md);
+    margin: var(--padding-sm);
     max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
     overflow: auto;
 }
 .modal-content button {
     margin: 0;
     margin-top: 4px;
+    max-width:100%;
     width: 100%;
-    max-width: 100%;
 }
 .modal-content ul {
     list-style: none;
+    min-width: calc(var(--page-width-card) - var(--padding-lg) * 2);
     padding: 0;
+    margin:0;
+}
+.modal-content ul li:first-child button {
+    margin: 0;
 }
 
 
@@ -1104,6 +1107,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     nav #navbar a, 
     nav #navbar button:not(.button-symbol) {
         display: none;
+        margin: var(--padding-sm);
     }
     
     /* Show active page link on mobile */
@@ -1114,6 +1118,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     nav #navbar button.active {
         display: block;
         position: static;
+        margin:0
     }
     
     /* Show all navigation when menu is open */
@@ -1124,10 +1129,13 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         margin: 0.5rem;
         width: auto;
     }
-    
+    nav.open #navbar a.active {
+        color: var(--color-primary-light);
+    }
+
     /* Navigation loading indicator on mobile */
     nav #navbar .nav-loading {
-        margin: 0.5rem;
+        margin: var(--padding-sm);
         display: block;
     }
     

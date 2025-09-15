@@ -21,9 +21,9 @@ export const ScheduleTableComponent = {
             if (!rawData || rawData.length === 0) {
                 // Return a basic set of columns if no data yet (for loading state)
                 return [
-                    { key: 'Show', label: 'Show', width: 200 },
-                    { key: 'Client', label: 'Client', width: 150 },
-                    { key: 'packlist', label: 'Packlist', width: 120 }
+                    { key: 'Show', label: 'Show' },
+                    { key: 'Client', label: 'Client' },
+                    { key: 'packlist', label: 'Packlist' }
                 ];
             }
 
