@@ -16,16 +16,17 @@ export { ModalComponent, modalManager } from './components/interface/modalCompon
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
 export { TableComponent } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
-export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
+export { DashboardToggleComponent } from './components/content/DashboardContent.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
 
 // Content components export
-export { InventoryTableComponent, ItemImageComponent } from './components/content/InventoryTable.js';
+export { ItemImageComponent, InventoryTableComponent } from './components/content/InventoryTable.js';
+export { InventoryOverviewTableComponent } from './components/content/InventoryOverviewTable.js';
 export { PacklistTable } from './components/content/PacklistTable.js';
 export { PacklistContent, PacklistMenuComponent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';
-
+export { DashboardContent } from './components/content/DashboardContent.js';
