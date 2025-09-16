@@ -29,17 +29,14 @@ const App = {
     },
     data() {
         return {
+            appLoading: true,
+            appLoadingMessage: 'Loading application...',
             isMenuOpen: false,
             navigationItems: NavigationRegistry.primaryNavigation,
             currentPage: 'dashboard',
             containers: [],
-            dashboardContainers: [],
             modals: [],
             tabSystems: {},
-            dashboardLoading: false,
-            reactiveTableData: {},
-            dashboardStore: null,
-            availablePaths: [],
             currentYear: new Date().getFullYear()
         };
     },
@@ -56,41 +53,46 @@ const App = {
         },
         authError() {
             return authState.error;
-        }
+        },
+        dashboardLoading() {
+            return NavigationRegistry.dashboardStore?.isLoading;
+        },
     },
     async mounted() {
         // Initialize authentication on app mount
         await Auth.initialize();
-    
-        // Show dashboard loading indicator before loading state
-        this.dashboardLoading = true;
-        
-        if (this.isAuthenticated) {
-            // Initialize dashboard reactive store if authenticated
-            await NavigationRegistry.initializeDashboardStore();
-            this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
-        }
 
-        // Hide dashboard loading indicator after state is loaded
-        this.dashboardLoading = false;
-
-        // Create containers based on auth state
-        NavigationRegistry.updateContainersForPage(this.currentPage, this);
+        // Initialize URL routing system
+        NavigationRegistry.initializeURLRouting(this);
         
         // Add ESC key support for closing modals
         document.addEventListener('keydown', this.handleKeyDown);
+
+        // Pass the reactive modals array to modalManager for all modal operations
+        modalManager.setReactiveModals(this.modals);
+
+        if (this.isAuthenticated) {
+            // Initialize dashboard reactive store if authenticated
+            await NavigationRegistry.initializeDashboardStore();
+        } else {
+            // Store current URL for post-login navigation if not authenticated
+            NavigationRegistry.urlRouter.storeIntendedURL();
+        }
         
         // Watch for auth state changes
         this.$watch('isAuthenticated', async (newVal) => {
             if (newVal) {
-                await NavigationRegistry.initializeDashboardStore();
-                this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
+                NavigationRegistry.initializeDashboardStore();
+                // Handle post-login URL routing
+                NavigationRegistry.handlePostLogin();
             }
             NavigationRegistry.updateContainersForPage(this.currentPage, this);
         });
 
-        // Pass the reactive modals array to modalManager for all modal operations
-        modalManager.setReactiveModals(this.modals);
+        // Create containers based on auth state
+        NavigationRegistry.updateContainersForPage(this.currentPage, this);
+
+        this.appLoading = false;
     },
     beforeUnmount() {
         // Clean up event listener
@@ -102,15 +104,7 @@ const App = {
         },
         async login() {
             try {
-                const success = await Auth.login();
-                if (success) {
-                    console.log('Login successful');
-                    // Always set location to dashboard after login
-                    this.currentPage = 'dashboard';
-                    // Containers will update automatically via watcher
-                } else {
-                    console.error('Login failed');
-                }
+                Auth.login();
             } catch (error) {
                 console.error('Login error:', error);
             }
@@ -124,8 +118,11 @@ const App = {
                 console.error('Logout error:', error);
             }
         },
-        navigateToPage(pageFile) {
-            NavigationRegistry.navigateToPage(pageFile, this);
+        navigateToPage(pagePath) {
+            NavigationRegistry.navigateToPage(pagePath, this);
+        },
+        navigateToPath(path) {
+            NavigationRegistry.handleNavigateToPath({ targetPath: path }, this);
         },
         async addContainer(type = 'default', title = '', options = {}) {
             const container = containerManager.createContainer(type, title, options);
@@ -147,11 +144,8 @@ const App = {
                 const pathToRemove = containerToRemove.containerPath || containerToRemove.containerType;
                 
                 NavigationRegistry.removeDashboardContainer(pathToRemove);
-                this.dashboardContainers = NavigationRegistry.dashboardStore?.data || [];
                 
                 NavigationRegistry.saveDashboardState();
-                
-                console.log('App: Dashboard containers after removal:', this.dashboardContainers);
             }
             
             this.containers = this.containers.filter(c => c.id !== containerId);
@@ -225,18 +219,34 @@ const App = {
                 :current-user="currentUser"
                 @toggle-menu="toggleMenu"
                 @navigate-to-page="navigateToPage"
+                @navigate-to-path="navigateToPath"
                 @login="login"
                 @logout="logout">
             </primary-nav>
 
             <div id="app-content">
-                <!-- Dashboard loading indicator -->
-                <div v-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
+                
+                <!-- App loading indicator -->
+                <div v-if="!isAuthenticated" class="empty-message">
+                    <p>please log in to view content</p>
+                </div>
+            
+                <!-- App loading indicator -->
+                <div v-else-if="appLoading" :class="'container' + (currentPage === 'dashboard' ? ' dashboard-card' : '')" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">
                         <img src="images/loading.gif" alt="..."/>
-                        <p>Loading dashboard cards...</p>
+                        <p>{{ appLoadingMessage }}</p>
                     </div>
                 </div>
+                
+                <!-- Dashboard loading indicators -->
+                <div v-else-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
+                    <div class="loading-message">
+                        <img src="images/loading.gif" alt="..."/>
+                        <p>Loading dashboard state...</p>
+                    </div>
+                </div>
+                
                 <!-- Dynamic containers inserted directly here -->
                 <app-container 
                     v-for="container in containers" 
@@ -251,7 +261,7 @@ const App = {
                     @close-container="removeContainer"
                     @navigate-to-path="handleNavigateToPath"
                     @expand-container="expandContainer"
-                    v-if="!dashboardLoading || currentPage !== 'dashboard'"
+                    v-if="(!dashboardLoading || currentPage !== 'dashboard') && !navigationLoading"
                 >
                     <template #content>
                         <!-- Inventory Content -->
@@ -260,7 +270,6 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :full-path="container.fullPath"
-                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
                         >
                         </inventory-content>
@@ -270,7 +279,6 @@ const App = {
                             :show-alert="showAlert"
                             :container-path="container.containerPath"
                             :full-path="container.fullPath"
-                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)"
                         >
                         </packlist-content>
@@ -280,7 +288,6 @@ const App = {
                             v-else-if="container.containerType === 'schedule' || container.containerPath?.startsWith('schedule')"
                             :container-path="container.containerPath"
                             :full-path="container.fullPath"
-                            :navigation-parameters="container.navigationParameters || {}"
                             :navigate-to-path="createNavigateToPathHandler(container.id)">
                         </schedule-content>
                         

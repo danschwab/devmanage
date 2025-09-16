@@ -2,6 +2,7 @@ import { html } from '../index.js';
 import { getReactiveStore } from './reactiveStores.js';
 import { Requests } from '../index.js';
 import { authState } from '../index.js';
+import { URLRouter } from './urlRouter.js';
 
 export const NavigationRegistry = {
     /**
@@ -50,6 +51,9 @@ export const NavigationRegistry = {
     dashboardStore: null,
     dashboardLoading: false,
 
+    // URL Router integration
+    urlRouter: null,
+
     /**
      * Initialize dashboard reactive store
      */
@@ -64,12 +68,8 @@ export const NavigationRegistry = {
             this.dashboardStore = getReactiveStore(
                 Requests.getUserData,
                 Requests.storeUserData,
-                [authState.user.email, 'dashboard_containers'],
-                false // Don't auto-load
+                [authState.user.email, 'dashboard_containers']
             );
-
-            // Wait for initial load
-            await this.dashboardStore.load('Loading dashboard...');
 
             // Use store data directly as dashboard containers
             if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
@@ -91,11 +91,68 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Initialize URL routing system
+     */
+    initializeURLRouting(appContext) {
+        if (!this.urlRouter) {
+            this.urlRouter = new URLRouter(this, appContext);
+            this.urlRouter.initialize();
+            console.log('[NavigationRegistry] URL router initialized successfully');
+        }
+    },
+
+    /**
+     * Handle post-login URL navigation
+     */
+    handlePostLogin() {
+        if (this.urlRouter) {
+            const intendedUrl = this.urlRouter.getIntendedURL();
+            if (intendedUrl) {
+                console.log('[NavigationRegistry] Navigating to intended URL after login:', intendedUrl);
+                
+                const pathInfo = this.parsePath(intendedUrl);
+                const basePage = pathInfo.path.split('/')[0];
+                
+                // Navigate to base page first
+                this.navigateToPage(basePage, this.urlRouter.appContext, false);
+                
+                // If it's a sub-path, update container after base page loads
+                if (pathInfo.path !== basePage) {
+                    this.urlRouter.appContext.$nextTick(() => {
+                        const container = this.urlRouter.appContext.containers.find(c => c.containerType === basePage);
+                        if (container) {
+                            container.containerPath = pathInfo.path;
+                            container.fullPath = pathInfo.fullPath;
+                            container.navigationParameters = pathInfo.parameters;
+                            console.log('[NavigationRegistry] Updated container for initial navigation:', container.id, 'with path:', pathInfo.path);
+                            
+                            // Update URL with full path
+                            if (this.urlRouter) {
+                                this.urlRouter.updateURL();
+                            }
+                        } else {
+                            console.warn('[NavigationRegistry] No container found for initial navigation to:', basePage);
+                        }
+                    });
+                } else {
+                    // For base page navigation, update URL immediately
+                    if (this.urlRouter) {
+                        this.urlRouter.updateURL(pathInfo.path, pathInfo.parameters);
+                    }
+                }
+                return;
+            }
+        }
+        
+        // Default to dashboard if no intended URL
+        console.log('[NavigationRegistry] No intended URL, defaulting to dashboard');
+    },
+
+    /**
      * Register navigation routes for a section
      * @param {string} section - Main section (e.g., 'inventory')
      * @param {Object} navigationConfig - Navigation configuration
      * @param {Object} navigationConfig.routes - Route definitions
-     * @param {Object} [navigationConfig.quickActions] - Quick action definitions
      */
     registerNavigation(section, navigationConfig) {
         if (!this.routes[section]) {
@@ -120,7 +177,6 @@ export const NavigationRegistry = {
             .map(([key, route]) => ({
                 id: key,
                 title: route.displayName,
-                file: key,
                 path: route.path,
                 icon: route.icon
             }));
@@ -216,15 +272,6 @@ export const NavigationRegistry = {
         const segments = path.split('/').filter(segment => segment.length > 0);
         const lastSegment = segments[segments.length - 1];
         return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Unknown';
-    },
-
-    /**
-     * Get dashboard title for a path (custom title for dashboard display)
-     * @param {string} path - The path to get dashboard title for
-     * @returns {string} Dashboard title or fallback to display name
-     */
-    getDashboardTitle(path) {
-        return this.getDisplayName(path, true);
     },
 
     /**
@@ -332,7 +379,7 @@ export const NavigationRegistry = {
         const exists = containers.some(container => container.path === containerPath);
         
         if (!exists) {
-            const displayTitle = title || this.getDashboardTitle(containerPath);
+            const displayTitle = title || this.getDisplayName(containerPath,true);
             const newContainer = { path: containerPath, title: displayTitle };
             this.dashboardStore.addRow(newContainer);
         }
@@ -381,17 +428,17 @@ export const NavigationRegistry = {
 
     /**
      * Get navigation result for a page (containers configuration) - consolidated
-     * @param {string} pageFile - The page to navigate to
+     * @param {string} pagePath - The page path to navigate to
      * @param {boolean} isAuthenticated - Whether user is authenticated
      * @returns {Object} Navigation result with containers
      */
-    getNavigationResult(pageFile, isAuthenticated = true) {
+    getNavigationResult(pagePath, isAuthenticated = true) {
         if (!isAuthenticated) {
-            return { page: pageFile, containers: [] };
+            return { page: pagePath, containers: [] };
         }
 
         let containerConfigs;
-        if (pageFile === 'dashboard') {
+        if (pagePath === 'dashboard') {
             const containers = this.dashboardStore?.data || [];
             containerConfigs = containers.map(container => ({
                 path: container.path,
@@ -401,15 +448,15 @@ export const NavigationRegistry = {
             }));
         } else {
             containerConfigs = [{ 
-                path: pageFile, 
-                title: this.getDisplayName(pageFile),
-                containerPath: pageFile,
-                type: this.getTypeFromPath(pageFile)
+                path: pagePath, 
+                title: this.getDisplayName(pagePath),
+                containerPath: pagePath,
+                type: this.getTypeFromPath(pagePath)
             }];
         }
         
         return {
-            page: pageFile,
+            page: pagePath,
             containers: containerConfigs.map(config => ({
                 ...config,
                 options: {
@@ -423,54 +470,54 @@ export const NavigationRegistry = {
     /**
      * Navigation handlers - consolidated
      */
-    handleContainerExpansion(containerData, currentPage) {
-        const targetPath = containerData.containerPath || containerData.path;
-        const targetPage = targetPath.split('/')[0];
-        
-        if (targetPage !== currentPage) {
-            return {
-                action: 'navigate',
-                targetPage: targetPage,
-                containerPath: targetPath
-            };
-        } else {
-            return {
-                action: 'already_here',
-                message: `You are already viewing the ${containerData.title} page.`
-            };
-        }
-    },
-
-    handleNavigateBack(navigationData, appContext) {
-        const { containerId, parentPath } = navigationData;
-        const container = appContext.containers.find(c => c.id === containerId);
-        
-        if (container) {
-            if (parentPath === 'dashboard' || !parentPath) {
-                appContext.removeContainer(containerId);
-                return { action: 'remove_container', containerId };
-            } else {
-                container.containerPath = parentPath;
-                return { action: 'update_path', containerId, newPath: parentPath };
-            }
-        }
-        
-        return { action: 'no_action' };
-    },
-
     handleNavigateToPath(navigationData, appContext) {
-        const { containerId, targetPath, navigationMap } = navigationData;
-        const container = appContext.containers.find(c => c.id === containerId);
-        
-        if (!container) return { action: 'no_action' };
+        const { containerId, targetPath, navigationMap, isBrowserNavigation } = navigationData;
         
         const pathInfo = this.parsePath(targetPath);
         const basePage = pathInfo.path.split('/')[0];
+        
+        // Handle primary navigation (no container ID provided)
+        if (!containerId) {
+            console.log('[NavigationRegistry] Primary navigation to:', pathInfo.path);
+            
+            // For browser navigation, handle full path like initial navigation
+            if (isBrowserNavigation && pathInfo.path !== basePage) {
+                // Navigate to base page first without URL update
+                this.navigateToPage(basePage, appContext, false);
+                
+                // Update container with full path after containers are created
+                appContext.$nextTick(() => {
+                    const container = appContext.containers.find(c => c.containerType === basePage);
+                    if (container) {
+                        container.containerPath = pathInfo.path;
+                        container.fullPath = pathInfo.fullPath;
+                        container.navigationParameters = pathInfo.parameters;
+                        console.log('[NavigationRegistry] Updated container for browser navigation:', container.id, 'with path:', pathInfo.path);
+                    } else {
+                        console.warn('[NavigationRegistry] No container found for browser navigation to:', basePage);
+                    }
+                });
+            } else {
+                // Regular primary navigation - just navigate to base page
+                this.navigateToPage(basePage, appContext);
+            }
+            
+            return { action: 'navigate_to_page', targetPage: basePage, parameters: pathInfo.parameters };
+        }
+        
+        const container = appContext.containers.find(c => c.id === containerId);
+        
+        if (!container) return { action: 'no_action' };
         
         // Update container with path and parameters
         container.containerPath = pathInfo.path;
         container.fullPath = pathInfo.fullPath;
         container.navigationParameters = pathInfo.parameters;
+        
+        // Update URL when path changes
+        if (this.urlRouter) {
+            this.urlRouter.updateURL();
+        }
         
         if (navigationMap) {
             container.navigationMap = { ...container.navigationMap, ...navigationMap };
@@ -483,8 +530,9 @@ export const NavigationRegistry = {
         }
         
         // Handle cross-page navigation
-        if (appContext.currentPage !== pathInfo.path) {
-            this.navigateToPage(basePage, appContext);
+        if (appContext.currentPage !== basePage) {
+            // Don't update URL immediately - let container update handle it
+            this.navigateToPage(basePage, appContext, false);
             
             appContext.$nextTick(() => {
                 const expandedContainer = appContext.containers.find(c => 
@@ -494,6 +542,11 @@ export const NavigationRegistry = {
                     expandedContainer.containerPath = pathInfo.path;
                     expandedContainer.fullPath = pathInfo.fullPath;
                     expandedContainer.navigationParameters = pathInfo.parameters;
+                    
+                    // Now update URL with the full path
+                    if (this.urlRouter) {
+                        this.urlRouter.updateURL();
+                    }
                 }
             });
             
@@ -527,16 +580,25 @@ export const NavigationRegistry = {
         };
     },
 
-    navigateToPage(pageFile, appContext) {
-        appContext.currentPage = pageFile;
+    navigateToPage(pagePath, appContext, updateURL = true) {
+        appContext.currentPage = pagePath;
         appContext.isMenuOpen = false;
-        console.log(`Navigating to: ${pageFile}`);
-        this.updateContainersForPage(pageFile, appContext);
+        console.log(`Navigating to: ${pagePath}`);
+        
+        // Update URL when navigation occurs - only if explicitly requested
+        if (updateURL && this.urlRouter) {
+            console.log('[NavigationRegistry] Updating URL via URLRouter to:', pagePath);
+            this.urlRouter.updateURL(pagePath, {});
+        } else if (!this.urlRouter) {
+            console.warn('[NavigationRegistry] URLRouter not initialized, cannot update URL');
+        }
+        
+        this.updateContainersForPage(pagePath, appContext);
     },
 
-    async updateContainersForPage(pageFile, appContext) {
+    async updateContainersForPage(pagePath, appContext) {
         appContext.containers = [];
-        const navigationResult = this.getNavigationResult(pageFile, appContext.isAuthenticated);
+        const navigationResult = this.getNavigationResult(pagePath, appContext.isAuthenticated);
         
         for (const containerConfig of navigationResult.containers) {
             await appContext.addContainer(
@@ -546,36 +608,32 @@ export const NavigationRegistry = {
             );
         }
         
-        if (appContext.isAuthenticated && appContext.containers.length === 0 && pageFile !== 'dashboard') {
+        if (appContext.isAuthenticated && appContext.containers.length === 0 && pagePath !== 'dashboard') {
             this.navigateToPage('dashboard', appContext);
         }
     },
 
     expandContainer(containerData, appContext) {
-        const expansionResult = this.handleContainerExpansion(containerData, appContext.currentPage);
+        const targetPath = containerData.containerPath || containerData.path;
+        const targetPage = targetPath.split('/')[0];
         
-        switch (expansionResult.action) {
-            case 'navigate':
-                this.navigateToPage(expansionResult.targetPage, appContext);
-                
-                if (expansionResult.containerPath) {
-                    appContext.$nextTick(() => {
-                        const basePage = expansionResult.containerPath.split('/')[0];
-                        const expandedContainer = appContext.containers.find(c => 
-                            c.containerType === basePage || c.containerPath === basePage
-                        );
-                        if (expandedContainer) {
-                            expandedContainer.containerPath = expansionResult.containerPath;
-                        }
-                    });
-                }
-                break;
-            case 'already_here':
-                appContext.showAlert(expansionResult.message, 'Already Here');
-                break;
+        if (targetPage !== appContext.currentPage) {
+            // Navigate to new page
+            this.navigateToPage(targetPage, appContext);
+            
+            if (targetPath) {
+                appContext.$nextTick(() => {
+                    const expandedContainer = appContext.containers.find(c => 
+                        c.containerType === targetPage || c.containerPath === targetPage
+                    );
+                    if (expandedContainer) {
+                        expandedContainer.containerPath = targetPath;
+                    }
+                });
+            }
+        } else {
+            // Already on the same page
+            appContext.showAlert(`You are already viewing the ${containerData.title} page.`, 'Already Here');
         }
     }
 };
-
-// Legacy export for backward compatibility
-export const NavigationConfig = NavigationRegistry;

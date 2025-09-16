@@ -29,16 +29,16 @@ export const PrimaryNavComponent = {
     },
     emits: [
         'toggle-menu',
-        'navigate-to-page',
+        'navigate-to-path',
         'login',
         'logout'
     ],
     methods: {
         handleNavClick(item) {
-            if (this.currentPage === item.file) {
+            if (this.currentPage === item.path) {
                 this.$emit('toggle-menu');
             } else {
-                this.$emit('navigate-to-page', item.file);
+                this.$emit('navigate-to-path', item.path);
             }
         },
         handleClickOutside(event) {
@@ -58,15 +58,14 @@ export const PrimaryNavComponent = {
     template: html`
         <header>
             <nav :class="{ 'open': isMenuOpen }">
-                <a href="#" @click="$emit('navigate-to-page', 'dashboard');"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+                <a @click.prevent="$emit('navigate-to-path', 'dashboard');"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
 
                 <span id="navbar">
                     <template v-if="isAuthenticated">
                         <a v-for="item in navigationItems" 
-                           :key="item.file"
-                           :class="{ 'active': currentPage === item.file }"
-                           @click="handleNavClick(item)"
-                           href="#">
+                           :key="item.path"
+                           :class="{ 'active': currentPage === item.path }"
+                           @click.prevent="handleNavClick(item)">
                             {{ item.title }}
                         </a>
                     </template>
@@ -159,7 +158,7 @@ export const BreadcrumbComponent = {
             if (this.containerPath) {
                 // For dashboard cards, use dashboard title; for regular breadcrumbs, use display name
                 if (this.cardStyle) {
-                    return NavigationRegistry.getDashboardTitle(this.containerPath);
+                    return NavigationRegistry.getDisplayName(this.containerPath,true);
                 } else {
                     if (this.pathSegmentsWithNames.length === 0) return this.title;
                     return this.pathSegmentsWithNames[this.pathSegmentsWithNames.length - 1].name;
@@ -238,12 +237,6 @@ export const BreadcrumbComponent = {
                 segmentId: segmentId,
                 displayName: displayName
             });
-        },
-        /**
-         * Update navigation mapping from external source
-         */
-        updateNavigationMapping(segmentId, displayName) {
-            this.localNavigationMap[segmentId] = displayName;
         },
         navigateToBreadcrumb(index) {
             if (index < this.pathSegments.length - 1) {
@@ -369,7 +362,7 @@ export const DashboardToggleComponent = {
                 }
             } else {
                 // Add to dashboard store
-                const displayTitle = this.title || NavigationRegistry.getDashboardTitle(this.containerPath);
+                const displayTitle = this.title || NavigationRegistry.getDisplayName(this.containerPath,true);
                 const newContainer = { path: this.containerPath, title: displayTitle };
                 this.dashboardStore.addRow(newContainer);
             }

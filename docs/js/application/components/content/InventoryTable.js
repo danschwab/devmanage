@@ -109,6 +109,12 @@ export const InventoryTableComponent = {
         TableComponent,
         ItemImageComponent
     },
+    inject: {
+        navigationParameters: { 
+            from: 'navigationParameters', 
+            default: () => () => ({}) 
+        }
+    },
     props: {
         containerPath: {
             type: String,
@@ -125,10 +131,6 @@ export const InventoryTableComponent = {
         editMode: {
             type: Boolean,
             default: true
-        },
-        navigationParameters: {
-            type: Object,
-            default: () => ({})
         }
     },
     data() {
@@ -185,6 +187,12 @@ export const InventoryTableComponent = {
         },
         isLoading() {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
+        },
+        // Navigation-based parameters from injection
+        navParams() {
+            return typeof this.navigationParameters === 'function' 
+                ? this.navigationParameters() 
+                : this.navigationParameters || {};
         }
     },
     async mounted() {
@@ -229,8 +237,8 @@ export const InventoryTableComponent = {
                 :showSearch="true"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
-                :searchTerm="navigationParameters?.searchTerm || ''"
-                :hideRowsOnSearch="navigationParameters?.hideRowsOnSearch !== false"
+                :searchTerm="navParams?.searchTerm || ''"
+                :hideRowsOnSearch="navParams?.hideRowsOnSearch !== false"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"

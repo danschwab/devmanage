@@ -32,6 +32,12 @@ export const ContainerComponent = {
         }
     },
     inject: ['hamburgerMenuRegistry'],
+    provide() {
+        return {
+            // Provide navigation parameters to child components
+            navigationParameters: () => this.navigationParameters
+        };
+    },
     data() {
         return {
             isLoading: false // now managed reactively by this component
@@ -44,6 +50,11 @@ export const ContainerComponent = {
         // Get hamburger menu component from registry
         hamburgerMenuComponent() {
             return this.hamburgerMenuRegistry.getMenuComponent(this.containerType, this.containerPath);
+        },
+        // Get navigation parameters from app context
+        navigationParameters() {
+            const container = this.$parent?.containers?.find(c => c.id === this.containerId);
+            return container?.navigationParameters || {};
         }
     },
     methods: {

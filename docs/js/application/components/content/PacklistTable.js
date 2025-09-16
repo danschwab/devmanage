@@ -4,15 +4,17 @@ import { ItemImageComponent } from './InventoryTable.js';
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
     components: { TableComponent, ItemImageComponent },
+    inject: {
+        navigationParameters: { 
+            from: 'navigationParameters', 
+            default: () => () => ({}) 
+        }
+    },
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
-        showDetailsOnly: { type: Boolean, default: false },
-        navigationParameters: {
-            type: Object,
-            default: () => ({})
-        }
+        showDetailsOnly: { type: Boolean, default: false }
     },
     data() {
         return {
@@ -24,9 +26,7 @@ export const PacklistTable = {
             dirtyCrateRows: {},
             error: null,
             itemQuantityStatus: {}, // Store item quantity analysis results
-            analyzingQuantities: false,
-            searchTerm: this.navigationParameters?.searchTerm || '', // Initialize from navigation parameters
-            hideRowsOnSearch: this.navigationParameters?.hideRowsOnSearch !== false // Default to true unless explicitly set to false
+            analyzingQuantities: false
         };
     },
     computed: {
@@ -78,8 +78,19 @@ export const PacklistTable = {
         isLoading() {
             return this.packlistTableStore ? this.packlistTableStore.isLoading : false;
         },
+        isDetailsLoading() {
+            // Details view should be loading when main table is loading OR when analyzing quantities
+            return this.isLoading || this.analyzingQuantities;
+        },
         loadingMessage() {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
+        },
+        detailsLoadingMessage() {
+            // Show appropriate loading message for details view
+            if (this.analyzingQuantities) {
+                return 'Analyzing item quantities...';
+            }
+            return this.loadingMessage;
         },
         itemWarningDetails() {
             // Extract all item data from AppData and aggregate by item ID
@@ -161,34 +172,38 @@ export const PacklistTable = {
         warningCount() {
             // Count only items with warnings for button display
             return this.itemWarningDetails.filter(item => item['Has Warning']).length;
+        },
+        // Navigation-based parameters from injection
+        navParams() {
+            return typeof this.navigationParameters === 'function' 
+                ? this.navigationParameters() 
+                : this.navigationParameters || {};
+        },
+        searchTerm() {
+            return this.navParams.searchTerm || '';
+        },
+        hideRowsOnSearch() {
+            return this.navParams.hideRowsOnSearch !== false;
         }
     },
     watch: {
-        navigationParameters: {
-            handler(newParams) {
-                if (newParams?.searchTerm) {
-                    this.searchTerm = newParams.searchTerm;
-                }
-                if (newParams?.hideRowsOnSearch !== undefined) {
-                    this.hideRowsOnSearch = newParams.hideRowsOnSearch;
-                }
-            },
-            deep: true,
-            immediate: true
+        // Watch for navigation parameter changes
+        'navParams.searchTerm'(newSearchTerm) {
+            console.log('[PacklistTable] Search term changed:', newSearchTerm);
         }
     },
     async mounted() {
-        // Pass Requests.savePackList as the save function
-        this.packlistTableStore = getReactiveStore(
-            Requests.getPackList,
-            Requests.savePackList,
-            [this.tabName]
-        );
-        this.error = this.packlistTableStore.error;
-
-        if (!this.packlistTableStore.isLoading) {
-            this.analyzePacklistQuantities();
+        // Initialize store if tabName is available
+        if (this.tabName) {
+            this.initializeStore();
         }
+
+        // Watch for tabName changes to handle direct URL navigation
+        this.$watch('tabName', (newTabName) => {
+            if (newTabName && !this.packlistTableStore) {
+                this.initializeStore();
+            }
+        }, { immediate: true });
 
         // Analyze quantities when data loads
         this.$watch(() => this.mainTableData, () => {
@@ -198,6 +213,21 @@ export const PacklistTable = {
         }, { immediate: true });
     },
     methods: {
+        initializeStore() {
+            if (!this.tabName) return;
+            
+            // Pass Requests.savePackList as the save function
+            this.packlistTableStore = getReactiveStore(
+                Requests.getPackList,
+                Requests.savePackList,
+                [this.tabName]
+            );
+            this.error = this.packlistTableStore.error;
+
+            if (!this.packlistTableStore.isLoading) {
+                this.analyzePacklistQuantities();
+            }
+        },
         async handleRefresh() {
             if (this.packlistTableStore) {
                 await this.packlistTableStore.load('Reloading packlist...');
@@ -392,8 +422,7 @@ export const PacklistTable = {
                 const tabName = await Requests.getTabNameForItem(itemId);
                 if (tabName) {
                     this.$emit('navigate-to-path', { 
-                        targetPath: `inventory/categories/${tabName}`,
-                        parameters: { searchTerm: itemId }
+                        targetPath: `inventory/categories/${tabName}?searchTerm=${itemId}`
                     });
                 } else {
                     console.warn('No tab found for item:', itemId);
@@ -417,7 +446,6 @@ export const PacklistTable = {
             <!-- Details View -->
             <div v-if="showDetailsOnly">
                 <TableComponent
-                    v-if="itemWarningDetails.length > 0"
                     :data="itemWarningDetails"
                     :originalData="itemWarningDetails"
                     :columns="detailsTableColumns"
@@ -426,7 +454,8 @@ export const PacklistTable = {
                     :emptyMessage="'No items'"
                     :draggable="false"
                     :newRow="false"
-                    :isLoading="false"
+                    :isLoading="isDetailsLoading"
+                    :loading-message="detailsLoadingMessage"
                     :searchTerm="searchTerm"
                     :hideRowsOnSearch="hideRowsOnSearch"
                     :showSearch="true"
@@ -556,7 +585,7 @@ export const PacklistTable = {
                                                 'red': warning.type === 'error',
                                                 'yellow': warning.type === 'warning'
                                             }"
-                                            @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details', parameters: { searchTerm: warning.itemId, hideRowsOnSearch: false } })"
+                                            @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details?searchTerm=' + warning.itemId + '&hideRowsOnSearch=false' })"
                                             v-html="warning.message"
                                             title="Click to view details and search for this item"
                                         ></div>

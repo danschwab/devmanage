@@ -68,11 +68,7 @@ export const ScheduleContent = {
             type: String,
             default: 'schedule'
         },
-        fullPath: String,
-        navigationParameters: {
-            type: Object,
-            default: () => ({})
-        }
+        fullPath: String
     },
     data() {
         return {

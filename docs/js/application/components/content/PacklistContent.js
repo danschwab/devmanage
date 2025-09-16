@@ -62,10 +62,6 @@ export const PacklistContent = {
         showAlert: Function,
         containerPath: String,
         fullPath: String,
-        navigationParameters: {
-            type: Object,
-            default: () => ({})
-        },
         navigateToPath: Function
     },
     data() {
@@ -169,8 +165,7 @@ export const PacklistContent = {
             <div v-else-if="isViewingPacklist && !isDetailsView">
                 <packlist-table 
                     :tab-name="currentPacklist" 
-                    :navigation-parameters="navigationParameters"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath, event.parameters)"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
             
@@ -179,8 +174,7 @@ export const PacklistContent = {
                 <packlist-table 
                     :tab-name="currentPacklist" 
                     :show-details-only="true" 
-                    :navigation-parameters="navigationParameters"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath, event.parameters)"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
         </div>

@@ -136,10 +136,6 @@ export const InventoryContent = {
             default: 'inventory'
         },
         fullPath: String,
-        navigationParameters: {
-            type: Object,
-            default: () => ({})
-        },
         navigateToPath: Function,
     },
     data() {
@@ -260,7 +256,6 @@ export const InventoryContent = {
                         :container-path="containerPath"
                         :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                         :tab-title="currentCategoryName.toUpperCase()"
-                        :navigationParameters="navigationParameters"
                     ></inventory-table>
                 </div>
             </div>

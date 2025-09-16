@@ -29,7 +29,13 @@ div#app-content {
     overflow: auto;
 }
 div#app-content:not(:has(div))::before {
-    content: "login or open a page to see content";
+    content: "open a page to see content";
+    color: var(--color-gray-bg-transparent);
+    font-size: larger;
+    font-style: italic;
+    line-height: calc(100vh - var(--navbar-height) - var(--padding-lg));
+}
+div#app-content div.empty-message p {
     color: var(--color-gray-bg-transparent);
     font-size: larger;
     font-style: italic;
@@ -78,6 +84,7 @@ nav #navbar {
 nav #navbar a {
     margin: auto 40px;
     text-decoration: none;
+    cursor: pointer;
     font-weight: bold;
     color: var(--color-primary);
 }
