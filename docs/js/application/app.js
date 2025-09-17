@@ -261,7 +261,7 @@ const App = {
                     @close-container="removeContainer"
                     @navigate-to-path="handleNavigateToPath"
                     @expand-container="expandContainer"
-                    v-if="(!dashboardLoading || currentPage !== 'dashboard') && !navigationLoading"
+                    v-else
                 >
                     <template #content>
                         <!-- Inventory Content -->

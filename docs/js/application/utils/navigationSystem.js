@@ -49,7 +49,6 @@ export const NavigationRegistry = {
 
     // Dashboard containers reactive store
     dashboardStore: null,
-    dashboardLoading: false,
 
     // URL Router integration
     urlRouter: null,
@@ -62,14 +61,16 @@ export const NavigationRegistry = {
             return;
         }
         
-        this.dashboardLoading = true;
         try {
             // Create reactive store for dashboard state
             this.dashboardStore = getReactiveStore(
                 Requests.getUserData,
                 Requests.storeUserData,
-                [authState.user.email, 'dashboard_containers']
+                [authState.user.email, 'dashboard_containers'],
+                false
             );
+            
+            await this.dashboardStore.load();
 
             // Use store data directly as dashboard containers
             if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
@@ -87,7 +88,6 @@ export const NavigationRegistry = {
             }
             this.dashboardStore.setData([]);
         }
-        this.dashboardLoading = false;
     },
 
     /**
