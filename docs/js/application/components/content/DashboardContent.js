@@ -1,4 +1,8 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, ContainerComponent, InventoryContent, PacklistContent, ScheduleContent } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry } from '../../index.js';
+import { ContainerComponent } from '../../index.js';
+import { InventoryContent } from '../../index.js';
+import { PacklistContent } from '../../index.js';
+import { ScheduleContent } from '../../index.js';
 
 /**
  * Standard Vue component for dashboard toggle functionality
@@ -10,27 +14,86 @@ export const DashboardToggleComponent = {
         currentView: String,
         title: String
     },
-    inject: ['appContext'],
+    data() {
+        return {
+            dashboardStore: null,
+            isInitializing: false
+        };
+    },
     computed: {
         isOnDashboard() {
-            return this.appContext.hasDashboardContainer(this.containerPath);
+            if (!this.dashboardStore || !this.dashboardStore.data) {
+                return false;
+            }
+            return this.dashboardStore.data.some(container => container.path === this.containerPath);
         },
         isLoading() {
-            return this.appContext.dashboardLoading || false;
+            return this.dashboardStore?.isLoading || this.isInitializing;
         },
         loadingMessage() {
-            return 'Dashboard updating...';
+            return this.dashboardStore?.loadingMessage || 'Dashboard updating...';
+        }
+    },
+    async mounted() {
+        if (authState.isAuthenticated && authState.user?.email) {
+            await this.initializeDashboardStore();
+        } else {
+            console.warn('[DashboardToggleComponent] User not authenticated, cannot access dashboard store');
         }
     },
     methods: {
+        async initializeDashboardStore() {
+            this.isInitializing = true;
+            try {
+                // Create reactive store for dashboard state
+                this.dashboardStore = getReactiveStore(
+                    Requests.getUserData,
+                    Requests.storeUserData,
+                    [authState.user.email, 'dashboard_containers']
+                );
+
+                // Initialize with empty data if no saved data
+                if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
+                    this.dashboardStore.setData([]);
+                }
+            } catch (error) {
+                console.error('[DashboardToggleComponent] Failed to initialize dashboard store:', error);
+                // Create a fallback empty store
+                this.dashboardStore = getReactiveStore(null, null, [], false);
+                this.dashboardStore.setData([]);
+            } finally {
+                this.isInitializing = false;
+            }
+        },
+
         async toggleDashboardPresence() {
+            if (!this.dashboardStore) {
+                console.warn('[DashboardToggleComponent] Dashboard store not available');
+                return;
+            }
+
             if (this.isOnDashboard) {
-                // Remove from dashboard
-                this.appContext.removeDashboardContainer(this.containerPath);
+                // Remove from dashboard store
+                const containers = this.dashboardStore.data;
+                const index = containers.findIndex(container => container.path === this.containerPath);
+                
+                if (index !== -1) {
+                    this.dashboardStore.markRowForDeletion(index, true);
+                    this.dashboardStore.removeMarkedRows();
+                }
             } else {
-                // Add to dashboard
+                // Add to dashboard store
                 const displayTitle = this.title || NavigationRegistry.getDisplayName(this.containerPath, true);
-                this.appContext.addDashboardContainer(this.containerPath, displayTitle);
+                const newContainer = { path: this.containerPath, title: displayTitle };
+                this.dashboardStore.addRow(newContainer);
+            }
+            
+            // Save the updated state
+            try {
+                await this.dashboardStore.save('Saving dashboard...');
+                console.log('[DashboardToggleComponent] Dashboard state saved successfully');
+            } catch (error) {
+                console.warn('[DashboardToggleComponent] Failed to save dashboard state:', error.message);
             }
         }
     },
@@ -178,13 +241,6 @@ export const DashboardContent = {
             );
         },
 
-        syncDashboardContainers() {
-            // This method can be called to ensure dashboard is in sync
-            if (this.dashboardStore) {
-                return this.dashboardStore.save('Syncing dashboard...');
-            }
-        },
-
         // Handle container removal from dashboard
         removeDashboardContainerCard(containerId) {
             // Find the container object by ID and get its path
@@ -192,20 +248,37 @@ export const DashboardContent = {
             if (container) {
                 this.removeDashboardContainer(container.containerPath);
                 // Save the updated dashboard state
-                this.syncDashboardContainers();
+                this.dashboardStore.save('Syncing dashboard...');
             }
         },
 
         // Handle container expansion (navigate to full page)
         expandDashboardContainer(containerData) {
             const targetPath = containerData.containerPath || containerData.path;
-            this.$emit('navigate-to-path', targetPath);
+            
+            // Create proper navigation data object that handleNavigateToPath expects
+            const navigationData = {
+                containerId: null, // No specific container ID for primary navigation
+                targetPath: targetPath,
+                navigationMap: {}, // Empty navigation map for expansion
+                isBrowserNavigation: false // This is a user-initiated expansion
+            };
+            
+            this.$emit('navigate-to-path', navigationData);
         },
 
         // Create a navigation handler for each container
         createNavigateToPathHandler(containerId) {
             return (path) => {
-                this.$emit('navigate-to-path', path);
+                // Create proper navigation data object
+                const navigationData = {
+                    containerId: containerId,
+                    targetPath: path,
+                    navigationMap: {},
+                    isBrowserNavigation: false
+                };
+                
+                this.$emit('navigate-to-path', navigationData);
             };
         }
     },

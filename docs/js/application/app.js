@@ -1,13 +1,15 @@
-import { html } from './index.js';
-import { ContainerComponent, containerManager } from './index.js';
-import { InventoryTableComponent } from './index.js';
-import { ModalComponent, modalManager } from './index.js';
-import { PrimaryNavComponent } from './index.js';
-import { Auth, authState } from './index.js';
-import { NavigationRegistry } from './index.js';
-import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
-import { hamburgerMenuRegistry } from './index.js';
-import { DashboardContent } from './components/content/DashboardContent.js';
+import { 
+    html, 
+    ContainerComponent, containerManager,
+    InventoryTableComponent,
+    ModalComponent, modalManager,
+    PrimaryNavComponent,
+    Auth, authState,
+    NavigationRegistry,
+    PacklistContent, InventoryContent, ScheduleContent,
+    hamburgerMenuRegistry,
+    DashboardContent
+} from './index.js';
 
 const { createApp } = Vue;
 
@@ -15,7 +17,6 @@ const { createApp } = Vue;
 const App = {
     components: {
         'app-container': ContainerComponent,
-        'inventory-table': InventoryTableComponent,
         'app-modal': ModalComponent,
         'primary-nav': PrimaryNavComponent,
         'packlist-content': PacklistContent,
@@ -140,15 +141,7 @@ const App = {
         },
         removeContainer(containerId) {
             const containerToRemove = this.containers.find(c => c.id === containerId);
-            
-            if (this.currentPage === 'dashboard' && containerToRemove) {
-                console.log('App: Removing dashboard container:', containerToRemove.containerPath || containerToRemove.containerType);
-                
-                const pathToRemove = containerToRemove.containerPath || containerToRemove.containerType;
-                
-                this.removeDashboardContainer(pathToRemove);
-                // Dashboard will handle its own save via DashboardContent
-            }
+
             
             this.containers = this.containers.filter(c => c.id !== containerId);
             containerManager.removeContainer(containerId);
@@ -181,41 +174,6 @@ const App = {
             return NavigationRegistry.createNavigateToPathHandler(containerId, (navigationData) => {
                 NavigationRegistry.handleNavigateToPath(navigationData, this);
             });
-        },
-
-        // Dashboard-related methods that delegate to DashboardContent component
-        getDashboardContent() {
-            return this.$refs.dashboardContent;
-        },
-
-        addDashboardContainer(containerPath, title = null) {
-            const dashboardContent = this.getDashboardContent();
-            if (dashboardContent) {
-                return dashboardContent.addDashboardContainer(containerPath, title);
-            }
-        },
-
-        removeDashboardContainer(containerPath) {
-            const dashboardContent = this.getDashboardContent();
-            if (dashboardContent) {
-                return dashboardContent.removeDashboardContainer(containerPath);
-            }
-        },
-
-        hasDashboardContainer(containerPath) {
-            const dashboardContent = this.getDashboardContent();
-            if (dashboardContent) {
-                return dashboardContent.hasDashboardContainer(containerPath);
-            }
-            return false;
-        },
-
-        getDashboardContainers() {
-            const dashboardContent = this.getDashboardContent();
-            if (dashboardContent) {
-                return dashboardContent.dashboardContainers;
-            }
-            return [];
         },
 
         /**
