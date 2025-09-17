@@ -1,4 +1,5 @@
-import { html, InventoryTableComponent, InventoryOverviewTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, DashboardToggleComponent } from '../../index.js';
+import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, DashboardToggleComponent } from '../../index.js';
+import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {

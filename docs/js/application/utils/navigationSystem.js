@@ -1,3 +1,7 @@
+import { html } from '../index.js';
+import { getReactiveStore } from './reactiveStores.js';
+import { Requests } from '../index.js';
+import { authState } from '../index.js';
 import { URLRouter } from './urlRouter.js';
 
 export const NavigationRegistry = {
@@ -43,8 +47,48 @@ export const NavigationRegistry = {
         }
     },
 
+    // Dashboard containers reactive store
+    dashboardStore: null,
+    dashboardLoading: false,
+
     // URL Router integration
     urlRouter: null,
+
+    /**
+     * Initialize dashboard reactive store
+     */
+    async initializeDashboardStore() {
+        if (!authState.isAuthenticated || !authState.user?.email) {
+            return;
+        }
+        
+        this.dashboardLoading = true;
+        try {
+            // Create reactive store for dashboard state
+            this.dashboardStore = getReactiveStore(
+                Requests.getUserData,
+                Requests.storeUserData,
+                [authState.user.email, 'dashboard_containers']
+            );
+
+            // Use store data directly as dashboard containers
+            if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
+                // Initialize with defaults if no saved data
+                this.dashboardStore.setData([]);
+                console.log('No saved dashboard state found, using defaults');
+            } else {
+                console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
+            }
+        } catch (error) {
+            console.error('Failed to initialize dashboard store:', error);
+            // Initialize with empty data to allow functioning
+            if (!this.dashboardStore) {
+                this.dashboardStore = getReactiveStore(null, null, [], false);
+            }
+            this.dashboardStore.setData([]);
+        }
+        this.dashboardLoading = false;
+    },
 
     /**
      * Initialize URL routing system
@@ -300,6 +344,75 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Get dashboard containers from reactive store
+     */
+    get allDashboardContainers() {
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return [];
+        }
+        return this.dashboardStore.data;
+    },
+
+    /**
+     * Save dashboard state using reactive store
+     */
+    async saveDashboardState() {
+        if (!this.dashboardStore || !authState.isAuthenticated || !authState.user?.email) {
+            return;
+        }
+        
+        try {
+            await this.dashboardStore.save('Saving dashboard...');
+            console.log('Dashboard state saved successfully via reactive store');
+        } catch (error) {
+            console.warn('Failed to save dashboard state (continuing without saving):', error.message);
+        }
+    },
+
+    /**
+     * Dashboard container management
+     */
+    addDashboardContainer(containerPath, title = null) {
+        if (!this.dashboardStore) return;
+        
+        const containers = this.dashboardStore.data;
+        const exists = containers.some(container => container.path === containerPath);
+        
+        if (!exists) {
+            const displayTitle = title || this.getDisplayName(containerPath,true);
+            const newContainer = { path: containerPath, title: displayTitle };
+            this.dashboardStore.addRow(newContainer);
+        }
+    },
+
+    removeDashboardContainer(containerPath) {
+        if (!this.dashboardStore) return;
+        
+        const containers = this.dashboardStore.data;
+        const index = containers.findIndex(container => container.path === containerPath);
+        
+        if (index !== -1) {
+            this.dashboardStore.markRowForDeletion(index, true);
+            this.dashboardStore.removeMarkedRows();
+        }
+    },
+
+    hasDashboardContainer(containerPath) {
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return false;
+        }
+        return this.dashboardStore.data.some(container => container.path === containerPath);
+    },
+
+    getAddablePaths() {
+        if (!this.dashboardStore || !this.dashboardStore.data) {
+            return this.getAllPaths(true); // Get sub-paths only
+        }
+        const currentPaths = this.dashboardStore.data.map(container => container.path);
+        return this.getAllPaths(true).filter(path => !currentPaths.includes(path));
+    },
+
+    /**
      * Get container type from path - consolidated logic
      * @param {string} path - The container path
      * @returns {string} Container type
@@ -326,8 +439,13 @@ export const NavigationRegistry = {
 
         let containerConfigs;
         if (pagePath === 'dashboard') {
-            // Dashboard containers are now handled by DashboardContent component
-            containerConfigs = [];
+            const containers = this.dashboardStore?.data || [];
+            containerConfigs = containers.map(container => ({
+                path: container.path,
+                title: container.title,
+                containerPath: container.path,
+                type: this.getTypeFromPath(container.path)
+            }));
         } else {
             containerConfigs = [{ 
                 path: pagePath, 

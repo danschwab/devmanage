@@ -1,4 +1,5 @@
-import { html, TableComponent, Requests, getReactiveStore, ItemImageComponent } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore } from '../../index.js';
+import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
