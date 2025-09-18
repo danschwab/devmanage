@@ -124,6 +124,10 @@ export const TableComponent = {
             const hasAddRow = !!this.newRow;
             return hasEditable || hasMovable || hasAddRow;
         },
+        hasEditableColumns() {
+            // True if any column is editable
+            return this.columns.some(col => col.editable);
+        },
         hideSet() {
             // Hide columns listed in hideColumns prop and always hide 'AppData'
             return new Set([...(this.hideColumns || []), 'AppData']);
@@ -823,7 +827,7 @@ export const TableComponent = {
                 
                 <!-- Data Table -->
                 <div v-else class="table-wrapper">
-                    <table>
+                    <table :class="{ editing: hasEditableColumns }">
                         <thead
                             @dragover="handleDragOverThead"
                             @drop="handleDropOnThead"
@@ -868,6 +872,7 @@ export const TableComponent = {
                                     <td 
                                         v-for="(column, colIndex) in mainTableColumns" 
                                         :key="column.key"
+                                        :style="{ width: getColumnWidth(column) }"
                                         :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
                                     >
                                         <div class="table-cell-container">

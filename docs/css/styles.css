@@ -698,12 +698,15 @@ th, td {
     padding: 0.5rem;
     border: 1px solid var(--color-border);
     text-align: left;
-    /*vertical-align: top;*/
+    vertical-align: top;
     /*min-width: 30px;*/
     min-height: 30px;
     max-width: 300px; /* Set maximum width for cells */
     white-space: normal; /* Allow text wrapping */
     word-wrap: break-word; /* Break long words if needed */
+}
+.inventory-table-component td {
+    vertical-align: middle;
 }
 
 th {
@@ -765,13 +768,16 @@ thead:hover .sort-button {
 }
 
 
+table:not(.editing) tr td:has(.table-wrapper) {
+    padding: 0;
+}
 table tr:not(:first-child) thead {
     display: none;
 }
-table tr:first-child td:has(.table-wrapper) {
+table.editing tr:first-child td:has(.table-wrapper) {
     padding-top: 1px;
 }
-table tr:not(:first-child):has(table) {
+table.editing tr:not(:first-child):has(table) {
     border-top: 1px solid var(--color-border);
 }
 
@@ -882,6 +888,21 @@ td.spacer-cell, th.spacer-cell {
     line-height: 100%;
 }
 
+
+tr.selected > td.row-drag-handle::before {
+    position: absolute;
+    font-size: 1.2rem;
+    color: var(--color-green);
+    width:100%;
+    transform: translateY(-50%);
+    content: "☑";
+    z-index: 4;
+}
+table:has(.selected) > tbody > tr:not(.selected) > td.row-drag-handle::before {
+    font-size: 1.2rem;
+    content: "☐";
+}
+
 .row-drag-handle:hover, :not(:has(.dragging)) .new-row-button:hover {
     background-color: var(--color-gray-bg-hover);
 }
@@ -907,15 +928,23 @@ td.spacer-cell, th.spacer-cell {
     transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out;
 }*/
 
-tr.dragging, tfoot tr.draggable {
+tr.dragging, tr.selected, tfoot tr.draggable {
     position: relative;
 }
 tr.dragging::after {
     content: "";
-    color: white;
+    color: var(--color-text-inverted);
     position: absolute;
     inset: 0;
     background: var(--color-gray-bg-transparent);
+    pointer-events: none;
+    z-index: 2;
+}
+tr.selected::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--color-green-bg-transparent);
     pointer-events: none;
     z-index: 2;
 }
@@ -924,6 +953,7 @@ tr.dragging::after {
 .table-cell-card {
     font-size: 11pt;
     display: block;
+    box-sizing: border-box;
     border: 1px solid var(--color-border);
     padding: .25em;
     margin-top: .5em;
@@ -931,7 +961,7 @@ tr.dragging::after {
     width: 100%;
     transition: background-color 0.15s ease-in-out;
 }
-.table-cell-card:only-child, .table-cell-card:first-child {
+.table-cell-card:only-child, .table-cell-card:first-child, div:has(span:empty) + .table-cell-card {
     margin-top: 0;
 }
 .table-cell-card.clickable, button.table-cell-card {

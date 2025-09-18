@@ -14,7 +14,8 @@ export const PacklistTable = {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
-        showDetailsOnly: { type: Boolean, default: false }
+        showDetailsOnly: { type: Boolean, default: false },
+        editMode: { type: Boolean, default: false }
     },
     data() {
         return {
@@ -47,7 +48,19 @@ export const PacklistTable = {
                 if (label === 'Piece #') {
                     return { key: label, label, editable: false, isIndex: true };
                 }
-                return { key: label, label, editable: ['Type','L','W','H','Weight','Notes'].includes(label), hidden: []};
+                // Only make columns editable if editMode is true
+                const isEditable = this.editMode && ['Type','L','W','H','Weight','Notes'].includes(label);
+                
+                // When not in edit mode, move Type, L, W, H, Weight to details
+                const isDetailsColumn = !this.editMode && ['Type','L','W','H','Weight'].includes(label);
+                
+                return { 
+                    key: label, 
+                    label, 
+                    editable: isEditable, 
+                    details: isDetailsColumn,
+                    hidden: []
+                };
             });
         },
         mainTableData() {
@@ -460,6 +473,13 @@ export const PacklistTable = {
                     :hideRowsOnSearch="hideRowsOnSearch"
                     :showSearch="true"
                 >
+                    <template #table-header-area>
+                        <div class="button-bar">
+                            <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
+                                Back
+                            </button>
+                        </div>
+                    </template>
                     <template #default="{ row, column }">
                         <!-- Render image for image column -->
                         <ItemImageComponent 
@@ -505,11 +525,12 @@ export const PacklistTable = {
                     :title="tabName"
                     :showRefresh="true"
                     :emptyMessage="'No crates'"
-                    :draggable="true"
-                    :newRow="true"
+                    :draggable="editMode"
+                    :newRow="editMode"
                     :isLoading="isLoading"
                     :loading-message="loadingMessage"
                     :drag-id="'packlist-crates'"
+                    :allowDetails="!editMode"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
                     @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'main')"
@@ -517,8 +538,21 @@ export const PacklistTable = {
                     @on-save="handleSave"
                 >
                     <template #table-header-area>
-                        <!-- Analysis Controls -->
+                        <!-- Navigation and Analysis Controls -->
                         <div class="button-bar">
+                            <!-- Edit Mode Toggle -->
+                            <template v-if="!editMode">
+                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/edit' }) : null">
+                                    Edit Packlist
+                                </button>
+                            </template>
+                            <template v-else>
+                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
+                                    Back to View
+                                </button>
+                            </template>
+                            
+                            <!-- Details Button -->
                             <button 
                                 :disabled="analyzingQuantities || isLoading || !tabName"
                                 :class="{ red: warningCount > 0 }"
@@ -550,11 +584,16 @@ export const PacklistTable = {
                                 v-if="row.Items"
                                 :data="row.Items.length === 0 ? (() => { handleAddItem(rowIndex); return row.Items; })() : row.Items"
                                 :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
-                                :columns="itemHeaders.map(label => ({ key: label, label, editable: ['Description','Packing/shop notes'].includes(label) }))"
+                                :columns="itemHeaders.map(label => ({ 
+                                    key: label, 
+                                    label, 
+                                    editable: editMode && ['Description','Packing/shop notes'].includes(label),
+                                    width: ['Description','Packing/shop notes'].includes(label) ? 200 : undefined
+                                }))"
                                 :hide-columns="['Pack','Check']"
                                 :emptyMessage="'No items'"
-                                :draggable="true"
-                                :newRow="true"
+                                :draggable="editMode"
+                                :newRow="editMode"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"

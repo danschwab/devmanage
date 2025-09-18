@@ -87,6 +87,10 @@ export const PacklistContent = {
             // Check if we're viewing the details subview
             return this.pathSegments[2] === 'details';
         },
+        isEditView() {
+            // Check if we're viewing the edit subview
+            return this.pathSegments[2] === 'edit';
+        },
         // Get formatted name for current packlist - keep original case
         currentPacklistName() {
             if (!this.currentPacklist || this.currentPacklist === 'packlist') return '';
@@ -98,6 +102,10 @@ export const PacklistContent = {
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
             return !!this.currentPacklist && this.currentPacklist !== 'packlist';
+        },
+        // Determine if we should show edit mode (only when on /edit path)
+        shouldShowEditMode() {
+            return this.isViewingPacklist && this.isEditView;
         }
     },
     mounted() {
@@ -161,10 +169,20 @@ export const PacklistContent = {
                 />
             </div>
             
-            <!-- Individual Packlist View -->
-            <div v-else-if="isViewingPacklist && !isDetailsView">
+            <!-- Individual Packlist View (Read-only) -->
+            <div v-else-if="isViewingPacklist && !isDetailsView && !isEditView">
                 <packlist-table 
                     :tab-name="currentPacklist" 
+                    :edit-mode="false"
+                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+                />
+            </div>
+            
+            <!-- Individual Packlist Edit View -->
+            <div v-else-if="isViewingPacklist && isEditView">
+                <packlist-table 
+                    :tab-name="currentPacklist" 
+                    :edit-mode="true"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
