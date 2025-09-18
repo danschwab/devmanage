@@ -898,7 +898,7 @@ tr.selected > td.row-drag-handle::before {
     content: "☑";
     z-index: 4;
 }
-table:has(.selected) > tbody > tr:not(.selected) > td.row-drag-handle::before {
+table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td.row-drag-handle::before {
     font-size: 1.2rem;
     content: "☐";
 }
@@ -947,6 +947,20 @@ tr.selected::after {
     background: var(--color-green-bg-transparent);
     pointer-events: none;
     z-index: 2;
+}
+
+/* Drop Target Styling */
+.drop-target-above {
+    border-top: 3px solid var(--color-blue) !important;
+}
+.drop-target-below {
+    border-bottom: 3px solid var(--color-blue) !important;
+}
+.drop-target-header {
+    border-top: 3px solid var(--color-green) !important;
+}
+.drop-target-footer {
+    border-bottom: 3px solid var(--color-green) !important;
 }
 
 

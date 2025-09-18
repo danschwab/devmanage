@@ -1,9 +1,5 @@
 import { html, parseDate } from '../../index.js';
 
-// Global drag state for cross-table row dragging
-let globalDragRow = null;
-let globalDragSourceTable = null;
-
 export const TableComponent = {
     name: 'TableComponent',
     props: {
@@ -92,14 +88,9 @@ export const TableComponent = {
             default: false
         }
     },
-    emits: ['refresh', 'cell-edit', 'row-move', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
+    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
     data() {
         return {
-            dragIndex: null,
-            dragOverIndex: null,
-            dragActive: false,
-            dragSourceTableId: null,
-            dragMoved: false,
             dirtyCells: {},
             allowSaveEvent: false,
             rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
@@ -108,6 +99,25 @@ export const TableComponent = {
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
+            selectedRows: new Set(), // Track selected row indices
+            clickState: {
+                isMouseDown: false,
+                startRowIndex: null,
+                startTime: null,
+                startX: null,
+                startY: null,
+                longClickTimer: null,
+                hasMoved: false
+            },
+            dropTarget: {
+                type: null, // 'between-rows', 'header', 'footer'
+                position: null, // row index for between-rows, null for header/footer
+                isAbove: false // for between-rows, whether drop is above the row
+            },
+            isMouseInTable: false,
+            lastKnownMouseX: null,
+            lastKnownMouseY: null,
+            mouseMoveCounter: 0
         };
     },
     watch: {
@@ -118,11 +128,10 @@ export const TableComponent = {
     },
     computed: {
         showSaveButton() {
-            // True if any editable cell, movable row, or add row button is present
+            // True if any editable cell or add row button is present
             const hasEditable = this.columns.some(col => col.editable);
-            const hasMovable = !!this.draggable;
             const hasAddRow = !!this.newRow;
-            return hasEditable || hasMovable || hasAddRow;
+            return hasEditable || hasAddRow;
         },
         hasEditableColumns() {
             // True if any column is editable
@@ -230,20 +239,16 @@ export const TableComponent = {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();
         });
-        // Listen for mouseup globally to end drag
-        window.addEventListener('mouseup', this.handleGlobalMouseUp);
-        // Listen for dragend globally to ensure drag state is always cleared
-        window.addEventListener('dragend', this.handleGlobalMouseUp);
         // Listen for clicks outside details area to close expanded details
         document.addEventListener('click', this.handleOutsideClick);
         // Listen for escape key to close expanded details
         document.addEventListener('keydown', this.handleEscapeKey);
     },
     beforeUnmount() {
-        window.removeEventListener('mouseup', this.handleGlobalMouseUp);
-        window.removeEventListener('dragend', this.handleGlobalMouseUp);
         document.removeEventListener('click', this.handleOutsideClick);
         document.removeEventListener('keydown', this.handleEscapeKey);
+        // Clean up any active click state
+        this.resetClickState();
     },
     methods: {
         handleRefresh() {
@@ -496,215 +501,246 @@ export const TableComponent = {
         handleRowMove() {
             this.$emit('row-move');
         },
-        handleGlobalMouseUp() {
-            // End drag state on any mouseup or dragend
-            this.dragIndex = null;
-            this.dragOverIndex = null;
-            this.dragSourceTableId = null;
-            this.dragMoved = false;
-            // Reset global drag state
-            globalDragRow = null;
-            globalDragSourceTable = null;
-        },
-        handleDragStart(rowIndex, event) {
-            if (!event.target.classList.contains('row-drag-handle')) {
-                event.preventDefault();
-                return;
-            }
-            this.dragIndex = rowIndex;
-            this.dragSourceTableId = this.dragId;
-            this.dragMoved = false;
-            // Set global drag state for cross-table dragging
-            globalDragRow = this.data[rowIndex];
-            globalDragSourceTable = this;
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', rowIndex);
-            if (event.dataTransfer.setDragImage) {
-                let tr = event.target.closest('tr');
-                if (tr) {
-                    const clone = tr.cloneNode(true);
-                    clone.style.background = '#fff';
-                    clone.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                    clone.style.width = `${tr.offsetWidth}px`;
-                    clone.style.position = 'absolute';
-                    clone.style.top = '-9999px';
-                    document.body.appendChild(clone);
-                    event.dataTransfer.setDragImage(clone, 0, 0);
-                    setTimeout(() => document.body.removeChild(clone), 0);
-                } else {
-                    event.dataTransfer.setDragImage(event.target, 0, 0);
-                }
-            }
-        },
-        handleDragOverRow(rowIndex, event) {
-            event.preventDefault();
-            // Allow auto-scrolling while dragging
-            const scrollMargin = 40;
-            const scrollSpeed = 20;
-            const y = event.clientY;
-            const winHeight = window.innerHeight;
-            if (y < scrollMargin) {
-                window.scrollBy({ top: -scrollSpeed, behavior: 'auto' });
-            } else if (y > winHeight - scrollMargin) {
-                window.scrollBy({ top: scrollSpeed, behavior: 'auto' });
-            }
-            // If the dragged row is marked for deletion, unmark it when dragged over tbody
-            if (
-                this.dragIndex !== null &&
-                this.data[this.dragIndex] &&
-                this.data[this.dragIndex].AppData &&
-                this.data[this.dragIndex].AppData['marked-for-deletion']
-            ) {
-                if (!this.data[this.dragIndex].AppData) this.data[this.dragIndex].AppData = {};
-                this.data[this.dragIndex].AppData['marked-for-deletion'] = false;
-            }
-
-            // Cross-table drag logic
-            if (
-                globalDragRow &&
-                globalDragSourceTable &&
-                globalDragSourceTable !== this &&
-                globalDragSourceTable.dragId === this.dragId &&
-                !this.dragMoved
-            ) {
-                // Insert the row at the drop position
-                let insertIndex = rowIndex;
-                const rowEl = event.currentTarget;
-                const rect = rowEl.getBoundingClientRect();
-                const mouseY = event.clientY;
-                const midpoint = rect.top + rect.height / 2;
-                if (mouseY > midpoint) {
-                    insertIndex = rowIndex + 1;
-                }
-                // Prevent duplicate insert if already present
-                if (!this.data.includes(globalDragRow)) {
-                    // Remove marked-for-deletion state before inserting into new table
-                    if (globalDragRow && globalDragRow.AppData && globalDragRow.AppData['marked-for-deletion']) {
-                        delete globalDragRow.AppData['marked-for-deletion'];
-                    }
-                    this.data.splice(insertIndex, 0, globalDragRow);
-                    // Remove from source table
-                    const srcIdx = globalDragSourceTable.data.indexOf(globalDragRow);
-                    if (srcIdx !== -1) {
-                        globalDragSourceTable.data.splice(srcIdx, 1);
-                    }
-                    // End drag in both tables to clear drag state and row highlight
-                    if (typeof globalDragSourceTable.handleGlobalMouseUp === 'function') {
-                        globalDragSourceTable.handleGlobalMouseUp();
-                    }
-                    this.handleGlobalMouseUp();
-                    this.$emit('row-move', null, insertIndex, [...this.data]);
-                }
-                // Clear global drag state
-                globalDragRow = null;
-                globalDragSourceTable = null;
-                return;
-            }
-            // ...existing drop-target logic...
-            if (
-                this.dragIndex !== null &&
-                this.dragSourceTableId === this.dragId &&
-                this.dragIndex !== rowIndex &&
-                !this.dragMoved
-            ) {
-                const rowEl = event.currentTarget;
-                const rect = rowEl.getBoundingClientRect();
-                const mouseY = event.clientY;
-                const midpoint = rect.top + rect.height / 2;
-                let insertIndex = rowIndex;
-                if (mouseY > midpoint) {
-                    insertIndex = rowIndex + 1;
-                }
-                if (insertIndex > this.dragIndex) insertIndex--;
-                if (insertIndex !== this.dragIndex) {
-                    const movedRow = this.data[this.dragIndex];
-                    this.data.splice(this.dragIndex, 1);
-                    this.data.splice(insertIndex, 0, movedRow);
-                    this.$emit('row-move', this.dragIndex, insertIndex, [...this.data]);
-                    this.dragIndex = insertIndex;
-                    this.dragMoved = true;
-                    setTimeout(() => { this.dragMoved = false; }, 50);
-                }
-            }
-            this.dragOverIndex = rowIndex;
-        },
-        handleDropOnRow(rowIndex, event) {
-            event.preventDefault();
-            // End drag state on drop
-            this.handleGlobalMouseUp();
-        },
-        handleDragOverThead(event) {
-            event.preventDefault();
-            // Allow auto-scrolling while dragging
-            const scrollMargin = 40;
-            const scrollSpeed = 20;
-            const y = event.clientY;
-            if (y < scrollMargin) {
-                window.scrollBy({ top: -scrollSpeed, behavior: 'auto' });
-            }
-            // If dragging a row marked for deletion over thead, unmark it
-            if (
-                this.dragIndex !== null &&
-                this.data[this.dragIndex] &&
-                this.data[this.dragIndex].AppData &&
-                this.data[this.dragIndex].AppData['marked-for-deletion']
-            ) {
-                this.data[this.dragIndex].AppData['marked-for-deletion'] = false;
-            }
-            // ...existing code...
-            if (
-                this.dragIndex !== null &&
-                this.dragSourceTableId === this.dragId &&
-                this.dragIndex !== 0 &&
-                !this.dragMoved
-            ) {
-                const movedRow = this.data[this.dragIndex];
-                this.data.splice(this.dragIndex, 1);
-                this.data.splice(0, 0, movedRow);
-                this.$emit('row-move', this.dragIndex, 0, [...this.data]);
-                this.dragIndex = 0;
-                this.dragMoved = true;
-                setTimeout(() => { this.dragMoved = false; }, 50);
-            }
-            this.dragOverIndex = -1;
-        },
-        handleDropOnThead(event) {
-            event.preventDefault();
-            this.handleGlobalMouseUp();
-        },
-        handleDragOverTfoot(event) {
-            event.preventDefault();
-            // Allow auto-scrolling while dragging
-            const scrollMargin = 40;
-            const scrollSpeed = 20;
-            const y = event.clientY;
-            const winHeight = window.innerHeight;
-            if (y > winHeight - scrollMargin) {
-                window.scrollBy({ top: scrollSpeed, behavior: 'auto' });
-            }
-            // Mark row for deletion if dragging over tfoot
-            if (
-                this.dragIndex !== null &&
-                this.dragSourceTableId === this.dragId &&
-                !this.dragMoved &&
-                this.data[this.dragIndex] &&
-                !(this.data[this.dragIndex].AppData && this.data[this.dragIndex].AppData['marked-for-deletion'])
-            ) {
-                if (!this.data[this.dragIndex].AppData) this.data[this.dragIndex].AppData = {};
-                this.data[this.dragIndex].AppData['marked-for-deletion'] = true;
-            }
-            this.dragOverIndex = this.data.length;
-        },
-        handleDropOnTfoot(event) {
-            event.preventDefault();
-            this.handleGlobalMouseUp();
-        },
         handleHamburgerMenu() {
             // Emit event to parent to show hamburger menu
             this.$emit('show-hamburger-menu', {
                 menuComponent: this.hamburgerMenuComponent,
                 tableId: this.dragId
             });
+        },
+        handleDragHandleMouseDown(rowIndex, event) {
+            // Only respond to left mouse button
+            if (event.button !== 0) return;
+            
+            // Ensure this is a drag handle
+            if (!event.target.classList.contains('row-drag-handle')) return;
+            
+            this.clickState.isMouseDown = true;
+            this.clickState.startRowIndex = rowIndex;
+            this.clickState.startTime = Date.now();
+            this.clickState.startX = event.clientX;
+            this.clickState.startY = event.clientY;
+            this.clickState.hasMoved = false;
+            
+            // Set up long click timer (800ms)
+            this.clickState.longClickTimer = setTimeout(() => {
+                if (this.clickState.isMouseDown && !this.clickState.hasMoved) {
+                    // Long click: add row to selection
+                    this.selectedRows.add(rowIndex);
+                    this.clickState.longClickTimer = null;
+                }
+            }, 800);
+            
+            // Add global mouse move and up listeners
+            document.addEventListener('mousemove', this.handleGlobalMouseMove);
+            document.addEventListener('mouseup', this.handleGlobalMouseUp);
+            
+            // Prevent text selection
+            event.preventDefault();
+        },
+        handleGlobalMouseMove(event) {
+            if (!this.clickState.isMouseDown) return;
+            
+            const deltaX = Math.abs(event.clientX - this.clickState.startX);
+            const deltaY = Math.abs(event.clientY - this.clickState.startY);
+            const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // If moved more than 8 pixels
+            if (moveDistance > 8 && !this.clickState.hasMoved) {
+                this.clickState.hasMoved = true;
+                
+                // Cancel long click timer
+                if (this.clickState.longClickTimer) {
+                    clearTimeout(this.clickState.longClickTimer);
+                    this.clickState.longClickTimer = null;
+                }
+                
+                // If dragged row is not in selection, replace entire selection
+                if (!this.selectedRows.has(this.clickState.startRowIndex)) {
+                    this.selectedRows.clear();
+                    this.selectedRows.add(this.clickState.startRowIndex);
+                }
+            }
+        },
+        handleGlobalMouseUp(event) {
+            if (!this.clickState.isMouseDown) return;
+            
+            // Check if mouse up is on the same drag handle that started the interaction
+            const targetHandle = event.target.closest('.row-drag-handle');
+            const startHandle = document.elementFromPoint(this.clickState.startX, this.clickState.startY);
+            
+            // Only process if mouse up is on the same handle (or close enough)
+            if (targetHandle && startHandle && targetHandle === startHandle) {
+                // Clear long click timer
+                if (this.clickState.longClickTimer) {
+                    clearTimeout(this.clickState.longClickTimer);
+                    this.clickState.longClickTimer = null;
+                }
+                
+                // Short click logic (only if no movement occurred)
+                if (!this.clickState.hasMoved) {
+                    const clickDuration = Date.now() - this.clickState.startTime;
+                    
+                    // Short click (less than 800ms and no movement)
+                    if (clickDuration < 800) {
+                        if (this.selectedRows.size > 0) {
+                            // Toggle selection state of clicked row
+                            if (this.selectedRows.has(this.clickState.startRowIndex)) {
+                                this.selectedRows.delete(this.clickState.startRowIndex);
+                            } else {
+                                this.selectedRows.add(this.clickState.startRowIndex);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Clean up
+            this.resetClickState();
+        },
+        resetClickState() {
+            if (this.clickState.longClickTimer) {
+                clearTimeout(this.clickState.longClickTimer);
+                this.clickState.longClickTimer = null;
+            }
+            
+            this.clickState.isMouseDown = false;
+            this.clickState.startRowIndex = null;
+            this.clickState.startTime = null;
+            this.clickState.startX = null;
+            this.clickState.startY = null;
+            this.clickState.hasMoved = false;
+            
+            // Remove global listeners
+            document.removeEventListener('mousemove', this.handleGlobalMouseMove);
+            document.removeEventListener('mouseup', this.handleGlobalMouseUp);
+        },
+        handleTableMouseEnter() {
+            this.isMouseInTable = true;
+            this.mouseMoveCounter = 0; // Reset counter when entering table
+        },
+        handleTableMouseLeave() {
+            this.isMouseInTable = false;
+            this.clearDropTarget();
+            this.lastKnownMouseX = null;
+            this.lastKnownMouseY = null;
+            this.mouseMoveCounter = 0; // Reset counter when leaving table
+        },
+        findDropTargetAtCursor() {
+            // Use stored mouse position if available
+            if (this.lastKnownMouseX === null || this.lastKnownMouseY === null) {
+                return; // No mouse position available
+            }
+            
+            let mouseX = this.lastKnownMouseX;
+            let mouseY = this.lastKnownMouseY;
+            if (this.lastKnownMouseX !== undefined && this.lastKnownMouseY !== undefined) {
+                mouseX = this.lastKnownMouseX;
+                mouseY = this.lastKnownMouseY;
+            }
+            
+            // Find the table element
+            const tableEl = this.$el.querySelector('table');
+            if (!tableEl) return;
+            
+            const tableRect = tableEl.getBoundingClientRect();
+            
+            // Check if mouse is within table bounds
+            if (mouseX < tableRect.left || mouseX > tableRect.right || 
+                mouseY < tableRect.top || mouseY > tableRect.bottom) {
+                this.clearDropTarget();
+                return;
+            }
+            
+            // Find thead, tbody, and tfoot elements
+            const thead = tableEl.querySelector('thead');
+            const tbody = tableEl.querySelector('tbody');
+            const tfoot = tableEl.querySelector('tfoot');
+            
+            let newDropTarget = { type: null, position: null, isAbove: false };
+            
+            // Check header drop target
+            if (thead) {
+                const theadRect = thead.getBoundingClientRect();
+                if (mouseY >= theadRect.top && mouseY <= theadRect.bottom) {
+                    newDropTarget = { type: 'header', position: null, isAbove: false };
+                }
+            }
+            
+            // Check footer drop target
+            if (tfoot && newDropTarget.type === null) {
+                const tfootRect = tfoot.getBoundingClientRect();
+                if (mouseY >= tfootRect.top && mouseY <= tfootRect.bottom) {
+                    newDropTarget = { type: 'footer', position: null, isAbove: false };
+                }
+            }
+            
+            // Check between rows in tbody
+            if (tbody && newDropTarget.type === null) {
+                const rows = tbody.querySelectorAll('tr');
+                
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const rowRect = row.getBoundingClientRect();
+                    
+                    if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+                        const midpoint = rowRect.top + rowRect.height / 2;
+                        const isAbove = mouseY < midpoint;
+                        
+                        newDropTarget = {
+                            type: 'between',
+                            targetIndex: isAbove ? i : i + 1
+                        };
+                        console.log('Drop target found:', newDropTarget, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                        break;
+                    }
+                }
+            }
+            
+            // Update drop target if changed
+            if (this.dropTarget.type !== newDropTarget.type ||
+                this.dropTarget.targetIndex !== newDropTarget.targetIndex) {
+                
+                this.dropTarget = newDropTarget;
+            }
+        },
+        clearDropTarget() {
+            this.dropTarget = { type: null, position: null, isAbove: false };
+        },
+        handleTableMouseMove(event) {
+            // Store last known mouse position for drop target detection
+            const newX = event.clientX;
+            const newY = event.clientY;
+            
+            // Only increment counter if mouse has actually moved
+            if (this.lastKnownMouseX !== newX || this.lastKnownMouseY !== newY) {
+                this.lastKnownMouseX = newX;
+                this.lastKnownMouseY = newY;
+                
+                // Increment counter and check if it's the 8th move
+                this.mouseMoveCounter++;
+                if (this.mouseMoveCounter >= 8) {
+                    this.mouseMoveCounter = 0; // Reset counter
+                    this.findDropTargetAtCursor();
+                }
+            }
+        },
+        getDropTargetClass(rowIndex, position) {
+            if (this.dropTarget.type !== 'between-rows') return '';
+            if (this.dropTarget.position !== rowIndex) return '';
+            
+            if (position === 'top' && this.dropTarget.isAbove) {
+                return 'drop-target-above';
+            } else if (position === 'bottom' && !this.dropTarget.isAbove) {
+                return 'drop-target-below';
+            }
+            return '';
+        },
+        getHeaderDropTargetClass() {
+            return this.dropTarget.type === 'header' ? 'drop-target-header' : '';
+        },
+        getFooterDropTargetClass() {
+            return this.dropTarget.type === 'footer' ? 'drop-target-footer' : '';
         },
         updateAllEditableCells() {
             // Set contenteditable text for all editable cells to match data (only on mount or new row)
@@ -768,7 +804,11 @@ export const TableComponent = {
         }
     },
     template: html `
-        <div class="dynamic-table">
+        <div class="dynamic-table"
+            @mouseenter="handleTableMouseEnter"
+            @mouseleave="handleTableMouseLeave"
+            @mousemove="handleTableMouseMove"
+        >
             <div :class="dragId ? 'drag-id-' + dragId : ''">
                 <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
                     <!--h3 v-if="title">{{ title }}</h3-->
@@ -828,10 +868,7 @@ export const TableComponent = {
                 <!-- Data Table -->
                 <div v-else class="table-wrapper">
                     <table :class="{ editing: hasEditableColumns }">
-                        <thead
-                            @dragover="handleDragOverThead"
-                            @drop="handleDropOnThead"
-                        >
+                        <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
                             <tr>
                                 <th v-if="draggable" class="spacer-cell"></th>
                                 <th 
@@ -858,16 +895,17 @@ export const TableComponent = {
                             <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
                                 <tr 
                                     :class="{
-                                        'dragging': dragIndex === idx,
-                                        'drag-over': dragOverIndex === idx
+                                        'dragging': false,
+                                        'drag-over': false,
+                                        'selected': selectedRows.has(idx),
+                                        'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
+                                        'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
                                     }"
-                                    @dragover="handleDragOverRow(idx, $event)"
-                                    @drop="handleDropOnRow(idx, $event)"
                                 >
                                     <td v-if="draggable"
                                         class="row-drag-handle"
                                         draggable="true"
-                                        @dragstart="handleDragStart(idx, $event)"
+                                        @mousedown="handleDragHandleMouseDown(idx, $event)"
                                     ></td>
                                     <td 
                                         v-for="(column, colIndex) in mainTableColumns" 
@@ -969,18 +1007,18 @@ export const TableComponent = {
                                 </tr>
                             </template>
                         </tbody>
-                        <tfoot v-if="newRow"
-                            @dragover="handleDragOverTfoot"
-                            @drop="handleDropOnTfoot"
-                        >
+                        <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
                             <tr v-for="({ row, idx }, delIdx) in deletedRows"
                                 :key="'del-' + idx"
-                                class="marked-for-deletion"
+                                :class="{
+                                    'marked-for-deletion': true,
+                                    'selected': selectedRows.has(idx)
+                                }"
                             >
                                 <td v-if="draggable"
                                     class="row-drag-handle"
                                     draggable="true"
-                                    @dragstart="handleDragStart(idx, $event)"
+                                    @mousedown="handleDragHandleMouseDown(idx, $event)"
                                 ></td>
                                 <td 
                                     v-for="(column, colIndex) in mainTableColumns" 
