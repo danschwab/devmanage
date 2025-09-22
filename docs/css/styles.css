@@ -940,28 +940,72 @@ tr.dragging::after {
     pointer-events: none;
     z-index: 2;
 }
-tr.selected::after {
+tr.selected::after, tr:last-child.selected.drop-target-below::after {
     content: "";
     position: absolute;
     inset: 0;
     background: var(--color-green-bg-transparent);
     pointer-events: none;
     z-index: 2;
+    box-sizing: border-box;
 }
 
 /* Drop Target Styling */
-.drop-target-above {
-    border-top: 3px solid var(--color-blue) !important;
+tr.selected.drop-target-above::after, .drop-target-header + tbody > tr:first-child.selected::after {
+    border-top: 2px solid var(--color-green);
 }
-.drop-target-below {
-    border-bottom: 3px solid var(--color-blue) !important;
+
+tr.selected.drop-target-below::after {
+    border-bottom: 2px solid var(--color-green);
 }
-.drop-target-header {
-    border-top: 3px solid var(--color-green) !important;
+tr.selected + .drop-target-above::after {
+    display:none;
 }
-.drop-target-footer {
-    border-bottom: 3px solid var(--color-green) !important;
+.drop-target-above::after, .drop-target-header + tbody > tr:first-child::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    z-index: 2;
+    inset: 0;
+    border-top: 2px solid var(--color-blue);
 }
+:last-child.drop-target-below::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    z-index: 2;
+    inset: 0;
+    border-bottom: 2px solid var(--color-blue);
+}
+
+
+/*.drop-target-footer::after {
+    content: "";
+    position: absolute;
+    display: block;
+    background: var(--color-red);
+    pointer-events: none;
+    z-index: 2;
+    top: -1px;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - 1px);
+}*/
+
+/* Drag State Styling 
+.dynamic-table.drag-source {
+    opacity: 0.7;
+    background-color: var(--color-blue-bg-transparent);
+}
+
+.dynamic-table.drag-target {
+    background-color: var(--color-green-bg-transparent);
+    border: 2px dashed var(--color-green);
+}
+
+.dynamic-table.drag-target:hover {
+    background-color: var(--color-green-bg);
+}*/
 
 
 .table-cell-card {

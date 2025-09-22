@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, tableRowSelectionState } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
@@ -253,19 +253,6 @@ export const PacklistTable = {
                 const colKey = this.mainColumns[colIdx]?.key;
                 if (colKey && this.mainTableData[rowIdx]) {
                     this.mainTableData[rowIdx][colKey] = value;
-                }
-            }
-        },
-        handleRowMove(dragIndex, dropIndex, newData, type = 'main', crateIdx = null) {
-            this.moved = true;
-            this.saveDisabled = false;
-            if (type === 'main') {
-                if (Array.isArray(newData)) {
-                    this.mainTableData.splice(0, this.mainTableData.length, ...newData);
-                }
-            } else if (type === 'item' && crateIdx !== null) {
-                if (Array.isArray(newData) && this.mainTableData[crateIdx] && Array.isArray(this.mainTableData[crateIdx].Items)) {
-                    this.mainTableData[crateIdx].Items.splice(0, this.mainTableData[crateIdx].Items.length, ...newData);
                 }
             }
         },
@@ -533,7 +520,6 @@ export const PacklistTable = {
                     :allowDetails="!editMode"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
-                    @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'main')"
                     @new-row="handleAddCrate"
                     @on-save="handleSave"
                 >
@@ -600,7 +586,6 @@ export const PacklistTable = {
                                 :loading-message="loadingMessage"
                                 :drag-id="'packlist-items'"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
-                                @row-move="(dragIndex, dropIndex, newData) => handleRowMove(dragIndex, dropIndex, newData, 'item', rowIndex)"
                                 @new-row="() => { handleAddItem(rowIndex); }"
                                 @inner-table-dirty="(isDirty) => { 
                                     if (typeof onInnerTableDirty === 'function') {

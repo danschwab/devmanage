@@ -1,5 +1,254 @@
 import { html, parseDate } from '../../index.js';
 
+// Global table row selection state - single source of truth for all selections
+export const tableRowSelectionState = Vue.reactive({
+    // Single selection set with array references
+    selections: new Map(), // Map of rowIndex -> { sourceArray: arrayRef, dragId: dragId }
+    
+    // Drag state
+    isDragging: false,
+    dragSourceArray: null,
+    dragTargetArray: null,
+    dragId: null, // The dragId of the table group participating in drag operations
+    currentDropTarget: null, // Current registered drop target from tables
+    
+    // Add a row to global selection
+    addRow(rowIndex, sourceArray, dragId = null) {
+        this.selections.set(rowIndex, {
+            sourceArray: sourceArray,
+            dragId: dragId
+        });
+    },
+    
+    // Remove a row from global selection
+    removeRow(rowIndex) {
+        this.selections.delete(rowIndex);
+    },
+    
+    // Toggle row selection
+    toggleRow(rowIndex, sourceArray, dragId = null) {
+        if (this.selections.has(rowIndex)) {
+            this.selections.delete(rowIndex);
+        } else {
+            this.selections.set(rowIndex, {
+                sourceArray: sourceArray,
+                dragId: dragId
+            });
+        }
+    },
+    
+    // Check if a row is selected (by checking if any selection has this index in its source array)
+    hasRow(sourceArray, rowIndex) {
+        for (const [selectedRowIndex, selection] of this.selections) {
+            if (selection.sourceArray === sourceArray && selectedRowIndex === rowIndex) {
+                return true;
+            }
+        }
+        return false;
+    },
+    
+    // Clear all selections
+    clearAll() {
+        this.selections.clear();
+    },
+    
+    // Clear selections from a specific array
+    clearArray(sourceArray) {
+        for (const [rowIndex, selection] of this.selections) {
+            if (selection.sourceArray === sourceArray) {
+                this.selections.delete(rowIndex);
+            }
+        }
+    },
+    
+    // Get selection count for a specific array
+    getArraySelectionCount(sourceArray) {
+        let count = 0;
+        for (const selection of this.selections.values()) {
+            if (selection.sourceArray === sourceArray) {
+                count++;
+            }
+        }
+        return count;
+    },
+    
+    // Get total selection count
+    getTotalSelectionCount() {
+        return this.selections.size;
+    },
+    
+    // Get all selected row indices for a specific array
+    getSelectedRowIndices(sourceArray) {
+        const indices = [];
+        for (const [rowIndex, selection] of this.selections) {
+            if (selection.sourceArray === sourceArray) {
+                indices.push(rowIndex);
+            }
+        }
+        return indices;
+    },
+    
+    // Get all selected row data for a specific array
+    getSelectedRowData(sourceArray) {
+        const data = [];
+        for (const [rowIndex, selection] of this.selections) {
+            if (selection.sourceArray === sourceArray) {
+                data.push(sourceArray[rowIndex]);
+            }
+        }
+        return data;
+    },
+    
+    // Get all selected rows (index + data) for a specific array
+    getSelectedRows(sourceArray) {
+        const rows = [];
+        for (const [rowIndex, selection] of this.selections) {
+            if (selection.sourceArray === sourceArray) {
+                rows.push({
+                    index: rowIndex,
+                    data: sourceArray[rowIndex]
+                });
+            }
+        }
+        return rows;
+    },
+    
+    // Drag management methods
+    startDrag() {
+        if (this.selections.size === 0) return false;
+        
+        this.isDragging = true;
+        // Get source array and dragId from first selection (all selections should be from same table group when dragging)
+        const firstSelection = this.selections.values().next().value;
+        this.dragSourceArray = firstSelection.sourceArray;
+        this.dragId = firstSelection.dragId;
+        this.currentDropTarget = null;
+        
+        // Set up global mouse up listener with proper binding
+        this.handleGlobalMouseUp = this.handleGlobalMouseUp.bind(this);
+        document.addEventListener('mouseup', this.handleGlobalMouseUp);
+        return true;
+    },
+    
+    // Set target array during drag
+    setDragTarget(targetArray) {
+        if (this.isDragging) {
+            this.dragTargetArray = targetArray;
+        }
+    },
+    
+    // Register drop target from a table
+    registerDropTarget(tableData, dropTarget) {
+        if (this.isDragging && this.dragTargetArray === tableData) {
+            this.currentDropTarget = dropTarget;
+        }
+    },
+    
+    // Clear drop target registration
+    clearDropTargetRegistration(tableData) {
+        if (this.dragTargetArray === tableData) {
+            this.currentDropTarget = null;
+        }
+    },
+    
+    
+    // Global mouse up handler for drag operations
+    handleGlobalMouseUp(event) {
+        if (!this.isDragging) return;
+        
+        console.log('Global drag completion - dragTargetArray:', !!this.dragTargetArray, 'currentDropTarget:', this.currentDropTarget);
+        
+        // Check if we have a valid drop target
+        if (this.dragTargetArray && this.currentDropTarget && this.currentDropTarget.type) {
+            const result = this.completeDrag(this.currentDropTarget);
+            console.log('Global completeDrag result:', result);
+        } else {
+            // No valid drop target, cancel the drag
+            console.log('Global cancelling drag - no valid drop target');
+            this.stopDrag();
+        }
+    },
+    
+    completeDrag(dropTarget) {
+        console.log('completeDrag called with:', dropTarget, 'isDragging:', this.isDragging, 'selections:', this.selections.size, 'dragTargetArray:', this.dragTargetArray);
+        if (!this.isDragging || this.selections.size === 0 || !this.dragTargetArray) {
+            console.log('completeDrag early exit - conditions not met');
+            this.stopDrag();
+            return false;
+        }
+        
+        // Get selected rows sorted by index (highest first for removal)
+        const selectedRows = Array.from(this.selections.entries())
+            .filter(([, selection]) => selection.sourceArray === this.dragSourceArray)
+            .sort(([a], [b]) => b - a);
+        
+        if (selectedRows.length === 0) {
+            this.stopDrag();
+            return false;
+        }
+        
+        // Calculate insertion position
+        let insertPosition;
+        console.log('dropTarget.type:', dropTarget.type);
+        if (dropTarget.type === 'header') {
+            insertPosition = 0;
+        } else if (dropTarget.type === 'footer') {
+            insertPosition = this.dragTargetArray.length;
+        } else if (dropTarget.type === 'between') {
+            insertPosition = dropTarget.targetIndex;
+        } else {
+            console.log('Invalid dropTarget.type:', dropTarget.type);
+            this.stopDrag();
+            return false;
+        }
+        
+        if (this.dragSourceArray === this.dragTargetArray) {
+            // Same array: reorder rows
+            console.log('Same array reorder - insertPosition:', insertPosition);
+            const rowsData = selectedRows.map(([index]) => this.dragSourceArray[index]);
+            
+            // Remove rows (in reverse order to maintain indices)
+            selectedRows.forEach(([index]) => {
+                this.dragSourceArray.splice(index, 1);
+                // Adjust insertion position if we removed rows before it
+                if (index < insertPosition) {
+                    insertPosition--;
+                }
+            });
+            
+            // Insert at new position
+            this.dragSourceArray.splice(insertPosition, 0, ...rowsData);
+        } else {
+            // Different arrays: move rows
+            console.log('Different arrays move - from:', this.dragSourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition);
+            const rowsData = selectedRows.map(([index]) => this.dragSourceArray[index]);
+            
+            // Remove from source array (in reverse order to maintain indices)
+            selectedRows.forEach(([index]) => this.dragSourceArray.splice(index, 1));
+            
+            // Insert into target array
+            this.dragTargetArray.splice(insertPosition, 0, ...rowsData);
+            console.log('After move - from:', this.dragSourceArray.length, 'to:', this.dragTargetArray.length);
+        }
+        
+        // Clear selection and drag state
+        this.clearAll();
+        this.stopDrag();
+        return true;
+    },
+    
+    stopDrag() {
+        this.isDragging = false;
+        this.dragSourceArray = null;
+        this.dragTargetArray = null;
+        this.dragId = null;
+        this.currentDropTarget = null;
+        
+        // Remove global mouse up listener
+        document.removeEventListener('mouseup', this.handleGlobalMouseUp);
+    }
+});
+
 export const TableComponent = {
     name: 'TableComponent',
     props: {
@@ -99,7 +348,6 @@ export const TableComponent = {
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
-            selectedRows: new Set(), // Track selected row indices
             clickState: {
                 isMouseDown: false,
                 startRowIndex: null,
@@ -127,6 +375,18 @@ export const TableComponent = {
         }
     },
     computed: {
+        selectedRowCount() {
+            return tableRowSelectionState.getArraySelectionCount(this.data);
+        },
+        isDragSource() {
+            return tableRowSelectionState.isDragging && 
+                   tableRowSelectionState.dragSourceArray === this.data;
+        },
+        canAcceptDrop() {
+            return tableRowSelectionState.isDragging && 
+                   this.draggable && 
+                   tableRowSelectionState.dragId === this.dragId;
+        },
         showSaveButton() {
             // True if any editable cell or add row button is present
             const hasEditable = this.columns.some(col => col.editable);
@@ -255,6 +515,11 @@ export const TableComponent = {
             this.$emit('refresh');
             // Also clear dirty state for nested tables on refresh
             this.nestedTableDirtyCells = {};
+        },
+
+        // Selection helper methods
+        isRowSelected(rowIndex) {
+            return tableRowSelectionState.hasRow(this.data, rowIndex);
         },
 
         handleSort(columnKey) {
@@ -505,7 +770,7 @@ export const TableComponent = {
             // Emit event to parent to show hamburger menu
             this.$emit('show-hamburger-menu', {
                 menuComponent: this.hamburgerMenuComponent,
-                tableId: this.dragId
+                tableId: this.title || 'table'
             });
         },
         handleDragHandleMouseDown(rowIndex, event) {
@@ -526,7 +791,7 @@ export const TableComponent = {
             this.clickState.longClickTimer = setTimeout(() => {
                 if (this.clickState.isMouseDown && !this.clickState.hasMoved) {
                     // Long click: add row to selection
-                    this.selectedRows.add(rowIndex);
+                    tableRowSelectionState.addRow(rowIndex, this.data, this.dragId);
                     this.clickState.longClickTimer = null;
                 }
             }, 800);
@@ -555,21 +820,37 @@ export const TableComponent = {
                     this.clickState.longClickTimer = null;
                 }
                 
-                // If dragged row is not in selection, replace entire selection
-                if (!this.selectedRows.has(this.clickState.startRowIndex)) {
-                    this.selectedRows.clear();
-                    this.selectedRows.add(this.clickState.startRowIndex);
+                // If dragged row is not in selection, replace entire selection with this row
+                if (!tableRowSelectionState.hasRow(this.data, this.clickState.startRowIndex)) {
+                    tableRowSelectionState.clearAll();
+                    tableRowSelectionState.addRow(this.clickState.startRowIndex, this.data, this.dragId);
+                }
+                
+                // Start drag if table is draggable and we have selections
+                if (this.draggable && tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    tableRowSelectionState.startDrag();
                 }
             }
         },
         handleGlobalMouseUp(event) {
             if (!this.clickState.isMouseDown) return;
             
+            // Handle drag completion is now managed by global state
+            // Tables only handle their own cleanup during drag operations
+            if (tableRowSelectionState.isDragging) {
+                // Clear local drop target after drag completion
+                this.clearDropTarget();
+                
+                // Clean up and exit early - don't process click logic when dragging
+                this.resetClickState();
+                return;
+            }
+            
             // Check if mouse up is on the same drag handle that started the interaction
             const targetHandle = event.target.closest('.row-drag-handle');
             const startHandle = document.elementFromPoint(this.clickState.startX, this.clickState.startY);
             
-            // Only process if mouse up is on the same handle (or close enough)
+            // Only process click logic if mouse up is on the same handle (or close enough)
             if (targetHandle && startHandle && targetHandle === startHandle) {
                 // Clear long click timer
                 if (this.clickState.longClickTimer) {
@@ -583,13 +864,9 @@ export const TableComponent = {
                     
                     // Short click (less than 800ms and no movement)
                     if (clickDuration < 800) {
-                        if (this.selectedRows.size > 0) {
+                        if (tableRowSelectionState.getTotalSelectionCount() > 0) {
                             // Toggle selection state of clicked row
-                            if (this.selectedRows.has(this.clickState.startRowIndex)) {
-                                this.selectedRows.delete(this.clickState.startRowIndex);
-                            } else {
-                                this.selectedRows.add(this.clickState.startRowIndex);
-                            }
+                            tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
                         }
                     }
                 }
@@ -621,6 +898,7 @@ export const TableComponent = {
         },
         handleTableMouseLeave() {
             this.isMouseInTable = false;
+            // Always clear drop target when leaving table
             this.clearDropTarget();
             this.lastKnownMouseX = null;
             this.lastKnownMouseY = null;
@@ -646,9 +924,11 @@ export const TableComponent = {
             const tableRect = tableEl.getBoundingClientRect();
             
             // Check if mouse is within table bounds
-            if (mouseX < tableRect.left || mouseX > tableRect.right || 
-                mouseY < tableRect.top || mouseY > tableRect.bottom) {
-                this.clearDropTarget();
+            if (mouseY < tableRect.top || mouseY > tableRect.bottom) {
+                // Only clear if we're not in an active drag operation
+                if (!tableRowSelectionState.isDragging) {
+                    this.clearDropTarget();
+                }
                 return;
             }
             
@@ -702,6 +982,11 @@ export const TableComponent = {
                 this.dropTarget.targetIndex !== newDropTarget.targetIndex) {
                 
                 this.dropTarget = newDropTarget;
+                
+                // Register the new drop target with global state
+                if (this.dropTarget.type) {
+                    tableRowSelectionState.registerDropTarget(this.data, this.dropTarget);
+                }
             }
         },
         clearDropTarget() {
@@ -716,12 +1001,18 @@ export const TableComponent = {
             if (this.lastKnownMouseX !== newX || this.lastKnownMouseY !== newY) {
                 this.lastKnownMouseX = newX;
                 this.lastKnownMouseY = newY;
-                
-                // Increment counter and check if it's the 8th move
+                // Increment counter and check if it's the 6th move
                 this.mouseMoveCounter++;
-                if (this.mouseMoveCounter >= 8) {
-                    this.mouseMoveCounter = 0; // Reset counter
-                    this.findDropTargetAtCursor();
+                if (this.mouseMoveCounter >= 6) {
+                
+                    // Only detect drop targets if dragging is active and this table can receive drops
+                    if (tableRowSelectionState.isDragging && this.draggable && tableRowSelectionState.dragId == this.dragId) {
+                        // Set this table as potential drag target
+                        tableRowSelectionState.setDragTarget(this.data);
+                    
+                        this.mouseMoveCounter = 0; // Reset counter
+                        this.findDropTargetAtCursor();
+                    }
                 }
             }
         },
@@ -781,11 +1072,22 @@ export const TableComponent = {
         },
         
         handleOutsideClick(event) {
-            // Only proceed if there are expanded rows
+            const clickedElement = event.target;
+            
+            // Handle clearing selection when clicking outside drag handles
+            if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                const dragHandle = clickedElement.closest('.row-drag-handle');
+                
+                // If click is not on a drag handle, clear selection
+                if (!dragHandle) {
+                    tableRowSelectionState.clearAll();
+                }
+            }
+            
+            // Handle closing expanded details (existing functionality)
             if (this.expandedRows.size === 0) return;
             
             // Check if the click is outside any details area
-            const clickedElement = event.target;
             const detailsContainer = clickedElement.closest('.details-container');
             const detailsButton = clickedElement.closest('.details-toggle');
             
@@ -805,11 +1107,15 @@ export const TableComponent = {
     },
     template: html `
         <div class="dynamic-table"
+            :class="{
+                'drag-source': isDragSource,
+                'drag-target': canAcceptDrop
+            }"
             @mouseenter="handleTableMouseEnter"
             @mouseleave="handleTableMouseLeave"
             @mousemove="handleTableMouseMove"
         >
-            <div :class="dragId ? 'drag-id-' + dragId : ''">
+            <div class="table-container">
                 <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
                     <!--h3 v-if="title">{{ title }}</h3-->
                     <slot 
@@ -897,7 +1203,7 @@ export const TableComponent = {
                                     :class="{
                                         'dragging': false,
                                         'drag-over': false,
-                                        'selected': selectedRows.has(idx),
+                                        'selected': isRowSelected(idx),
                                         'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
                                         'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
                                     }"
@@ -1012,7 +1318,7 @@ export const TableComponent = {
                                 :key="'del-' + idx"
                                 :class="{
                                     'marked-for-deletion': true,
-                                    'selected': selectedRows.has(idx)
+                                    'selected': isRowSelected(idx)
                                 }"
                             >
                                 <td v-if="draggable"

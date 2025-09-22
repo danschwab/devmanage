@@ -14,7 +14,7 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
-export { TableComponent } from './components/interface/tableComponent.js';
+export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
 
