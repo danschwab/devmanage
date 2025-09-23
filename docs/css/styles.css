@@ -710,6 +710,15 @@ th, td {
 .inventory-table-component td {
     vertical-align: middle;
 }
+.packlist-crates > tbody > tr {
+    border-bottom: 3px solid var(--color-gray);
+}
+.packlist-crates table tr:first-child td {
+    border-top: none;
+}
+.packlist-crates table tr:last-child td {
+    border-bottom: none;
+}
 
 th {
     background-color: var(--color-gray);

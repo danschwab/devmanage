@@ -535,7 +535,6 @@ export const PacklistTable = {
                     :isLoading="isLoading"
                     :loading-message="loadingMessage"
                     :drag-id="'packlist-crates'"
-                    :allowDetails="!editMode"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
                     @new-row="handleAddCrate"
