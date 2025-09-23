@@ -236,12 +236,54 @@ export const tableRowSelectionState = Vue.reactive({
     registerDropTarget(tableData, dropTarget) {
         if (this.isDragging && this.dragTargetArray === tableData) {
             this.currentDropTarget = dropTarget;
+            
+            // Handle deletion marking based on drop target
+            this.handleDeletionMarking(tableData, dropTarget);
+        }
+    },
+    
+    // Handle marking/unmarking rows for deletion based on drop target
+    handleDeletionMarking(tableData, dropTarget) {
+        const selectionSummary = this.getSelectionSummary();
+        
+        for (const [sourceArray, sourceInfo] of selectionSummary) {
+            const isSourceTable = sourceArray === tableData;
+            const isFooterTarget = dropTarget && dropTarget.type === 'footer';
+            
+            // Mark for deletion if: 
+            // 1. Drop target is footer AND 
+            // 2. It's the same table as the source (moving to its own footer)
+            const shouldMarkForDeletion = isSourceTable && isFooterTarget;
+            
+            // Apply deletion marking to all selected rows in this source
+            sourceInfo.rowIndices.forEach(rowIndex => {
+                if (sourceArray[rowIndex]) {
+                    // Ensure AppData exists
+                    if (!sourceArray[rowIndex].AppData) {
+                        sourceArray[rowIndex].AppData = {};
+                    }
+                    
+                    if (shouldMarkForDeletion) {
+                        // Mark for deletion
+                        sourceArray[rowIndex].AppData['marked-for-deletion'] = true;
+                    } else {
+                        // Remove deletion marking if it exists
+                        if (sourceArray[rowIndex].AppData['marked-for-deletion']) {
+                            delete sourceArray[rowIndex].AppData['marked-for-deletion'];
+                        }
+                    }
+                }
+            });
         }
     },
     
     // Clear drop target registration
     clearDropTargetRegistration(tableData) {
         if (this.dragTargetArray === tableData) {
+            // Before clearing, remove any deletion markings since we're no longer over a footer
+            if (this.currentDropTarget && this.currentDropTarget.type === 'footer') {
+                this.handleDeletionMarking(tableData, { type: null });
+            }
             this.currentDropTarget = null;
         }
     },
@@ -279,6 +321,26 @@ export const tableRowSelectionState = Vue.reactive({
             console.log('No selections found');
             this.stopDrag();
             return false;
+        }
+        
+        // Check for special case: dropping to footer of same table (deletion)
+        if (dropTarget.type === 'footer') {
+            // Check if all selections are from the same array as the drop target
+            let isAllSameSource = true;
+            for (const [sourceArray] of selectionsBySource) {
+                if (sourceArray !== this.dragTargetArray) {
+                    isAllSameSource = false;
+                    break;
+                }
+            }
+            
+            if (isAllSameSource) {
+                // This is a deletion operation - rows are already marked, just clear selection
+                console.log('Footer drop detected - rows marked for deletion');
+                this.clearAll();
+                this.stopDrag(true); // Preserve deletion markings
+                return true;
+            }
         }
         
         // Calculate insertion position
@@ -370,7 +432,13 @@ export const tableRowSelectionState = Vue.reactive({
         return true;
     },
     
-    stopDrag() {
+    stopDrag(preserveDeletionMarkings = false) {
+        // Clean up any temporary deletion markings before stopping drag
+        // unless explicitly preserving them (e.g., successful footer drop)
+        if (!preserveDeletionMarkings) {
+            this.cleanupDeletionMarkings();
+        }
+        
         this.isDragging = false;
         this.dragSourceArray = null;
         this.dragTargetArray = null;
@@ -379,6 +447,24 @@ export const tableRowSelectionState = Vue.reactive({
         
         // Remove global mouse up listener
         document.removeEventListener('mouseup', this.handleGlobalMouseUp);
+    },
+    
+    // Clean up temporary deletion markings when drag is cancelled
+    cleanupDeletionMarkings() {
+        if (!this.isDragging) return;
+        
+        const selectionSummary = this.getSelectionSummary();
+        
+        for (const [sourceArray, sourceInfo] of selectionSummary) {
+            sourceInfo.rowIndices.forEach(rowIndex => {
+                if (sourceArray[rowIndex] && sourceArray[rowIndex].AppData) {
+                    // Remove deletion marking if it exists
+                    if (sourceArray[rowIndex].AppData['marked-for-deletion']) {
+                        delete sourceArray[rowIndex].AppData['marked-for-deletion'];
+                    }
+                }
+            });
+        }
     }
 });
 
@@ -1539,11 +1625,10 @@ export const TableComponent = {
                             
                             <!-- Empty state row for draggable tables -->
                             <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
-                                <td v-if="draggable" class="spacer-cell"></td>
                                 <td 
                                     :colspan="mainTableColumns.length + (allowDetails ? 1 : 0)"
                                     class="empty-message"
-                                    style="text-align: center; padding: 20px; color: #666;"
+                                    style="text-align: center;"
                                 >
                                     {{ emptyMessage }}
                                 </td>
@@ -1608,7 +1693,7 @@ export const TableComponent = {
                                 <td v-if="allowDetails" class="details-cell"></td>
                             </tr>
                             <tr>
-                                <td v-if="draggable" class="spacer-cell"></td>
+                                <td v-if="draggable && (data && data.length > 0)" class="spacer-cell"></td>
                                 <td 
                                     :colspan="(draggable ? 1 : 0) + mainTableColumns.length + (allowDetails ? 1 : 0)" 
                                     class="new-row-button" 

@@ -586,7 +586,7 @@ export const PacklistTable = {
                         <template v-else-if="column && column.key === 'Items'">
                             <TableComponent
                                 v-if="row.Items"
-                                :data="row.Items.length === 0 ? (() => { handleAddItem(rowIndex); return row.Items; })() : row.Items"
+                                :data="row.Items"
                                 :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
                                 :columns="itemHeaders.map(label => ({ 
                                     key: label, 
