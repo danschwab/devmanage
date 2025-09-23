@@ -239,11 +239,13 @@ footer a:visited {
     background-color: var(--color-gray-bg);
     border: 1px solid var(--color-border);
 }
-.content-footer:last-of-type {
+.content-footer:last-of-type:not(:only-child) {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     border-top: none;
 }
-
+.content-footer:only-child {
+    border-radius: var(--radius-lg);
+}
 
 .container:has(.reading-page) {
     max-width: var(--page-width-small); /* Limit width for reading pages */
@@ -1112,12 +1114,15 @@ tr.selected + .drop-target-above:not(.selected)::after {
 }
 
 .dirty > .table-cell-container > .table-edit-textarea, .dirty input[type="number"] {
-    background-color: var(--color-red-bg-transparent);
-    outline: 2px solid var(--color-red-bg-transparent);
+    /*background-color: var(--color-red-bg-transparent);*/
+    outline: 2px dotted var(--color-red-bg-transparent);
 }
 
 tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .table-cell-container > input[type="number"] {
     background-color: var(--color-blue-bg-transparent);
+}
+.dirty > .table-cell-container > .table-edit-textarea:focus, .dirty > .table-cell-container > input[type="number"]:focus {
+    outline: solid 2px var(--color-red-bg);
 }
 .table-edit-textarea:focus, td input[type="number"]:focus {
     outline: solid 2px var(--color-blue-bg-hover);

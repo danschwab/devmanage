@@ -56,13 +56,13 @@ export const PacklistTable = {
                 const isEditable = this.editMode && ['Type','L','W','H','Weight','Notes'].includes(label);
                 
                 // When not in edit mode, move Type, L, W, H, Weight to details
-                const isDetailsColumn = !this.editMode && ['Type','L','W','H','Weight'].includes(label);
+                //const isDetailsColumn = !this.editMode && ['Type','L','W','H','Weight'].includes(label);
                 
                 return { 
                     key: label, 
                     label, 
                     editable: isEditable, 
-                    details: isDetailsColumn,
+                    details: null,
                     hidden: []
                 };
             });

@@ -1170,8 +1170,13 @@ export const TableComponent = {
                 mouseY = this.lastKnownMouseY;
             }
             
-            // Find the table element
-            const tableEl = this.$el.querySelector('table');
+            // Find the table element - scope to this specific table using drag-id
+            let tableEl;
+            if (this.dragId) {
+                tableEl = this.$el.querySelector(`table.${this.dragId}`);
+            } else {
+                tableEl = this.$el.querySelector('table');
+            }
             if (!tableEl) return;
             
             const tableRect = tableEl.getBoundingClientRect();
@@ -1186,10 +1191,16 @@ export const TableComponent = {
             }
             
             // Find thead, tbody, and tfoot elements
-            const thead = tableEl.querySelector('thead');
-            const tbody = tableEl.querySelector('tbody');
-            const tfoot = tableEl.querySelector('tfoot');
-            
+            let thead, tbody, tfoot;
+            if (this.dragId) {
+                thead = tableEl.querySelector(`table.${this.dragId} > thead`);
+                tbody = tableEl.querySelector(`table.${this.dragId} > tbody`);
+                tfoot = tableEl.querySelector(`table.${this.dragId} > tfoot`);
+            } else {
+                thead = tableEl.querySelector('thead');
+                tbody = tableEl.querySelector('tbody');
+                tfoot = tableEl.querySelector('tfoot');
+            }
             let newDropTarget = { type: null, position: null, isAbove: false };
             
             // Check header drop target
@@ -1210,8 +1221,12 @@ export const TableComponent = {
             
             // Check between rows in tbody
             if (tbody && newDropTarget.type === null) {
-                const rows = tbody.querySelectorAll('tr');
-                
+                let rows;
+                if (this.dragId) {
+                    rows = tbody.querySelectorAll(`table.${this.dragId} > tbody > tr`);
+                } else {
+                    rows = tbody.querySelectorAll('tr');
+                }
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     const rowRect = row.getBoundingClientRect();
@@ -1262,14 +1277,18 @@ export const TableComponent = {
         },
 
         getRowIndexAtPosition(mouseY) {
-            // Find which row index corresponds to the given Y position
-            const tableEl = this.$el.querySelector('table');
-            if (!tableEl) return null;
-            
-            const tbody = tableEl.querySelector('tbody');
-            if (!tbody) return null;
-            
-            const rows = tbody.querySelectorAll('tr');
+            // Find which row index corresponds to the given Y position - scope to this specific table
+            let rows;
+            if (this.dragId) {
+                rows = this.$el.querySelectorAll(`table.${this.dragId} > tbody > tr`);
+                if (!rows || rows.length === 0) return null;
+            } else {
+                const tableEl = this.$el.querySelector('table');
+                if (!tableEl) return null;
+                const tbody = tableEl.querySelector('tbody');
+                if (!tbody) return null;
+                rows = tbody.querySelectorAll('tr');
+            }
             
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
@@ -1483,7 +1502,7 @@ export const TableComponent = {
                 
                 <!-- Data Table (always render if draggable, even when empty) -->
                 <div v-else-if="data && data.length > 0 || draggable" class="table-wrapper">
-                    <table :class="{ editing: hasEditableColumns }">
+                    <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
                         <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
                             <tr>
                                 <th v-if="draggable" class="spacer-cell"></th>
