@@ -2,8 +2,11 @@ import { html, parseDate } from '../../index.js';
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
-    // Single selection set with array references
-    selections: new Map(), // Map of rowIndex -> { sourceArray: arrayRef, dragId: dragId }
+    // Selection map with unique keys to handle multiple tables
+    selections: new Map(), // Map of selectionKey -> { rowIndex: number, sourceArray: arrayRef, dragId: dragId }
+    
+    // Configuration options
+    allowMultiSourceDrag: true, // Allow dragging selections from different data sources
     
     // Drag state
     isDragging: false,
@@ -12,25 +15,41 @@ export const tableRowSelectionState = Vue.reactive({
     dragId: null, // The dragId of the table group participating in drag operations
     currentDropTarget: null, // Current registered drop target from tables
     
+    // Generate unique selection key for a row in a specific table
+    _getSelectionKey(rowIndex, sourceArray) {
+        // Use the array reference memory address as a unique identifier combined with row index
+        // This approach ensures different table instances get different keys even if they have similar content
+        if (!sourceArray._tableId) {
+            // Generate a unique ID for this table if it doesn't have one
+            sourceArray._tableId = 'table_' + Math.random().toString(36).substr(2, 9);
+        }
+        return `${sourceArray._tableId}_${rowIndex}`;
+    },
+    
     // Add a row to global selection
     addRow(rowIndex, sourceArray, dragId = null) {
-        this.selections.set(rowIndex, {
+        const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
+        this.selections.set(selectionKey, {
+            rowIndex: rowIndex,
             sourceArray: sourceArray,
             dragId: dragId
         });
     },
     
     // Remove a row from global selection
-    removeRow(rowIndex) {
-        this.selections.delete(rowIndex);
+    removeRow(rowIndex, sourceArray) {
+        const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
+        this.selections.delete(selectionKey);
     },
     
     // Toggle row selection
     toggleRow(rowIndex, sourceArray, dragId = null) {
-        if (this.selections.has(rowIndex)) {
-            this.selections.delete(rowIndex);
+        const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
+        if (this.selections.has(selectionKey)) {
+            this.selections.delete(selectionKey);
         } else {
-            this.selections.set(rowIndex, {
+            this.selections.set(selectionKey, {
+                rowIndex: rowIndex,
                 sourceArray: sourceArray,
                 dragId: dragId
             });
@@ -39,12 +58,8 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Check if a row is selected (by checking if any selection has this index in its source array)
     hasRow(sourceArray, rowIndex) {
-        for (const [selectedRowIndex, selection] of this.selections) {
-            if (selection.sourceArray === sourceArray && selectedRowIndex === rowIndex) {
-                return true;
-            }
-        }
-        return false;
+        const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
+        return this.selections.has(selectionKey);
     },
     
     // Clear all selections
@@ -54,9 +69,9 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Clear selections from a specific array
     clearArray(sourceArray) {
-        for (const [rowIndex, selection] of this.selections) {
+        for (const [selectionKey, selection] of this.selections) {
             if (selection.sourceArray === sourceArray) {
-                this.selections.delete(rowIndex);
+                this.selections.delete(selectionKey);
             }
         }
     },
@@ -80,9 +95,9 @@ export const tableRowSelectionState = Vue.reactive({
     // Get all selected row indices for a specific array
     getSelectedRowIndices(sourceArray) {
         const indices = [];
-        for (const [rowIndex, selection] of this.selections) {
+        for (const [selectionKey, selection] of this.selections) {
             if (selection.sourceArray === sourceArray) {
-                indices.push(rowIndex);
+                indices.push(selection.rowIndex);
             }
         }
         return indices;
@@ -91,9 +106,9 @@ export const tableRowSelectionState = Vue.reactive({
     // Get all selected row data for a specific array
     getSelectedRowData(sourceArray) {
         const data = [];
-        for (const [rowIndex, selection] of this.selections) {
+        for (const [selectionKey, selection] of this.selections) {
             if (selection.sourceArray === sourceArray) {
-                data.push(sourceArray[rowIndex]);
+                data.push(sourceArray[selection.rowIndex]);
             }
         }
         return data;
@@ -102,27 +117,107 @@ export const tableRowSelectionState = Vue.reactive({
     // Get all selected rows (index + data) for a specific array
     getSelectedRows(sourceArray) {
         const rows = [];
-        for (const [rowIndex, selection] of this.selections) {
+        for (const [selectionKey, selection] of this.selections) {
             if (selection.sourceArray === sourceArray) {
                 rows.push({
-                    index: rowIndex,
-                    data: sourceArray[rowIndex]
+                    index: selection.rowIndex,
+                    data: sourceArray[selection.rowIndex]
                 });
             }
         }
         return rows;
     },
     
-    // Drag management methods
-    startDrag() {
+    // Get all unique source arrays that have selections
+    getSelectedDataSources() {
+        const sources = new Set();
+        for (const selection of this.selections.values()) {
+            sources.add(selection.sourceArray);
+        }
+        return Array.from(sources);
+    },
+    
+    // Get selection summary grouped by data source
+    getSelectionSummary() {
+        const summary = new Map();
+        for (const [selectionKey, selection] of this.selections) {
+            if (!summary.has(selection.sourceArray)) {
+                summary.set(selection.sourceArray, {
+                    sourceArray: selection.sourceArray,
+                    dragId: selection.dragId,
+                    rowIndices: [],
+                    count: 0
+                });
+            }
+            const sourceSummary = summary.get(selection.sourceArray);
+            sourceSummary.rowIndices.push(selection.rowIndex);
+            sourceSummary.count++;
+        }
+        return summary;
+    },
+    
+    // Check if selections are all from the same data source
+    areSelectionsFromSameSource() {
+        const sources = this.getSelectedDataSources();
+        return sources.length <= 1;
+    },
+    
+    // Validate if the current selection can be dragged
+    canStartDrag() {
         if (this.selections.size === 0) return false;
         
+        // If multi-source drag is disabled, only allow same-source selections
+        if (!this.allowMultiSourceDrag && !this.areSelectionsFromSameSource()) {
+            console.log('Multi-source drag disabled - cannot drag selections from different tables');
+            return false;
+        }
+        
+        return true;
+    },
+    
+    // Debug method to log current selection state
+    logSelectionState() {
+        console.log('=== Selection State Debug ===');
+        console.log('Total selections:', this.selections.size);
+        console.log('Data sources with selections:', this.getSelectedDataSources().length);
+        
+        const summary = this.getSelectionSummary();
+        for (const [sourceArray, info] of summary) {
+            console.log(`Source ${info.dragId || 'unknown'}:`, {
+                count: info.count,
+                indices: info.rowIndices.sort((a, b) => a - b)
+            });
+        }
+        console.log('========================');
+    },
+    
+    // Drag management methods
+    startDrag() {
+        // Validate if drag can be started
+        if (!this.canStartDrag()) return false;
+        
+        // Check if we can drag with multiple data sources
+        const selectionSummary = this.getSelectionSummary();
+        const dataSources = this.getSelectedDataSources();
+        
+        console.log(`Starting drag with ${this.selections.size} selections from ${dataSources.length} data source(s)`);
+        
         this.isDragging = true;
-        // Get source array and dragId from first selection (all selections should be from same table group when dragging)
+        
+        // For compatibility, we'll use the first selection's info for dragSourceArray and dragId
+        // but the actual drag logic will handle all sources
         const firstSelection = this.selections.values().next().value;
         this.dragSourceArray = firstSelection.sourceArray;
         this.dragId = firstSelection.dragId;
         this.currentDropTarget = null;
+        
+        // Log selection summary for debugging
+        if (dataSources.length > 1) {
+            console.log('Multi-source drag detected:');
+            for (const [sourceArray, info] of selectionSummary) {
+                console.log(`  - Source ${info.dragId || 'unknown'}: ${info.count} rows`);
+            }
+        }
         
         // Set up global mouse up listener with proper binding
         this.handleGlobalMouseUp = this.handleGlobalMouseUp.bind(this);
@@ -177,12 +272,11 @@ export const tableRowSelectionState = Vue.reactive({
             return false;
         }
         
-        // Get selected rows sorted by index (highest first for removal)
-        const selectedRows = Array.from(this.selections.entries())
-            .filter(([, selection]) => selection.sourceArray === this.dragSourceArray)
-            .sort(([a], [b]) => b - a);
+        // Group selections by source array
+        const selectionsBySource = this.getSelectionSummary();
         
-        if (selectedRows.length === 0) {
+        if (selectionsBySource.size === 0) {
+            console.log('No selections found');
             this.stopDrag();
             return false;
         }
@@ -202,33 +296,72 @@ export const tableRowSelectionState = Vue.reactive({
             return false;
         }
         
-        if (this.dragSourceArray === this.dragTargetArray) {
-            // Same array: reorder rows
-            console.log('Same array reorder - insertPosition:', insertPosition);
-            const rowsData = selectedRows.map(([index]) => this.dragSourceArray[index]);
+        // Perform atomic move operation to prevent reactivity issues
+        try {
+            let totalRowsInserted = 0;
             
-            // Remove rows (in reverse order to maintain indices)
-            selectedRows.forEach(([index]) => {
-                this.dragSourceArray.splice(index, 1);
-                // Adjust insertion position if we removed rows before it
-                if (index < insertPosition) {
-                    insertPosition--;
+            // Process each source array
+            for (const [sourceArray, sourceInfo] of selectionsBySource) {
+                console.log(`Processing source with ${sourceInfo.count} rows from ${sourceInfo.dragId || 'unknown'}`);
+                
+                // Sort row indices in ascending order to preserve original order
+                const sortedIndicesAsc = sourceInfo.rowIndices.sort((a, b) => a - b);
+                // Sort row indices in reverse order (highest first) for safe removal
+                const sortedIndicesDesc = [...sortedIndicesAsc].reverse();
+                
+                // Extract row data BEFORE removal using ascending order to preserve original sequence
+                const rowsData = sortedIndicesAsc.map(index => sourceArray[index]).filter(row => row !== undefined);
+                
+                if (sourceArray === this.dragTargetArray) {
+                    // Same array: reorder rows
+                    console.log('Same array reorder - insertPosition:', insertPosition + totalRowsInserted);
+                    
+                    let adjustedInsertPosition = insertPosition + totalRowsInserted;
+                    
+                    // Remove rows (in reverse order to maintain indices)
+                    sortedIndicesDesc.forEach(index => {
+                        if (index < sourceArray.length) {
+                            sourceArray.splice(index, 1);
+                            // Adjust insertion position if we removed rows before it
+                            if (index < adjustedInsertPosition) {
+                                adjustedInsertPosition--;
+                            }
+                        }
+                    });
+                    
+                    // Insert at new position
+                    if (adjustedInsertPosition >= 0 && adjustedInsertPosition <= sourceArray.length) {
+                        sourceArray.splice(adjustedInsertPosition, 0, ...rowsData);
+                    }
+                    
+                    totalRowsInserted += rowsData.length;
+                } else {
+                    // Different arrays: move rows to target
+                    console.log('Different arrays move - from:', sourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition + totalRowsInserted);
+                    
+                    // Remove from source array (in reverse order to maintain indices)
+                    sortedIndicesDesc.forEach(index => {
+                        if (index < sourceArray.length) {
+                            sourceArray.splice(index, 1);
+                        }
+                    });
+                    
+                    // Insert into target array at adjusted position
+                    const adjustedInsertPosition = insertPosition + totalRowsInserted;
+                    if (adjustedInsertPosition >= 0 && adjustedInsertPosition <= this.dragTargetArray.length) {
+                        this.dragTargetArray.splice(adjustedInsertPosition, 0, ...rowsData);
+                    }
+                    
+                    totalRowsInserted += rowsData.length;
+                    console.log('After move - from:', sourceArray.length, 'to:', this.dragTargetArray.length);
                 }
-            });
+            }
             
-            // Insert at new position
-            this.dragSourceArray.splice(insertPosition, 0, ...rowsData);
-        } else {
-            // Different arrays: move rows
-            console.log('Different arrays move - from:', this.dragSourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition);
-            const rowsData = selectedRows.map(([index]) => this.dragSourceArray[index]);
-            
-            // Remove from source array (in reverse order to maintain indices)
-            selectedRows.forEach(([index]) => this.dragSourceArray.splice(index, 1));
-            
-            // Insert into target array
-            this.dragTargetArray.splice(insertPosition, 0, ...rowsData);
-            console.log('After move - from:', this.dragSourceArray.length, 'to:', this.dragTargetArray.length);
+            console.log(`Total rows moved: ${totalRowsInserted}`);
+        } catch (error) {
+            console.error('Error during drag operation:', error);
+            this.stopDrag();
+            return false;
         }
         
         // Clear selection and drag state
@@ -355,7 +488,10 @@ export const TableComponent = {
                 startX: null,
                 startY: null,
                 longClickTimer: null,
-                hasMoved: false
+                hasMoved: false,
+                // Multi-selection state
+                isMultiSelecting: false,
+                lastHoveredRowIndex: null
             },
             dropTarget: {
                 type: null, // 'between-rows', 'header', 'footer'
@@ -411,14 +547,17 @@ export const TableComponent = {
         },
         visibleRows() {
             // Filter rows based on search value and deletion status
+            if (!Array.isArray(this.data)) return [];
+            
             let filteredData = this.data
                 .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => !(row.AppData && row.AppData['marked-for-deletion']));
+                .filter(({ row }) => row && !(row.AppData && row.AppData['marked-for-deletion']));
 
             // Apply search filter if searchValue is provided and hideRowsOnSearch is enabled
             if (this.searchValue && this.searchValue.trim() && this.hideRowsOnSearch) {
                 const searchTerm = this.searchValue.toLowerCase().trim();
                 filteredData = filteredData.filter(({ row }) => {
+                    if (!row) return false;
                     // Only search visible columns (exclude hidden columns)
                     const visibleColumns = this.columns.filter(column => !this.hideSet.has(column.key));
                     return visibleColumns.some(column => {
@@ -462,9 +601,11 @@ export const TableComponent = {
         },
         deletedRows() {
             // Show rows marked for deletion in tfoot
+            if (!Array.isArray(this.data)) return [];
+            
             return this.data
                 .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => row.AppData && row.AppData['marked-for-deletion']);
+                .filter(({ row }) => row && row.AppData && row.AppData['marked-for-deletion']);
         }
     },
     watch: {
@@ -520,6 +661,13 @@ export const TableComponent = {
         // Selection helper methods
         isRowSelected(rowIndex) {
             return tableRowSelectionState.hasRow(this.data, rowIndex);
+        },
+
+        isRowDragging(rowIndex) {
+            // Check if this row is currently being dragged
+            return tableRowSelectionState.isDragging && 
+                   tableRowSelectionState.dragSourceArray === this.data &&
+                   tableRowSelectionState.hasRow(this.data, rowIndex);
         },
 
         handleSort(columnKey) {
@@ -790,8 +938,10 @@ export const TableComponent = {
             // Set up long click timer (800ms)
             this.clickState.longClickTimer = setTimeout(() => {
                 if (this.clickState.isMouseDown && !this.clickState.hasMoved) {
-                    // Long click: add row to selection
+                    // Long click: add row to selection and enable multi-selection mode
                     tableRowSelectionState.addRow(rowIndex, this.data, this.dragId);
+                    this.clickState.isMultiSelecting = true;
+                    this.clickState.lastHoveredRowIndex = rowIndex;
                     this.clickState.longClickTimer = null;
                 }
             }, 800);
@@ -820,27 +970,41 @@ export const TableComponent = {
                     this.clickState.longClickTimer = null;
                 }
                 
-                // If dragged row is not in selection, replace entire selection with this row
-                if (!tableRowSelectionState.hasRow(this.data, this.clickState.startRowIndex)) {
-                    tableRowSelectionState.clearAll();
-                    tableRowSelectionState.addRow(this.clickState.startRowIndex, this.data, this.dragId);
+                // If not in multi-selection mode, handle normal drag logic
+                if (!this.clickState.isMultiSelecting) {
+                    // If dragged row is not in selection, replace entire selection with this row
+                    if (!tableRowSelectionState.hasRow(this.data, this.clickState.startRowIndex)) {
+                        tableRowSelectionState.clearAll();
+                        tableRowSelectionState.addRow(this.clickState.startRowIndex, this.data, this.dragId);
+                    }
+                    
+                    // Start drag if table is draggable and we have selections
+                    if (this.draggable && tableRowSelectionState.getTotalSelectionCount() > 0) {
+                        tableRowSelectionState.startDrag();
+                        this.unselectAllEditableCells();
+                    }
                 }
+            }
+            
+            // Handle multi-selection mode
+            if (this.clickState.isMultiSelecting && this.clickState.hasMoved) {
+                // Find the row index at current mouse position
+                const currentRowIndex = this.getRowIndexAtPosition(event.clientY);
                 
-                // Start drag if table is draggable and we have selections
-                if (this.draggable && tableRowSelectionState.getTotalSelectionCount() > 0) {
-                    tableRowSelectionState.startDrag();
+                if (currentRowIndex !== null && currentRowIndex !== this.clickState.lastHoveredRowIndex) {
+                    // Update the selection range
+                    this.selectRowRange(this.clickState.startRowIndex, currentRowIndex);
+                    this.clickState.lastHoveredRowIndex = currentRowIndex;
                 }
             }
         },
         handleGlobalMouseUp(event) {
             if (!this.clickState.isMouseDown) return;
-            
-            // Handle drag completion is now managed by global state
-            // Tables only handle their own cleanup during drag operations
+            // Clear local drop target after drag completion
+
+            this.clearDropTarget();
+
             if (tableRowSelectionState.isDragging) {
-                // Clear local drop target after drag completion
-                this.clearDropTarget();
-                
                 // Clean up and exit early - don't process click logic when dragging
                 this.resetClickState();
                 return;
@@ -859,16 +1023,17 @@ export const TableComponent = {
                 }
                 
                 // Short click logic (only if no movement occurred)
-                if (!this.clickState.hasMoved) {
-                    const clickDuration = Date.now() - this.clickState.startTime;
-                    
-                    // Short click (less than 800ms and no movement)
-                    if (clickDuration < 800) {
-                        if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                            // Toggle selection state of clicked row
-                            tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
-                        }
+                if (!this.clickState.hasMoved && !this.clickState.isMultiSelecting) {
+                    if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                        // Toggle selection state of clicked row
+                        tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
                     }
+                }
+            } else if (tableRowSelectionState.getTotalSelectionCount() > 0 && !this.clickState.isMultiSelecting) {
+                // If click is not on a drag handle, clear selection
+                if (!targetHandle) {
+                    console.log('Click outside drag handle - clearing selection');
+                    tableRowSelectionState.clearAll();
                 }
             }
             
@@ -887,6 +1052,8 @@ export const TableComponent = {
             this.clickState.startX = null;
             this.clickState.startY = null;
             this.clickState.hasMoved = false;
+            this.clickState.isMultiSelecting = false;
+            this.clickState.lastHoveredRowIndex = null;
             
             // Remove global listeners
             document.removeEventListener('mousemove', this.handleGlobalMouseMove);
@@ -967,11 +1134,29 @@ export const TableComponent = {
                         const midpoint = rowRect.top + rowRect.height / 2;
                         const isAbove = mouseY < midpoint;
                         
+                        // Map visual row index to actual data position
+                        // visibleRows contains { row, idx } where idx is the actual data index
+                        let targetIndex;
+                        if (isAbove) {
+                            // Insert before this row
+                            if (i === 0) {
+                                targetIndex = 0; // Insert at beginning
+                            } else {
+                                // Find the data index of the previous visible row and add 1
+                                const prevVisibleRow = this.visibleRows[i - 1];
+                                targetIndex = prevVisibleRow ? prevVisibleRow.idx + 1 : 0;
+                            }
+                        } else {
+                            // Insert after this row
+                            const currentVisibleRow = this.visibleRows[i];
+                            targetIndex = currentVisibleRow ? currentVisibleRow.idx + 1 : this.data.length;
+                        }
+                        
                         newDropTarget = {
                             type: 'between',
-                            targetIndex: isAbove ? i : i + 1
+                            targetIndex: targetIndex
                         };
-                        console.log('Drop target found:', newDropTarget, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                        console.log('Drop target found:', newDropTarget, 'visual index:', i, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
                         break;
                     }
                 }
@@ -986,6 +1171,46 @@ export const TableComponent = {
                 // Register the new drop target with global state
                 if (this.dropTarget.type) {
                     tableRowSelectionState.registerDropTarget(this.data, this.dropTarget);
+                }
+            }
+        },
+
+        getRowIndexAtPosition(mouseY) {
+            // Find which row index corresponds to the given Y position
+            const tableEl = this.$el.querySelector('table');
+            if (!tableEl) return null;
+            
+            const tbody = tableEl.querySelector('tbody');
+            if (!tbody) return null;
+            
+            const rows = tbody.querySelectorAll('tr');
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const rowRect = row.getBoundingClientRect();
+                
+                if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+                    // Need to map visual row index to actual data index
+                    const visibleRowData = this.visibleRows[i];
+                    return visibleRowData ? visibleRowData.idx : null;
+                }
+            }
+            
+            return null;
+        },
+
+        selectRowRange(startIndex, endIndex) {
+            // Clear current selections for this table
+            tableRowSelectionState.clearArray(this.data);
+            
+            // Determine the actual range (handle reverse selection)
+            const minIndex = Math.min(startIndex, endIndex);
+            const maxIndex = Math.max(startIndex, endIndex);
+            
+            // Select all rows in the range
+            for (let i = minIndex; i <= maxIndex; i++) {
+                if (i >= 0 && i < this.data.length) {
+                    tableRowSelectionState.addRow(i, this.data, this.dragId);
                 }
             }
         },
@@ -1037,6 +1262,7 @@ export const TableComponent = {
             // Set contenteditable text for all editable cells to match data (only on mount or new row)
             if (!Array.isArray(this.data)) return; // <-- guard against null/undefined
             this.data.forEach((row, rowIndex) => {
+                if (!row) return; // Skip undefined rows
                 this.columns.forEach((column, colIndex) => {
                     if (column.editable) {
                         const refName = 'editable_' + rowIndex + '_' + colIndex;
@@ -1058,7 +1284,15 @@ export const TableComponent = {
                 });
             });
         },
-        
+        unselectAllEditableCells() {
+            // Remove focus from any editable cell. get editable cells by searching dom for contenteditable=true
+            const editableCells = this.$el.querySelectorAll('[contenteditable="true"]');
+            editableCells.forEach(cell => {
+                if (cell instanceof HTMLElement && document.activeElement === cell) {
+                    cell.blur();
+                }
+            });
+        },
         toggleRowDetails(rowIndex) {
             if (this.expandedRows.has(rowIndex)) {
                 this.expandedRows.delete(rowIndex);
@@ -1073,16 +1307,6 @@ export const TableComponent = {
         
         handleOutsideClick(event) {
             const clickedElement = event.target;
-            
-            // Handle clearing selection when clicking outside drag handles
-            if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                const dragHandle = clickedElement.closest('.row-drag-handle');
-                
-                // If click is not on a drag handle, clear selection
-                if (!dragHandle) {
-                    tableRowSelectionState.clearAll();
-                }
-            }
             
             // Handle closing expanded details (existing functionality)
             if (this.expandedRows.size === 0) return;
@@ -1166,13 +1390,13 @@ export const TableComponent = {
                     <p>{{ loadingMessage }}</p>
                 </div>
                 
-                <!-- Empty State -->
-                <div v-else-if="!data || data.length === 0" class="content-footer red">
+                <!-- Empty State (only show for non-draggable tables) -->
+                <div v-else-if="(!data || data.length === 0) && !draggable" class="content-footer red">
                     <p>{{ emptyMessage }}</p>
                 </div>
                 
-                <!-- Data Table -->
-                <div v-else class="table-wrapper">
+                <!-- Data Table (always render if draggable, even when empty) -->
+                <div v-else-if="data && data.length > 0 || draggable" class="table-wrapper">
                     <table :class="{ editing: hasEditableColumns }">
                         <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
                             <tr>
@@ -1201,7 +1425,7 @@ export const TableComponent = {
                             <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
                                 <tr 
                                     :class="{
-                                        'dragging': false,
+                                        'dragging': isRowDragging(idx),
                                         'drag-over': false,
                                         'selected': isRowSelected(idx),
                                         'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
@@ -1312,13 +1536,26 @@ export const TableComponent = {
                                     </td>
                                 </tr>
                             </template>
+                            
+                            <!-- Empty state row for draggable tables -->
+                            <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
+                                <td v-if="draggable" class="spacer-cell"></td>
+                                <td 
+                                    :colspan="mainTableColumns.length + (allowDetails ? 1 : 0)"
+                                    class="empty-message"
+                                    style="text-align: center; padding: 20px; color: #666;"
+                                >
+                                    {{ emptyMessage }}
+                                </td>
+                            </tr>
                         </tbody>
                         <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
                             <tr v-for="({ row, idx }, delIdx) in deletedRows"
                                 :key="'del-' + idx"
                                 :class="{
                                     'marked-for-deletion': true,
-                                    'selected': isRowSelected(idx)
+                                    'selected': isRowSelected(idx),
+                                    'dragging': isRowDragging(idx)
                                 }"
                             >
                                 <td v-if="draggable"
@@ -1381,6 +1618,11 @@ export const TableComponent = {
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+                
+                <!-- Fallback empty state for non-draggable tables with no data -->
+                <div v-else class="content-footer red">
+                    <p>{{ emptyMessage }}</p>
                 </div>
                 
                 <!-- Data Summary -->

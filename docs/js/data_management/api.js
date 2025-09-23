@@ -87,6 +87,39 @@ export const Requests = {
     },
     
     /**
+     * Get headers/schema from a sheet without loading all data
+     * @param {string} tableId - Table identifier
+     * @param {string} tabName - Tab name
+     * @returns {Promise<Array<string>>} - Array of column headers
+     */
+    getHeaders: async (tableId, tabName) => {
+        const rawData = await Database.getData(tableId, tabName);
+        if (Array.isArray(rawData) && rawData.length > 0 && Array.isArray(rawData[0])) {
+            return rawData[0]; // First row contains headers
+        }
+        return [];
+    },
+    
+    /**
+     * Get item headers/schema from a packlist by examining actual data
+     * @param {string} tabName - Packlist tab name
+     * @returns {Promise<Array<string>>} - Array of item column headers
+     */
+    getItemHeaders: async (tabName) => {
+        const packlistData = await Requests.getPackList(tabName);
+        if (Array.isArray(packlistData)) {
+            // Find the first crate that has items with actual data
+            for (const crate of packlistData) {
+                if (Array.isArray(crate.Items) && crate.Items.length > 0) {
+                    return Object.keys(crate.Items[0]);
+                }
+            }
+        }
+        // Return default schema if no data found
+        return ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
+    },
+    
+    /**
      * Clear cache for specified resources
      * @param {string} [namespace] - Optional namespace to clear cache for
      * @param {string} [methodName] - Optional method name to clear cache for

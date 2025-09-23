@@ -27,21 +27,25 @@ export const PacklistTable = {
             dirtyCrateRows: {},
             error: null,
             itemQuantityStatus: {}, // Store item quantity analysis results
-            analyzingQuantities: false
+            analyzingQuantities: false,
+            // Store headers fetched from database (will be populated on mount)
+            databaseItemHeaders: null
         };
     },
     computed: {
         mainHeaders() {
-            // Use headers from the first crate if available, else fallback to content
+            // Use headers from the first crate if available, else use default schema
             const crates = this.mainTableData;
-            if (crates.length > 0) {
+            if (crates.length > 0 && Object.keys(crates[0]).length > 0) {
                 return [...Object.keys(crates[0]).filter(k => k !== 'Items'), 'Items'];
             }
-            // fallback to content headers if present
-            const headers = this.content && this.content.length > 0
-                ? Object.keys(this.content[0]).filter(k => k !== 'Items')
-                : [];
-            return [...headers, 'Items'];
+            // Fallback to content headers if present
+            if (this.content && this.content.length > 0 && Object.keys(this.content[0]).length > 0) {
+                const headers = Object.keys(this.content[0]).filter(k => k !== 'Items');
+                return [...headers, 'Items'];
+            }
+            // Default schema when no data is available
+            return ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Notes', 'Items'];
         },
         mainColumns() {
             return this.mainHeaders.map((label, idx) => {
@@ -86,7 +90,8 @@ export const PacklistTable = {
             if (this.content && this.content.length > 0 && Array.isArray(this.content[0].Items) && this.content[0].Items.length > 0) {
                 return Object.keys(this.content[0].Items[0]);
             }
-            return [];
+            // Use database headers if available, otherwise use default schema
+            return this.databaseItemHeaders || ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
         },
         isLoading() {
             return this.packlistTableStore ? this.packlistTableStore.isLoading : false;
@@ -116,8 +121,9 @@ export const PacklistTable = {
             this.mainTableData.forEach((crate, crateIndex) => {
                 if (crate && crate.Items && Array.isArray(crate.Items)) {
                     crate.Items.forEach((item, itemIndex) => {
-                        if (item.AppData && Array.isArray(item.AppData.items)) {
+                        if (item && item.AppData && Array.isArray(item.AppData.items)) {
                             item.AppData.items.forEach(itemData => {
+                                if (!itemData) return;
                                 const itemId = itemData.itemId;
                                 
                                 if (!itemAggregation[itemId]) {
@@ -239,6 +245,18 @@ export const PacklistTable = {
 
             if (!this.packlistTableStore.isLoading) {
                 this.analyzePacklistQuantities();
+            }
+            
+            // Load database headers
+            this.loadItemHeaders();
+        },
+        async loadItemHeaders() {
+            if (!this.tabName) return;
+            try {
+                this.databaseItemHeaders = await Requests.getItemHeaders(this.tabName);
+            } catch (error) {
+                console.warn('Failed to load item headers from database:', error);
+                this.databaseItemHeaders = ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
             }
         },
         async handleRefresh() {

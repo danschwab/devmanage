@@ -931,34 +931,30 @@ table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td
 tr.dragging, tr.selected, tfoot tr.draggable {
     position: relative;
 }
-tr.dragging::after {
-    content: "";
-    color: var(--color-text-inverted);
-    position: absolute;
-    inset: 0;
-    background: var(--color-gray-bg-transparent);
-    pointer-events: none;
-    z-index: 2;
-}
 tr.selected::after, tr:last-child.selected.drop-target-below::after {
     content: "";
     position: absolute;
+    display: block;
     inset: 0;
     background: var(--color-green-bg-transparent);
     pointer-events: none;
     z-index: 2;
     box-sizing: border-box;
 }
+/*tr.selected.dragging::after {
+    background: var(--color-blue-bg);
+    opacity: 0.5;
+}*/
 
 /* Drop Target Styling */
 tr.selected.drop-target-above::after, .drop-target-header + tbody > tr:first-child.selected::after {
-    border-top: 2px solid var(--color-green);
+    border-top: 2px solid var(--color-blue);
 }
 
 tr.selected.drop-target-below::after {
-    border-bottom: 2px solid var(--color-green);
+    border-bottom: 2px solid var(--color-blue);
 }
-tr.selected + .drop-target-above::after {
+tr.selected + .drop-target-above:not(.selected)::after {
     display:none;
 }
 .drop-target-above::after, .drop-target-header + tbody > tr:first-child::after {
@@ -971,6 +967,7 @@ tr.selected + .drop-target-above::after {
 }
 :last-child.drop-target-below::after {
     content: "";
+    display: block;
     position: absolute;
     pointer-events: none;
     z-index: 2;
