@@ -168,27 +168,45 @@ export const tableRowSelectionState = Vue.reactive({
         
         // If multi-source drag is disabled, only allow same-source selections
         if (!this.allowMultiSourceDrag && !this.areSelectionsFromSameSource()) {
-            console.log('Multi-source drag disabled - cannot drag selections from different tables');
             return false;
         }
         
         return true;
     },
     
-    // Debug method to log current selection state
-    logSelectionState() {
-        console.log('=== Selection State Debug ===');
-        console.log('Total selections:', this.selections.size);
-        console.log('Data sources with selections:', this.getSelectedDataSources().length);
-        
-        const summary = this.getSelectionSummary();
-        for (const [sourceArray, info] of summary) {
-            console.log(`Source ${info.dragId || 'unknown'}:`, {
-                count: info.count,
-                indices: info.rowIndices.sort((a, b) => a - b)
-            });
+    // Keyboard action methods
+    clearAllSelections() {
+        // Clear all selections (used by Escape key)
+        this.clearAll();
+        console.log('All selections cleared via keyboard');
+    },
+    
+    markSelectedForDeletion() {
+        // Mark all selected rows for deletion (used by Delete key)
+        if (this.selections.size === 0) {
+            console.log('No selections to mark for deletion');
+            return;
         }
-        console.log('========================');
+        
+        let deletedCount = 0;
+        for (const [selectionKey, selection] of this.selections) {
+            const { rowIndex, sourceArray } = selection;
+            if (sourceArray[rowIndex]) {
+                // Ensure AppData exists
+                if (!sourceArray[rowIndex].AppData) {
+                    sourceArray[rowIndex].AppData = {};
+                }
+                
+                // Mark for deletion
+                sourceArray[rowIndex].AppData['marked-for-deletion'] = true;
+                deletedCount++;
+            }
+        }
+        
+        console.log(`Marked ${deletedCount} selected rows for deletion via keyboard`);
+        
+        // Clear selections after marking for deletion
+        this.clearAll();
     },
     
     // Drag management methods
@@ -199,9 +217,6 @@ export const tableRowSelectionState = Vue.reactive({
         // Check if we can drag with multiple data sources
         const selectionSummary = this.getSelectionSummary();
         const dataSources = this.getSelectedDataSources();
-        
-        console.log(`Starting drag with ${this.selections.size} selections from ${dataSources.length} data source(s)`);
-        
         this.isDragging = true;
         
         // For compatibility, we'll use the first selection's info for dragSourceArray and dragId
@@ -210,14 +225,6 @@ export const tableRowSelectionState = Vue.reactive({
         this.dragSourceArray = firstSelection.sourceArray;
         this.dragId = firstSelection.dragId;
         this.currentDropTarget = null;
-        
-        // Log selection summary for debugging
-        if (dataSources.length > 1) {
-            console.log('Multi-source drag detected:');
-            for (const [sourceArray, info] of selectionSummary) {
-                console.log(`  - Source ${info.dragId || 'unknown'}: ${info.count} rows`);
-            }
-        }
         
         // Set up global mouse up listener with proper binding
         this.handleGlobalMouseUp = this.handleGlobalMouseUp.bind(this);
@@ -293,15 +300,12 @@ export const tableRowSelectionState = Vue.reactive({
     handleGlobalMouseUp(event) {
         if (!this.isDragging) return;
         
-        console.log('Global drag completion - dragTargetArray:', !!this.dragTargetArray, 'currentDropTarget:', this.currentDropTarget);
         
         // Check if we have a valid drop target
         if (this.dragTargetArray && this.currentDropTarget && this.currentDropTarget.type) {
             const result = this.completeDrag(this.currentDropTarget);
-            console.log('Global completeDrag result:', result);
         } else {
             // No valid drop target, cancel the drag
-            console.log('Global cancelling drag - no valid drop target');
             this.stopDrag();
         }
     },
@@ -323,32 +327,13 @@ export const tableRowSelectionState = Vue.reactive({
             return false;
         }
         
-        // Check for special case: dropping to footer of same table (deletion)
-        if (dropTarget.type === 'footer') {
-            // Check if all selections are from the same array as the drop target
-            let isAllSameSource = true;
-            for (const [sourceArray] of selectionsBySource) {
-                if (sourceArray !== this.dragTargetArray) {
-                    isAllSameSource = false;
-                    break;
-                }
-            }
-            
-            if (isAllSameSource) {
-                // This is a deletion operation - rows are already marked, just clear selection
-                console.log('Footer drop detected - rows marked for deletion');
-                this.clearAll();
-                this.stopDrag(true); // Preserve deletion markings
-                return true;
-            }
-        }
-        
         // Calculate insertion position
         let insertPosition;
         console.log('dropTarget.type:', dropTarget.type);
         if (dropTarget.type === 'header') {
             insertPosition = 0;
         } else if (dropTarget.type === 'footer') {
+            // For footer drops, insert after the last element (at the end of the array)
             insertPosition = this.dragTargetArray.length;
         } else if (dropTarget.type === 'between') {
             insertPosition = dropTarget.targetIndex;
@@ -632,12 +617,12 @@ export const TableComponent = {
             return this.columns.filter(column => column.details);
         },
         visibleRows() {
-            // Filter rows based on search value and deletion status
+            // Filter rows based on search value but keep all rows including marked for deletion
             if (!Array.isArray(this.data)) return [];
             
             let filteredData = this.data
                 .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => row && !(row.AppData && row.AppData['marked-for-deletion']));
+                .filter(({ row }) => row); // Only filter out null/undefined rows
 
             // Apply search filter if searchValue is provided and hideRowsOnSearch is enabled
             if (this.searchValue && this.searchValue.trim() && this.hideRowsOnSearch) {
@@ -684,14 +669,6 @@ export const TableComponent = {
             }
 
             return filteredData;
-        },
-        deletedRows() {
-            // Show rows marked for deletion in tfoot
-            if (!Array.isArray(this.data)) return [];
-            
-            return this.data
-                .map((row, idx) => ({ row, idx }))
-                .filter(({ row }) => row && row.AppData && row.AppData['marked-for-deletion']);
         }
     },
     watch: {
@@ -728,7 +705,7 @@ export const TableComponent = {
         });
         // Listen for clicks outside details area to close expanded details
         document.addEventListener('click', this.handleOutsideClick);
-        // Listen for escape key to close expanded details
+        // Listen for keyboard shortcuts (Escape, Delete)
         document.addEventListener('keydown', this.handleEscapeKey);
     },
     beforeUnmount() {
@@ -1427,10 +1404,33 @@ export const TableComponent = {
         },
         
         handleEscapeKey(event) {
-            // Close all expanded details when Escape is pressed
-            if (event.key === 'Escape' && this.expandedRows.size > 0) {
-                this.expandedRows.clear();
-                event.preventDefault();
+            // Handle keyboard shortcuts for table interactions
+            if (event.key === 'Escape') {
+                let handled = false;
+                
+                // Close all expanded details
+                if (this.expandedRows.size > 0) {
+                    this.expandedRows.clear();
+                    handled = true;
+                }
+                
+                // Clear all selections
+                if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    tableRowSelectionState.clearAllSelections();
+                    handled = true;
+                }
+                
+                if (handled) {
+                    event.preventDefault();
+                }
+            }
+            
+            // Handle Delete key - mark selected rows for deletion
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+                if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    tableRowSelectionState.markSelectedForDeletion();
+                    event.preventDefault();
+                }
             }
         }
     },
@@ -1533,6 +1533,7 @@ export const TableComponent = {
                                         'dragging': isRowDragging(idx),
                                         'drag-over': false,
                                         'selected': isRowSelected(idx),
+                                        'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
                                         'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
                                         'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
                                     }"
@@ -1654,63 +1655,6 @@ export const TableComponent = {
                             </tr>
                         </tbody>
                         <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
-                            <tr v-for="({ row, idx }, delIdx) in deletedRows"
-                                :key="'del-' + idx"
-                                :class="{
-                                    'marked-for-deletion': true,
-                                    'selected': isRowSelected(idx),
-                                    'dragging': isRowDragging(idx)
-                                }"
-                            >
-                                <td v-if="draggable"
-                                    class="row-drag-handle"
-                                    draggable="true"
-                                    @mousedown="handleDragHandleMouseDown(idx, $event)"
-                                ></td>
-                                <td 
-                                    v-for="(column, colIndex) in mainTableColumns" 
-                                    :key="column.key"
-                                    :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
-                                >
-                                    <div class="table-cell-container">
-                                        <!-- Editable number input -->
-                                        <input
-                                            v-if="column.editable && column.format === 'number'"    
-                                            type="number"
-                                            :value="row[column.key]"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                        />
-                                        <!-- Editable text div -->
-                                        <div
-                                            v-else-if="column.editable"
-                                            contenteditable="true"
-                                            :data-row-index="idx"
-                                            :data-col-index="colIndex"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                            class="table-edit-textarea"
-                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                            :ref="'editable_' + idx + '_' + colIndex"
-                                        ></div>
-                                        <!-- Non-editable content -->
-                                        <slot v-else :row="row" :rowIndex="idx" :column="column">
-                                            {{ formatCellValue(row[column.key], column) }}
-                                        </slot>
-                                        
-                                        <!-- Additional cell content slot (for warnings, etc.) -->
-                                        <slot 
-                                            name="cell-extra"
-                                            :row="row" 
-                                            :rowIndex="idx" 
-                                            :column="column"
-                                            :cellRowIndex="idx"
-                                            :cellColIndex="colIndex"
-                                            :isEditable="column.editable"
-                                        ></slot>
-                                    </div>
-                                </td>
-                                <td v-if="allowDetails" class="details-cell"></td>
-                            </tr>
                             <tr>
                                 <td v-if="draggable && (data && data.length > 0)" class="spacer-cell"></td>
                                 <td 

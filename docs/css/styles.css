@@ -710,13 +710,13 @@ th, td {
 .inventory-table-component td {
     vertical-align: middle;
 }
-.packlist-crates > tbody > tr {
-    border-bottom: 3px solid var(--color-gray);
+.packlist-crates > tbody > tr > td:not(.row-drag-handle) {
+    border-bottom: 3px solid var(--color-border);
 }
-.packlist-crates table tr:first-child td {
+.packlist-crates:not(.editing) table tr:first-child td {
     border-top: none;
 }
-.packlist-crates table tr:last-child td {
+.packlist-crates:not(.editing) table tr:last-child td {
     border-bottom: none;
 }
 
@@ -845,15 +845,15 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::
     transition: color 0.15s;
 }
 
-/* row is being deleted */
-tfoot > tr:has(td.row-drag-handle):first-child::after, tbody > tr.marked-for-deletion:first-of-type::after {
-    content: "Deleted rows";
+table:not(.editing) > tbody > tr.marked-for-deletion {
+    display: none;
 }
-tfoot > tr:has(td.row-drag-handle)::after, tbody > tr.marked-for-deletion::after {
-    content: "";
+
+.editing tbody>tr.marked-for-deletion::after {
+    content: "Deleted";
     position: absolute;
     padding-top: .15rem;
-    color: white;
+    color: var(--color-text-inverted);
     inset: 0;
     background: var(--color-red-bg);
     opacity: .6;
@@ -909,7 +909,7 @@ tr.selected > td.row-drag-handle::before {
     content: "☑";
     z-index: 4;
 }
-table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td.row-drag-handle::before {
+:not(:has(.dragging)) table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td.row-drag-handle::before {
     font-size: 1.2rem;
     content: "☐";
 }
@@ -962,12 +962,6 @@ tr.selected.drop-target-above::after, .drop-target-header + tbody > tr:first-chi
     border-top: 2px solid var(--color-blue);
 }
 
-tr.selected.drop-target-below::after {
-    border-bottom: 2px solid var(--color-blue);
-}
-tr.selected + .drop-target-above:not(.selected)::after {
-    display:none;
-}
 .drop-target-above::after, .drop-target-header + tbody > tr:first-child::after {
     content: "";
     position: absolute;
@@ -976,7 +970,7 @@ tr.selected + .drop-target-above:not(.selected)::after {
     inset: 0;
     border-top: 2px solid var(--color-blue);
 }
-:last-child.drop-target-below::after {
+:last-child.drop-target-below::after, table:has(.drop-target-footer) > tbody > tr:last-child::after {
     content: "";
     display: block;
     position: absolute;
