@@ -557,7 +557,7 @@ export const TableComponent = {
         },
         visibleColumns() {
             // Get only columns not in hideSet
-            return this.columns.filter(column => !this.hideSet.has(column.key));
+            return this.columns.filter(column => !this.hideSet.has(column.key) && !this.detailsColumns.includes(column));
         },
         detailsColumns() {
             // Get only columns marked for details display

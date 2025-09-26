@@ -579,7 +579,6 @@ export const PacklistTable = {
                                 <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/edit' }) : null">
                                     Edit Packlist
                                 </button>
-                                <button @click="handlePrint">Print</button>
                             </template>
                             <template v-else>
                                 <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
@@ -589,9 +588,9 @@ export const PacklistTable = {
                             
                             <!-- Details Button -->
                             <button 
-                                :disabled="analyzingQuantities || isLoading || !tabName"
-                                :class="{ red: warningCount > 0 }"
-                                @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
+                            :disabled="analyzingQuantities || isLoading || !tabName"
+                            :class="{ red: warningCount > 0 }"
+                            @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
                             >
                                 <template v-if="isLoading || analyzingQuantities">
                                     Analyzing...
@@ -603,6 +602,7 @@ export const PacklistTable = {
                                     Details
                                 </template>
                             </button>
+                            <button v-if="!editMode" @click="handlePrint">Print</button>
                         </div>
                     </template>
                     <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">
