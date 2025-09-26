@@ -52,6 +52,12 @@ button {
 
 /* Main interface defaults */
 
+html, body {
+    font-family: Arial, sans-serif;
+}
+.font-narrow {font-family: "Arial Narrow", sans-serif; font-weight: 10;}
+.font-black {font-family: "Arial Black", sans-serif; font-weight: 800;}
+
 p,
 h1,
 h2,
@@ -60,6 +66,7 @@ h4,
 h5,
 h6 {
     margin: 0;
+    font-family: unset;
 }
 
 input[type="text"],

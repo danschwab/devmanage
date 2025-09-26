@@ -1,17 +1,12 @@
 @import url('theme.css');
 
 body, #app {
-    font-family: Arial, sans-serif;
     color: var(--color-text);
     background: var(--color-primary-gradient);
     background-attachment: fixed;
     margin: 0;
     padding: 0;
     position: fixed;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
 }
 div#app-content {
     display: flex;
@@ -124,6 +119,7 @@ footer {
     color: var(--color-text);
     padding-top: calc(var(--padding-lg) / 2);
     margin-top: calc(var(--padding-lg) / 2);
+    opacity: .6;
 }
 footer a, footer p {
     color: var(--color-text);
@@ -680,6 +676,9 @@ footer a:visited {
     /*box-shadow: 0 0 0 1px #dee2e6;*/
     /*box-shadow: inset 2px 2px 12px 0px rgba(5, 0, 50, 0.1);*/
 }
+.table-fixed table {
+    table-layout: fixed;
+}
 
 .table-wrapper:has(tbody:empty)::after {
     content: "No content";
@@ -707,19 +706,6 @@ th, td {
     white-space: normal; /* Allow text wrapping */
     word-wrap: break-word; /* Break long words if needed */
 }
-.inventory-table-component td {
-    vertical-align: middle;
-}
-.packlist-crates > tbody > tr > td:not(.row-drag-handle) {
-    border-bottom: 3px solid var(--color-border);
-}
-.packlist-crates:not(.editing) table tr:first-child td {
-    border-top: none;
-}
-.packlist-crates:not(.editing) table tr:last-child td {
-    border-bottom: none;
-}
-
 th {
     background-color: var(--color-gray);
     color: var(--color-text-inverted);
@@ -729,6 +715,20 @@ th {
     top: 0;
     z-index: 1;
 }
+td:first-child::after, td.empty-message::after {
+    position: absolute;
+    max-width: 100%;
+    display: block;
+    box-sizing: border-box;
+    inset: 0;
+    font-style: italic;
+    z-index: 2;
+    pointer-events: none;
+    color: var(--color-text-inverted);
+    text-shadow: 0 0 8px var(--color-shadow);
+    opacity: .7;
+}
+
 
 table {
     width: 100%;
@@ -750,7 +750,6 @@ td:has(button) {
 td:has(img) {
     padding: 0;
 }
-
 
 .sort-button {
     position: absolute;
@@ -782,7 +781,7 @@ thead:hover .sort-button {
 table:not(.editing) tr td:has(.table-wrapper) {
     padding: 0;
 }
-table tr:not(:first-child) thead {
+table tr:not(:first-child) thead, table tr thead {
     display: none;
 }
 table.editing tr:first-child td:has(.table-wrapper) {
@@ -845,42 +844,37 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::
     transition: color 0.15s;
 }
 
+
 table:not(.editing) > tbody > tr.marked-for-deletion {
     display: none;
 }
 
-.editing tbody>tr.marked-for-deletion::after {
-    content: "Deleted";
-    position: absolute;
-    padding-top: .15rem;
-    color: var(--color-text-inverted);
-    inset: 0;
-    background: var(--color-red-bg);
-    opacity: .6;
-    pointer-events: none;
-    font-style: italic;
-    z-index: 2;
-    text-align: center;
-    text-shadow: 0 0 8px var(--color-shadow);
-}
 
-.row-drag-handle {
+
+
+td.row-drag-handle {
     min-width: 0;
     width: 20px;
     vertical-align: middle;
     cursor: grab;
-    position: relative;
+    /*position: relative;*/
     padding: 0 !important;
     background-color: var(--color-gray-bg);
     transition: background-color 0.15s ease-in-out;
+    outline: 1px solid var(--color-border);
+    outline-offset: -.5px;
 }
-
 td.spacer-cell, th.spacer-cell {
     padding: 0px;
     min-width: 20px;
     border: none;
     background-color: transparent;
 }
+
+
+
+
+
 .content-header + .table-wrapper > table > tfoot > tr > td.spacer-cell {
     border: 1px solid var(--color-border);
 }
@@ -897,19 +891,20 @@ td.spacer-cell, th.spacer-cell {
     color: var(--color-text-light);
     font-size: 12px;
     line-height: 100%;
+    pointer-events: none;
 }
-
-
 tr.selected > td.row-drag-handle::before {
     position: absolute;
     font-size: 1.2rem;
     color: var(--color-green);
-    width:100%;
     transform: translateY(-50%);
+    left: 2px;
     content: "☑";
     z-index: 4;
 }
-:not(:has(.dragging)) table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td.row-drag-handle::before {
+
+:not(:has(.dragging)) table:has(.selected):not(:has(table .selected)) > tbody > tr:not(.selected) > td.row-drag-handle::before,
+:not(:has(.dragging)) table:has(table .selected) tr tbody > tr:not(.selected) > td.row-drag-handle::before {
     font-size: 1.2rem;
     content: "☐";
 }
@@ -918,106 +913,53 @@ tr.selected > td.row-drag-handle::before {
     background-color: var(--color-gray-bg-hover);
 }
 
-.row-clone {
-    pointer-events: none;
-    opacity: 0.95;
-    background: var(--color-gray-bg);
-    box-shadow: 0 8px 16px var(--color-shadow);
-    z-index: 1000;
-    max-height: 100px;
-    overflow: hidden;
-    transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out; 
-}
-.row-clone .row-drag-handle {
-    background-color: var(--color-gray-bg-hover);
-    color: var(--color-text-inverted);
-    max-height: 100%;
-}
-
-/*tr.draggable {
-    user-select: none;
-    transition: transform 0.1s, box-shadow 0.1s, max-height 0.2s ease-in-out, top 0.2s ease-in-out;
-}*/
-
 tr.dragging, tr.selected, tfoot tr.draggable {
     position: relative;
 }
-tr.selected::after, tr:last-child.selected.drop-target-below::after {
+
+
+
+
+
+tr.selected > td::after {
     content: "";
-    position: absolute;
-    display: block;
-    inset: 0;
     background: var(--color-green-bg-transparent);
-    pointer-events: none;
-    z-index: 2;
-    box-sizing: border-box;
 }
-/*tr.selected.dragging::after {
+:has(.dragging) tr.selected > td::after {
     background: var(--color-blue-bg);
-    opacity: 0.5;
-}*/
+}
+.editing tbody > tr.marked-for-deletion > td:not(.spacer-cell):not(.drag-handle)::after {
+    content: "";
+    background: var(--color-red-bg);
+    text-align: center;
+}
 
 /* Drop Target Styling */
-tr.selected.drop-target-above::after, .drop-target-header + tbody > tr:first-child.selected::after {
+tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:first-child.selected > td::after {
     border-top: 2px solid var(--color-blue);
 }
 
-.drop-target-above::after, .drop-target-header + tbody > tr:first-child::after {
+.drop-target-above > td::after, .drop-target-header + tbody > tr:first-child > td::after {
     content: "";
-    position: absolute;
-    pointer-events: none;
-    z-index: 2;
-    inset: 0;
     border-top: 2px solid var(--color-blue);
 }
-:last-child.drop-target-below::after, table:has(.drop-target-footer) > tbody > tr:last-child::after {
+:last-child.drop-target-below > td::after, table:has(.drop-target-footer):not(:has(table .drop-target-footer)) > tbody > tr:last-child > td::after {
     content: "";
-    display: block;
-    position: absolute;
-    pointer-events: none;
-    z-index: 2;
-    inset: 0;
     border-bottom: 2px solid var(--color-blue);
 }
 :has(.dragging) tr:hover > td.empty-message::after {
     content: "";
-    position: absolute;
-    display: block;
     background: var(--color-blue);
-    pointer-events: none;
-    z-index: 2;
-    inset: 0;
-    opacity: 0.5;
+    opacity: .4;
 }
 
 
-/*.drop-target-footer::after {
-    content: "";
-    position: absolute;
-    display: block;
-    background: var(--color-red);
-    pointer-events: none;
-    z-index: 2;
-    top: -1px;
-    left: 0;
-    right: 0;
-    bottom: calc(100% - 1px);
-}*/
 
-/* Drag State Styling 
-.dynamic-table.drag-source {
-    opacity: 0.7;
-    background-color: var(--color-blue-bg-transparent);
-}
 
-.dynamic-table.drag-target {
-    background-color: var(--color-green-bg-transparent);
-    border: 2px dashed var(--color-green);
-}
 
-.dynamic-table.drag-target:hover {
-    background-color: var(--color-green-bg);
-}*/
+
+
+
 
 
 .table-cell-card {
@@ -1180,6 +1122,46 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.inventory-table-component td {
+    vertical-align: middle;
+}
+
+.packlist-crates>tbody>tr>td {
+    border-bottom: 3px double var(--color-border);
+}
+
+.packlist-crates:not(.editing) table tr:first-child td {
+    border-top: none;
+}
+
+.packlist-crates:not(.editing) table tr:last-child td {
+    border-bottom: none;
+}
+
+
+
+
+
+
+
 @media (max-width: 800px) {
     /* Mobile navigation */
     header:has(nav.open)::before {
@@ -1270,4 +1252,141 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     .tabs.dropdown-mode .new-tab-button{
         display: none;
     }
+}
+
+
+
+
+
+@media print {
+    p, td, th, span, li, label {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact; /* Non-Webkit Browsers */
+
+        color: black !important;
+        font-size: 10pt !important;
+    }
+    
+    button, header nav #navbar, .breadcrumb-segment, .breadcrumb-separator {
+        display: none;
+    }
+
+    header nav {
+        box-shadow: none !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+
+    #app header {
+        position: absolute;
+        height: 0px;
+    }
+
+    .breadcrumb-segment.active {
+        position: fixed;
+        left: 100px;
+        top: 0;
+        line-height: 80px;
+        display: table-header-group;
+        font-family: "Arial Black";
+    }
+
+    .content {
+        position: relative !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+
+
+    body,
+    footer,
+    header,
+    #app,
+    div#app-content, 
+    .container,
+    .container-header {  
+        position: static !important;
+        width: 100% !important;
+        max-height: 100% !important;
+        overflow: visible !important;
+        page-break-inside: auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+
+    .container {
+        width: 100%;
+        padding: 0;
+        margin: 0 !important;
+        box-sizing: border-box;
+        top: 0 !important;
+    }
+
+    .content-header,
+    .content-footer,
+    footer {
+        display: none;
+    }
+
+    table thead th div span {
+        color: white !important;
+        font-size: 10pt !important;
+        font-weight: 600 !important;
+    }
+    table thead th {
+        box-shadow: 0 -200px var(--color-gray) inset !important;
+        padding: 2px;
+    }
+    td {
+        padding: 2px;
+    }
+    table thead:before {
+        content: "";
+        width: 100%;
+        display: block;
+        height: 80px;
+    }
+    
+    .packlist-crates {
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        width: 100%;
+    }
+    .packlist-crates > tbody > tr > td {
+        border-bottom: 6px solid var(--color-border) !important;
+    }
+    .items-table tr {
+        page-break-inside: avoid;
+    }
+
+    /*
+    table .table-wrapper, table {
+        overflow: visible;
+    }
+    table tr thead {
+        display: table-header-group !important;
+        position: sticky;
+    }
+    
+    table tr thead th {
+        display: table-cell !important;
+        position: relative;
+        top: -21px;
+        z-index: 1;
+    }
+    
+    table:has(table) > thead th:last-child {
+        display: none;
+    }
+    .items-table tr td {
+        position: relative;
+        box-shadow: 0 -200px white inset !important;
+        z-index: 2;
+    }*/
 }

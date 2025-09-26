@@ -29,7 +29,8 @@ export const PacklistTable = {
             itemQuantityStatus: {}, // Store item quantity analysis results
             analyzingQuantities: false,
             // Store headers fetched from database (will be populated on mount)
-            databaseItemHeaders: null
+            databaseItemHeaders: null,
+            hiddenColumns: ['Pack','Check']
         };
     },
     computed: {
@@ -37,33 +38,44 @@ export const PacklistTable = {
             // Use headers from the first crate if available, else use default schema
             const crates = this.mainTableData;
             if (crates.length > 0 && Object.keys(crates[0]).length > 0) {
-                return [...Object.keys(crates[0]).filter(k => k !== 'Items'), 'Items'];
+                return [...Object.keys(crates[0]), ...this.itemHeaders].filter(k => k !== 'Items').filter(k => !this.hiddenColumns.includes(k));
             }
             // Fallback to content headers if present
             if (this.content && this.content.length > 0 && Object.keys(this.content[0]).length > 0) {
                 const headers = Object.keys(this.content[0]).filter(k => k !== 'Items');
-                return [...headers, 'Items'];
+                return [...headers, ...this.itemHeaders].filter(k => !this.hiddenColumns.includes(k));
             }
             // Default schema when no data is available
-            return ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Notes', 'Items'];
+            return ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'];
         },
         mainColumns() {
             return this.mainHeaders.map((label, idx) => {
                 if (label === 'Piece #') {
-                    return { key: label, label, editable: false, isIndex: true };
+                    return { key: label, label, editable: false, isIndex: true, width: 10};
                 }
                 // Only make columns editable if editMode is true
-                const isEditable = this.editMode && ['Type','L','W','H','Weight','Notes'].includes(label);
+                const isEditable = this.editMode && ['Type','L','W','H','Weight'].includes(label);
                 
                 // When not in edit mode, move Type, L, W, H, Weight to details
                 //const isDetailsColumn = !this.editMode && ['Type','L','W','H','Weight'].includes(label);
-                
-                return { 
-                    key: label, 
-                    label, 
-                    editable: isEditable, 
-                    details: null,
-                    hidden: []
+
+                if (label === this.itemHeadersStart) {
+                    return {
+                        key: label,
+                        label,
+                        width: ['Description','Packing/shop notes'].includes(label) ? 300 : 30,
+                        colspan: this.itemHeaders.length,
+                        font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
+                    };
+                } else {
+                    return {
+                        key: label,
+                        label,
+                        editable: isEditable,
+                        details: null,
+                        width: ['Description', 'Packing/shop notes'].includes(label) ? 300 : 30,
+                        font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
+                    };
                 };
             });
         },
@@ -91,7 +103,10 @@ export const PacklistTable = {
                 return Object.keys(this.content[0].Items[0]);
             }
             // Use database headers if available, otherwise use default schema
-            return this.databaseItemHeaders || ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
+            return this.databaseItemHeaders || ['Pack', 'Check', 'Description', 'Packing/shop notes'];
+        },
+        itemHeadersStart() {
+            return this.itemHeaders.filter(k => !this.hiddenColumns.includes(k))[0];
         },
         isLoading() {
             return this.packlistTableStore ? this.packlistTableStore.isLoading : false;
@@ -315,11 +330,7 @@ export const PacklistTable = {
                 await this.analyzePacklistQuantities();
             }
         },
-        async handlePrint() {
-            this.isPrinting = true;
-            // ...existing code...
-            this.isPrinting = false;
-        },
+
         handleInnerTableDirty(isDirty, rowIndex) {
             if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
                 this.$refs.mainTableComponent.checkDirtyCells();
@@ -453,6 +464,25 @@ export const PacklistTable = {
             this.$emit('navigate-to-path', { 
                 targetPath: `packlist/${showIdentifier}` 
             });
+        },
+        async handlePrint() {
+            this.isPrinting = true;
+            
+            // Temporarily remove 'Pack' and 'Check' from hidden columns for printing
+            const originalHidden = [...this.hiddenColumns];
+            this.hiddenColumns = this.hiddenColumns.filter(col => col !== 'Pack' && col !== 'Check');
+
+            // Wait for DOM update
+            await this.$nextTick();
+            
+            // Print
+            window.print();
+            
+            // Restore hidden columns after printing
+            setTimeout(() => {
+                this.hiddenColumns = originalHidden;
+                this.isPrinting = false;
+            }, 100);
         }
     },
     template: html`
@@ -477,6 +507,7 @@ export const PacklistTable = {
                     :searchTerm="searchTerm"
                     :hideRowsOnSearch="hideRowsOnSearch"
                     :showSearch="true"
+                    class="packlist-items-table-component"
                 >
                     <template #table-header-area>
                         <div class="button-bar">
@@ -548,6 +579,7 @@ export const PacklistTable = {
                                 <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/edit' }) : null">
                                     Edit Packlist
                                 </button>
+                                <button @click="handlePrint">Print</button>
                             </template>
                             <template v-else>
                                 <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
@@ -582,7 +614,7 @@ export const PacklistTable = {
                                     .findIndex(r => r === row) + 1
                             }}
                         </template>
-                        <template v-else-if="column && column.key === 'Items'">
+                        <template v-else-if="column && column.key === itemHeadersStart">
                             <TableComponent
                                 v-if="row.Items"
                                 :data="row.Items"
@@ -591,9 +623,10 @@ export const PacklistTable = {
                                     key: label, 
                                     label, 
                                     editable: editMode && ['Description','Packing/shop notes'].includes(label),
-                                    width: ['Description','Packing/shop notes'].includes(label) ? 200 : undefined
+                                    width: ['Description','Packing/shop notes'].includes(label) ? undefined : 30,
+                                    font: ['Description','Packing/shop notes'].includes(label) ? '' : 'narrow'
                                 }))"
-                                :hide-columns="['Pack','Check']"
+                                :hide-columns="hiddenColumns"
                                 :emptyMessage="'No items'"
                                 :draggable="editMode"
                                 :newRow="editMode"
@@ -610,6 +643,7 @@ export const PacklistTable = {
                                     }
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
+                                class="table-fixed"
                             >
                                 <template #default="{ row: itemRow, column: itemColumn }">
                                     <div>

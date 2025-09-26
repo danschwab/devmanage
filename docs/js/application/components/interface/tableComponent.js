@@ -9,7 +9,7 @@ export const tableRowSelectionState = Vue.reactive({
     allowMultiSourceDrag: true, // Allow dragging selections from different data sources
     
     // Drag state
-    isDragging: false,
+    findingDropTargets: false,
     dragSourceArray: null,
     dragTargetArray: null,
     dragId: null, // The dragId of the table group participating in drag operations
@@ -28,12 +28,17 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Add a row to global selection
     addRow(rowIndex, sourceArray, dragId = null) {
+        if (dragId && dragId !== this.dragId) {
+            this.clearAll();
+        }
+
         const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
         this.selections.set(selectionKey, {
             rowIndex: rowIndex,
             sourceArray: sourceArray,
             dragId: dragId
         });
+        this.dragId = dragId;
     },
     
     // Remove a row from global selection
@@ -44,15 +49,10 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Toggle row selection
     toggleRow(rowIndex, sourceArray, dragId = null) {
-        const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
-        if (this.selections.has(selectionKey)) {
-            this.selections.delete(selectionKey);
+        if (this.hasRow(sourceArray, rowIndex)) {
+            this.removeRow(rowIndex, sourceArray)
         } else {
-            this.selections.set(selectionKey, {
-                rowIndex: rowIndex,
-                sourceArray: sourceArray,
-                dragId: dragId
-            });
+            this.addRow(rowIndex, sourceArray, dragId)
         }
     },
     
@@ -181,7 +181,7 @@ export const tableRowSelectionState = Vue.reactive({
         console.log('All selections cleared via keyboard');
     },
     
-    markSelectedForDeletion() {
+    markSelectedForDeletion(Value = true) {
         // Mark all selected rows for deletion (used by Delete key)
         if (this.selections.size === 0) {
             console.log('No selections to mark for deletion');
@@ -198,32 +198,28 @@ export const tableRowSelectionState = Vue.reactive({
                 }
                 
                 // Mark for deletion
-                sourceArray[rowIndex].AppData['marked-for-deletion'] = true;
+                sourceArray[rowIndex].AppData['marked-for-deletion'] = Value;
                 deletedCount++;
             }
         }
         
-        console.log(`Marked ${deletedCount} selected rows for deletion via keyboard`);
-        
-        // Clear selections after marking for deletion
-        this.clearAll();
+        console.log(`Marked ${deletedCount} selected rows for deletion = ${Value}`);
     },
     
     // Drag management methods
-    startDrag() {
+    startDrag(dataSourceArray, dragId) {
         // Validate if drag can be started
         if (!this.canStartDrag()) return false;
         
         // Check if we can drag with multiple data sources
         const selectionSummary = this.getSelectionSummary();
         const dataSources = this.getSelectedDataSources();
-        this.isDragging = true;
+        this.findingDropTargets = true;
         
         // For compatibility, we'll use the first selection's info for dragSourceArray and dragId
         // but the actual drag logic will handle all sources
-        const firstSelection = this.selections.values().next().value;
-        this.dragSourceArray = firstSelection.sourceArray;
-        this.dragId = firstSelection.dragId;
+        this.dragSourceArray = dataSourceArray;
+        this.dragId = dragId;
         this.currentDropTarget = null;
         
         // Set up global mouse up listener with proper binding
@@ -232,55 +228,13 @@ export const tableRowSelectionState = Vue.reactive({
         return true;
     },
     
-    // Set target array during drag
-    setDragTarget(targetArray) {
-        if (this.isDragging) {
-            this.dragTargetArray = targetArray;
-        }
-    },
-    
     // Register drop target from a table
     registerDropTarget(tableData, dropTarget) {
-        if (this.isDragging && this.dragTargetArray === tableData) {
+        if (this.findingDropTargets) {
             this.currentDropTarget = dropTarget;
-            
+            this.dragTargetArray = tableData;
             // Handle deletion marking based on drop target
-            this.handleDeletionMarking(tableData, dropTarget);
-        }
-    },
-    
-    // Handle marking/unmarking rows for deletion based on drop target
-    handleDeletionMarking(tableData, dropTarget) {
-        const selectionSummary = this.getSelectionSummary();
-        
-        for (const [sourceArray, sourceInfo] of selectionSummary) {
-            const isSourceTable = sourceArray === tableData;
-            const isFooterTarget = dropTarget && dropTarget.type === 'footer';
-            
-            // Mark for deletion if: 
-            // 1. Drop target is footer AND 
-            // 2. It's the same table as the source (moving to its own footer)
-            const shouldMarkForDeletion = isSourceTable && isFooterTarget;
-            
-            // Apply deletion marking to all selected rows in this source
-            sourceInfo.rowIndices.forEach(rowIndex => {
-                if (sourceArray[rowIndex]) {
-                    // Ensure AppData exists
-                    if (!sourceArray[rowIndex].AppData) {
-                        sourceArray[rowIndex].AppData = {};
-                    }
-                    
-                    if (shouldMarkForDeletion) {
-                        // Mark for deletion
-                        sourceArray[rowIndex].AppData['marked-for-deletion'] = true;
-                    } else {
-                        // Remove deletion marking if it exists
-                        if (sourceArray[rowIndex].AppData['marked-for-deletion']) {
-                            delete sourceArray[rowIndex].AppData['marked-for-deletion'];
-                        }
-                    }
-                }
-            });
+            this.markSelectedForDeletion((this.dragSourceArray === tableData && dropTarget.type === 'footer'));
         }
     },
     
@@ -289,7 +243,7 @@ export const tableRowSelectionState = Vue.reactive({
         if (this.dragTargetArray === tableData) {
             // Before clearing, remove any deletion markings since we're no longer over a footer
             if (this.currentDropTarget && this.currentDropTarget.type === 'footer') {
-                this.handleDeletionMarking(tableData, { type: null });
+                this.markSelectedForDeletion(false);
             }
             this.currentDropTarget = null;
         }
@@ -298,7 +252,7 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Global mouse up handler for drag operations
     handleGlobalMouseUp(event) {
-        if (!this.isDragging) return;
+        if (!this.findingDropTargets) return;
         
         
         // Check if we have a valid drop target
@@ -311,8 +265,8 @@ export const tableRowSelectionState = Vue.reactive({
     },
     
     completeDrag(dropTarget) {
-        console.log('completeDrag called with:', dropTarget, 'isDragging:', this.isDragging, 'selections:', this.selections.size, 'dragTargetArray:', this.dragTargetArray);
-        if (!this.isDragging || this.selections.size === 0 || !this.dragTargetArray) {
+        console.log('completeDrag called with:', dropTarget, 'findingDropTargets:', this.findingDropTargets, 'selections:', this.selections.size, 'dragTargetArray:', this.dragTargetArray);
+        if (!this.findingDropTargets || this.selections.size === 0 || !this.dragTargetArray) {
             console.log('completeDrag early exit - conditions not met');
             this.stopDrag();
             return false;
@@ -381,7 +335,7 @@ export const tableRowSelectionState = Vue.reactive({
                         sourceArray.splice(adjustedInsertPosition, 0, ...rowsData);
                     }
                     
-                    totalRowsInserted += rowsData.length;
+                    //totalRowsInserted += rowsData.length;
                 } else {
                     // Different arrays: move rows to target
                     console.log('Different arrays move - from:', sourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition + totalRowsInserted);
@@ -412,8 +366,8 @@ export const tableRowSelectionState = Vue.reactive({
         }
         
         // Clear selection and drag state
+        this.stopDrag(true);
         this.clearAll();
-        this.stopDrag();
         return true;
     },
     
@@ -421,10 +375,10 @@ export const tableRowSelectionState = Vue.reactive({
         // Clean up any temporary deletion markings before stopping drag
         // unless explicitly preserving them (e.g., successful footer drop)
         if (!preserveDeletionMarkings) {
-            this.cleanupDeletionMarkings();
+            this.markSelectedForDeletion(false);
         }
         
-        this.isDragging = false;
+        this.findingDropTargets = false;
         this.dragSourceArray = null;
         this.dragTargetArray = null;
         this.dragId = null;
@@ -432,24 +386,6 @@ export const tableRowSelectionState = Vue.reactive({
         
         // Remove global mouse up listener
         document.removeEventListener('mouseup', this.handleGlobalMouseUp);
-    },
-    
-    // Clean up temporary deletion markings when drag is cancelled
-    cleanupDeletionMarkings() {
-        if (!this.isDragging) return;
-        
-        const selectionSummary = this.getSelectionSummary();
-        
-        for (const [sourceArray, sourceInfo] of selectionSummary) {
-            sourceInfo.rowIndices.forEach(rowIndex => {
-                if (sourceArray[rowIndex] && sourceArray[rowIndex].AppData) {
-                    // Remove deletion marking if it exists
-                    if (sourceArray[rowIndex].AppData['marked-for-deletion']) {
-                        delete sourceArray[rowIndex].AppData['marked-for-deletion'];
-                    }
-                }
-            });
-        }
     }
 });
 
@@ -572,7 +508,8 @@ export const TableComponent = {
             isMouseInTable: false,
             lastKnownMouseX: null,
             lastKnownMouseY: null,
-            mouseMoveCounter: 0
+            mouseMoveCounter: 0,
+            hiddenColumns: [] // Reactive property for dynamically hiding columns (internal use only)
         };
     },
     watch: {
@@ -585,15 +522,6 @@ export const TableComponent = {
         selectedRowCount() {
             return tableRowSelectionState.getArraySelectionCount(this.data);
         },
-        isDragSource() {
-            return tableRowSelectionState.isDragging && 
-                   tableRowSelectionState.dragSourceArray === this.data;
-        },
-        canAcceptDrop() {
-            return tableRowSelectionState.isDragging && 
-                   this.draggable && 
-                   tableRowSelectionState.dragId === this.dragId;
-        },
         showSaveButton() {
             // True if any editable cell or add row button is present
             const hasEditable = this.columns.some(col => col.editable);
@@ -605,12 +533,31 @@ export const TableComponent = {
             return this.columns.some(col => col.editable);
         },
         hideSet() {
-            // Hide columns listed in hideColumns prop and always hide 'AppData'
-            return new Set([...(this.hideColumns || []), 'AppData']);
+            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData'
+            return new Set([...(this.hideColumns || []), 'AppData', ...(this.hiddenColumns || [])]);
         },
         mainTableColumns() {
+            // find columns marked with a colspan property and eliminate the extra columns following them
+            // e.g. if column 2 has colspan: 3, then columns 3 and 4 are removed
+            // This allows for dynamic column spanning in the main table view
+            const columnsClipped = [];
+            let i = 0;
+            while (i < this.columns.length) {
+                const col = this.columns[i];
+                columnsClipped.push(col);
+                if (col.colspan) {
+                    i += col.colspan;
+                } else {
+                    i++;
+                }
+            }
+
             // Filter out columns marked as details-only
-            return this.columns.filter(column => !column.details);
+            return columnsClipped.filter(column => !column.details);
+        },
+        visibleColumns() {
+            // Get only columns not in hideSet
+            return this.columns.filter(column => !this.hideSet.has(column.key));
         },
         detailsColumns() {
             // Get only columns marked for details display
@@ -728,7 +675,7 @@ export const TableComponent = {
 
         isRowDragging(rowIndex) {
             // Check if this row is currently being dragged
-            return tableRowSelectionState.isDragging && 
+            return tableRowSelectionState.findingDropTargets && 
                    tableRowSelectionState.dragSourceArray === this.data &&
                    tableRowSelectionState.hasRow(this.data, rowIndex);
         },
@@ -905,6 +852,9 @@ export const TableComponent = {
         getColumnWidth(column) {
             return column.width ? `${column.width}px` : 'auto';
         },
+        getColumnFont(column) {
+            return column.font ? 'font-' + column.font : '';
+        },
         handleCellEdit(rowIndex, colIndex, value) {
             this.$emit('cell-edit', rowIndex, colIndex, value);
             // Dirty check for single cell
@@ -1007,7 +957,7 @@ export const TableComponent = {
                     this.clickState.lastHoveredRowIndex = rowIndex;
                     this.clickState.longClickTimer = null;
                 }
-            }, 800);
+            }, 700);
             
             // Add global mouse move and up listeners
             document.addEventListener('mousemove', this.handleGlobalMouseMove);
@@ -1043,7 +993,7 @@ export const TableComponent = {
                     
                     // Start drag if table is draggable and we have selections
                     if (this.draggable && tableRowSelectionState.getTotalSelectionCount() > 0) {
-                        tableRowSelectionState.startDrag();
+                        tableRowSelectionState.startDrag(this.data, this.dragId);
                         this.unselectAllEditableCells();
                     }
                 }
@@ -1067,12 +1017,12 @@ export const TableComponent = {
 
             this.clearDropTarget();
 
-            if (tableRowSelectionState.isDragging) {
+            if (tableRowSelectionState.findingDropTargets) {
                 // Clean up and exit early - don't process click logic when dragging
                 this.resetClickState();
                 return;
             }
-            
+
             // Check if mouse up is on the same drag handle that started the interaction
             const targetHandle = event.target.closest('.row-drag-handle');
             const startHandle = document.elementFromPoint(this.clickState.startX, this.clickState.startY);
@@ -1087,7 +1037,7 @@ export const TableComponent = {
                 
                 // Short click logic (only if no movement occurred)
                 if (!this.clickState.hasMoved && !this.clickState.isMultiSelecting) {
-                    if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    if (tableRowSelectionState.getTotalSelectionCount() > 0 && tableRowSelectionState.dragId === this.dragId) {
                         // Toggle selection state of clicked row
                         tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
                     }
@@ -1130,6 +1080,7 @@ export const TableComponent = {
             this.isMouseInTable = false;
             // Always clear drop target when leaving table
             this.clearDropTarget();
+            tableRowSelectionState.clearDropTargetRegistration(this.data);
             this.lastKnownMouseX = null;
             this.lastKnownMouseY = null;
             this.mouseMoveCounter = 0; // Reset counter when leaving table
@@ -1161,7 +1112,7 @@ export const TableComponent = {
             // Check if mouse is within table bounds
             if (mouseY < tableRect.top || mouseY > tableRect.bottom) {
                 // Only clear if we're not in an active drag operation
-                if (!tableRowSelectionState.isDragging) {
+                if (!tableRowSelectionState.findingDropTargets) {
                     this.clearDropTarget();
                 }
                 return;
@@ -1313,32 +1264,12 @@ export const TableComponent = {
                 if (this.mouseMoveCounter >= 6) {
                 
                     // Only detect drop targets if dragging is active and this table can receive drops
-                    if (tableRowSelectionState.isDragging && this.draggable && tableRowSelectionState.dragId == this.dragId) {
-                        // Set this table as potential drag target
-                        tableRowSelectionState.setDragTarget(this.data);
-                    
+                    if (tableRowSelectionState.findingDropTargets && this.draggable && tableRowSelectionState.dragId == this.dragId) {
                         this.mouseMoveCounter = 0; // Reset counter
                         this.findDropTargetAtCursor();
                     }
                 }
             }
-        },
-        getDropTargetClass(rowIndex, position) {
-            if (this.dropTarget.type !== 'between-rows') return '';
-            if (this.dropTarget.position !== rowIndex) return '';
-            
-            if (position === 'top' && this.dropTarget.isAbove) {
-                return 'drop-target-above';
-            } else if (position === 'bottom' && !this.dropTarget.isAbove) {
-                return 'drop-target-below';
-            }
-            return '';
-        },
-        getHeaderDropTargetClass() {
-            return this.dropTarget.type === 'header' ? 'drop-target-header' : '';
-        },
-        getFooterDropTargetClass() {
-            return this.dropTarget.type === 'footer' ? 'drop-target-footer' : '';
         },
         updateAllEditableCells() {
             // Set contenteditable text for all editable cells to match data (only on mount or new row)
@@ -1416,7 +1347,7 @@ export const TableComponent = {
                 
                 // Clear all selections
                 if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                    tableRowSelectionState.clearAllSelections();
+                    tableRowSelectionState.clearAll();
                     handled = true;
                 }
                 
@@ -1428,18 +1359,15 @@ export const TableComponent = {
             // Handle Delete key - mark selected rows for deletion
             if (event.key === 'Delete' || event.key === 'Backspace') {
                 if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                    tableRowSelectionState.markSelectedForDeletion();
+                    tableRowSelectionState.markSelectedForDeletion(true);
+                    tableRowSelectionState.clearAll();
                     event.preventDefault();
                 }
             }
-        }
+        },
     },
     template: html `
         <div class="dynamic-table"
-            :class="{
-                'drag-source': isDragSource,
-                'drag-target': canAcceptDrop
-            }"
             @mouseenter="handleTableMouseEnter"
             @mouseleave="handleTableMouseLeave"
             @mousemove="handleTableMouseMove"
@@ -1503,14 +1431,21 @@ export const TableComponent = {
                 <!-- Data Table (always render if draggable, even when empty) -->
                 <div v-else-if="data && data.length > 0 || draggable" class="table-wrapper">
                     <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
+                        <colgroup>
+                            <col v-if="draggable" :style="{ width: '20px' }" />
+                            <col v-for="(column, colIdx) in visibleColumns" 
+                                 :key="column.key"
+                                 :style="column.width ? 'width:' + column.width + 'px' : ''"
+                            />
+                            <col v-if="allowDetails" />
+                        </colgroup>
                         <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
                             <tr>
                                 <th v-if="draggable" class="spacer-cell"></th>
                                 <th 
-                                    v-for="(column, colIdx) in mainTableColumns" 
+                                    v-for="(column, colIdx) in visibleColumns" 
                                     :key="column.key"
-                                    :style="{ width: getColumnWidth(column) }"
-                                    :class="[column.headerClass, hideSet.has(column.key) ? 'hide' : '']"
+                                    :class="getColumnFont(column)"
                                 >
                                     <div>
                                         <span>{{ column.label }}</span>
@@ -1546,8 +1481,9 @@ export const TableComponent = {
                                     <td 
                                         v-for="(column, colIndex) in mainTableColumns" 
                                         :key="column.key"
-                                        :style="{ width: getColumnWidth(column) }"
+                                        :colspan="column.colspan || 1"
                                         :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
+                                        v-show="!hideSet.has(column.key)"
                                     >
                                         <div class="table-cell-container">
                                             <!-- Editable number input -->
@@ -1607,7 +1543,7 @@ export const TableComponent = {
                                 <!-- Expandable details row with Vue transition -->
                                 <tr v-if="allowDetails" class="details-row-container">
                                     <td v-if="draggable"></td>
-                                    <td :colspan="mainTableColumns.length + (allowDetails ? 1 : 0)" class="details-container">
+                                    <td :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" class="details-container">
                                         
                                         <div v-if="isRowExpanded(idx)" class="details-content">
                                             <!-- Auto-generated details from columns marked with details: true -->
@@ -1645,8 +1581,9 @@ export const TableComponent = {
                             
                             <!-- Empty state row for draggable tables -->
                             <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
-                                <td 
-                                    :colspan="mainTableColumns.length + (allowDetails ? 1 : 0)"
+                                <td class="spacer-cell"></td>
+                                <td
+                                    :colspan="visibleColumns.length + (allowDetails ? 1 : 0)"
                                     class="empty-message"
                                     style="text-align: center;"
                                 >
@@ -1656,9 +1593,9 @@ export const TableComponent = {
                         </tbody>
                         <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
                             <tr>
-                                <td v-if="draggable && (data && data.length > 0)" class="spacer-cell"></td>
+                                <td v-if="draggable" class="spacer-cell"></td>
                                 <td 
-                                    :colspan="(draggable ? 1 : 0) + mainTableColumns.length + (allowDetails ? 1 : 0)" 
+                                    :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" 
                                     class="new-row-button" 
                                     @click="$emit('new-row')"
                                 >
