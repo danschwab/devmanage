@@ -95,6 +95,7 @@
     :root {
         --background-color: #181a1b;
         --background-color-hover: #202224;
+        --background-color-transparent: #181a1bd4;
         --color-text: #b4b4b4;
         --color-text-light: #bbb;
         --color-text-muted: #bbb;
@@ -125,10 +126,17 @@
         --color-orange-bg: #4d3923;
         --color-orange-bg-hover: #7a4a2a;
 
+        --color-green: #66cc74;
+        --color-green-hover: #146c1f;
+        --color-green-bg: #234d23;
+        --color-green-bg-hover: #2a7a2a;
+        --color-green-bg-transparent: #66cc7466;
+
         --color-yellow: #ffe066;
         --color-yellow-hover: #e6c200;
         --color-yellow-bg: #4d4a23;
         --color-yellow-bg-hover: #7a7a2a;
+        --color-yellow-bg-transparent: #ffff0055;
 
         --color-blue: #82aaff;
         --color-blue-hover: #5e8cff;
@@ -136,21 +144,9 @@
         --color-blue-bg-transparent: #82aaff33;
         --color-blue-bg-hover: #2a3a7a;
 
-        --color-green: #66cc74;
-        --color-green-hover: #146c1f;
-        --color-green-bg: #234d23;
-        --color-green-bg-hover: #2a7a2a;
-
-        --color-modal-bg-gradient: linear-gradient(to bottom, #23294d, #156bcc);
+        --color-modal-bg-gradient: linear-gradient(to bottom, #23294daa, #156bcc);
         --color-scrollbar-thumb: #444;
         --color-scrollbar-bg: #222;
         --color-row-drag-handle: #bbb;
     }
 }*/
-
-
-
-@media print {
-    
-
-}
