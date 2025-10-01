@@ -1,8 +1,7 @@
 import { html } from '../index.js';
-import { getReactiveStore } from './reactiveStores.js';
-import { Requests } from '../index.js';
 import { authState } from '../index.js';
 import { URLRouter } from './urlRouter.js';
+import { DashboardRegistry } from './DashboardRegistry.js';
 
 export const NavigationRegistry = {
     /**
@@ -47,47 +46,20 @@ export const NavigationRegistry = {
         }
     },
 
-    // Dashboard containers reactive store
-    dashboardStore: null,
+    // Dashboard registry
+    dashboardRegistry: DashboardRegistry,
 
     // URL Router integration
     urlRouter: null,
 
-    /**
-     * Initialize dashboard reactive store
-     */
-    async initializeDashboardStore() {
-        if (!authState.isAuthenticated || !authState.user?.email) {
-            return;
-        }
-        
-        try {
-            // Create reactive store for dashboard state
-            this.dashboardStore = getReactiveStore(
-                Requests.getUserData,
-                Requests.storeUserData,
-                [authState.user.email, 'dashboard_containers'],
-                false
-            );
-            
-            await this.dashboardStore.load();
+    // Central navigation parameters store (reactive)
+    navigationParameters: Vue.reactive({}),
 
-            // Use store data directly as dashboard containers
-            if (!this.dashboardStore.data || this.dashboardStore.data.length === 0) {
-                // Initialize with defaults if no saved data
-                this.dashboardStore.setData([]);
-                console.log('No saved dashboard state found, using defaults');
-            } else {
-                console.log('Dashboard state loaded from reactive store:', this.dashboardStore.data);
-            }
-        } catch (error) {
-            console.error('Failed to initialize dashboard store:', error);
-            // Initialize with empty data to allow functioning
-            if (!this.dashboardStore) {
-                this.dashboardStore = getReactiveStore(null, null, [], false);
-            }
-            this.dashboardStore.setData([]);
-        }
+    /**
+     * Initialize dashboard registry
+     */
+    async initializeDashboard() {
+        await this.dashboardRegistry.initialize();
     },
 
     /**
@@ -99,53 +71,6 @@ export const NavigationRegistry = {
             this.urlRouter.initialize();
             console.log('[NavigationRegistry] URL router initialized successfully');
         }
-    },
-
-    /**
-     * Handle post-login URL navigation
-     */
-    handlePostLogin() {
-        if (this.urlRouter) {
-            const intendedUrl = this.urlRouter.getIntendedURL();
-            if (intendedUrl) {
-                console.log('[NavigationRegistry] Navigating to intended URL after login:', intendedUrl);
-                
-                const pathInfo = this.parsePath(intendedUrl);
-                const basePage = pathInfo.path.split('/')[0];
-                
-                // Navigate to base page first
-                this.navigateToPage(basePage, this.urlRouter.appContext, false);
-                
-                // If it's a sub-path, update container after base page loads
-                if (pathInfo.path !== basePage) {
-                    this.urlRouter.appContext.$nextTick(() => {
-                        const container = this.urlRouter.appContext.containers.find(c => c.containerType === basePage);
-                        if (container) {
-                            container.containerPath = pathInfo.path;
-                            container.fullPath = pathInfo.fullPath;
-                            container.navigationParameters = pathInfo.parameters;
-                            console.log('[NavigationRegistry] Updated container for initial navigation:', container.id, 'with path:', pathInfo.path);
-                            
-                            // Update URL with full path
-                            if (this.urlRouter) {
-                                this.urlRouter.updateURL();
-                            }
-                        } else {
-                            console.warn('[NavigationRegistry] No container found for initial navigation to:', basePage);
-                        }
-                    });
-                } else {
-                    // For base page navigation, update URL immediately
-                    if (this.urlRouter) {
-                        this.urlRouter.updateURL(pathInfo.path, pathInfo.parameters);
-                    }
-                }
-                return;
-            }
-        }
-        
-        // Default to dashboard if no intended URL
-        console.log('[NavigationRegistry] No intended URL, defaulting to dashboard');
     },
 
     /**
@@ -203,7 +128,7 @@ export const NavigationRegistry = {
 
     /**
      * Parse path with parameters (supports query string parameters)
-     * @param {string} path - The path with potential parameters (e.g., 'inventory/categories?search=item&hideRows=false')
+     * @param {string} path - The path with potential parameters (e.g., 'inventory/categories?searchTerm=item&hideRowsOnSearch=false')
      * @returns {Object} Object with path, parameters, and route information
      */
     parsePath(path) {
@@ -254,6 +179,42 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Set navigation parameters for a specific path
+     * @param {string} path - The path to set parameters for
+     * @param {Object} parameters - The parameters to set
+     */
+    setNavigationParameters(path, parameters) {
+        this.navigationParameters[path] = { ...parameters };
+    },
+
+    /**
+     * Get navigation parameters for a specific path
+     * @param {string} path - The path to get parameters for
+     * @returns {Object} The parameters object
+     */
+    getNavigationParameters(path) {
+        return this.navigationParameters[path] || {};
+    },
+
+    /**
+     * Get current navigation parameters based on app context
+     * @param {Object} appContext - The app context object
+     * @returns {Object} Current navigation parameters
+     */
+    getCurrentNavigationParameters(appContext) {
+        const currentPath = appContext.currentPath || appContext.currentPage || 'dashboard';
+        return this.getNavigationParameters(currentPath);
+    },
+
+    /**
+     * Clear navigation parameters for a specific path
+     * @param {string} path - The path to clear parameters for
+     */
+    clearNavigationParameters(path) {
+        delete this.navigationParameters[path];
+    },
+
+    /**
      * Get display name for a path
      * @param {string} path - The path to get display name for
      * @param {boolean} [preferDashboardTitle=false] - If true, prefer dashboardTitle over displayName
@@ -274,15 +235,7 @@ export const NavigationRegistry = {
         return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Unknown';
     },
 
-    /**
-     * Get the main section for a path (e.g., 'inventory' for 'inventory/categories')
-     * @param {string} path - The path to get main section for
-     * @returns {string} Main section name
-     */
-    getMainSection(path) {
-        const pathSegments = path.split('/').filter(segment => segment.length > 0);
-        return pathSegments[0] || '';
-    },
+
 
     /**
      * Add a dynamic route at runtime (useful for categories, etc.)
@@ -343,74 +296,9 @@ export const NavigationRegistry = {
         return subPathsOnly ? paths.filter(path => path.includes('/')) : paths;
     },
 
-    /**
-     * Get dashboard containers from reactive store
-     */
-    get allDashboardContainers() {
-        if (!this.dashboardStore || !this.dashboardStore.data) {
-            return [];
-        }
-        return this.dashboardStore.data;
-    },
 
-    /**
-     * Save dashboard state using reactive store
-     */
-    async saveDashboardState() {
-        if (!this.dashboardStore || !authState.isAuthenticated || !authState.user?.email) {
-            return;
-        }
-        
-        try {
-            await this.dashboardStore.save('Saving dashboard...');
-            console.log('Dashboard state saved successfully via reactive store');
-        } catch (error) {
-            console.warn('Failed to save dashboard state (continuing without saving):', error.message);
-        }
-    },
 
-    /**
-     * Dashboard container management
-     */
-    addDashboardContainer(containerPath, title = null) {
-        if (!this.dashboardStore) return;
-        
-        const containers = this.dashboardStore.data;
-        const exists = containers.some(container => container.path === containerPath);
-        
-        if (!exists) {
-            const displayTitle = title || this.getDisplayName(containerPath,true);
-            const newContainer = { path: containerPath, title: displayTitle };
-            this.dashboardStore.addRow(newContainer);
-        }
-    },
 
-    removeDashboardContainer(containerPath) {
-        if (!this.dashboardStore) return;
-        
-        const containers = this.dashboardStore.data;
-        const index = containers.findIndex(container => container.path === containerPath);
-        
-        if (index !== -1) {
-            this.dashboardStore.markRowForDeletion(index, true);
-            this.dashboardStore.removeMarkedRows();
-        }
-    },
-
-    hasDashboardContainer(containerPath) {
-        if (!this.dashboardStore || !this.dashboardStore.data) {
-            return false;
-        }
-        return this.dashboardStore.data.some(container => container.path === containerPath);
-    },
-
-    getAddablePaths() {
-        if (!this.dashboardStore || !this.dashboardStore.data) {
-            return this.getAllPaths(true); // Get sub-paths only
-        }
-        const currentPaths = this.dashboardStore.data.map(container => container.path);
-        return this.getAllPaths(true).filter(path => !currentPaths.includes(path));
-    },
 
     /**
      * Get container type from path - consolidated logic
@@ -427,161 +315,50 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Get navigation result for a page (containers configuration) - consolidated
-     * @param {string} pagePath - The page path to navigate to
-     * @param {boolean} isAuthenticated - Whether user is authenticated
-     * @returns {Object} Navigation result with containers
-     */
-    getNavigationResult(pagePath, isAuthenticated = true) {
-        if (!isAuthenticated) {
-            return { page: pagePath, containers: [] };
-        }
-
-        let containerConfigs;
-        if (pagePath === 'dashboard') {
-            const containers = this.dashboardStore?.data || [];
-            containerConfigs = containers.map(container => ({
-                path: container.path,
-                title: container.title,
-                containerPath: container.path,
-                type: this.getTypeFromPath(container.path)
-            }));
-        } else {
-            containerConfigs = [{ 
-                path: pagePath, 
-                title: this.getDisplayName(pagePath),
-                containerPath: pagePath,
-                type: this.getTypeFromPath(pagePath)
-            }];
-        }
-        
-        return {
-            page: pagePath,
-            containers: containerConfigs.map(config => ({
-                ...config,
-                options: {
-                    containerPath: config.containerPath,
-                    title: config.title
-                }
-            }))
-        };
-    },
-
-    /**
      * Navigation handlers - consolidated
      */
     handleNavigateToPath(navigationData, appContext) {
-        const { containerId, targetPath, navigationMap, isBrowserNavigation } = navigationData;
+        const { targetPath, isBrowserNavigation } = navigationData;
         
         const pathInfo = this.parsePath(targetPath);
         const basePage = pathInfo.path.split('/')[0];
         
-        // Handle primary navigation (no container ID provided)
-        if (!containerId) {
-            console.log('[NavigationRegistry] Primary navigation to:', pathInfo.path);
-            
-            // For browser navigation, handle full path like initial navigation
-            if (isBrowserNavigation && pathInfo.path !== basePage) {
-                // Navigate to base page first without URL update
-                this.navigateToPage(basePage, appContext, false);
-                
-                // Update container with full path after containers are created
-                appContext.$nextTick(() => {
-                    const container = appContext.containers.find(c => c.containerType === basePage);
-                    if (container) {
-                        container.containerPath = pathInfo.path;
-                        container.fullPath = pathInfo.fullPath;
-                        container.navigationParameters = pathInfo.parameters;
-                        console.log('[NavigationRegistry] Updated container for browser navigation:', container.id, 'with path:', pathInfo.path);
-                    } else {
-                        console.warn('[NavigationRegistry] No container found for browser navigation to:', basePage);
-                    }
-                });
-            } else {
-                // Regular primary navigation - just navigate to base page
-                this.navigateToPage(basePage, appContext);
-            }
-            
-            return { action: 'navigate_to_page', targetPage: basePage, parameters: pathInfo.parameters };
-        }
-        
-        const container = appContext.containers.find(c => c.id === containerId);
-        
-        if (!container) return { action: 'no_action' };
-        
-        // Update container with path and parameters
-        container.containerPath = pathInfo.path;
-        container.fullPath = pathInfo.fullPath;
-        container.navigationParameters = pathInfo.parameters;
-        
-        // Update URL when path changes
-        if (this.urlRouter) {
-            this.urlRouter.updateURL();
-        }
-        
-        if (navigationMap) {
-            container.navigationMap = { ...container.navigationMap, ...navigationMap };
-        }
+        console.log('[NavigationRegistry] Navigation to:', pathInfo.path);
         
         // Handle dashboard navigation
         if (pathInfo.path === 'dashboard') {
             this.navigateToPage('dashboard', appContext);
-            return { action: 'navigate_to_dashboard', containerId, targetPage: 'dashboard', parameters: pathInfo.parameters };
+            // Clear parameters for dashboard
+            this.clearNavigationParameters('dashboard');
+            return { action: 'navigate_to_dashboard', targetPage: 'dashboard', parameters: pathInfo.parameters };
         }
         
-        // Handle cross-page navigation
-        if (appContext.currentPage !== basePage) {
-            // Don't update URL immediately - let container update handle it
-            this.navigateToPage(basePage, appContext, false);
-            
-            appContext.$nextTick(() => {
-                const expandedContainer = appContext.containers.find(c => 
-                    c.containerPath === basePage || c.containerType === basePage
-                );
-                if (expandedContainer) {
-                    expandedContainer.containerPath = pathInfo.path;
-                    expandedContainer.fullPath = pathInfo.fullPath;
-                    expandedContainer.navigationParameters = pathInfo.parameters;
-                    
-                    // Now update URL with the full path
-                    if (this.urlRouter) {
-                        this.urlRouter.updateURL();
-                    }
-                }
-            });
-            
-            return {
-                action: 'navigate_to_new_page',
-                containerId,
-                targetPage: basePage,
-                targetPath: pathInfo.path,
-                fullPath: pathInfo.fullPath,
-                parameters: pathInfo.parameters
-            };
+        // Navigate to base page WITHOUT updating URL to preserve the full path
+        this.navigateToPage(basePage, appContext, false);
+        
+        // Set the full path for the container to use
+        appContext.currentPath = pathInfo.path;
+        
+        // Store navigation parameters for the current path
+        if (pathInfo.hasParameters) {
+            this.setNavigationParameters(pathInfo.path, pathInfo.parameters);
+            console.log('[NavigationRegistry] Set navigation parameters for', pathInfo.path, ':', pathInfo.parameters);
+        } else {
+            // Clear parameters if none provided
+            this.clearNavigationParameters(pathInfo.path);
         }
         
-        return {
-            action: 'update_path',
-            containerId,
-            newPath: pathInfo.path,
-            fullPath: pathInfo.fullPath,
-            parameters: pathInfo.parameters,
-            navigationMap
-        };
-    },
-
-    /**
-     * Application-level functions - consolidated
-     */
-    createNavigateToPathHandler(containerId, handleNavigateToPath) {
-        return (path, parameters = null) => {
-            const fullPath = parameters ? this.buildPath(path, parameters) : path;
-            handleNavigateToPath({ containerId: containerId, targetPath: fullPath });
-        };
+        // Update URL with full path if not browser navigation
+        if (!isBrowserNavigation && this.urlRouter) {
+            this.urlRouter.updateURL(pathInfo.path, pathInfo.parameters);
+        }
+        
+        return { action: 'navigate_to_page', targetPage: basePage, parameters: pathInfo.parameters };
     },
 
     navigateToPage(pagePath, appContext, updateURL = true) {
         appContext.currentPage = pagePath;
+        appContext.currentPath = pagePath; // Set to same as page for base navigation
         appContext.isMenuOpen = false;
         console.log(`Navigating to: ${pagePath}`);
         
@@ -591,49 +368,6 @@ export const NavigationRegistry = {
             this.urlRouter.updateURL(pagePath, {});
         } else if (!this.urlRouter) {
             console.warn('[NavigationRegistry] URLRouter not initialized, cannot update URL');
-        }
-        
-        this.updateContainersForPage(pagePath, appContext);
-    },
-
-    async updateContainersForPage(pagePath, appContext) {
-        appContext.containers = [];
-        const navigationResult = this.getNavigationResult(pagePath, appContext.isAuthenticated);
-        
-        for (const containerConfig of navigationResult.containers) {
-            await appContext.addContainer(
-                containerConfig.type,
-                containerConfig.title,
-                containerConfig.options
-            );
-        }
-        
-        if (appContext.isAuthenticated && appContext.containers.length === 0 && pagePath !== 'dashboard') {
-            this.navigateToPage('dashboard', appContext);
-        }
-    },
-
-    expandContainer(containerData, appContext) {
-        const targetPath = containerData.containerPath || containerData.path;
-        const targetPage = targetPath.split('/')[0];
-        
-        if (targetPage !== appContext.currentPage) {
-            // Navigate to new page
-            this.navigateToPage(targetPage, appContext);
-            
-            if (targetPath) {
-                appContext.$nextTick(() => {
-                    const expandedContainer = appContext.containers.find(c => 
-                        c.containerType === targetPage || c.containerPath === targetPage
-                    );
-                    if (expandedContainer) {
-                        expandedContainer.containerPath = targetPath;
-                    }
-                });
-            }
-        } else {
-            // Already on the same page
-            appContext.showAlert(`You are already viewing the ${containerData.title} page.`, 'Already Here');
         }
     }
 };

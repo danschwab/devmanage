@@ -187,11 +187,6 @@ export class ModalManager {
         return false;
     }
 
-    getAllModals() {
-        console.log('[ModalManager] getAllModals', this.modals);
-        return this.modals;
-    }
-
     // Show an alert modal with a message and optional title
     showAlert(message, title = 'Alert') {
         const modal = this.createModal(title, AlertComponent, {

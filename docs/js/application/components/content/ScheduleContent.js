@@ -67,8 +67,7 @@ export const ScheduleContent = {
         containerPath: {
             type: String,
             default: 'schedule'
-        },
-        fullPath: String
+        }
     },
     data() {
         return {

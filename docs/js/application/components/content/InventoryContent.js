@@ -63,49 +63,49 @@ export const InventoryMenuComponent = {
                     );
                     break;
                 case 'exportInventory':
-                    modalManager.showAlert?.('Export all items functionality coming soon!', 'Info');
+                    modalManager.showAlert('Export all items functionality coming soon!', 'Info');
                     break;
                 case 'inventorySettings':
-                    modalManager.showAlert?.('Inventory settings functionality coming soon!', 'Info');
+                    modalManager.showAlert('Inventory settings functionality coming soon!', 'Info');
                     break;
                 case 'addNewCategory':
-                    modalManager.showAlert?.('Add new category functionality coming soon!', 'Info');
+                    modalManager.showAlert('Add new category functionality coming soon!', 'Info');
                     break;
                 case 'manageCategoryOrder':
-                    modalManager.showAlert?.('Manage category order functionality coming soon!', 'Info');
+                    modalManager.showAlert('Manage category order functionality coming soon!', 'Info');
                     break;
                 case 'exportCategoryReport':
-                    modalManager.showAlert?.('Export category report functionality coming soon!', 'Info');
+                    modalManager.showAlert('Export category report functionality coming soon!', 'Info');
                     break;
                 case 'categorySettings':
-                    modalManager.showAlert?.('Category settings functionality coming soon!', 'Info');
+                    modalManager.showAlert('Category settings functionality coming soon!', 'Info');
                     break;
                 case 'saveSearchCriteria':
-                    modalManager.showAlert?.('Save search criteria functionality coming soon!', 'Info');
+                    modalManager.showAlert('Save search criteria functionality coming soon!', 'Info');
                     break;
                 case 'loadSavedSearch':
-                    modalManager.showAlert?.('Load saved search functionality coming soon!', 'Info');
+                    modalManager.showAlert('Load saved search functionality coming soon!', 'Info');
                     break;
                 case 'exportSearchResults':
-                    modalManager.showAlert?.('Export search results functionality coming soon!', 'Info');
+                    modalManager.showAlert('Export search results functionality coming soon!', 'Info');
                     break;
                 case 'clearSearchHistory':
-                    modalManager.showAlert?.('Clear search history functionality coming soon!', 'Info');
+                    modalManager.showAlert('Clear search history functionality coming soon!', 'Info');
                     break;
                 case 'scheduleReport':
-                    modalManager.showAlert?.('Schedule automatic reports functionality coming soon!', 'Info');
+                    modalManager.showAlert('Schedule automatic reports functionality coming soon!', 'Info');
                     break;
                 case 'customReportBuilder':
-                    modalManager.showAlert?.('Custom report builder functionality coming soon!', 'Info');
+                    modalManager.showAlert('Custom report builder functionality coming soon!', 'Info');
                     break;
                 case 'emailReports':
-                    modalManager.showAlert?.('Email reports functionality coming soon!', 'Info');
+                    modalManager.showAlert('Email reports functionality coming soon!', 'Info');
                     break;
                 case 'reportSettings':
-                    modalManager.showAlert?.('Report settings functionality coming soon!', 'Info');
+                    modalManager.showAlert('Report settings functionality coming soon!', 'Info');
                     break;
                 case 'inventoryHelp':
-                    modalManager.showAlert?.('Inventory help functionality coming soon!', 'Info');
+                    modalManager.showAlert('Inventory help functionality coming soon!', 'Info');
                     break;
                 default:
                     modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
@@ -135,7 +135,6 @@ export const InventoryContent = {
             type: String,
             default: 'inventory'
         },
-        fullPath: String,
         navigateToPath: Function,
     },
     data() {

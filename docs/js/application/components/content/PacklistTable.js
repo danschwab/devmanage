@@ -1,21 +1,16 @@
-import { html, TableComponent, Requests, getReactiveStore, tableRowSelectionState } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, tableRowSelectionState, NavigationRegistry } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
     components: { TableComponent, ItemImageComponent },
-    inject: {
-        navigationParameters: { 
-            from: 'navigationParameters', 
-            default: () => () => ({}) 
-        }
-    },
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
         showDetailsOnly: { type: Boolean, default: false },
-        editMode: { type: Boolean, default: false }
+        editMode: { type: Boolean, default: false },
+        containerPath: { type: String, default: '' }
     },
     data() {
         return {
@@ -207,11 +202,15 @@ export const PacklistTable = {
             // Count only items with warnings for button display
             return this.itemWarningDetails.filter(item => item['Has Warning']).length;
         },
-        // Navigation-based parameters from injection
+        // Navigation-based parameters from NavigationRegistry
         navParams() {
-            return typeof this.navigationParameters === 'function' 
-                ? this.navigationParameters() 
-                : this.navigationParameters || {};
+            // Use the containerPath as the primary source - it should be the full path
+            // If containerPath is empty/undefined, fall back to constructing from tabName
+            let path = this.containerPath;
+            if (!path && this.tabName) {
+                path = this.showDetailsOnly ? `packlist/${this.tabName}/details` : `packlist/${this.tabName}`;
+            }
+            return NavigationRegistry.getNavigationParameters(path || '');
         },
         searchTerm() {
             return this.navParams.searchTerm || '';
@@ -522,11 +521,11 @@ export const PacklistTable = {
                             v-if="column.key === 'image'"
                             :itemNumber="row['Item ID']"
                         />
-                        <!-- Make Item ID column a clickable table-cell-card button -->
+                        <!-- Make Item ID column a clickable card button -->
                         <button 
                             v-else-if="column.key === 'Item ID'"
                             @click="handleItemIdClick(row['Item ID'])"
-                            class="table-cell-card"
+                            class="card"
                         >
                             {{ row['Item ID'] }}
                         </button>
@@ -537,7 +536,7 @@ export const PacklistTable = {
                                     v-for="showId in row['Overlapping Shows']" 
                                     :key="showId"
                                     @click="handleOverlappingShowClick(showId)"
-                                    class="table-cell-card"
+                                    class="card"
                                     style="margin: 2px;"
                                 >
                                     {{ showId }}
@@ -655,7 +654,7 @@ export const PacklistTable = {
                                     <!-- Add quantity warning cards based on AppData -->
                                     <template v-for="warning in getItemWarnings(itemRow, itemColumn.key)" :key="warning.itemId">
                                         <div 
-                                            class="table-cell-card clickable"
+                                            class="card clickable"
                                             :class="{
                                                 'red': warning.type === 'error',
                                                 'yellow': warning.type === 'warning'
@@ -678,4 +677,3 @@ export const PacklistTable = {
     `
 };
 
-export default PacklistTable;

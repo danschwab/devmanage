@@ -192,4 +192,3 @@ export const TabsListComponent = {
     `
 };
 
-export default TabComponent;

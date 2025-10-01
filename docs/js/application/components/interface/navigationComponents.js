@@ -33,6 +33,15 @@ export const PrimaryNavComponent = {
         'login',
         'logout'
     ],
+    computed: {
+        isDarkMode() {
+            // Use matchMedia to detect dark mode
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        },
+        logoSrc() {
+            return this.isDarkMode ? 'images/logoW.png' : 'images/logo.png';
+        }
+    },
     methods: {
         handleNavClick(item) {
             if (this.currentPage === item.path) {
@@ -58,7 +67,9 @@ export const PrimaryNavComponent = {
     template: html`
         <header>
             <nav :class="{ 'open': isMenuOpen }">
-                <a @click.prevent="$emit('navigate-to-path', 'dashboard');"><img src="images/logo.png" alt="Top Shelf Exhibits" /></a>
+                <a @click.prevent="$emit('navigate-to-path', 'dashboard');">
+                    <img :src="logoSrc" alt="Top Shelf Exhibits" />
+                </a>
 
                 <span id="navbar">
                     <template v-if="isAuthenticated">
@@ -107,32 +118,15 @@ export const BreadcrumbComponent = {
             type: Boolean,
             default: false
         },
-        navigationMap: {
-            type: Object,
-            default: () => ({})
-        },
         containerId: {
             type: String,
-            required: true
+            required: false
         }
     },
     data() {
         return {
-            // Local navigation map that can be extended at runtime
-            localNavigationMap: {},
             showHoverPath: false
         };
-    },
-    mounted() {
-        // Initialize local navigation map with props
-        this.localNavigationMap = { ...this.navigationMap };
-        
-        // Add any segments from current path that aren't already mapped
-        this.pathSegments.forEach(segment => {
-            if (!this.localNavigationMap[segment]) {
-                this.addNavigationMapping(segment);
-            }
-        });
     },
     computed: {
         pathSegments() {
@@ -148,7 +142,7 @@ export const BreadcrumbComponent = {
                 
                 return {
                     id: segment,
-                    name: this.getSegmentName(segment, cumulativePath),
+                    name: this.getSegmentName(segment),
                     index: index,
                     path: cumulativePath
                 };
@@ -190,70 +184,24 @@ export const BreadcrumbComponent = {
         /**
          * Get human-readable name for a segment, building it if not found
          * @param {string} segmentId - The segment identifier
-         * @param {string} fullPath - The full path to this segment (for better context)
          */
-        getSegmentName(segmentId, fullPath = null) {
-            // Check local navigation map first
-            if (this.localNavigationMap[segmentId]) {
-                return this.localNavigationMap[segmentId];
-            }
-            
-            // Try to get from NavigationRegistry using full path if available
-            let registryName = 'Unknown';
-            if (fullPath) {
-                registryName = NavigationRegistry.getDisplayName(fullPath);
-            }
-            
-            // If full path didn't work, try just the segment
-            if (registryName === 'Unknown') {
-                registryName = NavigationRegistry.getDisplayName(segmentId);
-            }
-            
+        getSegmentName(segmentId) {
+            // Try to get from NavigationRegistry
+            let registryName = NavigationRegistry.getDisplayName(segmentId);
             if (registryName !== 'Unknown') {
-                this.addNavigationMapping(segmentId, registryName);
                 return registryName;
             }
             
             // Auto-generate name if not found
-            const generatedName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-            this.addNavigationMapping(segmentId, generatedName);
-            return generatedName;
-        },
-        /**
-         * Add a new navigation mapping
-         */
-        addNavigationMapping(segmentId, displayName = null) {
-            if (!displayName) {
-                displayName = NavigationRegistry.getDisplayName(segmentId);
-                if (displayName === 'Unknown') {
-                    displayName = segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
-                }
-            }
-            this.localNavigationMap[segmentId] = displayName;
-            
-            // Emit event to parent to share this mapping
-            this.$emit('navigation-mapping-added', {
-                containerId: this.containerId,
-                segmentId: segmentId,
-                displayName: displayName
-            });
+            return segmentId.charAt(0).toUpperCase() + segmentId.slice(1);
         },
         navigateToBreadcrumb(index) {
             if (index < this.pathSegments.length - 1) {
                 const targetPath = this.pathSegments.slice(0, index + 1).join('/');
                 
-                // Ensure all segments in target path have mappings
-                this.pathSegments.slice(0, index + 1).forEach(segment => {
-                    if (!this.localNavigationMap[segment]) {
-                        this.addNavigationMapping(segment);
-                    }
-                });
-                
+                // Emit simple path-based navigation
                 this.$emit('navigate-to-path', {
-                    containerId: this.containerId,
-                    targetPath: targetPath,
-                    currentPath: this.containerPath,
-                    navigationMap: this.localNavigationMap
+                    targetPath: targetPath
                 });
             }
         },
@@ -328,59 +276,87 @@ export const DashboardToggleComponent = {
     },
     inject: ['appContext'],
     computed: {
-        dashboardStore() {
-            return NavigationRegistry.dashboardStore;
-        },
         isOnDashboard() {
-            if (!this.dashboardStore || !this.dashboardStore.data) {
-                return false;
-            }
-            return this.dashboardStore.data.some(container => container.path === this.containerPath);
+            return NavigationRegistry.dashboardRegistry.has(this.containerPath);
         },
         isLoading() {
-            return this.dashboardStore?.isLoading || false;
+            return NavigationRegistry.dashboardRegistry.isLoading;
         },
         loadingMessage() {
-            return this.dashboardStore?.loadingMessage || 'Dashboard updating...';
+            return NavigationRegistry.dashboardRegistry.loadingMessage;
+        },
+        containerClasses() {
+            const classes = NavigationRegistry.dashboardRegistry.getClasses(this.containerPath);
+            return new Set(classes ? classes.split(' ').filter(c => c.length > 0) : []);
+        },
+        canMoveLeft() {
+            if (!this.isOnDashboard) return false;
+            const containers = NavigationRegistry.dashboardRegistry.containers;
+            const index = containers.findIndex(container => 
+                (typeof container === 'string' ? container : container.path) === this.containerPath
+            );
+            return index > 0;
+        },
+        canMoveRight() {
+            if (!this.isOnDashboard) return false;
+            const containers = NavigationRegistry.dashboardRegistry.containers;
+            const index = containers.findIndex(container => 
+                (typeof container === 'string' ? container : container.path) === this.containerPath
+            );
+            return index > -1 && index < containers.length - 1;
         }
     },
     methods: {
         async toggleDashboardPresence() {
-            if (!this.dashboardStore) {
-                console.warn('Dashboard store is not available');
-                return;
-            }
-
             if (this.isOnDashboard) {
-                // Remove from dashboard store
-                const containers = this.dashboardStore.data;
-                const index = containers.findIndex(container => container.path === this.containerPath);
-                
-                if (index !== -1) {
-                    this.dashboardStore.markRowForDeletion(index, true);
-                    this.dashboardStore.removeMarkedRows();
-                }
+                await NavigationRegistry.dashboardRegistry.remove(this.containerPath);
             } else {
-                // Add to dashboard store
-                const displayTitle = this.title || NavigationRegistry.getDisplayName(this.containerPath,true);
-                const newContainer = { path: this.containerPath, title: displayTitle };
-                this.dashboardStore.addRow(newContainer);
+                await NavigationRegistry.dashboardRegistry.add(this.containerPath);
             }
-            
-            // Save the updated state
-            await this.dashboardStore.save('Saving dashboard...');
-            
-            // Update app context dashboard containers for reactivity
-            this.appContext.dashboardContainers = this.dashboardStore.data;
-            
-            // Refresh dashboard if currently on dashboard page
-            if (this.appContext.currentPage === 'dashboard') {
-                NavigationRegistry.updateContainersForPage('dashboard', this.appContext);
+        },
+        async toggleDashboardClass(className) {
+            if (this.isOnDashboard) {
+                await NavigationRegistry.dashboardRegistry.toggleClass(this.containerPath, className);
+            }
+        },
+        async moveLeft() {
+            if (this.canMoveLeft) {
+                await NavigationRegistry.dashboardRegistry.moveLeft(this.containerPath);
+            }
+        },
+        async moveRight() {
+            if (this.canMoveRight) {
+                await NavigationRegistry.dashboardRegistry.moveRight(this.containerPath);
             }
         }
     },
     template: html`
-        <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px;">
+        <div>
+            <!-- Dashboard card styling controls (only show on dashboard page) -->
+            <div v-if="(this.appContext.currentPage === 'dashboard') && isOnDashboard" class="button-bar">
+                <button @click="toggleDashboardClass('wide');" :disabled="isLoading" 
+                        :class="{ 'green': containerClasses.has('wide'), 'blue': !containerClasses.has('wide') }">
+                    Wide
+                </button>
+                <button @click="toggleDashboardClass('tall');" :disabled="isLoading" 
+                        :class="{ 'green': containerClasses.has('tall'), 'blue': !containerClasses.has('tall') }">
+                    Tall
+                </button>
+            </div>
+            
+            <!-- Dashboard ordering controls (only show on dashboard page) -->
+            <div v-if="(this.appContext.currentPage === 'dashboard') && isOnDashboard" class="button-bar">
+                <button @click="moveLeft" :disabled="isLoading || !canMoveLeft" 
+                        :class="{ 'blue': canMoveLeft && !isLoading, 'disabled': !canMoveLeft || isLoading }">
+                    ← Move Left
+                </button>
+                <button @click="moveRight" :disabled="isLoading || !canMoveRight" 
+                        :class="{ 'blue': canMoveRight && !isLoading, 'disabled': !canMoveRight || isLoading }">
+                    Move Right →
+                </button>
+            </div>
+            
+            <!-- Add/Remove from dashboard -->
             <button 
                 @click="toggleDashboardPresence"
                 :disabled="isLoading"

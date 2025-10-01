@@ -4,7 +4,7 @@ export { parseDate } from '../data_management/utils/helpers.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';
-export { Auth, authState, useAuth } from './utils/auth.js';
+export { Auth, authState } from './utils/auth.js';
 export { getReactiveStore } from './utils/reactiveStores.js';
 
 // Navigation components
@@ -13,7 +13,7 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
-export { ContainerComponent, containerManager } from './components/interface/containerComponent.js';
+export { ContainerComponent } from './components/interface/containerComponent.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
@@ -28,4 +28,3 @@ export { PacklistContent, PacklistMenuComponent } from './components/content/Pac
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';
-

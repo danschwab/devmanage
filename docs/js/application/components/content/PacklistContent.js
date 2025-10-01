@@ -26,14 +26,14 @@ export const PacklistMenuComponent = {
                     if (this.refreshCallback) {
                         this.refreshCallback();
                     } else {
-                        modalManager.showAlert?.('Refreshing packlist data...', 'Info');
+                        modalManager.showAlert('Refreshing packlist data...', 'Info');
                     }
                     break;
                 case 'help':
-                    modalManager.showAlert?.('Packlist help functionality coming soon!', 'Info');
+                    modalManager.showAlert('Packlist help functionality coming soon!', 'Info');
                     break;
                 default:
-                    modalManager.showAlert?.(`Action ${action} not implemented yet.`, 'Info');
+                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },
@@ -59,9 +59,7 @@ export const PacklistContent = {
         'tabs-list': TabsListComponent
     },
     props: {
-        showAlert: Function,
         containerPath: String,
-        fullPath: String,
         navigateToPath: Function
     },
     data() {
@@ -149,7 +147,7 @@ export const PacklistContent = {
                 const tabs = await Requests.getAvailableTabs('PACK_LISTS');
                 this.availablePacklists = tabs.filter(tab => tab.title !== 'TEMPLATE');
             } catch (error) {
-                this.modalManager.showAlert?.('Failed to load available packlists: ' + error.message, 'Error');
+                this.modalManager.showAlert('Failed to load available packlists: ' + error.message, 'Error');
             } finally {
                 this.isLoading = false;
             }
@@ -174,6 +172,7 @@ export const PacklistContent = {
                 <packlist-table 
                     :tab-name="currentPacklist" 
                     :edit-mode="false"
+                    :container-path="containerPath"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
@@ -183,6 +182,7 @@ export const PacklistContent = {
                 <packlist-table 
                     :tab-name="currentPacklist" 
                     :edit-mode="true"
+                    :container-path="containerPath"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>
@@ -192,6 +192,7 @@ export const PacklistContent = {
                 <packlist-table 
                     :tab-name="currentPacklist" 
                     :show-details-only="true" 
+                    :container-path="containerPath"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 />
             </div>

@@ -282,11 +282,3 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], autoLoa
     return reactiveStoreRegistry[key];
 }
 
-// Example usage:
-// const inventoryStore = createReactiveStore();
-// const packlistStore = createReactiveStore();
-
-// Export factory for use in components
-export default {
-    getReactiveStore
-};

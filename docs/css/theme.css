@@ -81,7 +81,7 @@
 }
 
 /* Responsive: Reduce padding on small screens */
-@media (max-width: 600px) {
+@media (max-width: 800px) {
     :root {
         --padding-sm: 8px;
         --padding-md: 8px;
@@ -91,7 +91,7 @@
 }
 
 /* Dark mode overrides */
-/*@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: dark) {
     :root {
         --background-color: #181a1b;
         --background-color-hover: #202224;
@@ -149,4 +149,4 @@
         --color-scrollbar-bg: #222;
         --color-row-drag-handle: #bbb;
     }
-}*/
+}

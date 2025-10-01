@@ -369,7 +369,7 @@ export const ScheduleTableComponent = {
                     <!-- Add packlist cards based on AppData -->
                     <template v-for="card in getPacklistCards(row, column.key)" :key="card.message">
                         <button 
-                            class="table-cell-card"
+                            class="card"
                             :disabled="card.disabled"
                             @click="!card.disabled ? card.action() : null"
                             v-html="card.message"

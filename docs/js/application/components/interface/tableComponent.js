@@ -482,7 +482,6 @@ export const TableComponent = {
         return {
             dirtyCells: {},
             allowSaveEvent: false,
-            rowsMarkedForDeletion: new Set(), // Track indices of rows marked for deletion
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
             searchValue: this.searchTerm || '', // Initialize with searchTerm prop
             sortColumn: null, // Current sort column key
@@ -1623,4 +1622,3 @@ export const TableComponent = {
     `
 };
 
-export default TableComponent;

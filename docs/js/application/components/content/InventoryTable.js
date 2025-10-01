@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, modalManager } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, modalManager, NavigationRegistry } from '../../index.js';
 
 
 
@@ -109,12 +109,6 @@ export const InventoryTableComponent = {
         TableComponent,
         ItemImageComponent
     },
-    inject: {
-        navigationParameters: { 
-            from: 'navigationParameters', 
-            default: () => () => ({}) 
-        }
-    },
     props: {
         containerPath: {
             type: String,
@@ -188,11 +182,9 @@ export const InventoryTableComponent = {
         isLoading() {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
         },
-        // Navigation-based parameters from injection
+        // Navigation-based parameters from NavigationRegistry
         navParams() {
-            return typeof this.navigationParameters === 'function' 
-                ? this.navigationParameters() 
-                : this.navigationParameters || {};
+            return NavigationRegistry.getNavigationParameters(this.containerPath);
         }
     },
     async mounted() {

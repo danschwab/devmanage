@@ -118,7 +118,7 @@ input[type="submit"]:disabled,
 input[type="button"]:disabled,
 button:disabled {
     pointer-events: none;
-    overflow: visible;
+    /*overflow: visible;*/
 }
 
 input[type="submit"]:after,

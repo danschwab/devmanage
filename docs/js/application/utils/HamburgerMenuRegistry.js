@@ -1,4 +1,4 @@
-import { html, DashboardToggleComponent } from '../index.js';
+import { html, DashboardToggleComponent, NavigationRegistry } from '../index.js';
 
 const { reactive } = Vue;
 
@@ -33,7 +33,7 @@ export class HamburgerMenuRegistry {
             containerPath,
             containerType,
             currentView: this.getCurrentView(containerPath),
-            title: this.getDisplayTitle(containerPath, containerType),
+            title: NavigationRegistry.getDisplayName(containerPath, true), // Use centralized display logic
             // Merge with menu-specific props
             ...menu.props
         };
@@ -62,16 +62,6 @@ export class HamburgerMenuRegistry {
 
         // Return default menu for all containers
         return this.defaultMenu;
-    }
-
-    getDisplayTitle(containerPath, containerType) {
-        if (containerPath) {
-            // Try to get title from path segments
-            const segments = containerPath.split('/').filter(s => s.length > 0);
-            const lastSegment = segments[segments.length - 1];
-            return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : containerType;
-        }
-        return containerType ? containerType.charAt(0).toUpperCase() + containerType.slice(1) : 'Container';
     }
 
     getCurrentView(containerPath) {

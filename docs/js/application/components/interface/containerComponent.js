@@ -1,4 +1,4 @@
-import { html, BreadcrumbComponent, modalManager } from '../../index.js';
+import { html, BreadcrumbComponent, modalManager, NavigationRegistry } from '../../index.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -26,6 +26,11 @@ export const ContainerComponent = {
             type: Boolean,
             default: false
         },
+        cardClasses: {
+            type: String,
+            default: ''
+        },
+        // Show expand button to open in full page
         showExpandButton: {
             type: Boolean,
             default: false
@@ -51,10 +56,9 @@ export const ContainerComponent = {
         hamburgerMenuComponent() {
             return this.hamburgerMenuRegistry.getMenuComponent(this.containerType, this.containerPath);
         },
-        // Get navigation parameters from app context
+        // Get navigation parameters from NavigationRegistry
         navigationParameters() {
-            const container = this.$parent?.containers?.find(c => c.id === this.containerId);
-            return container?.navigationParameters || {};
+            return NavigationRegistry.getNavigationParameters(this.containerPath);
         }
     },
     methods: {
@@ -62,7 +66,7 @@ export const ContainerComponent = {
             this.isLoading = val;
         },
         closeContainer() {
-            this.$emit('close-container', this.containerId);
+            this.$emit('navigate-to-path', 'dashboard');
         },
         openHamburgerMenu() {
             if (this.hamburgerMenuComponent) {
@@ -78,15 +82,14 @@ export const ContainerComponent = {
         },
         expandContainer() {
             this.$emit('expand-container', {
-                containerId: this.containerId,
-                title: this.title,
-                containerType: this.containerType,
-                containerPath: this.containerPath
+                path: this.containerPath,
+                containerPath: this.containerPath,
+                title: this.title
             });
         }
     },
     template: html `
-        <div class="container" :class="{ 'dashboard-card': cardStyle }">
+        <div class="container" :class="(cardStyle ? 'dashboard-card' + cardClasses : '')">
             <div v-if="containerPath || title || cardStyle" class="container-header">
                 <BreadcrumbComponent
                     :container-path="containerPath"
@@ -95,7 +98,7 @@ export const ContainerComponent = {
                     :container-id="containerId"
                     @navigate-to-path="(event) => $emit('navigate-to-path', event)" />
                 
-                <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="header-buttons">
+                <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
                     <button v-if="hamburgerMenuComponent" 
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
@@ -119,10 +122,8 @@ export const ContainerComponent = {
                     <p>Loading data...</p>
                 </div>
                 <slot v-else name="content">
-                    <div>
-                        <p>Container {{ containerId }} loaded successfully!</p>
-                        <p>Type: {{ containerType }}</p>
-                        <p>Path: {{ containerPath || 'No path' }}</p>
+                    <div class="content-footer red">
+                        <p>nothing found at "{{ containerPath }}"</p>
                     </div>
                 </slot>
             </div>
@@ -130,45 +131,3 @@ export const ContainerComponent = {
     `
 };
 
-// Container Manager - handles multiple containers
-export class ContainerManager {
-    constructor() {
-        this.containers = new Map();
-        this.nextId = 1;
-    }
-
-    createContainer(type = 'default', title = '', options = {}) {
-        const containerId = options.id || `container-${this.nextId++}`;
-        
-        const containerData = {
-            id: containerId,
-            type: type,
-            title: title,
-            options: options,
-            created: new Date()
-        };
-
-        this.containers.set(containerId, containerData);
-        return containerData;
-    }
-
-    removeContainer(containerId) {
-        return this.containers.delete(containerId);
-    }
-
-    getContainer(containerId) {
-        return this.containers.get(containerId);
-    }
-
-    getAllContainers() {
-        return Array.from(this.containers.values());
-    }
-
-    clearAllContainers() {
-        this.containers.clear();
-        this.nextId = 1;
-    }
-}
-
-// Create a global instance
-export const containerManager = new ContainerManager();

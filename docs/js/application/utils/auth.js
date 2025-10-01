@@ -29,6 +29,9 @@ export const authState = Vue.reactive({
     isInitialized: false
 });
 
+// Import DashboardRegistry for cleanup on logout
+import { DashboardRegistry } from './DashboardRegistry.js';
+
 /**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
@@ -83,6 +86,11 @@ export class Auth {
 
         try {
             await GoogleSheetsAuth.logout();
+            
+            // Clean up dashboard registry (save any pending changes and reset)
+            await DashboardRegistry.saveNow();
+            DashboardRegistry.cleanup();
+            
             // Flush everything in the reactive store
             authState.isAuthenticated = false;
             authState.user = null;
@@ -112,18 +120,3 @@ export class Auth {
     }
 }
 
-/**
- * Vue composable for authentication
- */
-export function useAuth() {
-    return {
-        // Reactive state
-        authState,
-        
-        // Methods
-        login: () => Auth.login(),
-        logout: () => Auth.logout(),
-        checkAuth: () => Auth.checkAuth(),
-        initialize: () => Auth.initialize()
-    };
-}

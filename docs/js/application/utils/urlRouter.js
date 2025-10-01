@@ -45,39 +45,6 @@ export class URLRouter {
     }
 
     /**
-     * Get intended URL from session storage or current URL
-     * Used by authentication flow to determine where to navigate after login
-     */
-    getIntendedURL() {
-        // First check session storage (set when user was redirected to login)
-        const storedUrl = sessionStorage.getItem('intended_url');
-        if (storedUrl) {
-            sessionStorage.removeItem('intended_url');
-            return storedUrl;
-        }
-        
-        // Otherwise use current URL if it's not login
-        const currentUrl = this.getCurrentURLPath();
-        if (currentUrl && currentUrl !== 'login') {
-            return currentUrl;
-        }
-        
-        return null;
-    }
-
-    /**
-     * Store current URL for post-login navigation
-     * Called when redirecting unauthenticated user to login
-     */
-    storeIntendedURL() {
-        const currentUrl = this.getCurrentURLPath();
-        if (currentUrl && currentUrl !== 'login') {
-            console.log('[URLRouter] Storing intended URL for after login:', currentUrl);
-            sessionStorage.setItem('intended_url', currentUrl);
-        }
-    }
-
-    /**
      * Handle browser back/forward buttons
      */
     handlePopState(event) {
@@ -131,38 +98,17 @@ export class URLRouter {
     }
 
     /**
-     * Get the active container that should drive URL state
-     * Priority: container with navigationParameters > container with custom path > fallback to current page
-     */
-    getActiveContainer() {
-        // First priority: container with navigation parameters (most specific)
-        let activeContainer = this.appContext.containers.find(container => 
-            container.navigationParameters && Object.keys(container.navigationParameters).length > 0
-        );
-        
-        if (activeContainer) return activeContainer;
-        
-        // Second priority: container with custom path (different from containerType)
-        activeContainer = this.appContext.containers.find(container => 
-            container.containerPath && container.containerPath !== container.containerType
-        );
-        
-        return activeContainer || null;
-    }
-
-    /**
      * Get current path from app context
      */
     getCurrentPath() {
-        const activeContainer = this.getActiveContainer();
-        return activeContainer?.containerPath || this.appContext.currentPage || 'dashboard';
+        return this.appContext.currentPath || this.appContext.currentPage || 'dashboard';
     }
 
     /**
-     * Get current navigation parameters from app context
+     * Get current navigation parameters from NavigationRegistry
      */
     getCurrentParameters() {
-        const activeContainer = this.getActiveContainer();
-        return activeContainer?.navigationParameters || {};
+        const currentPath = this.getCurrentPath();
+        return this.navigationRegistry.getNavigationParameters(currentPath);
     }
 }
