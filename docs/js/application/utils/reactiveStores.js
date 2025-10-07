@@ -23,6 +23,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         isLoading: false,
         loadingMessage: '',
         error: null,
+        isAnalyzing: false,
+        analysisProgress: 0,
+        analysisMessage: '',
         setData(newData) {
             // Deep clone and initialize AppData
             this.data = appDataInit(JSON.parse(JSON.stringify(newData)));
@@ -44,6 +47,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.isLoading = false;
             this.loadingMessage = '';
             this.error = null;
+            this.isAnalyzing = false;
+            this.analysisProgress = 0;
+            this.analysisMessage = '';
         },
         async load(message = 'Loading data...') {
             this.reset();
@@ -205,6 +211,92 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const appData = this.data[parentIdx][nestedKey][itemIdx].AppData;
             return key ? appData[key] : appData;
         },
+        async runAnalysis(analysisSteps, options = {}) {
+            const {
+                batchSize = 10,
+                delayMs = 50,
+                skipIfAnalyzed = true
+            } = options;
+
+            // Don't run if already analyzing
+            if (this.isAnalyzing) {
+                return;
+            }
+
+            this.isAnalyzing = true;
+            this.analysisProgress = 0;
+            this.analysisMessage = 'Starting analysis...';
+
+            try {
+                const data = this.data;
+                if (!Array.isArray(data) || data.length === 0) {
+                    return;
+                }
+
+                // Initialize AppData if needed
+                data.forEach(item => {
+                    if (!item.AppData) item.AppData = {};
+                    if (skipIfAnalyzed && item.AppData._analyzed) return;
+                    item.AppData._analyzing = true;
+                });
+
+                // Run each analysis step
+                for (let stepIndex = 0; stepIndex < analysisSteps.length; stepIndex++) {
+                    const { fn, message } = analysisSteps[stepIndex];
+                    this.analysisMessage = message;
+
+                    // Process items in batches
+                    for (let i = 0; i < data.length; i += batchSize) {
+                        const batch = data.slice(i, i + batchSize);
+                        
+                        // Run analysis function on batch
+                        await Promise.all(batch.map(async (item) => {
+                            if (skipIfAnalyzed && item.AppData._analyzed) return;
+                            
+                            try {
+                                // Call analysis function - it should mutate item.AppData
+                                await fn(item, this);
+                            } catch (error) {
+                                console.error('[ProgressiveAnalysis] Error analyzing item:', error);
+                                item.AppData._error = error.message;
+                            }
+                        }));
+
+                        // Update progress
+                        const stepProgress = (stepIndex / analysisSteps.length) + 
+                                           ((i + batchSize) / data.length) * (1 / analysisSteps.length);
+                        this.analysisProgress = Math.min(stepProgress * 100, 100);
+
+                        // Small delay to keep UI responsive
+                        if (delayMs > 0) {
+                            await new Promise(resolve => setTimeout(resolve, delayMs));
+                        }
+                    }
+                }
+
+                // Mark all items as analyzed
+                data.forEach(item => {
+                    if (item.AppData) {
+                        item.AppData._analyzing = false;
+                        item.AppData._analyzed = true;
+                    }
+                });
+
+                this.analysisProgress = 100;
+                this.analysisMessage = 'Analysis complete';
+
+            } catch (error) {
+                console.error('[ProgressiveAnalysis] Analysis failed:', error);
+                this.analysisMessage = `Analysis failed: ${error.message}`;
+            } finally {
+                this.isAnalyzing = false;
+                // Clear progress after a delay
+                setTimeout(() => {
+                    this.analysisProgress = 0;
+                    this.analysisMessage = '';
+                }, 2000);
+            }
+        }
     });
 
     // Helper to strip AppData from objects (including filtering out items marked for deletion)
@@ -280,5 +372,43 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], autoLoa
     }
     
     return reactiveStoreRegistry[key];
+}
+
+/**
+ * Helper to create analysis functions that use the existing API
+ * @param {Function} apiFunction - Existing API function to call
+ * @param {string} resultKey - Key to store result in AppData
+ * @param {Function} itemIdentifierFn - Function to extract identifier from item
+ */
+export function createApiAnalysisStep(apiFunction, resultKey, itemIdentifierFn) {
+    return async (item, reactiveStore) => {
+        const identifier = itemIdentifierFn(item);
+        if (!identifier) return;
+
+        try {
+            const result = await apiFunction(identifier);
+            item.AppData[resultKey] = result;
+        } catch (error) {
+            item.AppData[`${resultKey}_error`] = error.message;
+        }
+    };
+}
+
+/**
+ * Helper to create analysis functions that process item data locally
+ * @param {Function} processingFn - Function that takes (item) and returns result
+ * @param {string} resultKey - Key to store result in AppData
+ */
+export function createLocalAnalysisStep(processingFn, resultKey) {
+    return async (item, reactiveStore) => {
+        try {
+            const result = await processingFn(item, reactiveStore);
+            if (result !== undefined) {
+                item.AppData[resultKey] = result;
+            }
+        } catch (error) {
+            item.AppData[`${resultKey}_error`] = error.message;
+        }
+    };
 }
 
