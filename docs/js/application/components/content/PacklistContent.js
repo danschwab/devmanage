@@ -89,21 +89,9 @@ export const PacklistContent = {
             // Check if we're viewing the edit subview
             return this.pathSegments[2] === 'edit';
         },
-        // Get formatted name for current packlist - keep original case
-        currentPacklistName() {
-            if (!this.currentPacklist || this.currentPacklist === 'packlist') return '';
-            const match = this.availablePacklists.find(p => 
-                p.title === this.currentPacklist
-            );
-            return match ? match.title : this.currentPacklist;
-        },
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
             return !!this.currentPacklist && this.currentPacklist !== 'packlist';
-        },
-        // Determine if we should show edit mode (only when on /edit path)
-        shouldShowEditMode() {
-            return this.isViewingPacklist && this.isEditView;
         }
     },
     mounted() {
@@ -169,27 +157,10 @@ export const PacklistContent = {
             
             <!-- Individual Packlist View (Read-only) -->
             <packlist-table 
-                v-else-if="isViewingPacklist && !isDetailsView && !isEditView"
+                v-else
                 :tab-name="currentPacklist"
-                :edit-mode="false"
-                :container-path="containerPath"
-                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-            />
-            
-            <!-- Individual Packlist Edit View -->
-            <packlist-table 
-                v-else-if="isViewingPacklist && isEditView"
-                :tab-name="currentPacklist"
-                :edit-mode="true"
-                :container-path="containerPath"
-                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-            />
-            
-            <!-- Details View for Packlist -->
-            <packlist-table 
-                v-else-if="isViewingPacklist && isDetailsView"
-                :tab-name="currentPacklist"
-                :show-details-only="true" 
+                :edit-mode="isEditView"
+                :show-details-only="isDetailsView"
                 :container-path="containerPath"
                 @navigate-to-path="(event) => navigateToPath(event.targetPath)"
             />

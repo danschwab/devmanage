@@ -222,7 +222,7 @@ export const InventoryContent = {
         await this.loadCategories();
     },
     template: html `
-        <div class="inventory-page">
+        <slot>
             <!-- Main Inventory View -->
             <slot v-if="containerPath === 'inventory'">
                 <div class="button-bar">
@@ -240,24 +240,22 @@ export const InventoryContent = {
             </slot>
             
             <!-- Categories View -->
-            <slot v-else-if="containerPath === 'inventory/categories'">
-                <cards-grid
-                    :items="categoryList"
-                    :on-item-click="handleCategorySelect"
-                    :is-loading="false"
-                    loading-message="Loading categories..."
-                    empty-message="No categories available"
-                />
-            </slot>
+            <cards-grid
+                v-else-if="containerPath === 'inventory/categories'"
+                :items="categoryList"
+                :on-item-click="handleCategorySelect"
+                :is-loading="false"
+                loading-message="Loading categories..."
+                empty-message="No categories available"
+            />
             
             <!-- Specific Category View -->
-            <slot v-else-if="containerPath.startsWith('inventory/categories/') && currentCategoryName">
-                <inventory-table
-                    :container-path="containerPath"
-                    :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
-                    :tab-title="currentCategoryName.toUpperCase()"
-                ></inventory-table>
-            </slot>
+            <inventory-table
+                v-else-if="containerPath.startsWith('inventory/categories/') && currentCategoryName"
+                :container-path="containerPath"
+                :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
+                :tab-title="currentCategoryName.toUpperCase()"
+            ></inventory-table>
             
             <!-- Reports View -->
             <slot v-else-if="containerPath === 'inventory/reports'">
@@ -290,6 +288,6 @@ export const InventoryContent = {
                     <button @click="modalManager.showAlert('Add new item functionality coming soon!', 'Info')">Create New Item</button>
                 </div>
             </slot>
-        </div>
+        </slot>
     `
 };

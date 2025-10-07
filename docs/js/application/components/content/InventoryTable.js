@@ -216,7 +216,7 @@ export const InventoryTableComponent = {
         }
     },
     template: html `
-        <div class="inventory-table-component">
+        <slot>
             <TableComponent
                 ref="tableComponent"
                 :data="tableData"
@@ -231,6 +231,7 @@ export const InventoryTableComponent = {
                 :loading-message="loadingMessage"
                 :searchTerm="navParams?.searchTerm || ''"
                 :hideRowsOnSearch="navParams?.hideRowsOnSearch !== false"
+                class="inventory-table-component"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
@@ -242,6 +243,6 @@ export const InventoryTableComponent = {
                     />
                 </template>
             </TableComponent>
-        </div>
+        </slot>
     `
 };

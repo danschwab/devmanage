@@ -345,38 +345,36 @@ export const ScheduleTableComponent = {
         }
     },
     template: html`
-        <div class="schedule-table-component">
-            <TableComponent
-                ref="tableComponent"
-                :data="tableData"
-                :originalData="originalData"
-                :columns="columns"
-                :isLoading="isLoading"
-                :error="error"
-                :showRefresh="true"
-                :title="tableTitle"
-                emptyMessage="No shows found."
-                :loading-message="loadingMessage"
-                :showSearch="true"
-                :sortable="true"
-                :allowDetails="true"
-                @refresh="handleRefresh"
-            >
-                <template #table-header-area>
-                    <slot name="table-header-area"></slot>
+        <TableComponent
+            ref="tableComponent"
+            :data="tableData"
+            :originalData="originalData"
+            :columns="columns"
+            :isLoading="isLoading"
+            :error="error"
+            :showRefresh="true"
+            :title="tableTitle"
+            emptyMessage="No shows found."
+            :loading-message="loadingMessage"
+            :showSearch="true"
+            :sortable="true"
+            :allowDetails="true"
+            @refresh="handleRefresh"
+        >
+            <template #table-header-area>
+                <slot name="table-header-area"></slot>
+            </template>
+            <template #default="{ row, column }">
+                <!-- Add packlist cards based on AppData -->
+                <template v-for="card in getPacklistCards(row, column.key)" :key="card.message">
+                    <button 
+                        class="card"
+                        :disabled="card.disabled"
+                        @click="!card.disabled ? card.action() : null"
+                        v-html="card.message"
+                    ></button>
                 </template>
-                <template #default="{ row, column }">
-                    <!-- Add packlist cards based on AppData -->
-                    <template v-for="card in getPacklistCards(row, column.key)" :key="card.message">
-                        <button 
-                            class="card"
-                            :disabled="card.disabled"
-                            @click="!card.disabled ? card.action() : null"
-                            v-html="card.message"
-                        ></button>
-                    </template>
-                </template>
-            </TableComponent>
-        </div>
+            </template>
+        </TableComponent>
     `
 };
