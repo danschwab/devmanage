@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, DashboardToggleComponent } from '../../index.js';
+import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, CardsComponent, DashboardToggleComponent } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -128,7 +128,8 @@ export const InventoryContent = {
     components: {
         'inventory-table': InventoryTableComponent,
         'inventory-overview-table': InventoryOverviewTableComponent,
-        'tabs-list': TabsListComponent
+        'tabs-list': TabsListComponent,
+        'cards-grid': CardsComponent
     },
     props: {
         containerPath: {
@@ -240,11 +241,12 @@ export const InventoryContent = {
             
             <!-- Categories View -->
             <slot v-else-if="containerPath === 'inventory/categories'">
-                <tabs-list
-                    :tabs="categoryList"
-                    :on-select="handleCategorySelect"
+                <cards-grid
+                    :items="categoryList"
+                    :on-item-click="handleCategorySelect"
                     :is-loading="false"
                     loading-message="Loading categories..."
+                    empty-message="No categories available"
                 />
             </slot>
             

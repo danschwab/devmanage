@@ -1,4 +1,4 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -56,7 +56,7 @@ export const PacklistMenuComponent = {
 export const PacklistContent = {
     components: {
         'packlist-table': PacklistTable,
-        'tabs-list': TabsListComponent
+        'cards-grid': CardsComponent
     },
     props: {
         containerPath: String,
@@ -157,45 +157,42 @@ export const PacklistContent = {
         }
     },
     template: html `
-        <div class="packlist-page">
-            <div v-if="!isViewingPacklist">
-                <tabs-list
-                    :tabs="availablePacklists"
-                    :on-select="handlePacklistSelect"
-                    :is-loading="isLoading"
-                    loading-message="Loading available packlists..."
-                />
-            </div>
+        <slot>
+            <cards-grid
+                v-if="!isViewingPacklist"
+                :items="availablePacklists"
+                :on-item-click="handlePacklistSelect"
+                :is-loading="isLoading"
+                loading-message="Loading available packlists..."
+                empty-message="No packlists available"
+            />
             
             <!-- Individual Packlist View (Read-only) -->
-            <div v-else-if="isViewingPacklist && !isDetailsView && !isEditView">
-                <packlist-table 
-                    :tab-name="currentPacklist" 
-                    :edit-mode="false"
-                    :container-path="containerPath"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-                />
-            </div>
+            <packlist-table 
+                v-else-if="isViewingPacklist && !isDetailsView && !isEditView"
+                :tab-name="currentPacklist"
+                :edit-mode="false"
+                :container-path="containerPath"
+                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+            />
             
             <!-- Individual Packlist Edit View -->
-            <div v-else-if="isViewingPacklist && isEditView">
-                <packlist-table 
-                    :tab-name="currentPacklist" 
-                    :edit-mode="true"
-                    :container-path="containerPath"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-                />
-            </div>
+            <packlist-table 
+                v-else-if="isViewingPacklist && isEditView"
+                :tab-name="currentPacklist"
+                :edit-mode="true"
+                :container-path="containerPath"
+                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+            />
             
             <!-- Details View for Packlist -->
-            <div v-else-if="isViewingPacklist && isDetailsView">
-                <packlist-table 
-                    :tab-name="currentPacklist" 
-                    :show-details-only="true" 
-                    :container-path="containerPath"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-                />
-            </div>
-        </div>
+            <packlist-table 
+                v-else-if="isViewingPacklist && isDetailsView"
+                :tab-name="currentPacklist"
+                :show-details-only="true" 
+                :container-path="containerPath"
+                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+            />
+        </slot>
     `
 };
