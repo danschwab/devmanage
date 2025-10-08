@@ -159,7 +159,7 @@ export class FakeGoogleSheetsService {
                 ['TTOP-001', '', '15', '', '', '30" white cocktail table tops-round', ''],
                 ['TBASE-001', '', '8', '', '', 'cocktail table bases', '']
             ],
-            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-004', '', '10', '', '', 'Blah blah blah', '']],
+            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-004', '', '10', '', '', 'Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', '']],
             'HANGING SIGNS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'Description', 'Packing/shop notes'],['HS-001', '', '0', '', 'This is a sign', '']],
             'CEILING TILES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['C1', '', '0', '', '', 'Blah blah blah', '']],
             'CEILING TRIM': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['S1', '', '0', '', '', 'Blah blah blah', '']],
@@ -269,13 +269,13 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
                 ['1', 'Skid', '72', '32', '48', '800', '', '', '(1) straight-section reception counter (one of two sections). Test lighting', 'Sintra logo- last CES 2025'],
-                ['', '', '', '', '', '', '', '', 'Client junk', ''],
+                ['', '', '', '', '', '', '', '', 'TABLE-001 Client junk', ''],
                 ['2', 'Skid', '120', '48', '48', '1200', '', '', '(3) rolls 10\'x70\' SLATE gray carpeting', ''],
-                ['3', 'Skid', '120', '48', '48', '600', '', '', 'Padding for 30x70', ''],
+                ['3', 'Skid', '120', '48', '48', '600', '', '', '(4) CAB-004 Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', ''],
                 ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067'],
                 ['', '', '', '', '', '', '', '', 'SEG\'s', ''],
                 ['', '', '', '', '', '', '', '', 'Blank SEG\'s', ''],
-                ['', '', '', '', '', '', '', '', 'Client Packages', '']
+                ['', '', '', '', '', '', '', '', 'TABLE-001 Conference room table black 30 x 76 x 30', '']
             ],
             'GEARFIRE 2025 SHOT': [
                 ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
