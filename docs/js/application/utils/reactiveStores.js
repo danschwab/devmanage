@@ -1,5 +1,49 @@
+/**
+ * Reactive Store System with Configurable Analysis
+ * 
+ * This system provides Vue 3 reactive data stores with optional automatic analysis.
+ * 
+ * Example usage with analysis:
+ * 
+ * // Define analysis steps
+ * const analysisConfig = [
+ *     createAnalysisConfig(
+ *         Requests.getItemInfo,     // API function
+ *         'itemInfo',               // Result key in AppData  
+ *         'Loading item info...',   // UI label
+ *         'itemId',                 // Source column (or null for entire item)
+ *         ['details'],              // Additional parameters
+ *         'Items'                   // Also process nested 'Items' arrays
+ *     ),
+ *     createAnalysisConfig(
+ *         Requests.checkQuantity,
+ *         'quantityStatus', 
+ *         'Checking quantities...',
+ *         'itemId'
+ *     )
+ * ];
+ * 
+ * // Create store with analysis
+ * const store = getReactiveStore(
+ *     Requests.getPackList,      // Load function
+ *     Requests.savePackList,     // Save function
+ *     [tabName],                 // API arguments
+ *     analysisConfig             // Analysis configuration
+ * );
+ * 
+ * // Results will be stored in item.AppData[resultKey] automatically after data loads
+ * 
+ * Key Features:
+ * - Automatic analysis execution when data loads/reloads
+ * - Results cleared and re-analyzed on each data load
+ * - Support for nested data processing (e.g., Items within Crates)
+ * - Progress tracking with meaningful UI labels
+ * - Error isolation - individual analysis failures don't stop the process
+ * - Declarative configuration - no manual step creation needed
+ */
+
 // Modular reactive store factory for any generic data, with async API calls for load and save
-export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = []) {
+export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null) {
     // Helper to recursively add AppData to all objects in an array (and nested arrays)
     function appDataInit(arr) {
         if (!Array.isArray(arr)) return arr;
@@ -17,6 +61,38 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         });
     }
 
+    // Helper to clear analysis results from AppData
+    function clearAnalysisResults(arr, analysisConfig) {
+        if (!Array.isArray(arr) || !analysisConfig) return arr;
+        
+        const clearResults = (item) => {
+            if (item && item.AppData) {
+                analysisConfig.forEach(config => {
+                    // Clear the result key and error key
+                    delete item.AppData[config.resultKey];
+                    delete item.AppData[`${config.resultKey}_error`];
+                });
+                // Clear analysis state
+                delete item.AppData._analyzed;
+                delete item.AppData._analyzing;
+            }
+        };
+
+        arr.forEach(item => {
+            clearResults(item);
+            // Also clear nested arrays if they exist
+            if (item && typeof item === 'object') {
+                Object.keys(item).forEach(key => {
+                    if (Array.isArray(item[key])) {
+                        item[key].forEach(nestedItem => clearResults(nestedItem));
+                    }
+                });
+            }
+        });
+        
+        return arr;
+    }
+
     const store = Vue.reactive({
         data: [],
         originalData: [],
@@ -26,9 +102,23 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         isAnalyzing: false,
         analysisProgress: 0,
         analysisMessage: '',
+        analysisConfig,
         setData(newData) {
             // Deep clone and initialize AppData
-            this.data = appDataInit(JSON.parse(JSON.stringify(newData)));
+            const processedData = appDataInit(JSON.parse(JSON.stringify(newData)));
+            // Clear any existing analysis results if analysis is configured
+            if (this.analysisConfig) {
+                clearAnalysisResults(processedData, this.analysisConfig);
+            }
+            this.data = processedData;
+            
+            // Automatically run analysis if configured and data is loaded
+            if (this.analysisConfig && this.data.length > 0) {
+                // Run analysis after a small delay to allow UI to update
+                setTimeout(() => {
+                    this.runConfiguredAnalysis();
+                }, 100);
+            }
         },
         setOriginalData(newOriginalData) {
             // Deep clone and initialize AppData
@@ -211,82 +301,103 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const appData = this.data[parentIdx][nestedKey][itemIdx].AppData;
             return key ? appData[key] : appData;
         },
-        async runAnalysis(analysisSteps, options = {}) {
+        async runConfiguredAnalysis(options = {}) {
+            if (!this.analysisConfig || this.isAnalyzing) {
+                return;
+            }
+
             const {
                 batchSize = 10,
                 delayMs = 50,
-                skipIfAnalyzed = true
+                skipIfAnalyzed = false // Don't skip by default for configured analysis
             } = options;
-
-            // Don't run if already analyzing
-            if (this.isAnalyzing) {
-                return;
-            }
 
             this.isAnalyzing = true;
             this.analysisProgress = 0;
             this.analysisMessage = 'Starting analysis...';
 
             try {
-                const data = this.data;
-                if (!Array.isArray(data) || data.length === 0) {
-                    return;
-                }
-
-                // Initialize AppData if needed
-                data.forEach(item => {
-                    if (!item.AppData) item.AppData = {};
-                    if (skipIfAnalyzed && item.AppData._analyzed) return;
-                    item.AppData._analyzing = true;
-                });
-
-                // Run each analysis step
-                for (let stepIndex = 0; stepIndex < analysisSteps.length; stepIndex++) {
-                    const { fn, message } = analysisSteps[stepIndex];
-                    this.analysisMessage = message;
+                const processData = async (dataArray, isNested = false) => {
+                    if (!Array.isArray(dataArray) || dataArray.length === 0) {
+                        return;
+                    }
 
                     // Process items in batches
-                    for (let i = 0; i < data.length; i += batchSize) {
-                        const batch = data.slice(i, i + batchSize);
+                    for (let i = 0; i < dataArray.length; i += batchSize) {
+                        const batch = dataArray.slice(i, i + batchSize);
                         
-                        // Run analysis function on batch
                         await Promise.all(batch.map(async (item) => {
-                            if (skipIfAnalyzed && item.AppData._analyzed) return;
+                            if (!item || typeof item !== 'object') return;
+                            if (!item.AppData) item.AppData = {};
                             
-                            try {
-                                // Call analysis function - it should mutate item.AppData
-                                await fn(item, this);
-                            } catch (error) {
-                                console.error('[ProgressiveAnalysis] Error analyzing item:', error);
-                                item.AppData._error = error.message;
+                            if (skipIfAnalyzed && item.AppData._analyzed) return;
+                            item.AppData._analyzing = true;
+
+                            // Run each configured analysis step
+                            for (const config of this.analysisConfig) {
+                                try {
+                                    this.analysisMessage = config.label || 'Processing...';
+                                    
+                                    // Extract value from specified column
+                                    let inputValue = item;
+                                    if (config.sourceColumn) {
+                                        inputValue = item[config.sourceColumn];
+                                    }
+                                    
+                                    // Skip if no input value
+                                    if (!inputValue) continue;
+                                    
+                                    // Call API function with the extracted value and additional parameters
+                                    const apiParams = [inputValue, ...(config.additionalParams || [])];
+                                    const result = await config.apiFunction(...apiParams);
+                                    
+                                    // Store result in AppData
+                                    item.AppData[config.resultKey] = result;
+                                    
+                                } catch (error) {
+                                    console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
+                                    item.AppData[`${config.resultKey}_error`] = error.message;
+                                }
                             }
+                            
+                            item.AppData._analyzing = false;
+                            item.AppData._analyzed = true;
                         }));
 
-                        // Update progress
-                        const stepProgress = (stepIndex / analysisSteps.length) + 
-                                           ((i + batchSize) / data.length) * (1 / analysisSteps.length);
-                        this.analysisProgress = Math.min(stepProgress * 100, 100);
+                        // Update progress for main data
+                        if (!isNested) {
+                            this.analysisProgress = Math.min(((i + batchSize) / dataArray.length) * 50, 50);
+                        }
 
                         // Small delay to keep UI responsive
                         if (delayMs > 0) {
                             await new Promise(resolve => setTimeout(resolve, delayMs));
                         }
                     }
-                }
+                };
 
-                // Mark all items as analyzed
-                data.forEach(item => {
-                    if (item.AppData) {
-                        item.AppData._analyzing = false;
-                        item.AppData._analyzed = true;
+                // Process main data
+                await processData(this.data, false);
+                
+                // Process nested data if configured
+                const nestedConfigs = this.analysisConfig.filter(config => config.nestedArrayKey);
+                if (nestedConfigs.length > 0) {
+                    this.analysisMessage = 'Processing nested data...';
+                    
+                    for (const item of this.data) {
+                        for (const config of nestedConfigs) {
+                            if (item[config.nestedArrayKey] && Array.isArray(item[config.nestedArrayKey])) {
+                                await processData(item[config.nestedArrayKey], true);
+                            }
+                        }
                     }
-                });
+                }
 
                 this.analysisProgress = 100;
                 this.analysisMessage = 'Analysis complete';
 
             } catch (error) {
-                console.error('[ProgressiveAnalysis] Analysis failed:', error);
+                console.error('[ConfiguredAnalysis] Analysis failed:', error);
                 this.analysisMessage = `Analysis failed: ${error.message}`;
             } finally {
                 this.isAnalyzing = false;
@@ -349,14 +460,15 @@ const reactiveStoreRegistry = Vue.reactive({});
  * @param {Function} apiCall - The API function to use for loading data
  * @param {Function} saveCall - The API function to use for saving data
  * @param {Array} apiArgs - Arguments to pass to the API function
+ * @param {Array} analysisConfig - Optional analysis configuration array
  * @param {boolean} autoLoad - Whether to automatically load data on first creation (default: true)
  * @returns {Object} The reactive store instance
  */
-export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], autoLoad = true) {
-    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs);
+export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true) {
+    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
     
     if (!reactiveStoreRegistry[key]) {
-        reactiveStoreRegistry[key] = createReactiveStore(apiCall, saveCall, apiArgs);
+        reactiveStoreRegistry[key] = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig);
         
         if (autoLoad) {
             // Initial load with proper error handling for empty/null responses
@@ -375,40 +487,23 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], autoLoa
 }
 
 /**
- * Helper to create analysis functions that use the existing API
- * @param {Function} apiFunction - Existing API function to call
- * @param {string} resultKey - Key to store result in AppData
- * @param {Function} itemIdentifierFn - Function to extract identifier from item
+ * Helper to create a new analysis configuration entry
+ * @param {Function} apiFunction - The API function to call
+ * @param {string} resultKey - Key to store the result in AppData
+ * @param {string} label - UI label for the analysis step
+ * @param {string} sourceColumn - Column to extract value from (if null, passes entire item)
+ * @param {Array} additionalParams - Additional parameters to pass to API function
+ * @param {string} nestedArrayKey - If provided, will also process nested arrays with this key
+ * @returns {Object} Analysis configuration object
  */
-export function createApiAnalysisStep(apiFunction, resultKey, itemIdentifierFn) {
-    return async (item, reactiveStore) => {
-        const identifier = itemIdentifierFn(item);
-        if (!identifier) return;
-
-        try {
-            const result = await apiFunction(identifier);
-            item.AppData[resultKey] = result;
-        } catch (error) {
-            item.AppData[`${resultKey}_error`] = error.message;
-        }
-    };
-}
-
-/**
- * Helper to create analysis functions that process item data locally
- * @param {Function} processingFn - Function that takes (item) and returns result
- * @param {string} resultKey - Key to store result in AppData
- */
-export function createLocalAnalysisStep(processingFn, resultKey) {
-    return async (item, reactiveStore) => {
-        try {
-            const result = await processingFn(item, reactiveStore);
-            if (result !== undefined) {
-                item.AppData[resultKey] = result;
-            }
-        } catch (error) {
-            item.AppData[`${resultKey}_error`] = error.message;
-        }
+export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn = null, additionalParams = [], nestedArrayKey = null) {
+    return {
+        apiFunction,
+        resultKey,
+        label,
+        sourceColumn,
+        additionalParams,
+        nestedArrayKey
     };
 }
 

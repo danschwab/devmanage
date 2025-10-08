@@ -22,25 +22,14 @@ export const DashboardRegistry = {
             this.store = getReactiveStore(
                 Requests.getUserData,
                 Requests.storeUserData,
-                [authState.user.email, 'dashboard_containers'],
-                false
+                [authState.user.email, 'dashboard_containers']
             );
             
             await this.store.load();
             this.isInitiallyLoaded = true;
 
-            // Initialize with empty array if no data
-            if (!this.store.data || this.store.data.length === 0) {
-                this.store.setData([]);
-            }
         } catch (error) {
             console.error('Failed to initialize dashboard registry:', error);
-            // Fallback to empty store
-            if (!this.store) {
-                this.store = getReactiveStore(null, null, [], false);
-            }
-            this.store.setData([]);
-            this.isInitiallyLoaded = true; // Consider it loaded even if failed
         }
     },
 

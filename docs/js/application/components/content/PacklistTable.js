@@ -1,14 +1,12 @@
-import { html, TableComponent, Requests, getReactiveStore, createApiAnalysisStep, createLocalAnalysisStep, tableRowSelectionState, NavigationRegistry } from '../../index.js';
-import { ItemImageComponent } from './InventoryTable.js';
+import { html, TableComponent, Requests, getReactiveStore, tableRowSelectionState, NavigationRegistry } from '../../index.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    components: { TableComponent, ItemImageComponent },
+    components: { TableComponent },
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
         sheetId: { type: String, default: '' },
-        showDetailsOnly: { type: Boolean, default: false },
         editMode: { type: Boolean, default: false },
         containerPath: { type: String, default: '' }
     },
@@ -21,8 +19,6 @@ export const PacklistTable = {
             isPrinting: false,
             dirtyCrateRows: {},
             error: null,
-            itemQuantityStatus: {}, // Store item quantity analysis results
-            // Store headers fetched from database (will be populated on mount)
             databaseItemHeaders: null,
             hiddenColumns: ['Pack','Check']
         };
@@ -105,110 +101,8 @@ export const PacklistTable = {
         isLoading() {
             return this.packlistTableStore ? this.packlistTableStore.isLoading : false;
         },
-        isDetailsLoading() {
-            // Details view should be loading when main table is loading OR when analyzing quantities
-            return this.isLoading || (this.packlistTableStore && this.packlistTableStore.isAnalyzing);
-        },
         loadingMessage() {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
-        },
-        detailsLoadingMessage() {
-            // Show appropriate loading message for details view
-            if (this.packlistTableStore && this.packlistTableStore.isAnalyzing) {
-                return this.packlistTableStore.analysisMessage || 'Analyzing item quantities...';
-            }
-            return this.loadingMessage;
-        },
-        itemWarningDetails() {
-            // Extract all item data from AppData and aggregate by item ID
-            const itemAggregation = {};
-            
-            if (!this.mainTableData || !Array.isArray(this.mainTableData)) {
-                return [];
-            }
-            
-            this.mainTableData.forEach((crate, crateIndex) => {
-                if (crate && crate.Items && Array.isArray(crate.Items)) {
-                    crate.Items.forEach((item, itemIndex) => {
-                        if (item && item.AppData && Array.isArray(item.AppData.items)) {
-                            item.AppData.items.forEach(itemData => {
-                                if (!itemData) return;
-                                const itemId = itemData.itemId;
-                                
-                                if (!itemAggregation[itemId]) {
-                                    // First occurrence of this item - initialize
-                                    itemAggregation[itemId] = {
-                                        'Item ID': itemId,
-                                        'Quantity': itemData.quantity,
-                                        'Available': itemData.quantityInfo?.inventory || 'N/A',
-                                        'Remaining': itemData.quantityInfo?.remaining || 'N/A',
-                                        'Warning Message': itemData.warning?.message?.replace(/<[^>]*>/g, '') || '', // Strip HTML
-                                        'Overlapping Shows': itemData.quantityInfo?.overlapping || [], // Store array of show identifiers
-                                        'Has Warning': !!itemData.warning,
-                                        // Use the quantityInfo from API which already accounts for total quantities
-                                        quantityInfo: itemData.quantityInfo
-                                    };
-                                } else {
-                                    // Item already exists - aggregate quantity but keep the API quantityInfo
-                                    // (since API already calculated based on total quantities across all crates)
-                                    itemAggregation[itemId]['Quantity'] += itemData.quantity;
-                                    
-                                    // Keep the most severe warning
-                                    if (itemData.warning && !itemAggregation[itemId]['Has Warning']) {
-                                        itemAggregation[itemId]['Warning Message'] = itemData.warning.message?.replace(/<[^>]*>/g, '') || '';
-                                        itemAggregation[itemId]['Has Warning'] = true;
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-            
-            // Convert aggregation object to array
-            return Object.values(itemAggregation);
-        },
-        detailsTableColumns() {
-            // Define columns for the comprehensive details table - only show specified columns
-            return [
-                { 
-                    key: 'image', 
-                    label: 'IMG',
-                    width: 1,
-                    editable: false
-                },
-                { key: 'Item ID', label: 'Item#', editable: false },
-                { key: 'Quantity', label: 'Quantity', editable: false, format: 'number' },
-                { key: 'Available', label: 'Inv. Qty.', editable: false, format: 'number' },
-                { key: 'Remaining', label: 'Remaining', editable: false, format: 'number', 
-                  cellClass: (value, row) => {
-                    // Safety checks for row parameter
-                    if (!row || typeof row !== 'object') return '';
-                    
-                    // Only apply warning colors if there's actually a warning
-                    if (!row['Has Warning']) return '';
-                    if (typeof value === 'number') {
-                      return value < 0 ? 'red' : value === 0 ? 'orange' : '';
-                    }
-                    return '';
-                  }
-                },
-                { key: 'Warning Message', label: 'Message', editable: false },
-                { key: 'Overlapping Shows', label: 'Overlapping Shows', editable: false }
-            ];
-        },
-        warningCount() {
-            // Count only items with warnings for button display
-            return this.itemWarningDetails.filter(item => item['Has Warning']).length;
-        },
-        isAnalyzing() {
-            return this.packlistTableStore && this.packlistTableStore.isAnalyzing;
-        },
-        analysisProgress() {
-            return this.packlistTableStore ? this.packlistTableStore.analysisProgress : 0;
-        },
-        analysisMessage() {
-            return this.packlistTableStore ? this.packlistTableStore.analysisMessage : '';
         },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
@@ -216,23 +110,12 @@ export const PacklistTable = {
             // If containerPath is empty/undefined, fall back to constructing from tabName
             let path = this.containerPath;
             if (!path && this.tabName) {
-                path = this.showDetailsOnly ? `packlist/${this.tabName}/details` : `packlist/${this.tabName}`;
+                path = `packlist/${this.tabName}`;
             }
             return NavigationRegistry.getNavigationParameters(path || '');
-        },
-        searchTerm() {
-            return this.navParams.searchTerm || '';
-        },
-        hideRowsOnSearch() {
-            return this.navParams.hideRowsOnSearch !== false;
         }
     },
-    watch: {
-        // Watch for navigation parameter changes
-        'navParams.searchTerm'(newSearchTerm) {
-            console.log('[PacklistTable] Search term changed:', newSearchTerm);
-        }
-    },
+    watch: {},
     async mounted() {
         // Initialize store if tabName is available
         if (this.tabName) {
@@ -243,13 +126,6 @@ export const PacklistTable = {
         this.$watch('tabName', (newTabName) => {
             if (newTabName && !this.packlistTableStore) {
                 this.initializeStore();
-            }
-        }, { immediate: true });
-
-        // Analyze quantities when data loads
-        this.$watch(() => this.mainTableData, () => {
-            if (this.mainTableData.length > 0 && this.tabName) {
-                this.analyzePacklistQuantities();
             }
         }, { immediate: true });
     },
@@ -264,10 +140,6 @@ export const PacklistTable = {
                 [this.tabName]
             );
             this.error = this.packlistTableStore.error;
-
-            if (!this.packlistTableStore.isLoading) {
-                this.analyzePacklistQuantities();
-            }
             
             // Load database headers
             this.loadItemHeaders();
@@ -278,7 +150,7 @@ export const PacklistTable = {
                 this.databaseItemHeaders = await Requests.getItemHeaders(this.tabName);
             } catch (error) {
                 console.warn('Failed to load item headers from database:', error);
-                this.databaseItemHeaders = ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
+                this.databaseItemHeaders = ['Pack', 'Check', 'Description', 'Packing/shop notes'];
             }
         },
         async handleRefresh() {
@@ -333,8 +205,6 @@ export const PacklistTable = {
             // Only use the store's save method if this is called from the on-save event
             if (this.packlistTableStore) {
                 await this.packlistTableStore.save('Saving packlist...');
-                // Re-analyze quantities after successful save
-                await this.analyzePacklistQuantities();
             }
         },
 
@@ -342,161 +212,6 @@ export const PacklistTable = {
             if (this.$refs.mainTableComponent && this.$refs.mainTableComponent.checkDirtyCells) {
                 this.$refs.mainTableComponent.checkDirtyCells();
             }
-        },
-        async analyzePacklistQuantities() {
-            if (!this.tabName || this.packlistTableStore.isAnalyzing) {
-                return;
-            }
-
-            // Configure analysis steps for packlist - working on crates that contain items
-            const analysisSteps = [
-                {
-                    fn: createLocalAnalysisStep((crate) => {
-                        // Skip if no items in this crate
-                        if (!crate.Items || !Array.isArray(crate.Items)) {
-                            return null;
-                        }
-
-                        // Process each item in the crate
-                        crate.Items.forEach(item => {
-                            if (!item.AppData) item.AppData = {};
-                            
-                            // Extract item codes from description and packing notes
-                            const extractedItems = [];
-                            const fields = ['Description', 'Packing/shop notes'];
-                            
-                            fields.forEach(fieldName => {
-                                if (item[fieldName] && typeof item[fieldName] === 'string') {
-                                    const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/g;
-                                    let match;
-                                    
-                                    while ((match = itemRegex.exec(item[fieldName])) !== null) {
-                                        const quantity = match[1] ? parseInt(match[1], 10) : 1;
-                                        const itemId = match[2];
-                                        
-                                        if (itemId) {
-                                            extractedItems.push({ itemId, quantity, field: fieldName });
-                                        }
-                                    }
-                                }
-                            });
-                            
-                            item.AppData.extractedItems = extractedItems;
-                        });
-
-                        return { processedItems: crate.Items.length };
-                    }, 'itemExtractionComplete'),
-                    message: 'Extracting item codes...'
-                },
-                {
-                    fn: createApiAnalysisStep(
-                        Requests.checkItemQuantities,
-                        'quantityStatus',
-                        () => this.tabName
-                    ),
-                    message: 'Checking item quantities...'
-                },
-                {
-                    fn: createLocalAnalysisStep((crate) => {
-                        // Skip if no items in this crate
-                        if (!crate.Items || !Array.isArray(crate.Items)) {
-                            return null;
-                        }
-
-                        const quantityStatus = crate.AppData.quantityStatus || {};
-                        
-                        // Process each item in the crate
-                        crate.Items.forEach(item => {
-                            if (!item.AppData) item.AppData = {};
-                            
-                            const extractedItems = item.AppData.extractedItems || [];
-                            const analysisResults = extractedItems.map(extracted => {
-                                const quantityInfo = quantityStatus[extracted.itemId];
-                                const itemData = {
-                                    ...extracted,
-                                    quantityInfo
-                                };
-                                
-                                // Add warning information if applicable
-                                if (quantityInfo) {
-                                    if (quantityInfo.remaining < 0) {
-                                        itemData.warning = {
-                                            type: 'error',
-                                            message: `<strong>Warning:</strong> Insufficient inventory (${quantityInfo.remaining})`
-                                        };
-                                    } else if (quantityInfo.remaining === 0) {
-                                        itemData.warning = {
-                                            type: 'warning',
-                                            message: `<strong>Warning:</strong> No inventory margin`
-                                        };
-                                    }
-                                }
-                                
-                                return itemData;
-                            });
-                            
-                            item.AppData.items = analysisResults;
-                        });
-
-                        return { analyzedItems: crate.Items.length };
-                    }, 'analysisComplete'),
-                    message: 'Analyzing item availability...'
-                }
-            ];
-
-            // Run progressive analysis on the store
-            await this.packlistTableStore.runAnalysis(analysisSteps, { 
-                batchSize: 3, // Smaller batch size since we're processing crates with nested items
-                delayMs: 50 
-            });
-
-            // Update the legacy itemQuantityStatus for backward compatibility
-            try {
-                this.itemQuantityStatus = await Requests.checkItemQuantities(this.tabName);
-                console.log('[PacklistTable] Quantity analysis complete:', this.itemQuantityStatus);
-            } catch (error) {
-                console.error('[PacklistTable] Error updating legacy quantity status:', error);
-            }
-        },
-        getItemWarnings(itemRow, columnKey) {
-            // Get all warnings from item's AppData
-            if (!itemRow || !itemRow.AppData || !Array.isArray(itemRow.AppData.items)) {
-                return [];
-            }
-
-            // Always show warnings in the "Packing/shop notes" column only
-            if (columnKey !== 'Packing/shop notes') {
-                return [];
-            }
-
-            // Return all warnings regardless of which field they came from
-            const warnings = itemRow.AppData.items
-                .filter(item => item.warning)
-                .map(item => ({
-                    type: item.warning.type,
-                    message: item.warning.message,
-                    itemId: item.itemId
-                }));
-            return warnings;
-        },
-        async handleItemIdClick(itemId) {
-            try {
-                const tabName = await Requests.getTabNameForItem(itemId);
-                if (tabName) {
-                    this.$emit('navigate-to-path', { 
-                        targetPath: `inventory/categories/${tabName}?searchTerm=${itemId}`
-                    });
-                } else {
-                    console.warn('No tab found for item:', itemId);
-                }
-            } catch (error) {
-                console.error('Error getting tab name for item:', itemId, error);
-            }
-        },
-        handleOverlappingShowClick(showIdentifier) {
-            this.$emit('navigate-to-path', { 
-                targetPath: `packlist/${showIdentifier}` 
-            });
         },
         async handlePrint() {
             this.isPrinting = true;
@@ -524,78 +239,8 @@ export const PacklistTable = {
                 <p>Error: {{ error }}</p>
             </div>
             
-            <!-- Details View -->
-            <div v-if="showDetailsOnly">
-                <!-- Analysis Progress Display -->
-                <div v-if="isAnalyzing" class="analysis-progress" style="margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 4px;">
-                    <div style="margin-bottom: 5px;">{{ analysisMessage }}</div>
-                    <div class="progress-bar" style="width: 100%; height: 20px; background: #ddd; border-radius: 10px; overflow: hidden;">
-                        <div class="progress-fill" :style="{width: analysisProgress + '%', height: '100%', background: '#4CAF50', transition: 'width 0.3s ease'}"></div>
-                    </div>
-                    <div style="text-align: center; font-size: 12px; margin-top: 5px;">{{ Math.round(analysisProgress) }}%</div>
-                </div>
-                
-                <TableComponent
-                    :data="itemWarningDetails"
-                    :originalData="itemWarningDetails"
-                    :columns="detailsTableColumns"
-                    :title="'Packlist Items'"
-                    :showRefresh="false"
-                    :emptyMessage="'No items'"
-                    :draggable="false"
-                    :newRow="false"
-                    :isLoading="isDetailsLoading"
-                    :loading-message="detailsLoadingMessage"
-                    :searchTerm="searchTerm"
-                    :hideRowsOnSearch="hideRowsOnSearch"
-                    :showSearch="true"
-                    class="packlist-items-table-component"
-                >
-                    <template #table-header-area>
-                        <div class="button-bar">
-                            <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
-                                Back
-                            </button>
-                        </div>
-                    </template>
-                    <template #default="{ row, column }">
-                        <!-- Render image for image column -->
-                        <ItemImageComponent 
-                            v-if="column.key === 'image'"
-                            :itemNumber="row['Item ID']"
-                        />
-                        <!-- Make Item ID column a clickable card button -->
-                        <button 
-                            v-else-if="column.key === 'Item ID'"
-                            @click="handleItemIdClick(row['Item ID'])"
-                            class="card"
-                        >
-                            {{ row['Item ID'] }}
-                        </button>
-                        <!-- Handle Overlapping Shows column with multiple buttons -->
-                        <div v-else-if="column.key === 'Overlapping Shows'">
-                            <template v-if="Array.isArray(row['Overlapping Shows']) && row['Overlapping Shows'].length > 0">
-                                <button 
-                                    v-for="showId in row['Overlapping Shows']" 
-                                    :key="showId"
-                                    @click="handleOverlappingShowClick(showId)"
-                                    class="card"
-                                    style="margin: 2px;"
-                                >
-                                    {{ showId }}
-                                </button>
-                            </template>
-                            <span v-else>None</span>
-                        </div>
-                        <!-- Default display for other columns -->
-                        <span v-else>{{ row[column.key] }}</span>
-                    </template>
-                </TableComponent>
-            </div>
-            
             <!-- Main Packlist View -->
-            <div v-else>
-                <TableComponent
+            <TableComponent
                     ref="mainTableComponent"
                     :data="mainTableData"
                     :originalData="originalData"
@@ -614,7 +259,7 @@ export const PacklistTable = {
                     @on-save="handleSave"
                 >
                     <template #table-header-area>
-                        <!-- Navigation and Analysis Controls -->
+                        <!-- Navigation Controls -->
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->
                             <template v-if="!editMode">
@@ -628,22 +273,6 @@ export const PacklistTable = {
                                 </button>
                             </template>
                             
-                            <!-- Details Button -->
-                            <button 
-                            :disabled="(packlistTableStore && packlistTableStore.isAnalyzing) || isLoading || !tabName"
-                            :class="{ red: warningCount > 0 }"
-                            @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null"
-                            >
-                                <template v-if="isLoading || (packlistTableStore && packlistTableStore.isAnalyzing)">
-                                    Analyzing...
-                                </template>
-                                <template v-else-if="warningCount > 0">
-                                    Details &#9888;
-                                </template>
-                                <template v-else>
-                                    Details
-                                </template>
-                            </button>
                             <button v-if="!editMode" @click="handlePrint">Print</button>
                         </div>
                     </template>
@@ -691,22 +320,6 @@ export const PacklistTable = {
                                     <div>
                                         <span>{{ itemRow[itemColumn.key] }}</span>
                                     </div>
-                                </template>
-                                
-                                <template #cell-extra="{ row: itemRow, column: itemColumn }">
-                                    <!-- Add quantity warning cards based on AppData -->
-                                    <template v-for="warning in getItemWarnings(itemRow, itemColumn.key)" :key="warning.itemId">
-                                        <div 
-                                            class="card clickable"
-                                            :class="{
-                                                'red': warning.type === 'error',
-                                                'yellow': warning.type === 'warning'
-                                            }"
-                                            @click="() => $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details?searchTerm=' + warning.itemId + '&hideRowsOnSearch=false' })"
-                                            v-html="warning.message"
-                                            title="Click to view details and search for this item"
-                                        ></div>
-                                    </template>
                                 </template>
                             </TableComponent>
                         </template>

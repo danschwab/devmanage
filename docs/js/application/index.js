@@ -5,7 +5,7 @@ export { parseDate } from '../data_management/utils/helpers.js';
 // Utils
 export { html } from './utils/template-helpers.js';
 export { Auth, authState } from './utils/auth.js';
-export { getReactiveStore, createApiAnalysisStep, createLocalAnalysisStep } from './utils/reactiveStores.js';
+export { getReactiveStore, createAnalysisConfig } from './utils/reactiveStores.js';
 
 // Navigation components
 export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';
