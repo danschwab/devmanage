@@ -1,4 +1,4 @@
-import { html, parseDate } from '../../index.js';
+import { html, parseDate, LoadingBarComponent } from '../../index.js';
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
@@ -391,6 +391,7 @@ export const tableRowSelectionState = Vue.reactive({
 
 export const TableComponent = {
     name: 'TableComponent',
+    components: { LoadingBarComponent },
     props: {
         data: {
             type: Array,
@@ -403,6 +404,14 @@ export const TableComponent = {
         isLoading: {
             type: Boolean,
             default: false
+        },
+        isAnalyzing: {
+            type: Boolean,
+            default: false
+        },
+        loadingProgress: {
+            type: Number,
+            default: -1
         },
         error: {
             type: String,
@@ -677,6 +686,12 @@ export const TableComponent = {
             return tableRowSelectionState.findingDropTargets && 
                    tableRowSelectionState.dragSourceArray === this.data &&
                    tableRowSelectionState.hasRow(this.data, rowIndex);
+        },
+
+        isRowAnalyzing(rowIndex) {
+            // Check if this row is currently being analyzed
+            const row = this.data[rowIndex];
+            return row && row.AppData && row.AppData._analyzing === true;
         },
 
         handleSort(columnKey) {
@@ -1372,11 +1387,17 @@ export const TableComponent = {
             @mousemove="handleTableMouseMove"
         >
             <div class="table-container">
-                <div class="content-header" v-if="showHeader && (title || showRefresh || showSearch)">
+                <!-- Error State -->
+                <div key="error-state" v-if="error" class="content-header red">
+                    <span>Error: {{ error }}</span>
+                </div>
+
+                <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" class="content-header">
                     <!--h3 v-if="title">{{ title }}</h3-->
                     <slot 
                         name="table-header-area"
                     ></slot>
+                    <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
                     <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
                         <input
                             v-if="showSearch"
@@ -1411,30 +1432,23 @@ export const TableComponent = {
                     </div>
                 </div>
                 
-                <!-- Error State -->
-                <div v-if="error" class="content-footer red">
-                    <span>Error: {{ error }}</span>
-                </div>
-                
-                <!-- Loading State -->
-                <div v-if="isLoading" class="content-footer loading-message">
-                    <img src="images/loading.gif" alt="..."/>
-                    <p>{{ loadingMessage }}</p>
-                </div>
-                
-                <!-- Empty State (only show for non-draggable tables) -->
-                <div v-else-if="(!data || data.length === 0) && !draggable" class="content-footer red">
-                    <p>{{ emptyMessage }}</p>
-                </div>
+                <!-- Loading/Analysis Progress Indicator -->
+                <LoadingBarComponent
+                    key="loading-progress"
+                    v-if="isLoading || isAnalyzing"
+                    :is-loading="isLoading"
+                    :is-analyzing="isAnalyzing"
+                    :percent-complete="loadingProgress"
+                />
                 
                 <!-- Data Table (always render if draggable, even when empty) -->
-                <div v-else-if="data && data.length > 0 || draggable" class="table-wrapper">
+                <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" class="table-wrapper">
                     <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
                         <colgroup>
                             <col v-if="draggable" :style="{ width: '20px' }" />
                             <col v-for="(column, colIdx) in visibleColumns" 
-                                 :key="column.key"
-                                 :style="column.width ? 'width:' + column.width + 'px' : ''"
+                                :key="column.key"
+                                :style="column.width ? 'width:' + column.width + 'px' : ''"
                             />
                             <col v-if="allowDetails" />
                         </colgroup>
@@ -1467,6 +1481,7 @@ export const TableComponent = {
                                         'dragging': isRowDragging(idx),
                                         'drag-over': false,
                                         'selected': isRowSelected(idx),
+                                        'analyzing': isRowAnalyzing(idx),
                                         'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
                                         'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
                                         'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
@@ -1481,7 +1496,7 @@ export const TableComponent = {
                                         v-for="(column, colIndex) in mainTableColumns" 
                                         :key="column.key"
                                         :colspan="column.colspan || 1"
-                                        :class="[getCellClass(row[column.key], column, idx, colIndex), hideSet.has(column.key) ? 'hide' : '']"
+                                        :class="[getCellClass(row[column.key], column, idx, colIndex)]"
                                         v-show="!hideSet.has(column.key)"
                                     >
                                         <div class="table-cell-container">
@@ -1603,19 +1618,24 @@ export const TableComponent = {
                         </tfoot>
                     </table>
                 </div>
-                
-                <!-- Fallback empty state for non-draggable tables with no data -->
-                <div v-else class="content-footer red">
-                    <p>{{ emptyMessage }}</p>
-                </div>
-                
+            
+
+                <!-- Loading State >
+                <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">
+                    <img src="images/loading.gif" alt="..."/>
+                    <p>{{ loadingMessage }}</p>
+                </div-->
+
                 <!-- Data Summary -->
-                <div v-if="showFooter && allowSaveEvent && !isLoading" class="content-footer red">
+                <div key="unsaved-changes" v-if="showFooter && allowSaveEvent" class="content-footer red">
                     <p>There are unsaved changes in this table.</p>
                 </div>
-                <div v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
+                <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
                     <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                     <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                </div>
+                <div key="empty-state" v-else-if="showFooter" class="content-footer">
+                    <p>{{ emptyMessage }}</p>
                 </div>
             </div>
         </div>

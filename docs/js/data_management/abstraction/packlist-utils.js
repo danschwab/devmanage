@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, cleanTextForComparison, GetParagraphMatchRating } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -266,6 +266,161 @@ class packListUtils_uncached {
             //console.groupEnd();
             throw error;
         }
+    }
+
+    /**
+     * Compare item description with inventory description and return alert if mismatch
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} itemNumber - The item number to look up in inventory
+     * @param {string} description - The current item description to compare
+     * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
+     */
+    static async checkDescriptionMatch(deps, itemNumber, description) {
+        if (!itemNumber || !description) {
+            return null;
+        }
+
+        try {
+            // Get inventory description for this item
+            const inventoryDescription = await deps.call(InventoryUtils.getItemDescription, itemNumber);
+            
+            if (!inventoryDescription) {
+                return {
+                    type: 'warning',
+                    message: `No inventory description found for item ${itemNumber}`,
+                    score: 0
+                };
+            }
+
+            // Clean both descriptions for comparison (remove item codes and quantities)
+            const cleanPacklistDesc = cleanTextForComparison(description);
+            const cleanInventoryDesc = cleanTextForComparison(inventoryDescription);
+
+            // Calculate similarity score
+            const matchScore = GetParagraphMatchRating(cleanPacklistDesc, cleanInventoryDesc);
+
+            // Return alert if match is less than 50%
+            if (matchScore < 0.5) {
+                return {
+                    type: 'mismatch',
+                    message: `Description mismatch for ${itemNumber}: ${Math.round(matchScore * 100)}% match`,
+                    score: matchScore,
+                    packlistDescription: cleanPacklistDesc,
+                    inventoryDescription: cleanInventoryDesc
+                };
+            }
+
+            // Good match, no alert needed
+            return null;
+
+        } catch (error) {
+            console.error('Error checking description match:', error);
+            return {
+                type: 'error',
+                message: `Error checking description for ${itemNumber}: ${error.message}`,
+                score: 0
+            };
+        }
+    }
+
+    /**
+     * Get item quantities summary for a project (transformed to table format)
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} projectIdentifier - The project identifier
+     * @returns {Promise<Array<Object>>} Array of item objects for table display
+     */
+    static async getItemQuantitiesSummary(deps, projectIdentifier) {
+        const quantitiesMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
+        
+        // Transform to array format for table display
+        return Object.entries(quantitiesMap).map(([itemId, quantity]) => ({
+            itemId,
+            quantity,
+            tabName: null,        // Will be filled by first analysis
+            available: null,      // Will be filled by second analysis
+            remaining: null,      // Will be filled by fourth analysis  
+            overlappingShows: []  // Will be filled by third analysis
+        }));
+    }
+
+    /**
+     * Get inventory quantity for a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} itemId - The item ID to look up
+     * @returns {Promise<number>} Available inventory quantity
+     */
+    static async getItemInventoryQuantity(deps, itemId) {
+        const inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity']);
+        const item = inventoryInfo.find(i => i.itemName === itemId);
+        return item ? parseInt(item.quantity || "0", 10) : 0;
+    }
+
+    /**
+     * Get overlapping projects that use a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} currentProjectId - Current project identifier
+     * @param {string} itemId - Item ID to check for conflicts
+     * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
+     */
+    static async getItemOverlappingShows(deps, currentProjectId, itemId) {
+        // Get all overlapping projects for this project
+        const overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, { identifier: currentProjectId });
+        
+        const conflictingShows = [];
+        
+        // Check each overlapping project to see if it uses this item
+        for (const projectRow of overlappingProjects) {
+            const projectId = projectRow.Identifier || 
+                            await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
+            
+            if (projectId === currentProjectId) continue;
+            
+            try {
+                const projectItems = await deps.call(PackListUtils.extractItems, projectId);
+                if (projectItems[itemId] && projectItems[itemId] > 0) {
+                    conflictingShows.push(projectId);
+                }
+            } catch (e) {
+                // Ignore projects that can't be loaded
+            }
+        }
+        
+        return conflictingShows;
+    }
+
+    /**
+     * Calculate remaining quantity for an item based on inventory, current usage, and overlapping shows
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} currentProjectId - Current project identifier
+     * @param {string} itemId - Item ID to calculate remaining quantity for
+     * @returns {Promise<number>} Remaining available quantity
+     */
+    static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
+        if (!itemId || !currentProjectId) {
+            return 0;
+        }
+
+        // Run inventory lookup and overlapping shows check in parallel
+        const [inventoryQuantity, overlappingShows, currentProjectItems] = await Promise.all([
+            deps.call(PackListUtils.getItemInventoryQuantity, itemId),
+            deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId),
+            deps.call(PackListUtils.extractItems, currentProjectId)
+        ]);
+
+        const currentProjectUsage = currentProjectItems[itemId] || 0;
+        let totalUsed = currentProjectUsage;
+        
+        // Add quantities from overlapping shows (leveraging cache)
+        for (const projectId of overlappingShows) {
+            try {
+                const projectItems = await deps.call(PackListUtils.extractItems, projectId);
+                totalUsed += projectItems[itemId] || 0;
+            } catch (e) {
+                // Ignore if project can't be loaded
+            }
+        }
+        
+        return inventoryQuantity - totalUsed;
     }
 }
 

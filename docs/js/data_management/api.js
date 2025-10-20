@@ -1,4 +1,4 @@
-import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from './index.js';
+import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, extractItemNumber, extractQuantity } from './index.js';
 
 // Define all API methods in a single class/object
 export const Requests = {
@@ -301,5 +301,76 @@ export const Requests = {
      */
     getTabNameForItem: async (itemName) => {
         return await InventoryUtils.getTabNameForItem(itemName);
+    },
+
+    /**
+     * Extract item number from text using regex
+     * @param {string} text - Text to search for item number
+     * @returns {Promise<string|null>} Item number or null if not found
+     */
+    extractItemNumber: async (text) => {
+        return extractItemNumber(text);
+    },
+
+    /**
+     * Extract quantity from text using regex
+     * @param {string} text - Text to search for quantity
+     * @returns {Promise<number>} Quantity found or 1 if no quantity specified
+     */
+    extractQuantity: async (text) => {
+        return extractQuantity(text);
+    },
+
+    /**
+     * Compare item description with inventory description and return alert if mismatch
+     * @param {Object} itemData - Object containing itemNumber and description
+     * @param {string} itemData.itemNumber - The item number to look up in inventory
+     * @param {string} itemData.description - The current item description to compare
+     * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
+     */
+    checkDescriptionMatch: async (itemData) => {
+        if (!itemData || !itemData.itemNumber || !itemData.description) {
+            return null;
+        }
+        return await PackListUtils.checkDescriptionMatch(itemData.itemNumber, itemData.description);
+    },
+
+    /**
+     * Get item quantities summary for a project (transformed to table format)
+     * @param {string} projectIdentifier - The project identifier
+     * @returns {Promise<Array<Object>>} Array of item objects for table display
+     */
+    getItemQuantitiesSummary: async (projectIdentifier) => {
+        //sleep for a long time to simulate loading
+        return await PackListUtils.getItemQuantitiesSummary(projectIdentifier);
+    },
+
+    /**
+     * Get inventory quantity for a specific item
+     * @param {string} itemId - The item ID to look up
+     * @returns {Promise<number>} Available inventory quantity
+     */
+    getItemInventoryQuantity: async (itemId) => {
+        return await PackListUtils.getItemInventoryQuantity(itemId);
+    },
+
+    /**
+     * Get overlapping projects that use a specific item
+     * @param {string} currentProjectId - Current project identifier
+     * @param {string} itemId - Item ID to check for conflicts
+     * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
+     */
+    getItemOverlappingShows: async (currentProjectId, itemId) => {
+        return await PackListUtils.getItemOverlappingShows(currentProjectId, itemId);
+    },
+
+    /**
+     * Calculate remaining quantity for an item based on inventory, current usage, and overlapping shows
+     * @param {string} currentProjectId - Current project identifier
+     * @param {string} itemId - Item ID to calculate remaining quantity for
+     * @returns {Promise<number>} Remaining available quantity
+     */
+    calculateRemainingQuantity: async (currentProjectId, itemId) => {
+        return await PackListUtils.calculateRemainingQuantity(currentProjectId, itemId);
     }
 };

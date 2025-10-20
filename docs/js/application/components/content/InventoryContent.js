@@ -245,6 +245,7 @@ export const InventoryContent = {
                 :items="categoryList"
                 :on-item-click="handleCategorySelect"
                 :is-loading="false"
+                default-card-class="button purple"
                 loading-message="Loading categories..."
                 empty-message="No categories available"
             />

@@ -945,6 +945,16 @@ tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:firs
     opacity: .4;
 }
 
+/* Analyzing Row Styling */
+tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after {
+    content: "";
+    background: linear-gradient(90deg,
+                transparent,
+                var(--color-gray-bg-transparent),
+                transparent);
+    animation: loading-bar-slide 2s infinite linear;
+}
+
 
 
 
@@ -1421,4 +1431,47 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         box-shadow: 0 -200px white inset !important;
         z-index: 2;
     }*/
+}
+
+
+/* Loading Bar Component */
+.loading-bar-container {
+    display: flex;
+}
+
+.loading-bar-track {
+    flex: 1;
+    height: 2px;
+    background-color: var(--color-border);
+    overflow: hidden;
+}
+
+.loading-bar-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+    transition: width 0.3s ease;
+}
+
+.loading-bar-fill.progress-indeterminate {
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--color-primary),
+        transparent
+    );
+    animation: loading-bar-slide 2s infinite linear;
+}
+
+.loading-bar-fill.progress-determinate {
+    background-color: var(--color-primary);
+}
+
+@keyframes loading-bar-slide {
+    0% {
+        transform: translateX(-200%);
+    }
+    100% {
+        transform: translateX(400%);
+    }
 }

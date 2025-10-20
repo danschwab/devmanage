@@ -210,6 +210,24 @@ class inventoryUtils_uncached {
         }
     }
 
+    /**
+     * Get inventory description for a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} itemNumber - The item number to look up
+     * @returns {Promise<string|null>} Item description or null if not found
+     */
+    static async getItemDescription(deps, itemNumber) {
+        if (!itemNumber) return null;
+        
+        try {
+            const itemInfo = await deps.call(InventoryUtils.getItemInfo, itemNumber, ['description']);
+            return itemInfo?.[0]?.description || null;
+        } catch (error) {
+            console.error(`Failed to get description for item ${itemNumber}:`, error);
+            return null;
+        }
+    }
+
 }
 
 export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils', ['saveInventoryTabData']);

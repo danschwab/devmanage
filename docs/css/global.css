@@ -7,7 +7,7 @@
 }
 .fade-enter-active,
 .fade-leave-active {
-    transition: opacity 0.15s ease-in-out;
+    transition: opacity 0.15s ease-in-out !important;
 }
 
 
@@ -35,7 +35,7 @@
 }
 .expand-enter-active,
 .expand-leave-active {
-    transition: all 0.3s ease-in-out;
+    transition: all .3s ease-in-out !important;
     overflow: hidden;
 }
 
@@ -156,6 +156,10 @@ div.gray, span.gray {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
 }
+div.purple, span.purple {
+    border-color: var(--color-purple);
+    background-color: var(--color-purple-bg);
+}
 div.red, span.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
@@ -187,6 +191,9 @@ div.gray:hover, span.gray:hover {
 div.red:hover, span.red:hover {
     background-color: var(--color-red-bg-hover);
 }
+div.red:hover, span.red:hover {
+    background-color: var(--color-red-bg-hover);
+}
 div.orange:hover, span.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
@@ -201,56 +208,69 @@ div.green:hover, span.green:hover {
 }
 
 
-button.white, input[type="button"].white, input[type="submit"].white {
+button.white, input[type="button"].white, input[type="submit"].white, .button.white {
     background-color: var(--background-color);
     color: var(--color-text-light);
     border: 1px solid var(--color-border);
 }
-button.gray, input[type="button"].gray, input[type="submit"].gray {
+button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray {
     background-color: var(--color-gray);
     color: var(--color-text);
     border: 1px solid var(--color-border);
 }
-button.red, input[type="button"].red, input[type="submit"].red {
+button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple {
+    background-color: var(--color-purple);
+    color: var(--color-text-inverted);
+    border: none;
+}
+button.red, input[type="button"].red, input[type="submit"].red, .button.red {
     background-color: var(--color-red);
+    color: var(--color-text-inverted);
     border: none;
 }
-button.orange, input[type="button"].orange, input[type="submit"].orange {
+button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange {
     background-color: var(--color-orange);
+    color: var(--color-text-inverted);
     border: none;
 }
-button.yellow, input[type="button"].yellow, input[type="submit"].yellow {
+button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow {
     background-color: var(--color-yellow);
+    color: var(--color-text);
     border: none;
 }
-button.blue, input[type="button"].blue, input[type="submit"].blue {
+button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue {
     background-color: var(--color-blue);
+    color: var(--color-text-inverted);
     border: none;
 }
-button.green, input[type="button"].green, input[type="submit"].green {
+button.green, input[type="button"].green, input[type="submit"].green, .button.green {
     background-color: var(--color-green);
+    color: var(--color-text-inverted);
     border: none;
 }
 
-button.white:hover, input[type="button"].white:hover, input[type="submit"].white:hover {
+button.white:hover, input[type="button"].white:hover, input[type="submit"].white:hover, .button.white:hover {
     background-color: var(--background-color-hover);
 }
-button.gray:hover, input[type="button"].gray:hover, input[type="submit"].gray:hover {
+button.gray:hover, input[type="button"].gray:hover, input[type="submit"].gray:hover, .button.gray:hover {
     background-color: var(--color-gray-hover);
 }
-button.red:hover, input[type="button"].red:hover, input[type="submit"].red:hover {
+button.purple:hover, input[type="button"].purple:hover, input[type="submit"].purple:hover, .button.purple:hover {
+    background-color: var(--color-purple-hover);
+}
+button.red:hover, input[type="button"].red:hover, input[type="submit"].red:hover, .button.red:hover {
     background-color: var(--color-red-hover);
 }
-button.orange:hover, input[type="button"].orange:hover, input[type="submit"].orange:hover {
+button.orange:hover, input[type="button"].orange:hover, input[type="submit"].orange:hover, .button.orange:hover {
     background-color: var(--color-orange-hover);
 }
-button.yellow:hover, input[type="button"].yellow:hover, input[type="submit"].yellow:hover {
+button.yellow:hover, input[type="button"].yellow:hover, input[type="submit"].yellow:hover, .button.yellow:hover {
     background-color: var(--color-yellow-hover);
 }
-button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:hover {
+button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:hover, .button.blue:hover {
     background-color: var(--color-blue-hover);
 }
-button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover {
+button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover, .button.green:hover {
     background-color: var(--color-green-hover);
 }
 
@@ -260,6 +280,9 @@ p.white, h1.white, h2.white, h3.white, h4.white, h5.white, h6.white {
 }
 p.gray, h1.gray, h2.gray, h3.gray, h4.gray, h5.gray, h6.gray {
     color: var(--color-text-light);
+}
+p.purple, h1.purple, h2.purple, h3.purple, h4.purple, h5.purple, h6.purple {
+    color: var(--color-purple);
 }
 p.red, h1.red, h2.red, h3.red, h4.red, h5.red, h6.red {
     color: var(--color-red);
@@ -285,6 +308,10 @@ table.white th, td.white th, td.white tr, th.white, td.white {
 table.gray th, td.gray th, td.gray tr, th.gray, td.gray {
     background-color: var(--color-gray);
     color: var(--color-text);
+}
+table.purple th, td.purple th, td.purple tr, th.purple, td.purple {
+    background-color: var(--color-purple);
+    color: var(--color-text-inverted);
 }
 table.red th, td.red th, td.red tr, th.red, td.red {
     background-color: var(--color-red);

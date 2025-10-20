@@ -1,6 +1,6 @@
 // API
 export { Requests } from '../data_management/api.js';
-export { parseDate } from '../data_management/utils/helpers.js';
+export { parseDate, extractItemNumber } from '../data_management/utils/helpers.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';
@@ -14,6 +14,7 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent } from './components/interface/containerComponent.js';
+export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';

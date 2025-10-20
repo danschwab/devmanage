@@ -1,12 +1,12 @@
-import { html, TableComponent, Requests, getReactiveStore, tableRowSelectionState, NavigationRegistry } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, extractItemNumber } from '../../index.js';
+import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    components: { TableComponent },
+    components: { TableComponent, PacklistItemsSummary },
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
-        sheetId: { type: String, default: '' },
         editMode: { type: Boolean, default: false },
         containerPath: { type: String, default: '' }
     },
@@ -15,12 +15,10 @@ export const PacklistTable = {
             packlistTableStore: null,
             saveDisabled: true,
             dirty: false,
-            moved: false,
             isPrinting: false,
-            dirtyCrateRows: {},
             error: null,
             databaseItemHeaders: null,
-            hiddenColumns: ['Pack','Check']
+            hiddenColumns: ['Pack','Check','Extracted Item','Extracted Qty']
         };
     },
     computed: {
@@ -133,11 +131,59 @@ export const PacklistTable = {
         initializeStore() {
             if (!this.tabName) return;
             
-            // Pass Requests.savePackList as the save function
+            // Create analysis configuration for item extraction
+            const analysisConfig = [
+                // Extract item number from Description and store in 'Extracted Item' column
+                createAnalysisConfig(
+                    Requests.extractItemNumber,
+                    'extractedItem',
+                    'Extracting item numbers...',
+                    ['Description', 'Packing/shop notes'], // Try Description first, then notes
+                    [],
+                    'Extracted Item' // Target column name
+                ),
+                
+                // Extract quantity from Description and store in 'Extracted Qty' column  
+                createAnalysisConfig(
+                    Requests.extractQuantity,
+                    'extractedQty',
+                    'Extracting quantities...',
+                    ['Description', 'Packing/shop notes'], // Try Description first, then notes
+                    [],
+                    'Extracted Qty' // Target column name
+                ),
+
+                // Compare descriptions and store alert in AppData if mismatch
+                createAnalysisConfig(
+                    (item) => {
+                        // This function receives the entire item and extracts needed data
+                        const itemNumber = item['Extracted Item'] || extractItemNumber(item.Description || item['Packing/shop notes'] || '');
+                        const description = item.Description || item['Packing/shop notes'] || '';
+                        
+                        if (!itemNumber) {
+                            return Promise.resolve(null);
+                        }
+                        
+                        return Requests.checkDescriptionMatch({
+                            itemNumber,
+                            description
+                        });
+                    },
+                    'descriptionAlert',
+                    'Checking description match...',
+                    ['Description', 'Packing/shop notes'], // Source columns for nested detection
+                    [],
+                    null, // No targetColumn - results go to AppData
+                    true // passFullItem = true to get entire item object
+                )
+            ];
+            
+            // Pass Requests.savePackList as the save function with analysis
             this.packlistTableStore = getReactiveStore(
                 Requests.getPackList,
                 Requests.savePackList,
-                [this.tabName]
+                [this.tabName],
+                analysisConfig // Add analysis configuration
             );
             this.error = this.packlistTableStore.error;
             
@@ -251,7 +297,11 @@ export const PacklistTable = {
                     :draggable="editMode"
                     :newRow="editMode"
                     :isLoading="isLoading"
+                    :isAnalyzing="packlistTableStore ? packlistTableStore.isAnalyzing : false"
+                    :loading-message="packlistTableStore && packlistTableStore.isLoading ? (packlistTableStore.loadingMessage || 'Loading data...') : (packlistTableStore && packlistTableStore.isAnalyzing ? (packlistTableStore.analysisMessage.loadingMessage || 'Analyzing data...') : loadingMessage)"
+                    :loading-progress="packlistTableStore && packlistTableStore.isAnalyzing ? packlistTableStore.analysisProgress : -1"
                     :loading-message="loadingMessage"
+                    :loading-progress
                     :drag-id="'packlist-crates'"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
@@ -317,8 +367,16 @@ export const PacklistTable = {
                                 class="table-fixed"
                             >
                                 <template #default="{ row: itemRow, column: itemColumn }">
-                                    <div>
+                                    <div style="position: relative;">
                                         <span>{{ itemRow[itemColumn.key] }}</span>
+                                        <!-- Show alert icon if there's a description mismatch for this item -->
+                                        <span 
+                                            v-if="itemRow.AppData?.descriptionAlert && itemColumn.key === 'Description'"
+                                            :title="itemRow.AppData.descriptionAlert.message"
+                                            style="color: #ff6b35; margin-left: 5px; cursor: help;"
+                                        >
+                                            ⚠️
+                                        </span>
                                     </div>
                                 </template>
                             </TableComponent>
@@ -328,6 +386,11 @@ export const PacklistTable = {
                         </template>
                     </template>
                 </TableComponent>
+            </div>
+
+            <!-- Item Quantities Summary Section -->
+            <div v-if="tabName && !editMode" class="items-summary-section" style="margin-top: 2rem;">
+                <PacklistItemsSummary :project-identifier="tabName" />
             </div>
         </div>
     `

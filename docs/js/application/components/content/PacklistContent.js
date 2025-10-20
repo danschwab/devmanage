@@ -1,4 +1,4 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -81,10 +81,6 @@ export const PacklistContent = {
             // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier, pathSegments[2] = 'details' (optional)
             return this.pathSegments[1] || '';
         },
-        isDetailsView() {
-            // Check if we're viewing the details subview
-            return this.pathSegments[2] === 'details';
-        },
         isEditView() {
             // Check if we're viewing the edit subview
             return this.pathSegments[2] === 'edit';
@@ -160,7 +156,6 @@ export const PacklistContent = {
                 v-else
                 :tab-name="currentPacklist"
                 :edit-mode="isEditView"
-                :show-details-only="isDetailsView"
                 :container-path="containerPath"
                 @navigate-to-path="(event) => navigateToPath(event.targetPath)"
             />

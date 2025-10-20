@@ -50,6 +50,16 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         return arr.map(obj => {
             if (obj && typeof obj === 'object') {
                 if (!('AppData' in obj)) obj['AppData'] = {};
+                
+                // Initialize analysis target columns if they don't exist
+                if (analysisConfig && Array.isArray(analysisConfig)) {
+                    analysisConfig.forEach(config => {
+                        if (config.targetColumn && !(config.targetColumn in obj)) {
+                            obj[config.targetColumn] = null; // Initialize to null for proper placeholder display
+                        }
+                    });
+                }
+                
                 // Recursively initialize nested arrays (e.g., Items)
                 Object.keys(obj).forEach(key => {
                     if (Array.isArray(obj[key])) {
@@ -61,16 +71,25 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         });
     }
 
-    // Helper to clear analysis results from AppData
+    // Helper to clear analysis results from AppData and target columns
     function clearAnalysisResults(arr, analysisConfig) {
         if (!Array.isArray(arr) || !analysisConfig) return arr;
         
         const clearResults = (item) => {
             if (item && item.AppData) {
                 analysisConfig.forEach(config => {
-                    // Clear the result key and error key
-                    delete item.AppData[config.resultKey];
-                    delete item.AppData[`${config.resultKey}_error`];
+                    if (config.targetColumn) {
+                        // Clear target column data
+                        if (item.hasOwnProperty(config.targetColumn)) {
+                            item[config.targetColumn] = null; // Set to null for proper placeholder display
+                        }
+                        // Clear any AppData error for this target column
+                        delete item.AppData[`${config.targetColumn}_error`];
+                    } else {
+                        // Clear AppData results
+                        delete item.AppData[config.resultKey];
+                        delete item.AppData[`${config.resultKey}_error`];
+                    }
                 });
                 // Clear analysis state
                 delete item.AppData._analyzed;
@@ -175,8 +194,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.setLoading(true, message);
             this.setError(null);
             try {
-                // Remove all objects marked for deletion before saving
-                const cleanData = removeAppData(this.data);
+                // Remove all objects marked for deletion and analysis target columns before saving
+                const cleanData = removeAppData(this.data, this.analysisConfig);
                 const result = await saveCall(cleanData, ...apiArgs);
                 // now remove the rows marked for deletion from live data without breaking reactivity:
                 this.removeMarkedRows();
@@ -230,7 +249,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         // Remove all rows marked for deletion (and nested arrays)
         removeMarkedRows() {
-            this.data = removeAppData(this.data);
+            this.data = removeAppData(this.data, this.analysisConfig);
         },
         addRow(row, fieldNames = null) {
             // Ensure AppData is set and nested arrays are initialized
@@ -301,6 +320,65 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const appData = this.data[parentIdx][nestedKey][itemIdx].AppData;
             return key ? appData[key] : appData;
         },
+        // Clear analysis results and optionally re-run analysis
+        clearAndRerunAnalysis(rerun = true) {
+            if (!this.analysisConfig) {
+                console.warn('[ReactiveStore] clearAndRerunAnalysis: No analysis configuration found');
+                return;
+            }
+            
+            // Clear existing analysis results
+            clearAnalysisResults(this.data, this.analysisConfig);
+            
+            // Optionally re-run analysis
+            if (rerun && this.data.length > 0) {
+                setTimeout(() => {
+                    this.runConfiguredAnalysis();
+                }, 100);
+            }
+        },
+        // Clear specific analysis results by result key or target column
+        clearSpecificAnalysisResults(identifiers = []) {
+            if (!this.analysisConfig || !Array.isArray(identifiers) || identifiers.length === 0) {
+                return;
+            }
+            
+            const clearSpecificResults = (item) => {
+                if (item && item.AppData) {
+                    this.analysisConfig.forEach(config => {
+                        const shouldClear = identifiers.includes(config.resultKey) || 
+                                          identifiers.includes(config.targetColumn);
+                        
+                        if (shouldClear) {
+                            if (config.targetColumn) {
+                                // Clear target column data
+                                if (item.hasOwnProperty(config.targetColumn)) {
+                                    item[config.targetColumn] = null;
+                                }
+                                // Clear any AppData error for this target column
+                                delete item.AppData[`${config.targetColumn}_error`];
+                            } else {
+                                // Clear AppData results
+                                delete item.AppData[config.resultKey];
+                                delete item.AppData[`${config.resultKey}_error`];
+                            }
+                        }
+                    });
+                }
+            };
+
+            this.data.forEach(item => {
+                clearSpecificResults(item);
+                // Also clear nested arrays if they exist
+                if (item && typeof item === 'object') {
+                    Object.keys(item).forEach(key => {
+                        if (Array.isArray(item[key])) {
+                            item[key].forEach(nestedItem => clearSpecificResults(nestedItem));
+                        }
+                    });
+                }
+            });
+        },
         async runConfiguredAnalysis(options = {}) {
             if (!this.analysisConfig || this.isAnalyzing) {
                 return;
@@ -309,7 +387,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const {
                 batchSize = 10,
                 delayMs = 50,
-                skipIfAnalyzed = false // Don't skip by default for configured analysis
+                skipIfAnalyzed = false
             } = options;
 
             this.isAnalyzing = true;
@@ -317,77 +395,226 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.analysisMessage = 'Starting analysis...';
 
             try {
-                const processData = async (dataArray, isNested = false) => {
-                    if (!Array.isArray(dataArray) || dataArray.length === 0) {
-                        return;
+                // Helper to find value from ordered source columns
+                const findSourceValue = (item, sourceColumns, parentItem = null) => {
+                    if (!sourceColumns || sourceColumns.length === 0) return item;
+                    
+                    for (const column of sourceColumns) {
+                        // First check the item itself
+                        if (item && item[column] !== undefined && item[column] !== null && item[column] !== '') {
+                            return item[column];
+                        }
+                        // Then check parent item if available
+                        if (parentItem && parentItem[column] !== undefined && parentItem[column] !== null && parentItem[column] !== '') {
+                            return parentItem[column];
+                        }
+                    }
+                    return null;
+                };
+
+                // Helper to detect which arrays contain the requested columns
+                const detectRelevantArrays = () => {
+                    const relevantConfigs = [];
+                    
+                    for (const config of this.analysisConfig) {
+                        const configResult = {
+                            ...config,
+                            processMain: false,
+                            processNested: [],
+                            needsParentContext: false
+                        };
+
+                        if (!config.sourceColumns || config.sourceColumns.length === 0) {
+                            // No source columns specified, process main array only
+                            configResult.processMain = true;
+                        } else {
+                            // Check if any source columns exist in main data
+                            const mainSample = this.data[0];
+                            if (mainSample) {
+                                const hasMainColumns = config.sourceColumns.some(col => 
+                                    mainSample.hasOwnProperty(col) && 
+                                    mainSample[col] !== undefined && 
+                                    mainSample[col] !== null && 
+                                    mainSample[col] !== ''
+                                );
+                                
+                                if (hasMainColumns) {
+                                    configResult.processMain = true;
+                                }
+
+                                // Check nested arrays for the columns
+                                Object.keys(mainSample).forEach(key => {
+                                    if (Array.isArray(mainSample[key]) && mainSample[key].length > 0) {
+                                        const nestedSample = mainSample[key][0];
+                                        const hasNestedColumns = config.sourceColumns.some(col => 
+                                            nestedSample.hasOwnProperty(col) && 
+                                            nestedSample[col] !== undefined && 
+                                            nestedSample[col] !== null && 
+                                            nestedSample[col] !== ''
+                                        );
+                                        
+                                        if (hasNestedColumns) {
+                                            configResult.processNested.push(key);
+                                            
+                                            // Check if nested items need parent context
+                                            const needsParent = config.sourceColumns.some(col => 
+                                                !nestedSample.hasOwnProperty(col) && 
+                                                mainSample.hasOwnProperty(col)
+                                            );
+                                            
+                                            if (needsParent) {
+                                                configResult.needsParentContext = true;
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        }
+
+                        relevantConfigs.push(configResult);
                     }
 
-                    // Process items in batches
-                    for (let i = 0; i < dataArray.length; i += batchSize) {
-                        const batch = dataArray.slice(i, i + batchSize);
+                    return relevantConfigs;
+                };
+
+                const relevantConfigs = detectRelevantArrays();
+                let totalOperations = 0;
+                let completedOperations = 0;
+
+                // Calculate total operations for progress tracking
+                relevantConfigs.forEach(config => {
+                    if (config.processMain) {
+                        totalOperations += this.data.length;
+                    }
+                    config.processNested.forEach(arrayKey => {
+                        this.data.forEach(item => {
+                            if (item[arrayKey] && Array.isArray(item[arrayKey])) {
+                                totalOperations += item[arrayKey].length;
+                            }
+                        });
+                    });
+                });
+
+                // Process main data
+                for (const config of relevantConfigs) {
+                    if (!config.processMain) continue;
+
+                    this.analysisMessage = `${config.label || 'Processing'} main data...`;
+
+                    for (let i = 0; i < this.data.length; i += batchSize) {
+                        const batch = this.data.slice(i, i + batchSize);
                         
-                        await Promise.all(batch.map(async (item) => {
-                            if (!item || typeof item !== 'object') return;
+                        // Process items sequentially to respect dependencies
+                        for (const item of batch) {
+                            if (!item || typeof item !== 'object') continue;
                             if (!item.AppData) item.AppData = {};
                             
-                            if (skipIfAnalyzed && item.AppData._analyzed) return;
+                            if (skipIfAnalyzed && item.AppData._analyzed) continue;
                             item.AppData._analyzing = true;
 
-                            // Run each configured analysis step
-                            for (const config of this.analysisConfig) {
-                                try {
-                                    this.analysisMessage = config.label || 'Processing...';
-                                    
-                                    // Extract value from specified column
-                                    let inputValue = item;
-                                    if (config.sourceColumn) {
-                                        inputValue = item[config.sourceColumn];
-                                    }
-                                    
-                                    // Skip if no input value
-                                    if (!inputValue) continue;
-                                    
-                                    // Call API function with the extracted value and additional parameters
-                                    const apiParams = [inputValue, ...(config.additionalParams || [])];
+                            try {
+                                const inputValue = findSourceValue(item, config.sourceColumns);
+                                
+                                if (inputValue !== null || config.passFullItem) {
+                                    // Use full item if passFullItem is true, otherwise use extracted value
+                                    const firstParam = config.passFullItem ? item : inputValue;
+                                    const apiParams = [firstParam, ...(config.additionalParams || [])];
                                     const result = await config.apiFunction(...apiParams);
                                     
-                                    // Store result in AppData
-                                    item.AppData[config.resultKey] = result;
-                                    
-                                } catch (error) {
-                                    console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
+                                    // Store result in target column or AppData
+                                    if (config.targetColumn) {
+                                        item[config.targetColumn] = result;
+                                    } else {
+                                        item.AppData[config.resultKey] = result;
+                                    }
+                                }
+                                
+                            } catch (error) {
+                                console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
+                                if (config.targetColumn) {
+                                    item.AppData[`${config.targetColumn}_error`] = error.message;
+                                } else {
                                     item.AppData[`${config.resultKey}_error`] = error.message;
                                 }
                             }
                             
                             item.AppData._analyzing = false;
                             item.AppData._analyzed = true;
-                        }));
-
-                        // Update progress for main data
-                        if (!isNested) {
-                            this.analysisProgress = Math.min(((i + batchSize) / dataArray.length) * 50, 50);
+                            completedOperations++;
                         }
 
-                        // Small delay to keep UI responsive
+                        this.analysisProgress = Math.min((completedOperations / totalOperations) * 100, 100);
+
                         if (delayMs > 0) {
                             await new Promise(resolve => setTimeout(resolve, delayMs));
                         }
                     }
-                };
+                }
 
-                // Process main data
-                await processData(this.data, false);
-                
-                // Process nested data if configured
-                const nestedConfigs = this.analysisConfig.filter(config => config.nestedArrayKey);
-                if (nestedConfigs.length > 0) {
-                    this.analysisMessage = 'Processing nested data...';
-                    
-                    for (const item of this.data) {
-                        for (const config of nestedConfigs) {
-                            if (item[config.nestedArrayKey] && Array.isArray(item[config.nestedArrayKey])) {
-                                await processData(item[config.nestedArrayKey], true);
+                // Process nested data
+                for (const config of relevantConfigs) {
+                    for (const arrayKey of config.processNested) {
+                        this.analysisMessage = `${config.label || 'Processing'} ${arrayKey} data...`;
+
+                        for (const parentItem of this.data) {
+                            if (!parentItem[arrayKey] || !Array.isArray(parentItem[arrayKey])) continue;
+
+                            const nestedArray = parentItem[arrayKey];
+                            
+                            for (let i = 0; i < nestedArray.length; i += batchSize) {
+                                const batch = nestedArray.slice(i, i + batchSize);
+                                
+                                // Process items sequentially to respect dependencies
+                                for (const nestedItem of batch) {
+                                    if (!nestedItem || typeof nestedItem !== 'object') continue;
+                                    if (!nestedItem.AppData) nestedItem.AppData = {};
+                                    
+                                    if (skipIfAnalyzed && nestedItem.AppData._analyzed) continue;
+                                    nestedItem.AppData._analyzing = true;
+
+                                    try {
+                                        // Create enhanced item with parent context if needed
+                                        let itemWithContext = nestedItem;
+                                        if (config.needsParentContext) {
+                                            itemWithContext = { ...parentItem, ...nestedItem };
+                                        }
+
+                                        const inputValue = findSourceValue(nestedItem, config.sourceColumns, 
+                                            config.needsParentContext ? parentItem : null);
+                                        
+                                        if (inputValue !== null || config.passFullItem) {
+                                            // Use full item if passFullItem is true, otherwise use extracted value
+                                            const firstParam = config.passFullItem ? nestedItem : inputValue;
+                                            const apiParams = [firstParam, ...(config.additionalParams || [])];
+                                            const result = await config.apiFunction(...apiParams);
+                                            
+                                            // Store result in target column or AppData
+                                            if (config.targetColumn) {
+                                                nestedItem[config.targetColumn] = result;
+                                            } else {
+                                                nestedItem.AppData[config.resultKey] = result;
+                                            }
+                                        }
+                                        
+                                    } catch (error) {
+                                        console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
+                                        if (config.targetColumn) {
+                                            nestedItem.AppData[`${config.targetColumn}_error`] = error.message;
+                                        } else {
+                                            nestedItem.AppData[`${config.resultKey}_error`] = error.message;
+                                        }
+                                    }
+                                    
+                                    nestedItem.AppData._analyzing = false;
+                                    nestedItem.AppData._analyzed = true;
+                                    completedOperations++;
+                                }
+
+                                this.analysisProgress = Math.min((completedOperations / totalOperations) * 100, 100);
+
+                                if (delayMs > 0) {
+                                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                                }
                             }
                         }
                     }
@@ -401,7 +628,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.analysisMessage = `Analysis failed: ${error.message}`;
             } finally {
                 this.isAnalyzing = false;
-                // Clear progress after a delay
                 setTimeout(() => {
                     this.analysisProgress = 0;
                     this.analysisMessage = '';
@@ -410,9 +636,20 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         }
     });
 
-    // Helper to strip AppData from objects (including filtering out items marked for deletion)
-    function removeAppData(arr) {
+    // Helper to strip AppData and analysis target columns from objects (including filtering out items marked for deletion)
+    function removeAppData(arr, analysisConfig = null) {
         if (!Array.isArray(arr)) return arr;
+        
+        // Get list of target columns to remove
+        const targetColumns = new Set();
+        if (analysisConfig && Array.isArray(analysisConfig)) {
+            analysisConfig.forEach(config => {
+                if (config.targetColumn) {
+                    targetColumns.add(config.targetColumn);
+                }
+            });
+        }
+        
         return arr
             .filter(obj => {
                 // Filter out items marked for deletion
@@ -426,10 +663,16 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     const newObj = { ...obj };
                     // Remove AppData before sending to API
                     delete newObj.AppData;
+                    
+                    // Remove analysis target columns before sending to API
+                    targetColumns.forEach(column => {
+                        delete newObj[column];
+                    });
+                    
                     // Recursively process nested arrays
                     Object.keys(newObj).forEach(key => {
                         if (Array.isArray(newObj[key])) {
-                            newObj[key] = removeAppData(newObj[key]);
+                            newObj[key] = removeAppData(newObj[key], analysisConfig);
                         }
                     });
                     return newObj;
@@ -489,21 +732,67 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
 /**
  * Helper to create a new analysis configuration entry
  * @param {Function} apiFunction - The API function to call
- * @param {string} resultKey - Key to store the result in AppData
+ * @param {string} resultKey - Key to store the result in AppData OR column name if targetColumn is specified
  * @param {string} label - UI label for the analysis step
- * @param {string} sourceColumn - Column to extract value from (if null, passes entire item)
+ * @param {string|Array<string>} sourceColumns - Column(s) to extract value from (ordered array for priority)
  * @param {Array} additionalParams - Additional parameters to pass to API function
- * @param {string} nestedArrayKey - If provided, will also process nested arrays with this key
+ * @param {string} targetColumn - Optional: column name to store results directly in data (not AppData)
  * @returns {Object} Analysis configuration object
  */
-export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn = null, additionalParams = [], nestedArrayKey = null) {
+export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false) {
     return {
         apiFunction,
         resultKey,
         label,
-        sourceColumn,
+        sourceColumns: Array.isArray(sourceColumns) ? sourceColumns : (sourceColumns ? [sourceColumns] : []),
         additionalParams,
-        nestedArrayKey
+        targetColumn, // If set, results go to this column instead of AppData
+        passFullItem // If true, pass entire item even when sourceColumns specified
     };
+}
+
+/**
+ * Trigger re-analysis on an existing reactive store
+ * @param {Function} apiCall - The API function used to identify the store
+ * @param {Function} saveCall - The save function used to identify the store (can be null)
+ * @param {Array} apiArgs - Arguments used to identify the store
+ * @param {Array} analysisConfig - Analysis configuration used to identify the store
+ * @param {Array} specificResultKeys - Optional: specific result keys/target columns to clear before re-analysis
+ * @param {Object} analysisOptions - Optional: options to pass to runConfiguredAnalysis
+ * @returns {Promise|boolean} - Returns the analysis promise if store found, false if not found
+ */
+export function triggerStoreReanalysis(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, specificResultKeys = null, analysisOptions = {}) {
+    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+    
+    if (!reactiveStoreRegistry[key]) {
+        console.warn('[ReactiveStore] triggerStoreReanalysis: Store not found for the given parameters');
+        return false;
+    }
+    
+    const store = reactiveStoreRegistry[key];
+    
+    if (specificResultKeys && Array.isArray(specificResultKeys)) {
+        // Clear specific analysis results
+        store.clearSpecificAnalysisResults(specificResultKeys);
+    } else {
+        // Clear all analysis results
+        store.clearAndRerunAnalysis(false); // Don't auto-rerun, we'll do it manually
+    }
+    
+    // Run analysis with provided options
+    return store.runConfiguredAnalysis(analysisOptions);
+}
+
+/**
+ * Get an existing reactive store without creating a new one
+ * @param {Function} apiCall - The API function used to identify the store
+ * @param {Function} saveCall - The save function used to identify the store (can be null)
+ * @param {Array} apiArgs - Arguments used to identify the store
+ * @param {Array} analysisConfig - Analysis configuration used to identify the store
+ * @returns {Object|null} - Returns the store if found, null if not found
+ */
+export function getExistingReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null) {
+    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+    return reactiveStoreRegistry[key] || null;
 }
 
