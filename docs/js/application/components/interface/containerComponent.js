@@ -1,4 +1,4 @@
-import { html, BreadcrumbComponent, modalManager, NavigationRegistry } from '../../index.js';
+import { html, BreadcrumbComponent, NavigationRegistry } from '../../index.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -36,7 +36,7 @@ export const ContainerComponent = {
             default: false
         }
     },
-    inject: ['hamburgerMenuRegistry'],
+    inject: ['hamburgerMenuRegistry', '$modal'],
     provide() {
         return {
             // Provide navigation parameters to child components
@@ -70,14 +70,11 @@ export const ContainerComponent = {
         },
         openHamburgerMenu() {
             if (this.hamburgerMenuComponent) {
-                const modal = modalManager.createModal(
-                    `${this.title}`,
+                this.$modal.custom(
                     this.hamburgerMenuComponent.components,
-                    {
-                        componentProps: this.hamburgerMenuComponent.props || {}
-                    }
+                    this.hamburgerMenuComponent.props || {},
+                    this.title
                 );
-                modalManager.showModal(modal.id);
             }
         },
         expandContainer() {

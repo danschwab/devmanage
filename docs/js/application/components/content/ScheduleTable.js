@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, TableComponent, getReactiveStore, modalManager } from '../../index.js';
+import { html, Requests, parseDate, TableComponent, getReactiveStore } from '../../index.js';
 
 export const ScheduleTableComponent = {
     components: {
@@ -10,6 +10,7 @@ export const ScheduleTableComponent = {
             default: null
         }
     },
+    inject: ['$modal'],
     data() {
         return {
             scheduleTableStore: null
@@ -305,7 +306,7 @@ export const ScheduleTableComponent = {
         },
         async handlePacklistClick(packlistInfo) {
             if (!packlistInfo.exists || !packlistInfo.identifier) {
-                modalManager.showAlert('No packlist available for this show', 'Info');
+                this.$modal.alert('No packlist available for this show', 'Info');
                 return;
             }
             

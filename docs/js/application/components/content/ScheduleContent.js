@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, modalManager, hamburgerMenuRegistry, DashboardToggleComponent } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent } from '../../index.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
@@ -8,6 +8,7 @@ export const ScheduleMenuComponent = {
         currentView: String,
         title: String
     },
+    inject: ['$modal'],
     computed: {
         menuItems() {
             return [
@@ -24,25 +25,25 @@ export const ScheduleMenuComponent = {
         handleAction(action) {
             switch (action) {
                 case 'showCalendarView':
-                    modalManager.showAlert('Calendar view functionality coming soon!', 'Info');
+                    this.$modal.alert('Calendar view functionality coming soon!', 'Info');
                     break;
                 case 'showChartView':
-                    modalManager.showAlert('Chart view functionality coming soon!', 'Info');
+                    this.$modal.alert('Chart view functionality coming soon!', 'Info');
                     break;
                 case 'filterColumns':
-                    modalManager.showAlert('Date range filter functionality coming soon!', 'Info');
+                    this.$modal.alert('Date range filter functionality coming soon!', 'Info');
                     break;
                 case 'setAsDefault':
-                    modalManager.showAlert('Export schedule functionality coming soon!', 'Info');
+                    this.$modal.alert('Export schedule functionality coming soon!', 'Info');
                     break;
                 case 'refresh':
-                    modalManager.showAlert('Refreshing schedule data...', 'Info');
+                    this.$modal.alert('Refreshing schedule data...', 'Info');
                     break;
                 case 'help':
-                    modalManager.showAlert('Schedule help functionality coming soon!', 'Info');
+                    this.$modal.alert('Schedule help functionality coming soon!', 'Info');
                     break;
                 default:
-                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
+                    this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },

@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, modalManager, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, CardsComponent, DashboardToggleComponent } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, CardsComponent, DashboardToggleComponent } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -9,6 +9,7 @@ export const InventoryMenuComponent = {
         currentView: String,
         title: String
     },
+    inject: ['$modal'],
     computed: {
         menuItems() {
             switch (this.currentView) {
@@ -52,63 +53,63 @@ export const InventoryMenuComponent = {
         handleAction(action) {
             switch (action) {
                 case 'refreshInventory':
-                    modalManager.showAlert('Refreshing inventory...', 'Info');
+                    this.$modal.alert('Refreshing inventory...', 'Info');
                     break;
                 case 'addInventoryItem':
-                    modalManager.showConfirm(
+                    this.$modal.confirm(
                         'Do you want to add a new inventory item?',
-                        () => modalManager.showAlert('Item added!', 'Success'),
-                        () => modalManager.showAlert('Add cancelled.', 'Info'),
+                        () => this.$modal.alert('Item added!', 'Success'),
+                        () => this.$modal.alert('Add cancelled.', 'Info'),
                         'Add Item'
                     );
                     break;
                 case 'exportInventory':
-                    modalManager.showAlert('Export all items functionality coming soon!', 'Info');
+                    this.$modal.alert('Export all items functionality coming soon!', 'Info');
                     break;
                 case 'inventorySettings':
-                    modalManager.showAlert('Inventory settings functionality coming soon!', 'Info');
+                    this.$modal.alert('Inventory settings functionality coming soon!', 'Info');
                     break;
                 case 'addNewCategory':
-                    modalManager.showAlert('Add new category functionality coming soon!', 'Info');
+                    this.$modal.alert('Add new category functionality coming soon!', 'Info');
                     break;
                 case 'manageCategoryOrder':
-                    modalManager.showAlert('Manage category order functionality coming soon!', 'Info');
+                    this.$modal.alert('Manage category order functionality coming soon!', 'Info');
                     break;
                 case 'exportCategoryReport':
-                    modalManager.showAlert('Export category report functionality coming soon!', 'Info');
+                    this.$modal.alert('Export category report functionality coming soon!', 'Info');
                     break;
                 case 'categorySettings':
-                    modalManager.showAlert('Category settings functionality coming soon!', 'Info');
+                    this.$modal.alert('Category settings functionality coming soon!', 'Info');
                     break;
                 case 'saveSearchCriteria':
-                    modalManager.showAlert('Save search criteria functionality coming soon!', 'Info');
+                    this.$modal.alert('Save search criteria functionality coming soon!', 'Info');
                     break;
                 case 'loadSavedSearch':
-                    modalManager.showAlert('Load saved search functionality coming soon!', 'Info');
+                    this.$modal.alert('Load saved search functionality coming soon!', 'Info');
                     break;
                 case 'exportSearchResults':
-                    modalManager.showAlert('Export search results functionality coming soon!', 'Info');
+                    this.$modal.alert('Export search results functionality coming soon!', 'Info');
                     break;
                 case 'clearSearchHistory':
-                    modalManager.showAlert('Clear search history functionality coming soon!', 'Info');
+                    this.$modal.alert('Clear search history functionality coming soon!', 'Info');
                     break;
                 case 'scheduleReport':
-                    modalManager.showAlert('Schedule automatic reports functionality coming soon!', 'Info');
+                    this.$modal.alert('Schedule automatic reports functionality coming soon!', 'Info');
                     break;
                 case 'customReportBuilder':
-                    modalManager.showAlert('Custom report builder functionality coming soon!', 'Info');
+                    this.$modal.alert('Custom report builder functionality coming soon!', 'Info');
                     break;
                 case 'emailReports':
-                    modalManager.showAlert('Email reports functionality coming soon!', 'Info');
+                    this.$modal.alert('Email reports functionality coming soon!', 'Info');
                     break;
                 case 'reportSettings':
-                    modalManager.showAlert('Report settings functionality coming soon!', 'Info');
+                    this.$modal.alert('Report settings functionality coming soon!', 'Info');
                     break;
                 case 'inventoryHelp':
-                    modalManager.showAlert('Inventory help functionality coming soon!', 'Info');
+                    this.$modal.alert('Inventory help functionality coming soon!', 'Info');
                     break;
                 default:
-                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
+                    this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },
@@ -138,16 +139,13 @@ export const InventoryContent = {
         },
         navigateToPath: Function,
     },
+    inject: ['$modal'],
     data() {
         return {
             categories: [] // loaded from spreadsheet
         };
     },
     computed: {
-        // Add modalManager reference for template access
-        modalManager() {
-            return modalManager;
-        },
         // Direct navigation options for inventory
         inventoryNavigation() {
             return [
@@ -264,10 +262,10 @@ export const InventoryContent = {
                 <p>View and manage inventory reports.</p>
                 
                 <div style="margin: 1rem 0;">
-                    <button @click="modalManager.showAlert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
-                    <button @click="modalManager.showAlert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
-                    <button @click="modalManager.showAlert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
-                    <button @click="modalManager.showAlert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
+                    <button @click="$modal.alert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
+                    <button @click="$modal.alert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
+                    <button @click="$modal.alert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
+                    <button @click="$modal.alert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
@@ -286,7 +284,7 @@ export const InventoryContent = {
                 <h3>Add New Item</h3>
                 <p>Add a new item to the inventory.</p>
                 <div style="margin: 1rem 0;">
-                    <button @click="modalManager.showAlert('Add new item functionality coming soon!', 'Info')">Create New Item</button>
+                    <button @click="$modal.alert('Add new item functionality coming soon!', 'Info')">Create New Item</button>
                 </div>
             </slot>
         </slot>

@@ -1,209 +1,117 @@
 import { html } from '../../index.js';
 
-// Create simple alert and confirm components
+// Simple alert component
 const AlertComponent = {
-    props: {
-        message: String,
-        timeout: {
-            type: Number,
-            default: 1300 // milliseconds
-        }
-    },
+    props: ['message'],
     mounted() {
-        setTimeout(() => {
-            this.$emit('close-modal');
-        }, this.timeout);
+        setTimeout(() => this.$emit('close-modal'), 1300);
+    },
+    template: html`<div style="text-align: center; padding: 1rem;"><p>{{ message }}</p></div>`
+};
+
+// Simple confirm component
+const ConfirmComponent = {
+    props: ['message', 'onConfirm', 'onCancel'],
+    methods: {
+        confirm() { this.onConfirm?.(); this.$emit('close-modal'); },
+        cancel() { this.onCancel?.(); this.$emit('close-modal'); }
     },
     template: html`
         <div style="text-align: center; padding: 1rem;">
             <p>{{ message }}</p>
+            <button @click="confirm">Confirm</button>
+            <button @click="cancel">Cancel</button>
         </div>
     `
 };
 
-const ConfirmComponent = {
-    props: {
-        message: String,
-        onConfirm: Function,
-        onCancel: Function
-    },
-    methods: {
-        handleConfirm() {
-            this.onConfirm?.();
-            this.$emit('close-modal');
-        },
-        handleCancel() {
-            this.onCancel?.();
-            this.$emit('close-modal');
-        }
-    },
+// Simple image component
+const ImageComponent = {
+    props: ['imageUrl'],
     template: html`
         <div style="text-align: center; padding: 1rem;">
-            <p>{{ message }}</p>
-            <button @click="handleConfirm">Confirm</button>
-            <button @click="handleCancel">Cancel</button>
+            <img :src="imageUrl" alt="Image" style="max-width: 90vw; max-height: 80vh; object-fit: contain;" />
         </div>
     `
 };
 
 export const ModalComponent = {
     props: {
-        modalId: {
-            type: String,
-            required: true
-        },
-        title: {
-            type: String,
-            default: ''
-        },
-        isVisible: {
-            type: Boolean,
-            default: false
-        },
-        components: {
-            type: Array,
-            required: true
-        },
-        componentProps: {
-            type: Object,
-            default: () => ({ })
-        }
-    },
-    data() {
-        return {
-            isLoading: false // reactive loading state
-        };
+        modalId: { type: String, required: true },
+        title: { type: String, default: '' },
+        isVisible: { type: Boolean, default: false },
+        components: { type: Array, required: true },
+        componentProps: { type: Object, default: () => ({}) }
     },
     methods: {
-        setLoading(val) {
-            this.isLoading = val;
-        },
-        closeModal() {
-            this.$emit('close-modal', this.modalId);
-        },
-        handleChildClose() {
-            // Always emit with this modal's id
-            this.$emit('close-modal', this.modalId);
-        }
-    },
-    created() {
-        // Vue 2: this.$options.propsData, Vue 3: this.$props
-        // Log all props received by the component
-        if (!this.components) {
-            console.warn('[ModalComponent] created: components prop is undefined!', this.$props || this.$options?.propsData);
-        } else if (!Array.isArray(this.components)) {
-            console.warn('[ModalComponent] created: components prop is not an array!', this.components);
-        }
-    },
-    mounted() {
-        if (!this.components) {
-            console.warn('[ModalComponent] mounted: components prop is undefined!');
-        } else if (!Array.isArray(this.components)) {
-            console.warn('[ModalComponent] mounted: components prop is not an array!', this.components);
-        }
+        closeModal() { this.$emit('close-modal', this.modalId); }
     },
     template: html`
         <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
-            <div class="modal" :data-modal-id="modalId">
+            <div class="modal">
                 <div class="modal-header">
                     <h3>{{ title }}</h3>
                     <button class="close-button" @click="closeModal">&times;</button>
                 </div>
                 <div class="modal-content">
-                    <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
-                        <img src="images/loading.gif" alt="..."/>
-                        <p>{{ componentProps.loadingMessage || 'Loading data...' }}</p>
-                    </div>
-                    <div v-else>
-                        <component
-                            v-for="(comp, idx) in components"
-                            :is="comp"
-                            :key="modalId + '-' + idx + '-' + JSON.stringify(componentProps)"
-                            v-bind="componentProps"
-                            @close-modal="handleChildClose"
-                        ></component>
-                    </div>
+                    <component v-for="(comp, idx) in components" :is="comp" :key="idx" 
+                               v-bind="componentProps" @close-modal="closeModal"></component>
                 </div>
             </div>
         </div>
     `
 };
 
-// Modal Manager - now purely component-based
+// Simplified Modal Manager - single class, essential methods only
 export class ModalManager {
     constructor() {
         this.nextId = 1;
-        this._reactiveModals = null;
+        this.modals = [];
     }
 
     setReactiveModals(reactiveArray) {
-        this._reactiveModals = reactiveArray;
+        this.modals = reactiveArray;
     }
 
-    get modals() {
-        return this._reactiveModals || [];
-    }
-
-    createModal(title = '', componentsOrSingle = null, options = {}) {
-        if (!componentsOrSingle) {
-            console.error('[ModalManager] No component(s) provided to createModal');
-            throw new Error('Modal component(s) is required');
-        }
-        const modalId = options.id || `modal-${this.nextId++}`;
-        const components = Array.isArray(componentsOrSingle)
-            ? componentsOrSingle
-            : [componentsOrSingle];
-        const modalData = {
-            id: modalId,
-            title: title,
-            isVisible: false,
-            components: components,
-            componentProps: options.componentProps || {},
-            created: new Date()
+    _create(title, components, props) {
+        const modal = {
+            id: `modal-${this.nextId++}`,
+            title,
+            isVisible: true,
+            components: Array.isArray(components) ? components : [components],
+            componentProps: props || {}
         };
-        this.modals.push(modalData);
-        return modalData;
-    }
-
-    showModal(modalId) {
-        const modal = this.modals.find(m => m.id === modalId);
-        if (modal) {
-            modal.isVisible = true;
-            console.log('[ModalManager] showModal', modalId, modal);
-        } else {
-            console.warn('[ModalManager] showModal: modal not found', modalId);
-        }
+        this.modals.push(modal);
         return modal;
     }
 
     removeModal(modalId) {
         const index = this.modals.findIndex(m => m.id === modalId);
-        if (index !== -1) {
-            this.modals.splice(index, 1);
-            console.log('[ModalManager] removeModal', modalId, 'removed: true');
-            return true;
-        }
-        console.log('[ModalManager] removeModal', modalId, 'removed: false');
-        return false;
+        if (index !== -1) this.modals.splice(index, 1);
     }
 
-    // Show an alert modal with a message and optional title
-    showAlert(message, title = 'Alert') {
-        const modal = this.createModal(title, AlertComponent, {
-            componentProps: { message }
-        });
-        this.showModal(modal.id);
-        return modal;
+    // Core methods that are actually used
+    alert(message, title = 'Alert') {
+        return this._create(title, AlertComponent, { message });
     }
 
-    // Show a confirm modal with message, confirm/cancel callbacks, and optional title
-    showConfirm(message, onConfirm, onCancel, title = 'Confirm') {
-        const modal = this.createModal(title, ConfirmComponent, {
-            componentProps: { message, onConfirm, onCancel }
-        });
-        this.showModal(modal.id);
-        return modal;
+    confirm(message, onConfirm, onCancel = null, title = 'Confirm') {
+        return this._create(title, ConfirmComponent, { message, onConfirm, onCancel });
     }
+
+    image(imageUrl, title = 'Image') {
+        return this._create(title, ImageComponent, { imageUrl });
+    }
+
+    custom(components, props = {}, title = '') {
+        return this._create(title, components, props);
+    }
+
+    // Legacy compatibility (remove these after testing)
+    showAlert(message, title) { return this.alert(message, title); }
+    showConfirm(message, onConfirm, onCancel, title) { return this.confirm(message, onConfirm, onCancel, title); }
+    createModal(title, components, options) { return this._create(title, components, options.componentProps); }
+    showModal() { /* No-op - modals show immediately now */ }
 }
 
 // Create a global instance

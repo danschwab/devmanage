@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, modalManager, NavigationRegistry } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, NavigationRegistry } from '../../index.js';
 
 
 
@@ -15,6 +15,7 @@ export const ItemImageComponent = {
             default: 64
         }
     },
+    inject: ['$modal'],
     data() {
         return {
             imageUrl: 'images/placeholder.png',
@@ -60,31 +61,7 @@ export const ItemImageComponent = {
         },
         showImageModal() {
             if (this.imageUrl && this.imageUrl !== 'images/placeholder.png') {
-                // Create a simple image modal component
-                const ImageModalComponent = {
-                    props: ['imageUrl', 'itemNumber'],
-                    template: html`
-                        <div style="text-align: center; padding: 1rem;">
-                            <img
-                                :src="imageUrl" 
-                                alt="Item Image" 
-                                style="max-width: 90vw; max-height: 80vh; object-fit: contain;"
-                            />
-                        </div>
-                    `
-                };
-                
-                const modal = modalManager.createModal(
-                    `Image: ${this.itemNumber}`,
-                    [ImageModalComponent],
-                    {
-                        componentProps: {
-                            imageUrl: this.imageUrl,
-                            itemNumber: this.itemNumber
-                        }
-                    }
-                );
-                modalManager.showModal(modal.id);
+                this.$modal.image(this.imageUrl, `Image: ${this.itemNumber}`, this.itemNumber);
             }
         }
     },

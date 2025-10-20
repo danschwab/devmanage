@@ -1,4 +1,4 @@
-import { Requests, html, modalManager, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -8,6 +8,7 @@ export const PacklistMenuComponent = {
         title: String,
         refreshCallback: Function
     },
+    inject: ['$modal'],
     computed: {
         menuItems() {
             switch (this.currentView) {
@@ -26,14 +27,14 @@ export const PacklistMenuComponent = {
                     if (this.refreshCallback) {
                         this.refreshCallback();
                     } else {
-                        modalManager.showAlert('Refreshing packlist data...', 'Info');
+                        this.$modal.alert('Refreshing packlist data...', 'Info');
                     }
                     break;
                 case 'help':
-                    modalManager.showAlert('Packlist help functionality coming soon!', 'Info');
+                    this.$modal.alert('Packlist help functionality coming soon!', 'Info');
                     break;
                 default:
-                    modalManager.showAlert(`Action ${action} not implemented yet.`, 'Info');
+                    this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
         }
     },
@@ -62,6 +63,7 @@ export const PacklistContent = {
         containerPath: String,
         navigateToPath: Function
     },
+    inject: ['$modal'],
     data() {
         return {
             availablePacklists: [], // loaded from API
@@ -131,7 +133,7 @@ export const PacklistContent = {
                 const tabs = await Requests.getAvailableTabs('PACK_LISTS');
                 this.availablePacklists = tabs.filter(tab => tab.title !== 'TEMPLATE');
             } catch (error) {
-                this.modalManager.showAlert('Failed to load available packlists: ' + error.message, 'Error');
+                this.$modal.alert('Failed to load available packlists: ' + error.message, 'Error');
             } finally {
                 this.isLoading = false;
             }

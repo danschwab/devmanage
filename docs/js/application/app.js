@@ -22,7 +22,8 @@ const App = {
     provide() {
         return {
             appContext: this,
-            hamburgerMenuRegistry: hamburgerMenuRegistry
+            hamburgerMenuRegistry: hamburgerMenuRegistry,
+            $modal: modalManager
         };
     },
     data() {

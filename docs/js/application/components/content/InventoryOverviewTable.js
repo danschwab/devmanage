@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, modalManager, ItemImageComponent } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, ItemImageComponent } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -11,6 +11,7 @@ export const InventoryOverviewTableComponent = {
             default: 'inventory'
         }
     },
+    inject: ['$modal'],
     data() {
         return {
             columns: [
@@ -117,11 +118,11 @@ export const InventoryOverviewTableComponent = {
         },
         handleCellEdit(rowIdx, colIdx, value) {
             // Read-only for overview table
-            modalManager.showAlert('This overview table is read-only. Navigate to specific categories to edit items.', 'Info');
+            this.$modal.alert('This overview table is read-only. Navigate to specific categories to edit items.', 'Info');
         },
         async handleSave() {
             // No save functionality for overview table
-            modalManager.showAlert('This overview table is read-only. No changes to save.', 'Info');
+            this.$modal.alert('This overview table is read-only. No changes to save.', 'Info');
         },
         async getItemImageUrl(itemNumber) {
             console.log('InventoryOverviewTable.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
