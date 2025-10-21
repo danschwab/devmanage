@@ -3,6 +3,49 @@
  */
 const DEFAULT_CACHE_EXPIRATION_MS = 5 * 60 * 1000;
 
+/**
+ * Lightweight event bus for cache invalidation notifications
+ */
+class CacheInvalidationBus {
+    static listeners = new Map();
+    
+    /**
+     * Subscribe to cache invalidation events for specific patterns
+     * @param {string} pattern - Pattern to match (e.g., 'api:getPackList' or 'api:extractItemNumber')
+     * @param {Function} callback - Function to call with {key, namespace, methodName, args}
+     */
+    static on(pattern, callback) {
+        if (!this.listeners.has(pattern)) {
+            this.listeners.set(pattern, []);
+        }
+        this.listeners.get(pattern).push(callback);
+    }
+    
+    /**
+     * Emit cache invalidation event
+     * @param {string} key - Full cache key that was invalidated
+     * @param {string} namespace - Namespace (e.g., 'api')
+     * @param {string} methodName - Method name (e.g., 'getPackList')
+     * @param {string} argsString - Serialized arguments
+     */
+    static emit(key, namespace, methodName, argsString) {
+        const eventData = { key, namespace, methodName, argsString };
+        
+        // Emit to exact pattern matches: 'namespace:methodName'
+        const pattern = `${namespace}:${methodName}`;
+        const callbacks = this.listeners.get(pattern) || [];
+        
+        if (callbacks.length > 0) {
+            callbacks.forEach(cb => cb(eventData));
+        }
+        
+        // Also emit to wildcard namespace listeners
+        const wildcardCallbacks = this.listeners.get(namespace) || [];
+        if (wildcardCallbacks.length > 0) {
+            wildcardCallbacks.forEach(cb => cb(eventData));
+        }
+    }
+}
 
 class CacheManager {
     static cache = new Map();
@@ -26,7 +69,6 @@ class CacheManager {
             return null;
         }
         
-        console.log(`[CacheManager] GET HIT: ${key}`);
         return entry.value;
     }
     
@@ -52,8 +94,6 @@ class CacheManager {
             value,
             expire: expirationMs ? Date.now() + expirationMs : null
         });
-        
-        console.log(`[CacheManager] SET: ${key} (expires in ${expirationMs}ms)`);
     }
     
     /**
@@ -97,7 +137,6 @@ class CacheManager {
             this.dependencies.set(dependentKey, new Set());
         }
         this.dependencies.get(dependentKey).add(dependencyKey);
-        console.log(`[CacheManager] DEPENDENCY: ${dependentKey} -> ${dependencyKey}`);
     }
     
     /**
@@ -108,7 +147,6 @@ class CacheManager {
     static invalidate(key, invalidationStack = new Set()) {
         // Prevent infinite recursion - if this key is already being invalidated, skip it
         if (invalidationStack.has(key)) {
-            console.log(`[CacheManager] SKIP INVALIDATE (already in progress): ${key}`);
             return;
         }
         
@@ -121,10 +159,13 @@ class CacheManager {
         // Also clean up any pending calls for this key
         if (this.pendingCalls.has(key)) {
             this.pendingCalls.delete(key);
-            console.log(`[CacheManager] CLEANED UP PENDING CALL: ${key}`);
         }
         
-        console.log(`[CacheManager] INVALIDATE: ${key}`);
+        // Emit invalidation event for reactive stores (only for 'api' namespace)
+        const [namespace, methodName, argsString] = key.split(':', 3);
+        if (namespace === 'api') {
+            CacheInvalidationBus.emit(key, namespace, methodName, argsString);
+        }
         
         // Find and invalidate all dependent entries
         const dependents = [];
@@ -134,8 +175,9 @@ class CacheManager {
             }
         }
         
+        // Log only when there are dependents (useful for debugging cascades)
         if (dependents.length > 0) {
-            console.log(`[CacheManager] INVALIDATE: ${key} has dependents: [${dependents.join(', ')}]`);
+            console.log(`[CacheManager] Invalidating ${key} → cascading to ${dependents.length} dependents`);
         }
         
         // Recursively invalidate dependents with the same invalidation stack
@@ -155,8 +197,6 @@ class CacheManager {
      * @param {string} prefix - Cache key prefix to match
      */
     static invalidateByPrefix(prefix) {
-        console.log(`[CacheManager] INVALIDATE BY PREFIX: ${prefix}`);
-        
         // Find all cache keys that start with the prefix
         const keysToInvalidate = [];
         for (const key of this.cache.keys()) {
@@ -212,6 +252,16 @@ class CacheManager {
 
     /**
      * Wraps all static methods of a class with caching and automatic dependency decorator
+     * 
+     * CRITICAL: Mutation methods must be excluded from wrapping to avoid circular dependencies.
+     * Mutation methods trigger cache invalidation through Database.setData() and must NOT:
+     * 1. Accept 'deps' as first parameter
+     * 2. Use deps.call() to invoke sub-functions
+     * 3. Be cached or wrapped by this method
+     * 
+     * Mutation methods are passed through directly without modification, preserving their
+     * original signatures and allowing them to trigger cache invalidation independently.
+     * 
      * @param {Object} targetClass - The class to wrap
      * @param {string} namespace - Cache namespace
      * @param {Array<string>} [mutationKeys] - Array of method names to skip wrapping (mutation methods)
@@ -225,9 +275,12 @@ class CacheManager {
             .filter(name => typeof targetClass[name] === 'function' && name !== 'constructor');
         
         methods.forEach(methodName => {
-            // Skip wrapping for mutation methods - call them directly
+            // Skip wrapping for mutation methods - pass them through directly without modification
+            // This preserves their original signatures (no deps parameter) and prevents circular dependencies
             if (mutationKeys.includes(methodName)) {
                 wrappedClass[methodName] = targetClass[methodName];
+                // Store method name for extractMethodName to retrieve
+                wrappedClass[methodName]._methodName = methodName;
                 return;
             }
             
@@ -246,7 +299,6 @@ class CacheManager {
                 // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
                 let promise = CacheManager.pendingCalls.get(cacheKey);
                 if (promise) {
-                    console.log(`[CacheManager] AWAITING PENDING: ${cacheKey}`);
                     return await promise;
                 }
                 
@@ -267,18 +319,13 @@ class CacheManager {
                     }
                 })();
                 
-
-                // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
-                let promiseFinalCheck = CacheManager.pendingCalls.get(cacheKey);
-                if (promiseFinalCheck) {
-                    console.log(`[CacheManager] AWAITING PENDING: ${cacheKey}`);
-                    return await promiseFinalCheck;
-                } else {
-                    // Store the promise immediately after creation
-                    CacheManager.pendingCalls.set(cacheKey, promise);
-                    return await promise;
-                }
+                // Store the promise immediately and return it
+                CacheManager.pendingCalls.set(cacheKey, promise);
+                return await promise;
             };
+            
+            // Store the method name on the wrapped function for extractMethodName to retrieve
+            wrappedClass[methodName]._methodName = methodName;
         });
         
         return wrappedClass;
@@ -287,5 +334,4 @@ class CacheManager {
 
 export const wrapMethods = CacheManager.wrapMethods;
 export const invalidateCache = CacheManager.invalidateCache;
-export const invalidateByPrefix = CacheManager.invalidateByPrefix;
-export const setCacheDependency = CacheManager.createDependencyDecorator;
+export { CacheInvalidationBus };

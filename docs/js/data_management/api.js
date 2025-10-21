@@ -1,112 +1,169 @@
-import { invalidateCache, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, extractItemNumber, extractQuantity } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, extractItemNumber, extractQuantity } from './index.js';
 
-// Define all API methods in a single class/object
-export const Requests = {
+/**
+ * CACHING ARCHITECTURE NOTES:
+ * 
+ * This API layer uses automatic caching via wrapMethods() decorator. Most methods are cached,
+ * but MUTATION methods are intentionally excluded from caching.
+ * 
+ * MUTATION METHODS (excluded from caching):
+ * - saveData
+ * - createNewTab
+ * - showTabs
+ * - hideTabs
+ * - saveInventoryTabData
+ * - savePackList
+ * - storeUserData
+ * 
+ * CRITICAL: Mutation methods must NOT:
+ * 1. Accept 'deps' as first parameter
+ * 2. Use deps.call() to invoke sub-functions
+ * 3. Be wrapped by wrapMethods()
+ * 
+ * WHY: Mutation methods trigger cache invalidation through Database.setData(). If they were
+ * cached or used deps.call(), it would create circular dependencies and break the invalidation
+ * cascade system. The cache chain is independent from the mutation chain.
+ * 
+ * The cache invalidation flow:
+ * 1. Mutation method calls Database.setData() (or similar)
+ * 2. Database layer calls invalidateCache() with dependency info
+ * 3. CacheManager cascades invalidation through dependency chain
+ * 4. CacheInvalidationBus emits events for 'api' namespace
+ * 5. ReactiveStores receive events and reload data
+ */
+
+// Define all API methods in a single class
+class Requests_uncached {
     /**
      * Fetch data from a table/tab as JS objects
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Table identifier (INVENTORY, PACK_LISTS, etc.)
      * @param {string} tabName - Tab name
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<Array<Object>>} - Array of JS objects
      */
-    fetchData: async (tableId, tabName, mapping = null) => {
-        return await Database.getData(tableId, tabName, mapping);
-    },
+    static async fetchData(deps, tableId, tabName, mapping = null) {
+        return await deps.call(Database.getData, tableId, tabName, mapping);
+    }
     
     /**
      * Save JS objects to a table/tab
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Triggers cache invalidation through Database.setData()
+     * 
      * @param {string} tableId - Table identifier
      * @param {string} tabName - Tab name
      * @param {Array<Object>} data - Array of JS objects to save
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>} - Success status
      */
-    saveData: async (tableId, tabName, data, mapping = null) => {
+    static async saveData(tableId, tabName, data, mapping = null) {
         return await Database.setData(tableId, tabName, data, mapping);
-    },
+    }
     
     /**
      * Get all available tabs for a table
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Table identifier
      * @param {boolean} includeHidden - Whether to include hidden tabs in the result
      * @returns {Promise<Array<{title: string, sheetId: number}>>}
      */
-    getAvailableTabs: async (tableId, includeHidden = false) => {
-        const tabs = await Database.getTabs(tableId);
+    static async getAvailableTabs(deps, tableId, includeHidden = false) {
+        const tabs = await deps.call(Database.getTabs, tableId);
         return includeHidden ? tabs : tabs.filter(tab => !tab.title.startsWith('_'));
-    },
+    }
     
     /**
      * Create a new tab based on a template
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls Database methods directly to avoid circular dependencies
+     * 
      * @param {string} tableId - Table identifier
      * @param {string} templateName - Name of the template tab
      * @param {string} newTabName - Name for the new tab
      * @returns {Promise<boolean>} - Success status
      */
-    createNewTab: async (tableId, templateName, newTabName) => {
+    static async createNewTab(tableId, templateName, newTabName) {
         const templateTab = await Database.findTabByName(tableId, templateName);
         if (!templateTab) throw new Error(`Template tab "${templateName}" not found`);
         await Database.createTab(tableId, templateTab, newTabName);
         return true;
-    },
+    }
     
     /**
      * Show specified tabs
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls Database methods directly to avoid circular dependencies
+     * 
      * @param {string} tableId - Table identifier
      * @param {string[]} tabNames - Names of tabs to show
      */
-    showTabs: async (tableId, tabNames) => {
+    static async showTabs(tableId, tabNames) {
         const allTabs = await Database.getTabs(tableId);
         const tabsToShow = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToShow.length === 0) return false;
         await Database.showTabs(tableId, tabsToShow);
         return true;
-    },
+    }
     
     /**
      * Hide specified tabs
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls Database methods directly to avoid circular dependencies
+     * 
      * @param {string} tableId - Table identifier
      * @param {string[]} tabNames - Names of tabs to hide
      */
-    hideTabs: async (tableId, tabNames) => {
+    static async hideTabs(tableId, tabNames) {
         const allTabs = await Database.getTabs(tableId);
         const tabsToHide = allTabs.filter(tab => tabNames.includes(tab.title));
         if (tabsToHide.length === 0) return false;
         await Database.hideTabs(tableId, tabsToHide);
         return true;
-    },
+    }
     
     /**
      * Find a tab by name
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Table identifier
      * @param {string} tabName - Name of the tab to find
      * @returns {Promise<{title: string, sheetId: number}|null>}
      */
-    findTab: async (tableId, tabName) => {
-        return await Database.findTabByName(tableId, tabName);
-    },
+    static async findTab(deps, tableId, tabName) {
+        return await deps.call(Database.findTabByName, tableId, tabName);
+    }
     
     /**
      * Get headers/schema from a sheet without loading all data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Table identifier
      * @param {string} tabName - Tab name
      * @returns {Promise<Array<string>>} - Array of column headers
      */
-    getHeaders: async (tableId, tabName) => {
-        const rawData = await Database.getData(tableId, tabName);
+    static async getHeaders(deps, tableId, tabName) {
+        const rawData = await deps.call(Database.getData, tableId, tabName);
         if (Array.isArray(rawData) && rawData.length > 0 && Array.isArray(rawData[0])) {
             return rawData[0]; // First row contains headers
         }
         return [];
-    },
+    }
     
     /**
      * Get item headers/schema from a packlist by examining actual data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - Packlist tab name
      * @returns {Promise<Array<string>>} - Array of item column headers
      */
-    getItemHeaders: async (tabName) => {
-        const packlistData = await Requests.getPackList(tabName);
+    static async getItemHeaders(deps, tabName) {
+        const packlistData = await deps.call(Requests.getPackList, tabName);
         if (Array.isArray(packlistData)) {
             // Find the first crate that has items with actual data
             for (const crate of packlistData) {
@@ -117,260 +174,290 @@ export const Requests = {
         }
         // Return default schema if no data found
         return ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
-    },
-    
-    /**
-     * Clear cache for specified resources
-     * @param {string} [namespace] - Optional namespace to clear cache for
-     * @param {string} [methodName] - Optional method name to clear cache for
-     * @param {Array} [args] - Optional args to clear specific cache entry
-     */
-    clearCache: async (namespace = null, methodName = null, args = null) => {
-        if (namespace && methodName && args) {
-            // Clear specific cache entry
-            invalidateCache([
-                { namespace, methodName, args }
-            ]);
-        } else if (namespace && methodName) {
-            // Clear all entries for a specific method (would need additional logic)
-            console.warn('Clearing by namespace and method not implemented yet');
-        } else {
-            // Clear all cache (would need additional logic)
-            console.warn('Clearing entire cache not implemented yet');
-        }
-        return true;
-    },
+    }
     
     /**
      * Executes a SQL-like query against sheet data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - The table identifier
      * @param {string} query - SQL-like query string
      * @returns {Promise<Array<Object>>} Query results
      */
-    queryData: async (tableId, query) => {
-        return await Database.queryData(tableId, query);
-    },
+    static async queryData(deps, tableId, query) {
+        return await deps.call(Database.queryData, tableId, query);
+    }
     
     /**
      * Extracts item quantities from a project's pack list
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Map of itemId to quantity
      */
-    getItemQuantities: async (projectIdentifier) => {
-        return await PackListUtils.extractItems(projectIdentifier);
-    },
+    static async getItemQuantities(deps, projectIdentifier) {
+        return await deps.call(PackListUtils.extractItems, projectIdentifier);
+    }
     
     /**
      * Check quantities and availability for items in a project
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Inventory status for all items in the project
      */
-    checkAvailability: async (projectIdentifier) => {
-        return await InventoryUtils.checkItemAvailability(projectIdentifier);
-    },
+    static async checkAvailability(deps, projectIdentifier) {
+        return await deps.call(InventoryUtils.checkItemAvailability, projectIdentifier);
+    }
     
     /**
      * Check item quantities for a project (with overlapping shows analysis)
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Detailed inventory status for all items
      */
-    checkItemQuantities: async (projectIdentifier) => {
-        return await PackListUtils.checkItemQuantities(projectIdentifier);
-    },
+    static async checkItemQuantities(deps, projectIdentifier) {
+        return await deps.call(PackListUtils.checkItemQuantities, projectIdentifier);
+    }
     
     /**
      * Get information about specific inventory items
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string|string[]} itemName - Item ID(s) to look up
      * @param {string|string[]} fields - Field(s) to retrieve
      * @returns {Promise<Array<Object>>} Item information
      */
-    getInventoryInfo: async (itemName, fields) => {
-        return await InventoryUtils.getItemInfo(itemName, fields);
-    },
+    static async getInventoryInfo(deps, itemName, fields) {
+        return await deps.call(InventoryUtils.getItemInfo, itemName, fields);
+    }
     
     /**
      * Get pack list content for a project
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @param {string} [itemColumnsStart="Pack"] - Column header where item data begins
      * @returns {Promise<Array<Object>>} Array of crate objects
      */
-    getPackList: async (projectIdentifier, itemColumnsStart = "Pack") => {
+    static async getPackList(deps, projectIdentifier, itemColumnsStart = "Pack") {
         // Return the array of crate objects directly
-        return await PackListUtils.getContent(projectIdentifier, itemColumnsStart);
-    },
+        return await deps.call(PackListUtils.getContent, projectIdentifier, itemColumnsStart);
+    }
     
     /**
      * Find projects that overlap with the given project or date range
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string|Object} parameters - Project identifier or date range parameters
      * @returns {Promise<string[]>} Array of overlapping project identifiers
      */
-    getOverlappingProjects: async (parameters) => {
-        return await ProductionUtils.getOverlappingShows(parameters);
-    },
+    static async getOverlappingProjects(deps, parameters) {
+        return await deps.call(ProductionUtils.getOverlappingShows, parameters);
+    }
     
     /**
      * Store user-specific application data
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls ApplicationUtils directly to trigger cache invalidation
+     * 
+     * @param {Array} data - Array of data to store
      * @param {string} username - The username to store data for
      * @param {string} id - The ID to associate with the data
-     * @param {Array} data - Array of data to store
      * @returns {Promise<boolean>} Success status
      */
-    storeUserData: async (data, username, id) => {
+    static async storeUserData(data, username, id) {
         return await ApplicationUtils.storeUserData(username, id, data);
-    },
+    }
     
     /**
      * Retrieve user-specific application data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} username - The username to retrieve data for
      * @param {string} id - The ID to retrieve data for
      * @returns {Promise<Array|null>} Array of data or null if not found
      */
-    getUserData: async (username, id) => {
-        return await ApplicationUtils.getUserData(username, id);
-    },
+    static async getUserData(deps, username, id) {
+        return await deps.call(ApplicationUtils.getUserData, username, id);
+    }
     
     /**
      * Get mapped inventory tab data (with default mapping and optional filters).
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
      * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<Array<Object>>}
      */
-    getInventoryTabData: async (tabOrItemName, mapping, filters) => {
-        return await InventoryUtils.getInventoryTabData(tabOrItemName, mapping, filters);
-    },
+    static async getInventoryTabData(deps, tabOrItemName, mapping, filters) {
+        return await deps.call(InventoryUtils.getInventoryTabData, tabOrItemName, mapping, filters);
+    }
     
     /**
      * Save mapped inventory tab data (with default mapping and optional filters).
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Triggers cache invalidation through InventoryUtils.saveInventoryTabData()
+     * 
      * @param {Array<Object>} mappedData - Array of mapped inventory objects
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
      * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<boolean>}
      */
-    saveInventoryTabData: async (mappedData, tabOrItemName, mapping, filters) => {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters) {
         return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters);
-    },
+    }
     
     /**
      * Save pack list data for a project
-     * @param {string} projectIdentifier - The project identifier (tab name)
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Triggers cache invalidation through PackListUtils.savePackList()
+     * 
      * @param {Array<Object>} crates - Array of crate objects (with keys/values, Items array)
+     * @param {string} projectIdentifier - The project identifier (tab name)
      * @returns {Promise<boolean>} Success status
      */
-    savePackList: async (crates, projectIdentifier) => {
+    static async savePackList(crates, projectIdentifier) {
+        console.log("API.savePackList called for project:", projectIdentifier);
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
         return await PackListUtils.savePackList(projectIdentifier, crates);
-    },
+    }
 
     /**
      * Get production schedule data for the table (all, or filtered by overlap params and optional filters).
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object|string} [parameters] - Optional: date range or show identifier
      * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<Array<Object>>}
      */
-    getProductionScheduleData: async (parameters = null, filters = null) => {
-        return await ProductionUtils.getOverlappingShows(parameters, filters);
-    },
+    static async getProductionScheduleData(deps, parameters = null, filters = null) {
+        return await deps.call(ProductionUtils.getOverlappingShows, parameters, filters);
+    }
 
     /**
      * Compute Identifier from client, year, and show data
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} showName - The name of the show
      * @param {string} clientName - The name of the client
      * @param {number} year - The year of the show
      * @returns {Promise<string>} The computed identifier
      */
-    computeIdentifier: async (showName, clientName, year) => {
+    static async computeIdentifier(deps, showName, clientName, year) {
         return ProductionUtils.computeIdentifier(showName, clientName, year);
-    },
+    }
 
     /**
      * Get item image URL from Google Drive
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemNumber - The item number to search for
      * @returns {Promise<string|null>} Direct image URL or null if not found
      */
-    getItemImageUrl: async (itemNumber) => {
-        console.log('API.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
-        return await Database.getItemImageUrl(itemNumber);
-    },
+    static async getItemImageUrl(deps, itemNumber) {
+        return await deps.call(Database.getItemImageUrl, itemNumber);
+    }
 
     /**
      * Get the tab name for a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemName - The item name/ID to search for
      * @returns {Promise<string|null>} Tab name or null if not found
      */
-    getTabNameForItem: async (itemName) => {
-        return await InventoryUtils.getTabNameForItem(itemName);
-    },
+    static async getTabNameForItem(deps, itemName) {
+        return await deps.call(InventoryUtils.getTabNameForItem, itemName);
+    }
 
     /**
      * Extract item number from text using regex
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} text - Text to search for item number
      * @returns {Promise<string|null>} Item number or null if not found
      */
-    extractItemNumber: async (text) => {
+    static async extractItemNumber(deps, text) {
         return extractItemNumber(text);
-    },
+    }
 
     /**
      * Extract quantity from text using regex
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} text - Text to search for quantity
      * @returns {Promise<number>} Quantity found or 1 if no quantity specified
      */
-    extractQuantity: async (text) => {
+    static async extractQuantity(deps, text) {
         return extractQuantity(text);
-    },
+    }
 
     /**
      * Compare item description with inventory description and return alert if mismatch
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object} itemData - Object containing itemNumber and description
      * @param {string} itemData.itemNumber - The item number to look up in inventory
      * @param {string} itemData.description - The current item description to compare
      * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
      */
-    checkDescriptionMatch: async (itemData) => {
+    static async checkDescriptionMatch(deps, itemData) {
         if (!itemData || !itemData.itemNumber || !itemData.description) {
             return null;
         }
-        return await PackListUtils.checkDescriptionMatch(itemData.itemNumber, itemData.description);
-    },
+        return await deps.call(PackListUtils.checkDescriptionMatch, itemData.itemNumber, itemData.description);
+    }
 
     /**
      * Get item quantities summary for a project (transformed to table format)
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<Array<Object>>} Array of item objects for table display
      */
-    getItemQuantitiesSummary: async (projectIdentifier) => {
+    static async getItemQuantitiesSummary(deps, projectIdentifier) {
         //sleep for a long time to simulate loading
-        return await PackListUtils.getItemQuantitiesSummary(projectIdentifier);
-    },
+        return await deps.call(PackListUtils.getItemQuantitiesSummary, projectIdentifier);
+    }
 
     /**
      * Get inventory quantity for a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemId - The item ID to look up
      * @returns {Promise<number>} Available inventory quantity
      */
-    getItemInventoryQuantity: async (itemId) => {
-        return await PackListUtils.getItemInventoryQuantity(itemId);
-    },
+    static async getItemInventoryQuantity(deps, itemId) {
+        return await deps.call(PackListUtils.getItemInventoryQuantity, itemId);
+    }
 
     /**
      * Get overlapping projects that use a specific item
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier
      * @param {string} itemId - Item ID to check for conflicts
      * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
      */
-    getItemOverlappingShows: async (currentProjectId, itemId) => {
-        return await PackListUtils.getItemOverlappingShows(currentProjectId, itemId);
-    },
+    static async getItemOverlappingShows(deps, currentProjectId, itemId) {
+        return await deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId);
+    }
 
     /**
      * Calculate remaining quantity for an item based on inventory, current usage, and overlapping shows
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier
      * @param {string} itemId - Item ID to calculate remaining quantity for
      * @returns {Promise<number>} Remaining available quantity
      */
-    calculateRemainingQuantity: async (currentProjectId, itemId) => {
-        return await PackListUtils.calculateRemainingQuantity(currentProjectId, itemId);
+    static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
+        return await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemId);
     }
-};
+}
+
+/**
+ * Wrap the API class with automatic caching and dependency tracking.
+ * 
+ * MUTATION METHODS ARE EXCLUDED from wrapping to prevent circular dependencies:
+ * - saveData: Triggers cache invalidation via Database.setData()
+ * - createNewTab: Modifies sheet structure via Database.createTab()
+ * - showTabs: Modifies sheet visibility via Database.showTabs()
+ * - hideTabs: Modifies sheet visibility via Database.hideTabs()
+ * - saveInventoryTabData: Triggers cache invalidation via InventoryUtils.saveInventoryTabData()
+ * - savePackList: Triggers cache invalidation via PackListUtils.savePackList()
+ * - storeUserData: Triggers cache invalidation via ApplicationUtils.storeUserData()
+ * 
+ * These methods are passed through without modification, preserving their original
+ * signatures (no deps parameter) and allowing them to trigger invalidation independently.
+ */
+export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData']);

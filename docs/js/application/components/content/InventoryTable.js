@@ -174,7 +174,7 @@ export const InventoryTableComponent = {
     },
     methods: {
         async handleRefresh() {
-            Requests.clearCache('database', 'getData', ['INVENTORY', this.tabTitle]);
+            // Reload inventory data (cache will be automatically invalidated)
             if (this.inventoryTableStore) {
                 await this.inventoryTableStore.load('Reloading inventory...');
             }

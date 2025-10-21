@@ -106,14 +106,7 @@ export const InventoryOverviewTableComponent = {
             }
         },
         async handleRefresh() {
-            // Clear all inventory caches
-            const tabs = await Requests.getAvailableTabs('INVENTORY');
-            const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
-            
-            for (const tab of inventoryTabs) {
-                Requests.clearCache('database', 'getData', ['INVENTORY', tab.title]);
-            }
-            
+            // Reload all inventory data (cache will be automatically invalidated)
             await this.loadAllInventoryData();
         },
         handleCellEdit(rowIdx, colIdx, value) {

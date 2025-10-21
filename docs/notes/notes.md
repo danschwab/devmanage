@@ -1,3 +1,10 @@
+is editing flag for packlists and inventories that locks other users out.
+whenever possible, rely on the caching system instead of data from live tables.
+extra spreadsheet MetaData column: save history {dateTime, userName, fields[], old values[]}
+batch order form: allows incrimenting / decrimenting a whole table at once
+match actual bematrix hardware to inventory bematrix item numbers
+description change recommendations for common or similar items that checks or aggregates history potentially?
+
 **Use Cases**
 We can have pack lists generated from Inventor
 We can know if there are item shortages as pack lists are generated
@@ -5,26 +12,23 @@ If we add bematrix stuff to pack lists, we can also check inventory qty of them
 If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
 We can get an inventory report of item quantities throughout the year
 
-
-
 **Minimum Features To Show:**
+
 - Export Basic Pack List from Inventor
-    - Categorize all booth parts according to Pack List Rules (preferences)
-    + Create new pack list in Google Sheets
-    + Input items into Google Sheets
+  - Categorize all booth parts according to Pack List Rules (preferences)
+  * Create new pack list in Google Sheets
+  * Input items into Google Sheets
     > (PLANNED) Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - Open Pack List in Web
-    + Get pack list data from web and display
-    - Allow addition of new crates
-    + Allow crate contents edit
-        + Allow addition of new items
-        + Allow deletion of items
-        + Allow moving items
-        + Allow editing item contents
-    - allow saving edits to google sheet
-    + warnings for items that are unavailable
-
-
+  - Get pack list data from web and display
+  * Allow addition of new crates
+  - Allow crate contents edit
+    - Allow addition of new items
+    - Allow deletion of items
+    - Allow moving items
+    - Allow editing item contents
+  * allow saving edits to google sheet
+  - warnings for items that are unavailable
 
 **To do:**
 add verification when closing a tab
@@ -44,17 +48,14 @@ Provide a user-friendly interface to locate and update item status
 Allow for item images to be uploaded for better identification
 Customizable User Dashboards
 
-
 **Learning:**
 Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
 
-
-
-
 **Regexes:**
 
 ##
+
 Split long description into component parts:
 1: "on top" or null
 2: count number or null
@@ -62,11 +63,8 @@ Split long description into component parts:
 4: remaining text
 
 @"^(?:(on top):)? ?(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+[a-zA-Z]?)? (.+)$"gmi
+
 ##
-
-
-
-
 
 **Element Examples:**
 
@@ -78,7 +76,6 @@ tag in a cell:
 <span class="table-cell-warning"><strong>Warning: </strong>Only 1 CAB-005 left in stock</span>
 </td><td>Booth # W3067</td></tr>
 
-
 modal:
 
 <div class="modal"> 
@@ -88,4 +85,3 @@ modal:
         <p>Content for the new tab goes here.</p>
     </div>
 </div>
-

@@ -301,7 +301,6 @@ export const PacklistTable = {
                     :loading-message="packlistTableStore && packlistTableStore.isLoading ? (packlistTableStore.loadingMessage || 'Loading data...') : (packlistTableStore && packlistTableStore.isAnalyzing ? (packlistTableStore.analysisMessage.loadingMessage || 'Analyzing data...') : loadingMessage)"
                     :loading-progress="packlistTableStore && packlistTableStore.isAnalyzing ? packlistTableStore.analysisProgress : -1"
                     :loading-message="loadingMessage"
-                    :loading-progress
                     :drag-id="'packlist-crates'"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
@@ -354,6 +353,7 @@ export const PacklistTable = {
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
+                                :isAnalyzing="packlistTableStore ? packlistTableStore.isAnalyzing : false"
                                 :loading-message="loadingMessage"
                                 :drag-id="'packlist-items'"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"

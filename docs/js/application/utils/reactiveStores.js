@@ -1,3 +1,5 @@
+import { CacheInvalidationBus } from '../index.js';
+
 /**
  * Reactive Store System with Configurable Analysis
  * 
@@ -132,11 +134,11 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.data = processedData;
             
             // Automatically run analysis if configured and data is loaded
-            if (this.analysisConfig && this.data.length > 0) {
-                // Run analysis after a small delay to allow UI to update
-                setTimeout(() => {
+            if (this.analysisConfig && this.data.length > 0 && !this.isAnalyzing) {
+                // Use nextTick to ensure Vue has updated the DOM and reactive properties
+                Vue.nextTick(() => {
                     this.runConfiguredAnalysis();
-                }, 100);
+                });
             }
         },
         setOriginalData(newOriginalData) {
@@ -205,28 +207,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 return false;
             } finally {
                 this.setLoading(false, '');
-                this.reloadOriginalData();
-            }
-        },
-        async reloadOriginalData() {
-            this.setLoading(true, 'Reloading data...');
-            if (typeof apiCall !== 'function') {
-                this.setOriginalData([]);
-                console.log('[ReactiveStore] reloadOriginalData: No API call provided');
-                return [];
-            }
-            try {
-                const result = await apiCall(...apiArgs);
-                // Handle null, undefined, or empty results by initializing empty arrays
-                const dataToSet = (result && Array.isArray(result)) ? result : [];
-                this.setOriginalData(dataToSet);
-                return this.originalData;
-            } catch (err) {
-                this.setOriginalData([]);
-                console.log('[ReactiveStore] reloadOriginalData: Failed', err);
-                return [];
-            } finally {
-                this.setLoading(false, '');
             }
         },
         // Mark/unmark for deletion by index using AppData
@@ -287,54 +267,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     });
                 }
                 this.data[parentIdx][key].push(row);
-            }
-        },
-        // AppData utility methods for managing arbitrary key-value pairs
-        setAppData(rowIdx, key, value) {
-            if (this.data[rowIdx]) {
-                if (!this.data[rowIdx].AppData) this.data[rowIdx].AppData = {};
-                this.data[rowIdx].AppData[key] = value;
-            }
-        },
-        getAppData(rowIdx, key = null) {
-            if (!this.data[rowIdx] || !this.data[rowIdx].AppData) return key ? null : {};
-            return key ? this.data[rowIdx].AppData[key] : this.data[rowIdx].AppData;
-        },
-        setNestedAppData(parentIdx, nestedKey, itemIdx, key, value) {
-            if (this.data[parentIdx] && 
-                Array.isArray(this.data[parentIdx][nestedKey]) && 
-                this.data[parentIdx][nestedKey][itemIdx]) {
-                if (!this.data[parentIdx][nestedKey][itemIdx].AppData) {
-                    this.data[parentIdx][nestedKey][itemIdx].AppData = {};
-                }
-                this.data[parentIdx][nestedKey][itemIdx].AppData[key] = value;
-            }
-        },
-        getNestedAppData(parentIdx, nestedKey, itemIdx, key = null) {
-            if (!this.data[parentIdx] || 
-                !Array.isArray(this.data[parentIdx][nestedKey]) || 
-                !this.data[parentIdx][nestedKey][itemIdx] ||
-                !this.data[parentIdx][nestedKey][itemIdx].AppData) {
-                return key ? null : {};
-            }
-            const appData = this.data[parentIdx][nestedKey][itemIdx].AppData;
-            return key ? appData[key] : appData;
-        },
-        // Clear analysis results and optionally re-run analysis
-        clearAndRerunAnalysis(rerun = true) {
-            if (!this.analysisConfig) {
-                console.warn('[ReactiveStore] clearAndRerunAnalysis: No analysis configuration found');
-                return;
-            }
-            
-            // Clear existing analysis results
-            clearAnalysisResults(this.data, this.analysisConfig);
-            
-            // Optionally re-run analysis
-            if (rerun && this.data.length > 0) {
-                setTimeout(() => {
-                    this.runConfiguredAnalysis();
-                }, 100);
             }
         },
         // Clear specific analysis results by result key or target column
@@ -633,6 +565,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     this.analysisMessage = '';
                 }, 2000);
             }
+        },
+        async handleInvalidation() {
+            // Reload both originalData and data from the server
+            await this.load('Reloading data due to invalidation...');
         }
     });
 
@@ -697,6 +633,42 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
 const reactiveStoreRegistry = Vue.reactive({});
 
 /**
+ * Helper to extract method name from API function
+ * @param {Function} apiFunction - The API function
+ * @returns {string|null} - Method name or null
+ */
+function extractMethodName(apiFunction) {
+    if (!apiFunction) return null;
+    
+    // Check if the function has _methodName property (set by wrapMethods)
+    if (apiFunction._methodName) {
+        return apiFunction._methodName;
+    }
+    
+    const funcStr = apiFunction.toString();
+    // For arrow functions that call Requests.methodName, extract the method name
+    // Matches patterns like: Requests.methodName( or Requests.methodName.call(
+    const requestsMatch = funcStr.match(/Requests\.(\w+)(?:\(|\.call\()/);
+    if (requestsMatch) {
+        return requestsMatch[1];
+    }
+    
+    // Try to extract method name from function
+    const match = funcStr.match(/function\s+(\w+)|^(\w+)\s*\(/);
+    if (match) {
+        return match[1] || match[2];
+    }
+    
+    // For arrow functions, check the name property
+    if (apiFunction.name) {
+        return apiFunction.name;
+    }
+    
+    console.warn(`[extractMethodName] Could not extract name from function`, funcStr.substring(0, 100));
+    return null;
+}
+
+/**
  * Returns a reactive store instance for the given apiCall and apiArgs.
  * If a store for the same apiCall/apiArgs exists, returns it.
  * Otherwise, creates a new store and registers it.
@@ -711,22 +683,69 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
     const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
     
     if (!reactiveStoreRegistry[key]) {
-        reactiveStoreRegistry[key] = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig);
+        const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig);
+        reactiveStoreRegistry[key] = store;
+        
+        // Setup cache invalidation subscriptions
+        setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig);
         
         if (autoLoad) {
             // Initial load with proper error handling for empty/null responses
-            reactiveStoreRegistry[key].load('Loading data...').catch(err => {
+            store.load('Loading data...').catch(err => {
                 console.warn('[ReactiveStore] Initial load failed:', err);
                 // Store will have empty arrays initialized, allowing dynamic property addition
             });
         } else {
             // Initialize with empty arrays to allow dynamic property addition
-            reactiveStoreRegistry[key].setOriginalData([]);
-            reactiveStoreRegistry[key].setData([]);
+            store.setOriginalData([]);
+            store.setData([]);
         }
     }
     
     return reactiveStoreRegistry[key];
+}
+
+/**
+ * Setup cache invalidation listeners for a reactive store
+ * @param {Object} store - The reactive store instance
+ * @param {Function} apiCall - The main API call function
+ * @param {Array} apiArgs - Arguments for the API call
+ * @param {Array} analysisConfig - Analysis configuration
+ */
+function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig) {
+    // Subscribe to main API call invalidations (triggers full reload)
+    const mainMethodName = extractMethodName(apiCall);
+    if (mainMethodName) {
+        const mainPattern = `api:${mainMethodName}`;
+        const storeArgs = JSON.stringify(apiArgs).replace(/^\[|\]$/g, '');
+        
+        CacheInvalidationBus.on(mainPattern, (eventData) => {
+            // Check if arguments match
+            const cachedArgs = eventData.argsString;
+            
+            if (cachedArgs === storeArgs) {
+                console.log(`[ReactiveStore] Cache invalidation received for ${mainMethodName} with matching args, reloading data`);
+                store.handleInvalidation();
+            }
+        });
+    }
+    
+    // Subscribe to analysis function invalidations (triggers re-analysis only)
+    if (analysisConfig && Array.isArray(analysisConfig)) {
+        analysisConfig.forEach((config, index) => {
+            const analysisMethodName = extractMethodName(config.apiFunction);
+            if (analysisMethodName) {
+                const analysisPattern = `api:${analysisMethodName}`;
+                
+                CacheInvalidationBus.on(analysisPattern, (eventData) => {
+                    // Clear and rerun only the specific analysis that was invalidated
+                    console.log(`[ReactiveStore] Analysis invalidation received for ${analysisMethodName}, re-running analysis step ${index + 1}`);
+                    store.clearSpecificAnalysisResults([config.resultKey || config.targetColumn]);
+                    store.runConfiguredAnalysis({ skipIfAnalyzed: false });
+                });
+            }
+        });
+    }
 }
 
 /**
@@ -749,50 +768,5 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
         targetColumn, // If set, results go to this column instead of AppData
         passFullItem // If true, pass entire item even when sourceColumns specified
     };
-}
-
-/**
- * Trigger re-analysis on an existing reactive store
- * @param {Function} apiCall - The API function used to identify the store
- * @param {Function} saveCall - The save function used to identify the store (can be null)
- * @param {Array} apiArgs - Arguments used to identify the store
- * @param {Array} analysisConfig - Analysis configuration used to identify the store
- * @param {Array} specificResultKeys - Optional: specific result keys/target columns to clear before re-analysis
- * @param {Object} analysisOptions - Optional: options to pass to runConfiguredAnalysis
- * @returns {Promise|boolean} - Returns the analysis promise if store found, false if not found
- */
-export function triggerStoreReanalysis(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, specificResultKeys = null, analysisOptions = {}) {
-    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
-    
-    if (!reactiveStoreRegistry[key]) {
-        console.warn('[ReactiveStore] triggerStoreReanalysis: Store not found for the given parameters');
-        return false;
-    }
-    
-    const store = reactiveStoreRegistry[key];
-    
-    if (specificResultKeys && Array.isArray(specificResultKeys)) {
-        // Clear specific analysis results
-        store.clearSpecificAnalysisResults(specificResultKeys);
-    } else {
-        // Clear all analysis results
-        store.clearAndRerunAnalysis(false); // Don't auto-rerun, we'll do it manually
-    }
-    
-    // Run analysis with provided options
-    return store.runConfiguredAnalysis(analysisOptions);
-}
-
-/**
- * Get an existing reactive store without creating a new one
- * @param {Function} apiCall - The API function used to identify the store
- * @param {Function} saveCall - The save function used to identify the store (can be null)
- * @param {Array} apiArgs - Arguments used to identify the store
- * @param {Array} analysisConfig - Analysis configuration used to identify the store
- * @returns {Object|null} - Returns the store if found, null if not found
- */
-export function getExistingReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null) {
-    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
-    return reactiveStoreRegistry[key] || null;
 }
 

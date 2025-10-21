@@ -524,6 +524,15 @@ export const TableComponent = {
         // Watch for changes to searchTerm prop and update internal searchValue
         searchTerm(newValue) {
             this.searchValue = newValue || '';
+        },
+        // Watch for changes to originalData prop and recompare dirty state
+        originalData: {
+            handler() {
+                this.$nextTick(() => {
+                    this.compareAllCellsDirty();
+                });
+            },
+            deep: true
         }
     },
     computed: {
@@ -1601,7 +1610,7 @@ export const TableComponent = {
                                     class="empty-message"
                                     style="text-align: center;"
                                 >
-                                    {{ emptyMessage }}
+                                    {{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}
                                 </td>
                             </tr>
                         </tbody>
