@@ -389,16 +389,55 @@ class Requests_uncached {
     /**
      * Compare item description with inventory description and return alert if mismatch
      * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Object} itemData - Object containing itemNumber and description
-     * @param {string} itemData.itemNumber - The item number to look up in inventory
-     * @param {string} itemData.description - The current item description to compare
+     * @param {Object} item - Item object from packlist
+     * @param {string} item['Extracted Item'] - The item number to look up in inventory
+     * @param {string} item.Description - The current item description to compare
+     * @param {string} item['Packing/shop notes'] - Alternative source for description
      * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
      */
-    static async checkDescriptionMatch(deps, itemData) {
-        if (!itemData || !itemData.itemNumber || !itemData.description) {
+    static async checkDescriptionMatch(deps, item) {
+        // Extract item number and description from the item object
+        const itemNumber = item['Extracted Item'];
+        const description = item.Description || item['Packing/shop notes'] || '';
+        
+        if (!itemNumber || !description) {
             return null;
         }
-        return await deps.call(PackListUtils.checkDescriptionMatch, itemData.itemNumber, itemData.description);
+        
+        // Get comparison result from business logic layer
+        const result = await deps.call(PackListUtils.checkDescriptionMatch, itemNumber, description);
+        
+        if (!result) {
+            return null;
+        }
+        
+        // Build alert object based on comparison result
+        if (!result.inventoryFound) {
+            return {
+                type: 'warning',
+                color: 'yellow',
+                clickable: false,
+                message: `No inventory description found for item ${result.itemNumber}`,
+                score: 0,
+                error: result.error
+            };
+        }
+        
+        // Return alert if match is less than 50%
+        if (result.score < 0.5) {
+            return {
+                type: 'mismatch',
+                color: 'orange',
+                clickable: true,
+                message: `Description mismatch for ${result.itemNumber}: ${Math.round(result.score * 100)}% match`,
+                score: result.score,
+                packlistDescription: result.packlistDescription,
+                inventoryDescription: result.inventoryDescription
+            };
+        }
+        
+        // Good match, no alert needed
+        return null;
     }
 
     /**
@@ -442,6 +481,60 @@ class Requests_uncached {
      */
     static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
         return await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemId);
+    }
+
+    /**
+     * Check inventory levels for an item and return alert if low/shortage
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} item - Item object from packlist
+     * @param {string} item['Extracted Item'] - The item number to check
+     * @param {string} currentProjectId - Current project identifier
+     * @returns {Promise<Object|null>} Alert object if inventory is low/shortage, null if sufficient
+     */
+    static async checkInventoryLevel(deps, item, currentProjectId) {
+        const itemNumber = item['Extracted Item'];
+        
+        if (!itemNumber || !currentProjectId) {
+            return null;
+        }
+        
+        try {
+            // Get remaining quantity from business logic layer
+            const remaining = await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemNumber);
+            
+            // Build alert object based on inventory level
+            if (remaining < 0) {
+                return {
+                    type: 'shortage',
+                    color: 'red',
+                    clickable: true,
+                    message: `Shortage: ${Math.abs(remaining)} units short`,
+                    remaining
+                };
+            } else if (remaining === 0) {
+                return {
+                    type: 'warning',
+                    color: 'orange',
+                    clickable: true,
+                    message: 'No buffer remaining',
+                    remaining
+                };
+            } else if (remaining <= 2) {
+                return {
+                    type: 'low-inventory',
+                    color: 'yellow',
+                    clickable: true,
+                    message: `Low: ${remaining} remaining`,
+                    remaining
+                };
+            }
+            
+            // Sufficient inventory, no alert needed
+            return null;
+        } catch (error) {
+            console.error(`Error checking inventory for ${itemNumber}:`, error);
+            return null;
+        }
     }
 }
 

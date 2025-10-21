@@ -7,7 +7,8 @@ import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig,
 export const PacklistItemsSummary = {
     components: { TableComponent, ItemImageComponent },
     props: {
-        projectIdentifier: { type: String, required: true }
+        projectIdentifier: { type: String, required: true },
+        containerPath: { type: String, default: '' }
     },
     inject: ['appContext'],
     data() {
@@ -117,9 +118,17 @@ export const PacklistItemsSummary = {
             if (this.itemsSummaryStore) {
                 await this.itemsSummaryStore.load('Refreshing item summary...');
             }
+        },
+
+        navigateBackToPacklist() {
+            if (this.projectIdentifier && this.appContext?.navigateToPath) {
+                this.appContext.navigateToPath('packlist/' + this.projectIdentifier);
+            }
         }
     },
     template: html`
+        <div class="packlist-items-summary">
+            
             <TableComponent
                 :data="tableData"
                 :columns="tableColumns"
@@ -136,6 +145,9 @@ export const PacklistItemsSummary = {
                 @refresh="handleRefresh"
             >
                 <template #table-header-area>
+                    <button @click="navigateBackToPacklist">
+                        Back
+                    </button>
                 </template>
                 <template #default="{ row, column }">
                     <div v-if="column.key === 'image'">
@@ -180,5 +192,6 @@ export const PacklistItemsSummary = {
                     </div>
                 </template>
             </TableComponent>
+        </div>
         `
 };

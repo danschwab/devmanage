@@ -1,9 +1,9 @@
 import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, extractItemNumber } from '../../index.js';
-import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    components: { TableComponent, PacklistItemsSummary },
+    components: { TableComponent },
+    inject: ['$modal'],
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
@@ -155,26 +155,24 @@ export const PacklistTable = {
 
                 // Compare descriptions and store alert in AppData if mismatch
                 createAnalysisConfig(
-                    (item) => {
-                        // This function receives the entire item and extracts needed data
-                        const itemNumber = item['Extracted Item'] || extractItemNumber(item.Description || item['Packing/shop notes'] || '');
-                        const description = item.Description || item['Packing/shop notes'] || '';
-                        
-                        if (!itemNumber) {
-                            return Promise.resolve(null);
-                        }
-                        
-                        return Requests.checkDescriptionMatch({
-                            itemNumber,
-                            description
-                        });
-                    },
+                    Requests.checkDescriptionMatch,
                     'descriptionAlert',
                     'Checking description match...',
                     ['Description', 'Packing/shop notes'], // Source columns for nested detection
                     [],
                     null, // No targetColumn - results go to AppData
-                    true // passFullItem = true to get entire item object
+                    true // passFullItem = true to get entire item object (API expects full item)
+                ),
+
+                // Check inventory levels and create alerts for low quantities
+                createAnalysisConfig(
+                    Requests.checkInventoryLevel,
+                    'inventoryAlert',
+                    'Checking inventory levels...',
+                    ['Description', 'Packing/shop notes'], // Source columns for nested detection (use existing columns, not generated ones)
+                    [this.tabName], // Additional parameter: current project ID
+                    null, // No targetColumn - results go to AppData
+                    true // passFullItem = true to get entire item object (API expects full item)
                 )
             ];
             
@@ -259,6 +257,127 @@ export const PacklistTable = {
                 this.$refs.mainTableComponent.checkDirtyCells();
             }
         },
+
+        /**
+         * Get card color for an alert
+         * Prioritizes alert.color property, falls back to type-based mapping
+         * @param {Object|string} alert - Alert object or type string
+         * @returns {string} Color class name for the card
+         */
+        getAlertColor(alert) {
+            // If alert is an object with a color property, use it
+            if (typeof alert === 'object' && alert.color) {
+                return alert.color;
+            }
+            
+            // Otherwise, map type to color
+            const type = typeof alert === 'object' ? alert.type : alert;
+            const colorMap = {
+                'error': 'red',
+                'mismatch': 'orange',
+                'warning': 'yellow',
+                'info': 'blue',
+                'success': 'green'
+            };
+            return colorMap[type] || 'red'; // Default to red if type is unknown
+        },
+
+        /**
+         * Handle click on an alert card
+         * @param {Object} item - The item row containing the alert
+         * @param {string} alertKey - The AppData key for this alert
+         * @param {Object} alert - The alert object that was clicked
+         */
+        handleAlertClick(item, alertKey, alert) {
+            // Handle different types of alerts
+            if (alertKey === 'descriptionAlert' || alert.type === 'mismatch') {
+                this.showDescriptionMismatchModal(item, alert);
+            } else if (alertKey === 'inventoryAlert' || ['shortage', 'warning', 'low-inventory'].includes(alert.type)) {
+                this.showInventoryAlertModal(item, alert);
+            } else {
+                // Generic alert display
+                this.$modal.alert(alert.message, alert.type || 'Info');
+            }
+        },
+
+        /**
+         * Show detailed modal for description mismatch alerts
+         * @param {Object} item - The item with the mismatch
+         * @param {Object} alert - The alert data
+         */
+        showDescriptionMismatchModal(item, alert) {
+            const itemNumber = item['Extracted Item'] || 'Unknown';
+            const matchPercentage = alert.score ? Math.round(alert.score * 100) : 0;
+            
+            const modalContent = `
+                <div style="text-align: left;">
+                    <h3>Description Mismatch Detected</h3>
+                    <p><strong>Item Number:</strong> ${itemNumber}</p>
+                    <p><strong>Match Score:</strong> ${matchPercentage}%</p>
+                    
+                    <div style="margin-top: 1rem;">
+                        <h4>Packlist Description:</h4>
+                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px; margin-bottom: 1rem;">
+                            ${alert.packlistDescription || item.Description || 'N/A'}
+                        </div>
+                        
+                        <h4>Inventory Description:</h4>
+                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px;">
+                            ${alert.inventoryDescription || 'N/A'}
+                        </div>
+                    </div>
+                    
+                    <p style="margin-top: 1rem; font-size: 0.9em; color: var(--color-text-secondary);">
+                        <em>Review the descriptions and update the packlist if needed.</em>
+                    </p>
+                </div>
+            `;
+            
+            this.$modal.alert(modalContent, 'Description Mismatch');
+        },
+
+        /**
+         * Show detailed modal for inventory alerts (shortage, low quantity, etc.)
+         * @param {Object} item - The item with the inventory issue
+         * @param {Object} alert - The alert data
+         */
+        async showInventoryAlertModal(item, alert) {
+            const itemNumber = item['Extracted Item'] || 'Unknown';
+            const itemQty = item['Extracted Qty'] || 'N/A';
+            const remaining = alert.remaining !== undefined ? alert.remaining : 'Unknown';
+            
+            // Determine alert severity for header
+            let severityTitle = 'Inventory Alert';
+            if (alert.type === 'shortage') {
+                severityTitle = 'Inventory Shortage';
+            } else if (alert.type === 'warning') {
+                severityTitle = 'Inventory Warning';
+            } else if (alert.type === 'low-inventory') {
+                severityTitle = 'Low Inventory';
+            }
+            
+            const modalContent = `
+                <div style="text-align: left;">
+                    <h3>${severityTitle}</h3>
+                    <p><strong>Item Number:</strong> ${itemNumber}</p>
+                    <p><strong>Needed for this project:</strong> ${itemQty}</p>
+                    
+                    <div style="margin-top: 1rem;">
+                        <h4>Inventory Status:</h4>
+                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px;">
+                            <p style="margin: 0.25rem 0;"><strong>Remaining after all allocations:</strong> ${remaining}</p>
+                        </div>
+                    </div>
+                    
+                    <p style="margin-top: 1rem; font-size: 0.9em; color: var(--color-text-secondary);">
+                        <em>${remaining < 0 ? 'This item is over-allocated. You may need to adjust quantities or source additional inventory.' : remaining === 0 ? 'This item has no buffer remaining after all allocations.' : 'This item has limited availability. Consider adjusting quantities if possible.'}</em>
+                    </p>
+                </div>
+            `;
+            
+            this.$modal.alert(modalContent, severityTitle);
+        },
+
         async handlePrint() {
             this.isPrinting = true;
             
@@ -321,8 +440,11 @@ export const PacklistTable = {
                                     Back to View
                                 </button>
                             </template>
-                            
-                            <button v-if="!editMode" @click="handlePrint">Print</button>
+                            <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null">
+                                Item Details
+                            </button>
+
+                            <button v-if="!editMode" @click="handlePrint" class="white">Print</button>
                         </div>
                     </template>
                     <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">
@@ -353,8 +475,6 @@ export const PacklistTable = {
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
-                                :isAnalyzing="packlistTableStore ? packlistTableStore.isAnalyzing : false"
-                                :loading-message="loadingMessage"
                                 :drag-id="'packlist-items'"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
                                 @new-row="() => { handleAddItem(rowIndex); }"
@@ -366,18 +486,25 @@ export const PacklistTable = {
                                 }"
                                 class="table-fixed"
                             >
+                                <!-- Default slot for cell content -->
                                 <template #default="{ row: itemRow, column: itemColumn }">
-                                    <div style="position: relative;">
-                                        <span>{{ itemRow[itemColumn.key] }}</span>
-                                        <!-- Show alert icon if there's a description mismatch for this item -->
-                                        <span 
-                                            v-if="itemRow.AppData?.descriptionAlert && itemColumn.key === 'Description'"
-                                            :title="itemRow.AppData.descriptionAlert.message"
-                                            style="color: #ff6b35; margin-left: 5px; cursor: help;"
-                                        >
-                                            ⚠️
-                                        </span>
-                                    </div>
+                                    <span>{{ itemRow[itemColumn.key] }}</span>
+                                </template>
+                                
+                                <!-- Cell-extra slot for alerts (proper location for warnings/notifications) -->
+                                <template #cell-extra="{ row: itemRow, column: itemColumn }">
+                                    <!-- Display all AppData alerts as colored cards (visible in both view and edit modes) -->
+                                    <template v-if="itemRow.AppData && itemColumn.key === 'Packing/shop notes'">
+                                        <template v-for="(value, key) in itemRow.AppData" :key="key">
+                                            <div 
+                                                v-if="value && typeof value === 'object' && value.message && !key.endsWith('_error')"
+                                                :class="['card', getAlertColor(value), { 'clickable': value.clickable }]"
+                                                @click="value.clickable ? handleAlertClick(itemRow, key, value) : null"
+                                            >
+                                                {{ value.message }}
+                                            </div>
+                                        </template>
+                                    </template>
                                 </template>
                             </TableComponent>
                         </template>
@@ -386,11 +513,6 @@ export const PacklistTable = {
                         </template>
                     </template>
                 </TableComponent>
-            </div>
-
-            <!-- Item Quantities Summary Section -->
-            <div v-if="tabName && !editMode" class="items-summary-section" style="margin-top: 2rem;">
-                <PacklistItemsSummary :project-identifier="tabName" />
             </div>
         </div>
     `

@@ -1,4 +1,5 @@
 import { Requests, html, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -57,7 +58,8 @@ export const PacklistMenuComponent = {
 export const PacklistContent = {
     components: {
         'packlist-table': PacklistTable,
-        'cards-grid': CardsComponent
+        'cards-grid': CardsComponent,
+        'PacklistItemsSummary': PacklistItemsSummary
     },
     props: {
         containerPath: String,
@@ -79,13 +81,17 @@ export const PacklistContent = {
             return 'packlist';
         },
         currentPacklist() {
-            // Handle direct packlist access: packlist/{name} or packlist/{name}/details
-            // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier, pathSegments[2] = 'details' (optional)
+            // Handle direct packlist access: packlist/{name} or packlist/{name}/details or packlist/{name}/edit
+            // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier, pathSegments[2] = 'details' or 'edit' (optional)
             return this.pathSegments[1] || '';
         },
         isEditView() {
             // Check if we're viewing the edit subview
             return this.pathSegments[2] === 'edit';
+        },
+        isDetailsView() {
+            // Check if we're viewing the details subview
+            return this.pathSegments[2] === 'details';
         },
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
@@ -153,11 +159,19 @@ export const PacklistContent = {
                 empty-message="No packlists available"
             />
             
-            <!-- Individual Packlist View (Read-only) -->
+            <!-- Individual Packlist View (Read-only or Edit mode) -->
             <packlist-table 
-                v-else
+                v-else-if="!isDetailsView"
                 :tab-name="currentPacklist"
                 :edit-mode="isEditView"
+                :container-path="containerPath"
+                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+            />
+            
+            <!-- Packlist Details View (Summary Table Only) -->
+            <PacklistItemsSummary 
+                v-else-if="isDetailsView"
+                :project-identifier="currentPacklist"
                 :container-path="containerPath"
                 @navigate-to-path="(event) => navigateToPath(event.targetPath)"
             />

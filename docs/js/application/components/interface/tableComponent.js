@@ -1395,53 +1395,53 @@ export const TableComponent = {
             @mouseleave="handleTableMouseLeave"
             @mousemove="handleTableMouseMove"
         >
-            <div class="table-container">
-                <!-- Error State -->
-                <div key="error-state" v-if="error" class="content-header red">
-                    <span>Error: {{ error }}</span>
-                </div>
+            <!-- Error State -->
+            <div key="error-state" v-if="error" class="content-header red">
+                <span>Error: {{ error }}</span>
+            </div>
 
-                <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" class="content-header">
-                    <!--h3 v-if="title">{{ title }}</h3-->
-                    <slot 
-                        name="table-header-area"
-                    ></slot>
-                    <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
-                    <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
-                        <input
-                            v-if="showSearch"
-                            type="text"
-                            v-model="searchValue"
-                            placeholder="Find..."
-                            class="search-input"
-                        />
-                        <button
-                            v-if="showSaveButton"
-                            @click="handleSave"
-                            :disabled="isLoading || !allowSaveEvent"
-                            class="save-button green"
-                        >
-                            Save
-                        </button>
-                        <button 
-                            v-if="showRefresh" 
-                            @click="handleRefresh" 
-                            :disabled="isLoading" 
-                            :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
-                        >
-                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
-                        </button>
-                        <button
-                            v-if="hamburgerMenuComponent"
-                            @click="handleHamburgerMenu"
-                            class="button-symbol white"
-                        >
-                            ☰
-                        </button>
-                    </div>
+            <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" class="content-header">
+                <!--h3 v-if="title">{{ title }}</h3-->
+                <slot 
+                    name="table-header-area"
+                ></slot>
+                <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
+                <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
+                    <input
+                        v-if="showSearch"
+                        type="text"
+                        v-model="searchValue"
+                        placeholder="Find..."
+                        class="search-input"
+                    />
+                    <button
+                        v-if="showSaveButton || allowSaveEvent"
+                        @click="handleSave"
+                        :disabled="isLoading || !allowSaveEvent"
+                        class="save-button green"
+                    >
+                        Save
+                    </button>
+                    <button 
+                        v-if="showRefresh" 
+                        @click="handleRefresh" 
+                        :disabled="isLoading" 
+                        :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
+                    >
+                        {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                    </button>
+                    <button
+                        v-if="hamburgerMenuComponent"
+                        @click="handleHamburgerMenu"
+                        class="button-symbol white"
+                    >
+                        ☰
+                    </button>
                 </div>
-                
-                <!-- Loading/Analysis Progress Indicator -->
+            </div>
+            
+            <!-- Loading/Analysis Progress Indicator -->
+            <transition name="fade">
                 <LoadingBarComponent
                     key="loading-progress"
                     v-if="isLoading || isAnalyzing"
@@ -1449,203 +1449,203 @@ export const TableComponent = {
                     :is-analyzing="isAnalyzing"
                     :percent-complete="loadingProgress"
                 />
-                
-                <!-- Data Table (always render if draggable, even when empty) -->
-                <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" class="table-wrapper">
-                    <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
-                        <colgroup>
-                            <col v-if="draggable" :style="{ width: '20px' }" />
-                            <col v-for="(column, colIdx) in visibleColumns" 
+            </transition>
+            
+            <!-- Data Table (always render if draggable, even when empty) -->
+            <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" class="table-wrapper">
+                <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
+                    <colgroup>
+                        <col v-if="draggable" :style="{ width: '20px' }" />
+                        <col v-for="(column, colIdx) in visibleColumns" 
+                            :key="column.key"
+                            :style="column.width ? 'width:' + column.width + 'px' : ''"
+                        />
+                        <col v-if="allowDetails" />
+                    </colgroup>
+                    <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
+                        <tr>
+                            <th v-if="draggable" class="spacer-cell"></th>
+                            <th 
+                                v-for="(column, colIdx) in visibleColumns" 
                                 :key="column.key"
-                                :style="column.width ? 'width:' + column.width + 'px' : ''"
-                            />
-                            <col v-if="allowDetails" />
-                        </colgroup>
-                        <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
-                            <tr>
-                                <th v-if="draggable" class="spacer-cell"></th>
-                                <th 
-                                    v-for="(column, colIdx) in visibleColumns" 
-                                    :key="column.key"
-                                    :class="getColumnFont(column)"
-                                >
-                                    <div>
-                                        <span>{{ column.label }}</span>
-                                        <button 
-                                            v-if="sortable"
-                                            @click="handleSort(column.key)"
-                                            :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
-                                        >
-                                            {{ getSortIcon(column.key) || '↕' }}
-                                        </button>
-                                    </div>
-                                </th>
-                                <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;">&#9432;</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
-                                <tr 
-                                    :class="{
-                                        'dragging': isRowDragging(idx),
-                                        'drag-over': false,
-                                        'selected': isRowSelected(idx),
-                                        'analyzing': isRowAnalyzing(idx),
-                                        'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
-                                        'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
-                                        'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
-                                    }"
-                                >
-                                    <td v-if="draggable"
-                                        class="row-drag-handle"
-                                        draggable="true"
-                                        @mousedown="handleDragHandleMouseDown(idx, $event)"
-                                    ></td>
-                                    <td 
-                                        v-for="(column, colIndex) in mainTableColumns" 
-                                        :key="column.key"
-                                        :colspan="column.colspan || 1"
-                                        :class="[getCellClass(row[column.key], column, idx, colIndex)]"
-                                        v-show="!hideSet.has(column.key)"
+                                :class="getColumnFont(column)"
+                            >
+                                <div>
+                                    <span>{{ column.label }}</span>
+                                    <button 
+                                        v-if="sortable"
+                                        @click="handleSort(column.key)"
+                                        :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        <div class="table-cell-container">
-                                            <!-- Editable number input -->
-                                            <input
-                                                v-if="column.editable && column.format === 'number'"    
-                                                type="number"
-                                                :value="row[column.key]"
-                                                @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                            />
-                                            <!-- Editable text div -->
-                                            <div
-                                                v-else-if="column.editable"
-                                                contenteditable="true"
-                                                :data-row-index="idx"
-                                                :data-col-index="colIndex"
-                                                @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                                class="table-edit-textarea"
-                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                                :ref="'editable_' + idx + '_' + colIndex"
-                                            ></div>
-                                            <!-- Non-editable content (slot) -->
-                                            <slot 
-                                                v-else 
-                                                :row="row" 
-                                                :rowIndex="idx" 
-                                                :column="column"
-                                                :cellRowIndex="idx"
-                                                :cellColIndex="colIndex"
-                                                :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
-                                            >
-                                                <span v-html="highlightSearchText(row[column.key], column)"></span>
-                                            </slot>
-                                            
-                                            <!-- Additional cell content slot (for warnings, etc.) -->
-                                            <slot 
-                                                name="cell-extra"
-                                                :row="row" 
-                                                :rowIndex="idx" 
-                                                :column="column"
-                                                :cellRowIndex="idx"
-                                                :cellColIndex="colIndex"
-                                                :isEditable="column.editable"
-                                            ></slot>
-                                        </div>
-                                    </td>
-                                    <td v-if="allowDetails" class="details-cell">
-                                        <button 
-                                            @click="toggleRowDetails(idx)"
-                                            :class="'button-symbol details-toggle ' + (isRowExpanded(idx) ? 'expanded' : 'collapsed')"
+                                        {{ getSortIcon(column.key) || '↕' }}
+                                    </button>
+                                </div>
+                            </th>
+                            <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;">&#9432;</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
+                            <tr 
+                                :class="{
+                                    'dragging': isRowDragging(idx),
+                                    'drag-over': false,
+                                    'selected': isRowSelected(idx),
+                                    'analyzing': isRowAnalyzing(idx),
+                                    'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
+                                    'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
+                                    'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
+                                }"
+                            >
+                                <td v-if="draggable"
+                                    class="row-drag-handle"
+                                    draggable="true"
+                                    @mousedown="handleDragHandleMouseDown(idx, $event)"
+                                ></td>
+                                <td 
+                                    v-for="(column, colIndex) in mainTableColumns" 
+                                    :key="column.key"
+                                    :colspan="column.colspan || 1"
+                                    :class="[getCellClass(row[column.key], column, idx, colIndex)]"
+                                    v-show="!hideSet.has(column.key)"
+                                >
+                                    <div class="table-cell-container">
+                                        <!-- Editable number input -->
+                                        <input
+                                            v-if="column.editable && column.format === 'number'"    
+                                            type="number"
+                                            :value="row[column.key]"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                        />
+                                        <!-- Editable text div -->
+                                        <div
+                                            v-else-if="column.editable"
+                                            contenteditable="true"
+                                            :data-row-index="idx"
+                                            :data-col-index="colIndex"
+                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                            class="table-edit-textarea"
+                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                            :ref="'editable_' + idx + '_' + colIndex"
+                                        ></div>
+                                        <!-- Non-editable content (slot) -->
+                                        <slot 
+                                            v-else 
+                                            :row="row" 
+                                            :rowIndex="idx" 
+                                            :column="column"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex"
+                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
                                         >
-                                            {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
-                                        </button>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Expandable details row with Vue transition -->
-                                <tr v-if="allowDetails" class="details-row-container">
-                                    <td v-if="draggable"></td>
-                                    <td :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" class="details-container">
+                                            <span v-html="highlightSearchText(row[column.key], column)"></span>
+                                        </slot>
                                         
-                                        <div v-if="isRowExpanded(idx)" class="details-content">
-                                            <!-- Auto-generated details from columns marked with details: true -->
-                                            <div v-if="detailsColumns.length > 0" class="auto-details">
-                                                <div class="details-grid">
-                                                    <div 
-                                                        v-for="column in detailsColumns" 
-                                                        :key="column.key"
-                                                        class="detail-item"
-                                                    >
-                                                        <label>{{ column.label }}:</label>
-                                                        <span>{{ formatCellValue(row[column.key], column) || '—' }}</span>
-                                                    </div>
+                                        <!-- Additional cell content slot (for warnings, etc.) -->
+                                        <slot 
+                                            name="cell-extra"
+                                            :row="row" 
+                                            :rowIndex="idx" 
+                                            :column="column"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex"
+                                            :isEditable="column.editable"
+                                        ></slot>
+                                    </div>
+                                </td>
+                                <td v-if="allowDetails" class="details-cell">
+                                    <button 
+                                        @click="toggleRowDetails(idx)"
+                                        :class="'button-symbol details-toggle ' + (isRowExpanded(idx) ? 'expanded' : 'collapsed')"
+                                    >
+                                        {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
+                                    </button>
+                                </td>
+                            </tr>
+                            
+                            <!-- Expandable details row with Vue transition -->
+                            <tr v-if="allowDetails" class="details-row-container">
+                                <td v-if="draggable"></td>
+                                <td :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" class="details-container">
+                                    
+                                    <div v-if="isRowExpanded(idx)" class="details-content">
+                                        <!-- Auto-generated details from columns marked with details: true -->
+                                        <div v-if="detailsColumns.length > 0" class="auto-details">
+                                            <div class="details-grid">
+                                                <div 
+                                                    v-for="column in detailsColumns" 
+                                                    :key="column.key"
+                                                    class="detail-item"
+                                                >
+                                                    <label>{{ column.label }}:</label>
+                                                    <span>{{ formatCellValue(row[column.key], column) || '—' }}</span>
                                                 </div>
                                             </div>
-                                            
-                                            <!-- Custom slot content -->
-                                            <slot 
-                                                name="row-details"
-                                                :row="row" 
-                                                :rowIndex="idx"
-                                                :isExpanded="isRowExpanded(idx)"
-                                                :detailsColumns="detailsColumns"
-                                            >
-                                                <!-- Fallback if no details columns and no custom slot -->
-                                                <div v-if="detailsColumns.length === 0" class="default-details">
-                                                    <h4>Row Details</h4>
-                                                    <pre>{{ JSON.stringify(row, null, 2) }}</pre>
-                                                </div>
-                                            </slot>
                                         </div>
-                                    </td>
-                                </tr>
-                            </template>
-                            
-                            <!-- Empty state row for draggable tables -->
-                            <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
-                                <td class="spacer-cell"></td>
-                                <td
-                                    :colspan="visibleColumns.length + (allowDetails ? 1 : 0)"
-                                    class="empty-message"
-                                    style="text-align: center;"
-                                >
-                                    {{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}
+                                        
+                                        <!-- Custom slot content -->
+                                        <slot 
+                                            name="row-details"
+                                            :row="row" 
+                                            :rowIndex="idx"
+                                            :isExpanded="isRowExpanded(idx)"
+                                            :detailsColumns="detailsColumns"
+                                        >
+                                            <!-- Fallback if no details columns and no custom slot -->
+                                            <div v-if="detailsColumns.length === 0" class="default-details">
+                                                <h4>Row Details</h4>
+                                                <pre>{{ JSON.stringify(row, null, 2) }}</pre>
+                                            </div>
+                                        </slot>
+                                    </div>
                                 </td>
                             </tr>
-                        </tbody>
-                        <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
-                            <tr>
-                                <td v-if="draggable" class="spacer-cell"></td>
-                                <td 
-                                    :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" 
-                                    class="new-row-button" 
-                                    @click="$emit('new-row')"
-                                >
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            
+                        </template>
+                        
+                        <!-- Empty state row for draggable tables -->
+                        <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
+                            <td class="spacer-cell"></td>
+                            <td
+                                :colspan="visibleColumns.length + (allowDetails ? 1 : 0)"
+                                class="empty-message"
+                                style="text-align: center;"
+                            >
+                                {{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
+                        <tr>
+                            <td v-if="draggable" class="spacer-cell"></td>
+                            <td 
+                                :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" 
+                                class="new-row-button" 
+                                @click="$emit('new-row')"
+                            >
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        
 
-                <!-- Loading State >
-                <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">
-                    <img src="images/loading.gif" alt="..."/>
-                    <p>{{ loadingMessage }}</p>
-                </div-->
+            <!-- Loading State >
+            <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">
+                <img src="images/loading.gif" alt="..."/>
+                <p>{{ loadingMessage }}</p>
+            </div-->
 
-                <!-- Data Summary -->
-                <div key="unsaved-changes" v-if="showFooter && allowSaveEvent" class="content-footer red">
-                    <p>There are unsaved changes in this table.</p>
-                </div>
-                <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
-                    <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
-                    <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
-                </div>
-                <div key="empty-state" v-else-if="showFooter" class="content-footer">
-                    <p>{{ emptyMessage }}</p>
-                </div>
+            <!-- Data Summary -->
+            <div key="unsaved-changes" v-if="showFooter && allowSaveEvent" class="content-footer red">
+                <p>There are unsaved changes in this table.</p>
+            </div>
+            <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
+                <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+            </div>
+            <div key="empty-state" v-else-if="showFooter" class="content-footer">
+                <p>{{ emptyMessage }}</p>
             </div>
         </div>
     `

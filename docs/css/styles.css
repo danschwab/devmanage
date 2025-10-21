@@ -1436,14 +1436,18 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 /* Loading Bar Component */
 .loading-bar-container {
-    display: flex;
+    position: relative;
 }
 
 .loading-bar-track {
-    flex: 1;
     height: 2px;
-    background-color: var(--color-border);
+    background: var(--color-border);
     overflow: hidden;
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: -2px;
+    z-index: 10;
 }
 
 .loading-bar-fill {

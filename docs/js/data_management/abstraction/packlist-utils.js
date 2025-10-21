@@ -269,11 +269,11 @@ class packListUtils_uncached {
     }
 
     /**
-     * Compare item description with inventory description and return alert if mismatch
+     * Compare item description with inventory description
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemNumber - The item number to look up in inventory
      * @param {string} description - The current item description to compare
-     * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
+     * @returns {Promise<Object|null>} Comparison result with score and descriptions, or null if no comparison possible
      */
     static async checkDescriptionMatch(deps, itemNumber, description) {
         if (!itemNumber || !description) {
@@ -286,8 +286,8 @@ class packListUtils_uncached {
             
             if (!inventoryDescription) {
                 return {
-                    type: 'warning',
-                    message: `No inventory description found for item ${itemNumber}`,
+                    itemNumber,
+                    inventoryFound: false,
                     score: 0
                 };
             }
@@ -299,26 +299,21 @@ class packListUtils_uncached {
             // Calculate similarity score
             const matchScore = GetParagraphMatchRating(cleanPacklistDesc, cleanInventoryDesc);
 
-            // Return alert if match is less than 50%
-            if (matchScore < 0.5) {
-                return {
-                    type: 'mismatch',
-                    message: `Description mismatch for ${itemNumber}: ${Math.round(matchScore * 100)}% match`,
-                    score: matchScore,
-                    packlistDescription: cleanPacklistDesc,
-                    inventoryDescription: cleanInventoryDesc
-                };
-            }
-
-            // Good match, no alert needed
-            return null;
+            return {
+                itemNumber,
+                inventoryFound: true,
+                score: matchScore,
+                packlistDescription: cleanPacklistDesc,
+                inventoryDescription: cleanInventoryDesc
+            };
 
         } catch (error) {
             console.error('Error checking description match:', error);
             return {
-                type: 'error',
-                message: `Error checking description for ${itemNumber}: ${error.message}`,
-                score: 0
+                itemNumber,
+                inventoryFound: false,
+                score: 0,
+                error: error.message
             };
         }
     }
