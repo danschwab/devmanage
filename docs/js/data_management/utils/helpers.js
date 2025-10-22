@@ -298,35 +298,43 @@ export const GetTopFuzzyMatch = FuzzyMatcher.GetTopFuzzyMatch;
  * @returns {number} Similarity score between 0 (no match) and 1 (exact match)
  */
 export function GetParagraphMatchRating(text1, text2) {
-    // Handle null/undefined/empty cases
-    if (!text1 || !text2) return 0;
-    if (text1 === text2) return 1;
-    
-    // Normalize texts: lowercase, remove extra whitespace and punctuation
-    const normalize = (text) => text.toLowerCase()
-        .replace(/[^\w\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    
-    const norm1 = normalize(text1);
-    const norm2 = normalize(text2);
-    
-    // Quick exact match check after normalization
-    if (norm1 === norm2) return 1;
-    
-    // Split into words and filter out short words
-    const words1 = norm1.split(' ').filter(w => w.length > 2);
-    const words2 = norm2.split(' ').filter(w => w.length > 2);
-    
-    if (words1.length === 0 || words2.length === 0) return 0;
-    
-    // Calculate word overlap using Jaccard similarity
-    const set1 = new Set(words1);
-    const set2 = new Set(words2);
-    const intersection = new Set([...set1].filter(word => set2.has(word)));
-    const union = new Set([...set1, ...set2]);
-    
-    return intersection.size / union.size;
+  // Handle null/undefined/empty cases
+  if (!text1 || !text2) return 0;
+  if (text1 === text2) return 1;
+  
+  // Normalize texts: lowercase, remove extra whitespace and punctuation
+  const normalize = (text) => {
+    let normalized = text.toLowerCase()
+      // Normalize dimensions like "3 x 4 x 5" to "3x4x5"
+      .replace(/(\d+)\s*[xX]\s*(\d+)(?:\s*[xX]\s*(\d+))?/g, '$1x$2$3')
+      // Normalize measurements like "2 ft" to "2ft", "3 cm" to "3cm", etc.
+      .replace(/(\d+)\s+(ft|in|cm|mm|m|yd|inch|inches|foot|feet)/g, '$1$2')
+      // Remove other punctuation
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalized;
+  };
+  
+  const norm1 = normalize(text1);
+  const norm2 = normalize(text2);
+  
+  // Quick exact match check after normalization
+  if (norm1 === norm2) return 1;
+  
+  // Split into words
+  const words1 = norm1.split(' ');
+  const words2 = norm2.split(' ');
+  
+  if (words1.length === 0 || words2.length === 0) return 0;
+  
+  // Calculate word overlap using Jaccard similarity
+  const set1 = new Set(words1);
+  const set2 = new Set(words2);
+  const intersection = new Set([...set1].filter(word => set2.has(word)));
+  const union = new Set([...set1, ...set2]);
+  
+  return intersection.size / union.size;
 }
 
 /**

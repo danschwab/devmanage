@@ -417,6 +417,59 @@ class packListUtils_uncached {
         
         return inventoryQuantity - totalUsed;
     }
+
+    /**
+     * Generate a summary description for a packlist
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} projectIdentifier - The project identifier (tab name)
+     * @returns {Promise<Object>} Summary object with { totalCrates, totalItems, itemCount }
+     */
+    static async getPacklistSummary(deps, projectIdentifier) {
+        try {
+            // Get pack list content (array of crate objects with Items arrays)
+            const crates = await deps.call(PackListUtils.getContent, projectIdentifier, "Pack");
+            
+            if (!crates || crates.length === 0) {
+                return {
+                    totalCrates: 0,
+                    totalItems: 0,
+                    itemCount: 0
+                };
+            }
+
+            let totalItems = 0;
+            const uniqueItems = new Set();
+
+            // Count items and unique item numbers
+            crates.forEach(crate => {
+                if (crate.Items && Array.isArray(crate.Items)) {
+                    crate.Items.forEach(item => {
+                        totalItems++;
+                        
+                        // Extract item number from Description or other fields
+                        const description = item.Description || item['Packing/shop notes'] || '';
+                        const itemMatch = description.match(/([A-Z]+-\d+)/);
+                        if (itemMatch) {
+                            uniqueItems.add(itemMatch[1]);
+                        }
+                    });
+                }
+            });
+
+            return {
+                totalCrates: crates.length,
+                totalItems: totalItems,
+                itemCount: uniqueItems.size
+            };
+        } catch (error) {
+            console.error(`Error generating packlist summary for ${projectIdentifier}:`, error);
+            return {
+                totalCrates: 0,
+                totalItems: 0,
+                itemCount: 0
+            };
+        }
+    }
 }
 
 export const PackListUtils = wrapMethods(packListUtils_uncached, 'packlist_utils', ['savePackList']);

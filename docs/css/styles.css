@@ -137,6 +137,9 @@ div#app-content div.empty-message {
 
 
 .container {
+    container-name: container-component;
+    container-type: inline-size;
+
     background: var(--background-color);
     box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: var(--radius-lg);
@@ -489,10 +492,6 @@ div#app-content div.empty-message {
     display: none;
     width: 50%;
 }
-.dashboard-card .tabs.dropdown-mode .tab-button {
-    display: none;
-    width: calc(100% - 1rem);
-}
 
 .tabs.dropdown-mode .tab-button.active {
     display: inline-block;
@@ -528,10 +527,6 @@ div#app-content div.empty-message {
     box-shadow: inset 0 -8px 16px -16px var(--color-shadow);
     border-radius: 0 0 var(--radius-md) var(--radius-md);
     max-width: 100%;
-}
-
-.dashboard-card .tabs.dropdown-mode.menu-open .new-tab-button {
-    width: calc(100% - 1rem);
 }
 
 
@@ -979,8 +974,24 @@ tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after {
     border-radius: 0;
     background: transparent;
     border: 0;
-    border-bottom: 1px
+    border-top: 1px;
+    box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
+
+.card .content-footer {
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px;
+    box-shadow: 0 -12px 14px -18px var(--color-shadow);
+}
+
+
+
+.card > .content {
+    padding: var(--padding-sm);
+}
+
 td .card {
     font-size: 11pt;
     padding: .25em;
@@ -1149,20 +1160,50 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 
-.hide {
-    display: none !important;
+/* Loading Bar Component */
+.loading-bar-container {
+    position: relative;
 }
 
+.loading-bar-track {
+    height: 2px;
+    background: var(--color-border);
+    overflow: hidden;
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: -2px;
+    z-index: 10;
+}
 
+.loading-bar-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+    transition: width 0.3s ease;
+}
 
+.loading-bar-fill.progress-indeterminate {
+    background: linear-gradient(90deg,
+            transparent,
+            var(--color-primary),
+            transparent);
+    animation: loading-bar-slide 2s infinite linear;
+}
 
+.loading-bar-fill.progress-determinate {
+    background-color: var(--color-primary);
+}
 
+@keyframes loading-bar-slide {
+    0% {
+        transform: translateX(-200%);
+    }
 
-
-
-
-
-
+    100% {
+        transform: translateX(400%);
+    }
+}
 
 
 
@@ -1269,6 +1310,14 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         padding: calc(var(--navbar-height) + 1rem) 0.5rem 0;
     }
 
+    .container.dashboard-card.wide {
+        width: var(--page-width-card);
+        grid-column: span 1;
+    }
+}
+
+
+@container container-component (width < 600px) {
     .tabs.dropdown-mode .tab-button,
     .tabs.dropdown-mode .tab-button.active,
     .tabs.dropdown-mode.menu-open .tab-button,
@@ -1279,12 +1328,6 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
     .tabs.dropdown-mode .new-tab-button{
         display: none;
-    }
-
-
-    .container.dashboard-card.wide {
-        width: var(--page-width-card);
-        grid-column: span 1;
     }
 
     .cards-grid {
@@ -1406,76 +1449,6 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     .items-table tr {
         page-break-inside: avoid;
     }
-
-    /*
-    table .table-wrapper, table {
-        overflow: visible;
-    }
-    table tr thead {
-        display: table-header-group !important;
-        position: sticky;
-    }
-    
-    table tr thead th {
-        display: table-cell !important;
-        position: relative;
-        top: -21px;
-        z-index: 1;
-    }
-    
-    table:has(table) > thead th:last-child {
-        display: none;
-    }
-    .items-table tr td {
-        position: relative;
-        box-shadow: 0 -200px white inset !important;
-        z-index: 2;
-    }*/
 }
 
 
-/* Loading Bar Component */
-.loading-bar-container {
-    position: relative;
-}
-
-.loading-bar-track {
-    height: 2px;
-    background: var(--color-border);
-    overflow: hidden;
-    position: absolute;
-    left: 1px;
-    right: 1px;
-    bottom: -2px;
-    z-index: 10;
-}
-
-.loading-bar-fill {
-    height: 100%;
-    background-color: var(--color-primary);
-    border-radius: var(--radius-sm);
-    transition: width 0.3s ease;
-}
-
-.loading-bar-fill.progress-indeterminate {
-    background: linear-gradient(
-        90deg,
-        transparent,
-        var(--color-primary),
-        transparent
-    );
-    animation: loading-bar-slide 2s infinite linear;
-}
-
-.loading-bar-fill.progress-determinate {
-    background-color: var(--color-primary);
-}
-
-@keyframes loading-bar-slide {
-    0% {
-        transform: translateX(-200%);
-    }
-    100% {
-        transform: translateX(400%);
-    }
-}

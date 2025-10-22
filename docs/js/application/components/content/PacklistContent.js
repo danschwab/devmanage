@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -68,8 +68,7 @@ export const PacklistContent = {
     inject: ['$modal'],
     data() {
         return {
-            availablePacklists: [], // loaded from API
-            isLoading: false
+            packlistsStore: null // Reactive store for packlists
         };
     },
     computed: {
@@ -96,6 +95,51 @@ export const PacklistContent = {
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
             return !!this.currentPacklist && this.currentPacklist !== 'packlist';
+        },
+        // Computed properties for cards grid
+        availablePacklists() {
+            if (!this.packlistsStore) return [];
+            const tabs = this.packlistsStore.data || [];
+            // Filter out TEMPLATE and format for CardsComponent
+            return tabs
+                .filter(tab => tab.title !== 'TEMPLATE')
+                .map(tab => {
+                    // Find any reactive stores for this packlist (regardless of analysis config)
+                    const matchingStores = findMatchingStores(
+                        Requests.getPackList,
+                        [tab.title]
+                    );
+                    
+                    // Check if any matching store has unsaved changes
+                    const hasUnsavedChanges = matchingStores.some(match => match.isModified);
+                    
+                    // Determine card styling based on store state
+                    const cardClass = hasUnsavedChanges ? 'red' : 'gray';
+                    const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
+                    
+                    // Use description from analysis or show loading placeholder
+                    const content = tab.description || '...';
+                    
+                    return {
+                        id: tab.sheetId,
+                        title: tab.title,
+                        content: content,
+                        cardClass: cardClass,
+                        contentFooter: contentFooter
+                    };
+                });
+        },
+        isLoading() {
+            return this.packlistsStore ? (this.packlistsStore.isLoading || this.packlistsStore.isAnalyzing) : false;
+        },
+        isAnalyzing() {
+            return this.packlistsStore ? this.packlistsStore.isAnalyzing : false;
+        },
+        loadingProgress() {
+            return this.packlistsStore ? this.packlistsStore.analysisProgress : -1;
+        },
+        analysisMessage() {
+            return this.packlistsStore ? this.packlistsStore.analysisMessage : 'Loading...';
         }
     },
     mounted() {
@@ -106,17 +150,14 @@ export const PacklistContent = {
                 active: {
                     displayName: 'Active Packlists',
                     dashboardTitle: 'Active Pack Lists',
-                    icon: 'play_arrow'
                 },
                 archived: {
                     displayName: 'Archived Packlists',
                     dashboardTitle: 'Archived Pack Lists',
-                    icon: 'archive'
                 },
                 templates: {
-                    displayName: 'Templates',
-                    dashboardTitle: 'Pack List Templates',
-                    icon: 'content_copy'
+                    displayName: 'Automation',
+                    dashboardTitle: 'Pack List Automation',
                 }
             }
         });
@@ -125,23 +166,35 @@ export const PacklistContent = {
         hamburgerMenuRegistry.registerMenu('packlist', {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
-                refreshCallback: this.loadAvailablePacklists
+                refreshCallback: this.handleRefresh
             }
         });
         
-        // Load available packlists
-        this.loadAvailablePacklists();
+        // Configure analysis for packlist descriptions
+        const analysisConfig = [
+            createAnalysisConfig(
+                Requests.getPacklistDescription,
+                'description',
+                'Loading packlist details...',
+                ['title'], // Use title as the source (project identifier)
+                [],
+                'description' // Store result in 'description' column
+            )
+        ];
+        
+        // Initialize reactive store for available packlists with analysis
+        this.packlistsStore = getReactiveStore(
+            Requests.getAvailableTabs,
+            null,
+            ['PACK_LISTS'],
+            analysisConfig
+        );
     },
     methods: {
-        async loadAvailablePacklists() {
-            this.isLoading = true;
-            try {
-                const tabs = await Requests.getAvailableTabs('PACK_LISTS');
-                this.availablePacklists = tabs.filter(tab => tab.title !== 'TEMPLATE');
-            } catch (error) {
-                this.$modal.alert('Failed to load available packlists: ' + error.message, 'Error');
-            } finally {
-                this.isLoading = false;
+        async handleRefresh() {
+            // Reload packlists data using reactive store
+            if (this.packlistsStore) {
+                await this.packlistsStore.load('Refreshing packlists...');
             }
         },
         handlePacklistSelect(packlistName) {
@@ -154,8 +207,10 @@ export const PacklistContent = {
                 v-if="!isViewingPacklist"
                 :items="availablePacklists"
                 :on-item-click="handlePacklistSelect"
-                :is-loading="isLoading"
-                loading-message="Loading available packlists..."
+                :is-loading="packlistsStore ? packlistsStore.isLoading : false"
+                :is-analyzing="isAnalyzing"
+                :loading-progress="loadingProgress"
+                :loading-message="analysisMessage"
                 empty-message="No packlists available"
             />
             

@@ -235,6 +235,40 @@ class productionUtils_uncached {
         };
     }
 
+    /**
+     * Get show details by project identifier
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
+     * @returns {Promise<Object|null>} Show details object or null if not found
+     */
+    static async getShowDetails(deps, identifier) {
+        if (!identifier) return null;
+
+        const tabName = "ProductionSchedule";
+        
+        // Get dynamic mapping from ProductionSchedule headers
+        const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+        
+        // Get all production schedule data
+        const data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
+        
+        // Find the row matching the identifier
+        for (const row of data) {
+            const showName = row.Show;
+            const client = row.Client;
+            const yearVal = row.Year;
+            
+            if (showName && client && yearVal) {
+                const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
+                if (computedIdentifier === identifier) {
+                    return row;
+                }
+            }
+        }
+        
+        return null;
+    }
+
 }
 
 export const ProductionUtils = wrapMethods(productionUtils_uncached, 'production_utils');

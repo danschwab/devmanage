@@ -347,6 +347,16 @@ class Requests_uncached {
     }
 
     /**
+     * Get show details by project identifier
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
+     * @returns {Promise<Object|null>} Show details object or null if not found
+     */
+    static async getShowDetails(deps, identifier) {
+        return await deps.call(ProductionUtils.getShowDetails, identifier);
+    }
+
+    /**
      * Get item image URL from Google Drive
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemNumber - The item number to search for
@@ -417,19 +427,21 @@ class Requests_uncached {
                 type: 'warning',
                 color: 'yellow',
                 clickable: false,
-                message: `No inventory description found for item ${result.itemNumber}`,
+                message: `No inventory description`,
                 score: 0,
                 error: result.error
             };
         }
-        
-        // Return alert if match is less than 50%
-        if (result.score < 0.5) {
+
+        const color = result.score < 0.5 ? 'orange' : 'yellow';
+
+        // Return alert if match is less than 100%
+        if (result.score < 1) {
             return {
                 type: 'mismatch',
-                color: 'orange',
+                color: color,
                 clickable: true,
-                message: `Description mismatch for ${result.itemNumber}: ${Math.round(result.score * 100)}% match`,
+                message: `Description mismatch`,
                 score: result.score,
                 packlistDescription: result.packlistDescription,
                 inventoryDescription: result.inventoryDescription
@@ -449,6 +461,36 @@ class Requests_uncached {
     static async getItemQuantitiesSummary(deps, projectIdentifier) {
         //sleep for a long time to simulate loading
         return await deps.call(PackListUtils.getItemQuantitiesSummary, projectIdentifier);
+    }
+
+    /**
+     * Get packlist summary description
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} projectIdentifier - The project identifier (tab name)
+     * @returns {Promise<string>} Formatted description string
+     */
+    static async getPacklistDescription(deps, projectIdentifier) {
+        const summary = await deps.call(PackListUtils.getPacklistSummary, projectIdentifier);
+        
+        if (summary.totalCrates === 0 && summary.totalItems === 0) {
+            return 'Empty packlist';
+        }
+
+        const parts = [];
+        
+        if (summary.totalCrates > 0) {
+            parts.push(`${summary.totalCrates} crate${summary.totalCrates !== 1 ? 's' : ''}`);
+        }
+        
+        if (summary.itemCount > 0) {
+            parts.push(`${summary.itemCount} unique item${summary.itemCount !== 1 ? 's' : ''}`);
+        }
+        
+        if (summary.totalItems > 0) {
+            parts.push(`${summary.totalItems} total item${summary.totalItems !== 1 ? 's' : ''}`);
+        }
+
+        return parts.join('<br>');
     }
 
     /**
@@ -516,7 +558,7 @@ class Requests_uncached {
                     type: 'warning',
                     color: 'orange',
                     clickable: true,
-                    message: 'No buffer remaining',
+                    message: 'No inventory buffer',
                     remaining
                 };
             } else if (remaining <= 2) {

@@ -14,6 +14,7 @@ export const PacklistItemsSummary = {
     data() {
         return {
             itemsSummaryStore: null,
+            showDetails: null, // Production schedule show details
             error: null,
             NavigationRegistry // Make NavigationRegistry available in template
         };
@@ -44,6 +45,20 @@ export const PacklistItemsSummary = {
         },
         tableData() {
             return this.itemsSummaryStore ? this.itemsSummaryStore.data : [];
+        },
+        // Navigation-based parameters from NavigationRegistry
+        navParams() {
+            // Use the containerPath as the primary source - it should be the full path
+            // If containerPath is empty/undefined, fall back to constructing from projectIdentifier
+            let path = this.containerPath;
+            if (!path && this.projectIdentifier) {
+                path = `packlist/${this.projectIdentifier}/details`;
+            }
+            return NavigationRegistry.getNavigationParameters(path || '');
+        },
+        // Get search term from URL parameters
+        initialSearchTerm() {
+            return this.navParams?.searchTerm || '';
         }
     },
     watch: {
@@ -52,6 +67,7 @@ export const PacklistItemsSummary = {
             handler(newProjectId) {
                 if (newProjectId) {
                     this.initializeStore();
+                    this.loadShowDetails();
                 }
             }
         }
@@ -122,18 +138,51 @@ export const PacklistItemsSummary = {
 
         navigateBackToPacklist() {
             if (this.projectIdentifier && this.appContext?.navigateToPath) {
-                this.appContext.navigateToPath('packlist/' + this.projectIdentifier);
+                this.appContext.navigateToPath(`packlist/${this.projectIdentifier}`);
+            }
+        },
+
+        async loadShowDetails() {
+            if (!this.projectIdentifier) return;
+            
+            try {
+                this.showDetails = await Requests.getShowDetails(this.projectIdentifier);
+            } catch (err) {
+                console.error('Error loading show details:', err);
+                this.showDetails = null;
             }
         }
     },
     template: html`
         <div class="packlist-items-summary">
+            <!-- Show Details Header -->
+            <div v-if="showDetails" class="show-details-header card white">
+                <h3>{{ showDetails.Show }}</h3>
+                <div class="show-details-grid">
+                    <div v-if="showDetails.Client">
+                        <strong>Client:</strong> {{ showDetails.Client }}
+                    </div>
+                    <div v-if="showDetails.Year">
+                        <strong>Year:</strong> {{ showDetails.Year }}
+                    </div>
+                    <div v-if="showDetails.Ship">
+                        <strong>Ship:</strong> {{ showDetails.Ship }}
+                    </div>
+                    <div v-if="showDetails.Return">
+                        <strong>Return:</strong> {{ showDetails.Return }}
+                    </div>
+                    <div v-if="showDetails.Location">
+                        <strong>Location:</strong> {{ showDetails.Location }}
+                    </div>
+                </div>
+            </div>
             
             <TableComponent
                 :data="tableData"
                 :columns="tableColumns"
                 :hide-columns="['tabName']"
                 :show-search="true"
+                :search-term="initialSearchTerm"
                 :hide-rows-on-search="false"
                 :readonly="true"
                 :is-loading="itemsSummaryStore ? itemsSummaryStore.isLoading : false"

@@ -1,12 +1,14 @@
-import { html } from '../../index.js';
+import { html, LoadingBarComponent } from '../../index.js';
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
+    components: { LoadingBarComponent },
     props: {
         items: {
             type: Array,
             required: true,
-            // Expected format: [{ id, title, content?, onClick?, cardClass? }]
+            // Expected format: [{ id, title, content?, contentFooter?, onClick?, cardClass? }]
+            // content and contentFooter support HTML (rendered with v-html)
             // cardClass options: 'gray' (default), 'blue', 'green', 'yellow', 'red'
         },
         onItemClick: {
@@ -16,6 +18,14 @@ export const CardsComponent = {
         isLoading: {
             type: Boolean,
             default: false
+        },
+        isAnalyzing: {
+            type: Boolean,
+            default: false
+        },
+        loadingProgress: {
+            type: Number,
+            default: -1
         },
         loadingMessage: {
             type: String,
@@ -32,10 +42,15 @@ export const CardsComponent = {
     },
     computed: {
         shouldShowLoading() {
-            return this.isLoading || (!this.items || this.items.length === 0);
+            // Only show loading spinner if actually loading AND no items yet
+            return this.isLoading && (!this.items || this.items.length === 0);
         },
         shouldShowEmpty() {
-            return !this.isLoading && this.items && this.items.length === 0;
+            return !this.isLoading && !this.isAnalyzing && this.items && this.items.length === 0;
+        },
+        shouldShowCards() {
+            // Show cards if we have items, even during analysis
+            return this.items && this.items.length > 0;
         }
     },
     methods: {
@@ -57,8 +72,18 @@ export const CardsComponent = {
     },
     template: html`
         <div class="cards-component">
-            <!-- Loading State -->
-            <div v-if="shouldShowLoading && isLoading" class="loading-message">
+            <!-- Loading/Analysis Progress Indicator -->
+            <transition name="fade">
+                <LoadingBarComponent
+                    v-if="isLoading || isAnalyzing"
+                    :is-loading="isLoading"
+                    :is-analyzing="isAnalyzing"
+                    :percent-complete="loadingProgress"
+                />
+            </transition>
+            
+            <!-- Initial Loading State (no items yet) -->
+            <div v-if="shouldShowLoading" class="loading-message">
                 <img src="images/loading.gif" alt="Loading..."/>
                 <p>{{ loadingMessage }}</p>
             </div>
@@ -68,8 +93,8 @@ export const CardsComponent = {
                 <p>{{ emptyMessage }}</p>
             </div>
             
-            <!-- Cards Grid -->
-            <div v-else class="cards-grid">
+            <!-- Cards Grid (shows during analysis with progressive updates) -->
+            <div v-else-if="shouldShowCards" class="cards-grid">
                 <div
                     v-for="item in items"
                     :key="item.id || item.title"
@@ -83,7 +108,10 @@ export const CardsComponent = {
                         <h3>{{ item.title }}</h3>
                     </div>
                     <div class="content" v-if="item.content">
-                        <p>{{ item.content }}</p>
+                        <div v-html="item.content"></div>
+                    </div>
+                    <div class="content-footer" v-if="item.contentFooter">
+                        <div v-html="item.contentFooter"></div>
                     </div>
                 </div>
             </div>

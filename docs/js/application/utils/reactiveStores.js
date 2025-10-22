@@ -124,6 +124,26 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         analysisProgress: 0,
         analysisMessage: '',
         analysisConfig,
+        
+        // Computed property to check if data has been modified
+        get isModified() {
+            if (!this.data || !this.originalData) return false;
+            if (this.data.length === 0 && this.originalData.length === 0) return false;
+            
+            // Create clean copies without AppData and analysis columns for comparison
+            const cleanCurrent = removeAppData(
+                JSON.parse(JSON.stringify(this.data)), 
+                this.analysisConfig
+            );
+            const cleanOriginal = removeAppData(
+                JSON.parse(JSON.stringify(this.originalData)), 
+                this.analysisConfig
+            );
+            
+            // Deep comparison using JSON serialization
+            return JSON.stringify(cleanCurrent) !== JSON.stringify(cleanOriginal);
+        },
+        
         setData(newData) {
             // Deep clone and initialize AppData
             const processedData = appDataInit(JSON.parse(JSON.stringify(newData)));
@@ -631,6 +651,58 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
 
 // Central registry for reactive stores, keyed by apiCall.toString() + JSON.stringify(apiArgs)
 const reactiveStoreRegistry = Vue.reactive({});
+
+/**
+ * Find stores that match the given criteria (partial matching)
+ * Useful for finding stores when you don't know the exact analysis config
+ * @param {Function} apiCall - The API function used to create the store
+ * @param {Array} apiArgs - Arguments passed to the API function
+ * @returns {Array} Array of matching store objects with { key, store, isModified }
+ */
+export function findMatchingStores(apiCall, apiArgs = []) {
+    if (!apiCall) return [];
+    
+    const apiCallStr = apiCall.toString();
+    const apiArgsStr = JSON.stringify(apiArgs);
+    const matches = [];
+    
+    // Search through all registered stores
+    for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
+        // Check if the key starts with the apiCall and contains the apiArgs
+        if (key.includes(apiCallStr) && key.includes(apiArgsStr)) {
+            matches.push({
+                key,
+                store,
+                isModified: store.isModified || false
+            });
+        }
+    }
+    
+    return matches;
+}
+
+/**
+ * Check if a reactive store exists and get its modification status
+ * @param {Function} apiCall - The API function used to create the store
+ * @param {Function} saveCall - The save function (optional, can be null)
+ * @param {Array} apiArgs - Arguments passed to the API function
+ * @param {Array} analysisConfig - Analysis configuration (optional)
+ * @returns {Object|null} { exists: boolean, isModified: boolean, store: Object } or null if not found
+ */
+export function getStoreStatus(apiCall, saveCall = null, apiArgs = [], analysisConfig = null) {
+    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+    const store = reactiveStoreRegistry[key];
+    
+    if (!store) {
+        return { exists: false, isModified: false, store: null };
+    }
+    
+    return {
+        exists: true,
+        isModified: store.isModified || false,
+        store: store
+    };
+}
 
 /**
  * Helper to extract method name from API function

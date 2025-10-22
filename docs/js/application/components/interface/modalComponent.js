@@ -4,23 +4,25 @@ import { html } from '../../index.js';
 const AlertComponent = {
     props: ['message'],
     mounted() {
-        setTimeout(() => this.$emit('close-modal'), 1300);
+        setTimeout(() => this.$emit('close-modal'), 3000);
     },
-    template: html`<div style="text-align: center; padding: 1rem;"><p>{{ message }}</p></div>`
+    template: html`<div style="text-align: center; padding: 1rem;"><div v-html="message"></div></div>`
 };
 
 // Simple confirm component
 const ConfirmComponent = {
-    props: ['message', 'onConfirm', 'onCancel'],
+    props: ['message', 'onConfirm', 'onCancel', 'confirmText', 'cancelText'],
     methods: {
         confirm() { this.onConfirm?.(); this.$emit('close-modal'); },
         cancel() { this.onCancel?.(); this.$emit('close-modal'); }
     },
     template: html`
         <div style="text-align: center; padding: 1rem;">
-            <p>{{ message }}</p>
-            <button @click="confirm">Confirm</button>
-            <button @click="cancel">Cancel</button>
+            <div v-html="message"></div>
+            <div style="margin-top: 1rem;">
+                <button @click="confirm">{{ confirmText || 'Ok' }}</button>
+                <button @click="cancel">{{ cancelText || 'Cancel' }}</button>
+            </div>
         </div>
     `
 };
@@ -95,8 +97,8 @@ export class ModalManager {
         return this._create(title, AlertComponent, { message });
     }
 
-    confirm(message, onConfirm, onCancel = null, title = 'Confirm') {
-        return this._create(title, ConfirmComponent, { message, onConfirm, onCancel });
+    confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null) {
+        return this._create(title, ConfirmComponent, { message, onConfirm, onCancel, confirmText, cancelText });
     }
 
     image(imageUrl, title = 'Image') {

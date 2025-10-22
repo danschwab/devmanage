@@ -13,8 +13,6 @@ export const PacklistTable = {
     data() {
         return {
             packlistTableStore: null,
-            saveDisabled: true,
-            dirty: false,
             isPrinting: false,
             error: null,
             databaseItemHeaders: null,
@@ -102,6 +100,10 @@ export const PacklistTable = {
         loadingMessage() {
             return this.packlistTableStore ? (this.packlistTableStore.loadingMessage || 'Loading data...') : 'Loading data...';
         },
+        // Check if data has been modified (uses reactive store's computed property)
+        isDirty() {
+            return this.packlistTableStore?.isModified || false;
+        },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
             // Use the containerPath as the primary source - it should be the full path
@@ -113,7 +115,16 @@ export const PacklistTable = {
             return NavigationRegistry.getNavigationParameters(path || '');
         }
     },
-    watch: {},
+    watch: {
+        // Auto-switch to edit mode when data becomes dirty in view mode
+        isDirty(newValue) {
+            if (newValue && !this.editMode && this.tabName) {
+                // Navigate to edit mode when data becomes dirty
+                const editPath = `packlist/${this.tabName}/edit`;
+                this.$emit('navigate-to-path', { targetPath: editPath });
+            }
+        }
+    },
     async mounted() {
         // Initialize store if tabName is available
         if (this.tabName) {
@@ -203,8 +214,6 @@ export const PacklistTable = {
             }
         },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
-            this.dirty = true;
-            this.saveDisabled = false;
             if (type === 'main') {
                 const colKey = this.mainColumns[colIdx]?.key;
                 if (colKey && this.mainTableData[rowIdx]) {
@@ -226,8 +235,6 @@ export const PacklistTable = {
                     Items: []
                 });
             }
-            this.dirty = true;
-            this.saveDisabled = false;
         },
         handleAddItem(crateIdx) {
             const itemHeaders = this.itemHeaders;
@@ -242,8 +249,6 @@ export const PacklistTable = {
             ) {
                 this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj);
             }
-            this.dirty = true;
-            this.saveDisabled = false;
         },
         async handleSave() {
             // Only use the store's save method if this is called from the on-save event
@@ -293,7 +298,7 @@ export const PacklistTable = {
             if (alertKey === 'descriptionAlert' || alert.type === 'mismatch') {
                 this.showDescriptionMismatchModal(item, alert);
             } else if (alertKey === 'inventoryAlert' || ['shortage', 'warning', 'low-inventory'].includes(alert.type)) {
-                this.showInventoryAlertModal(item, alert);
+                this.navigateToInventoryDetails(item);
             } else {
                 // Generic alert display
                 this.$modal.alert(alert.message, alert.type || 'Info');
@@ -307,75 +312,67 @@ export const PacklistTable = {
          */
         showDescriptionMismatchModal(item, alert) {
             const itemNumber = item['Extracted Item'] || 'Unknown';
+            const extractedQty = item['Extracted Qty'] || '1';
             const matchPercentage = alert.score ? Math.round(alert.score * 100) : 0;
+            const inventoryDescription = alert.inventoryDescription || 'N/A';
             
             const modalContent = `
                 <div style="text-align: left;">
-                    <h3>Description Mismatch Detected</h3>
-                    <p><strong>Item Number:</strong> ${itemNumber}</p>
-                    <p><strong>Match Score:</strong> ${matchPercentage}%</p>
+                    <em>Click "Update Description" to replace the packlist description with the inventory description.</em>
+
+                    <p style="margin-top:1rem;">Current Description:</p>
+                    <div class="card orange">
+                        ${alert.packlistDescription || item.Description || 'N/A'}
+                    </div>
                     
-                    <div style="margin-top: 1rem;">
-                        <h4>Packlist Description:</h4>
-                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px; margin-bottom: 1rem;">
-                            ${alert.packlistDescription || item.Description || 'N/A'}
-                        </div>
-                        
-                        <h4>Inventory Description:</h4>
-                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px;">
-                            ${alert.inventoryDescription || 'N/A'}
-                        </div>
+                    <p style="margin-top:1rem;">Inventory Description:</p>
+                    <div class="card purple">
+                        ${inventoryDescription}
                     </div>
                     
                     <p style="margin-top: 1rem; font-size: 0.9em; color: var(--color-text-secondary);">
-                        <em>Review the descriptions and update the packlist if needed.</em>
+                        
                     </p>
                 </div>
             `;
             
-            this.$modal.alert(modalContent, 'Description Mismatch');
+            // Show confirm modal with custom action button
+            this.$modal.confirm(
+                modalContent,
+                () => {
+                    // On confirm: Update the description field with the formatted inventory description
+                    const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
+                    
+                    // Update the item's Description field
+                    item.Description = newDescription;
+                    
+                    // Show success message (save will be enabled automatically via isModified)
+                    this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
+                },
+                () => {
+                    // On cancel: do nothing
+                },
+                `Description Mismatch ${itemNumber}`, // Title
+                'Update Description', // Custom confirm button text
+                'Cancel' // Custom cancel button text
+            );
         },
 
         /**
-         * Show detailed modal for inventory alerts (shortage, low quantity, etc.)
-         * @param {Object} item - The item with the inventory issue
-         * @param {Object} alert - The alert data
+         * Navigate to inventory details page for an item
+         * @param {Object} item - The item to view details for
          */
-        async showInventoryAlertModal(item, alert) {
-            const itemNumber = item['Extracted Item'] || 'Unknown';
-            const itemQty = item['Extracted Qty'] || 'N/A';
-            const remaining = alert.remaining !== undefined ? alert.remaining : 'Unknown';
+        navigateToInventoryDetails(item) {
+            const itemNumber = item['Extracted Item'];
             
-            // Determine alert severity for header
-            let severityTitle = 'Inventory Alert';
-            if (alert.type === 'shortage') {
-                severityTitle = 'Inventory Shortage';
-            } else if (alert.type === 'warning') {
-                severityTitle = 'Inventory Warning';
-            } else if (alert.type === 'low-inventory') {
-                severityTitle = 'Low Inventory';
+            if (!itemNumber) {
+                console.warn('Cannot navigate to details: no item number found');
+                return;
             }
             
-            const modalContent = `
-                <div style="text-align: left;">
-                    <h3>${severityTitle}</h3>
-                    <p><strong>Item Number:</strong> ${itemNumber}</p>
-                    <p><strong>Needed for this project:</strong> ${itemQty}</p>
-                    
-                    <div style="margin-top: 1rem;">
-                        <h4>Inventory Status:</h4>
-                        <div style="padding: 0.5rem; background-color: var(--color-gray-bg); border-radius: 4px;">
-                            <p style="margin: 0.25rem 0;"><strong>Remaining after all allocations:</strong> ${remaining}</p>
-                        </div>
-                    </div>
-                    
-                    <p style="margin-top: 1rem; font-size: 0.9em; color: var(--color-text-secondary);">
-                        <em>${remaining < 0 ? 'This item is over-allocated. You may need to adjust quantities or source additional inventory.' : remaining === 0 ? 'This item has no buffer remaining after all allocations.' : 'This item has limited availability. Consider adjusting quantities if possible.'}</em>
-                    </p>
-                </div>
-            `;
-            
-            this.$modal.alert(modalContent, severityTitle);
+            // Navigate to the details endpoint with the item number as a search parameter
+            const targetPath = `packlist/${this.tabName}/details?searchTerm=${encodeURIComponent(itemNumber)}`;
+            this.$emit('navigate-to-path', { targetPath });
         },
 
         async handlePrint() {
@@ -436,12 +433,15 @@ export const PacklistTable = {
                                 </button>
                             </template>
                             <template v-else>
-                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null">
+                                <button 
+                                    @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null"
+                                    :disabled="isDirty"
+                                    :title="isDirty ? 'Save or discard changes before returning to view mode' : 'Return to view mode'">
                                     Back to View
                                 </button>
                             </template>
                             <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null">
-                                Item Details
+                                Details
                             </button>
 
                             <button v-if="!editMode" @click="handlePrint" class="white">Print</button>
@@ -476,7 +476,7 @@ export const PacklistTable = {
                                 :showHeader="false"
                                 :isLoading="isLoading"
                                 :drag-id="'packlist-items'"
-                                @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; dirty = true; saveDisabled = false; }"
+                                @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; }"
                                 @new-row="() => { handleAddItem(rowIndex); }"
                                 @inner-table-dirty="(isDirty) => { 
                                     if (typeof onInnerTableDirty === 'function') {
