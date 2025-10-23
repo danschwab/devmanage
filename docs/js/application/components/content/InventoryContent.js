@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, TabsListComponent, CardsComponent, DashboardToggleComponent } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -129,7 +129,6 @@ export const InventoryContent = {
     components: {
         'inventory-table': InventoryTableComponent,
         'inventory-overview-table': InventoryOverviewTableComponent,
-        'tabs-list': TabsListComponent,
         'cards-grid': CardsComponent
     },
     props: {
@@ -155,7 +154,7 @@ export const InventoryContent = {
             ];
         },
         categoryList() {
-            // Return loaded categories with formatted title for TabsListComponent
+            // Return loaded categories with formatted title
             return this.categories.map(cat => ({
                 id: cat.id,
                 title: cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : (cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase())
