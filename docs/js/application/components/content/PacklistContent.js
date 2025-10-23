@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, TabsListComponent, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -83,10 +83,6 @@ export const PacklistContent = {
             // Handle direct packlist access: packlist/{name} or packlist/{name}/details or packlist/{name}/edit
             // pathSegments[0] = 'packlist', pathSegments[1] = packlist identifier, pathSegments[2] = 'details' or 'edit' (optional)
             return this.pathSegments[1] || '';
-        },
-        isEditView() {
-            // Check if we're viewing the edit subview
-            return this.pathSegments[2] === 'edit';
         },
         isDetailsView() {
             // Check if we're viewing the details subview

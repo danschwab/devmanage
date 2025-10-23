@@ -7,7 +7,6 @@ export const PacklistTable = {
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
-        editMode: { type: Boolean, default: false },
         containerPath: { type: String, default: '' }
     },
     data() {
@@ -113,6 +112,11 @@ export const PacklistTable = {
                 path = `packlist/${this.tabName}`;
             }
             return NavigationRegistry.getNavigationParameters(path || '');
+        },
+        editMode() {
+            // Check if we're viewing the edit subview
+            console.log('navParams edit:', this.navParams?.edit);
+            return this.navParams?.edit === true;
         }
     },
     watch: {
@@ -120,7 +124,7 @@ export const PacklistTable = {
         isDirty(newValue) {
             if (newValue && !this.editMode && this.tabName) {
                 // Navigate to edit mode when data becomes dirty
-                const editPath = `packlist/${this.tabName}/edit`;
+                const editPath = `packlist/${this.tabName}?edit=true`;
                 this.$emit('navigate-to-path', { targetPath: editPath });
             }
         }
@@ -428,7 +432,7 @@ export const PacklistTable = {
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->
                             <template v-if="!editMode">
-                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/edit' }) : null">
+                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '?edit=true' }) : null">
                                     Edit Packlist
                                 </button>
                             </template>

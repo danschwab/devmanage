@@ -661,6 +661,12 @@ export const TableComponent = {
                 this.updateAllEditableCells();
             });
         },
+        draggable() {
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+                this.compareAllCellsDirty();
+            });
+        }
     },
     mounted() {
         this.$nextTick(() => {
@@ -833,7 +839,7 @@ export const TableComponent = {
             let baseClass = '';
             // Centralized autoColor logic for number columns
             if (column.autoColor && column.format === 'number') {
-                if (value == 0) baseClass = 'red';
+                if (value <= 0) baseClass = 'red';
                 else if (value < 5) baseClass = 'orange';
             }
             // Centralized autoColor logic for date columns
