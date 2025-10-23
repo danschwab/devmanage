@@ -144,7 +144,7 @@ export class FakeGoogleSheetsService {
                 ['TBASE', 'FURNITURE', '']
             ],
             'FURNITURE': [
-                ['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],
+                ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
                 ['TABLE-001', '', '2', '', '', 'Conference room table black 30 x 76 x 30', ''],
                 ['TABLE-002', '', '2', '', '', 'Glass-top square end table w/ metal bases 18x18x16', ''],
                 ['TABLE-003', '', '2', '', '', 'Glass-top rectangular coffee table w/ metal bases 42x18x16', ''],
@@ -159,13 +159,13 @@ export class FakeGoogleSheetsService {
                 ['TTOP-001', '', '15', '', '', '30" white cocktail table tops-round', ''],
                 ['TBASE-001', '', '8', '', '', 'cocktail table bases', '']
             ],
-            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-004', '', '10', '', '', 'Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', '']],
-            'HANGING SIGNS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'Description', 'Packing/shop notes'],['HS-001', '', '0', '', 'This is a sign', '']],
-            'CEILING TILES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['C1', '', '0', '', '', 'Blah blah blah', '']],
-            'CEILING TRIM': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['S1', '', '0', '', '', 'Blah blah blah', '']],
-            'LIGHTBOXES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['LB-001', '', '0', '', '', 'Blah blah blah', '']],
-            'COUNTERTOPS': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['CNTR-001', '', '0', '', '', 'Blah blah blah', '']],
-            'SHELVES': [['ITEM#', 'THUMBNAIL', 'QTY', 'CLIENT', 'NOTES', 'Description', 'Packing/shop notes'],['SHLF-001', '', '0', '', '', 'Blah blah blah', '']],
+            'CABINETS': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['CAB-004', '', '10', '', '', 'Curved-bottom white demo counter with 30" wide top and LED lighting. (4) standoffs on front and top. Test LED lights', '']],
+            'HANGING SIGNS': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'Description', 'Packing/shop notes'],['HS-001', '', '0', '', 'This is a sign', '']],
+            'CEILING TILES': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['C1', '', '0', '', '', 'Blah blah blah', '']],
+            'CEILING TRIM': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['S1', '', '0', '', '', 'Blah blah blah', '']],
+            'LIGHTBOXES': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['LB-001', '', '0', '', '', 'Blah blah blah', '']],
+            'COUNTERTOPS': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['CNTR-001', '', '0', '', '', 'Blah blah blah', '']],
+            'SHELVES': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['SHLF-001', '', '0', '', '', 'Blah blah blah', '']],
         },
         'PACK_LISTS': {
             'TEMPLATE': [

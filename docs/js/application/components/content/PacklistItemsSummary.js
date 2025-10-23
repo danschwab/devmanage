@@ -8,7 +8,11 @@ export const PacklistItemsSummary = {
     components: { TableComponent, ItemImageComponent },
     props: {
         projectIdentifier: { type: String, required: true },
-        containerPath: { type: String, default: '' }
+        containerPath: { type: String, default: '' },
+        showDetailsVisible: {
+            type: Array,
+            default: () => ['Ship', 'S. Start', 'S. End', 'Expected Return Date', 'City', 'Size', 'Booth#', 'S/U IN SHOP']
+        }
     },
     inject: ['appContext'],
     data() {
@@ -48,8 +52,6 @@ export const PacklistItemsSummary = {
         },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
-            // Use the containerPath as the primary source - it should be the full path
-            // If containerPath is empty/undefined, fall back to constructing from projectIdentifier
             let path = this.containerPath;
             if (!path && this.projectIdentifier) {
                 path = `packlist/${this.projectIdentifier}/details`;
@@ -76,53 +78,44 @@ export const PacklistItemsSummary = {
         initializeStore() {
             if (!this.projectIdentifier) return;
 
-            // Progressive analysis configuration
             const analysisConfig = [
-                // First Analysis: Get inventory tab name for each item
                 createAnalysisConfig(
                     Requests.getTabNameForItem,
                     'tabName',
                     'Getting inventory tab names...',
-                    ['itemId'], // Use itemId as source
+                    ['itemId'],
                     [],
-                    'tabName' // Store result in 'tabName' column
+                    'tabName'
                 ),
-
-                // Second Analysis: Get inventory quantities for each item
                 createAnalysisConfig(
                     Requests.getItemInventoryQuantity,
                     'available',
                     'Checking inventory quantities...',
-                    ['itemId'], // Use itemId as source
+                    ['itemId'],
                     [],
-                    'available' // Store result in 'available' column
+                    'available'
                 ),
-
-                // Third Analysis: Find overlapping shows for each item
                 createAnalysisConfig(
                     (itemId, currentProjectId) => Requests.getItemOverlappingShows(currentProjectId, itemId),
                     'overlappingShows',
                     'Finding overlapping shows...',
-                    ['itemId'], // Use itemId as source
-                    [this.projectIdentifier], // Pass current project as additional parameter
-                    'overlappingShows' // Store result in 'overlappingShows' column
+                    ['itemId'],
+                    [this.projectIdentifier],
+                    'overlappingShows'
                 ),
-
-                // Fourth Analysis: Calculate remaining quantities
                 createAnalysisConfig(
                     (itemId, currentProjectId) => Requests.calculateRemainingQuantity(currentProjectId, itemId),
                     'remaining',
                     'Calculating remaining quantities...',
-                    ['itemId'], // Use itemId as source
-                    [this.projectIdentifier], // Pass current project as additional parameter
-                    'remaining' // Store result in 'remaining' column
+                    ['itemId'],
+                    [this.projectIdentifier],
+                    'remaining'
                 )
             ];
 
-            // Create reactive store with progressive analysis
             this.itemsSummaryStore = getReactiveStore(
                 Requests.getItemQuantitiesSummary,
-                null, // No save function - read-only data
+                null,
                 [this.projectIdentifier],
                 analysisConfig
             );
@@ -155,24 +148,12 @@ export const PacklistItemsSummary = {
     },
     template: html`
         <div class="packlist-items-summary">
-            <!-- Show Details Header -->
-            <div v-if="showDetails" class="show-details-header card white">
-                <h3>{{ showDetails.Show }}</h3>
-                <div class="show-details-grid">
-                    <div v-if="showDetails.Client">
-                        <strong>Client:</strong> {{ showDetails.Client }}
-                    </div>
-                    <div v-if="showDetails.Year">
-                        <strong>Year:</strong> {{ showDetails.Year }}
-                    </div>
-                    <div v-if="showDetails.Ship">
-                        <strong>Ship:</strong> {{ showDetails.Ship }}
-                    </div>
-                    <div v-if="showDetails.Return">
-                        <strong>Return:</strong> {{ showDetails.Return }}
-                    </div>
-                    <div v-if="showDetails.Location">
-                        <strong>Location:</strong> {{ showDetails.Location }}
+            <div class="content">
+                <div class="details-grid">
+                    <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
+                        <label>{{ key }}:</label>
+                        <span v-if="showDetails">{{ showDetails[key] || '—' }}</span>
+                        <span v-else>...</span>
                     </div>
                 </div>
             </div>
@@ -194,9 +175,7 @@ export const PacklistItemsSummary = {
                 @refresh="handleRefresh"
             >
                 <template #table-header-area>
-                    <button @click="navigateBackToPacklist">
-                        Back
-                    </button>
+                    
                 </template>
                 <template #default="{ row, column }">
                     <div v-if="column.key === 'image'">
