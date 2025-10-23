@@ -497,21 +497,20 @@ button.card {
     text-align: center;
 }
 .close-button {
-    /*transform: translateX(80%);*/
     background-color: transparent;
     display: block;
+    font-size: 20px;
     color: var(--color-text-light);
-    width: 16px;
+    width: 22px;
     padding:0;
-    height: 16px;
-    line-height: 16px;
+    height: 22px;
+    line-height: 0;
+    flex-basis: 22px;
+    flex-grow: 0;
+    flex-shrink: 0;
     box-shadow: none;
-    min-width: 16px;
     text-align: center;
     justify-content: center;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
 .close-button:only-child {
     margin-left:auto;
@@ -1047,7 +1046,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 
-.inventory-table-component td {
+.inventory-table-component td, .items-summary-table td {
     vertical-align: middle;
 }
 
