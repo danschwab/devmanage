@@ -122,7 +122,8 @@ export const InventoryTableComponent = {
                 label: 'QTY',
                 format: 'number',
                 editable: this.editMode,
-                autoColor: true
+                autoColor: true,
+                width: 120
             },
             { 
                 key: 'description', 

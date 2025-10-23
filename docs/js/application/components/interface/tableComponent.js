@@ -1511,13 +1511,20 @@ export const TableComponent = {
                                 >
                                     <div class="table-cell-container">
                                         <!-- Editable number input -->
-                                        <input
-                                            v-if="column.editable && column.format === 'number'"    
-                                            type="number"
-                                            :value="row[column.key]"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                            :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                        />
+                                        <slot
+                                            v-if="column.editable && column.format === 'number'"
+                                            :row="row"
+                                            :column="column">
+                                            <span class="original-value" v-if="dirtyCells[idx] && dirtyCells[idx][colIndex]">
+                                                {{ formatCellValue(originalData[idx][column.key], column) }} →
+                                            </span>
+                                            <input
+                                                type="number"
+                                                :value="row[column.key]"
+                                                @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
+                                            />
+                                        </slot>
                                         <!-- Editable text div -->
                                         <div
                                             v-else-if="column.editable"

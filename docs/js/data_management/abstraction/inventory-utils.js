@@ -8,7 +8,8 @@ class inventoryUtils_uncached {
         itemNumber: 'ITEM#',
         quantity: 'QTY',
         description: 'Description',
-        notes: 'NOTES'
+        notes: 'NOTES',
+        metadata: 'MetaData'
     };
 
     static async getTabNameForItem(deps, itemName) {
