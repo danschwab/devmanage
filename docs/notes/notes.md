@@ -1,9 +1,41 @@
-is editing flag for packlists and inventories that locks other users out.
+## WORK
+
+**important:**
 whenever possible, rely on the caching system instead of data from live tables.
-extra spreadsheet MetaData column: save history {dateTime, userName, fields[], old values[]}
-batch order form: allows incrimenting / decrimenting a whole table at once
-match actual bematrix hardware to inventory bematrix item numbers
-description change recommendations for common or similar items that checks or aggregates history potentially?
+Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
+Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
+
+**to do:**
+
+- container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
+- find error causing early dashboard changes to be overwritten by an empty dashboard
+- find error causing unsyncing of packlist saves, or attribute it to fakeGoogle
+- New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
+
+- ensure that everything works if ben and DY simultaneously edit
+
+  - 'is editing' flag for packlists and inventories that locks other users out.
+
+- extra spreadsheet MetaData column
+  - save history {dateTime, userName, fields[], old values[]}
+- allow new packlists from template, allow duplicate packlists from existing packlists
+- implement packlist rules, and automatic packlist rule suggestion jobs
+  - description change recommendations for common or similar items that checks or aggregates history potentially?
+  - quickly add typical client or show items
+- Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
+- Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to metadata.
+  - Allow metadata finding, viewing (in modal?), checking (analysis steps), and updating (via inventor).
+- Inject the sheet ids and the api-key via github soas not to expose them
+
+**maybe:**
+quick action buttons on cards?
+allow analysis to intelligently slow or pause itself and notify user for slow connection states.
+implement notes and checklists
+workspace system with multiple dashboards? Easily pin to dashboard?
+allow modals to receive the arrow keys and enter button
+create backup of packlists before saving packlist to ensure no data loss
+
+## MVP
 
 **Use Cases**
 We can have pack lists generated from Inventor
@@ -11,77 +43,75 @@ We can know if there are item shortages as pack lists are generated
 If we add bematrix stuff to pack lists, we can also check inventory qty of them
 If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
 We can get an inventory report of item quantities throughout the year
+We can migrate all our checklists and schedule management to this system
+All of our data is available and easy to update on the go
 
-**Minimum Features To Show:**
+**Application outline**
 
 - Export Basic Pack List from Inventor
   - Categorize all booth parts according to Pack List Rules (preferences)
   * Create new pack list in Google Sheets
   * Input items into Google Sheets
-    > (PLANNED) Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
-- Open Pack List in Web
+  * Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
+
+* Pack Lists in Web
   - Get pack list data from web and display
-  * Allow addition of new crates
+  - Allow addition of new crates
   - Allow crate contents edit
     - Allow addition of new items
     - Allow deletion of items
     - Allow moving items
     - Allow editing item contents
-  * allow saving edits to google sheet
-  - warnings for items that are unavailable
+  - allow saving edits to google sheet
+  * automations interface
+    - allow user to configure automations (description updates, item extraction, notifications)
 
-**To do:**
-add verification when closing a tab
-Set up a queue for packlist overlaps and cache data. If there are multiple tabs open, run for all open tabs at once while avoiding rate-limiting.
-Allow multiple workspaces?
-Inject the sheet ids and the api-key via github soas not to expose them
-allow modals to recieve the arrow keys and enter button
-remove reliance on google sheets fuzzymatching for identifyers - or make google sheets fuzzymatching set the cell contents instead of dynamically load
-make sure cache renewal is logical
-ensure that everything works if ben and DY simultaneously edit
-auth last longer than an hour
-create backup of packlists before saving packlist to ensure no data loss
-Track crate information to further streamline pack list generation
-Impliment a pack list suggestion system to quickly add typical client or show items
-Provide a feedback mechanism for users to suggest improvements or report issues
-Provide a user-friendly interface to locate and update item status
-Allow for item images to be uploaded for better identification
-Customizable User Dashboards
+- analysis of pack list against current inventory
 
-**Learning:**
-Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
-Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
+  - quantities
+    - overlapping shows
+    - low stock warnings
+  - description updates
 
-**Regexes:**
+- inventory updates
 
-##
+  - include all current categories
 
-Split long description into component parts:
-1: "on top" or null
-2: count number or null
-3: part number "CAB-001" etc
-4: remaining text
+  * allow editing of item quantities
+  * allow editing of item descriptions
 
-@"^(?:(on top):)? ?(?:\(([0-9]+)\))? ?([A-Z]+-[0-9]+[a-zA-Z]?)? (.+)$"gmi
+  - allow adding new items
+  - thumbnails
+    - add existing item thumbnails
+    - allow uploading new item thumbnails
+  - item status interface to locate items and update item status
+  - track crate information to further streamline pack list generation
 
-##
+- show management system
 
-**Element Examples:**
+  - create and edit shows
+  - analyze and show the rough number and complexity of shows throughout the year
 
-tag in a cell:
+  * link shows to pack lists
 
-<tr class="draggable"><td class="row-drag-handle"></td><td style="
-    /* background-color: #fdd; */
-">(2) CAB-005
-<span class="table-cell-warning"><strong>Warning: </strong>Only 1 CAB-005 left in stock</span>
-</td><td>Booth # W3067</td></tr>
+- notifications system
+  - allow notifications throughout application to be picked up by components
+  - basic notification center on dashboard
+- checklist and reports system
 
-modal:
+  - create and edit checklists
+  - template checklists
+  - complete checklists
+  - link checklists to products
+    - allow template checklist linking to product areas: packlists, inventories, shows
+    - allow template checklists to be applied based on triggers
+    - allow logical checklist creation from data (ex: packlist items checklist)
+    - integrate with notifications
+    - integrate with automations
 
-<div class="modal"> 
-    <div class="modal-content">
-        <div class="modal-header">Open Pack List:<span class="modal-close">&times;</span></div>
-        <h2>New Tab</h2>
-        <p>Content for the new tab goes here.</p>
-    </div>
-</div>
+- application and meta data storage and use in google sheets
+  - dashboard configuration
+  * save edit history and provide tools to view and revert changes
+  * user preferences storage
+  * locking and edit rules to prevent simultaneous edits
+  * Provide a feedback mechanism for users to suggest improvements or report issues
