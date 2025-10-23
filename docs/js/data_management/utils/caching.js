@@ -1,7 +1,7 @@
 /**
  * Default cache expiration in milliseconds
  */
-const DEFAULT_CACHE_EXPIRATION_MS = 5 * 60 * 1000;
+const DEFAULT_CACHE_EXPIRATION_MS = 20 * 60 * 1000;
 
 /**
  * Lightweight event bus for cache invalidation notifications
@@ -65,6 +65,7 @@ class CacheManager {
         
         // Check expiration
         if (entry.expire && entry.expire < Date.now()) {
+            this.invalidate(key); // Invalidate the cache entry before deletion
             this.cache.delete(key);
             return null;
         }

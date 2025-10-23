@@ -283,7 +283,7 @@ export const PacklistTable = {
             const type = typeof alert === 'object' ? alert.type : alert;
             const colorMap = {
                 'error': 'red',
-                'mismatch': 'orange',
+                'description mismatch': 'yellow',
                 'warning': 'yellow',
                 'info': 'blue',
                 'success': 'green'
@@ -299,9 +299,9 @@ export const PacklistTable = {
          */
         handleAlertClick(item, alertKey, alert) {
             // Handle different types of alerts
-            if (alertKey === 'descriptionAlert' || alert.type === 'mismatch') {
+            if (alertKey === 'descriptionAlert' || alert.type === 'description mismatch') {
                 this.showDescriptionMismatchModal(item, alert);
-            } else if (alertKey === 'inventoryAlert' || ['shortage', 'warning', 'low-inventory'].includes(alert.type)) {
+            } else if (alertKey === 'inventoryAlert' || ['item shortage', 'item warning', 'low-inventory'].includes(alert.type)) {
                 this.navigateToInventoryDetails(item);
             } else {
                 // Generic alert display

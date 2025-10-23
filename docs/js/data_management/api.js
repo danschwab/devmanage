@@ -424,7 +424,7 @@ class Requests_uncached {
         // Build alert object based on comparison result
         if (!result.inventoryFound) {
             return {
-                type: 'warning',
+                type: 'item warning',
                 color: 'yellow',
                 clickable: false,
                 message: `No inventory description`,
@@ -438,7 +438,7 @@ class Requests_uncached {
         // Return alert if match is less than 100%
         if (result.score < 1) {
             return {
-                type: 'mismatch',
+                type: 'description mismatch',
                 color: color,
                 clickable: true,
                 message: `Description mismatch`,
@@ -547,7 +547,7 @@ class Requests_uncached {
             // Build alert object based on inventory level
             if (remaining < 0) {
                 return {
-                    type: 'shortage',
+                    type: 'item shortage',
                     color: 'red',
                     clickable: true,
                     message: `Shortage: ${Math.abs(remaining)} units short`,
@@ -555,7 +555,7 @@ class Requests_uncached {
                 };
             } else if (remaining === 0) {
                 return {
-                    type: 'warning',
+                    type: 'item warning',
                     color: 'orange',
                     clickable: true,
                     message: 'No inventory buffer',
