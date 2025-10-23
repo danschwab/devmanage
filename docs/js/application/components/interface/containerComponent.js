@@ -34,6 +34,10 @@ export const ContainerComponent = {
         showExpandButton: {
             type: Boolean,
             default: false
+        },
+        pinnedToDashboard: {
+            type: Boolean,
+            default: false
         }
     },
     inject: ['hamburgerMenuRegistry', '$modal'],
@@ -77,6 +81,12 @@ export const ContainerComponent = {
                 );
             }
         },
+        toggleDashboardState() {
+            this.$emit('toggle-dashboard-state', {
+                containerPath: this.containerPath,
+                pinned: !this.pinnedToDashboard
+            });
+        },
         expandContainer() {
             this.$emit('expand-container', {
                 path: this.containerPath,
@@ -96,7 +106,13 @@ export const ContainerComponent = {
                     @navigate-to-path="(event) => $emit('navigate-to-path', event)" />
                 
                 <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
-                    <button v-if="hamburgerMenuComponent" 
+                    <button v-if="!cardStyle"
+                            class="button-symbol white"
+                            @click="toggleDashboardState" 
+                            title="Pin to dashboard">
+                        <span class="material-symbols-outlined">{{ pinnedToDashboard ? 'keep_off' : 'keep' }}</span>
+                    </button>
+                    <button v-if="hamburgerMenuComponent"
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
                             title="Menu">☰</button>
@@ -113,7 +129,7 @@ export const ContainerComponent = {
                 </div>
             </div>
             
-            <div class="content">
+            <div class="container-content">
                 <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
                     <img src="images/loading.gif" alt="..."/>
                     <p>Loading data...</p>

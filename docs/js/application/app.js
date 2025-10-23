@@ -75,7 +75,8 @@ const App = {
                         containerPath: containerId,
                         cardStyle: true,
                         cardClasses: ` ${containerClasses}`,
-                        showExpandButton: true
+                        showExpandButton: true,
+                        isOnDashboard: true
                     };
                 });
             } else {
@@ -88,7 +89,8 @@ const App = {
                     containerPath: this.currentPath,
                     cardStyle: false,
                     cardClasses: '',
-                    showExpandButton: false
+                    showExpandButton: false,
+                    isOnDashboard: NavigationRegistry.dashboardRegistry.has(this.currentPath)
                 }];
             }
         }
@@ -175,7 +177,15 @@ const App = {
         expandContainer(containerData) {
             const targetPath = containerData.containerPath || containerData.path;
             this.navigateToPath(targetPath);
-        }
+        },
+
+        async toggleDashboardPresence(containerData) {
+            if (NavigationRegistry.dashboardRegistry.has(containerData.containerPath)) {
+                await NavigationRegistry.dashboardRegistry.remove(containerData.containerPath);
+            } else {
+                await NavigationRegistry.dashboardRegistry.add(containerData.containerPath);
+            }
+        },
     },
     setup() {
         return { modalManager };
@@ -235,8 +245,10 @@ const App = {
                         :card-style="container.cardStyle"
                         :card-classes="container.cardClasses"
                         :show-expand-button="container.showExpandButton"
+                        :pinned-to-dashboard="container.isOnDashboard"
                         @navigate-to-path="navigateToPath"
                         @expand-container="expandContainer"
+                        @toggle-dashboard-state="toggleDashboardPresence"
                     >
                         <template #content>
                             <!-- Inventory Content -->
