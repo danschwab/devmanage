@@ -17,7 +17,6 @@ export { ModalComponent, modalManager } from './components/interface/modalCompon
 export { ContainerComponent } from './components/interface/containerComponent.js';
 export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
-export { TabComponent, TabsListComponent } from './components/interface/tabComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
 
