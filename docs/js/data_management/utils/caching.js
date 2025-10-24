@@ -66,7 +66,6 @@ class CacheManager {
         // Check expiration
         if (entry.expire && entry.expire < Date.now()) {
             this.invalidate(key); // Invalidate the cache entry before deletion
-            this.cache.delete(key);
             return null;
         }
         
@@ -157,10 +156,10 @@ class CacheManager {
         // Remove the cache entry
         this.cache.delete(key);
         
-        // Also clean up any pending calls for this key
-        if (this.pendingCalls.has(key)) {
-            this.pendingCalls.delete(key);
-        }
+        // Also clean up any pending calls for this key DO NOT CLEAR PENDING CALLS HERE
+        //if (this.pendingCalls.has(key)) {
+        //    this.pendingCalls.delete(key);
+        //}
         
         // Emit invalidation event for reactive stores (only for 'api' namespace)
         const [namespace, methodName, argsString] = key.split(':', 3);
@@ -187,7 +186,7 @@ class CacheManager {
         }
         
         // Clean up dependency registration
-        this.dependencies.delete(key);
+        // this.dependencies.delete(key);
         
         // Remove from invalidation stack when done
         invalidationStack.delete(key);
