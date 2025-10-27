@@ -356,7 +356,12 @@ export const PacklistTable = {
                     item.Description = newDescription;
                     
                     // Show success message (save will be enabled automatically via isModified)
-                    this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
+                    //this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
+
+                    //clear the alert from AppData
+                    if (item.AppData) {
+                        delete item.AppData['descriptionAlert'];
+                    }
                 },
                 () => {
                     // On cancel: do nothing

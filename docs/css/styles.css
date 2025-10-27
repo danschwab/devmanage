@@ -119,7 +119,7 @@ div#app-content.dashboard {
     width: auto;
 }
 
-div#app-content div.empty-message {
+div#app-content > div.empty-message {
     color: var(--color-gray-bg-transparent);
     text-align: center;
     font-size: larger;
@@ -936,8 +936,8 @@ tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after {
 }
 
 .dirty > .table-cell-container > .table-edit-textarea, .dirty input[type="number"] {
-    /*background-color: var(--color-red-bg-transparent);*/
-    outline: 2px dotted var(--color-red-bg-transparent);
+    background-color: var(--color-red-bg-transparent);
+    outline: 2px solid var(--color-red-bg-transparent);
 }
 
 tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .table-cell-container > input[type="number"] {

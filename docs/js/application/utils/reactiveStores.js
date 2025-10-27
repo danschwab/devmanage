@@ -183,7 +183,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.analysisMessage = '';
         },
         async load(message = 'Loading data...') {
-            this.reset();
+            //this.reset();
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
                 // Initialize with empty array to allow dynamic property addition

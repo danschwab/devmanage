@@ -343,7 +343,7 @@ class Requests_uncached {
      * @returns {Promise<string>} The computed identifier
      */
     static async computeIdentifier(deps, showName, clientName, year) {
-        return ProductionUtils.computeIdentifier(showName, clientName, year);
+        return deps.call(ProductionUtils.computeIdentifier, showName, clientName, year);
     }
 
     /**

@@ -110,18 +110,26 @@ class CacheManager {
              * @returns {Promise} - Function result
              */
             call: async (wrappedFunction, ...args) => {
-                // Execute the wrapped function
-                const result = await wrappedFunction(...args);
                 
                 // Generate the cache key for the called function
-                // This assumes the wrapped function has a _cacheKey property or we can derive it
-                const calledKey = wrappedFunction._lastCacheKey;
+                const calledKey = CacheManager.generateCacheKey(wrappedFunction._namespace, wrappedFunction._methodName, args);
+
+                // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
+                let result;
+                let promise = CacheManager.pendingCalls.get(calledKey);
+                if (promise) {
+                    result = await promise;
+                } else {
+                    // Execute the wrapped function
+                    result = await wrappedFunction(...args);
+                }
+
                 
                 if (calledKey) {
                     // Register the called function as a dependency of the caller
                     CacheManager.addDependency(callerKey, calledKey);
                 }
-                
+
                 return result;
             }
         };
@@ -144,7 +152,7 @@ class CacheManager {
      * @param {string} key - Cache key to invalidate
      * @param {Set} invalidationStack - Set of keys currently being invalidated (to prevent recursion)
      */
-    static invalidate(key, invalidationStack = new Set()) {
+    static invalidate(key, invalidationStack = new Set()) {        
         // Prevent infinite recursion - if this key is already being invalidated, skip it
         if (invalidationStack.has(key)) {
             return;
@@ -160,12 +168,6 @@ class CacheManager {
         //if (this.pendingCalls.has(key)) {
         //    this.pendingCalls.delete(key);
         //}
-        
-        // Emit invalidation event for reactive stores (only for 'api' namespace)
-        const [namespace, methodName, argsString] = key.split(':', 3);
-        if (namespace === 'api') {
-            CacheInvalidationBus.emit(key, namespace, methodName, argsString);
-        }
         
         // Find and invalidate all dependent entries
         const dependents = [];
@@ -186,8 +188,16 @@ class CacheManager {
         }
         
         // Clean up dependency registration
-        // this.dependencies.delete(key);
+        this.dependencies.delete(key);
         
+        
+        // Emit invalidation event for reactive stores (only for 'api' namespace)
+        // THIS MUST HAPPEN LAST to avoid incorrect cache hits during cascading invalidation
+        const [namespace, methodName, argsString] = key.split(':', 3);
+        if (namespace === 'api') {
+            CacheInvalidationBus.emit(key, namespace, methodName, argsString);
+        }
+
         // Remove from invalidation stack when done
         invalidationStack.delete(key);
     }
@@ -269,6 +279,7 @@ class CacheManager {
      */
     static wrapMethods(targetClass, namespace, mutationKeys = []) {
         const wrappedClass = {};
+        wrappedClass._namespace = namespace;
         
         // Get all static methods
         const methods = Object.getOwnPropertyNames(targetClass)
@@ -280,15 +291,13 @@ class CacheManager {
             if (mutationKeys.includes(methodName)) {
                 wrappedClass[methodName] = targetClass[methodName];
                 // Store method name for extractMethodName to retrieve
+                wrappedClass[methodName]._namespace = namespace;
                 wrappedClass[methodName]._methodName = methodName;
                 return;
             }
             
             wrappedClass[methodName] = async function(...args) {
                 const cacheKey = CacheManager.generateCacheKey(namespace, methodName, args);
-                
-                // Store the cache key on the function for dependency tracking
-                wrappedClass[methodName]._lastCacheKey = cacheKey;
                 
                 // Check cache first
                 const cached = CacheManager.get(cacheKey);
@@ -325,6 +334,9 @@ class CacheManager {
             };
             
             // Store the method name on the wrapped function for extractMethodName to retrieve
+            wrappedClass[methodName]._methodName = methodName;
+            // Store the cache key info on the function for dependency tracking
+            wrappedClass[methodName]._namespace = namespace;
             wrappedClass[methodName]._methodName = methodName;
         });
         

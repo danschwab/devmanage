@@ -1461,7 +1461,7 @@ export const TableComponent = {
             <transition name="fade">
                 <LoadingBarComponent
                     key="loading-progress"
-                    v-if="isLoading || isAnalyzing"
+                    v-if="showHeader && (isLoading || isAnalyzing)"
                     :is-loading="isLoading"
                     :is-analyzing="isAnalyzing"
                     :percent-complete="loadingProgress"

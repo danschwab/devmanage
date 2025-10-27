@@ -116,6 +116,7 @@ class packListUtils_uncached {
         console.log('[PackListUtils.savePackList] crates input:', mappedData);
 
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
+        console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
         const metadataRows = originalSheetData.slice(0, 2);
         const headerRow = originalSheetData[2] || [];
 
