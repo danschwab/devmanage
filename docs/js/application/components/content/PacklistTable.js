@@ -15,7 +15,7 @@ export const PacklistTable = {
             isPrinting: false,
             error: null,
             databaseItemHeaders: null,
-            hiddenColumns: ['Pack','Check','Extracted Item','Extracted Qty']
+            hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty']
         };
     },
     computed: {
@@ -112,6 +112,11 @@ export const PacklistTable = {
                 path = `packlist/${this.tabName}`;
             }
             return NavigationRegistry.getNavigationParameters(path || '');
+        },
+        // Get search term from URL parameters
+        initialSearchTerm() {
+            console.log('navParams search:', this.navParams?.searchTerm);
+            return this.navParams?.searchTerm || '';
         },
         editMode() {
             // Check if we're viewing the edit subview

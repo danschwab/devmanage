@@ -44,7 +44,7 @@ export const PrimaryNavComponent = {
     },
     methods: {
         handleNavClick(item) {
-            if (this.currentPage === item.path) {
+            if (this.currentPage === item.path && !this.isMenuOpen) {
                 this.$emit('toggle-menu');
             } else {
                 this.$emit('navigate-to-path', item.path);

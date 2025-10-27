@@ -426,7 +426,7 @@ class Requests_uncached {
             return {
                 type: 'item warning',
                 color: 'yellow',
-                clickable: false,
+                clickable: true,
                 message: `No inventory description`,
                 score: 0,
                 error: result.error

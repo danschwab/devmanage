@@ -951,13 +951,16 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 /* Search highlighting for editable table cells */
-.search-match {
+.search-match:not(:has(.search-match)),
+.search-match button,
+.search-match .table-edit-textarea,
+.search-match input[type="number"] {
     background-color: var(--color-yellow-bg-transparent) !important;
+    color: var(--color-text) !important;
 }
 
 .search-match:focus {
     background-color: var(--color-yellow-bg-transparent) !important;
-    outline: 2px solid var(--color-yellow-bg);
 }
 
 /*.dirty::after {

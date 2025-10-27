@@ -1394,6 +1394,17 @@ export const TableComponent = {
                 }
             }
         },
+
+        hasDetailsSearchMatch(row) {
+            if (!this.searchValue || !this.searchValue.trim()) {
+                return false;
+            }
+            const searchTerm = this.searchValue.trim().toLowerCase();
+            return this.detailsColumns.some(column => {
+                const value = row[column.key];
+                return value && String(value).toLowerCase().includes(searchTerm);
+            });
+        },
     },
     template: html `
         <div class="dynamic-table"
@@ -1515,7 +1526,7 @@ export const TableComponent = {
                                     :class="[getCellClass(row[column.key], column, idx, colIndex)]"
                                     v-show="!hideSet.has(column.key)"
                                 >
-                                    <div class="table-cell-container">
+                                    <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column) }]">
                                         <!-- Editable number input -->
                                         <slot
                                             v-if="column.editable && column.format === 'number'"
@@ -1528,7 +1539,6 @@ export const TableComponent = {
                                                 type="number"
                                                 :value="row[column.key]"
                                                 @input="handleCellEdit(idx, colIndex, $event.target.value)"
-                                                :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             />
                                         </slot>
                                         <!-- Editable text div -->
@@ -1570,7 +1580,7 @@ export const TableComponent = {
                                 <td v-if="allowDetails" class="details-cell">
                                     <button 
                                         @click="toggleRowDetails(idx)"
-                                        :class="'button-symbol details-toggle ' + (isRowExpanded(idx) ? 'expanded' : 'collapsed')"
+                                        :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
                                         {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
                                     </button>
@@ -1592,7 +1602,7 @@ export const TableComponent = {
                                                     class="detail-item"
                                                 >
                                                     <label>{{ column.label }}:</label>
-                                                    <span>{{ formatCellValue(row[column.key], column) || '—' }}</span>
+                                                    <span v-html="highlightSearchText(row[column.key], column)"></span>
                                                 </div>
                                             </div>
                                         </div>

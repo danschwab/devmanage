@@ -10,6 +10,7 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 - container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 - find error causing early dashboard changes to be overwritten by an empty dashboard
 - find error causing unsyncing of packlist saves, or attribute it to fakeGoogle
+- find error causing card component to lose analytics details on reload after cache clear???
 - New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 
 - ensure that everything works if ben and DY simultaneously edit
@@ -18,6 +19,7 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 
 - extra spreadsheet MetaData column
   - save history {dateTime, userName, fields[], old values[]}
+  - consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes
 - allow new packlists from template, allow duplicate packlists from existing packlists
 - implement packlist rules, and automatic packlist rule suggestion jobs
   - description change recommendations for common or similar items that checks or aggregates history potentially?
@@ -34,6 +36,7 @@ implement notes and checklists
 workspace system with multiple dashboards? Easily pin to dashboard?
 allow modals to receive the arrow keys and enter button
 create backup of packlists before saving packlist to ensure no data loss
+find missing show or client index info and allow user to add it
 
 ## MVP
 
@@ -91,6 +94,7 @@ All of our data is available and easy to update on the go
 
   - create and edit shows
   - analyze and show the rough number and complexity of shows throughout the year
+  - calendar view of shows
 
   * link shows to pack lists
 
