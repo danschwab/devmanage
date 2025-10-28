@@ -201,6 +201,8 @@ export const PacklistContent = {
         <slot>
             <cards-grid
                 v-if="!isViewingPacklist"
+                :show-header="true"
+                :show-search="true"
                 :items="availablePacklists"
                 :on-item-click="handlePacklistSelect"
                 :is-loading="packlistsStore ? packlistsStore.isLoading : false"
