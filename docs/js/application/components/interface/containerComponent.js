@@ -142,7 +142,7 @@ export const ContainerComponent = {
                     :card-style="cardStyle"
                     :container-id="containerId"
                     @navigate-to-path="(event) => $emit('navigate-to-path', event)" />
-                
+                <div style="flex-grow: 1;"></div>
                 <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
                     <button v-if="!cardStyle"
                             class="button-symbol white"

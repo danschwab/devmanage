@@ -156,8 +156,10 @@ div#app-content > div.empty-message {
 }
 .container-header {
     display: flex;
+    flex-wrap: wrap-reverse;
+    gap: calc(var(--padding-sm) / 2);
     z-index: 1000;
-    justify-content: space-between;
+    justify-content: end;
     align-items: center;
     padding: var(--padding-md);
     padding-bottom: var(--padding-md);
@@ -285,14 +287,18 @@ div#app-content > div.empty-message {
 
 
 /* breadcrumbs */
+.breadcrumb-nav {
+    max-width: 100%;
+}
 .breadcrumb-path, .breadcrumb-current {
     display: flex;
     align-items: center;
+    justify-content: end;
     gap: 0.5rem;
     font-size: 1rem;
     font-weight: 600;
     color: var(--color-text);
-    line-height: .9rem;
+    overflow: hidden;
 }
 .breadcrumb-path .breadcrumb-segment:not(.active) {
     color: var(--color-text-light);
