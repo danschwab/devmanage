@@ -5,7 +5,6 @@ import { Requests } from '../../data_management/api.js';
 
 export const DashboardRegistry = {
     store: null,
-    isInitiallyLoaded: false,
     saveTimeout: null,
     SAVE_DELAY_MS: 5000, // 5 seconds
     
@@ -24,9 +23,6 @@ export const DashboardRegistry = {
                 Requests.storeUserData,
                 [authState.user.email, 'dashboard_containers']
             );
-            
-            await this.store.load();
-            this.isInitiallyLoaded = true;
 
         } catch (error) {
             console.error('Failed to initialize dashboard registry:', error);
@@ -37,7 +33,7 @@ export const DashboardRegistry = {
      * Check if dashboard is loading for the first time
      */
     get isLoading() {
-        return !this.isInitiallyLoaded && this.store?.isLoading;
+        return this.store?.isLoading;
     },
 
     /**
@@ -231,7 +227,6 @@ export const DashboardRegistry = {
             clearTimeout(this.saveTimeout);
             this.saveTimeout = null;
         }
-        this.isInitiallyLoaded = false;
         this.store = null;
     }
 };

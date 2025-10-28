@@ -17,15 +17,6 @@ class applicationUtils_uncached {
         const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
         const tabName = `User_${sanitizedUsername}`;
         
-        // Ensure tab exists (create with proper structure if not)
-        const allTabs = await Database.getTabs('CACHE');
-        let tab = allTabs.find(t => t.title === tabName);
-        if (!tab) {
-            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
-            // Initialize the tab with headers
-            await Database.setData('CACHE', tabName, [['ID', 'Value']], null);
-        }
-        
         // Convert data to JSON string if it's not already a string
         let serializedData;
         if (typeof data === 'string') {
@@ -33,10 +24,27 @@ class applicationUtils_uncached {
         } else {
             serializedData = JSON.stringify(data);
         }
-        
-        // Prepare JS object for update
-        let obj = { ID: id, Value: serializedData };
-        return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
+
+        // Ensure tab exists (create with proper structure if not)
+        const allTabs = await Database.getTabs('CACHE');
+        let tab = allTabs.find(t => t.title === tabName);
+        if (!tab) {
+            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
+            // Initialize the tab with headers and a single data row as a 2D array
+            return await Database.setData(
+                'CACHE',
+                tabName,
+                [
+                    ['ID', 'Value'],
+                    [id, serializedData]
+                ]
+            );
+        } else {   
+            // Prepare JS object for update
+            let obj = { ID: id, Value: serializedData };
+            console.log('Storing user data:', obj);
+            return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
+        }
     }
     
     /**

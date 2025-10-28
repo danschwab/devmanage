@@ -220,13 +220,13 @@ const App = {
                     </div>
                 </div>
                 
-                <!-- Dashboard loading indicators -->
+                <!-- Dashboard loading indicators >
                 <div v-else-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">
                         <img src="images/loading.gif" alt="..."/>
                         <p>loading dashboard...</p>
                     </div>
-                </div>
+                </div-->
 
                 <!-- No containers message -->
                 <div v-else-if="containers.length === 0" class="empty-message">
