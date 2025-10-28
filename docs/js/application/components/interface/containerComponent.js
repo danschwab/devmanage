@@ -49,11 +49,29 @@ export const ContainerComponent = {
     },
     data() {
         return {
-            isLoading: false // now managed reactively by this component
+            isLoading: false, // now managed reactively by this component
+            isScrolling: false,
+            _scrollTimeout: null
         };
     },
     mounted() {
-        // Component mounted
+        // Listen for wheel events on the container
+        const container = this.$el;
+        if (container) {
+            container.addEventListener('wheel', this.handleWheel, { passive: true });
+        }
+    },
+
+    beforeUnmount() {
+        // Clean up event listener and timeout
+        const container = this.$el;
+        if (container) {
+            container.removeEventListener('wheel', this.handleWheel);
+        }
+        if (this._scrollTimeout) {
+            clearTimeout(this._scrollTimeout);
+            this._scrollTimeout = null;
+        }
     },
     computed: {
         // Get hamburger menu component from registry
@@ -93,6 +111,26 @@ export const ContainerComponent = {
                 containerPath: this.containerPath,
                 title: this.title
             });
+        },
+        handleWheel() {
+            // Only set isScrolling if container is clipping content
+            const container = this.$el;
+            // Check for vertical or horizontal overflow
+            const isClipping = (
+                container.scrollHeight > container.clientHeight ||
+                container.scrollWidth > container.clientWidth
+            );
+            if (isClipping) {
+                this.isScrolling = true;
+                if (this._scrollTimeout) {
+                    clearTimeout(this._scrollTimeout);
+                }
+                // After 500ms of no wheel events, set isScrolling to false
+                this._scrollTimeout = setTimeout(() => {
+                    this.isScrolling = false;
+                    this._scrollTimeout = null;
+                }, 500);
+            }
         }
     },
     template: html `
@@ -140,6 +178,11 @@ export const ContainerComponent = {
                     </div>
                 </slot>
             </div>
+            <transition name="longfade">
+                <div v-if="cardStyle && isScrolling" class="container-expand-overlay" @click="expandContainer">
+                    <span class="material-symbols-outlined">expand_content</span>
+                </div>
+            </transition>
         </div>
     `
 };

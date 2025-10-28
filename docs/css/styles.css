@@ -168,7 +168,7 @@ div#app-content > div.empty-message {
     flex: 1;
     padding: 2px;
     /*var(--padding-md);*/
-    overflow: auto;
+    /*overflow: auto;*/
     box-sizing: border-box;
 }
 
@@ -209,9 +209,20 @@ div#app-content > div.empty-message {
     font-size: 1.2rem;
     color: var(--color-text);
 }
-
-
-
+.container.dashboard-card .container-expand-overlay {
+    z-index: 1000;
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    inset: 2px;
+    border-radius: var(--radius-lg);
+    background: var(--color-modal-bg-gradient);
+}
+.container-expand-overlay span.material-symbols-outlined {
+    color: var(--color-text-inverted);
+    font-size: 64px;
+}
 
 
 
@@ -433,7 +444,7 @@ button.card {
 }
 
 .material-symbols-outlined {
-    font-size: 14pt !important;
+    font-size: 14pt;
     line-height: 27px !important;
 }
 

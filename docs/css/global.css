@@ -11,6 +11,22 @@
 }
 
 
+.longfade-enter-active,
+.longfade-leave-active {
+    transition: opacity 0.5s ease-in-out;
+}
+
+.longfade-enter-from,
+.longfade-leave-to {
+    opacity: 0;
+}
+
+.longfade-enter-active,
+.longfade-leave-active {
+    transition: opacity 0.5s ease-in-out !important;
+}
+
+
 .expand-enter-from {
     max-height: 0;
     padding-top: 0;
@@ -188,28 +204,28 @@ div.green, span.green {
 }
 
 
-div.white:hover, span.white:hover {
+div.clickable.white:hover, span.clickable.white:hover {
     background-color: var(--background-color-hover);
 }
-div.gray:hover, span.gray:hover {
+div.clickable.gray:hover, span.clickable.gray:hover {
     background-color: var(--color-gray-bg-hover);
 }
-div.red:hover, span.red:hover {
+div.clickable.purple:hover, span.clickable.purple:hover {
+    background-color: var(--color-purple-bg-hover);
+}
+div.clickable.red:hover, span.clickable.red:hover {
     background-color: var(--color-red-bg-hover);
 }
-div.red:hover, span.red:hover {
-    background-color: var(--color-red-bg-hover);
-}
-div.orange:hover, span.orange:hover {
+div.clickable.orange:hover, span.clickable.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
-div.yellow:hover, span.yellow:hover {
+div.clickable.yellow:hover, span.clickable.yellow:hover {
     background-color: var(--color-yellow-bg-hover);
 }
-div.blue:hover, span.blue:hover {
+div.clickable.blue:hover, span.clickable.blue:hover {
     background-color: var(--color-blue-bg-hover);
 }
-div.green:hover, span.green:hover {
+div.clickable.green:hover, span.clickable.green:hover {
     background-color: var(--color-green-bg-hover);
 }
 

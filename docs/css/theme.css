@@ -80,7 +80,7 @@
     --color-text-inverted: #fff;
 
     /* Misc */
-    --color-modal-bg-gradient: linear-gradient(to bottom, #156accaa, #2baaff);
+    --color-modal-bg-gradient: linear-gradient(to bottom, #156accaa, #2baaffaa);
     --color-scrollbar-thumb: #dbdbdb;
     --color-scrollbar-bg: #f3f3f3;
     --color-row-drag-handle: #666;

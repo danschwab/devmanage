@@ -115,7 +115,11 @@ export const PacklistContent = {
                     
                     // Use description from analysis or show loading placeholder
                     const content = tab.description || '...';
-                    
+
+                    if (!tab.description && !(this.packlistsStore.isAnalyzing || this.packlistsStore.isLoading)) {
+                        this.packlistsStore.runConfiguredAnalysis();
+                    }
+
                     return {
                         id: tab.sheetId,
                         title: tab.title,
