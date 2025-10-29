@@ -161,8 +161,7 @@ div#app-content > div.empty-message {
     z-index: 1000;
     justify-content: end;
     align-items: center;
-    padding: var(--padding-md);
-    padding-bottom: var(--padding-md);
+    padding: var(--padding-sm);
     border-bottom: 1px solid var(--color-border);
     box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
@@ -246,6 +245,7 @@ div#app-content > div.empty-message {
     width: 100%;
     box-sizing: border-box;
     border-radius: var(--radius-lg);
+    overflow: hidden;
 }
 .content-header:has(.button-bar:only-child) {
     justify-content: right;
@@ -392,7 +392,9 @@ button.card {
     grid-auto-rows: 1fr;
     align-items: center;
     gap: var(--padding-sm);
-    padding: var(--padding-sm);
+}
+.content-header + .cards-grid {
+    padding-top: var(--padding-sm);
 }
 
 .cards-grid .card {
@@ -973,10 +975,10 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 /* Search highlighting for editable table cells */
-.search-match:not(:has(.search-match)),
+.search-match:not(:has(.search-match)):not(:has(button)):not(:has(input)),
 .search-match button,
 .search-match .table-edit-textarea,
-.search-match input[type="number"] {
+.search-match input {
     background-color: var(--color-yellow-bg-transparent) !important;
     color: var(--color-text) !important;
 }
@@ -1021,6 +1023,13 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 .loading-bar-container {
     position: relative;
 }
+.loading-bar-container.embedded {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+}
 
 .loading-bar-track {
     height: 2px;
@@ -1029,7 +1038,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     position: absolute;
     left: 1px;
     right: 1px;
-    bottom: -2px;
+    bottom: 0;
     z-index: 10;
 }
 

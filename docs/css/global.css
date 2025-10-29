@@ -137,10 +137,11 @@ input[type="submit"]:disabled,
 input[type="button"]:disabled,
 button:disabled {
     pointer-events: none;
+    opacity: .3;
     /*overflow: visible;*/
 }
 
-input[type="submit"]:after,
+/*input[type="submit"]:after,
 input[type="button"]:after,
 button:after {
     content: "";
@@ -159,7 +160,7 @@ input[type="submit"]:disabled:after,
 input[type="button"]:disabled:after,
 button:disabled:after {
     opacity: 1;
-}
+}*/
 
 
 

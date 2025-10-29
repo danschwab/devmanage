@@ -120,60 +120,58 @@ export const CardsComponent = {
         }
     },
     template: html`
-        <div class="cards-component">
+        <div class="cards-component content">
             
-            <div v-if="isLoading || shouldShowEmpty || showHeader" class="content">
-                <!-- Initial Loading State (no items yet) -->
-                <div v-if="!showHeader && isLoading" class="loading-message">
-                    <img src="images/loading.gif" alt="Loading..."/>
-                    <p>{{ loadingMessage }}</p>
-                </div>
+            <!-- Initial Loading State (no items yet) -->
+            <div v-if="!showHeader && isLoading" class="loading-message">
+                <img src="images/loading.gif" alt="Loading..."/>
+                <p>{{ loadingMessage }}</p>
+            </div>
+            
+            <!-- Empty State -->
+            <div v-else-if="!showHeader && shouldShowEmpty" class="empty-message">
+                <p>{{ emptyMessage }}</p>
+            </div>
+            
+            <div key="content-header" v-if="showHeader" class="content-header">
+                <!--h3 v-if="title">{{ title }}</h3-->
+                <slot 
+                    name="table-header-area"
+                ></slot>
+                <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
+                <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
                 
-                <!-- Empty State -->
-                <div v-else-if="!showHeader && shouldShowEmpty" class="empty-message">
-                    <p>{{ emptyMessage }}</p>
-                </div>
-                
-                <div key="content-header" v-if="showHeader" class="content-header">
-                    <!--h3 v-if="title">{{ title }}</h3-->
-                    <slot 
-                        name="table-header-area"
-                    ></slot>
-                    <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
-                    <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
-                    
-                    <div v-if="showSearch" class="button-bar">
-                        <input
-                            v-if="showSearch"
-                            type="text"
-                            v-model="searchValue"
-                            placeholder="Find..."
-                            class="search-input"
-                        />
-                        <!--button
-                            v-if="showSaveButton || allowSaveEvent"
-                            @click="handleSave"
-                            :disabled="isLoading || !allowSaveEvent"
-                            class="save-button green"
-                        >
-                            Save
-                        </button>
-                        <button 
-                            v-if="showRefresh" 
-                            @click="handleRefresh" 
-                            :disabled="isLoading" 
-                            :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
-                        >
-                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
-                        </button>
-                        <button
-                            v-if="hamburgerMenuComponent"
-                            @click="handleHamburgerMenu"
-                            class="button-symbol white"
-                        >
-                            ☰
-                        </button-->
-                    </div>
+                <div v-if="showSearch" class="button-bar">
+                    <input
+                        v-if="showSearch"
+                        type="text"
+                        v-model="searchValue"
+                        placeholder="Find..."
+                        class="search-input"
+                    />
+                    <!--button
+                        v-if="showSaveButton || allowSaveEvent"
+                        @click="handleSave"
+                        :disabled="isLoading || !allowSaveEvent"
+                        class="save-button green"
+                    >
+                        Save
+                    </button>
+                    <button 
+                        v-if="showRefresh" 
+                        @click="handleRefresh" 
+                        :disabled="isLoading" 
+                        :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
+                    >
+                        {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                    </button>
+                    <button
+                        v-if="hamburgerMenuComponent"
+                        @click="handleHamburgerMenu"
+                        class="button-symbol white"
+                    >
+                        ☰
+                    </button-->
                 </div>
                 <!-- Loading/Analysis Progress Indicator -->
                 <transition name="fade">
@@ -182,6 +180,7 @@ export const CardsComponent = {
                         :is-loading="isLoading"
                         :is-analyzing="isAnalyzing"
                         :percent-complete="loadingProgress"
+                        class="embedded"
                     />
                 </transition>
             </div>
