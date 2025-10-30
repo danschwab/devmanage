@@ -1,11 +1,10 @@
-// Google Sheets API configuration
-const API_KEY = 'AIzaSyCDA4ynZWF1xbuFQ2exsX2orRYQPpsiX1U';
-const CLIENT_ID = '381868581846-a5hdjs5520u9u1jve5rdalm3kua2iqpf.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
-
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
+
+const API_KEY = window.APP_CONFIG.API_KEY;
+const CLIENT_ID = window.APP_CONFIG.CLIENT_ID;
+const SCOPES = window.APP_CONFIG.SCOPES;
 
 export class GoogleSheetsAuth {
     static userEmail = null;

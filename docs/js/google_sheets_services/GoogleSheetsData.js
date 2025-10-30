@@ -2,13 +2,6 @@ import { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
 import { SheetSql } from './sheetSql.js';
 
 export class GoogleSheetsService {
-    
-    static SPREADSHEET_IDS = {
-        'INVENTORY': '1qHAJ0FgHJjtqXiyCGohzaL1fuzdYQMF2n4YiDSc5uYE',
-        'PACK_LISTS': '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0',
-        'PROD_SCHED': '1BacxHxdGXSkS__ZtCv6WqgyxvTs_a2Hsv8NJnNiHU18', //eventually, once DY puts the prod sched under TSExhibits, the real sheet is: 1lwmzvEIjA99pBztPiudIrxpdW4IFf_xRhOwNzVkBPYk
-        'CACHE': '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw'
-    };
 
     // Exponential backoff helper for Google Sheets API calls
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
@@ -59,7 +52,7 @@ export class GoogleSheetsService {
      */
     static async getSheetData(tableId, range) {
         await GoogleSheetsAuth.checkAuth();
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
 
         let response;
@@ -92,7 +85,7 @@ export class GoogleSheetsService {
      */
     static async setSheetData(tableId, tabName, updates, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
         // Convert JS objects to sheet format
         let values;
@@ -244,7 +237,7 @@ export class GoogleSheetsService {
     static async getSheetTabs(tableId) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
         
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -270,7 +263,7 @@ export class GoogleSheetsService {
     static async hideTabs(tableId, tabs) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
@@ -300,7 +293,7 @@ export class GoogleSheetsService {
     static async showTabs(tableId, tabs) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
@@ -331,7 +324,7 @@ export class GoogleSheetsService {
     static async copySheetTab(tableId, sourceTab, newTabName) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId directly
@@ -406,7 +399,7 @@ export class GoogleSheetsService {
     static async createBlankTab(tableId, newTabName) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = this.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Add the new sheet/tab
