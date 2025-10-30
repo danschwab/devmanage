@@ -14,11 +14,22 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Inject config.js from secrets
+    env:
+      SCOPES: ${{ vars.SCOPES }}
+      INVENTORY: ${{ vars.INVENTORY }}
+      PACK_LISTS: ${{ vars.PACK_LISTS }}
+      PROD_SCHED: ${{ vars.PROD_SCHED }}
+      CACHE: ${{ vars.CACHE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Inject config.js from secrets and variables
         run: |
           mkdir -p docs/js/google_sheets_services
-          echo "window.APP_CONFIG = ${{ secrets.APP_CONFIG }};" > docs/js/google_sheets_services/config.js
-          echo "window.SPREADSHEET_IDS = ${{ env.SPREADSHEET_IDS }};" >> docs/js/google_sheets_services/config.js
+          echo "window.APP_CONFIG = { API_KEY: '${{ secrets.API_KEY }}', CLIENT_ID: '${{ secrets.CLIENT_ID }}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
+          echo "window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };" >> docs/js/google_sheets_services/config.js
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
