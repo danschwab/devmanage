@@ -16,8 +16,8 @@ jobs:
       PACK_LISTS: ${{ vars.PACK_LISTS }}
       PROD_SCHED: ${{ vars.PROD_SCHED }}
       CACHE: ${{ vars.CACHE }}
-      API_KEY: ${{ secrets.API_KEY }}
-      CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      API_KEY: ${{ vars.API_KEY }}
+      CLIENT_ID: ${{ vars.CLIENT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
