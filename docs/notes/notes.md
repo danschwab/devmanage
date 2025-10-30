@@ -9,6 +9,7 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 
 - reactiveStore optimization: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
+- fix scrolling issue when navigating
 
 * container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 * find error causing early dashboard changes to be overwritten by an empty dashboard

@@ -33,6 +33,12 @@ export const PrimaryNavComponent = {
         'login',
         'logout'
     ],
+    data() {
+        return {
+            isMenuVisible: true,
+            lastScrollTop: 0
+        };
+    },
     computed: {
         isDarkMode() {
             // Use matchMedia to detect dark mode
@@ -60,13 +66,26 @@ export const PrimaryNavComponent = {
     },
     mounted() {
         document.addEventListener('mouseup', this.handleClickOutside);
+        //add a listener for scroll up or down in #app-content to hide or show the navbar
+        document.querySelector('#app-content').addEventListener('scroll', () => {
+            const currentScroll = document.querySelector('#app-content').scrollTop;
+            if (currentScroll > this.lastScrollTop + 12) {
+                this.isMenuVisible = false;
+                this.lastScrollTop = currentScroll;
+            } else if (currentScroll < this.lastScrollTop - 64 || currentScroll <= 0) {
+                this.isMenuVisible = true;
+                this.lastScrollTop = currentScroll;
+            }
+        });
     },
     beforeUnmount() {
         document.removeEventListener('mouseup', this.handleClickOutside);
     },
     template: html`
         <header>
-            <nav :class="{ 'open': isMenuOpen }">
+            <nav 
+                :class="{ 'open': isMenuOpen, 'hidden': !isMenuVisible && !isMenuOpen }"
+                >
                 <a @click.prevent="$emit('navigate-to-path', 'dashboard');">
                     <img :src="logoSrc" alt="Top Shelf Exhibits" />
                 </a>

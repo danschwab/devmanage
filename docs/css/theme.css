@@ -93,6 +93,7 @@
         --padding-md: 8px;
         --padding-lg: 16px;
         --page-width-card: calc(100vw - 16px);
+        --navbar-height: 50px;
     }
 }
 

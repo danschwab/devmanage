@@ -17,19 +17,20 @@ header nav {
     left:0;
     right:0;
     top: 0;
-    height:80px;
+    max-height: var(--navbar-height);
     z-index: 3000;
     background-color: var(--background-color);
     box-shadow: 0 4px 8px var(--color-shadow);
-    transition: height 0.3s ease-in-out;
+    transition: max-height 0.2s ease-in-out;
     overflow: hidden;
 }
 
 nav .button-symbol {
     display: none; /* Hidden by default on desktop */
-    position: absolute;
-    top: 50%;
+    position: fixed;
+    top: 24px;
     transform: translateY(-50%);
+    box-shadow: .5px 2px 6px var(--color-shadow);
     right: var(--padding-lg);
 }
 
@@ -104,8 +105,8 @@ div#app-content {
     left: 0;
     right: 0;
     bottom: 0;
-    top: var(--navbar-height);
-    padding: var(--padding-lg) var(--padding-lg) var(--padding-md) var(--padding-lg);
+    top: 0;
+    padding: calc(var(--padding-lg) + var(--navbar-height)) var(--padding-md) var(--padding-md) var(--padding-md);
     box-sizing: border-box;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1169,26 +1170,38 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 @media (max-width: 800px) {
     /* Mobile navigation */
-    header:has(nav.open)::before {
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        height: 100%;
+    header::before {
+        position: fixed;
+        inset: 0;
         content: "";
         background: var(--color-modal-bg-gradient);
         z-index: 3000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
     }
     
+    header:has(nav.open)::before {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    
+    nav.hidden {
+        max-height: 0;
+    }
     nav.open {
-        height: auto;
+        max-height: 200px;
     }
     
+    nav img {
+        height: 46px;
+        margin: 2px 10px;
+    }
+
     nav #navbar {
         flex-direction: column;
         align-items: flex-start;
-        padding: 20px;
+        padding: 7px;
         box-sizing: border-box;
     }
     
