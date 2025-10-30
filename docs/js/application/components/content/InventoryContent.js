@@ -222,14 +222,15 @@ export const InventoryContent = {
         <slot>
             <!-- Main Inventory View -->
             <slot v-if="containerPath === 'inventory'">
-                <div class="button-bar">
+                <div class="content"><div class="button-bar">
                     <button 
                         v-for="nav in inventoryNavigation" 
                         :key="nav.id"
+                        class="alert"
                         @click="navigateToPath(nav.path)">
                         {{ nav.label }}
                     </button>
-                </div>
+                </div></div>
                 <inventory-overview-table
                     :container-path="containerPath"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"

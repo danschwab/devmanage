@@ -7,26 +7,26 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 
 **to do:**
 
-- container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
-- find error causing early dashboard changes to be overwritten by an empty dashboard
-- find error causing unsyncing of packlist saves, or attribute it to fakeGoogle
-- find error causing card component to lose analytics details on reload after cache clear???
+- reactiveStore optimization: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 
-- ensure that everything works if ben and DY simultaneously edit
+* container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
+* find error causing early dashboard changes to be overwritten by an empty dashboard
+* find error causing unsyncing of packlist saves, or attribute it to fakeGoogle
+* find error causing card component to lose analytics details on reload after cache clear???
 
-  - 'is editing' flag for packlists and inventories that locks other users out.
-
-- extra spreadsheet MetaData column
-  - save history {dateTime, userName, fields[], old values[]}
-  - consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes
-- allow new packlists from template, allow duplicate packlists from existing packlists
+- Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
+- ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
 - implement packlist rules, and automatic packlist rule suggestion jobs
   - description change recommendations for common or similar items that checks or aggregates history potentially?
   - quickly add typical client or show items
-- Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
-- Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to metadata.
-  - Allow metadata finding, viewing (in modal?), checking (analysis steps), and updating (via inventor).
+- extra spreadsheet MetaData column
+  - save history {dateTime, userName, fields[], old values[]}
+  - consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes
+  - 'is editing' flag for packlists and inventories that locks other users out.
+- allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
+- Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
+  - Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - Inject the sheet ids and the api-key via github soas not to expose them
 
 **maybe:**
@@ -37,6 +37,10 @@ workspace system with multiple dashboards? Easily pin to dashboard?
 allow modals to receive the arrow keys and enter button
 create backup of packlists before saving packlist to ensure no data loss
 find missing show or client index info and allow user to add it
+user preferences (allow delay save)
+
+- view table details in modal or as dropdown default
+- default settings for primary page views
 
 ## MVP
 

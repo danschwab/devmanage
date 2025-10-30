@@ -1,5 +1,3 @@
-on:
-jobs:
 name: Deploy static site to Pages
 on:
   push:

@@ -1077,10 +1077,57 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 
+/* Status Indicators */
 
-
-
-
+/* Removed per design decision, keep in case it's useful later
+.unsaved:has(.unsaved)::after,
+.alert:has(.alert)::after,
+.dirty:has(.dirty)::after {
+    content: none;
+    display: none;
+}
+.unsaved::after, .alert::after, .dirty::after {
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: .6rem;
+    display: block;
+    opacity: .8;
+    line-height: 1.1rem;
+    position: absolute;
+    right: 3px;
+    top: calc(50% - .6rem);
+    text-align: center;
+    pointer-events: none;
+    transition: width 0.3s ease;
+}
+.unsaved::after {
+    content: "●";
+    background: var(--color-red);
+    color: var(--color-text-inverted);
+}
+:hover.unsaved::after {
+    content: "unsaved";
+    width: 4.5rem;
+}
+.alert::after {
+    content: "⚠";
+    background: var(--color-yellow);
+    color: var(--color-text);
+}
+:hover.alert::after {
+    content: "alert";
+    width: 3rem;
+}
+.dirty::after {
+    content: "✎";
+    background: var(--color-red);
+    color: var(--color-text-inverted);
+}
+:hover.dirty::after {
+    content: "edited";
+    width: 3.5rem;
+}
+*/
 
 
 
