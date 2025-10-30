@@ -115,12 +115,10 @@ export const PacklistTable = {
         },
         // Get search term from URL parameters
         initialSearchTerm() {
-            console.log('navParams search:', this.navParams?.searchTerm);
             return this.navParams?.searchTerm || '';
         },
         editMode() {
             // Check if we're viewing the edit subview
-            console.log('navParams edit:', this.navParams?.edit);
             return this.navParams?.edit === true;
         }
     },
@@ -390,6 +388,9 @@ export const PacklistTable = {
         },
 
         async handlePrint() {
+            //if not on the packlist page, navigate to the packlist page first
+            this.$emit('navigate-to-path', { targetPath: this.containerPath});
+
             this.isPrinting = true;
             
             // Temporarily remove 'Pack' and 'Check' from hidden columns for printing
