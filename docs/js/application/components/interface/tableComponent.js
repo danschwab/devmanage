@@ -724,7 +724,7 @@ export const TableComponent = {
 
         getSortIcon(columnKey) {
             if (!this.sortable || this.sortColumn !== columnKey) return '';
-            return this.sortDirection === 'asc' ? '↑' : '↓';
+            return this.sortDirection === 'asc' ? '⭡' : '⭣';
         },
         
         formatCellValue(value, column) {
@@ -1494,7 +1494,7 @@ export const TableComponent = {
                                         @click="handleSort(column.key)"
                                         :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        {{ getSortIcon(column.key) || '↕' }}
+                                        {{ getSortIcon(column.key) || '⭥' }}
                                     </button>
                                 </div>
                             </th>

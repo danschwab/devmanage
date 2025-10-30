@@ -12,7 +12,9 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 
 * container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 * find error causing early dashboard changes to be overwritten by an empty dashboard
-* find error causing unsyncing of packlist saves, or attribute it to fakeGoogle
+
+- find error causing unsyncing of packlist saves, especially when data or rows are deleted
+
 * find error causing card component to lose analytics details on reload after cache clear???
 
 - Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
@@ -30,10 +32,11 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 - Inject the sheet ids and the api-key via github soas not to expose them
 
 **maybe:**
+change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.
 quick action buttons on cards?
 allow analysis to intelligently slow or pause itself and notify user for slow connection states.
 implement notes and checklists
-workspace system with multiple dashboards? Easily pin to dashboard?
+workspace system with multiple dashboards?
 allow modals to receive the arrow keys and enter button
 create backup of packlists before saving packlist to ensure no data loss
 find missing show or client index info and allow user to add it
