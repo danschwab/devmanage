@@ -65,6 +65,10 @@ export class Auth {
             await GoogleSheetsAuth.authenticate();
             
             const email = await GoogleSheetsAuth.getUserEmail();
+            if (!email || email.length === 0) {
+                throw new Error('Failed to retrieve user email');
+            }
+
             authState.user = { email, name: email?.split('@')[0] || 'User' };
             authState.isAuthenticated = true;
             
@@ -85,11 +89,11 @@ export class Auth {
         authState.error = null;
 
         try {
-            await GoogleSheetsAuth.logout();
-            
             // Clean up dashboard registry (save any pending changes and reset)
             await DashboardRegistry.saveNow();
             DashboardRegistry.cleanup();
+
+            await GoogleSheetsAuth.logout();
             
             // Flush everything in the reactive store
             authState.isAuthenticated = false;

@@ -110,7 +110,7 @@ const App = {
 
         if (this.isAuthenticated) {
             // Initialize dashboard registry if authenticated
-            await NavigationRegistry.initializeDashboard();
+            NavigationRegistry.initializeDashboard();
             
             // Apply current URL state if user is already authenticated
             const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
@@ -207,8 +207,11 @@ const App = {
             </primary-nav>
 
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
-                <!-- App loading indicator -->
-                <div v-if="!isAuthenticated" class="empty-message">
+
+                <div v-if="authError" class="empty-message" style="color: var(--color-text);">
+                    <div class="card red"><strong>Error: </strong>{{ authError }} </div>
+                </div>
+                <div v-else-if="!isAuthenticated" class="empty-message">
                     please log in to view content
                 </div>
                 
@@ -219,7 +222,8 @@ const App = {
                         <p>{{ appLoadingMessage }}</p>
                     </div>
                 </div>
-                
+
+
                 <!-- Dashboard loading indicators >
                 <div v-else-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">

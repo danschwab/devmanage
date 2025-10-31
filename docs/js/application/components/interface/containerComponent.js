@@ -173,8 +173,10 @@ export const ContainerComponent = {
                     <p>Loading data...</p>
                 </div>
                 <slot v-else name="content">
-                    <div class="content-footer red">
-                        <p>nothing found at "{{ containerPath }}"</p>
+                    <div class="content">
+                        <div class="card red">
+                            <p>nothing found at "{{ containerPath }}"</p>
+                        </div>
                     </div>
                 </slot>
             </div>

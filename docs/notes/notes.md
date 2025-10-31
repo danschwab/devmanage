@@ -7,14 +7,19 @@ Google drive rate-limits queries, making it difficult to realtime-check tons of 
 
 **to do:**
 
+- make thumbnails be a cached analytics step
+- ensure log out/in does not break things: the pin button currently breaks on reauth
 - reactiveStore optimization: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 - fix scrolling issue when navigating
+- allow unused reactiveStores to self-clean to save memory after a period of inactivity
 
 * container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 * find error causing early dashboard changes to be overwritten by an empty dashboard
 
+- find error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
 - find error causing unsyncing of packlist saves, especially when data or rows are deleted
+- find error causing imperfect or corrupted analytics information on data refresh after auth
 
 * find error causing card component to lose analytics details on reload after cache clear???
 
