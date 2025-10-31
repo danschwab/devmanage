@@ -21,7 +21,7 @@ header nav {
     z-index: 3000;
     background-color: var(--background-color);
     box-shadow: 0 4px 8px var(--color-shadow);
-    transition: max-height 0.2s ease-in-out;
+    transition: max-height 0.2s ease;
     overflow: hidden;
 }
 
@@ -37,20 +37,38 @@ nav .button-symbol {
 nav img {
     height: 64px;
     width: auto;
-    margin: 8px 20px;
+    margin: 8px;
 }
 nav #navbar {
     display: flex;
+    padding: 0 var(--padding-lg);
+    gap: var(--padding-lg);
     justify-content: flex-start;
     align-items: center;
     width: 100%;
+    transition: gap 0.2s ease-in-out;
+}
+nav #navbar button, nav #navbar a {
+    display: block;
+    overflow:hidden;
+    max-height: 100px;
+    opacity: 1;
+    transition: opacity .1s ease-in-out, max-height 0.15s ease-in-out, margin 0.15s ease-in-out, padding 0.15s ease-in-out;
+}
+
+nav #navbar button {
+    margin-left: auto;
+    width: auto;
+    flex: 0 0 auto;
 }
 nav #navbar a {
-    margin: auto 40px;
+    display:block;
     text-decoration: none;
+    text-align: center;
     cursor: pointer;
     font-weight: bold;
     color: var(--color-primary);
+    flex: .1 0 auto;
 }
 nav #navbar a.active {
     color: var(--color-primary-light);
@@ -58,14 +76,10 @@ nav #navbar a.active {
 nav #navbar a:hover {
     text-decoration: underline;
 }
-nav #navbar .login-out-button {
-    position: absolute;
-    right: 20px;
-}
 
 footer {
     width:100%;
-    /*height: var(--navbar-height);*/
+    max-width: calc(var(--page-width-card) * 4 + var(--padding-lg) * 3);
     background-color: transparent;
     box-shadow: 0 -12px 14px -18px var(--color-shadow);
     display: flex;
@@ -76,8 +90,10 @@ footer {
     padding-top: calc(var(--padding-lg) / 2);
     margin-top: var(--padding-lg);
     opacity: .6;
-
+}
+div#app-content.dashboard:not(:has(> div.empty-message)) footer {
     grid-column: 1 / -1;
+    align-self: end;
 }
 footer a, footer p {
     color: var(--color-text);
@@ -106,29 +122,33 @@ div#app-content {
     right: 0;
     bottom: 0;
     top: 0;
-    padding: calc(var(--padding-lg) + var(--navbar-height)) var(--padding-md) var(--padding-md) var(--padding-md);
-    box-sizing: border-box;
+    padding: var(--padding-md);
+    padding-top: calc(var(--padding-lg) + var(--navbar-height));
+    box-sizing: content-box;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-div#app-content.dashboard {
+div#app-content.dashboard:not(:has(> div.empty-message)) {
     display: grid;
     justify-content: center;
+    align-items: start;
     grid-template-columns: repeat(auto-fit, var(--page-width-card));
     gap: var(--padding-lg);
-    box-sizing: border-box;
+    padding-left: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2);
+    padding-right: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2);
     width: auto;
 }
 
 div#app-content > div.empty-message {
     color: var(--color-gray-bg-transparent);
     text-align: center;
+    align-content: center;
     font-size: larger;
     padding: 0;
     margin: 0;
     font-style: italic;
-    line-height: calc(100vh - var(--navbar-height) - var(--padding-lg) * 2);
+    flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2);
     grid-column: 1 / -1;
 }
 
@@ -147,7 +167,7 @@ div#app-content > div.empty-message {
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: var(--page-width-large);
-    /*min-height: calc(100vh - var(--navbar-height) - 2 * var(--padding-lg));*/
+    flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1186,57 +1206,54 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         pointer-events: auto;
     }
     
+    
+    nav img {
+        height: 46px;
+        margin: 2px;
+    }
+    nav #navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;/*var(--padding-lg);*/
+        box-sizing: border-box;
+    }
+    nav:has(#navbar a) .button-symbol {
+        display: block;
+    }
+    
+    /* Hide navigation items by default on mobile */
     nav.hidden {
         max-height: 0;
     }
     nav.open {
-        max-height: 200px;
+        max-height: 100vh;
     }
-    
-    nav img {
-        height: 46px;
-        margin: 2px 10px;
+    nav:not(.open) #navbar {
+        gap: 0;
     }
-
-    nav #navbar {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 7px;
-        box-sizing: border-box;
+    nav #navbar a {
+        margin-top: var(--padding-lg);
     }
-    
-    nav .button-symbol {
-        display: block;
+    nav #navbar button {
+        margin-top: var(--padding-sm);
+        margin-bottom: var(--padding-sm);
     }
-    nav:not(:has(#navbar a)) .button-symbol {
-        display:none;
-    }
-    
-    /* Hide navigation items by default on mobile */
-    nav #navbar a, 
-    nav #navbar button:not(.button-symbol) {
-        display: none;
-        margin: var(--padding-sm);
+    nav:not(.open) #navbar a:not(.active), 
+    nav:not(.open) #navbar button:not(.active) {
+        max-height: 0;
+        margin-top: 0;
+        margin-bottom:0;
+        padding-top:0;
+        padding-bottom:0;
+        opacity: 0;
     }
     
     /* Show active page link on mobile */
     nav #navbar a.active {
         color: var(--color-primary);
-        display: block;
     }
-    nav #navbar button.active {
-        display: block;
-        position: static;
-        margin:0
-    }
-    
-    /* Show all navigation when menu is open */
-    nav.open #navbar a, 
-    nav.open #navbar button:not(.button-symbol) {
-        display: block;
-        position: static;
-        margin: 0.5rem;
-        width: auto;
+    nav #navbar button {
+        margin-left: 0;
     }
     nav.open #navbar a.active {
         color: var(--color-primary-light);
