@@ -253,6 +253,9 @@ div#app-content > div.empty-message {
 
 .content {
     padding: var(--padding-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-sm);
 }
 .content-header {
     display: flex;
@@ -413,6 +416,9 @@ button.card {
     grid-auto-rows: 1fr;
     align-items: center;
     gap: var(--padding-sm);
+}
+.cards-grid.two {
+    grid-template-columns: repeat(2, 1fr);
 }
 .content-header + .cards-grid {
     padding-top: var(--padding-sm);

@@ -85,6 +85,7 @@ h6 {
 }
 
 input[type="text"],
+input[type="date"],
 input[type="number"],
 select {
     color: unset;

@@ -8,6 +8,10 @@ export const ScheduleTableComponent = {
         filter: {
             type: [Object, String],
             default: null
+        },
+        searchParams: {
+            type: Object,
+            default: null
         }
     },
     inject: ['$modal'],
@@ -122,16 +126,20 @@ export const ScheduleTableComponent = {
             },
             immediate: true
         },
-        // Watch for filter changes and recreate store with new parameters
+        // Watch for filter or searchParams changes and recreate store with new parameters
         filter: {
             handler(newFilter, oldFilter) {
                 if (JSON.stringify(newFilter) !== JSON.stringify(oldFilter)) {
-                    // Create a new reactive store with the updated filter
-                    this.scheduleTableStore = getReactiveStore(
-                        Requests.getProductionScheduleData,
-                        null,
-                        [newFilter]
-                    );
+                    this.recreateStore();
+                }
+            },
+            deep: true,
+            immediate: false
+        },
+        searchParams: {
+            handler(newSearchParams, oldSearchParams) {
+                if (JSON.stringify(newSearchParams) !== JSON.stringify(oldSearchParams)) {
+                    this.recreateStore();
                 }
             },
             deep: true,
@@ -139,13 +147,17 @@ export const ScheduleTableComponent = {
         }
     },
     async mounted() {
-        this.scheduleTableStore = getReactiveStore(
-            Requests.getProductionScheduleData,
-            null,
-            [this.filter]
-        );
+        this.recreateStore();
     },
     methods: {
+        recreateStore() {
+            // Create a new reactive store with the updated filter and searchParams
+            this.scheduleTableStore = getReactiveStore(
+                Requests.getProductionScheduleData,
+                null,
+                [this.filter, this.searchParams]
+            );
+        },
         async handleRefresh() {
             // Reload schedule data (cache will be automatically invalidated)
             if (this.scheduleTableStore) {
