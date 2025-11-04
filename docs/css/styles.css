@@ -359,6 +359,7 @@ div#app-content > div.empty-message {
     padding: var(--padding-sm);
     width: 100%;
     border-radius: var(--radius-lg);
+    overflow: hidden;
 }
 
 .card:has(.content-header) {
@@ -880,13 +881,18 @@ tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:firs
 }
 
 /* Analyzing Row Styling */
-tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after {
+tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
+.card.analyzing::after {
     content: "";
     background: linear-gradient(90deg,
                 transparent,
                 var(--color-gray-bg-transparent),
                 transparent);
     animation: loading-bar-slide 2s infinite linear;
+    position: absolute;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
 }
 
 

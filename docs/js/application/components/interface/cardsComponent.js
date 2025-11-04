@@ -174,15 +174,12 @@ export const CardsComponent = {
                     </button-->
                 </div>
                 <!-- Loading/Analysis Progress Indicator -->
-                <transition name="fade">
-                    <LoadingBarComponent
-                        v-if="isLoading || isAnalyzing"
-                        :is-loading="isLoading"
-                        :is-analyzing="isAnalyzing"
-                        :percent-complete="loadingProgress"
-                        class="embedded"
-                    />
-                </transition>
+                <LoadingBarComponent
+                    :is-loading="isLoading"
+                    :is-analyzing="isAnalyzing"
+                    :percent-complete="loadingProgress"
+                    class="embedded"
+                />
             </div>
 
             <!-- Cards Grid (shows during analysis with progressive updates) -->

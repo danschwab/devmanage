@@ -19,7 +19,7 @@ const ConfirmComponent = {
     template: html`
         <div style="text-align: center; padding: 1rem;">
             <div v-html="message"></div>
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 1rem;" class="button-bar">
                 <button @click="confirm">{{ confirmText || 'Ok' }}</button>
                 <button @click="cancel">{{ cancelText || 'Cancel' }}</button>
             </div>

@@ -381,3 +381,152 @@ export function cleanTextForComparison(text) {
         .replace(/\s+/g, ' ')   // Normalize whitespace
         .trim();                // Remove leading/trailing spaces
 }
+
+/**
+ * Parse a DateSearch URL parameter into a filter object
+ * Format: 'offset,offset' or 'date,date' or 'showIdentifier'
+ * 
+ * @param {string} dateSearch - The DateSearch parameter from URL
+ * @returns {Object} Filter object with startDate, endDate, startDateOffset, endDateOffset, or overlapShowIdentifier
+ */
+export function parseDateSearchParameter(dateSearch) {
+    const filter = {};
+    
+    if (!dateSearch) return filter;
+    
+    // Check if it's an offset (starts with + or - or is a number followed by comma)
+    if (dateSearch.startsWith('+') || dateSearch.startsWith('-') || /^-?\d+,/.test(dateSearch)) {
+        // Format: offset,offset (e.g., '-30,365' or '0,30')
+        const [start, end] = dateSearch.split(',');
+        
+        if (start !== undefined && start !== '') {
+            filter.startDateOffset = parseInt(start);
+        }
+        if (end !== undefined && end !== '') {
+            filter.endDateOffset = parseInt(end);
+        }
+    } else if (dateSearch.includes(',')) {
+        // Format: date,date (e.g., '2025-01-01,2025-12-31')
+        const [start, end] = dateSearch.split(',');
+        
+        if (start && start !== '') {
+            filter.startDate = start;
+        }
+        if (end && end !== '') {
+            filter.endDate = end;
+        }
+    } else {
+        // Just a show identifier for overlap
+        filter.overlapShowIdentifier = dateSearch;
+    }
+    
+    return filter;
+}
+
+/**
+ * Build a DateSearch URL parameter from filter components
+ * 
+ * @param {Object} options - Filter options
+ * @param {number} options.startDateOffset - Start date offset in days
+ * @param {number} options.endDateOffset - End date offset in days
+ * @param {string} options.startDate - Start date string (YYYY-MM-DD)
+ * @param {string} options.endDate - End date string (YYYY-MM-DD)
+ * @param {string} options.overlapShowIdentifier - Show identifier for overlap
+ * @returns {string|null} DateSearch parameter string or null if no date criteria
+ */
+export function buildDateSearchParameter(options) {
+    const { startDateOffset, endDateOffset, startDate, endDate, overlapShowIdentifier } = options;
+    
+    // If there's an overlap identifier, return it directly
+    if (overlapShowIdentifier) {
+        return overlapShowIdentifier;
+    }
+    
+    // If we have offsets, use them
+    if (startDateOffset !== null && startDateOffset !== undefined) {
+        const start = startDateOffset;
+        const end = endDateOffset !== null && endDateOffset !== undefined ? endDateOffset : '';
+        return `${start},${end}`;
+    }
+    
+    // If we have explicit dates, use them
+    if (startDate || endDate) {
+        return `${startDate || ''},${endDate || ''}`;
+    }
+    
+    return null;
+}
+
+/**
+ * Parse text filter parameters from URL params object
+ * Format: Col1, Val1, Col2, Val2, etc.
+ * 
+ * @param {Object} params - URL parameters object
+ * @returns {Array} Array of text filters with {column, value}
+ */
+export function parseTextFilterParameters(params) {
+    const textFilters = [];
+    let filterIndex = 1;
+    
+    while (params[`Col${filterIndex}`] || params[`Val${filterIndex}`]) {
+        const column = params[`Col${filterIndex}`] || '';
+        const value = params[`Val${filterIndex}`] || '';
+        
+        if (column || value) {
+            textFilters.push({ column, value });
+        }
+        filterIndex++;
+    }
+    
+    return textFilters;
+}
+
+/**
+ * Build text filter URL parameters
+ * 
+ * @param {Array} textFilters - Array of text filters with {column, value}
+ * @returns {Object} Object with Col1, Val1, Col2, Val2, etc.
+ */
+export function buildTextFilterParameters(textFilters) {
+    const params = {};
+    
+    if (!textFilters || !Array.isArray(textFilters)) return params;
+    
+    textFilters.forEach((filter, index) => {
+        if (filter.column || filter.value) {
+            params[`Col${index + 1}`] = filter.column || '';
+            params[`Val${index + 1}`] = filter.value || '';
+        }
+    });
+    
+    return params;
+}
+
+/**
+ * Parse all search parameters from URL params object
+ * Combines DateSearch and text filter parsing
+ * 
+ * @param {Object} params - URL parameters object
+ * @returns {Object} Object with {dateFilter, searchParams}
+ */
+export function parseSearchParameters(params) {
+    const result = {
+        dateFilter: {},
+        searchParams: {}
+    };
+    
+    // Parse DateSearch parameter
+    if (params.DateSearch) {
+        result.dateFilter = parseDateSearchParameter(params.DateSearch);
+    }
+    
+    // Parse text filters into searchParams
+    const textFilters = parseTextFilterParameters(params);
+    textFilters.forEach(filter => {
+        if (filter.column && filter.value) {
+            result.searchParams[filter.column] = filter.value;
+        }
+    });
+    
+    return result;
+}

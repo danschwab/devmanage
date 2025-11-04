@@ -12,6 +12,10 @@ export const ScheduleTableComponent = {
         searchParams: {
             type: Object,
             default: null
+        },
+        hideRowsOnSearch: {
+            type: Boolean,
+            default: true
         }
     },
     inject: ['$modal'],
@@ -370,6 +374,7 @@ export const ScheduleTableComponent = {
             emptyMessage="No shows found."
             :loading-message="loadingMessage"
             :showSearch="true"
+            :hideRowsOnSearch="hideRowsOnSearch"
             :sortable="true"
             :allowDetails="true"
             @refresh="handleRefresh"

@@ -84,6 +84,36 @@ class applicationUtils_uncached {
         
         return parsedValue;
     }
+    
+    /**
+     * Initialize default saved searches for a user if they don't exist
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to initialize searches for
+     * @returns {Promise<Array>} Array of saved searches (existing or newly created)
+     */
+    static async initializeDefaultSavedSearches(deps, username) {
+        // Check if user already has saved searches
+        const existingSearches = await deps.call(applicationUtils_uncached.getUserData, username, 'saved_searches');
+        
+        if (existingSearches && existingSearches.length > 0) {
+            // User already has saved searches, return them
+            return existingSearches;
+        }
+        
+        // Create default saved searches
+        const defaultSearches = [
+            {
+                name: 'Upcoming',
+                dateSearch: '0,30', // Today to 30 days in the future
+                textFilters: []
+            }
+        ];
+        
+        // Store the default searches
+        await applicationUtils_uncached.storeUserData(username, 'saved_searches', defaultSearches);
+        
+        return defaultSearches;
+    }
 }
 
-export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData']);
+export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData', 'initializeDefaultSavedSearches']);

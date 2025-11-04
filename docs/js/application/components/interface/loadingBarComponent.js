@@ -10,6 +10,10 @@ import { html } from '../../index.js';
  */
 export const LoadingBarComponent = {
     props: {
+        key: {
+            type: String,
+            default: 'defaultkey'
+        },
         isLoading: {
             type: Boolean,
             default: false
@@ -41,14 +45,16 @@ export const LoadingBarComponent = {
         }
     },
     template: html`
-        <div v-if="isVisible" class="loading-bar-container">
-            <div class="loading-bar-track">
-                <div 
-                    class="loading-bar-fill"
-                    :class="progressClass"
-                    :style="{ width: progressWidth }"
-                ></div>
+        <transition name="fade">
+            <div v-if="isVisible" class="loading-bar-container" :key="'loading-bar-' + key">
+                <div class="loading-bar-track">
+                    <div 
+                        class="loading-bar-fill"
+                        :class="progressClass"
+                        :style="{ width: progressWidth }"
+                    ></div>
+                </div>
             </div>
-        </div>
+        </transition>
     `
 };

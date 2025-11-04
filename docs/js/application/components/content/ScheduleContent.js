@@ -1,4 +1,5 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parseDateSearchParameter, parseSearchParameters, getReactiveStore, authState } from '../../index.js';
+import { AdvancedSearchComponent } from './ScheduleAdvancedSearch.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
@@ -58,422 +59,6 @@ export const ScheduleMenuComponent = {
     `
 };
 
-// Advanced Search Component for Schedule (defined first so it can be registered)
-const AdvancedSearchComponent = {
-    components: {
-        ScheduleTableComponent
-    },
-    props: {
-        containerPath: String
-    },
-    data() {
-        return {
-            // Date range filters
-            startDate: '',
-            endDate: '',
-            overlapShowIdentifier: '', // Identifier of the show to find overlaps with
-            overlapShowYearFilter: new Date().getFullYear().toString(), // 'upcoming' or specific year (defaults to current year)
-            dateFilterMode: 'dateRange', // 'dateRange' or 'overlap' - tracks which filter is active
-            
-            // Dynamic text search filters
-            textFilters: [
-                { id: 1, column: '', value: '' }
-            ],
-            nextFilterId: 2,
-            
-            // Available columns for text search
-            availableColumns: [],
-            isLoadingColumns: false,
-            
-            // Available shows for overlap dropdown (all shows from API)
-            allShows: [],
-            isLoadingShows: false,
-            
-            // Computed filter for table
-            activeFilter: null,
-            activeSearchParams: null
-        };
-    },
-    computed: {
-        hasDateRangeFilter() {
-            return this.startDate || this.endDate || this.overlapShowIdentifier;
-        },
-        hasTextSearchFilter() {
-            return this.textFilters.some(f => f.column && f.value);
-        },
-        availableYears() {
-            const currentYear = new Date().getFullYear();
-            const years = [];
-            for (let y = currentYear + 2; y >= 2023; y--) {
-                years.push(y);
-            }
-            return years;
-        },
-        filteredShows() {
-            if (!this.allShows || this.allShows.length === 0) {
-                return [];
-            }
-
-            if (this.overlapShowYearFilter === 'upcoming') {
-                // Filter for upcoming shows (current year and future)
-                const currentYear = new Date().getFullYear();
-                return this.allShows.filter(show => {
-                    const year = parseInt(show.year);
-                    return year >= currentYear;
-                });
-            } else {
-                // Filter by specific year
-                const selectedYear = parseInt(this.overlapShowYearFilter);
-                return this.allShows.filter(show => {
-                    return parseInt(show.year) === selectedYear;
-                });
-            }
-        }
-    },
-    async mounted() {
-        await Promise.all([
-            this.loadAvailableShows(),
-            this.loadAvailableColumns()
-        ]);
-    },
-    methods: {
-        async loadAvailableShows() {
-            this.isLoadingShows = true;
-            try {
-                // Get all shows from production schedule (no filters)
-                const allShowsData = await Requests.getProductionScheduleData();
-                
-                // Create a unique list of show identifiers with display names and year
-                this.allShows = allShowsData.map(show => ({
-                    identifier: show.Identifier || `${show.Client} ${show.Year} ${show.Show}`,
-                    display: `${show.Show} - ${show.Client} (${show.Year})`,
-                    year: show.Year
-                })).sort((a, b) => {
-                    // Sort by year desc, then by display name
-                    if (a.year !== b.year) {
-                        return parseInt(b.year) - parseInt(a.year);
-                    }
-                    return a.display.localeCompare(b.display);
-                });
-                
-            } catch (error) {
-                console.error('Failed to load available shows:', error);
-                this.allShows = [];
-            } finally {
-                this.isLoadingShows = false;
-            }
-        },
-        async loadAvailableColumns() {
-            this.isLoadingColumns = true;
-            try {
-                // Get sample data to extract column headers
-                const sampleData = await Requests.getProductionScheduleData();
-                
-                if (sampleData && sampleData.length > 0) {
-                    // Extract all column headers from the first row, excluding AppData
-                    const firstRow = sampleData[0];
-                    this.availableColumns = Object.keys(firstRow)
-                        .filter(key => key !== 'AppData')
-                        .sort();
-                } else {
-                    this.availableColumns = [];
-                }
-                
-            } catch (error) {
-                console.error('Failed to load available columns:', error);
-                this.availableColumns = [];
-            } finally {
-                this.isLoadingColumns = false;
-            }
-        },
-        addTextFilter() {
-            this.textFilters.push({
-                id: this.nextFilterId++,
-                column: '',
-                value: ''
-            });
-        },
-        removeTextFilter(filterId) {
-            // Keep at least one filter
-            if (this.textFilters.length > 1) {
-                this.textFilters = this.textFilters.filter(f => f.id !== filterId);
-            }
-        },
-        setDateFilterMode(mode) {
-            this.dateFilterMode = mode;
-        },
-        applyFilters() {
-            // Build filter object for date range (parameters to getOverlappingShows)
-            let filter = null;
-            let searchParams = null;
-
-            // Date range or overlap filtering based on active mode
-            if (this.hasDateRangeFilter) {
-                if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                    // Use identifier-based overlap detection
-                    filter = { identifier: this.overlapShowIdentifier };
-                } else if (this.dateFilterMode === 'dateRange' && (this.startDate || this.endDate)) {
-                    // Use date range
-                    filter = {};
-                    if (this.startDate) filter.startDate = this.startDate;
-                    if (this.endDate) filter.endDate = this.endDate;
-                }
-            }
-
-            // Text search filtering (searchParams uses searchFilter)
-            if (this.hasTextSearchFilter) {
-                searchParams = {};
-                // Build search params from dynamic text filters
-                this.textFilters.forEach(f => {
-                    if (f.column && f.value) {
-                        searchParams[f.column] = f.value;
-                    }
-                });
-            }
-
-            // Set the filters
-            this.activeFilter = filter;
-            this.activeSearchParams = searchParams;
-        },
-        clearFilters() {
-            this.startDate = '';
-            this.endDate = '';
-            this.overlapShowIdentifier = '';
-            this.overlapShowYearFilter = new Date().getFullYear().toString();
-            this.dateFilterMode = 'dateRange';
-            this.textFilters = [{ id: 1, column: '', value: '' }];
-            this.nextFilterId = 2;
-            this.activeFilter = null;
-            this.activeSearchParams = null;
-        },
-        setPreset(preset) {
-            this.clearFilters();
-            const today = new Date();
-            const currentYear = today.getFullYear();
-            
-            switch (preset) {
-                case 'upcoming':
-                    this.startDate = today.toISOString().slice(0, 10);
-                    const future = new Date(today.getTime() + 365 * 24 * 60 * 60 * 1000);
-                    this.endDate = future.toISOString().slice(0, 10);
-                    break;
-                case 'thisYear':
-                    this.startDate = `${currentYear}-01-01`;
-                    this.endDate = `${currentYear}-12-31`;
-                    break;
-                case 'nextYear':
-                    this.startDate = `${currentYear + 1}-01-01`;
-                    this.endDate = `${currentYear + 1}-12-31`;
-                    break;
-                case 'lastYear':
-                    this.startDate = `${currentYear - 1}-01-01`;
-                    this.endDate = `${currentYear - 1}-12-31`;
-                    break;
-                case 'thisMonth':
-                    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                    this.startDate = monthStart.toISOString().slice(0, 10);
-                    this.endDate = monthEnd.toISOString().slice(0, 10);
-                    break;
-            }
-            
-            this.applyFilters();
-        }
-    },
-    template: html`
-        <div class="advanced-search-container">
-            <div class="content search-form-section">
-                <!-- Quick Presets -->
-                <h4>Quick Presets</h4>
-                <div class="button-bar">
-                    <button @click="setPreset('upcoming')" class="">Upcoming Year</button>
-                    <button @click="setPreset('thisYear')" class="">This Year</button>
-                    <button @click="setPreset('nextYear')" class="">Next Year</button>
-                    <button @click="setPreset('lastYear')" class="">Last Year</button>
-                    <button @click="setPreset('thisMonth')" class="">This Month</button>
-                </div>
-
-                <!-- Date Range Filters -->
-                <div class="cards-grid two">
-                    <!-- Date Range Card -->
-                    <div 
-                        :class="['card', dateFilterMode === 'dateRange' ? 'green' : 'white clickable']"
-                        @click="setDateFilterMode('dateRange')"
-                    >
-                        <div class="content-header">
-                            <h5>Filter By Date Range</h5>
-                            <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
-                                ✓ Active filter
-                            </small>
-                            <small v-else style="display: block; color: var(--color-text-light);">
-                                Click to activate
-                            </small>
-                        </div>
-                        <div class="content">
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Start Date:</span>
-                                <input 
-                                    type="date" 
-                                    v-model="startDate" 
-                                    placeholder="YYYY-MM-DD"
-                                    @focus="setDateFilterMode('dateRange')"
-                                    style="padding: 0.5rem;"
-                                />
-                            </label>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">End Date:</span>
-                                <input 
-                                    type="date" 
-                                    v-model="endDate"
-                                    placeholder="YYYY-MM-DD"
-                                    @focus="setDateFilterMode('dateRange')"
-                                    style="padding: 0.5rem;"
-                                />
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Overlap Show Card -->
-                    <div 
-                        :class="['card', dateFilterMode === 'overlap' ? 'green' : 'white clickable']"
-                        @click="setDateFilterMode('overlap')"
-                    >
-                        <div class="content-header">
-                            <h5>Filter By Show Overlap</h5>
-                            <small v-if="isLoadingShows" style="display: block; color: var(--color-text-light);">
-                                Loading shows...
-                            </small>
-                            <small v-else-if="filteredShows.length === 0" style="display: block; color: var(--color-text-light);">
-                                No shows available for selected year filter
-                            </small>
-                            <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
-                                ✓ Active filter - showing {{ filteredShows.length }} show(s)
-                            </small>
-                            <small v-else style="display: block; color: var(--color-text-light);">
-                                Click to activate ({{ filteredShows.length }} show(s) available)
-                            </small>
-                        </div>
-                        <div class="content">
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Filter Shows by Year:</span>
-                                <select 
-                                    v-model="overlapShowYearFilter" 
-                                    @focus="setDateFilterMode('overlap')"
-                                    @change="overlapShowIdentifier = ''"
-                                    style="padding: 0.5rem;"
-                                >
-                                    <option value="upcoming">Upcoming Shows</option>
-                                    <option 
-                                        v-for="year in availableYears" 
-                                        :key="year" 
-                                        :value="year"
-                                    >
-                                        {{ year }}
-                                    </option>
-                                </select>
-                            </label>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Overlaps with Show:</span>
-                                <select 
-                                    v-model="overlapShowIdentifier" 
-                                    :disabled="isLoadingShows || filteredShows.length === 0"
-                                    @focus="setDateFilterMode('overlap')"
-                                    style="padding: 0.5rem;"
-                                >
-                                    <option value="">
-                                        {{ isLoadingShows ? 'Loading...' : (filteredShows.length === 0 ? 'No shows available' : 'Select a show...') }}
-                                    </option>
-                                    <option 
-                                        v-for="show in filteredShows" 
-                                        :key="show.identifier" 
-                                        :value="show.identifier"
-                                    >
-                                        {{ show.display }}
-                                    </option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Text Search Filters -->
-                <div v-if="isLoadingColumns" style="padding: 1rem; text-align: center; color: #666;">
-                    Loading columns...
-                </div>
-                
-                <slot v-else>
-                    <div 
-                        v-for="filter in textFilters" 
-                        :key="filter.id"
-                        :class="'card' + (filter.value ? ' green' : ' white')"
-                        style="display: flex; gap: var(--padding-sm); align-items: center;"
-                    >
-                        <span style="font-weight: 500; font-size: 0.9rem;">Column Filter:</span>
-                        <select 
-                            v-model="filter.column"
-                        >
-                            <option value="">Select column...</option>
-                            <option 
-                                v-for="col in availableColumns" 
-                                :key="col" 
-                                :value="col"
-                            >
-                                {{ col }}
-                            </option>
-                        </select>
-                    
-                        <span style="font-weight: 500; font-size: 0.9rem;">Search Text:</span>
-                        <input 
-                            type="text" 
-                            v-model="filter.value" 
-                            :placeholder="filter.column ? 'Search in ' + filter.column : 'Select a column first'"
-                            :disabled="!filter.column"
-                        />
-                        
-                        <button 
-                            @click="removeTextFilter(filter.id)"
-                            class="button-symbol red"
-                            :disabled="textFilters.length === 1"
-                            :title="textFilters.length === 1 ? 'At least one filter required' : 'Remove this filter'"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    
-                    <button 
-                        v-if="textFilters.length > 0 && textFilters.every(filter => filter.column && filter.value)"
-                        @click="addTextFilter" 
-                        class="card white"
-                        :disabled="isLoadingColumns"
-                    >
-                        Add Another Text Filter
-                    </button>
-                </slot>
-
-                <!-- Action Buttons -->
-                <div class="button-bar">
-                    <button @click="applyFilters" class="green">Apply Filters</button>
-                    <button @click="clearFilters" class="white">Clear All</button>
-                </div>
-            </div>
-
-            <!-- Results Table -->
-            <div class="search-results-section" style="margin-top: 1rem;">
-                <ScheduleTableComponent 
-                    v-if="activeFilter !== null || activeSearchParams !== null"
-                    :filter="activeFilter"
-                    :search-params="activeSearchParams"
-                />
-                <div v-else class="placeholder-message content" style="text-align: center; padding: 2rem;">
-                    <p style="font-size: 1.1rem; color: var(--text-muted, #666);">Configure your search criteria above and click "Apply Filters" to see results.</p>
-                </div>
-            </div>
-        </div>
-    `
-};
-
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
@@ -488,15 +73,51 @@ export const ScheduleContent = {
     },
     data() {
         return {
-            availableYearOptions: [],
-            selectedYearOption: 'upcoming', // Default to "Upcoming"
-            isLoadingYears: false,
-            filter: null
+            availableOptions: [],
+            selectedOption: new Date().getFullYear().toString(), // Default to current year
+            isLoadingOptions: false,
+            filter: null,
+            isUsingUrlParams: false,
+            savedSearchesStore: null // Will be initialized in mounted
         };
     },
     computed: {
         isAdvancedSearchView() {
             return this.containerPath === 'schedule/advanced-search';
+        },
+        // Split filter into dateFilter and searchParams for table
+        dateFilter() {
+            if (!this.filter) return null;
+            const { searchParams, ...dateFilter } = this.filter;
+            return Object.keys(dateFilter).length > 0 ? dateFilter : null;
+        },
+        tableSearchParams() {
+            return this.filter?.searchParams || null;
+        },
+        // Computed display value for the dropdown
+        dropdownDisplayValue() {
+            if (this.isUsingUrlParams) {
+                return 'url-params';
+            }
+            return this.selectedOption;
+        },
+        // Computed property to get saved searches from store
+        savedSearches() {
+            return this.savedSearchesStore?.data || [];
+        },
+        // Computed property to check authentication status
+        isUserAuthenticated() {
+            return authState.isAuthenticated;
+        }
+    },
+    watch: {
+        // Watch for authentication changes
+        isUserAuthenticated(newVal) {
+            if (newVal && !this.savedSearchesStore) {
+                // User just logged in, initialize the store
+                this.initializeSavedSearchesStore();
+                this.loadAvailableOptions();
+            }
         }
     },
     mounted() {
@@ -519,50 +140,206 @@ export const ScheduleContent = {
             }
         });
         
-        this.loadAvailableYears();
-        this.handleYearSelection(); // Set initial filter
+        // Initialize saved searches store
+        this.initializeSavedSearchesStore();
+        
+        this.loadAvailableOptions();
+        
+        // Check for URL parameters and apply complex search if present
+        if (!this.loadComplexSearchFromURL()) {
+            // No complex search params, use default year selection
+            this.handleSelection();
+        }
     },
     methods: {
-        loadAvailableYears() {
-            this.isLoadingYears = true;
-            try {
-                // Generate years from 2023 to current year, plus "Upcoming" option
-                const currentYear = new Date().getFullYear();
-                const startYear = 2023;
-                const yearOptions = [];
-                
-                // Add "Upcoming" as first option
-                yearOptions.push({ value: 'upcoming', label: 'Upcoming' });
-                
-                // Add years from current year down to start year
-                for (let year = currentYear; year >= startYear; year--) {
-                    yearOptions.push({ value: year.toString(), label: year.toString() });
-                }
-                
-                this.availableYearOptions = yearOptions;
-            } catch (error) {
-                console.error('Failed to generate available years:', error);
-            } finally {
-                this.isLoadingYears = false;
+        async initializeSavedSearchesStore() {
+            // Only initialize store if user is authenticated
+            if (!authState.isAuthenticated || !authState.user?.email) {
+                console.log('[ScheduleContent] User not authenticated, skipping saved searches initialization');
+                return;
+            }
+            
+            // Initialize reactive store using the same pattern as DashboardRegistry
+            // This will automatically initialize with default searches if they don't exist
+            this.savedSearchesStore = getReactiveStore(
+                Requests.getUserData,
+                Requests.storeUserData,
+                [authState.user.email, 'saved_searches'],
+                null, // No analysis config
+                true // Auto-load
+            );
+            
+            // Ensure default searches exist after store loads
+            if (this.savedSearchesStore.isLoading) {
+                // Wait for initial load to complete
+                await new Promise(resolve => {
+                    const checkLoading = setInterval(() => {
+                        if (!this.savedSearchesStore.isLoading) {
+                            clearInterval(checkLoading);
+                            resolve();
+                        }
+                    }, 50);
+                });
+            }
+            
+            // Initialize defaults if no searches exist
+            if (!this.savedSearchesStore.data || this.savedSearchesStore.data.length === 0) {
+                const defaultSearches = [
+                    {
+                        name: 'Upcoming',
+                        dateSearch: '0,30', // Today to 30 days in the future
+                        textFilters: []
+                    }
+                ];
+                this.savedSearchesStore.data = defaultSearches;
+                await this.savedSearchesStore.save();
             }
         },
-        handleYearSelection() {
-            if (this.selectedYearOption === 'upcoming') {
-                // Create filter for upcoming shows (today to +10 years)
-                const today = new Date();
-                const startDate = today.toISOString().slice(0, 10);
-                const future = new Date(today.getTime() + 10 * 365 * 24 * 60 * 60 * 1000);
-                const endDate = future.toISOString().slice(0, 10);
-                this.filter = { startDate, endDate };
-            } else if (this.selectedYearOption) {
-                // Create date range filter for the entire selected year
-                const year = parseInt(this.selectedYearOption);
+        async loadAvailableOptions() {
+            this.isLoadingOptions = true;
+            try {
+                const options = [];
+                
+                // Add years from current year down to 2023
+                const currentYear = new Date().getFullYear();
+                const startYear = 2023;
+                for (let year = currentYear; year >= startYear; year--) {
+                    options.push({ value: year.toString(), label: year.toString(), type: 'year' });
+                }
+                
+                // Add separator for saved searches
+                const savedSearches = await this.loadSavedSearches();
+                if (savedSearches.length > 0) {
+                    //options.push({ value: 'separator-1', label: '──────────', type: 'separator', disabled: true });
+                    
+                    // Add saved searches
+                    savedSearches.forEach((search, index) => {
+                        options.push({ 
+                            value: `search-${index}`, 
+                            label: search.name, 
+                            type: 'search',
+                            searchData: search
+                        });
+                    });
+                }
+                
+                // Add URL params option if there are URL parameters
+                //options.push({ value: 'separator-2', label: '──────────', type: 'separator', disabled: true });
+                options.push({ value: 'url-params', label: 'URL Params', type: 'urlparams', disabled: true });
+                
+                this.availableOptions = options;
+            } catch (error) {
+                console.error('Failed to load available options:', error);
+            } finally {
+                this.isLoadingOptions = false;
+            }
+        },
+        async loadSavedSearches() {
+            try {
+                if (!authState.isAuthenticated || !authState.user?.email) {
+                    return [];
+                }
+                
+                // Use the reactive store if initialized
+                if (this.savedSearchesStore) {
+                    // Wait for store to load if it's currently loading
+                    if (this.savedSearchesStore.isLoading) {
+                        await new Promise(resolve => {
+                            const checkLoading = setInterval(() => {
+                                if (!this.savedSearchesStore.isLoading) {
+                                    clearInterval(checkLoading);
+                                    resolve();
+                                }
+                            }, 50);
+                        });
+                    }
+                    return this.savedSearchesStore.data || [];
+                }
+                
+                // Fallback: return empty array if store not initialized
+                return [];
+            } catch (error) {
+                console.error('Failed to load saved searches:', error);
+                return [];
+            }
+        },
+        handleSelection() {
+            // Clear URL params flag when user manually selects
+            this.isUsingUrlParams = false;
+            
+            const selectedValue = this.selectedOption;
+            
+            // Find the selected option
+            const option = this.availableOptions.find(opt => opt.value === selectedValue);
+            
+            if (!option || option.type === 'separator' || option.type === 'urlparams') {
+                return;
+            }
+            
+            if (option.type === 'year') {
+                // Handle year selection - create date range filter for the entire selected year
+                const year = parseInt(selectedValue);
                 const startDate = `${year}-01-01`;
                 const endDate = `${year}-12-31`;
                 this.filter = { startDate, endDate, year };
-            } else {
-                this.filter = null;
+            } else if (option.type === 'search') {
+                // Handle saved search selection
+                this.applySavedSearch(option.searchData);
             }
+        },
+        applySavedSearch(searchData) {
+            const filter = {
+                searchParams: {}
+            };
+            
+            // Parse DateSearch from saved search
+            if (searchData.dateSearch) {
+                const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+                Object.assign(filter, dateFilter);
+            }
+            
+            // Apply text filters
+            if (searchData.textFilters && searchData.textFilters.length > 0) {
+                searchData.textFilters.forEach(textFilter => {
+                    if (textFilter.column && textFilter.value) {
+                        filter.searchParams[textFilter.column] = textFilter.value;
+                    }
+                });
+            }
+            
+            this.filter = filter;
+        },
+        loadComplexSearchFromURL() {
+            // Check if we're on the main schedule page (not advanced-search)
+            if (this.containerPath !== 'schedule') return false;
+            
+            // Get URL parameters for schedule route
+            const params = NavigationRegistry.getNavigationParameters('schedule');
+            
+            if (Object.keys(params).length === 0) return false;
+            
+            // Check if there are complex search parameters (DateSearch or text filters)
+            const hasDateSearch = !!params.DateSearch;
+            const hasTextFilters = Object.keys(params).some(key => key.startsWith('Col') || key.startsWith('Val'));
+            
+            if (!hasDateSearch && !hasTextFilters) return false;
+            
+            // Use utility to parse all search parameters
+            const { dateFilter, searchParams } = parseSearchParameters(params);
+            
+            // Build combined filter object
+            const filter = {
+                ...dateFilter,
+                searchParams
+            };
+            
+            // Apply the filter
+            this.filter = filter;
+            
+            // Set flag to show "URL Params" in dropdown
+            this.isUsingUrlParams = true;
+            
+            return true; // Indicate that complex search was loaded
         }
     },
     template: html`
@@ -570,29 +347,31 @@ export const ScheduleContent = {
             <!-- Main Schedule View (Year Selector) -->
             <div v-if="containerPath === 'schedule'" class="schedule-page">
                 <ScheduleTableComponent 
-                    :filter="filter" 
+                    :filter="dateFilter"
+                    :search-params="tableSearchParams"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 >
                     <template #table-header-area>
-                        <div class="year-selector-bar">
+                        <div class="button-bar">
                             <select 
-                                id="year-select"
-                                v-model="selectedYearOption" 
-                                @change="handleYearSelection"
-                                :disabled="isLoadingYears"
+                                id="schedule-filter-select"
+                                :value="dropdownDisplayValue"
+                                @change="(e) => { selectedOption = e.target.value; handleSelection(); }"
+                                :disabled="isLoadingOptions"
                                 class="year-select"
                             >
                                 <option 
-                                    v-for="option in availableYearOptions" 
+                                    v-for="option in availableOptions" 
                                     :key="option.value" 
                                     :value="option.value"
+                                    :disabled="option.disabled"
                                 >
-                                    {{ option.label }}
+                                    {{ isLoadingOptions ? 'Loading...' : option.label }}
                                 </option>
                             </select>
-                            <span v-if="isLoadingYears" class="status-text">
-                                Loading years...
-                            </span>
+                            <button @click="navigateToPath('schedule/advanced-search')">
+                                Advanced
+                            </button>
                         </div>
                     </template>
                 </ScheduleTableComponent>
@@ -602,6 +381,7 @@ export const ScheduleContent = {
             <AdvancedSearchComponent 
                 v-else-if="isAdvancedSearchView"
                 :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
                 @navigate-to-path="(event) => navigateToPath(event.targetPath)"
             />
         </slot>

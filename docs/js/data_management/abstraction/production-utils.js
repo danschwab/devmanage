@@ -118,8 +118,23 @@ class productionUtils_uncached {
                 console.log(`[production-utils] No endDate found, assuming 30 days after startDate: endDate=${endDate}`);
             }
         } else {
-            startDate = parseDate(parameters.startDate, true, parameters.year);
-            endDate = parseDate(parameters.endDate, true, parameters.year);
+            // Handle relative day offsets (e.g., startDateOffset: -30 means 30 days ago)
+            if (typeof parameters.startDateOffset === 'number') {
+                const today = new Date();
+                startDate = new Date(today.getTime() + parameters.startDateOffset * 86400000);
+                console.log(`[production-utils] Using startDateOffset ${parameters.startDateOffset}: startDate=${startDate}`);
+            } else {
+                startDate = parseDate(parameters.startDate, true, parameters.year);
+            }
+            
+            if (typeof parameters.endDateOffset === 'number') {
+                const today = new Date();
+                endDate = new Date(today.getTime() + parameters.endDateOffset * 86400000);
+                console.log(`[production-utils] Using endDateOffset ${parameters.endDateOffset}: endDate=${endDate}`);
+            } else {
+                endDate = parseDate(parameters.endDate, true, parameters.year);
+            }
+            
             year = parameters.year || startDate?.getFullYear();
             // If startDate exists but no endDate, assume 30 days after startDate
             if (startDate && !endDate) {
@@ -129,13 +144,22 @@ class productionUtils_uncached {
             console.log(`[production-utils] Date range mode: year=${year}, startDate=${startDate}, endDate=${endDate}`);
         }
         
-        if (!year || !startDate || !endDate) {
-            console.log('[production-utils] Missing year/startDate/endDate, returning empty array');
+        if (!startDate || !endDate) {
+            console.log('[production-utils] Missing startDate/endDate, returning empty array');
             return [];
         }
+        
+        // When using offsets, we need to check multiple years
+        const startYear = startDate.getFullYear();
+        const endYear = endDate.getFullYear();
+        const yearsToCheck = [];
+        for (let y = startYear; y <= endYear; y++) {
+            yearsToCheck.push(y);
+        }
+        
         // Filter data for overlapping shows
         const filtered = data.filter(row => {
-            if (!row.Year || row.Year != year) return false;
+            if (!row.Year || !yearsToCheck.includes(parseInt(row.Year))) return false;
             let ship = parseDate(row.Ship, true, row.Year) ||
                 (parseDate(row['S. Start'], true, row.Year) ? new Date(parseDate(row['S. Start'], true, row.Year).getTime() - 10 * 86400000) : null);
             let ret = parseDate(row['Expected Return Date'], true, row.Year) ||

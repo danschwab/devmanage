@@ -393,6 +393,10 @@ export const TableComponent = {
     name: 'TableComponent',
     components: { LoadingBarComponent },
     props: {
+        key: {
+            type: String,
+            default: 'defaultkey'
+        },
         data: {
             type: Array,
             default: () => []
@@ -1458,15 +1462,13 @@ export const TableComponent = {
             </div>
             
             <!-- Loading/Analysis Progress Indicator -->
-            <transition name="fade">
-                <LoadingBarComponent
-                    key="loading-progress"
-                    v-if="showHeader && (isLoading || isAnalyzing)"
-                    :is-loading="isLoading"
-                    :is-analyzing="isAnalyzing"
-                    :percent-complete="loadingProgress"
-                />
-            </transition>
+            <LoadingBarComponent
+                :key="key + 'loading-progress'"
+                v-if="showHeader"
+                :is-loading="isLoading"
+                :is-analyzing="isAnalyzing"
+                :percent-complete="loadingProgress"
+            />
             
             <!-- Data Table (always render if draggable, even when empty) -->
             <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" class="table-wrapper">
