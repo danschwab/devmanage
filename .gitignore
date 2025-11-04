@@ -1,2 +1,3 @@
 # Ignore config containing secrets
 /docs/js/google_sheets_services/config.js
+packlist examples
