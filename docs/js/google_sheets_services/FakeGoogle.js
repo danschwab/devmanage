@@ -125,7 +125,7 @@ export class FakeGoogleSheetsService {
     static mockData = {
         'INVENTORY': {
             'INDEX': [
-                // Added mock INDEX data based on provided mapping
+                // Enhanced INDEX with new item type mappings
                 ['PREFIX', 'INVENTORY', 'NOTES'],
                 ['CAB', 'CABINETS', ''],
                 ['HS', 'HANGING SIGNS', ''],
@@ -141,7 +141,15 @@ export class FakeGoogleSheetsService {
                 ['COUCH', 'FURNITURE', ''],
                 ['TABLE', 'FURNITURE', ''],
                 ['TTOP', 'FURNITURE', ''],
-                ['TBASE', 'FURNITURE', '']
+                ['TBASE', 'FURNITURE', ''],
+                // New item types for enhanced pattern matching
+                ['BX', 'PANELS', 'Dimensional panels'],
+                ['VUE', 'PANELS', 'VUE brand panels'],
+                ['901', 'HARDWARE', 'Hardware family 901'],
+                ['250', 'HARDWARE', 'LED hardware'],
+                ['615', 'HARDWARE', 'Hardware family 615'],
+                ['LED', 'HARDWARE', 'LED controllers'],
+                ['HH', 'HARDWARE', 'HH brand hardware']
             ],
             'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
@@ -166,6 +174,60 @@ export class FakeGoogleSheetsService {
             'LIGHTBOXES': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['LB-001', '', '0', '', '', 'Blah blah blah', '']],
             'COUNTERTOPS': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['CNTR-001', '', '0', '', '', 'Blah blah blah', '']],
             'SHELVES': [['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],['SHLF-001', '', '0', '', '', 'Blah blah blah', '']],
+            // New inventory tabs for enhanced item types
+            'PANELS': [
+                ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
+                // Standard rectangular panels
+                ['BX-16x39', '', '10', '', '', 'Standard rectangular panel 16" x 39"', 'Pack flat'],
+                ['BX-16x47', '', '8', '', '', 'Standard rectangular panel 16" x 47"', 'Pack flat'],
+                ['BX-15x39', '', '12', '', '', 'Standard rectangular panel 15" x 39"', 'Pack flat'],
+                // Circular panels
+                ['BX-○39', '', '5', '', '', 'Circular panel 39" diameter', 'Protect edges'],
+                ['BX-○19', '', '8', '', '', 'Circular panel 19" diameter', 'Protect edges'],
+                ['BX-○16', '', '10', '', '', 'Circular panel 16" diameter', 'Protect edges'],
+                // Special panels
+                ['BX-M8○5', '', '3', '', '', 'Metric circular panel M8, 5 units', 'Special order'],
+                ['BX-10Rx39P', '', '4', '', '', 'Curved panel 10R x 39" with pole', 'Poles separate'],
+                // Curved panels
+                ['BX-2Rx8', '', '6', '', '', 'Small curved panel 2R x 8"', 'Pack carefully'],
+                ['BX-2Rx16', '', '5', '', '', 'Small curved panel 2R x 16"', 'Pack carefully'],
+                ['BX-2Rx39', '', '3', '', '', 'Large curved panel 2R x 39"', 'Pack carefully'],
+                // Angled curved panels
+                ['BX-3Rx8_45°', '', '4', '', '', 'Curved panel 3R x 8" at 45° angle', 'Note angle'],
+                ['BX-3Rx8', '', '6', '', '', 'Curved panel 3R x 8"', 'Standard curve'],
+                ['BX-3Rx19_45°', '', '3', '', '', 'Curved panel 3R x 19" at 45° angle', 'Note angle'],
+                ['BX-3Rx39_45°', '', '2', '', '', 'Large curved panel 3R x 39" at 45° angle', 'Note angle'],
+                // VUE brand panels
+                ['VUE-8x39', '', '7', '', '', 'VUE brand panel 8" x 39"', 'VUE specific'],
+                ['VUE-16x39', '', '5', '', '', 'VUE brand panel 16" x 39"', 'VUE specific']
+            ],
+            'HARDWARE': [
+                ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
+                // VUE multi-segment alphanumeric
+                ['VUE-V2C-LP', '', '20', '', '', 'VUE V2C low profile connector', 'Small parts'],
+                // 901 series spaced numeric hardware
+                ['901 00 030 MKII', '', '50', '', '', '901 series mounting bracket Mark II', 'Hardware kit'],
+                ['901 00 033', '', '45', '', '', '901 series mounting bracket', 'Hardware kit'],
+                ['901 10 08 G', '', '100', '', '', '901 series galvanized connector', 'Bulk item'],
+                ['901 11 09 2X TG', '', '75', '', '', '901 series 2X TG fastener', 'Bulk item'],
+                ['901 2018 0062 ECO', '', '30', '', '', '901 ECO series connector 2018', 'Eco line'],
+                ['901 2025 0132 POM', '', '25', '', '', '901 POM series part 2025', 'New stock'],
+                ['901 28 0222 INOX', '', '60', '', '', '901 INOX stainless steel fastener', 'Corrosion resistant'],
+                ['901 28 0224 GALVA', '', '55', '', '', '901 galvanized fastener', 'Outdoor use'],
+                ['901 28 0341 E', '', '80', '', '', '901 E-series connector', 'Standard'],
+                ['901 28 0342 E', '', '75', '', '', '901 E-series connector variant', 'Standard'],
+                // 250 series LED hardware
+                ['250 05 50 LED - LED50WW', '', '25', '', '', 'LED strip 50WW warm white', 'Fragile'],
+                // LED controllers
+                ['LED-EXL21-SL', '', '10', '', '', 'LED controller EXL21 silver', 'Electronics'],
+                // 615 series hardware
+                ['615 11 01 ANO', '', '200', '', '', '615 series anodized fastener', 'Bulk item'],
+                // HH brand text-based hardware
+                ['HH BOLTHOG 1-4 20 x 2.5', '', '150', '', '', 'HH bolt M4-20 x 2.5mm', 'Hardware kit'],
+                ['HH BOLTHOG 1-4 20 x 3', '', '120', '', '', 'HH bolt M4-20 x 3mm', 'Hardware kit'],
+                ['HH BOLTHOG M8 LONG', '', '100', '', '', 'HH bolt M8 long size', 'Hardware kit'],
+                ['HH BRACKET UPPER 62', '', '40', '', '', 'HH upper mounting bracket size 62', 'Mounting hardware']
+            ]
         },
         'PACK_LISTS': {
             'TEMPLATE': [
@@ -319,6 +381,37 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '(1) laminated riser from MOJO SHOT show', '30"x30"x12"'],
                 ['', '', '', '', '', '', '', '', '(2) 55" Samsung TV screen', 'Top Shelf rentals'],
                 ['', '', '', '', '', '', '', '', 'Power cord', '']
+            ],
+            // Test pack list with new item code formats
+            'TEST 2025 ENHANCED': [
+                ['', '', 'Pack List:', '', 'TEST 2025 ENHANCED', '', '', '', '', 'Ship: Mon. Nov, 4'],
+                ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
+                // Standard items (existing format)
+                ['1', 'Crate', '72', '48', '48', '400', '', '', '(2) TABLE-001 Conference tables', 'Standard items'],
+                ['', '', '', '', '', '', '', '', '(5) CHAIR-002 Lounge chairs', ''],
+                ['', '', '', '', '', '', '', '', 'STOOL-001 Bar stool', ''],
+                // Dimensional PANELS
+                ['2', 'Crate', '96', '48', '12', '200', '', '', '(3) BX-16x39 Standard rectangular panels', 'Pack flat, protect edges'],
+                ['', '', '', '', '', '', '', '', '(2) BX-16x47 Large rectangular panels', ''],
+                ['', '', '', '', '', '', '', '', 'BX-○39 Circular panel 39" diameter', ''],
+                ['', '', '', '', '', '', '', '', '(2) BX-3Rx8_45° Curved panels with 45° angle', ''],
+                ['', '', '', '', '', '', '', '', '(4) VUE-8x39 VUE brand panels', ''],
+                // Hardware - spaced numeric format
+                ['3', 'Box', '24', '18', '12', '50', '', '', '(10) 901 00 030 MKII Mounting brackets', 'Hardware kit'],
+                ['', '', '', '', '', '', '', '', '(20) 901 28 0341 E E-series connectors', ''],
+                ['', '', '', '', '', '', '', '', '(50) 615 11 01 ANO Anodized fasteners', 'Bulk item'],
+                ['', '', '', '', '', '', '', '', '(5) 250 05 50 LED - LED50WW LED strips', 'Fragile electronics'],
+                // Hardware - alphanumeric format
+                ['4', 'Box', '18', '12', '8', '15', '', '', '(3) VUE-V2C-LP Low profile connectors', 'Small parts'],
+                ['', '', '', '', '', '', '', '', '(2) LED-EXL21-SL LED controllers', 'Electronics'],
+                // Hardware - text-based format
+                ['5', 'Box', '36', '24', '18', '80', '', '', '(25) HH BOLTHOG M8 LONG Long bolts', 'Hardware kit'],
+                ['', '', '', '', '', '', '', '', '(15) HH BOLTHOG 1-4 20 x 2.5 Small bolts', ''],
+                ['', '', '', '', '', '', '', '', '(8) HH BRACKET UPPER 62 Mounting brackets', ''],
+                // Mixed content in single description
+                ['6', 'Crate', '60', '40', '40', '300', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types'],
+                ['', '', '', '', '', '', '', '', 'Also includes: VUE-8x39 and (3) CHAIR-002', '']
             ]
         },
         'PROD_SCHED': {
@@ -328,6 +421,7 @@ export class FakeGoogleSheetsService {
                 ['SHOT Show', 'MOJO', '2025', 'MOJO 2025 SHOT', 'Las Vegas, NV', '30x30', '10518', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', '', 'X', '', '', 'X', '', '', '10-Dec', ''],
                 ['SHOT Show', 'Gearfire', '2025', 'GEARFIRE 2025 SHOT', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['NAB', 'ATSC', '2025', 'ATSC 2025 NAB', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],
+                ['Enhanced Test', 'Test Client', '2025', 'TEST 2025 ENHANCED', 'Test City', '20x20', '999', '5-Nov', '8-Nov', '11/4/2025', 'X', 'X', 'X', '', '11/10', 'Test GC', 'Top Shelf', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', '10/20', '11/1', 'X', 'X', '', 'X', 'X', '', 'X', '', '', '', 'X', 'X', '1-Nov', 'X'],
                 ['NADA', 'AWN', '2025', 'AWNINC 2025 NADA', 'New Orleans', '20x20', '3363', '24-Jan', '26-Jan', '1/7/2024', 'X', 'X', 'X', '', '1/28', 'Freeman', 'ELITE', '', 'X', 'X', 'X', 'X', '', '', 'X', '', 'in', 'done', 'X', 'X', '', 'X', 'X', '', 'X', '', '', '', 'X', 'X', '', ''],
                 ['SLAS', 'BitBio', '2025', 'BITBIO 2025 SLAS', 'San Diego, CA', '20x20', '349', '26-Jan', '30-Jan', '1/9/2024', 'X', 'X', 'X', '', '2/17', 'Freeman', 'WW', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '12/20', '1/8', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '16-Dec', ''],
                 ['Surfaces (TISE)', 'Cyncly', '2025', 'CYNCLY 2025 SURFACES', 'Las Vegas, NV', '40x60', '2057', '28-Jan', '30-Jan', '1/22/2025', 'X', 'X', 'X', '', '2/4', 'Freeman', 'Brian', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', '12/20', '1/20', 'X', 'X', '', 'X', 'X', '', 'X', '', '', '', '', '', '16-Dec', 'X'],
@@ -635,14 +729,17 @@ export class FakeGoogleSheetsService {
             { title: 'CEILING TRIM', sheetId: 5 },
             { title: 'LIGHTBOXES', sheetId: 6 },
             { title: 'COUNTERTOPS', sheetId: 7 },
-            { title: 'SHELVES', sheetId: 8 }
+            { title: 'SHELVES', sheetId: 8 },
+            { title: 'PANELS', sheetId: 9 },
+            { title: 'HARDWARE', sheetId: 10 }
         ],
         'PACK_LISTS': [
             { title: 'TEMPLATE', sheetId: 1 },
             { title: 'ATSC 2025 NAB', sheetId: 2 },
             { title: 'TULIP 2025 NRF', sheetId: 3 },
             { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 3 },
-            { title: 'GEARFIRE 2025 SHOT', sheetId: 4 }
+            { title: 'GEARFIRE 2025 SHOT', sheetId: 4 },
+            { title: 'TEST 2025 ENHANCED', sheetId: 5 }
         ],
         'PROD_SCHED': [
             { title: 'ProductionSchedule', sheetId: 0 },
