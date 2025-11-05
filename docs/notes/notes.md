@@ -5,7 +5,8 @@ Google oAuth2 for client-only apps requires a token refresh every hour, no excep
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
 
 Inventory Handling:
-Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, HARDWARE, LIGHTING
+Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING
+Special logic to support finding items: HARDWARE
 In standard descriptions: Power strips? Cables? Keyboards and mice? Remotes? Antennas?
 Consolidated tracked: BEAMATRIX PANELS & HARDWARE
 Extra tracking: ELECTRONICS, MONITORS
@@ -35,7 +36,6 @@ Need features:
 **chores**
 
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
-- [ ] make thumbnails be a cached analytics step
 - [ ] add context variables to live site github
 
 **problems**
@@ -103,21 +103,24 @@ analysis of pack list against current inventory
 
 HIGH PRIORITY: inventory updates
 
-- [ ] include all current categories
-- [ ] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
+- [x] include all current categories
+- [x] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
 - [x] allow editing of item quantities
 - [x] allow editing of item descriptions
 - [ ] allow adding new items
-- [ ] allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
 - [x] add existing item thumbnails
+- [ ] make thumbnails be a cached analytics step
 - [ ] allow uploading new item thumbnails
 - [ ] track crate information to further streamline pack list generation
+      allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
 
 show management system
 
 - [x] link shows to pack lists
+- [x] advanced search and preset system
 - [ ] create and edit shows
+      allow user to access show searches as pages and pin to dashboard
       analyze and show the rough number and complexity of shows throughout the year
       calendar view of shows
 
