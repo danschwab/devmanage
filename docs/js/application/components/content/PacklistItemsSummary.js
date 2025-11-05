@@ -178,13 +178,13 @@ export const PacklistItemsSummary = {
                     
                 </template>
                 <template #default="{ row, column }">
-                    <div v-if="column.key === 'image'">
+                    <slot v-if="column.key === 'image'">
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
                         />
-                    </div>
-                    <div v-else-if="column.key === 'itemId'">
+                    </slot>
+                    <slot v-else-if="column.key === 'itemId'">
                         <button v-if="row.tabName" 
                                 @click="appContext.navigateToPath(NavigationRegistry.buildPath('inventory/categories/' + row.tabName, { searchTerm: row.itemId }))"
                                 class="purple"
@@ -192,21 +192,21 @@ export const PacklistItemsSummary = {
                             {{ row.itemId }}
                         </button>
                         <span v-else>{{ row.itemId }}</span>
-                    </div>
-                    <div v-else-if="column.key === 'overlappingShows'">
-                        <div v-if="!Array.isArray(row.overlappingShows) || row.overlappingShows.length === 0">
-                            None
-                        </div>
-                        <div v-else class="overlapping-shows-buttons">
+                    </slot>
+                    <slot v-else-if="column.key === 'overlappingShows'">
+                        <slot v-if="!Array.isArray(row.overlappingShows) || row.overlappingShows.length === 0">
+                            —
+                        </slot>
+                        <slot v-else class="overlapping-shows-buttons">
                             <button v-for="packlistId in row.overlappingShows" 
                                     :key="packlistId"
                                     @click="appContext.navigateToPath('packlist/' + packlistId)"
                                     class="card white">
                                 {{ packlistId }}
                             </button>
-                        </div>
-                    </div>
-                    <div v-else-if="column.key === 'remaining'">
+                        </slot>
+                    </slot>
+                    <!--div v-else-if="column.key === 'remaining'">
                         {{ row.remaining !== null ? row.remaining : '...' }}
                     </div>
                     <div v-else-if="column.key === 'available'">
@@ -214,7 +214,7 @@ export const PacklistItemsSummary = {
                     </div>
                     <div v-else-if="column.key === 'tabName'">
                         {{ row.tabName !== null ? row.tabName : '...' }}
-                    </div>
+                    </div-->
                     <div v-else>
                         {{ row[column.key] }}
                     </div>

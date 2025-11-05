@@ -338,23 +338,6 @@ export function GetParagraphMatchRating(text1, text2) {
 }
 
 /**
- * Clean text by removing item numbers and quantities for comparison
- * @param {string} text - Text to clean
- * @returns {string} Cleaned text with item codes and quantities removed
- */
-export function cleanTextForComparison(text) {
-    if (!text || typeof text !== 'string') return '';
-    
-    // Remove item codes and quantities using the same regex
-    const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/g;
-    
-    return text
-        .replace(itemRegex, '') // Remove item codes and quantities
-        .replace(/\s+/g, ' ')   // Normalize whitespace
-        .trim();                // Remove leading/trailing spaces
-}
-
-/**
  * Parse a DateSearch URL parameter into a filter object
  * Format: 'offset,offset' or 'date,date' or 'showIdentifier'
  * 

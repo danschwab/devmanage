@@ -28,6 +28,20 @@ class inventoryUtils_uncached {
             prefix = prefix[0];
             tab = prefixToTab[prefix];
         }
+        
+        // If prefix lookup failed, check HARDWARE table for exact item number match
+        if (!tab) {
+            try {
+                const hardwareData = await deps.call(Database.getData, 'INVENTORY', 'HARDWARE', inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
+                const hardwareItem = hardwareData.find(item => item.itemNumber === itemName);
+                if (hardwareItem) {
+                    return 'HARDWARE';
+                }
+            } catch (error) {
+                console.error('Error checking HARDWARE table:', error);
+            }
+        }
+        
         return tab || null;
     }
 

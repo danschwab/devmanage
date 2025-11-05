@@ -1584,7 +1584,7 @@ export const TableComponent = {
                                         @click="toggleRowDetails(idx)"
                                         :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
-                                        {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
+                                        {{ isRowExpanded(idx) ? '✖' : '&#9432;' }}
                                     </button>
                                 </td>
                             </tr>

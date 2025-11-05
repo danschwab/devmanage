@@ -53,7 +53,7 @@ export const ModalComponent = {
             <div class="modal">
                 <div class="modal-header">
                     <h3>{{ title }}</h3>
-                    <button class="close-button" @click="closeModal">&times;</button>
+                    <button class="close-button" @click="closeModal">✖</button>
                 </div>
                 <div class="modal-content">
                     <component v-for="(comp, idx) in components" :is="comp" :key="idx" 

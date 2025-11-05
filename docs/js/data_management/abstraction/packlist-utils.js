@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, cleanTextForComparison, GetParagraphMatchRating } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -24,18 +24,115 @@ class packListUtils_uncached {
         const match = text.match(itemRegex);
         
         if (match) {
-            return {
-                quantity: match[1] ? parseInt(match[1], 10) : 1,
-                itemNumber: match[2] || null,
-                description: text
-            };
+            // If a match is found, check if that item number prefix exists in the inventory index
+            const itemNumber = match[2];
+            const tabName = await deps.call(InventoryUtils.getTabNameForItem, itemNumber);
+            
+            // Only return the item if its prefix exists in the inventory index
+            if (tabName) {
+                if (tabName === 'HARDWARE') {
+                    return await deps.call(PackListUtils.extractHardwareFromText, text);
+                } else {
+                    // Extract clean description by removing the matched item code and quantity
+                    const description = text
+                        .replace(match[0], '') // Remove the entire match (quantity + item number)
+                        .replace(/\s+/g, ' ')  // Normalize whitespace
+                        .trim();               // Remove leading/trailing spaces
+                    
+                    return {
+                        quantity: match[1] ? parseInt(match[1], 10) : 1,
+                        itemNumber: itemNumber,
+                        description: description
+                    };
+                }
+            }
         }
         
+        // No item found in text, attempt a hardware search
+        const hardwareResult = await deps.call(PackListUtils.extractHardwareFromText, text);
+        if (hardwareResult.itemNumber) {
+            return hardwareResult;
+        }
+
         return {
             quantity: 1,
             itemNumber: null,
             description: text
         };
+    }
+
+    /**
+     * Extract hardware item information from text by checking against HARDWARE inventory
+     * Searches for pattern: (qty) itemNumber where itemNumber exists in HARDWARE tab
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} text - Text to search for hardware item information
+     * @returns {Promise<Object>} Object with {quantity: number, itemNumber: string|null, description: string}
+     */
+    static async extractHardwareFromText(deps, text) {
+        if (!text || typeof text !== 'string') {
+            return {
+                quantity: 1,
+                itemNumber: null,
+                description: text || ''
+            };
+        }
+
+        try {
+            // Get all hardware items from the HARDWARE inventory tab
+            const hardwareData = await deps.call(InventoryUtils.getInventoryTabData, 'HARDWARE');
+            
+            if (!hardwareData || hardwareData.length === 0) {
+                return {
+                    quantity: 1,
+                    itemNumber: null,
+                    description: text
+                };
+            }
+
+            // Extract all hardware item numbers
+            const hardwareItemNumbers = hardwareData
+                .map(item => item.itemNumber)
+                .filter(num => num && num.trim() !== '');
+
+            // Check text for each hardware item number with pattern: (qty) itemNumber
+            for (const itemNum of hardwareItemNumbers) {
+                // Escape special regex characters in item number
+                const escapedItemNum = itemNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                // Create regex pattern: optional (qty) followed by the item number
+                const pattern = new RegExp(`(?:\\(([0-9]+)\\))?\\s*${escapedItemNum}`, 'i');
+                const match = text.match(pattern);
+                
+                if (match) {
+                    // Extract clean description by removing the matched hardware code and quantity
+                    const description = text
+                        .replace(match[0], '') // Remove the entire match (quantity + item number)
+                        .replace(/\s+/g, ' ')  // Normalize whitespace
+                        .trim();               // Remove leading/trailing spaces
+                    
+                    return {
+                        quantity: match[1] ? parseInt(match[1], 10) : 1,
+                        itemNumber: itemNum,
+                        description: description
+                    };
+                }
+            }
+
+            // No hardware item found in text
+            return {
+                quantity: 1,
+                itemNumber: null,
+                description: text
+            };
+
+        } catch (error) {
+            console.error('Error extracting hardware from text:', error);
+            return {
+                quantity: 1,
+                itemNumber: null,
+                description: text
+            };
+        }
     }
     /**
      * Get pack list content
@@ -323,9 +420,13 @@ class packListUtils_uncached {
                 };
             }
 
-            // Clean both descriptions for comparison (remove item codes and quantities)
-            const cleanPacklistDesc = cleanTextForComparison(description);
-            const cleanInventoryDesc = cleanTextForComparison(inventoryDescription);
+            // Extract clean descriptions using cached extraction functions
+            // This removes item codes and quantities from both descriptions
+            const packlistExtracted = await deps.call(PackListUtils.extractItemFromText, description);
+            const inventoryExtracted = await deps.call(PackListUtils.extractItemFromText, inventoryDescription);
+            
+            const cleanPacklistDesc = packlistExtracted.description;
+            const cleanInventoryDesc = inventoryExtracted.description;
 
             // Calculate similarity score
             const matchScore = GetParagraphMatchRating(cleanPacklistDesc, cleanInventoryDesc);
@@ -373,12 +474,18 @@ class packListUtils_uncached {
      * Get inventory quantity for a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemId - The item ID to look up
-     * @returns {Promise<number>} Available inventory quantity
+     * @returns {Promise<number|null>} Available inventory quantity, or null if item not found in inventory
      */
     static async getItemInventoryQuantity(deps, itemId) {
         const inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity']);
         const item = inventoryInfo.find(i => i.itemName === itemId);
-        return item ? parseInt(item.quantity || "0", 10) : 0;
+        
+        // Return null if item not found or quantity is null/undefined/empty
+        if (!item || item.quantity === null || item.quantity === undefined || item.quantity === '') {
+            return null;
+        }
+        
+        return parseInt(item.quantity, 10);
     }
 
     /**
@@ -419,11 +526,11 @@ class packListUtils_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier
      * @param {string} itemId - Item ID to calculate remaining quantity for
-     * @returns {Promise<number>} Remaining available quantity
+     * @returns {Promise<number|null>} Remaining available quantity, or null if item not found in inventory
      */
     static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
         if (!itemId || !currentProjectId) {
-            return 0;
+            return null;
         }
 
         // Run inventory lookup and overlapping shows check in parallel
@@ -432,6 +539,11 @@ class packListUtils_uncached {
             deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId),
             deps.call(PackListUtils.extractItems, currentProjectId)
         ]);
+
+        // If item not found in inventory, return null
+        if (inventoryQuantity === null) {
+            return null;
+        }
 
         const currentProjectUsage = currentProjectItems[itemId] || 0;
         let totalUsed = currentProjectUsage;

@@ -139,7 +139,7 @@ export class FakeGoogleSheetsService {
                 ['TTOP', 'FURNITURE', ''],
                 ['TBASE', 'FURNITURE', ''],
                 ['BX', 'PANELS', 'Dimensional panels'],
-                ['VUE', 'PANELS', 'VUE brand panels']
+                ['VU', 'PANELS', 'VUE brand panels']
             ],
             'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
@@ -188,8 +188,8 @@ export class FakeGoogleSheetsService {
                 ['BX-3Rx19_45°', '', '3', '', '', 'Curved panel 3R x 19" at 45° angle', 'Note angle'],
                 ['BX-3Rx39_45°', '', '2', '', '', 'Large curved panel 3R x 39" at 45° angle', 'Note angle'],
                 // VUE brand panels
-                ['VUE-8x39', '', '7', '', '', 'VUE brand panel 8" x 39"', 'VUE specific'],
-                ['VUE-16x39', '', '5', '', '', 'VUE brand panel 16" x 39"', 'VUE specific']
+                ['VU-8x39', '', '7', '', '', 'VUE brand panel 8" x 39"', 'VUE specific'],
+                ['VU-16x39', '', '5', '', '', 'VUE brand panel 16" x 39"', 'VUE specific']
             ],
             'HARDWARE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
@@ -386,7 +386,7 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '(2) BX-16x47 Large rectangular panels', ''],
                 ['', '', '', '', '', '', '', '', 'BX-○39 Circular panel 39" diameter', ''],
                 ['', '', '', '', '', '', '', '', '(2) BX-3Rx8_45° Curved panels with 45° angle', ''],
-                ['', '', '', '', '', '', '', '', '(4) VUE-8x39 VUE brand panels', ''],
+                ['', '', '', '', '', '', '', '', '(4) VU-8x39 VUE brand panels', ''],
                 // Hardware - spaced numeric format
                 ['3', 'Box', '24', '18', '12', '50', '', '', '(10) 901 00 030 MKII Mounting brackets', 'Hardware kit'],
                 ['', '', '', '', '', '', '', '', '(20) 901 28 0341 E E-series connectors', ''],
@@ -401,7 +401,7 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '(8) HH BRACKET UPPER 62 Mounting brackets', ''],
                 // Mixed content in single description
                 ['6', 'Crate', '60', '40', '40', '300', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types'],
-                ['', '', '', '', '', '', '', '', 'Also includes: VUE-8x39 and (3) CHAIR-002', '']
+                ['', '', '', '', '', '', '', '', 'Also includes: VU-8x39 and (3) CHAIR-002', '']
             ]
         },
         'PROD_SCHED': {

@@ -399,6 +399,16 @@ class Requests_uncached {
     }
 
     /**
+     * Extract hardware item information from text by checking against HARDWARE inventory
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} text - Text to extract hardware item information from
+     * @returns {Promise<Object>} Object with {quantity: number, itemNumber: string|null, description: string}
+     */
+    static async extractHardwareFromText(deps, text) {
+        return await deps.call(PackListUtils.extractHardwareFromText, text);
+    }
+
+    /**
      * Compare item description with inventory description and return alert if mismatch
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object} item - Item object from packlist
@@ -427,7 +437,7 @@ class Requests_uncached {
         if (!result.inventoryFound) {
             return {
                 type: 'item warning',
-                color: 'yellow',
+                color: 'purple',
                 clickable: true,
                 message: `No inventory description`,
                 score: 0,
@@ -435,7 +445,7 @@ class Requests_uncached {
             };
         }
 
-        const color = result.score < 0.5 ? 'orange' : 'yellow';
+        const color = result.score < 0.5 ? 'purple' : 'white';
 
         // Return alert if match is less than 100%
         if (result.score < 1) {
@@ -499,7 +509,7 @@ class Requests_uncached {
      * Get inventory quantity for a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemId - The item ID to look up
-     * @returns {Promise<number>} Available inventory quantity
+     * @returns {Promise<number|null>} Available inventory quantity, or null if item not found in inventory
      */
     static async getItemInventoryQuantity(deps, itemId) {
         return await deps.call(PackListUtils.getItemInventoryQuantity, itemId);
@@ -521,7 +531,7 @@ class Requests_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier
      * @param {string} itemId - Item ID to calculate remaining quantity for
-     * @returns {Promise<number>} Remaining available quantity
+     * @returns {Promise<number|null>} Remaining available quantity, or null if item not found in inventory
      */
     static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
         return await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemId);
@@ -546,6 +556,17 @@ class Requests_uncached {
             // Get remaining quantity from business logic layer
             const remaining = await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemNumber);
             
+            // Check if item not found in inventory
+            if (remaining === null) {
+                return {
+                    type: 'item not found',
+                    color: 'yellow',
+                    clickable: true,
+                    message: 'Not in inventory',
+                    remaining: null
+                };
+            }
+            
             // Build alert object based on inventory level
             if (remaining < 0) {
                 return {
@@ -558,7 +579,7 @@ class Requests_uncached {
             } else if (remaining === 0) {
                 return {
                     type: 'item warning',
-                    color: 'orange',
+                    color: 'yellow',
                     clickable: true,
                     message: 'No inventory buffer',
                     remaining
@@ -566,7 +587,7 @@ class Requests_uncached {
             } else if (remaining <= 2) {
                 return {
                     type: 'low-inventory',
-                    color: 'yellow',
+                    color: 'white',
                     clickable: true,
                     message: `Low: ${remaining} remaining`,
                     remaining
