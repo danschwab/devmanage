@@ -15,7 +15,7 @@ class applicationUtils_uncached {
     static async storeUserData(username, id, data) {
         // Sanitize username and compose tab name consistently with getUserData
         const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const tabName = `User_${sanitizedUsername}`;
+        const tabName = `UserData_${sanitizedUsername}`;
         
         // Convert data to JSON string if it's not already a string
         let serializedData;
@@ -40,10 +40,24 @@ class applicationUtils_uncached {
                 ]
             );
         } else {   
-            // Prepare JS object for update
-            let obj = { ID: id, Value: serializedData };
-            console.log('Storing user data:', obj);
-            return await Database.setData('CACHE', tabName, [obj], { ID: 'ID', Value: 'Value' });
+            // Tab exists - need to read all existing data, update/add the row, then write back
+            const existingData = await Database.getData('CACHE', tabName, { ID: 'ID', Value: 'Value' });
+            
+            // Find the row with matching ID
+            const rowIndex = existingData.findIndex(row => row.ID === id);
+            
+            if (rowIndex !== -1) {
+                // Update existing row
+                existingData[rowIndex].Value = serializedData;
+            } else {
+                // Add new row
+                existingData.push({ ID: id, Value: serializedData });
+            }
+            
+            console.log('Storing user data - writing all rows:', existingData);
+            
+            // Write back ALL rows to the sheet
+            return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' });
         }
     }
     
@@ -56,7 +70,7 @@ class applicationUtils_uncached {
      */
     static async getUserData(deps, username, id) {
         const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const tabName = `User_${sanitizedUsername}`;
+        const tabName = `UserData_${sanitizedUsername}`;
         // Check if tab exists
         const userTab = await deps.call(Database.findTabByName, 'CACHE', tabName);
         if (!userTab) {
