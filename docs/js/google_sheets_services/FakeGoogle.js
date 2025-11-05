@@ -129,10 +129,6 @@ export class FakeGoogleSheetsService {
                 ['PREFIX', 'INVENTORY', 'NOTES'],
                 ['CAB', 'CABINETS', ''],
                 ['HS', 'HANGING SIGNS', ''],
-                ['C', 'CEILING TILES', ''],
-                ['P', 'CEILING TRIM', ''],
-                ['T', 'CEILING TRIM', ''],
-                ['S', 'CEILING TRIM', ''],
                 ['LB', 'LIGHTBOXES', ''],
                 ['CNTR', 'COUNTERTOPS', 'NEW'],
                 ['SHLF', 'SHELVES', 'NEW'],
@@ -142,14 +138,8 @@ export class FakeGoogleSheetsService {
                 ['TABLE', 'FURNITURE', ''],
                 ['TTOP', 'FURNITURE', ''],
                 ['TBASE', 'FURNITURE', ''],
-                // New item types for enhanced pattern matching
                 ['BX', 'PANELS', 'Dimensional panels'],
-                ['VUE', 'PANELS', 'VUE brand panels'],
-                ['901', 'HARDWARE', 'Hardware family 901'],
-                ['250', 'HARDWARE', 'LED hardware'],
-                ['615', 'HARDWARE', 'Hardware family 615'],
-                ['LED', 'HARDWARE', 'LED controllers'],
-                ['HH', 'HARDWARE', 'HH brand hardware']
+                ['VUE', 'PANELS', 'VUE brand panels']
             ],
             'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],

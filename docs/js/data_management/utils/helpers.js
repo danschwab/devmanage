@@ -338,34 +338,6 @@ export function GetParagraphMatchRating(text1, text2) {
 }
 
 /**
- * Extract item number from text using regex pattern
- * @param {string} text - Text to search for item number
- * @returns {string|null} Item number or null if not found
- */
-export function extractItemNumber(text) {
-    if (!text || typeof text !== 'string') return null;
-    
-    const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-    const match = text.match(itemRegex);
-    
-    return match && match[2] ? match[2] : null;
-}
-
-/**
- * Extract quantity from text using regex pattern
- * @param {string} text - Text to search for quantity
- * @returns {number} Quantity found or 1 if no quantity specified
- */
-export function extractQuantity(text) {
-    if (!text || typeof text !== 'string') return 1;
-    
-    const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
-    const match = text.match(itemRegex);
-    
-    return match && match[1] ? parseInt(match[1], 10) : 1;
-}
-
-/**
  * Clean text by removing item numbers and quantities for comparison
  * @param {string} text - Text to clean
  * @returns {string} Cleaned text with item codes and quantities removed

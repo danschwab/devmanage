@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, extractItemNumber, extractQuantity } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from './index.js';
 
 /**
  * CACHING ARCHITECTURE NOTES:
@@ -383,7 +383,8 @@ class Requests_uncached {
      * @returns {Promise<string|null>} Item number or null if not found
      */
     static async extractItemNumber(deps, text) {
-        return extractItemNumber(text);
+        const extracted = await deps.call(PackListUtils.extractItemFromText, text);
+        return extracted.itemNumber;
     }
 
     /**
@@ -393,7 +394,8 @@ class Requests_uncached {
      * @returns {Promise<number>} Quantity found or 1 if no quantity specified
      */
     static async extractQuantity(deps, text) {
-        return extractQuantity(text);
+        const extracted = await deps.call(PackListUtils.extractItemFromText, text);
+        return extracted.quantity;
     }
 
     /**

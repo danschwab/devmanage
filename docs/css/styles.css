@@ -634,6 +634,7 @@ th, td {
     max-width: 300px; /* Set maximum width for cells */
     white-space: normal; /* Allow text wrapping */
     word-wrap: break-word; /* Break long words if needed */
+    overflow: hidden;
 }
 th {
     background-color: var(--color-gray);
@@ -666,9 +667,7 @@ table {
     background-color: var(--background-color);
     overflow: hidden;
 }
-tr {
-    position: relative;
-}
+
 
 td:has(.table-wrapper) {
     padding: 8px;

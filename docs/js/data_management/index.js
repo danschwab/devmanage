@@ -9,4 +9,4 @@ export { PackListUtils } from './abstraction/packlist-utils.js';
 export { ProductionUtils } from './abstraction/production-utils.js';
 
 // Utility classes
-export { parseDate, searchFilter, GetTopFuzzyMatch, GetParagraphMatchRating, extractItemNumber, extractQuantity, cleanTextForComparison } from './utils/helpers.js';
+export { parseDate, searchFilter, GetTopFuzzyMatch, GetParagraphMatchRating, cleanTextForComparison } from './utils/helpers.js';

@@ -5,6 +5,39 @@ import { Database, InventoryUtils, ProductionUtils, wrapMethods, cleanTextForCom
  */
 class packListUtils_uncached {
     /**
+     * Extract item information from text using regex pattern
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} text - Text to search for item information
+     * @returns {Promise<Object>} Object with {quantity: number, itemNumber: string|null, description: string}
+     */
+    static async extractItemFromText(deps, text) {
+        if (!text || typeof text !== 'string') {
+            return {
+                quantity: 1,
+                itemNumber: null,
+                description: text || ''
+            };
+        }
+        
+        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9A-Za-z_○°]+)/;
+
+        const match = text.match(itemRegex);
+        
+        if (match) {
+            return {
+                quantity: match[1] ? parseInt(match[1], 10) : 1,
+                itemNumber: match[2] || null,
+                description: text
+            };
+        }
+        
+        return {
+            quantity: 1,
+            itemNumber: null,
+            description: text
+        };
+    }
+    /**
      * Get pack list content
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
@@ -81,25 +114,22 @@ class packListUtils_uncached {
         // Return empty object if pack list not found
         if (!crates) return {};
 
-        const itemRegex = /(?:\(([0-9]+)\))?\s*([A-Z]+-[0-9]+[a-zA-Z]?)/;
         const itemMap = {};
 
-        crates.forEach(crate => {
+        for (const crate of crates) {
             if (Array.isArray(crate.Items)) {
-                crate.Items.forEach(itemObj => {
+                for (const itemObj of crate.Items) {
                     // For each property in the item object, check for item codes
-                    Object.values(itemObj).forEach(cell => {
-                        if (!cell) return;
-                        const match = typeof cell === 'string' && cell.match(itemRegex);
-                        if (match && match[2]) {
-                            const qty = parseInt(match[1] || "1", 10);
-                            const id = match[2];
-                            itemMap[id] = (itemMap[id] || 0) + qty;
+                    for (const cell of Object.values(itemObj)) {
+                        if (!cell) continue;
+                        const extracted = await deps.call(PackListUtils.extractItemFromText, cell);
+                        if (extracted.itemNumber) {
+                            itemMap[extracted.itemNumber] = (itemMap[extracted.itemNumber] || 0) + extracted.quantity;
                         }
-                    });
-                });
+                    }
+                }
             }
-        });
+        }
 
         return itemMap;
     }

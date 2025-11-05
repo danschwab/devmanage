@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, extractItemNumber } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig } from '../../index.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
