@@ -136,6 +136,7 @@ class packListUtils_uncached {
     }
     /**
      * Get pack list content
+     * Now uses mapped data format to support metadata tracking.
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @param {string} [itemColumnsStart="Pack"] - Column header where item data begins
@@ -149,9 +150,11 @@ class packListUtils_uncached {
             console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
             return null;
         }
-        // Fetch the raw sheet data (2D array)
+        
+        // Fetch the raw sheet data (2D array) to get headers
         const sheetData = await deps.call(Database.getData, 'PACK_LISTS', projectIdentifier, null);
         if (!sheetData || sheetData.length < 4) return [];
+        
         // Extract headers (typically row 3)
         const headerRow = sheetData[2] || [];
         const itemStartIndex = headerRow.findIndex(header => header === itemColumnsStart);
@@ -160,42 +163,65 @@ class packListUtils_uncached {
         }
         const mainHeaders = headerRow.slice(0, itemStartIndex);
         const itemHeaders = headerRow.slice(itemStartIndex);
+        
+        // Build mapping for all columns
+        const mapping = {};
+        mainHeaders.forEach(h => {
+            mapping[h] = h;
+        });
+        itemHeaders.forEach(h => {
+            mapping[h] = h;
+        });
+        mapping.metadata = 'MetaData'; // Include metadata column
+        
+        // Get mapped data (with metadata)
+        const mappedRows = await deps.call(Database.getData, 'PACK_LISTS', projectIdentifier, mapping);
+        
+        // Reconstruct nested crate structure from flat rows
         const crates = [];
         let currentCrate = null;
-        // Process rows starting from row 4
-        for (let i = 3; i < sheetData.length; i++) {
-            const rowValues = sheetData[i] || [];
-            const crateInfoArr = rowValues.slice(0, itemStartIndex);
-            const crateContentsArr = rowValues.slice(itemStartIndex);
-            // If crate info row, start a new crate
-            if (crateInfoArr.some(cell => cell)) {
+        
+        for (const row of mappedRows) {
+            // Determine if this is a crate row or item row
+            // Crate row: has data in main headers
+            // Item row: has data in item headers
+            const hasCrateData = mainHeaders.some(h => row[h] && row[h] !== '');
+            const hasItemData = itemHeaders.some(h => row[h] && row[h] !== '');
+            
+            if (hasCrateData) {
+                // This is a crate row - start new crate
                 if (currentCrate) {
                     crates.push(currentCrate);
                 }
-                // Map crate info to object with header keys (always include all headers)
-                const crateInfoObj = {};
-                mainHeaders.forEach((label, idx) => {
-                    crateInfoObj[label] = idx < crateInfoArr.length && crateInfoArr[idx] !== undefined ? crateInfoArr[idx] : '';
+                
+                currentCrate = {};
+                mainHeaders.forEach(h => {
+                    currentCrate[h] = row[h] || '';
                 });
-                currentCrate = {
-                    ...crateInfoObj,
-                    Items: []
-                };
-            }
-            // If item row, add to current crate's Items array
-            if (crateContentsArr.some(cell => cell) && currentCrate) {
+                // Preserve metadata if present
+                if (row.metadata) {
+                    currentCrate.metadata = row.metadata;
+                }
+                currentCrate.Items = [];
+            } else if (hasItemData && currentCrate) {
+                // This is an item row - add to current crate
                 const itemObj = {};
-                itemHeaders.forEach((label, idx) => {
-                    itemObj[label] = idx < crateContentsArr.length && crateContentsArr[idx] !== undefined ? crateContentsArr[idx] : '';
+                itemHeaders.forEach(h => {
+                    itemObj[h] = row[h] || '';
                 });
+                // Preserve metadata if present
+                if (row.metadata) {
+                    itemObj.metadata = row.metadata;
+                }
                 currentCrate.Items.push(itemObj);
             }
         }
+        
         if (currentCrate) {
             crates.push(currentCrate);
         }
+        
         return crates;
-    // ...existing code...
     }
 
     /**
@@ -233,6 +259,7 @@ class packListUtils_uncached {
 
     /**
      * Save pack list data to the PACK_LISTS sheet.
+     * Now uses mapped row objects to support metadata tracking.
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The sheet/tab name.
      * @param {Array<Object>} crates - Array of crate objects, each with info and items arrays.
@@ -245,7 +272,6 @@ class packListUtils_uncached {
 
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
         console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
-        const metadataRows = originalSheetData.slice(0, 2);
         const headerRow = originalSheetData[2] || [];
 
         const itemColumnsStart = headerRow.findIndex(h => h === 'Pack');
@@ -279,28 +305,65 @@ class packListUtils_uncached {
         }
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
-        const sheetData = [...metadataRows, headerRow];
-        // Row 4+: crate/item data
+        // Build mapping for all columns (main + items + metadata)
+        // IMPORTANT: Build in the exact order they appear in the original sheet
+        const mapping = {};
+        const orderedHeaders = [...headers.main, ...headers.items, 'MetaData'];
+        
+        headers.main.forEach(h => {
+            mapping[h] = h; // Use header name as both key and value
+        });
+        headers.items.forEach(h => {
+            mapping[h] = h; // Use header name as both key and value
+        });
+        mapping.metadata = 'MetaData'; // Add metadata column
+
+        // Flatten nested crates into flat row objects
+        const flatRows = [];
         cleanCrates.forEach(crate => {
-            // Crate info row
-            const crateInfoArr = headers.main.map(h => crate[h] !== undefined ? crate[h] : '');
-            const crateContentsArr = headers.items.map(h => '');
-            sheetData.push([...crateInfoArr, ...crateContentsArr]);
-            // Item rows
+            // Crate info row - merge crate properties with empty item properties
+            const crateRow = {};
+            headers.main.forEach(h => {
+                crateRow[h] = crate[h] !== undefined ? crate[h] : '';
+            });
+            headers.items.forEach(h => {
+                crateRow[h] = ''; // Empty for crate rows
+            });
+            // Preserve existing metadata if present
+            if (crate.metadata) {
+                crateRow.metadata = crate.metadata;
+            }
+            flatRows.push(crateRow);
+            
+            // Item rows - merge empty crate properties with item properties
             if (Array.isArray(crate.Items)) {
                 crate.Items.forEach(itemObj => {
-                    const itemInfoArr = headers.main.map(() => '');
-                    const itemContentsArr = headers.items.map(h => itemObj[h] !== undefined ? itemObj[h] : '');
-                    sheetData.push([...itemInfoArr, ...itemContentsArr]);
+                    const itemRow = {};
+                    headers.main.forEach(h => {
+                        itemRow[h] = ''; // Empty for item rows
+                    });
+                    headers.items.forEach(h => {
+                        itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                    });
+                    // Preserve existing metadata if present
+                    if (itemObj.metadata) {
+                        itemRow.metadata = itemObj.metadata;
+                    }
+                    flatRows.push(itemRow);
                 });
             }
         });
-        // Save the sheet data (2D array), overwriting the whole tab
-        // Note: Pack lists use raw 2D arrays, not mapped data, so metadata is skipped
-        // Metadata could be added in future by converting to mapped format
-        return await Database.setData('PACK_LISTS', tabName, sheetData, null, {
+
+        // Save using mapped data format to enable metadata tracking
+        // Pass metadata rows (0-1) to preserve them when saving
+        const metadataRows = originalSheetData.slice(0, 2);
+        return await Database.setData('PACK_LISTS', tabName, flatRows, mapping, {
             username,
-            skipMetadata: true // Pack lists use special format, skip for now
+            skipMetadata: false, // Enable metadata tracking!
+            identifierKey: headers.main[0], // Use first main column as identifier (e.g., "Crate #")
+            headerRow: 2, // Headers are in row 2 (0-indexed)
+            metadataRows: metadataRows, // Preserve rows 0-1
+            headerOrder: orderedHeaders // Preserve original header order
         });
     }
 

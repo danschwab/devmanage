@@ -4,20 +4,30 @@
  * Provides core functions for tracking row changes, managing history,
  * and archiving deleted rows to MetaData table.
  * 
- * MetaData Column Format:
+ * MetaData Column Format (minimized):
  * {
- *   "history": [
+ *   "h": [
  *     {
- *       "user": "user@example.com",
- *       "timestamp": "2025-11-06T15:30:00Z",
- *       "changes": [
- *         { "column": "quantity", "old": "5", "new": "10" }
+ *       "u": "dan",
+ *       "t": 17309064000,
+ *       "c": [
+ *         { "n": "quantity", "o": "5" }
  *       ]
  *     }
  *   ],
- *   "cachedAnalytics": { ... },
- *   "userSettings": { ... }
+ *   "a": { ... },
+ *   "s": { ... }
  * }
+ * 
+ * Key mapping:
+ * h = history
+ * u = user (username before @)
+ * t = timestamp (deciseconds since epoch - divide by 10 for seconds, multiply by 100 for milliseconds)
+ * c = changes
+ * n = column name
+ * o = old value
+ * a = cachedAnalytics
+ * s = userSettings
  */
 
 export class MetaDataUtils {
@@ -28,10 +38,19 @@ export class MetaDataUtils {
      * @returns {Object} Metadata entry object
      */
     static createMetaDataEntry(username, changes) {
+        // Extract username before @ symbol
+        const shortUser = username ? username.split('@')[0] : 'unknown';
+        
+        // Convert changes to minimal format (only store old values)
+        const minimalChanges = changes.map(change => ({
+            n: change.column,  // n = name
+            o: change.old      // o = old value (new value not stored)
+        }));
+        
         return {
-            user: username || 'unknown',
-            timestamp: new Date().toISOString(),
-            changes: changes || []
+            u: shortUser,                           // u = user
+            t: Math.floor(new Date().getTime() / 100),  // t = timestamp in deciseconds
+            c: minimalChanges                       // c = changes
         };
     }
 
@@ -48,28 +67,28 @@ export class MetaDataUtils {
         // Parse existing metadata
         if (typeof existingMetaData === 'string') {
             try {
-                metadata = existingMetaData ? JSON.parse(existingMetaData) : { history: [] };
+                metadata = existingMetaData ? JSON.parse(existingMetaData) : { h: [] };
             } catch (error) {
                 console.warn('Failed to parse existing metadata, creating new:', error);
-                metadata = { history: [] };
+                metadata = { h: [] };
             }
         } else if (typeof existingMetaData === 'object' && existingMetaData !== null) {
             metadata = { ...existingMetaData };
         } else {
-            metadata = { history: [] };
+            metadata = { h: [] };
         }
 
-        // Ensure history array exists
-        if (!Array.isArray(metadata.history)) {
-            metadata.history = [];
+        // Ensure history array exists (support both old 'history' and new 'h' format)
+        if (!Array.isArray(metadata.h)) {
+            metadata.h = [];
         }
 
         // Add new entry at the beginning (most recent first)
-        metadata.history.unshift(newEntry);
+        metadata.h.unshift(newEntry);
 
         // Trim to max history length
-        if (metadata.history.length > maxHistory) {
-            metadata.history = metadata.history.slice(0, maxHistory);
+        if (metadata.h.length > maxHistory) {
+            metadata.h = metadata.h.slice(0, maxHistory);
         }
 
         return JSON.stringify(metadata);
@@ -239,10 +258,37 @@ export class MetaDataUtils {
             SourceTab: sourceTab,
             RowIdentifier: rowIdentifier,
             Username: username || 'unknown',
-            Timestamp: new Date().toISOString(),
+            Timestamp: Math.floor(new Date().getTime() / 100),
             Operation: 'delete',
             RowData: JSON.stringify(rowData)
         };
+    }
+
+    /**
+     * Convert decisecond timestamp to Date object
+     * @param {number} deciseconds - Timestamp in deciseconds (1/10th second)
+     * @returns {Date} Date object
+     */
+    static decisecondToDate(deciseconds) {
+        return new Date(deciseconds * 100);
+    }
+
+    /**
+     * Format decisecond timestamp as ISO string
+     * @param {number} deciseconds - Timestamp in deciseconds (1/10th second)
+     * @returns {string} ISO 8601 formatted date string
+     */
+    static formatTimestamp(deciseconds) {
+        return new Date(deciseconds * 100).toISOString();
+    }
+
+    /**
+     * Format decisecond timestamp as human-readable string
+     * @param {number} deciseconds - Timestamp in deciseconds (1/10th second)
+     * @returns {string} Human-readable date string
+     */
+    static formatTimestampHuman(deciseconds) {
+        return new Date(deciseconds * 100).toLocaleString();
     }
 
     /**
@@ -278,10 +324,13 @@ export class MetaDataUtils {
      */
     static getMostRecentChange(metadata) {
         const parsed = this.parseMetaData(metadata);
-        if (!parsed || !Array.isArray(parsed.history) || parsed.history.length === 0) {
+        if (!parsed) return null;
+        
+        const history = parsed.h;
+        if (!Array.isArray(history) || history.length === 0) {
             return null;
         }
-        return parsed.history[0];
+        return history[0];
     }
 
     /**
@@ -292,13 +341,13 @@ export class MetaDataUtils {
      * @returns {string} Updated metadata as JSON string
      */
     static setCachedAnalytic(existingMetaData, analyticKey, analyticValue) {
-        let metadata = this.parseMetaData(existingMetaData) || { history: [] };
+        let metadata = this.parseMetaData(existingMetaData) || { h: [] };
 
-        if (!metadata.cachedAnalytics) {
-            metadata.cachedAnalytics = {};
+        if (!metadata.a) {
+            metadata.a = {};
         }
 
-        metadata.cachedAnalytics[analyticKey] = analyticValue;
+        metadata.a[analyticKey] = analyticValue;
 
         return JSON.stringify(metadata);
     }
@@ -311,10 +360,12 @@ export class MetaDataUtils {
      */
     static getCachedAnalytic(metadata, analyticKey) {
         const parsed = this.parseMetaData(metadata);
-        if (!parsed || !parsed.cachedAnalytics) {
-            return null;
-        }
-        return parsed.cachedAnalytics[analyticKey] || null;
+        if (!parsed) return null;
+        
+        const analytics = parsed.a;
+        if (!analytics) return null;
+        
+        return analytics[analyticKey] || null;
     }
 
     /**
@@ -325,13 +376,13 @@ export class MetaDataUtils {
      * @returns {string} Updated metadata as JSON string
      */
     static setUserSetting(existingMetaData, settingKey, settingValue) {
-        let metadata = this.parseMetaData(existingMetaData) || { history: [] };
+        let metadata = this.parseMetaData(existingMetaData) || { h: [] };
 
-        if (!metadata.userSettings) {
-            metadata.userSettings = {};
+        if (!metadata.s) {
+            metadata.s = {};
         }
 
-        metadata.userSettings[settingKey] = settingValue;
+        metadata.s[settingKey] = settingValue;
 
         return JSON.stringify(metadata);
     }
@@ -344,9 +395,12 @@ export class MetaDataUtils {
      */
     static getUserSetting(metadata, settingKey) {
         const parsed = this.parseMetaData(metadata);
-        if (!parsed || !parsed.userSettings) {
-            return null;
-        }
-        return parsed.userSettings[settingKey] || null;
+        if (!parsed) return null;
+        
+        // Support both old 'userSettings' and new 's' format
+        const settings = parsed.s;
+        if (!settings) return null;
+        
+        return settings[settingKey] || null;
     }
 }

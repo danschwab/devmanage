@@ -83,7 +83,7 @@ export class GoogleSheetsService {
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @returns {Promise<boolean>}
      */
-    static async setSheetData(tableId, tabName, updates, mapping = null) {
+    static async setSheetData(tableId, tabName, updates, mapping = null, options = {}) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
@@ -94,7 +94,7 @@ export class GoogleSheetsService {
         } else if (Array.isArray(updates) && updates.length > 0) {
             // If mapping is provided, use reverse transform to get proper sheet format
             if (mapping) {
-                values = this.reverseTransformSheetData(mapping, updates);
+                values = this.reverseTransformSheetData(mapping, updates, options);
             } else {
                 const headers = Object.keys(updates[0]);
                 values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
@@ -151,19 +151,29 @@ export class GoogleSheetsService {
     /**
      * Transform raw sheet data to JS objects using mapping
      */
-    static transformSheetData(rawData, mapping) {
-        if (!rawData || rawData.length < 2 || !mapping) return [];
-        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
+    /**
+     * Transform raw sheet data to JS objects using mapping
+     * @param {Array<Array>} rawData - Raw 2D array from sheet
+     * @param {Object} mapping - Mapping of object keys to sheet headers
+     * @param {Object} [options] - Optional configuration
+     * @param {number} [options.headerRow=0] - Row index where headers are located (0-based)
+     * @returns {Array<Object>} Array of JS objects
+     */
+    static transformSheetData(rawData, mapping, options = {}) {
+        const { headerRow = 0 } = options;
+        
+        if (!rawData || rawData.length < (headerRow + 2) || !mapping) return [];
+        const headers = Array.isArray(rawData[headerRow]) ? rawData[headerRow] : [];
         if (headers.length === 0) {
             console.error('GoogleSheetsService.transformSheetData: headers is not an array or empty', headers, rawData);
             return [];
         }
-        const rows = rawData.slice(1);
+        const rows = rawData.slice(headerRow + 1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
             const idx = headers.findIndex(h => typeof h === 'string' && h.trim() === headerName);
             if (idx === -1) {
-                console.warn(`GoogleSheetsService.transformSheetData: header '${headerName}' not found in sheet headers`, headers);
+                console.warn(`GoogleSheetsService.transformSheetData: header '${headerName}' not found in sheet headers. Will initialize as empty.`, headers);
             }
             if (idx !== -1) headerIdxMap[key] = idx;
         });
@@ -180,14 +190,29 @@ export class GoogleSheetsService {
 
     /**
      * Reverse transform JS objects to sheet data using mapping
+     * @param {Object} mapping - Mapping of object keys to sheet headers
+     * @param {Array<Object>} mappedData - Array of JS objects
+     * @param {Object} [options] - Optional configuration
+     * @param {number} [options.headerRow=0] - Row index where headers should be placed (0-based)
+     * @param {Array<Array>} [options.metadataRows] - Rows to prepend before headers (for pack lists, rows 0-1)
+     * @param {Array<string>} [options.headerOrder] - Explicit header order (if not provided, uses Object.values(mapping))
+     * @returns {Array<Array>} 2D array in sheet format
      */
-    static reverseTransformSheetData(mapping, mappedData) {
+    static reverseTransformSheetData(mapping, mappedData, options = {}) {
         if (!mappedData || mappedData.length === 0) return [];
-        const headers = Object.values(mapping);
+        
+        const { headerRow = 0, metadataRows = [], headerOrder } = options;
+        const headers = headerOrder || Object.values(mapping);
         const rows = mappedData.map(obj => headers.map(h => {
             const key = Object.keys(mapping).find(k => mapping[k] === h);
             return key ? obj[key] ?? '' : '';
         }));
+        
+        // If headerRow > 0, prepend metadata rows
+        if (headerRow > 0 && metadataRows.length > 0) {
+            return [...metadataRows, headers, ...rows];
+        }
+        
         return [headers, ...rows];
     }
     
