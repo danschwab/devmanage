@@ -278,6 +278,14 @@ class packListUtils_uncached {
         const mainHeaders = headerRow.slice(0, itemColumnsStart);
         const itemHeaders = headerRow.slice(itemColumnsStart);
 
+        console.log('[PackListUtils.savePackList] headerRow:', headerRow);
+        console.log('[PackListUtils.savePackList] mainHeaders:', mainHeaders);
+        console.log('[PackListUtils.savePackList] itemHeaders:', itemHeaders);
+
+        // Remove MetaData from itemHeaders if it exists (we'll add it explicitly later)
+        const itemHeadersFiltered = itemHeaders.filter(h => h !== 'MetaData');
+        console.log('[PackListUtils.savePackList] itemHeadersFiltered:', itemHeadersFiltered);
+
         // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
         const cleanCrates = Array.isArray(mappedData) ? mappedData.map(crate => {
             const cleanCrate = {};
@@ -287,7 +295,7 @@ class packListUtils_uncached {
             cleanCrate.Items = Array.isArray(crate.Items)
                 ? crate.Items.map(itemObj => {
                     const cleanItem = {};
-                    itemHeaders.forEach(h => {
+                    itemHeadersFiltered.forEach(h => {
                         cleanItem[h] = itemObj[h] !== undefined ? itemObj[h] : '';
                     });
                     return cleanItem;
@@ -300,7 +308,7 @@ class packListUtils_uncached {
         if (!headers) {
             headers = {
                 main: mainHeaders,
-                items: itemHeaders
+                items: itemHeadersFiltered
             };
         }
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
