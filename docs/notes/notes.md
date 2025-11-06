@@ -56,12 +56,13 @@ Need features:
 Architecture Improvements
 
 - [x] dashboard configuration
-- [ ] user preferences storage
+- [x] user preferences storage
 - [ ] consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
 - [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
 - [ ] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
 - [ ] extra spreadsheet MetaData column
 - [ ] save history: dateTime, userName, fields edited & old values
+- [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
       reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
@@ -109,9 +110,9 @@ HIGH PRIORITY: inventory updates
 - [x] allow editing of item descriptions
 - [ ] allow adding new items
 - [x] add existing item thumbnails
-- [ ] make thumbnails be a cached analytics step
-- [ ] allow uploading new item thumbnails
 - [ ] track crate information to further streamline pack list generation
+- [ ] make thumbnails be a cached analytics step
+      allow uploading new item thumbnails
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
 
@@ -119,7 +120,9 @@ show management system
 
 - [x] link shows to pack lists
 - [x] advanced search and preset system
+- [x] default schedule ship date as analytics step
 - [ ] create and edit shows
+      express checklist columns as checkboxes
       allow user to access show searches as pages and pin to dashboard
       analyze and show the rough number and complexity of shows throughout the year
       calendar view of shows
