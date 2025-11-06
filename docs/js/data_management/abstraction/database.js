@@ -25,7 +25,7 @@ if (isLocalhost()) {
     ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
 }
 
-import { wrapMethods, invalidateCache } from '../index.js';
+import { wrapMethods, invalidateCache, MetaDataUtils } from '../index.js';
 
 class database_uncached {
     /**
@@ -109,13 +109,10 @@ class database_uncached {
         const extensions = ['jpg', 'jpeg', 'png', 'gif'];
         
         for (const ext of extensions) {
-            const fileName = `${itemNumber}.${ext}`;
-            console.log(`Searching for file: ${fileName} in folder: ${folderId}`);
-            
+            const fileName = `${itemNumber}.${ext}`;            
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
             if (file && file.directImageUrl) {
-                console.log(`Found image for ${itemNumber}:`, file.directImageUrl);
                 return file.directImageUrl;
             }
         }
@@ -135,10 +132,59 @@ class database_uncached {
      * @param {string} tabName - Tab name or logical identifier
      * @param {Array<Object>} updates - Array of JS objects to save
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @param {Object} [options] - Optional parameters for metadata tracking
+     * @param {string} [options.username] - Username making the change
+     * @param {boolean} [options.skipMetadata] - Skip metadata generation (for MetaData table itself)
+     * @param {string} [options.identifierKey] - Key to identify rows (for deletion tracking)
      * @returns {Promise<boolean>} - Success status
      */
-    static async setData(tableId, tabName, updates, mapping = null) {
-        const result = await GoogleSheetsService.setSheetData(tableId, tabName, updates, mapping);
+    static async setData(tableId, tabName, updates, mapping = null, options = {}) {
+        const {
+            username = null,
+            skipMetadata = false,
+            identifierKey = null
+        } = options;
+
+        let updatesWithMetadata = updates;
+
+        // Add metadata tracking if not skipped
+        if (!skipMetadata && mapping && mapping.metadata) {
+            try {
+                // Get original data for comparison (use Database.getData to leverage cache)
+                const transformedOriginal = await Database.getData(tableId, tabName, mapping);
+
+                // Add metadata to updated rows
+                updatesWithMetadata = await _addMetadataToRows(
+                    transformedOriginal,
+                    updates,
+                    username,
+                    mapping
+                );
+
+                // Detect and archive deleted rows
+                if (identifierKey) {
+                    const deletedRows = MetaDataUtils.detectDeletedRows(
+                        transformedOriginal,
+                        updates,
+                        identifierKey
+                    );
+
+                    if (deletedRows.length > 0) {
+                        await _archiveDeletedRows(
+                            tableId,
+                            tabName,
+                            deletedRows,
+                            username
+                        );
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to add metadata, continuing with save:', error);
+                // Continue with save even if metadata fails
+            }
+        }
+
+        const result = await GoogleSheetsService.setSheetData(tableId, tabName, updatesWithMetadata, mapping);
         
         // Invalidate related caches using prefix to handle custom mapped data
         invalidateCache([
@@ -147,6 +193,7 @@ class database_uncached {
         
         return result;
     }
+
     
     /**
      * Updates a single row in a table/tab using a unique identifier.
@@ -155,9 +202,13 @@ class database_uncached {
      * @param {string} tabName - Tab name or logical identifier
      * @param {Object} update - JS object representing the row to update
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
+     * @param {Object} [options] - Optional parameters for metadata tracking
+     * @param {string} [options.username] - Username making the change
      * @returns {Promise<boolean>} - Success status
      */
-    static async updateRow(tableId, tabName, update, mapping = null) {
+    static async updateRow(tableId, tabName, update, mapping = null, options = {}) {
+        const { username = null } = options;
+
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
         const transformedData = mapping
@@ -174,8 +225,22 @@ class database_uncached {
             throw new Error(`Row with identifier not found in tab ${tabName}`);
         }
 
+        const originalRow = transformedData[rowIndex];
+
+        // Calculate changes and add metadata if mapping includes it
+        let updatedRow = { ...originalRow, ...update };
+        if (mapping && mapping.metadata && username) {
+            const changes = MetaDataUtils.calculateRowDiff(originalRow, update);
+            if (changes.length > 0) {
+                const metaEntry = MetaDataUtils.createMetaDataEntry(username, changes);
+                const existingMetadata = originalRow.metadata || originalRow.MetaData || '';
+                const newMetadata = MetaDataUtils.appendToMetaData(existingMetadata, metaEntry);
+                updatedRow.metadata = newMetadata;
+            }
+        }
+
         // Update the transformed row
-        transformedData[rowIndex] = { ...transformedData[rowIndex], ...update };
+        transformedData[rowIndex] = updatedRow;
 
         // Convert back to sheet format for saving
         const updatedSheetData = mapping
@@ -235,3 +300,99 @@ class database_uncached {
 }
 
 export const Database = wrapMethods(database_uncached, 'database', ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow']);
+
+
+/**
+ * Add metadata to rows that have changed
+ * @private
+ */
+async function _addMetadataToRows(originalRows, updatedRows, username, mapping) {
+    if (!Array.isArray(updatedRows)) {
+        return updatedRows;
+    }
+
+    return updatedRows.map((updatedRow, index) => {
+        const originalRow = originalRows[index];
+
+        // Calculate changes for this row
+        const changes = MetaDataUtils.calculateRowDiff(originalRow, updatedRow);
+
+        // If changes exist, append to metadata
+        if (changes.length > 0 && username) {
+            const metaEntry = MetaDataUtils.createMetaDataEntry(username, changes);
+            const existingMetadata = updatedRow.metadata || '';
+            const newMetadata = MetaDataUtils.appendToMetaData(existingMetadata, metaEntry);
+
+            // Update the metadata field using the mapping key (always 'metadata')
+            return { ...updatedRow, metadata: newMetadata };
+        }
+
+        return updatedRow;
+    });
+}
+
+/**
+ * Archive deleted rows to MetaData table
+ * @private
+ */
+async function _archiveDeletedRows(sourceTable, sourceTab, deletedRows, username) {
+    try {
+        // Get existing metadata table data (use Database to leverage cache if available)
+        let metadataTableData = [];
+        try {
+            // Try to get with mapping first
+            const metadataMapping = {
+                SourceTable: 'SourceTable',
+                SourceTab: 'SourceTab',
+                RowIdentifier: 'RowIdentifier',
+                Username: 'Username',
+                Timestamp: 'Timestamp',
+                Operation: 'Operation',
+                RowData: 'RowData'
+            };
+            
+            metadataTableData = await Database.getData(sourceTable, 'MetaData', metadataMapping);
+        } catch (error) {
+            // MetaData tab doesn't exist yet, will be created
+            console.log('MetaData tab does not exist yet, will create');
+            metadataTableData = [];
+        }
+
+        // Create archive entries for deleted rows
+        const archiveEntries = deletedRows.map(deleted => 
+            MetaDataUtils.createArchiveEntry(
+                sourceTable,
+                sourceTab,
+                deleted.identifier,
+                deleted.rowData,
+                username
+            )
+        );
+
+        // Append to existing metadata
+        const updatedMetadata = [...metadataTableData, ...archiveEntries];
+
+        // Save to MetaData table (skip metadata for this table itself)
+        const metadataMapping = {
+            SourceTable: 'SourceTable',
+            SourceTab: 'SourceTab',
+            RowIdentifier: 'RowIdentifier',
+            Username: 'Username',
+            Timestamp: 'Timestamp',
+            Operation: 'Operation',
+            RowData: 'RowData'
+        };
+
+        await GoogleSheetsService.setSheetData(
+            sourceTable,
+            'MetaData',
+            updatedMetadata,
+            metadataMapping
+        );
+
+        console.log(`Archived ${deletedRows.length} deleted rows to MetaData table`);
+    } catch (error) {
+        console.error('Failed to archive deleted rows:', error);
+        // Don't throw - archival failure shouldn't block the main save
+    }
+}

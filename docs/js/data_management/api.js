@@ -1,4 +1,5 @@
 import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from './index.js';
+import { authState } from '../application/utils/auth.js';
 
 /**
  * CACHING ARCHITECTURE NOTES:
@@ -303,7 +304,8 @@ class Requests_uncached {
      * @returns {Promise<boolean>}
      */
     static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters) {
-        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters);
+        const username = authState.user?.email || null;
+        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username);
     }
     
     /**
@@ -319,8 +321,9 @@ class Requests_uncached {
      */
     static async savePackList(crates, projectIdentifier) {
         console.log("API.savePackList called for project:", projectIdentifier);
+        const username = authState.user?.email || null;
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
-        return await PackListUtils.savePackList(projectIdentifier, crates);
+        return await PackListUtils.savePackList(projectIdentifier, crates, null, username);
     }
 
     /**

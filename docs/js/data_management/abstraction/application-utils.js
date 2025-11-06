@@ -37,7 +37,9 @@ class applicationUtils_uncached {
                 [
                     ['ID', 'Value'],
                     [id, serializedData]
-                ]
+                ],
+                null,
+                { skipMetadata: true } // User data doesn't need change tracking
             );
         } else {   
             // Tab exists - need to read all existing data, update/add the row, then write back
@@ -57,7 +59,9 @@ class applicationUtils_uncached {
             console.log('Storing user data - writing all rows:', existingData);
             
             // Write back ALL rows to the sheet
-            return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' });
+            return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' }, {
+                skipMetadata: true // User data doesn't need change tracking
+            });
         }
     }
     

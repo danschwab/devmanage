@@ -128,7 +128,7 @@ class inventoryUtils_uncached {
         return tabData;
     }
 
-    static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null) {
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
@@ -149,9 +149,9 @@ class inventoryUtils_uncached {
                 return existingItem && JSON.stringify(existingItem) !== JSON.stringify(item);
             });
 
-            // Send updates one by one
+            // Send updates one by one with username
             for (const update of updates) {
-                await Database.updateRow('INVENTORY', resolvedTabName, update, mapping);
+                await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username });
             }
 
             return true;
@@ -161,8 +161,11 @@ class inventoryUtils_uncached {
             mappedData = Array.from(mappedData);
         }
 
-        // Save JS objects using mapping
-        return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping);
+        // Save JS objects using mapping with metadata options
+        return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
+            username,
+            identifierKey: 'itemNumber'
+        });
     }
 
 

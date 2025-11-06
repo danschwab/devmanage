@@ -237,9 +237,10 @@ class packListUtils_uncached {
      * @param {string} tabName - The sheet/tab name.
      * @param {Array<Object>} crates - Array of crate objects, each with info and items arrays.
      * @param {Object} [headers] - { main: [...], items: [...] } (optional)
+     * @param {string} [username] - Username making the change (for metadata)
      * @returns {Promise<boolean>} Success status
      */
-    static async savePackList(tabName, mappedData, headers = null) {
+    static async savePackList(tabName, mappedData, headers = null, username = null) {
         console.log('[PackListUtils.savePackList] crates input:', mappedData);
 
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
@@ -295,7 +296,12 @@ class packListUtils_uncached {
             }
         });
         // Save the sheet data (2D array), overwriting the whole tab
-        return await Database.setData('PACK_LISTS', tabName, sheetData, null);
+        // Note: Pack lists use raw 2D arrays, not mapped data, so metadata is skipped
+        // Metadata could be added in future by converting to mapped format
+        return await Database.setData('PACK_LISTS', tabName, sheetData, null, {
+            username,
+            skipMetadata: true // Pack lists use special format, skip for now
+        });
     }
 
 
