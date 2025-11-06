@@ -478,9 +478,7 @@ export class GoogleSheetsService {
     static async searchDriveFileInFolder(fileName, folderId) {
         return await this.withExponentialBackoff(async () => {
             try {
-                // Add parameter validation and debugging
-                console.log('GoogleSheetsService.searchDriveFileInFolder called with:', { fileName, folderId });
-                
+                // Add parameter validation and debugging                
                 if (typeof fileName !== 'string') {
                     console.error('fileName must be a string, received:', typeof fileName, fileName);
                     return null;

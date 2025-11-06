@@ -166,9 +166,12 @@ class database_uncached {
 
         // Add metadata tracking if not skipped
         if (!skipMetadata && mapping && mapping.metadata) {
+            console.log('[Database.setData] Metadata tracking enabled', { tableId, tabName, username, identifierKey });
             try {
                 // Get original data for comparison (use Database.getData to leverage cache)
                 const transformedOriginal = await Database.getData(tableId, tabName, mapping, { headerRow });
+                console.log('[Database.setData] Original data loaded:', transformedOriginal?.length, 'rows');
+                console.log('[Database.setData] Updates to save:', updates?.length, 'rows');
 
                 // Add metadata to updated rows
                 updatesWithMetadata = await _addMetadataToRows(
@@ -177,6 +180,8 @@ class database_uncached {
                     username,
                     mapping
                 );
+                console.log('[Database.setData] Metadata added to rows:', updatesWithMetadata?.length, 'rows');
+                console.log('[Database.setData] Sample row with metadata:', updatesWithMetadata[0]);
 
                 // Detect and archive deleted rows
                 if (identifierKey) {
@@ -187,6 +192,7 @@ class database_uncached {
                     );
 
                     if (deletedRows.length > 0) {
+                        console.log('[Database.setData] Archiving deleted rows:', deletedRows.length);
                         await _archiveDeletedRows(
                             tableId,
                             tabName,
@@ -199,6 +205,12 @@ class database_uncached {
                 console.warn('Failed to add metadata, continuing with save:', error);
                 // Continue with save even if metadata fails
             }
+        } else {
+            console.log('[Database.setData] Metadata tracking skipped', { 
+                skipMetadata, 
+                hasMapping: !!mapping, 
+                hasMappingMetadata: !!(mapping && mapping.metadata) 
+            });
         }
 
         // Pass options to setSheetData for proper header row handling
