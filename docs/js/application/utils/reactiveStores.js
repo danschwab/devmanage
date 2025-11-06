@@ -81,10 +81,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             if (item && item.AppData) {
                 analysisConfig.forEach(config => {
                     if (config.targetColumn) {
-                        // Clear target column data
-                        if (item.hasOwnProperty(config.targetColumn)) {
-                            item[config.targetColumn] = null; // Set to null for proper placeholder display
-                        }
+                        // Do NOT clear target column data - preserve existing values
+                        // Analysis will only update if result is not null
                         // Clear any AppData error for this target column
                         delete item.AppData[`${config.targetColumn}_error`];
                     } else {
@@ -473,11 +471,16 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                     const apiParams = [firstParam, ...(config.additionalParams || [])];
                                     const result = await config.apiFunction(...apiParams);
                                     
-                                    // Store result in target column or AppData
-                                    if (config.targetColumn) {
-                                        item[config.targetColumn] = result;
-                                    } else {
-                                        item.AppData[config.resultKey] = result;
+                                    // Store result based on return value:
+                                    // - undefined: preserve existing value (do nothing)
+                                    // - null: explicitly clear the value
+                                    // - any other value: update with new value
+                                    if (result !== undefined) {
+                                        if (config.targetColumn) {
+                                            item[config.targetColumn] = result;
+                                        } else {
+                                            item.AppData[config.resultKey] = result;
+                                        }
                                     }
                                 }
                                 

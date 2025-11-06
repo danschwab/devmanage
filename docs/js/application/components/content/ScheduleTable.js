@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, TableComponent, getReactiveStore } from '../../index.js';
+import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig } from '../../index.js';
 
 export const ScheduleTableComponent = {
     components: {
@@ -69,18 +69,8 @@ export const ScheduleTableComponent = {
         },
         tableData() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
-            // Add reactive packlist information to AppData for each row
-            return rawData.map((row, index) => ({
-                ...row,
-                AppData: {
-                    ...row.AppData,
-                    packlist: {
-                        loading: row.AppData?.packlist?.loading !== false,
-                        exists: row.AppData?.packlist?.exists || false,
-                        identifier: row.AppData?.packlist?.identifier || null
-                    }
-                }
-            }));
+            // Packlist information is now populated by reactive store analysis in AppData
+            return rawData;
         },
         originalData() {
             return this.scheduleTableStore && Array.isArray(this.scheduleTableStore.originalData)
@@ -121,15 +111,6 @@ export const ScheduleTableComponent = {
         }
     },
     watch: {
-        // Watch for data changes and enrich with packlist information
-        'scheduleTableStore.data': {
-            handler(newData) {
-                if (newData && newData.length > 0) {
-                    this.enrichWithPacklistData();
-                }
-            },
-            immediate: true
-        },
         // Watch for filter or searchParams changes and recreate store with new parameters
         filter: {
             handler(newFilter, oldFilter) {
@@ -155,11 +136,45 @@ export const ScheduleTableComponent = {
     },
     methods: {
         recreateStore() {
-            // Create a new reactive store with the updated filter and searchParams
+            // Create analysis configuration to check packlist existence for each row
+            const analysisConfig = [
+                createAnalysisConfig(
+                    Requests.checkPacklistExists,
+                    'packlist',
+                    'Checking packlists...',
+                    null, // No specific source columns
+                    [], // No additional params
+                    null, // Results go to AppData
+                    true // Pass full item/row
+                ),
+                // Guess ship date if missing and store in AppData
+                createAnalysisConfig(
+                    Requests.guessShipDate,
+                    'estimatedShipDate',
+                    'Guessing missing ship dates...',
+                    null, // No specific source columns
+                    [], // No additional params
+                    null, // Results go to AppData
+                    true // Pass full item/row
+                ),
+                // Guess ship date if missing and store in AppData
+                createAnalysisConfig(
+                    Requests.guessShipDate,
+                    'estimatedShipDateEnrichment',
+                    'Adding missing ship dates to data...',
+                    null, // No specific source columns
+                    [], // No additional params
+                    'Ship', // Results go to ship date column
+                    true // Pass full item/row
+                )
+            ];
+
+            // Create a new reactive store with the updated filter, searchParams, and analysis
             this.scheduleTableStore = getReactiveStore(
                 Requests.getProductionScheduleData,
                 null,
-                [this.filter, this.searchParams]
+                [this.filter, this.searchParams],
+                analysisConfig
             );
         },
         async handleRefresh() {
@@ -278,48 +293,6 @@ export const ScheduleTableComponent = {
                 return 140;
             }
         },
-        async enrichWithPacklistData() {
-            if (!this.scheduleTableStore?.data) return;
-            
-            const data = this.scheduleTableStore.data;
-            
-            // Enrich each row with packlist information in parallel
-            const enrichmentPromises = data.map(async (row, index) => {
-                try {
-                    const identifier = await Requests.computeIdentifier(
-                        row.Show, 
-                        row.Client, 
-                        parseInt(row.Year)
-                    );
-                    
-                    // Get available tabs and check if packlist exists
-                    const availableTabs = await Requests.getAvailableTabs('PACK_LISTS');
-                    const tab = availableTabs.find(tab => tab.title === identifier);
-                    
-                    // Update the row's AppData with packlist information (Vue 3 compatible)
-                    row.AppData = {
-                        ...row.AppData,
-                        packlist: {
-                            loading: false,
-                            exists: !!tab,
-                            identifier: identifier
-                        }
-                    };
-                } catch (error) {
-                    console.warn(`Failed to enrich packlist data for row ${index}:`, error);
-                    row.AppData = {
-                        ...row.AppData,
-                        packlist: {
-                            loading: false,
-                            exists: false,
-                            identifier: null
-                        }
-                    };
-                }
-            });
-            
-            await Promise.all(enrichmentPromises);
-        },
         async handlePacklistClick(packlistInfo) {
             if (!packlistInfo.exists || !packlistInfo.identifier) {
                 this.$modal.alert('No packlist available for this show', 'Info');
@@ -328,6 +301,27 @@ export const ScheduleTableComponent = {
             
             this.$emit('navigate-to-path', { targetPath: `packlist/${packlistInfo.identifier}` });
         },
+        getShipDateCards(row, columnKey) {
+            // Only show estimated ship date cards in the ship column
+            if (columnKey !== 'Ship') {
+                return [];
+            }
+            
+            const estimatedDate = row.AppData?.estimatedShipDate;
+            const startDate = row['S. Start'] ? row['S. Start'] : 'N/A';
+
+            // Only show card if there's an estimated date
+            if (estimatedDate) {
+                return [{
+                    message: `Est: ${estimatedDate}`,
+                    hoverMessage: `Starts: ${startDate}`,
+                    clickable: false,
+                    class: 'gray' // Gray card to indicate estimated value
+                }];
+            }
+            
+            return [];
+        },
         getPacklistCards(row, columnKey) {
             // Only show packlist cards in the packlist column
             if (columnKey !== 'packlist') {
@@ -335,14 +329,11 @@ export const ScheduleTableComponent = {
             }
             
             const packlistInfo = row.AppData?.packlist;
-            if (!packlistInfo) {
-                return [];
-            }
             
-            // Create a card based on packlist status
-            if (packlistInfo.loading) {
+            // If no packlist info yet or still analyzing, show loading state
+            if (!packlistInfo || packlistInfo.exists === undefined) {
                 return [{
-                    message: 'Loading...',
+                    message: 'Checking...',
                     disabled: true
                 }];
             }
@@ -383,6 +374,15 @@ export const ScheduleTableComponent = {
                 <slot name="table-header-area"></slot>
             </template>
             <template #default="{ row, column }">
+                <!-- Add estimated ship date cards in Ship column -->
+                <template v-for="card in getShipDateCards(row, column.key)" :key="'ship-' + card.message">
+                    <span 
+                        :class="['card', card.class]"
+                        :title="card.hoverMessage"
+                        v-html="card.message"
+                    ></span>
+                </template>
+                
                 <!-- Add packlist cards based on AppData -->
                 <template v-for="card in getPacklistCards(row, column.key)" :key="card.message">
                     <button 

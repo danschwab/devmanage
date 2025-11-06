@@ -85,30 +85,15 @@ class productionUtils_uncached {
                 return [];
             }
             year = foundRow.Year;
-            let ship = parseDate(foundRow.Ship, true, year);
-            let ret = parseDate(foundRow['Expected Return Date'], true, year);
-            if (!ship) {
-                let sStart = parseDate(foundRow['S. Start'], true, year);
-                ship = sStart ? new Date(sStart.getTime() - 10 * 86400000) : null;
-            }
-            if (!ret) {
-                let sEnd = parseDate(foundRow['S. End'], true, year);
-                ret = sEnd ? new Date(sEnd.getTime() + 10 * 86400000) : null;
+            // Use shared date calculation helpers
+            let ship = _calculateShipDate(foundRow);
+            let ret = _calculateReturnDate(foundRow, ship);
+            
+            // Ensure return date is after ship date
+            if (ship && ret && ret <= ship) {
+                ret.setFullYear(ret.getFullYear() + 1);
             }
             
-            // Additional fallback: if we still have no return date but have S. Start, use S. Start + 1 month
-            if (!ret && !ship) {
-                let sStart = parseDate(foundRow['S. Start'], true, year);
-                if (sStart) {
-                    ship = new Date(sStart.getTime() - 10 * 86400000); // 10 days before show start
-                    ret = new Date(sStart.getTime() + 30 * 86400000); // 30 days after show start
-                    console.log(`[production-utils] Using S. Start fallback: ship=${ship}, ret=${ret}`);
-                }
-            }
-            
-            if (ship && ship.getFullYear() != year) ship.setFullYear(Number(year));
-            if (ret && ret.getFullYear() != year) ret.setFullYear(Number(year));
-            if (ship && ret && ret <= ship) ret.setFullYear(ret.getFullYear() + 1);
             startDate = ship;
             endDate = ret;
             console.log(`[production-utils] Identifier mode: year=${year}, startDate=${startDate}, endDate=${endDate}`);
@@ -160,30 +145,16 @@ class productionUtils_uncached {
         // Filter data for overlapping shows
         const filtered = data.filter(row => {
             if (!row.Year || !yearsToCheck.includes(parseInt(row.Year))) return false;
-            let ship = parseDate(row.Ship, true, row.Year) ||
-                (parseDate(row['S. Start'], true, row.Year) ? new Date(parseDate(row['S. Start'], true, row.Year).getTime() - 10 * 86400000) : null);
-            let ret = parseDate(row['Expected Return Date'], true, row.Year) ||
-                (parseDate(row['S. End'], true, row.Year) ? new Date(parseDate(row['S. End'], true, row.Year).getTime() + 10 * 86400000) : null);
             
-            // Additional fallback: if we still have no ship/return dates but have S. Start, use S. Start + 1 month
-            if (!ship && !ret) {
-                let sStart = parseDate(row['S. Start'], true, row.Year);
-                if (sStart) {
-                    ship = new Date(sStart.getTime() - 10 * 86400000); // 10 days before show start
-                    ret = new Date(sStart.getTime() + 30 * 86400000); // 30 days after show start
-                    console.log(`[production-utils] Using S. Start fallback for ${row.Identifier || row.Show}: ship=${ship}, ret=${ret}`);
-                }
+            // Use shared date calculation helpers
+            let ship = _calculateShipDate(row);
+            let ret = _calculateReturnDate(row, ship);
+            
+            // Ensure return date is after ship date
+            if (ship && ret && ret <= ship) {
+                ret.setFullYear(ret.getFullYear() + 1);
             }
             
-            // Fallback: if we have ship date but no return date, assume one month after ship date
-            if (ship && !ret) {
-                ret = new Date(ship.getTime() + 30 * 86400000); // Add 30 days
-                console.log(`[production-utils] No return date for ${row.Identifier || row.Show}, assuming one month after ship: ${ret}`);
-            }
-            
-            if (ship && ship.getFullYear() != row.Year) ship.setFullYear(Number(row.Year));
-            if (ret && ret.getFullYear() != row.Year) ret.setFullYear(Number(row.Year));
-            if (ship && ret && ret <= ship) ret.setFullYear(ret.getFullYear() + 1);
             if (!ship || !ret) return false;
             return (ret >= startDate && ship <= endDate);
         });
@@ -293,6 +264,117 @@ class productionUtils_uncached {
         return null;
     }
 
+
+    /**
+     * Guess ship date based on other date fields in the row
+     * API function used by reactive store analysis to fill in missing ship dates
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} row - Schedule row with date fields (Ship, S. Start, S. End, Year)
+     * @returns {Promise<string|null>} Guessed ship date in MM/DD/YYYY format or null
+     */
+    static async guessShipDate(deps, row) {
+        try {
+            // Only guess if Ship is empty
+            if (row.Ship && row.Ship.toString().trim() !== '') {
+                return row.Ship; // Return existing value
+            }
+            
+            // Use shared calculation logic
+            const guessedDate = _calculateShipDate(row);
+            
+            if (guessedDate) {
+                // Format as MM/DD/YYYY
+                const month = String(guessedDate.getMonth() + 1).padStart(2, '0');
+                const day = String(guessedDate.getDate()).padStart(2, '0');
+                const year = guessedDate.getFullYear();
+                return `${month}/${day}/${year}`;
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn('[production-utils] Failed to guess ship date:', error);
+            return null;
+        }
+    }
+
 }
 
 export const ProductionUtils = wrapMethods(productionUtils_uncached, 'production_utils');
+
+
+
+// Helper functions not exposed via API
+
+/**
+ * Calculate ship date from row data with fallbacks
+ * Shared helper used by overlap calculations and date inference
+ * @param {Object} row - Schedule row with date fields (Ship, S. Start, S. End, Year)
+ * @returns {Date|null} Ship date or null
+ * @private
+ */
+function _calculateShipDate(row) {
+    const year = row.Year;
+    
+    // Try explicit Ship date first
+    let ship = parseDate(row.Ship, true, year);
+    if (ship) return ship;
+    
+    // Fallback 1: S. Start - 10 days
+    const sStart = parseDate(row['S. Start'], true, year);
+    if (sStart) {
+        ship = new Date(sStart.getTime() - 14 * 86400000);
+        if (ship.getFullYear() != year) ship.setFullYear(Number(year));
+        return ship;
+    }
+    
+    // Fallback 2: S. End - 20 days
+    const sEnd = parseDate(row['S. End'], true, year);
+    if (sEnd) {
+        ship = new Date(sEnd.getTime() - 21 * 86400000);
+        if (ship.getFullYear() != year) ship.setFullYear(Number(year));
+        return ship;
+    }
+    
+    return null;
+}
+
+/**
+ * Calculate return date from row data with fallbacks
+ * Shared helper used by overlap calculations
+ * @param {Object} row - Schedule row with date fields
+ * @param {Date|null} shipDate - Already calculated ship date (optional)
+ * @returns {Date|null} Return date or null
+ * @private
+ */
+function _calculateReturnDate(row, shipDate = null) {
+    const year = row.Year;
+    
+    // Try explicit return date first
+    let ret = parseDate(row['Expected Return Date'], true, year);
+    if (ret) return ret;
+    
+    // Fallback 1: S. End + 10 days
+    const sEnd = parseDate(row['S. End'], true, year);
+    if (sEnd) {
+        ret = new Date(sEnd.getTime() + 10 * 86400000);
+        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        return ret;
+    }
+    
+    // Fallback 2: S. Start + 30 days
+    const sStart = parseDate(row['S. Start'], true, year);
+    if (sStart) {
+        ret = new Date(sStart.getTime() + 30 * 86400000);
+        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        return ret;
+    }
+    
+    // Fallback 3: Ship date + 30 days
+    if (shipDate) {
+        ret = new Date(shipDate.getTime() + 30 * 86400000);
+        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        return ret;
+    }
+    
+    return null;
+}

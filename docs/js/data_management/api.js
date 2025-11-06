@@ -357,6 +357,56 @@ class Requests_uncached {
     }
 
     /**
+     * Check if a packlist exists for a schedule row
+     * Used by reactive store analysis to enrich schedule data with packlist information
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} scheduleRow - Full schedule row object with Show, Client, Year properties
+     * @returns {Promise<Object>} Object with { exists: boolean, identifier: string|null }
+     */
+    static async checkPacklistExists(deps, scheduleRow) {
+        try {
+            // Compute the identifier from the row data
+            const identifier = await deps.call(
+                Requests.computeIdentifier,
+                scheduleRow.Show,
+                scheduleRow.Client,
+                parseInt(scheduleRow.Year)
+            );
+            
+            // Get available tabs and check if packlist exists
+            const availableTabs = await deps.call(Requests.getAvailableTabs, 'PACK_LISTS');
+            const tab = availableTabs.find(tab => tab.title === identifier);
+            
+            return {
+                exists: !!tab,
+                identifier: identifier
+            };
+        } catch (error) {
+            console.warn('Failed to check packlist existence:', error);
+            return {
+                exists: false,
+                identifier: null
+            };
+        }
+    }
+
+    /**
+     * Guess ship date if missing based on other date fields
+     * Used by reactive store analysis to fill in missing ship dates
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} scheduleRow - Full schedule row object
+     * @returns {Promise<string|undefined>} Guessed ship date or undefined (to preserve existing)
+     */
+    static async guessShipDate(deps, scheduleRow) {
+        // Only guess if Ship field is empty or null
+        if (!scheduleRow.Ship || scheduleRow.Ship.toString().trim() === '') {
+            return await deps.call(ProductionUtils.guessShipDate, scheduleRow);
+        }
+        // Return undefined to preserve existing ship date
+        return undefined;
+    }
+
+    /**
      * Get item image URL from Google Drive
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemNumber - The item number to search for

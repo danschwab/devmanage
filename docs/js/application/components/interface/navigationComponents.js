@@ -115,7 +115,7 @@ export const PrimaryNavComponent = {
                 </span>
                 
                 <button class="button-symbol white" @click="$emit('toggle-menu')">
-                    {{ isMenuOpen ? '✖' : '≡' }}
+                    {{ isMenuOpen ? '×' : '≡' }}
                 </button>
             </nav>
         </header>

@@ -174,34 +174,42 @@ button:disabled:after {
 div.white, span.white {
     border-color: var(--color-border);
     background-color: var(--background-color);
+    color: var(--color-text)
 }
 div.gray, span.gray {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
+    color: var(--color-text)
 }
 div.purple, span.purple {
     border-color: var(--color-purple);
     background-color: var(--color-purple-bg);
+    color: var(--color-text)
 }
 div.red, span.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
+    color: var(--color-text)
 }
 div.orange, span.orange {
     border-color: var(--color-orange);
     background-color: var(--color-orange-bg);
+    color: var(--color-text)
 }
 div.yellow, span.yellow {
     border-color: var(--color-yellow);
     background-color: var(--color-yellow-bg);
+    color: var(--color-text)
 }
 div.blue, span.blue {
     border-color: var(--color-blue);
     background-color: var(--color-blue-bg);
+    color: var(--color-text)
 }
 div.green, span.green {
     border-color: var(--color-green);
     background-color: var(--color-green-bg);
+    color: var(--color-text)
 }
 
 

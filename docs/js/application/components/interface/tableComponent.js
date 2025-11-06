@@ -829,14 +829,19 @@ export const TableComponent = {
             const diffTime = targetDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
+            // Don't color dates more than a week in the past
+            if (diffDays < -7) {
+                return '';  // No coloring for dates older than a week
+            }
+            
             // Apply color based on proximity
             if (diffDays <= 2) {
-                return 'red';  // Within 2 days (including past dates)
+                return 'red';  // Within 2 days (including past dates up to a week ago)
             } else if (diffDays <= 7) {
                 return 'orange';  // Within 7 days
             }
             
-            return '';  // No special coloring for dates more than 7 days away
+            return '';  // No special coloring for dates more than 7 days in the future
         },
         
         getCellClass(value, column, rowIndex, colIndex) {
@@ -1584,7 +1589,7 @@ export const TableComponent = {
                                         @click="toggleRowDetails(idx)"
                                         :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
-                                        {{ isRowExpanded(idx) ? '✖' : '&#9432;' }}
+                                        {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
                                     </button>
                                 </td>
                             </tr>

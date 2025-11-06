@@ -762,7 +762,7 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button {
     outline: none;
 }
 table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::before {
-    content: "✖";
+    content: "×";
     display: block;
     text-align: center;
     color: var(--color-text-inverted);
@@ -1010,7 +1010,8 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 .search-match:not(:has(.search-match)):not(:has(button)):not(:has(input)),
 .search-match button,
 .search-match .table-edit-textarea,
-.search-match input {
+.search-match input,
+.search-match .card {
     background-color: var(--color-yellow-bg-transparent) !important;
     color: var(--color-text) !important;
 }
