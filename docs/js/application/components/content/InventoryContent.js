@@ -1,5 +1,6 @@
 import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
+import { ShowInventoryReport } from './ShowInventoryReport.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
@@ -129,7 +130,8 @@ export const InventoryContent = {
     components: {
         'inventory-table': InventoryTableComponent,
         'inventory-overview-table': InventoryOverviewTableComponent,
-        'cards-grid': CardsComponent
+        'cards-grid': CardsComponent,
+        'show-inventory-report': ShowInventoryReport
     },
     props: {
         containerPath: {
@@ -150,6 +152,7 @@ export const InventoryContent = {
             return [
                 { id: 'categories', label: 'Categories', path: 'inventory/categories' },
                 { id: 'reports', label: 'Reports', path: 'inventory/reports' },
+                { id: 'show-inventory-report', label: 'Show Inventory Report', path: 'inventory/reports/show-inventory' },
                 { id: 'new', label: 'New Item', path: 'inventory/new' }
             ];
         },
@@ -200,7 +203,14 @@ export const InventoryContent = {
                 reports: {
                     displayName: 'Reports',
                     dashboardTitle: 'Inventory Reports',
-                    icon: 'assessment'
+                    icon: 'assessment',
+                    children: {
+                        'show-inventory': {
+                            displayName: 'Show Inventory Report',
+                            dashboardTitle: 'Show Inventory Report',
+                            icon: 'analytics'
+                        }
+                    }
                 },
                 new: {
                     displayName: 'New Item',
@@ -262,6 +272,7 @@ export const InventoryContent = {
                 <p>View and manage inventory reports.</p>
                 
                 <div style="margin: 1rem 0;">
+                    <button @click="navigateToPath('inventory/reports/show-inventory')">Show Inventory Report</button>
                     <button @click="$modal.alert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
                     <button @click="$modal.alert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
                     <button @click="$modal.alert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
@@ -278,6 +289,13 @@ export const InventoryContent = {
                     </inventory-table>
                 </div>
             </slot>
+
+            <!-- Show Inventory Report View -->
+            <show-inventory-report
+                v-else-if="containerPath === 'inventory/reports/show-inventory'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+            />
 
             <!-- New Item View -->
             <slot v-else-if="containerPath === 'inventory/new'">

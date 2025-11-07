@@ -28,5 +28,6 @@ export { InventoryTableComponent, ItemImageComponent } from './components/conten
 export { PacklistTable } from './components/content/PacklistTable.js';
 export { PacklistContent, PacklistMenuComponent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
+export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';

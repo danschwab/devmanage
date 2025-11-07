@@ -529,6 +529,16 @@ class Requests_uncached {
     }
 
     /**
+     * Get item quantities summary for multiple projects
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Array<string>} projectIdentifiers - Array of project identifiers
+     * @returns {Promise<Array<Object>>} Array of item objects with quantities per show
+     */
+    static async getMultipleShowsItemsSummary(deps, projectIdentifiers) {
+        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers);
+    }
+
+    /**
      * Get packlist summary description
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier (tab name)

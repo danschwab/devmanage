@@ -295,7 +295,15 @@ export const ScheduleContent = {
             // Parse DateSearch from saved search
             if (searchData.dateSearch) {
                 const dateFilter = parseDateSearchParameter(searchData.dateSearch);
-                Object.assign(filter, dateFilter);
+                
+                // Check if this is an overlap search (has overlapShowIdentifier)
+                if (dateFilter.overlapShowIdentifier) {
+                    // Convert overlapShowIdentifier to identifier for API
+                    filter.identifier = dateFilter.overlapShowIdentifier;
+                } else {
+                    // Regular date filter
+                    Object.assign(filter, dateFilter);
+                }
             }
             
             // Apply text filters

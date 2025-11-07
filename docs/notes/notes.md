@@ -87,7 +87,7 @@ HIGH PRIORITY: analysis of pack list against current inventory
 - [x] overlapping shows
 - [x] low stock warnings
 - [x] description updates
-- [ ] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
+- [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
       "show inventory report" for the schedule/advanced search
       Original data gets all items in the shows during a time period.
       First analytics gets inventory data loaded from reactive store.

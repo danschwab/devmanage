@@ -554,8 +554,8 @@ export const TableComponent = {
             return this.columns.some(col => col.editable);
         },
         hideSet() {
-            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData'
-            return new Set([...(this.hideColumns || []), 'AppData', ...(this.hiddenColumns || [])]);
+            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData' and 'MetaData'
+            return new Set([...(this.hideColumns || []), 'AppData', 'MetaData', ...(this.hiddenColumns || [])]);
         },
         mainTableColumns() {
             // find columns marked with a colspan property and eliminate the extra columns following them
@@ -846,25 +846,20 @@ export const TableComponent = {
         
         getCellClass(value, column, rowIndex, colIndex) {
             let baseClass = '';
-            // Centralized autoColor logic for number columns
-            if (column.autoColor && column.format === 'number') {
-                if (value <= 0) baseClass = 'red';
-                else if (value < 5) baseClass = 'orange';
-            }
-            // Centralized autoColor logic for date columns
-            if (column.autoColor && column.format === 'date') {
-                const cellClass = this.getDateColorClass(value);
-                if (cellClass) baseClass = cellClass;
-            }
-            // Support function-based cell classes
+            
+            // Support function-based cell classes FIRST (before autoColor)
+            // This allows custom columns to override autoColor behavior
             if (typeof column.cellClass === 'function') {
                 // Pass the full row data if rowIndex is provided and valid
                 if (typeof rowIndex === 'number' && this.data && this.data[rowIndex]) {
-                    baseClass = column.cellClass(value, this.data[rowIndex]);
+                    const customClass = column.cellClass(value, this.data[rowIndex]);
+                    if (customClass) return customClass; // Return early if custom class provided
                 } else {
-                    baseClass = column.cellClass(value);
+                    const customClass = column.cellClass(value);
+                    if (customClass) return customClass; // Return early if custom class provided
                 }
             }
+            
             // Support object-based cell classes
             if (typeof column.cellClass === 'object') {
                 for (const [className, condition] of Object.entries(column.cellClass)) {
@@ -876,6 +871,20 @@ export const TableComponent = {
                     }
                 }
             }
+            
+            // Centralized autoColor logic for number columns
+            // Only apply if value is not null/undefined
+            if (column.autoColor && column.format === 'number' && value !== null && value !== undefined) {
+                if (value <= 0) baseClass = 'red';
+                else if (value < 5) baseClass = 'orange';
+            }
+            
+            // Centralized autoColor logic for date columns
+            if (column.autoColor && column.format === 'date') {
+                const cellClass = this.getDateColorClass(value);
+                if (cellClass) baseClass = cellClass;
+            }
+            
             // Add dirty class if cell is dirty
             if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][colIndex]) {
                 baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';

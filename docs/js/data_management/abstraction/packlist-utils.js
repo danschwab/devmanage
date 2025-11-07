@@ -568,6 +568,44 @@ class packListUtils_uncached {
     }
 
     /**
+     * Extract items from multiple shows and aggregate quantities
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Array<string>} projectIdentifiers - Array of project identifiers to extract items from
+     * @returns {Promise<Array>} Array of items with quantities per show and total
+     */
+    static async extractItemsFromMultipleShows(deps, projectIdentifiers) {
+        const allItemsMap = {};
+        
+        // Extract items from each show
+        for (const projectId of projectIdentifiers) {
+            try {
+                const itemsMap = await deps.call(PackListUtils.extractItems, projectId);
+                
+                // Aggregate all unique items
+                for (const [itemId, quantity] of Object.entries(itemsMap)) {
+                    if (!allItemsMap[itemId]) {
+                        allItemsMap[itemId] = {
+                            itemId,
+                            totalQuantity: 0,
+                            shows: {},
+                            tabName: null,
+                            available: null,
+                            remaining: null
+                        };
+                    }
+                    allItemsMap[itemId].shows[projectId] = quantity;
+                    allItemsMap[itemId].totalQuantity += quantity;
+                }
+            } catch (e) {
+                console.warn(`Failed to load items for ${projectId}:`, e);
+            }
+        }
+        
+        // Transform to array format for table display
+        return Object.values(allItemsMap);
+    }
+
+    /**
      * Generate a summary description for a packlist
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier (tab name)
