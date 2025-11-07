@@ -35,6 +35,8 @@ Need features:
 
 **chores**
 
+- [ ] packlist print titleblock??
+- [ ] label as "some data may be out of date"
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] add context variables to live site github
 
@@ -60,8 +62,9 @@ Architecture Improvements
 - [ ] consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
 - [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
 - [ ] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
-- [ ] extra spreadsheet MetaData column
-- [ ] save history: dateTime, userName, fields edited & old values
+- [x] extra spreadsheet MetaData column
+- [ ] impliment metadata for packlists
+- [x] save history: dateTime, userName, fields edited & old values
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
       reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
@@ -73,10 +76,27 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Create new pack list in Google Sheets
 - [x] Input items into Google Sheets
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
+- [ ] change the packlist export to export all items correctly
+- [ ] make sure panel and hardware part numbers come in correctly
 - [ ] Categorize all booth parts according to Pack List Rules (preferences)
 - [ ] Improve and test this system
 
-MEDIUM PRIORITY: Pack Lists in Web
+HIGH PRIORITY: analysis of pack list against current inventory
+
+- [x] quantities
+- [x] overlapping shows
+- [x] low stock warnings
+- [x] description updates
+- [ ] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
+      "show inventory report" for the schedule/advanced search
+      Original data gets all items in the shows during a time period.
+      First analytics gets inventory data loaded from reactive store.
+      Custom configure analytics to add a column for the quantities for each show...
+      Final step subtracts all and shows result.
+      columns: Thumbnail, Item #, Inv Qty, Show quantities... (narrow) , Remaining.
+      allow loading custom url-params into page?
+
+Pack Lists in Web
 
 - [x] Get pack list data from web and display
 - [x] Allow addition of new crates
@@ -95,14 +115,7 @@ MEDIUM PRIORITY: Pack Lists in Web
 - [ ] description change recommendations for common or similar items that checks or aggregates history potentially?
 - [ ] automations automatically allow for quick addition of typical client or show items
 
-analysis of pack list against current inventory
-
-- [x] quantities
-- [x] overlapping shows
-- [x] low stock warnings
-- [x] description updates
-
-HIGH PRIORITY: inventory updates
+inventory updates
 
 - [x] include all current categories
 - [x] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers

@@ -34,11 +34,9 @@ class database_uncached {
      * @param {string} tableId - Identifier for the table (INVENTORY, PACK_LISTS, etc.)
      * @param {string} tabName - Tab name or logical identifier
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
-     * @param {Object} [options] - Optional configuration
-     * @param {number} [options.headerRow] - Row index where headers are located (0-based). Defaults to 0 for INVENTORY, 2 for PACK_LISTS
      * @returns {Promise<Array<Object>>} - Array of JS objects
      */
-    static async getData(deps, tableId, tabName, mapping = null, options = {}) {
+    static async getData(deps, tableId, tabName, mapping = null) {
         // Get raw sheet data from GoogleSheetsService
         const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
         //console.log('[Database] Raw data from GoogleSheetsService:', rawData);
@@ -46,12 +44,7 @@ class database_uncached {
         
         // If mapping provided, transform to JS objects
         if (mapping) {
-            // Determine header row based on table type if not explicitly provided
-            const headerRow = options.headerRow !== undefined 
-                ? options.headerRow 
-                : (tableId === 'PACK_LISTS' ? 2 : 0);
-            
-            const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping, { headerRow });
+            const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping);
             console.log('[Database] Transformed data:', transformedData);
             return transformedData;
         }
@@ -143,35 +136,22 @@ class database_uncached {
      * @param {string} [options.username] - Username making the change
      * @param {boolean} [options.skipMetadata] - Skip metadata generation (for MetaData table itself)
      * @param {string} [options.identifierKey] - Key to identify rows (for deletion tracking)
-     * @param {number} [options.headerRow] - Row index where headers are located (0-based)
-     * @param {Array<Array>} [options.metadataRows] - Rows to prepend before headers
      * @returns {Promise<boolean>} - Success status
      */
     static async setData(tableId, tabName, updates, mapping = null, options = {}) {
         const {
             username = null,
             skipMetadata = false,
-            identifierKey = null,
-            headerRow: explicitHeaderRow,
-            metadataRows,
-            headerOrder
+            identifierKey = null
         } = options;
-
-        // Determine header row based on table type if not explicitly provided
-        const headerRow = explicitHeaderRow !== undefined 
-            ? explicitHeaderRow 
-            : (tableId === 'PACK_LISTS' ? 2 : 0);
 
         let updatesWithMetadata = updates;
 
         // Add metadata tracking if not skipped
         if (!skipMetadata && mapping && mapping.metadata) {
-            console.log('[Database.setData] Metadata tracking enabled', { tableId, tabName, username, identifierKey });
             try {
                 // Get original data for comparison (use Database.getData to leverage cache)
-                const transformedOriginal = await Database.getData(tableId, tabName, mapping, { headerRow });
-                console.log('[Database.setData] Original data loaded:', transformedOriginal?.length, 'rows');
-                console.log('[Database.setData] Updates to save:', updates?.length, 'rows');
+                const transformedOriginal = await Database.getData(tableId, tabName, mapping);
 
                 // Add metadata to updated rows
                 updatesWithMetadata = await _addMetadataToRows(
@@ -180,8 +160,6 @@ class database_uncached {
                     username,
                     mapping
                 );
-                console.log('[Database.setData] Metadata added to rows:', updatesWithMetadata?.length, 'rows');
-                console.log('[Database.setData] Sample row with metadata:', updatesWithMetadata[0]);
 
                 // Detect and archive deleted rows
                 if (identifierKey) {
@@ -192,7 +170,6 @@ class database_uncached {
                     );
 
                     if (deletedRows.length > 0) {
-                        console.log('[Database.setData] Archiving deleted rows:', deletedRows.length);
                         await _archiveDeletedRows(
                             tableId,
                             tabName,
@@ -205,17 +182,9 @@ class database_uncached {
                 console.warn('Failed to add metadata, continuing with save:', error);
                 // Continue with save even if metadata fails
             }
-        } else {
-            console.log('[Database.setData] Metadata tracking skipped', { 
-                skipMetadata, 
-                hasMapping: !!mapping, 
-                hasMappingMetadata: !!(mapping && mapping.metadata) 
-            });
         }
 
-        // Pass options to setSheetData for proper header row handling
-        const setDataOptions = { headerRow, metadataRows, headerOrder };
-        const result = await GoogleSheetsService.setSheetData(tableId, tabName, updatesWithMetadata, mapping, setDataOptions);
+        const result = await GoogleSheetsService.setSheetData(tableId, tabName, updatesWithMetadata, mapping);
         
         // Invalidate related caches using prefix to handle custom mapped data
         invalidateCache([
@@ -235,21 +204,15 @@ class database_uncached {
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @param {Object} [options] - Optional parameters for metadata tracking
      * @param {string} [options.username] - Username making the change
-     * @param {number} [options.headerRow] - Row index where headers are located (0-based)
      * @returns {Promise<boolean>} - Success status
      */
     static async updateRow(tableId, tabName, update, mapping = null, options = {}) {
-        const { username = null, headerRow: explicitHeaderRow } = options;
+        const { username = null } = options;
 
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
-        // Determine header row based on table type if not explicitly provided
-        const headerRow = explicitHeaderRow !== undefined 
-            ? explicitHeaderRow 
-            : (tableId === 'PACK_LISTS' ? 2 : 0);
-
         const transformedData = mapping
-            ? GoogleSheetsService.transformSheetData(existingData, mapping, { headerRow })
+            ? GoogleSheetsService.transformSheetData(existingData, mapping)
             : GoogleSheetsService.sheetArrayToObjects(existingData);
 
         const rowIndex = transformedData.findIndex(row => {

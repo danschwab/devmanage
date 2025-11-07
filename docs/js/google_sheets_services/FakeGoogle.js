@@ -84,35 +84,19 @@ export class FakeGoogleSheetsService {
     /**
      * Transform raw sheet data to JS objects using mapping
      */
-    /**
-     * Transform raw sheet data to JS objects using mapping
-     * @param {Array<Array>} rawData - Raw 2D array from sheet
-     * @param {Object} mapping - Mapping of object keys to sheet headers
-     * @param {Object} [options] - Optional configuration
-     * @param {number} [options.headerRow=0] - Row index where headers are located (0-based)
-     * @returns {Array<Object>} Array of JS objects
-     */
-    static transformSheetData(rawData, mapping, options = {}) {
-        const { headerRow = 0 } = options;
-        
-        if (!rawData || rawData.length < (headerRow + 2) || !mapping) return [];
-        const headers = rawData[headerRow];
-        const rows = rawData.slice(headerRow + 1);
+    static transformSheetData(rawData, mapping) {
+        if (!rawData || rawData.length < 2 || !mapping) return [];
+        const headers = rawData[0];
+        const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
             const idx = headers.findIndex(h => h.trim() === headerName);
-            if (idx === -1) {
-                console.warn(`FakeGoogle.transformSheetData: header '${headerName}' not found in sheet headers. Will initialize as empty.`, headers);
-            }
             if (idx !== -1) headerIdxMap[key] = idx;
         });
         return rows.map(row => {
             const obj = {};
             Object.keys(mapping).forEach(key => {
-                // Explicitly check if column was found before accessing
-                obj[key] = (headerIdxMap[key] !== undefined && row[headerIdxMap[key]] !== undefined)
-                    ? row[headerIdxMap[key]]
-                    : '';
+                obj[key] = row[headerIdxMap[key]] ?? '';
             });
             return obj;
         }).filter(obj => Object.values(obj).some(val => val !== ''));
@@ -120,29 +104,14 @@ export class FakeGoogleSheetsService {
 
     /**
      * Reverse transform JS objects to sheet data using mapping
-     * @param {Object} mapping - Mapping of object keys to sheet headers
-     * @param {Array<Object>} mappedData - Array of JS objects
-     * @param {Object} [options] - Optional configuration
-     * @param {number} [options.headerRow=0] - Row index where headers should be placed (0-based)
-     * @param {Array<Array>} [options.metadataRows] - Rows to prepend before headers (for pack lists, rows 0-1)
-     * @param {Array<string>} [options.headerOrder] - Explicit header order (if not provided, uses Object.values(mapping))
-     * @returns {Array<Array>} 2D array in sheet format
      */
-    static reverseTransformSheetData(mapping, mappedData, options = {}) {
+    static reverseTransformSheetData(mapping, mappedData) {
         if (!mappedData || mappedData.length === 0) return [];
-        
-        const { headerRow = 0, metadataRows = [], headerOrder } = options;
-        const headers = headerOrder || Object.values(mapping);
+        const headers = Object.values(mapping);
         const rows = mappedData.map(obj => headers.map(h => {
             const key = Object.keys(mapping).find(k => mapping[k] === h);
             return key ? obj[key] ?? '' : '';
         }));
-        
-        // If headerRow > 0, prepend metadata rows
-        if (headerRow > 0 && metadataRows.length > 0) {
-            return [...metadataRows, headers, ...rows];
-        }
-        
         return [headers, ...rows];
     }
     static SPREADSHEET_IDS = {
@@ -326,14 +295,13 @@ export class FakeGoogleSheetsService {
                 ['10', 'Skid', '96', '48', '72', '800', '', '', '(6) IKEA counter-height white stools', 'Tighten foot rests/seats and clean'],
                 ['', '', '', '', '', '', '', '', '(22) IKEA BAR-height white stools', 'Tighten foot rests/seats and clean'],
                 ['', '', '', '', '', '', '', '', '(3) CURVED LOUNGE CLUB CHAIR-WHITE WITH LEGS', ''],
-                ['11', 'Skid', '96', '48', '72', '800', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
+                ['11', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
                 ['', '', '', '', '', '', '', '', '(4) 4\'x8\' sheets white Sintra', 'New- for misc. use onsite'],
                 ['', '', '', '', '', '', '', '', 'Sintra Graphics', ''],
-                ['12', 'Skid', '96', '48', '72', '800', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
-                ['13', 'Skid', '96', '48', '72', '800', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'BeMatrix frames/accessories', 'Per separate pack list']
+                ['12', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
+                ['13', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
+                ['14', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list'],
+                ['15', 'Skid', '96', '48', '72', '800', '', '', 'BeMatrix frames/accessories', 'Per separate pack list']
             ],
             'TULIP 2025 NRF': [
                 ['', '', 'Pack List:', '', 'GEARFIRE 2025 SHOT', '', '', '', '', 'Ship: Fri. Mar, 28'],
@@ -410,35 +378,29 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '', 'Setup in shop: Yes'],
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes'],
                 // Standard items (existing format)
-                ['1', 'Crate', '72', '48', '48', '400', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', '(2) TABLE-001 Conference tables', 'Standard items'],
+                ['1', 'Crate', '72', '48', '48', '400', '', '', '(2) TABLE-001 Conference tables', 'Standard items'],
                 ['', '', '', '', '', '', '', '', '(5) CHAIR-002 Lounge chairs', ''],
                 ['', '', '', '', '', '', '', '', 'STOOL-001 Bar stool', ''],
                 // Dimensional PANELS
-                ['2', 'Crate', '96', '48', '12', '200', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', '(3) BX-16x39 Standard rectangular panels', 'Pack flat, protect edges'],
+                ['2', 'Crate', '96', '48', '12', '200', '', '', '(3) BX-16x39 Standard rectangular panels', 'Pack flat, protect edges'],
                 ['', '', '', '', '', '', '', '', '(2) BX-16x47 Large rectangular panels', ''],
                 ['', '', '', '', '', '', '', '', 'BX-○39 Circular panel 39" diameter', ''],
                 ['', '', '', '', '', '', '', '', '(2) BX-3Rx8_45° Curved panels with 45° angle', ''],
                 ['', '', '', '', '', '', '', '', '(4) VU-8x39 VUE brand panels', ''],
                 // Hardware - spaced numeric format
-                ['3', 'Box', '24', '18', '12', '50', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', '(10) 901 00 030 MKII Mounting brackets', 'Hardware kit'],
+                ['3', 'Box', '24', '18', '12', '50', '', '', '(10) 901 00 030 MKII Mounting brackets', 'Hardware kit'],
                 ['', '', '', '', '', '', '', '', '(20) 901 28 0341 E E-series connectors', ''],
                 ['', '', '', '', '', '', '', '', '(50) 615 11 01 ANO Anodized fasteners', 'Bulk item'],
                 ['', '', '', '', '', '', '', '', '(5) 250 05 50 LED - LED50WW LED strips', 'Fragile electronics'],
                 // Hardware - alphanumeric format
-                ['4', 'Box', '18', '12', '8', '15', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', '(3) VUE-V2C-LP Low profile connectors', 'Small parts'],
+                ['4', 'Box', '18', '12', '8', '15', '', '', '(3) VUE-V2C-LP Low profile connectors', 'Small parts'],
                 ['', '', '', '', '', '', '', '', '(2) LED-EXL21-SL LED controllers', 'Electronics'],
                 // Hardware - text-based format
-                ['5', 'Box', '36', '24', '18', '80', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', '(25) HH BOLTHOG M8 LONG Long bolts', 'Hardware kit'],
+                ['5', 'Box', '36', '24', '18', '80', '', '', '(25) HH BOLTHOG M8 LONG Long bolts', 'Hardware kit'],
                 ['', '', '', '', '', '', '', '', '(15) HH BOLTHOG 1-4 20 x 2.5 Small bolts', ''],
                 ['', '', '', '', '', '', '', '', '(8) HH BRACKET UPPER 62 Mounting brackets', ''],
                 // Mixed content in single description
-                ['6', 'Crate', '60', '40', '40', '300', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types'],
+                ['6', 'Crate', '60', '40', '40', '300', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types'],
                 ['', '', '', '', '', '', '', '', 'Also includes: VU-8x39 and (3) CHAIR-002', '']
             ]
         },

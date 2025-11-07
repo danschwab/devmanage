@@ -14,6 +14,7 @@ The MetaData system has been implemented to track row changes, store modificatio
 ### Implementation Level: Database Layer (Recommended Option 1)
 
 The implementation follows the recommended Database Layer approach, providing:
+
 - **Single point of control** - All saves flow through Database.setData()
 - **Automatic tracking** - Works for all tables without code changes
 - **Transparent operation** - Upper layers unaware of metadata tracking
@@ -28,6 +29,7 @@ The implementation follows the recommended Database Layer approach, providing:
 Core utility class providing metadata operations:
 
 **Key Methods:**
+
 - `createMetaDataEntry(username, changes)` - Creates new metadata entry
 - `appendToMetaData(existingMetaData, newEntry, maxHistory)` - Appends to history
 - `calculateRowDiff(oldRow, newRow, ignoredColumns)` - Detects changes
@@ -41,6 +43,7 @@ Core utility class providing metadata operations:
 ### 2. Enhanced Database Layer (`abstraction/database.js`)
 
 **Database.setData() Enhancements:**
+
 - Accepts `options` parameter with:
   - `username` - User making the change
   - `skipMetadata` - Skip metadata generation (for special tables)
@@ -51,32 +54,38 @@ Core utility class providing metadata operations:
 - Graceful fallback if metadata operations fail
 
 **Database.updateRow() Enhancements:**
+
 - Accepts `options` parameter with username
 - Calculates single-row diff
 - Appends metadata for changed fields
 
 **Private Helper Methods:**
+
 - `_addMetadataToRows(originalRows, updatedRows, username, mapping)` - Adds metadata to changed rows
 - `_archiveDeletedRows(sourceTable, sourceTab, deletedRows, username)` - Archives to MetaData table
 
 ### 3. Updated Abstraction Layer
 
 **InventoryUtils.saveInventoryTabData():**
+
 - Accepts `username` parameter
 - Passes username to Database.setData() with `identifierKey: 'itemNumber'`
 - Passes username to Database.updateRow() for filtered saves
 
 **PackListUtils.savePackList():**
+
 - Accepts `username` parameter
 - Currently skips metadata (pack lists use special 2D array format)
 - Tagged with comment for future enhancement
 
 **ApplicationUtils.storeUserData():**
+
 - Passes `skipMetadata: true` option (user data doesn't need tracking)
 
 ### 4. Updated API Layer (`data_management/api.js`)
 
 **Changes:**
+
 - Imports `authState` from auth utility
 - Extracts username: `authState.user?.email || null`
 - Passes username to abstraction layer methods:
@@ -89,56 +98,82 @@ Core utility class providing metadata operations:
 
 ### MetaData Column Format
 
-Stored as JSON string in the `MetaData` column of each table:
+Stored as JSON string in the `MetaData` column of each table (minimized format):
 
 ```json
 {
-  "history": [
+  "h": [
     {
-      "user": "dan@example.com",
-      "timestamp": "2025-11-06T15:30:00Z",
-      "changes": [
-        { "column": "quantity", "old": "5", "new": "10" },
-        { "column": "notes", "old": "", "new": "Updated for show" }
+      "u": "dan",
+      "t": "2025-11-06T15:30:00Z",
+      "c": [
+        { "n": "quantity", "o": "5" },
+        { "n": "notes", "o": "" }
       ]
     },
     {
-      "user": "jane@example.com",
-      "timestamp": "2025-11-05T10:15:00Z",
-      "changes": [
-        { "column": "quantity", "old": "3", "new": "5" }
-      ]
+      "u": "jane",
+      "t": 17309064000,
+      "c": [{ "n": "quantity", "o": "3" }]
     }
   ],
-  "cachedAnalytics": {
+  "a": {
     "lastInventoryCheck": "2025-11-06T15:30:00Z",
     "alertsAcknowledged": ["low-quantity-2025-11-05"]
   },
-  "userSettings": {
+  "s": {
     "starred": true,
     "color": "yellow"
   }
 }
 ```
 
-**Features:**
-- Most recent changes first (index 0)
-- Maintains up to 10 history entries (configurable)
-- Extensible with `cachedAnalytics` and `userSettings`
+**Key Mapping (Single Letters for Minimal Size):**
+
+- `h` = history (array of change entries)
+- `u` = user (username before @ symbol, e.g., "dan" not "dan@example.com")
+- `t` = timestamp (decisecond integer - divide by 10 for seconds, multiply by 100 for milliseconds)
+- `c` = changes (array of changed fields)
+- `n` = column name
+- `o` = old value (new value not stored - can be inferred from current data)
+- `a` = cachedAnalytics (optional)
+- `s` = userSettings (optional)
+
+**Timestamp Format:**
+Decisecond integers (1/10th second precision) reduce size by 54% vs ISO strings:
+
+- ISO string: `"2025-11-05T10:15:00Z"` (24 chars)
+- Deciseconds: `17309064000` (11 chars)
+- Convert to Date: `new Date(timestamp * 100)` or `MetaDataUtils.decisecondToDate(timestamp)`
+- Convert to ISO: `MetaDataUtils.formatTimestamp(timestamp)`
+- Human readable: `MetaDataUtils.formatTimestampHuman(timestamp)`
+
+**Design Rationale:**
+
+- **Single-letter keys**: Reduces JSON size by ~40%
+- **Username truncation**: Stores only "dan" instead of "dan@example.com"
+- **Decisecond timestamps**: 54% smaller than ISO strings, sufficient precision
+- **Old values only**: New values are the current values, so no need to store twice
+- **Most recent first**: Index 0 is always the latest change
+
+**Backwards Compatibility:**
+The system automatically migrates old format keys (`history`, `user`, etc.) to new format when reading.
 
 ### MetaData Table Structure
 
 Dedicated tab in each spreadsheet storing deleted rows:
 
-| Column | Description | Example |
-|--------|-------------|---------|
-| SourceTable | Table identifier | "INVENTORY" |
-| SourceTab | Tab name | "FURNITURE" |
-| RowIdentifier | Row ID | "F-123" |
-| Username | User who deleted | "dan@example.com" |
-| Timestamp | Deletion time | "2025-11-06T15:30:00Z" |
-| Operation | Action type | "delete" |
-| RowData | Full row as JSON | {"itemNumber":"F-123", "quantity":"5", ...} |
+| Column        | Description                   | Example                                     |
+| ------------- | ----------------------------- | ------------------------------------------- |
+| SourceTable   | Table identifier              | "INVENTORY"                                 |
+| SourceTab     | Tab name                      | "FURNITURE"                                 |
+| RowIdentifier | Row ID                        | "F-123"                                     |
+| Username      | User who deleted (full email) | "dan@example.com"                           |
+| Timestamp     | Deletion time (deciseconds)   | 17309064000                                 |
+| Operation     | Action type                   | "delete"                                    |
+| RowData       | Full row as JSON              | {"itemNumber":"F-123", "quantity":"5", ...} |
+
+**Note:** MetaData table uses decisecond integers for Timestamp. Convert with `MetaDataUtils.decisecondToDate(timestamp)`.
 
 ---
 
@@ -162,6 +197,7 @@ Dedicated tab in each spreadsheet storing deleted rows:
 ### Example: Inventory Item Update
 
 **Original Data:**
+
 ```javascript
 {
   itemNumber: "F-123",
@@ -175,19 +211,23 @@ Dedicated tab in each spreadsheet storing deleted rows:
 **User Changes quantity to "10" and notes to "Ready for show"**
 
 **Saved Data:**
+
 ```javascript
 {
   itemNumber: "F-123",
   quantity: "10",
   description: "Blue table",
   notes: "Ready for show",
-  metadata: '{"history":[{"user":"dan@example.com","timestamp":"2025-11-06T15:30:00Z","changes":[{"column":"quantity","old":"5","new":"10"},{"column":"notes","old":"In good condition","new":"Ready for show"}]}]}'
+  metadata: '{"h":[{"u":"dan","t":17309064000,"c":[{"n":"quantity","o":"5"},{"n":"notes","o":"In good condition"}]}]}'
 }
 ```
+
+**Note:** Only old values are stored. Current values are already in the data columns. Username is shortened to just "dan" instead of "dan@example.com". Timestamp is decisecond integer (17309064000 = ~Nov 6, 2025).
 
 ### Example: Row Deletion
 
 **Before (3 rows):**
+
 ```javascript
 [
   { itemNumber: "F-123", quantity: "5", ... },
@@ -197,6 +237,7 @@ Dedicated tab in each spreadsheet storing deleted rows:
 ```
 
 **After (2 rows - F-124 deleted):**
+
 ```javascript
 [
   { itemNumber: "F-123", quantity: "5", ... },
@@ -205,37 +246,44 @@ Dedicated tab in each spreadsheet storing deleted rows:
 ```
 
 **MetaData Table Entry Created:**
+
 ```javascript
 {
   SourceTable: "INVENTORY",
   SourceTab: "FURNITURE",
   RowIdentifier: "F-124",
   Username: "dan@example.com",
-  Timestamp: "2025-11-06T15:30:00Z",
+  Timestamp: 17309064000,
   Operation: "delete",
   RowData: '{"itemNumber":"F-124","quantity":"3",...}'
 }
 ```
+
+**Note:** MetaData table stores full username (not truncated) and uses decisecond integer timestamps.
 
 ---
 
 ## Configuration
 
 ### Inventory Tables
+
 - ✅ **Enabled** - Full metadata tracking
 - Mapping includes: `metadata: 'MetaData'`
 - Identifier key: `'itemNumber'`
 
 ### Pack Lists
+
 - ⚠️ **Partially Disabled** - Uses special 2D array format
 - Currently skips metadata with `skipMetadata: true`
 - Future enhancement: Convert to mapped format
 
 ### Production Schedule
+
 - 🔄 **Future** - Not yet implemented
 - Will follow inventory pattern
 
 ### Cache/User Data
+
 - ❌ **Disabled** - User preferences don't need change tracking
 - Passes `skipMetadata: true`
 
@@ -244,61 +292,62 @@ Dedicated tab in each spreadsheet storing deleted rows:
 ## Usage Examples
 
 ### Basic Save (Automatic)
+
 ```javascript
 // No changes needed - metadata is automatic!
-await Requests.saveInventoryTabData(updatedData, 'FURNITURE');
+await Requests.saveInventoryTabData(updatedData, "FURNITURE");
 // Metadata is automatically added based on authState.user.email
 ```
 
 ### Retrieve Metadata History
+
 ```javascript
-import { MetaDataUtils } from './data_management/index.js';
+import { MetaDataUtils } from "./data_management/index.js";
 
 // Get item data
-const items = await Requests.getInventoryTabData('FURNITURE');
+const items = await Requests.getInventoryTabData("FURNITURE");
 const item = items[0];
 
 // Parse metadata
 const metadata = MetaDataUtils.parseMetaData(item.metadata);
-console.log('Change history:', metadata.history);
+console.log("Change history:", metadata.h); // Note: 'h' not 'history'
 
 // Get most recent change
 const lastChange = MetaDataUtils.getMostRecentChange(item.metadata);
-console.log('Last modified by:', lastChange.user);
-console.log('Last modified at:', lastChange.timestamp);
+console.log("Last modified by:", lastChange.u); // Short username
+console.log("Last modified at:", lastChange.t);
+console.log("Fields changed:", lastChange.c); // Array of {n: name, o: oldValue}
 ```
 
 ### Store Cached Analytics
+
 ```javascript
-import { MetaDataUtils } from './data_management/index.js';
+import { MetaDataUtils } from "./data_management/index.js";
 
 // Update cached analytic
 item.metadata = MetaDataUtils.setCachedAnalytic(
   item.metadata,
-  'lastInventoryCheck',
+  "lastInventoryCheck",
   new Date().toISOString()
 );
 
 // Retrieve cached value
 const lastCheck = MetaDataUtils.getCachedAnalytic(
   item.metadata,
-  'lastInventoryCheck'
+  "lastInventoryCheck"
 );
 ```
 
 ### Store User Settings
+
 ```javascript
-import { MetaDataUtils } from './data_management/index.js';
+import { MetaDataUtils } from "./data_management/index.js";
 
 // Mark item as starred
-item.metadata = MetaDataUtils.setUserSetting(
-  item.metadata,
-  'starred',
-  true
-);
+item.metadata = MetaDataUtils.setUserSetting(item.metadata, "starred", true);
 
 // Get starred status
-const isStarred = MetaDataUtils.getUserSetting(item.metadata, 'starred');
+const isStarred = MetaDataUtils.getUserSetting(item.metadata, "starred");
 ```
 
 ---
@@ -317,22 +366,26 @@ The system works with FakeGoogle.js for local development:
 ## Future Enhancements (Not Yet Implemented)
 
 ### Phase 2: UI Integration
+
 - [ ] History viewer component
 - [ ] Restore deleted row functionality
 - [ ] Change indicators in tables
 - [ ] User badges showing who last modified
 
 ### Phase 3: Pack List Metadata
+
 - [ ] Convert pack lists to mapped format
 - [ ] Enable metadata for crate info
 - [ ] Track item-level changes within crates
 
 ### Phase 4: Production Schedule
+
 - [ ] Add metadata tracking to schedule
 - [ ] Track show date changes
 - [ ] Track assignment changes
 
 ### Phase 5: Advanced Features
+
 - [ ] Rollback/undo functionality
 - [ ] Conflict resolution for concurrent edits
 - [ ] Metadata search/filter
@@ -366,6 +419,7 @@ try {
 ```
 
 **Graceful Degradation:**
+
 - Metadata parsing errors → Returns empty metadata
 - Archive failures → Logs error but doesn't throw
 - Missing username → Records as 'unknown'
@@ -395,22 +449,24 @@ If the tab doesn't exist, it will be created automatically on first deletion. To
 To prevent metadata from growing indefinitely:
 
 **Option 1: Reduce maxHistory**
+
 ```javascript
 // In metadata-utils.js, change default
 static appendToMetaData(existingMetaData, newEntry, maxHistory = 5) {
 ```
 
 **Option 2: Manual Cleanup Script**
+
 ```javascript
 // Clear metadata older than 90 days
 const cutoffDate = new Date();
 cutoffDate.setDate(cutoffDate.getDate() - 90);
 
-items.forEach(item => {
+items.forEach((item) => {
   const metadata = MetaDataUtils.parseMetaData(item.metadata);
   if (metadata && metadata.history) {
-    metadata.history = metadata.history.filter(entry => 
-      new Date(entry.timestamp) > cutoffDate
+    metadata.history = metadata.history.filter(
+      (entry) => new Date(entry.timestamp) > cutoffDate
     );
     item.metadata = JSON.stringify(metadata);
   }
@@ -422,13 +478,15 @@ items.forEach(item => {
 ## Summary
 
 ✅ **Phase 1 Complete** - Core metadata infrastructure implemented
+
 - MetaData column tracking change history
-- MetaData table archiving deleted rows  
+- MetaData table archiving deleted rows
 - Username attribution from authState
 - Transparent operation at Database layer
 - Extensible format for future features
 
 **Next Steps:**
+
 - Monitor system in production
 - Gather feedback from users
 - Plan Phase 2 UI features
@@ -439,6 +497,7 @@ items.forEach(item => {
 ## Questions & Support
 
 For questions about the metadata system:
+
 1. Review this documentation
 2. Check `metadata-utils.js` for utility methods
 3. Examine `database.js` for implementation details
