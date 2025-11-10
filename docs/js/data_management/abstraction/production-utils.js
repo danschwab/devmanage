@@ -340,19 +340,43 @@ function _calculateShipDate(row) {
     let ship = parseDate(row.Ship, true, year);
     if (ship) return ship;
     
-    // Fallback 1: S. Start - 10 days
+    // Fallback 1: S. Start - 14 days
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
         ship = new Date(sStart.getTime() - 14 * 86400000);
-        if (ship.getFullYear() != year) ship.setFullYear(Number(year));
+        
+        // Ensure ship date is before show start date
+        // If forcing the year makes ship date >= show start, keep it in the previous year
+        if (ship.getFullYear() !== year) {
+            const shipWithYearAdjusted = new Date(ship);
+            shipWithYearAdjusted.setFullYear(Number(year));
+            
+            // Only adjust year if it keeps ship date before show start
+            if (shipWithYearAdjusted < sStart) {
+                ship = shipWithYearAdjusted;
+            }
+        }
+        
         return ship;
     }
     
-    // Fallback 2: S. End - 20 days
+    // Fallback 2: S. End - 21 days
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
         ship = new Date(sEnd.getTime() - 21 * 86400000);
-        if (ship.getFullYear() != year) ship.setFullYear(Number(year));
+        
+        // Ensure ship date is before show end date
+        // If forcing the year makes ship date >= show end, keep it in the previous year
+        if (ship.getFullYear() !== year) {
+            const shipWithYearAdjusted = new Date(ship);
+            shipWithYearAdjusted.setFullYear(Number(year));
+            
+            // Only adjust year if it keeps ship date before show end
+            if (shipWithYearAdjusted < sEnd) {
+                ship = shipWithYearAdjusted;
+            }
+        }
+        
         return ship;
     }
     
