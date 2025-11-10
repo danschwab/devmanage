@@ -448,6 +448,23 @@ export class FakeGoogleSheetsService {
                 ,['User Conference','Softwriters','2025','', 'San Diego, CA','20x30','N/A','9/15','9/17','9/2/2025','','','','','Alliance','ELITE','','X','X','X','','9/1/2025','','8/1','','','','','','','','','','']
                 ,['HR Tech','PayActiv','2025','', 'Las Vegas','10x20','6708','9/16','9/18','9/2/2025','','','','','The Expo Gp','ELITE','','','','9/1/2025','','','','','','','','','','','','','','']
                 ,['ASNE FMMS','Austal','2025','', 'San Diego, CA','10x10','','9/23','9/25','','','','','','','','X','','','','','','','','','','','','','','','','','','']
+                // --- Test data for byShowDate filtering: Shows with dates crossing year boundaries ---
+                // Early 2026 shows with 2025 ship dates (ship in Dec 2025, show in Jan 2026)
+                ,['CES','TechCorp','2026','TECHCORP 2026 CES', 'Las Vegas, NV','20x30','1001','1/7','1/10','12/28/2025','X','X','X','','1/15/2026','Freeman','Top Shelf','','X','X','X','X','X','X','X','','12/1','12/20','X','X','','X','X','X','X','X','','','X','X','','']
+                ,['Winter Summit','DataInc','2026','DATAINC 2026 WINTER SUMMIT', 'Denver, CO','10x20','2002','1/15','1/18','1/8/2026','X','X','X','','1/25/2026','Freeman','ELITE','','X','X','X','X','','','X','','12/20','1/5','X','X','','X','X','','','','','','X','X','','']
+                ,['Early Bird Expo','BizSoft','2026','BIZSOFT 2026 EARLY BIRD EXPO', 'Chicago, IL','10x10','3003','1/20','1/22','1/13/2026','X','X','X','','1/30/2026','GES','Top Shelf','','X','X','X','X','','','X','','1/5','1/10','X','X','','','X','','','','','','X','X','','']
+                // Late 2025 shows (Nov-Dec) to test year boundary
+                ,['Holiday Tech','GadgetPro','2025','GADGETPRO 2025 HOLIDAY TECH', 'New York, NY','30x40','4004','12/10','12/13','12/3/2025','X','X','X','','12/20/2025','Freeman','Top Shelf','','X','X','X','X','X','X','X','','11/15','11/28','X','X','','X','X','X','X','X','','','X','X','','']
+                ,['Year End Summit','CloudVentures','2025','CLOUDVENTURES 2025 YEAR END SUMMIT', 'San Francisco, CA','20x20','5005','12/15','12/18','12/8/2025','X','X','X','','12/23/2025','GES','ELITE','','X','X','X','X','','','X','','11/20','12/5','X','X','','X','X','','','','','','X','X','','']
+                // Mid-2026 shows for complete year testing
+                ,['Summer Tech','InnovateCo','2026','INNOVATECO 2026 SUMMER TECH', 'Austin, TX','20x30','6006','6/15','6/18','6/8/2026','X','X','X','','6/25/2026','Freeman','Top Shelf','','X','X','X','X','X','X','X','','5/15','6/5','X','X','','X','X','X','','','','','X','X','','']
+                ,['Mid-Year Conference','SystemsInc','2026','SYSTEMSINC 2026 MID-YEAR CONFERENCE', 'Seattle, WA','10x20','7007','7/20','7/23','7/13/2026','X','X','X','','7/30/2026','GES','ELITE','','X','X','X','X','','','X','','6/20','7/10','X','X','','','X','','','','','','X','X','','']
+                // Fall 2026 shows
+                ,['Fall Expo','MegaTech','2026','MEGATECH 2026 FALL EXPO', 'Boston, MA','30x30','8008','10/5','10/8','9/28/2026','X','X','X','','10/15/2026','Freeman','Top Shelf','','X','X','X','X','X','X','X','','9/10','9/25','X','X','','X','X','X','X','','','','X','X','','']
+                ,['Q4 Summit','ProSystems','2026','PROSYSTEMS 2026 Q4 SUMMIT', 'Miami, FL','20x20','9009','11/10','11/13','11/3/2026','X','X','X','','11/20/2026','GES','ELITE','','X','X','X','X','','','X','','10/15','11/1','X','X','','','X','','','','','','X','X','','']
+                // Shows with ambiguous dates (no full date) - should use Year column for inference
+                ,['Test Ambiguous Early','AmbiguousCo','2026','AMBIGUOUSCO 2026 TEST AMBIGUOUS EARLY', 'Las Vegas, NV','10x10','1111','1/5','1/8','12/29/2025','X','X','X','','1/15/2026','Freeman','Top Shelf','','X','X','X','X','','','X','','12/15','12/28','X','X','','','X','','','','','','X','X','','']
+                ,['Test Ambiguous Late','LateShowInc','2025','LATESHOWINC 2025 TEST AMBIGUOUS LATE', 'Chicago, IL','10x10','2222','12/28','12/31','12/21/2025','X','X','X','','1/5/2026','GES','ELITE','','X','X','X','X','','','X','','12/10','12/20','X','X','','','X','','','','','','X','X','','']
             ],
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
@@ -516,7 +533,19 @@ export class FakeGoogleSheetsService {
                 ['UCF', '', ''],
                 ['VISMEC', '', ''],
                 ['VUZIX', '', ''],
-                ['WORKLIO', '', '']
+                ['WORKLIO', '', ''],
+                // Test data clients for byShowDate filtering
+                ['TECHCORP', '', 'Test client for byShowDate filtering'],
+                ['DATAINC', '', 'Test client for byShowDate filtering'],
+                ['BIZSOFT', '', 'Test client for byShowDate filtering'],
+                ['GADGETPRO', '', 'Test client for byShowDate filtering'],
+                ['CLOUDVENTURES', '', 'Test client for byShowDate filtering'],
+                ['INNOVATECO', '', 'Test client for byShowDate filtering'],
+                ['SYSTEMSINC', '', 'Test client for byShowDate filtering'],
+                ['MEGATECH', '', 'Test client for byShowDate filtering'],
+                ['PROSYSTEMS', '', 'Test client for byShowDate filtering'],
+                ['AMBIGUOUSCO', '', 'Test client for ambiguous date handling'],
+                ['LATESHOWINC', '', 'Test client for ambiguous date handling']
             ],
             'Shows': [
                 ['Shows', 'Abbreviations', 'Notes'],

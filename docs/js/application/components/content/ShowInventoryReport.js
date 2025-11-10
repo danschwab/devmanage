@@ -1,20 +1,18 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, authState, parseDateSearchParameter } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
  * Shows: Item ID, Inventory Qty, quantities for each show, Remaining
  */
 export const ShowInventoryReport = {
-    components: { TableComponent, ItemImageComponent },
+    components: { TableComponent, ItemImageComponent, SavedSearchSelect },
     props: {
         containerPath: { type: String, default: '' },
         navigateToPath: Function
     },
     data() {
         return {
-            savedSearchesStore: null,
             reportStore: null,
-            selectedSearch: '',
             showIdentifiers: [], // List of show IDs from search
             error: null,
             NavigationRegistry // Make NavigationRegistry available in template
@@ -33,36 +31,56 @@ export const ShowInventoryReport = {
                 { key: 'available', label: 'Inv Qty.' },
             ];
             
-            // Add dynamic show columns (narrow width)
-            const showColumns = this.showIdentifiers.map(showId => ({
-                key: `show_${showId}`,
-                label: showId,
-                width: 1,
-                format: 'number'
-            }));
-            
-            // Add remaining column with custom cellClass function
-            const finalColumns = [
-                {
-                    key: 'remaining',
-                    label: 'Remaining',
-                    format: 'number',
-                    cellClass: (value, row) => {
-                        // Compute remaining on the fly
-                        const remaining = this.calculateRemaining(row);
-                        if (remaining === null || remaining === undefined) return '';
-                        if (remaining < 0) return 'red';
-                        if (remaining < 5) return 'orange';
-                        return '';
-                    }
+            // Add remaining column with custom cellClass function (before show columns)
+            const remainingColumn = {
+                key: 'remaining',
+                label: 'Remaining',
+                format: 'number',
+                cellClass: (value, row) => {
+                    // Compute remaining on the fly
+                    const remaining = this.calculateRemaining(row);
+                    if (remaining === null || remaining === undefined) return '';
+                    if (remaining < 0) return 'red';
+                    if (remaining < 5) return 'orange';
+                    return '';
                 }
-            ];
+            };
             
-            return [...baseColumns, ...showColumns, ...finalColumns];
-        },
-        
-        savedSearches() {
-            return this.savedSearchesStore?.data || [];
+            // Add dynamic show columns (narrow width and narrow font)
+            const showColumns = this.showIdentifiers.map((showId, index) => {
+                // Remove year from display label and abbreviate
+                // Format is typically "CLIENT YEAR SHOW", we want abbreviated "CLI... SHO..."
+                let displayLabel = showId;
+                
+                // Match pattern: word(s) followed by 4-digit year followed by word(s)
+                // Example: "ALLEN ARMS 2025 SHOT" -> "ALL... SHO..."
+                const yearPattern = /^(.+?)\s+(\d{4})\s+(.+)$/;
+                const match = showId.match(yearPattern);
+                if (match) {
+                    const clientPart = match[1];
+                    const showPart = match[3];
+                    
+                    // Abbreviate if longer than 4 characters
+                    const abbreviate = (text) => {
+                        return text.length > 5 ? text.substring(0, 3) + '...' : text;
+                    };
+                    
+                    displayLabel = `${abbreviate(clientPart)} ${abbreviate(showPart)}`;
+                }
+                
+                return {
+                    key: `show_${showId}`,
+                    label: displayLabel,
+                    title: showId, // Full identifier as tooltip
+                    width: 1,
+                    format: 'number',
+                    font: 'narrow',
+                    columnClass: 'striped gray', // Every other column gets gray background
+                    allowHide: true // Enable hide button for show columns
+                };
+            });
+            
+            return [...baseColumns, remainingColumn, ...showColumns];
         },
         
         isLoading() {
@@ -87,13 +105,6 @@ export const ShowInventoryReport = {
             return this.navParams?.searchTerm || '';
         }
     },
-    watch: {
-        selectedSearch(newVal) {
-            if (newVal) {
-                this.handleSearchSelection();
-            }
-        }
-    },
     methods: {
         async initializeSavedSearchesStore() {
             // Only initialize store if user is authenticated
@@ -102,7 +113,7 @@ export const ShowInventoryReport = {
                 return;
             }
             
-            // Initialize reactive store using the same pattern as ScheduleContent
+            // Initialize reactive store - defaults are handled by ApplicationUtils layer
             this.savedSearchesStore = getReactiveStore(
                 Requests.getUserData,
                 Requests.storeUserData,
@@ -110,32 +121,6 @@ export const ShowInventoryReport = {
                 null, // No analysis config
                 true // Auto-load
             );
-            
-            // Ensure default searches exist after store loads
-            if (this.savedSearchesStore.isLoading) {
-                // Wait for initial load to complete
-                await new Promise(resolve => {
-                    const checkLoading = setInterval(() => {
-                        if (!this.savedSearchesStore.isLoading) {
-                            clearInterval(checkLoading);
-                            resolve();
-                        }
-                    }, 50);
-                });
-            }
-            
-            // Initialize defaults if no searches exist
-            if (!this.savedSearchesStore.data || this.savedSearchesStore.data.length === 0) {
-                const defaultSearches = [
-                    {
-                        name: 'Upcoming',
-                        dateSearch: '0,30', // Today to 30 days in the future
-                        textFilters: []
-                    }
-                ];
-                this.savedSearchesStore.data = defaultSearches;
-                await this.savedSearchesStore.save();
-            }
         },
 
         async loadShowsFromSearch(searchData) {
@@ -245,18 +230,65 @@ export const ShowInventoryReport = {
             return row.available - totalUsed;
         },
 
-        async handleSearchSelection() {
-            const searchData = this.savedSearches.find(s => s.name === this.selectedSearch);
-            if (searchData) {
-                await this.loadShowsFromSearch(searchData);
-            }
+        async handleSearchSelected(searchData) {
+            // Called when SavedSearchSelect emits search-selected event
+            await this.loadShowsFromSearch(searchData);
         },
 
-        loadFromURLParams() {
-            const params = this.navParams;
-            if (params.savedSearch) {
-                this.selectedSearch = params.savedSearch;
-                // handleSearchSelection will be triggered by the watch
+        async loadShowsFromSearch(searchData) {
+            if (!searchData) return;
+            
+            // Parse search to get date filter and search params
+            const filter = {};
+            const searchParams = {};
+            
+            if (searchData.dateSearch) {
+                const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+                
+                // Check if this is an overlap search (has overlapShowIdentifier)
+                if (dateFilter.overlapShowIdentifier) {
+                    // Convert overlapShowIdentifier to identifier for API
+                    filter.identifier = dateFilter.overlapShowIdentifier;
+                } else {
+                    // Regular date filter
+                    Object.assign(filter, dateFilter);
+                }
+            }
+            
+            // Apply text filters
+            if (searchData.textFilters && searchData.textFilters.length > 0) {
+                searchData.textFilters.forEach(textFilter => {
+                    if (textFilter.column && textFilter.value) {
+                        searchParams[textFilter.column] = textFilter.value;
+                    }
+                });
+            }
+            
+            try {
+                // Get overlapping shows based on filter
+                const shows = await Requests.getProductionScheduleData(filter, searchParams);
+                
+                // Extract identifiers from shows
+                this.showIdentifiers = shows.map(s => {
+                    if (s.Identifier) return s.Identifier;
+                    // Compute identifier if not present
+                    const show = s.Show || '';
+                    const client = s.Client || '';
+                    const year = s.Year || '';
+                    return `${show}_${client}_${year}`.replace(/\s+/g, '_');
+                }).filter(id => id && id !== '__'); // Filter out empty identifiers
+                
+                console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
+                
+                // Initialize report store with these shows
+                if (this.showIdentifiers.length > 0) {
+                    this.initializeReportStore();
+                } else {
+                    this.error = 'No shows found for the selected search criteria';
+                }
+            } catch (err) {
+                console.error('[ShowInventoryReport] Error loading shows:', err);
+                this.error = 'Failed to load shows: ' + err.message;
             }
         },
 
@@ -265,10 +297,6 @@ export const ShowInventoryReport = {
                 await this.reportStore.load('Refreshing report...');
             }
         }
-    },
-    async mounted() {
-        await this.initializeSavedSearchesStore();
-        this.loadFromURLParams();
     },
     template: html`
         <div class="show-inventory-report">
@@ -294,21 +322,13 @@ export const ShowInventoryReport = {
             >
                 <template #table-header-area>
                     <div class="button-bar">
-                        <select 
-                            v-model="selectedSearch"
-                            :disabled="!savedSearches || savedSearches.length === 0"
-                        >
-                            <option value="">Select a saved search...</option>
-                            <option 
-                                v-for="search in savedSearches" 
-                                :key="search.name"
-                                :value="search.name"
-                            >
-                                {{ search.name }}
-                            </option>
-                        </select>
-                        <span v-if="showIdentifiers.length > 0" style="margin-left: 1rem;">
-                            {{ showIdentifiers.length }} show{{ showIdentifiers.length !== 1 ? 's' : '' }} loaded
+                        <SavedSearchSelect
+                            :container-path="containerPath || 'inventory/reports/show-inventory'"
+                            :navigate-to-path="navigateToPath"
+                            @search-selected="handleSearchSelected"
+                        />
+                        <span v-if="showIdentifiers.length > 0 || isLoading" class="card gray">
+                            {{ showIdentifiers.length }} show{{ showIdentifiers.length !== 1 ? 's' : '' }} {{isLoading ? 'loading...' : 'loaded'}}
                         </span>
                     </div>
                 </template>

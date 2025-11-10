@@ -616,6 +616,16 @@ export const TableComponent = {
                     if (aValue === null || aValue === undefined) return 1;
                     if (bValue === null || bValue === undefined) return -1;
                     
+                    // Try to parse as dates first
+                    const aDate = parseDate(aValue);
+                    const bDate = parseDate(bValue);
+                    
+                    if (aDate && bDate) {
+                        // Both are valid dates - compare chronologically
+                        const comparison = aDate.getTime() - bDate.getTime();
+                        return this.sortDirection === 'desc' ? -comparison : comparison;
+                    }
+                    
                     // Determine if values are numbers
                     const aNum = parseFloat(aValue);
                     const bNum = parseFloat(bValue);
@@ -691,6 +701,8 @@ export const TableComponent = {
     methods: {
         handleRefresh() {
             this.$emit('refresh');
+            // Clear hidden columns on refresh
+            this.hiddenColumns = [];
             // Also clear dirty state for nested tables on refresh
             this.nestedTableDirtyCells = {};
         },
@@ -729,6 +741,13 @@ export const TableComponent = {
         getSortIcon(columnKey) {
             if (!this.sortable || this.sortColumn !== columnKey) return '';
             return this.sortDirection === 'asc' ? '⭡' : '⭣';
+        },
+        
+        handleHideColumn(columnKey) {
+            // Add column to hiddenColumns array to hide it
+            if (!this.hiddenColumns.includes(columnKey)) {
+                this.hiddenColumns.push(columnKey);
+            }
         },
         
         formatCellValue(value, column) {
@@ -1492,6 +1511,7 @@ export const TableComponent = {
                         <col v-for="(column, colIdx) in visibleColumns" 
                             :key="column.key"
                             :style="column.width ? 'width:' + column.width + 'px' : ''"
+                            :class="column.columnClass || ''"
                         />
                         <col v-if="allowDetails" />
                     </colgroup>
@@ -1502,6 +1522,7 @@ export const TableComponent = {
                                 v-for="(column, colIdx) in visibleColumns" 
                                 :key="column.key"
                                 :class="getColumnFont(column)"
+                                :title="column.title || column.label"
                             >
                                 <div>
                                     <span>{{ column.label }}</span>
@@ -1511,6 +1532,14 @@ export const TableComponent = {
                                         :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
                                         {{ getSortIcon(column.key) || '⭥' }}
+                                    </button>
+                                    <button 
+                                        v-if="column.allowHide"
+                                        @click="handleHideColumn(column.key)"
+                                        class="sort-button"
+                                        title="Hide this column"
+                                    >
+                                        ✕
                                     </button>
                                 </div>
                             </th>

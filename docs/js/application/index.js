@@ -19,6 +19,7 @@ export { LoadingBarComponent } from './components/interface/loadingBarComponent.
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
+export { SavedSearchSelect } from './components/interface/SavedSearchSelect.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';

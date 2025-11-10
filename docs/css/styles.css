@@ -359,6 +359,7 @@ div#app-content > div.empty-message {
     padding: var(--padding-sm);
     width: 100%;
     border-radius: var(--radius-lg);
+    align-content: center;
     overflow: hidden;
 }
 
@@ -388,10 +389,8 @@ div#app-content > div.empty-message {
     padding: var(--padding-sm);
 }
 
-td .card {
+td .card, .button-bar .card {
     font-size: 11pt;
-    padding: .25em;
-    margin-top: .5em;
     padding: 2px;
     border-radius: var(--radius-md);
 }

@@ -78,16 +78,28 @@ class applicationUtils_uncached {
         // Check if tab exists
         const userTab = await deps.call(Database.findTabByName, 'CACHE', tabName);
         if (!userTab) {
+            // Tab doesn't exist - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
             return null; // Tab doesn't exist, no data stored yet
         }
         // Get tab data as JS objects
         const tabData = await deps.call(Database.getData, 'CACHE', tabName, { ID: 'ID', Value: 'Value' });
         if (!tabData || tabData.length === 0) {
+            // No data in tab - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
             return null; // No data in tab
         }
         // Find object with the ID
         const foundObj = tabData.find(obj => obj.ID === id);
         if (!foundObj) {
+            // ID not found - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
             return null; // ID not found
         }
         
@@ -100,23 +112,22 @@ class applicationUtils_uncached {
             parsedValue = foundObj.Value;
         }
         
+        // If requesting saved_searches and result is empty array, initialize with defaults
+        if (id === 'saved_searches' && Array.isArray(parsedValue) && parsedValue.length === 0) {
+            return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+        }
+        
         return parsedValue;
     }
     
     /**
      * Initialize default saved searches for a user if they don't exist
-     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} username - The username to initialize searches for
-     * @returns {Promise<Array>} Array of saved searches (existing or newly created)
+     * @returns {Promise<Array>} Array of saved searches (newly created defaults)
      */
-    static async initializeDefaultSavedSearches(deps, username) {
-        // Check if user already has saved searches
-        const existingSearches = await deps.call(applicationUtils_uncached.getUserData, username, 'saved_searches');
-        
-        if (existingSearches && existingSearches.length > 0) {
-            // User already has saved searches, return them
-            return existingSearches;
-        }
+    static async initializeDefaultSavedSearches(username) {
+        // Don't check getUserData again - we're called because data doesn't exist!
+        // Just create and store the defaults to avoid infinite recursion
         
         // Create default saved searches
         const defaultSearches = [

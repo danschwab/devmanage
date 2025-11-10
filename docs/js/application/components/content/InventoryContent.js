@@ -151,8 +151,7 @@ export const InventoryContent = {
         inventoryNavigation() {
             return [
                 { id: 'categories', label: 'Categories', path: 'inventory/categories' },
-                { id: 'reports', label: 'Reports', path: 'inventory/reports' },
-                { id: 'show-inventory-report', label: 'Show Inventory Report', path: 'inventory/reports/show-inventory' },
+                { id: 'reports', label: 'Generate Report', path: 'inventory/reports' },
                 { id: 'new', label: 'New Item', path: 'inventory/new' }
             ];
         },
@@ -204,13 +203,6 @@ export const InventoryContent = {
                     displayName: 'Reports',
                     dashboardTitle: 'Inventory Reports',
                     icon: 'assessment',
-                    children: {
-                        'show-inventory': {
-                            displayName: 'Show Inventory Report',
-                            dashboardTitle: 'Show Inventory Report',
-                            icon: 'analytics'
-                        }
-                    }
                 },
                 new: {
                     displayName: 'New Item',
@@ -265,34 +257,10 @@ export const InventoryContent = {
                 :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                 :tab-title="currentCategoryName.toUpperCase()"
             ></inventory-table>
-            
-            <!-- Reports View -->
-            <slot v-else-if="containerPath === 'inventory/reports'">
-                <h3>Reports</h3>
-                <p>View and manage inventory reports.</p>
-                
-                <div style="margin: 1rem 0;">
-                    <button @click="navigateToPath('inventory/reports/show-inventory')">Show Inventory Report</button>
-                    <button @click="$modal.alert('Schedule automatic reports functionality coming soon!', 'Info')">Schedule Report</button>
-                    <button @click="$modal.alert('Custom report builder functionality coming soon!', 'Info')">Custom Report Builder</button>
-                    <button @click="$modal.alert('Email reports functionality coming soon!', 'Info')">Email Reports</button>
-                    <button @click="$modal.alert('Report settings functionality coming soon!', 'Info')">Report Settings</button>
-                </div>
-                
-                <div style="margin-top: 1.5rem;">
-                    <h4>Recent Reports</h4>
-                    <inventory-table
-                        :container-path="containerPath"
-                        :tab-title="'FURNITURE'"
-                        :edit-mode="false"
-                    >
-                    </inventory-table>
-                </div>
-            </slot>
 
             <!-- Show Inventory Report View -->
             <show-inventory-report
-                v-else-if="containerPath === 'inventory/reports/show-inventory'"
+                v-else-if="containerPath === 'inventory/reports'"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />

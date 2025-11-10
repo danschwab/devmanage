@@ -70,7 +70,11 @@ input[type="submit"], input[type="button"], select, button {
 html, body {
     font-family: Arial, sans-serif;
 }
-.font-narrow {font-family: "Arial Narrow", sans-serif; font-weight: 10;}
+.font-narrow {
+    font-family: "Arial Narrow", sans-serif; 
+    font-weight: 10;
+    letter-spacing: -0.5px;
+}
 .font-black {font-family: "Arial Black", sans-serif; font-weight: 800;}
 
 p,
@@ -171,70 +175,70 @@ button:disabled:after {
 
 /* apply colors */
 
-div.white, span.white {
+div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)) {
     border-color: var(--color-border);
     background-color: var(--background-color);
     color: var(--color-text)
 }
-div.gray, span.gray {
+div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)) {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
     color: var(--color-text)
 }
-div.purple, span.purple {
+div.purple, span.purple, col.purple, tr.purple {
     border-color: var(--color-purple);
     background-color: var(--color-purple-bg);
     color: var(--color-text)
 }
-div.red, span.red {
+div.red, span.red, col.red, tr.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
     color: var(--color-text)
 }
-div.orange, span.orange {
+div.orange, span.orange, col.orange, tr.orange {
     border-color: var(--color-orange);
     background-color: var(--color-orange-bg);
     color: var(--color-text)
 }
-div.yellow, span.yellow {
+div.yellow, span.yellow, col.yellow, tr.yellow {
     border-color: var(--color-yellow);
     background-color: var(--color-yellow-bg);
     color: var(--color-text)
 }
-div.blue, span.blue {
+div.blue, span.blue, col.blue, tr.blue {
     border-color: var(--color-blue);
     background-color: var(--color-blue-bg);
     color: var(--color-text)
 }
-div.green, span.green {
+div.green, span.green, col.green, tr.green {
     border-color: var(--color-green);
     background-color: var(--color-green-bg);
     color: var(--color-text)
 }
 
 
-div.clickable.white:hover, span.clickable.white:hover {
+div.clickable.white:hover, span.clickable.white:hover, col.clickable.white:hover, tr.clickable.white:hover {
     background-color: var(--background-color-hover);
 }
-div.clickable.gray:hover, span.clickable.gray:hover {
+div.clickable.gray:hover, span.clickable.gray:hover, col.clickable.gray:hover, tr.clickable.gray:hover {
     background-color: var(--color-gray-bg-hover);
 }
-div.clickable.purple:hover, span.clickable.purple:hover {
+div.clickable.purple:hover, span.clickable.purple:hover, col.clickable.purple:hover, tr.clickable.purple:hover {
     background-color: var(--color-purple-bg-hover);
 }
-div.clickable.red:hover, span.clickable.red:hover {
+div.clickable.red:hover, span.clickable.red:hover, col.clickable.red:hover, tr.clickable.red:hover {
     background-color: var(--color-red-bg-hover);
 }
-div.clickable.orange:hover, span.clickable.orange:hover {
+div.clickable.orange:hover, span.clickable.orange:hover, col.clickable.orange:hover, tr.clickable.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
-div.clickable.yellow:hover, span.clickable.yellow:hover {
+div.clickable.yellow:hover, span.clickable.yellow:hover, col.clickable.yellow:hover, tr.clickable.yellow:hover {
     background-color: var(--color-yellow-bg-hover);
 }
-div.clickable.blue:hover, span.clickable.blue:hover {
+div.clickable.blue:hover, span.clickable.blue:hover, col.clickable.blue:hover, tr.clickable.blue:hover {
     background-color: var(--color-blue-bg-hover);
 }
-div.clickable.green:hover, span.clickable.green:hover {
+div.clickable.green:hover, span.clickable.green:hover, col.clickable.green:hover, tr.clickable.green:hover {
     background-color: var(--color-green-bg-hover);
 }
 
@@ -332,35 +336,35 @@ p.green, h1.green, h2.green, h3.green, h4.green, h5.green, h6.green {
 }
 
 
-table.white th, td.white th, td.white tr, th.white, td.white {
+table.white th, td.white th, th.white, td.white {
     background-color: var(--background-color);
     color: var(--color-text);
 }
-table.gray th, td.gray th, td.gray tr, th.gray, td.gray {
+table.gray th, td.gray th, th.gray, td.gray {
     background-color: var(--color-gray);
     color: var(--color-text);
 }
-table.purple th, td.purple th, td.purple tr, th.purple, td.purple {
+table.purple th, td.purple th, th.purple, td.purple {
     background-color: var(--color-purple);
     color: var(--color-text-inverted);
 }
-table.red th, td.red th, td.red tr, th.red, td.red {
+table.red th, td.red th, th.red, td.red {
     background-color: var(--color-red);
     color: var(--color-text-inverted);
 }
-table.orange th, td.orange th, td.orange tr, th.orange, td.orange {
+table.orange th, td.orange th, th.orange, td.orange {
     background-color: var(--color-orange);
     color: var(--color-text-inverted);
 }
-table.yellow th, td.yellow th, td.yellow tr, th.yellow, td.yellow {
+table.yellow th, td.yellow th, th.yellow, td.yellow {
     background-color: var(--color-yellow);
     color: var(--color-text);
 }
-table.blue th, td.blue th, td.blue tr, th.blue, td.blue {
+table.blue th, td.blue th, th.blue, td.blue {
     background-color: var(--color-blue);
     color: var(--color-text-inverted);
 }
-table.green th, td.green th, td.green tr, th.green, td.green {
+table.green th, td.green th, th.green, td.green {
     background-color: var(--color-green);
     color: var(--color-text-inverted);
 }

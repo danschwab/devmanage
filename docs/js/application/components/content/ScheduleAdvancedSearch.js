@@ -144,7 +144,7 @@ export const AdvancedSearchComponent = {
                 return;
             }
             
-            // Initialize reactive store using the same pattern as DashboardRegistry
+            // Initialize reactive store - defaults are handled by ApplicationUtils layer
             this.savedSearchesStore = getReactiveStore(
                 Requests.getUserData,
                 Requests.storeUserData,
@@ -152,32 +152,6 @@ export const AdvancedSearchComponent = {
                 null, // No analysis config
                 true // Auto-load
             );
-            
-            // Ensure default searches exist after store loads
-            if (this.savedSearchesStore.isLoading) {
-                // Wait for initial load to complete
-                await new Promise(resolve => {
-                    const checkLoading = setInterval(() => {
-                        if (!this.savedSearchesStore.isLoading) {
-                            clearInterval(checkLoading);
-                            resolve();
-                        }
-                    }, 50);
-                });
-            }
-            
-            // Initialize defaults if no searches exist
-            if (!this.savedSearchesStore.data || this.savedSearchesStore.data.length === 0) {
-                const defaultSearches = [
-                    {
-                        name: 'Upcoming',
-                        dateSearch: '0,30', // Today to 30 days in the future
-                        textFilters: []
-                    }
-                ];
-                this.savedSearchesStore.data = defaultSearches;
-                await this.savedSearchesStore.save();
-            }
         },
         loadFiltersFromURL() {
             // Get URL parameters from NavigationRegistry
@@ -188,6 +162,47 @@ export const AdvancedSearchComponent = {
             // Set flag to prevent watchers from clearing during URL load
             this.isApplyingFilters = true;
             
+            // Parse URL parameters to searchData format for comparison
+            const urlSearchData = {
+                dateSearch: params.DateSearch || null,
+                textFilters: parseTextFilterParameters(params)
+            };
+            
+            // Check if URL parameters match any saved search
+            let matchedSearchIndex = null;
+            if (this.savedSearches && this.savedSearches.length > 0) {
+                matchedSearchIndex = this.savedSearches.findIndex(search => {
+                    // Compare dateSearch
+                    if (search.dateSearch !== urlSearchData.dateSearch) {
+                        return false;
+                    }
+                    
+                    // Compare text filters (order-independent)
+                    const searchFilters = search.textFilters || [];
+                    const urlFilters = urlSearchData.textFilters || [];
+                    
+                    if (searchFilters.length !== urlFilters.length) {
+                        return false;
+                    }
+                    
+                    // Check if all filters match (ignoring order)
+                    return searchFilters.every(sf => 
+                        urlFilters.some(uf => uf.column === sf.column && uf.value === sf.value)
+                    ) && urlFilters.every(uf => 
+                        searchFilters.some(sf => sf.column === uf.column && sf.value === uf.value)
+                    );
+                });
+            }
+            
+            // If URL matches a saved search, select it and use handleSavedSearchSelection
+            if (matchedSearchIndex !== null && matchedSearchIndex >= 0) {
+                this.selectedSavedSearchIndex = matchedSearchIndex;
+                this.handleSavedSearchSelection();
+                this.isApplyingFilters = false;
+                return;
+            }
+            
+            // Otherwise, load URL parameters as custom search
             // Parse DateSearch parameter using utility
             if (params.DateSearch) {
                 const dateFilter = parseDateSearchParameter(params.DateSearch);
@@ -1069,7 +1084,11 @@ export const AdvancedSearchComponent = {
                     :filter="activeFilter"
                     :search-params="activeSearchParams"
                     :hideRowsOnSearch="false"
-                />
+                >
+                    <template #table-header-area>
+                        <h3>Search Results:</h3>
+                    </template>
+                </ScheduleTableComponent>
                 <div v-else class="content-header">
                     <p class="loading-message">Configure your search criteria above and click "View Search Results" to see results.</p>
                 </div>

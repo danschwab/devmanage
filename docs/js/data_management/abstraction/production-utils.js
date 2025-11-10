@@ -146,7 +146,28 @@ class productionUtils_uncached {
         const filtered = data.filter(row => {
             if (!row.Year || !yearsToCheck.includes(parseInt(row.Year))) return false;
             
-            // Use shared date calculation helpers
+            // If byShowDate flag is set, filter by exact show date instead of overlap range
+            if (parameters.byShowDate) {
+                // Try to get show date from S. Start field
+                let showDate = parseDate(row['S. Start'], true, row.Year);
+                
+                // If show date not available, try other date fields to infer it
+                if (!showDate) {
+                    // Try ship date and work backwards
+                    const ship = _calculateShipDate(row);
+                    if (ship) {
+                        // Typical show is ~7-14 days after ship
+                        showDate = new Date(ship.getTime() + 10 * 86400000);
+                    }
+                }
+                
+                if (!showDate) return false;
+                
+                // Show date must fall within the specified date range
+                return (showDate >= startDate && showDate <= endDate);
+            }
+            
+            // Default: Use overlap logic (ship to return range)
             let ship = _calculateShipDate(row);
             let ret = _calculateReturnDate(row, ship);
             
