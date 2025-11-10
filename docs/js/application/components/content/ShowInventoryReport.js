@@ -106,23 +106,6 @@ export const ShowInventoryReport = {
         }
     },
     methods: {
-        async initializeSavedSearchesStore() {
-            // Only initialize store if user is authenticated
-            if (!authState.isAuthenticated || !authState.user?.email) {
-                console.log('[ShowInventoryReport] User not authenticated, skipping saved searches initialization');
-                return;
-            }
-            
-            // Initialize reactive store - defaults are handled by ApplicationUtils layer
-            this.savedSearchesStore = getReactiveStore(
-                Requests.getUserData,
-                Requests.storeUserData,
-                [authState.user.email, 'saved_searches'],
-                null, // No analysis config
-                true // Auto-load
-            );
-        },
-
         async loadShowsFromSearch(searchData) {
             if (!searchData) return;
             
@@ -156,15 +139,20 @@ export const ShowInventoryReport = {
                 // Get overlapping shows based on filter
                 const shows = await Requests.getProductionScheduleData(filter, searchParams);
                 
-                // Extract identifiers from shows
-                this.showIdentifiers = shows.map(s => {
-                    if (s.Identifier) return s.Identifier;
-                    // Compute identifier if not present
-                    const show = s.Show || '';
-                    const client = s.Client || '';
-                    const year = s.Year || '';
-                    return `${show}_${client}_${year}`.replace(/\s+/g, '_');
-                }).filter(id => id && id !== '__'); // Filter out empty identifiers
+                // Extract identifiers from shows - use API to compute if not present
+                this.showIdentifiers = await Promise.all(
+                    shows.map(async (s) => {
+                        if (s.Identifier) return s.Identifier;
+                        // Compute identifier via API if not present
+                        if (s.Show && s.Client && s.Year) {
+                            return await Requests.computeIdentifier(s.Show, s.Client, parseInt(s.Year));
+                        }
+                        return null;
+                    })
+                );
+                
+                // Filter out null identifiers
+                this.showIdentifiers = this.showIdentifiers.filter(id => id);
                 
                 console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
                 
@@ -233,63 +221,6 @@ export const ShowInventoryReport = {
         async handleSearchSelected(searchData) {
             // Called when SavedSearchSelect emits search-selected event
             await this.loadShowsFromSearch(searchData);
-        },
-
-        async loadShowsFromSearch(searchData) {
-            if (!searchData) return;
-            
-            // Parse search to get date filter and search params
-            const filter = {};
-            const searchParams = {};
-            
-            if (searchData.dateSearch) {
-                const dateFilter = parseDateSearchParameter(searchData.dateSearch);
-                
-                // Check if this is an overlap search (has overlapShowIdentifier)
-                if (dateFilter.overlapShowIdentifier) {
-                    // Convert overlapShowIdentifier to identifier for API
-                    filter.identifier = dateFilter.overlapShowIdentifier;
-                } else {
-                    // Regular date filter
-                    Object.assign(filter, dateFilter);
-                }
-            }
-            
-            // Apply text filters
-            if (searchData.textFilters && searchData.textFilters.length > 0) {
-                searchData.textFilters.forEach(textFilter => {
-                    if (textFilter.column && textFilter.value) {
-                        searchParams[textFilter.column] = textFilter.value;
-                    }
-                });
-            }
-            
-            try {
-                // Get overlapping shows based on filter
-                const shows = await Requests.getProductionScheduleData(filter, searchParams);
-                
-                // Extract identifiers from shows
-                this.showIdentifiers = shows.map(s => {
-                    if (s.Identifier) return s.Identifier;
-                    // Compute identifier if not present
-                    const show = s.Show || '';
-                    const client = s.Client || '';
-                    const year = s.Year || '';
-                    return `${show}_${client}_${year}`.replace(/\s+/g, '_');
-                }).filter(id => id && id !== '__'); // Filter out empty identifiers
-                
-                console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
-                
-                // Initialize report store with these shows
-                if (this.showIdentifiers.length > 0) {
-                    this.initializeReportStore();
-                } else {
-                    this.error = 'No shows found for the selected search criteria';
-                }
-            } catch (err) {
-                console.error('[ShowInventoryReport] Error loading shows:', err);
-                this.error = 'Failed to load shows: ' + err.message;
-            }
         },
 
         async handleRefresh() {
