@@ -9,12 +9,6 @@ export class FakeGoogleSheetsAuth {
     static userEmail = 'test@example.com';
     static isInitialized = false;
     static isAuthenticatedState = false;
-    static mockToken = {
-        access_token: 'fake_access_token_12345',
-        token_type: 'Bearer',
-        expires_in: 3600,
-        timestamp: Date.now()
-    };
 
     static async initialize() {
         await this.delay(100); // Simulate async initialization
@@ -25,7 +19,16 @@ export class FakeGoogleSheetsAuth {
     static async authenticate() {
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
-        this.storeToken(this.mockToken);
+        this.userEmail = 'test@example.com'; // Reset email on re-authentication
+        
+        // Create fresh token with current timestamp
+        const mockToken = {
+            access_token: 'fake_access_token_' + Date.now(),
+            token_type: 'Bearer',
+            expires_in: 3600,
+            timestamp: Date.now()
+        };
+        this.storeToken(mockToken);
         return true;
     }
 

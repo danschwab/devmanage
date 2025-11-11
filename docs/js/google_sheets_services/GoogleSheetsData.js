@@ -55,19 +55,14 @@ export class GoogleSheetsService {
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
 
-        let response;
-        try {
-            response = await GoogleSheetsService.withExponentialBackoff(() =>
-                gapi.client.sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range,
-                })
-            );
-        } catch (err) {
-            // If the tab is empty or doesn't exist, return empty array
-            console.warn('GoogleSheetsService.getSheetData: error fetching data', err);
-            return [[]];
-        }
+        // Remove try/catch to allow errors to bubble up to reactive store
+        const response = await GoogleSheetsService.withExponentialBackoff(() =>
+            gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+            })
+        );
+        
         const rawData = response.result && Array.isArray(response.result.values) ? response.result.values : [];
         if (!rawData || rawData.length === 0) return [[]];
         
