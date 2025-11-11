@@ -101,6 +101,7 @@ export const InventoryOverviewTableComponent = {
             } catch (error) {
                 console.error('Failed to load inventory overview data:', error);
                 this.error = 'Failed to load inventory data';
+                this.$modal.error('Failed to load inventory overview data. Please try refreshing or contact support if the problem persists.', 'Inventory Load Error');
             } finally {
                 this.isLoading = false;
             }

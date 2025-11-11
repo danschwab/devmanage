@@ -156,6 +156,7 @@ const App = {
                 Auth.login();
             } catch (error) {
                 console.error('Login error:', error);
+                modalManager.error('Failed to log in. Please check your credentials and try again.', 'Login Error');
             }
         },
         async logout() {
@@ -165,6 +166,7 @@ const App = {
                 // Containers will update automatically via watcher
             } catch (error) {
                 console.error('Logout error:', error);
+                modalManager.error('Failed to log out. Please try again or refresh the page.', 'Logout Error');
             }
         },
         navigateToPath(pathOrData) {

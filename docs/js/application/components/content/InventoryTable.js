@@ -24,11 +24,8 @@ export const ItemImageComponent = {
         };
     },
     async mounted() {
-        console.log('ItemImageComponent mounted with props:', { itemNumber: this.itemNumber });
-
         if (this.itemNumber) {
             try {
-                console.log('ItemImageComponent calling getItemImageUrl with:', this.itemNumber);
                 this.imageUrl = await this.getItemImageUrl(this.itemNumber);
                 if (!(this.imageUrl === null) && this.imageUrl !== 'images/placeholder.png') {
                     this.imageFound = true;
@@ -45,7 +42,6 @@ export const ItemImageComponent = {
     },
     methods: {
         async getItemImageUrl(itemNumber) {
-            console.log('ItemImageComponent.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
             
             if (!itemNumber) return 'images/placeholder.png';
             

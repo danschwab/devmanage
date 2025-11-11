@@ -326,6 +326,7 @@ export const AdvancedSearchComponent = {
             } catch (error) {
                 console.error('Failed to load available shows:', error);
                 this.allShows = [];
+                this.$modal.error('Failed to load available shows. Please refresh the page and try again.', 'Shows Load Error');
             } finally {
                 this.isLoadingShows = false;
             }
@@ -349,6 +350,7 @@ export const AdvancedSearchComponent = {
             } catch (error) {
                 console.error('Failed to load available columns:', error);
                 this.availableColumns = [];
+                this.$modal.error('Failed to load available search columns. Please refresh the page and try again.', 'Columns Load Error');
             } finally {
                 this.isLoadingColumns = false;
             }
@@ -670,7 +672,7 @@ export const AdvancedSearchComponent = {
                 }
             } catch (error) {
                 console.error('Failed to update search:', error);
-                this.$modal.alert('Failed to update search. Please try again.', 'Error');
+                this.$modal.error('Failed to update the saved search. Please try again or contact support if the problem persists.', 'Update Search Error');
             }
         },
         deleteSavedSearch() {
@@ -706,7 +708,7 @@ export const AdvancedSearchComponent = {
                         }
                     } catch (error) {
                         console.error('Failed to delete search:', error);
-                        this.$modal.alert('Failed to delete search. Please try again.', 'Error');
+                        this.$modal.error('Failed to delete the saved search. Please try again or contact support if the problem persists.', 'Delete Search Error');
                     }
                 },
                 null, // onCancel callback (optional)
@@ -790,7 +792,7 @@ export const AdvancedSearchComponent = {
                             }
                         } catch (error) {
                             console.error('Failed to save search:', error);
-                            this.$modal.alert('Failed to save search. Please try again.', 'Error');
+                            this.$modal.error('Failed to save the search. Please try again or contact support if the problem persists.', 'Save Search Error');
                         } finally {
                             this.isSaving = false;
                         }

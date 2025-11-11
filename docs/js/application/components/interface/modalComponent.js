@@ -37,6 +37,17 @@ const ImageComponent = {
     `
 };
 
+// Error component with icon and no auto-dismiss
+const ErrorComponent = {
+    props: ['message'],
+    template: html`
+        <div style="text-align: center; padding: 1rem;">
+            <img src="images/error.png" alt="Error" style="width: 64px; height: 64px; margin-bottom: 1rem;" />
+            <div v-html="message" style="color: var(--color-red); font-weight: 500;"></div>
+        </div>
+    `
+};
+
 export const ModalComponent = {
     props: {
         modalId: { type: String, required: true },
@@ -103,6 +114,10 @@ export class ModalManager {
 
     image(imageUrl, title = 'Image') {
         return this._create(title, ImageComponent, { imageUrl });
+    }
+
+    error(message, title = 'Error') {
+        return this._create(title, ErrorComponent, { message });
     }
 
     custom(components, props = {}, title = '') {

@@ -165,6 +165,7 @@ export const ShowInventoryReport = {
             } catch (err) {
                 console.error('[ShowInventoryReport] Error loading shows:', err);
                 this.error = 'Failed to load shows: ' + err.message;
+                this.$modal.error('Failed to load shows for the inventory report. Please check your search criteria and try again.', 'Show Load Error');
             }
         },
 
