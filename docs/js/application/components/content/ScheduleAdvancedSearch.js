@@ -849,25 +849,20 @@ export const AdvancedSearchComponent = {
                         <div class="content-header">
                             <h5>Filter By Date Range</h5>
                             <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
-                                ✓ Active filter
+                                Active filter
                             </small>
                             <small v-else style="display: block; color: var(--color-text-light);">
                                 Click to activate
                             </small>
                         </div>
-                        <LoadingBarComponent
-                            key="date-range"
-                            :is-loading="isLoadingShows"
-                        />
                         <div class="content">
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Start Date:</span>
+                                <span>Start Date:</span>
                                 <div class="button-bar">
                                     <select 
                                         v-model="startDatePreset"
                                         @change="setStartDatePreset(startDatePreset)"
                                         @focus="dateFilterMode = 'dateRange'"
-                                        style="padding: 0.5rem;"
                                     >
                                         <option value="">Manual Entry</option>
                                         <option value="today">Today</option>
@@ -880,19 +875,18 @@ export const AdvancedSearchComponent = {
                                         placeholder="YYYY-MM-DD"
                                         @focus="dateFilterMode = 'dateRange'; startDatePreset = ''"
                                         :disabled="!!startDatePreset"
-                                        style="padding: 0.5rem; flex: 1;"
+                                        style="flex: 1;"
                                     />
                                 </div>
                             </label>
                             
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">End Date:</span>
+                                <span>End Date:</span>
                                 <div class="button-bar">
                                     <select 
                                         v-model="endDatePreset"
                                         @change="setEndDatePreset(endDatePreset)"
                                         @focus="dateFilterMode = 'dateRange'"
-                                        style="padding: 0.5rem;"
                                     >
                                         <option value="">Manual Entry</option>
                                         <option value="today">Today</option>
@@ -905,7 +899,7 @@ export const AdvancedSearchComponent = {
                                         placeholder="YYYY-MM-DD"
                                         @focus="dateFilterMode = 'dateRange'; endDatePreset = ''"
                                         :disabled="!!endDatePreset"
-                                        style="padding: 0.5rem; flex: 1;"
+                                        style="flex: 1;"
                                     />
                                 </div>
                             </label>
@@ -926,7 +920,7 @@ export const AdvancedSearchComponent = {
                                 No shows available for selected year filter
                             </small>
                             <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
-                                ✓ Active filter - showing {{ filteredShows.length }} show(s)
+                                Active filter - showing {{ filteredShows.length }} show(s)
                             </small>
                             <small v-else style="display: block; color: var(--color-text-light);">
                                 Click to activate ({{ filteredShows.length }} show(s) available)
@@ -938,12 +932,11 @@ export const AdvancedSearchComponent = {
                         />
                         <div class="content">
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Filter Shows by Year:</span>
+                                <span>Filter Shows by Year:</span>
                                 <select 
                                     v-model="overlapShowYearFilter" 
                                     @focus="dateFilterMode = 'overlap'"
                                     @change="overlapShowIdentifier = ''"
-                                    style="padding: 0.5rem;"
                                 >
                                     <option value="upcoming">Upcoming Shows</option>
                                     <option 
@@ -957,12 +950,11 @@ export const AdvancedSearchComponent = {
                             </label>
                             
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span style="font-weight: 500; font-size: 0.9rem;">Overlaps with Show:</span>
+                                <span>Overlaps with Show:</span>
                                 <select 
                                     v-model="overlapShowIdentifier" 
                                     :disabled="isLoadingShows || filteredShows.length === 0"
                                     @focus="dateFilterMode = 'overlap'"
-                                    style="padding: 0.5rem;"
                                 >
                                     <option value="">
                                         {{ isLoadingShows ? 'Loading...' : (filteredShows.length === 0 ? 'No shows available' : 'Select a show...') }}
@@ -990,9 +982,9 @@ export const AdvancedSearchComponent = {
                         v-for="filter in textFilters" 
                         :key="filter.id"
                         :class="'card' + (filter.value ? ' green' : ' white') + (isApplyingFilters ? ' analyzing' : '')"
-                        style="display: flex; gap: var(--padding-sm); align-items: center;"
+                        style="display: flex; flex-wrap: wrap; gap: var(--padding-sm); align-items: center;"
                     >
-                        <span style="font-weight: 500; font-size: 0.9rem;">Column Filter:</span>
+                        <span>Column Filter:</span>
                         <select 
                             v-model="filter.column"
                         >
@@ -1006,12 +998,13 @@ export const AdvancedSearchComponent = {
                             </option>
                         </select>
                     
-                        <span style="font-weight: 500; font-size: 0.9rem;">Search Text:</span>
+                        <span>Search Text:</span>
                         <input 
                             type="text" 
                             v-model="filter.value" 
                             :placeholder="filter.column ? 'Search in ' + filter.column : 'Select a column first'"
                             :disabled="!filter.column"
+                            style="flex: 1;"
                         />
                         
                         <button 
@@ -1042,7 +1035,7 @@ export const AdvancedSearchComponent = {
                     <select 
                         v-model="selectedSavedSearchIndex"
                         @change="handleSavedSearchSelection"
-                        style="padding: 0.5rem; min-width: 200px;"
+                        style="flex: auto;"
                     >
                         <option :value="null">New Search</option>
                         <option 
@@ -1079,7 +1072,7 @@ export const AdvancedSearchComponent = {
             </div>
 
             <!-- Results Table -->
-            <div class="search-results-section" style="margin-top: 1rem;">
+            <div class="search-results-section">
                 <ScheduleTableComponent 
                     key="search-results"
                     v-if="activeFilter !== null || activeSearchParams !== null"

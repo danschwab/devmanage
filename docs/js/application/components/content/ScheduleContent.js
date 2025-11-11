@@ -1,5 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parseDateSearchParameter, parseSearchParameters, SavedSearchSelect } from '../../index.js';
-import { AdvancedSearchComponent } from './ScheduleAdvancedSearch.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parseDateSearchParameter, SavedSearchSelect, AdvancedSearchComponent } from '../../index.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
