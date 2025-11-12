@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore } from '../../index.js';
+import { html, ScheduleTableComponent, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore, createAnalysisConfig } from '../../index.js';
 
 // Advanced Search Component for Schedule
 export const AdvancedSearchComponent = {
@@ -28,14 +28,6 @@ export const AdvancedSearchComponent = {
             ],
             nextFilterId: 2,
             
-            // Available columns for text search
-            availableColumns: [],
-            isLoadingColumns: false,
-            
-            // Available shows for overlap dropdown (all shows from API)
-            allShows: [],
-            isLoadingShows: false,
-            
             // Computed filter for table
             activeFilter: null,
             activeSearchParams: null,
@@ -45,6 +37,9 @@ export const AdvancedSearchComponent = {
             
             // Reactive store for saved searches
             savedSearchesStore: null,
+            
+            // Reactive store for production schedule data (for dropdowns)
+            scheduleStore: null,
             
             // Selected saved search for update/delete
             selectedSavedSearchIndex: null // null = "New Search"
@@ -61,6 +56,53 @@ export const AdvancedSearchComponent = {
                 return null;
             }
             return this.savedSearches[this.selectedSavedSearchIndex];
+        },
+        // Get schedule data from store
+        scheduleData() {
+            return this.scheduleStore?.data || [];
+        },
+        // Computed shows from store data
+        allShows() {
+            if (!this.scheduleData || this.scheduleData.length === 0) {
+                return [];
+            }
+            
+            // Extract shows with identifiers and display info from store
+            const shows = this.scheduleData
+                .filter(show => show.Identifier) // Only shows with computed identifiers
+                .map(show => ({
+                    identifier: show.Identifier,
+                    display: `${show.Show} - ${show.Client} (${show.Year})`,
+                    year: show.Year
+                }))
+                .sort((a, b) => {
+                    // Sort by year desc, then by display name
+                    if (a.year !== b.year) {
+                        return parseInt(b.year) - parseInt(a.year);
+                    }
+                    return a.display.localeCompare(b.display);
+                });
+            
+            return shows;
+        },
+        // Computed columns from store data
+        availableColumns() {
+            if (!this.scheduleData || this.scheduleData.length === 0) {
+                return [];
+            }
+            
+            // Extract column headers from first row
+            const firstRow = this.scheduleData[0];
+            return Object.keys(firstRow)
+                .filter(key => key !== 'AppData')
+                .sort();
+        },
+        // Loading states from store
+        isLoadingShows() {
+            return this.scheduleStore?.isLoading || this.scheduleStore?.isAnalyzing || false;
+        },
+        isLoadingColumns() {
+            return this.scheduleStore?.isLoading || false;
         },
         hasDateRangeFilter() {
             return this.startDate || this.endDate || this.overlapShowIdentifier;
@@ -98,16 +140,14 @@ export const AdvancedSearchComponent = {
         }
     },
     async mounted() {
+        // Initialize schedule store with analysis config
+        await this.initializeScheduleStore();
+        
         // Initialize saved searches store
-        this.initializeSavedSearchesStore();
+        await this.initializeSavedSearchesStore();
         
         // Load filters from URL parameters if present
         this.loadFiltersFromURL();
-
-        await Promise.all([
-            this.loadAvailableShows(),
-            this.loadAvailableColumns()
-        ]);
     },
     watch: {
         // Watch for changes to any filter input and clear active filters
@@ -137,6 +177,31 @@ export const AdvancedSearchComponent = {
         }
     },
     methods: {
+        async initializeScheduleStore() {
+            // Create analysis config to compute identifiers
+            const analysisConfig = [
+                createAnalysisConfig(
+                    (show) => Requests.computeIdentifier(show.Show, show.Client, show.Year),
+                    'Identifier',
+                    'Computing show identifiers...',
+                    null, // Pass full item
+                    [],
+                    'Identifier', // Store in Identifier column
+                    true // passFullItem
+                )
+            ];
+            
+            // Initialize reactive store for production schedule
+            this.scheduleStore = getReactiveStore(
+                Requests.getProductionScheduleData,
+                null, // No save function
+                [], // No arguments - load all shows
+                analysisConfig
+            );
+            
+            // Load the data
+            await this.scheduleStore.load('Loading production schedule...');
+        },
         async initializeSavedSearchesStore() {
             // Only initialize store if user is authenticated
             if (!authState.isAuthenticated || !authState.user?.email) {
@@ -294,65 +359,6 @@ export const AdvancedSearchComponent = {
             if (this.navigateToPath) {
                 const path = NavigationRegistry.buildPath('schedule/advanced-search', params);
                 this.navigateToPath(path);
-            }
-        },
-        async loadAvailableShows() {
-            this.isLoadingShows = true;
-            try {
-                // Get all shows from production schedule (no filters)
-                const allShowsData = await Requests.getProductionScheduleData();
-                
-                // Create a unique list of show identifiers with display names and year
-                // Use API to compute identifier from client, year, and show
-                const showsWithIdentifiers = await Promise.all(
-                    allShowsData.map(async (show) => {
-                        const identifier = await Requests.computeIdentifier(show.Show, show.Client, show.Year);
-                        return {
-                            identifier: identifier,
-                            display: `${show.Show} - ${show.Client} (${show.Year})`,
-                            year: show.Year
-                        };
-                    })
-                );
-                
-                this.allShows = showsWithIdentifiers.sort((a, b) => {
-                    // Sort by year desc, then by display name
-                    if (a.year !== b.year) {
-                        return parseInt(b.year) - parseInt(a.year);
-                    }
-                    return a.display.localeCompare(b.display);
-                });
-                
-            } catch (error) {
-                console.error('Failed to load available shows:', error);
-                this.allShows = [];
-                this.$modal.error('Failed to load available shows. Please refresh the page and try again.', 'Shows Load Error');
-            } finally {
-                this.isLoadingShows = false;
-            }
-        },
-        async loadAvailableColumns() {
-            this.isLoadingColumns = true;
-            try {
-                // Get sample data to extract column headers
-                const sampleData = await Requests.getProductionScheduleData();
-                
-                if (sampleData && sampleData.length > 0) {
-                    // Extract all column headers from the first row, excluding AppData
-                    const firstRow = sampleData[0];
-                    this.availableColumns = Object.keys(firstRow)
-                        .filter(key => key !== 'AppData')
-                        .sort();
-                } else {
-                    this.availableColumns = [];
-                }
-                
-            } catch (error) {
-                console.error('Failed to load available columns:', error);
-                this.availableColumns = [];
-                this.$modal.error('Failed to load available search columns. Please refresh the page and try again.', 'Columns Load Error');
-            } finally {
-                this.isLoadingColumns = false;
             }
         },
         addTextFilter() {

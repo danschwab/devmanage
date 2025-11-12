@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 
@@ -143,7 +143,7 @@ export const InventoryContent = {
     inject: ['$modal'],
     data() {
         return {
-            categories: [] // loaded from spreadsheet
+            categoriesStore: null // Reactive store for inventory categories
         };
     },
     computed: {
@@ -156,11 +156,14 @@ export const InventoryContent = {
             ];
         },
         categoryList() {
-            // Return loaded categories with formatted title
-            return this.categories.map(cat => ({
-                id: cat.id,
-                title: cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : (cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase())
-            }));
+            // Return loaded categories from store with formatted title
+            const categories = this.categoriesStore?.data || [];
+            return categories
+                .filter(cat => cat.title !== 'INDEX')
+                .map(cat => ({
+                    id: cat.sheetId,
+                    title: cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : ''
+                }));
         },
         // Get current category name from path for specific category views
         currentCategoryName() {
@@ -172,23 +175,28 @@ export const InventoryContent = {
                 return match ? match.title : (categorySlug.charAt(0).toUpperCase() + categorySlug.slice(1).toLowerCase());
             }
             return '';
+        },
+        isLoadingCategories() {
+            return this.categoriesStore?.isLoading || false;
         }
     },
     methods: {
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
-        },
-        async loadCategories() {
-            // Use API to get all tabs for INVENTORY, filter out INDEX
-            const tabs = await Requests.getAvailableTabs('INVENTORY');
-            // tabs: [{title, sheetId}]
-            this.categories = tabs.filter(tab => tab.title !== 'INDEX').map(tab => ({
-                id: tab.sheetId,
-                title: tab.title
-            }));
         }
     },
     async mounted() {
+        // Initialize categories store
+        this.categoriesStore = getReactiveStore(
+            Requests.getAvailableTabs,
+            null, // No save function
+            ['INVENTORY'], // Arguments
+            null // No analysis config
+        );
+        
+        // Load categories
+        await this.categoriesStore.load('Loading inventory categories...');
+
 
         // Register inventory navigation routes
         NavigationRegistry.registerNavigation('inventory', {
@@ -217,8 +225,6 @@ export const InventoryContent = {
             components: [InventoryMenuComponent, DashboardToggleComponent],
             props: {}
         });
-        
-        await this.loadCategories();
     },
     template: html `
         <slot>
@@ -244,7 +250,7 @@ export const InventoryContent = {
                 v-else-if="containerPath === 'inventory/categories'"
                 :items="categoryList"
                 :on-item-click="handleCategorySelect"
-                :is-loading="false"
+                :is-loading="isLoadingCategories"
                 default-card-class="button purple"
                 loading-message="Loading categories..."
                 empty-message="No categories available"

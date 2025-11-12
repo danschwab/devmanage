@@ -1,14 +1,19 @@
-import { html, Requests, TableComponent, getReactiveStore, NavigationRegistry } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority } from '../../index.js';
 
 
 
 
-// Image component for dynamic loading
+// Image component for displaying item thumbnails
+// Image URL should be provided via analysis step in reactive store
 export const ItemImageComponent = {
     props: {
+        imageUrl: {
+            type: String,
+            default: 'images/placeholder.png'
+        },
         itemNumber: {
             type: String,
-            required: true
+            default: ''
         },
         imageSize: {
             type: Number,
@@ -16,60 +21,33 @@ export const ItemImageComponent = {
         }
     },
     inject: ['$modal'],
-    data() {
-        return {
-            imageUrl: 'images/placeholder.png',
-            isLoading: true,
-            imageFound: false
-        };
-    },
-    async mounted() {
-        if (this.itemNumber) {
-            try {
-                this.imageUrl = await this.getItemImageUrl(this.itemNumber);
-                if (!(this.imageUrl === null) && this.imageUrl !== 'images/placeholder.png') {
-                    this.imageFound = true;
-                }
-            } catch (error) {
-                console.error('Error loading image:', error);
-                this.imageUrl = 'images/placeholder.png';
-            } finally {
-                this.isLoading = false;
-            }
-        } else {
-            this.isLoading = false;
+    computed: {
+        displayUrl() {
+            return this.imageUrl || 'images/placeholder.png';
+        },
+        imageFound() {
+            return this.displayUrl !== 'images/placeholder.png';
         }
     },
     methods: {
-        async getItemImageUrl(itemNumber) {
-            
-            if (!itemNumber) return 'images/placeholder.png';
-            
-            try {
-                const imageUrl = await Requests.getItemImageUrl(itemNumber);
-                const finalUrl = imageUrl || 'images/placeholder.png';
-                return finalUrl;
-            } catch (error) {
-                console.error('Error loading image for item:', itemNumber, error);
-                const fallbackUrl = 'images/placeholder.png';
-                return fallbackUrl;
+        showImageModal() {
+            if (this.imageFound) {
+                this.$modal.image(this.displayUrl, `Image: ${this.itemNumber}`, this.itemNumber);
             }
         },
-        showImageModal() {
-            if (this.imageUrl && this.imageUrl !== 'images/placeholder.png') {
-                this.$modal.image(this.imageUrl, `Image: ${this.itemNumber}`, this.itemNumber);
-            }
+        handleError() {
+            // If image fails to load, will fall back to placeholder via error handling in template
+            console.warn(`Failed to load image for item ${this.itemNumber}`);
         }
     },
     template: html`
         <div class="item-image-container" :style="{ position: 'relative', width: imageSize + 'px', height: imageSize + 'px' }">
             <img 
-                :src="imageUrl" 
+                :src="displayUrl" 
                 alt="Item Image" 
-                :style="isLoading ? 'background-color: var(--color-gray-bg-transparent);' : ''"
                 :style="imageFound ? 'cursor: pointer;' : ''"
                 @click="showImageModal"
-                @error="imageUrl = 'images/placeholder.png'"
+                @error="handleError"
             />
         </div>
     `
@@ -162,11 +140,26 @@ export const InventoryTableComponent = {
         }
     },
     async mounted() {
+        // Create analysis config for image URLs
+        const analysisConfig = [
+            createAnalysisConfig(
+                Requests.getItemImageUrl,
+                'imageUrl',
+                'Loading item images...',
+                ['itemNumber'],
+                [],
+                'imageUrl',
+                false,
+                Priority.BACKGROUND // Images are visual enhancements, lowest priority
+            )
+        ];
+        
         // Defensive: always set up the store before using it
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle, undefined, undefined] // No filters needed - search is handled in UI
+            [this.tabTitle, undefined, undefined], // No filters needed - search is handled in UI
+            analysisConfig
         );
     },
     methods: {
@@ -214,6 +207,7 @@ export const InventoryTableComponent = {
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :itemNumber="row.itemNumber"
+                        :imageUrl="row.imageUrl"
                     />
                 </template>
             </TableComponent>

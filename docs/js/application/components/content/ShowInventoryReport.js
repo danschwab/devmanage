@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter, findMatchingStores, Priority } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
@@ -17,6 +17,7 @@ export const ShowInventoryReport = {
             error: null,
             isLoadingShows: false, // Loading state for fetching shows before store creation
             showLoadingMessage: '', // Message for show loading phase
+            scheduleStore: null, // Shared store for production schedule data
             NavigationRegistry // Make NavigationRegistry available in template
         };
     },
@@ -159,26 +160,55 @@ export const ShowInventoryReport = {
             }
             
             try {
-                // Get overlapping shows based on filter
-                const shows = await Requests.getProductionScheduleData(filter, searchParams);
+                // Try to find existing schedule store from ScheduleAdvancedSearch
+                const existingStores = findMatchingStores(
+                    Requests.getProductionScheduleData,
+                    []
+                );
+                
+                let shows;
+                if (existingStores.length > 0 && existingStores[0].data && existingStores[0].data.length > 0) {
+                    // Use cached data from existing store
+                    console.log('[ShowInventoryReport] Using cached schedule data from existing store');
+                    this.scheduleStore = existingStores[0];
+                    
+                    // Filter the cached data
+                    shows = this.scheduleStore.data.filter(show => {
+                        // Apply filter logic (this is simplified, you may need more complex filtering)
+                        if (filter.identifier) {
+                            return show.Identifier === filter.identifier;
+                        }
+                        // Add more filter logic as needed
+                        return true;
+                    });
+                } else {
+                    // No cached store or empty data, fetch directly
+                    console.log('[ShowInventoryReport] No cached store available, fetching fresh data');
+                    shows = await Requests.getProductionScheduleData(filter, searchParams);
+                }
                 
                 // Update loading message for identifier computation phase
                 this.showLoadingMessage = `Computing identifiers for ${shows.length} show${shows.length !== 1 ? 's' : ''}...`;
                 
-                // Extract identifiers from shows - use API to compute if not present
-                this.showIdentifiers = await Promise.all(
-                    shows.map(async (s) => {
-                        if (s.Identifier) return s.Identifier;
-                        // Compute identifier via API if not present
-                        if (s.Show && s.Client && s.Year) {
-                            return await Requests.computeIdentifier(s.Show, s.Client, parseInt(s.Year));
-                        }
-                        return null;
-                    })
-                );
+                // Extract identifiers from shows
+                this.showIdentifiers = shows
+                    .map(s => s.Identifier || null)
+                    .filter(id => id);
                 
-                // Filter out null identifiers
-                this.showIdentifiers = this.showIdentifiers.filter(id => id);
+                // If some shows don't have identifiers, compute them
+                if (this.showIdentifiers.length < shows.length) {
+                    const computedIdentifiers = await Promise.all(
+                        shows.map(async (s) => {
+                            if (s.Identifier) return s.Identifier;
+                            // Compute identifier via API if not present
+                            if (s.Show && s.Client && s.Year) {
+                                return await Requests.computeIdentifier(s.Show, s.Client, parseInt(s.Year));
+                            }
+                            return null;
+                        })
+                    );
+                    this.showIdentifiers = computedIdentifiers.filter(id => id);
+                }
                 
                 console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
                 
@@ -211,7 +241,9 @@ export const ShowInventoryReport = {
                     'Getting inventory tab names...',
                     ['itemId'],
                     [],
-                    'tabName'
+                    'tabName',
+                    false,
+                    Priority.USER_ACTION // Used for navigation buttons
                 ),
                 // Get inventory quantity
                 createAnalysisConfig(
@@ -221,6 +253,17 @@ export const ShowInventoryReport = {
                     ['itemId'],
                     [],
                     'available'
+                ),
+                // Get item image URL
+                createAnalysisConfig(
+                    Requests.getItemImageUrl,
+                    'imageUrl',
+                    'Loading item images...',
+                    ['itemId'],
+                    [],
+                    'imageUrl',
+                    false,
+                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 )
             ];
             
@@ -300,6 +343,7 @@ export const ShowInventoryReport = {
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
+                            :imageUrl="row.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">

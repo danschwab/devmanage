@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, ItemImageComponent } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -49,66 +49,97 @@ export const InventoryOverviewTableComponent = {
                     autoColor: true
                 }
             ],
-            allInventoryData: [],
-            isLoading: false,
-            error: null,
-            loadingMessage: 'Loading all inventory data...',
-            imageCache: new Map() // Cache for loaded images
+            inventoryStore: null, // Reactive store for aggregated inventory
         };
     },
     computed: {
         tableData() {
-            return this.allInventoryData;
+            return this.inventoryStore?.data || [];
         },
         originalData() {
-            return JSON.parse(JSON.stringify(this.allInventoryData));
+            return this.inventoryStore?.originalData || [];
+        },
+        isLoading() {
+            return this.inventoryStore?.isLoading || false;
+        },
+        error() {
+            return this.inventoryStore?.error || null;
+        },
+        loadingMessage() {
+            return this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
         }
     },
     async mounted() {
-        await this.loadAllInventoryData();
+        await this.initializeInventoryStore();
     },
     methods: {
-        async loadAllInventoryData() {
-            this.isLoading = true;
-            this.error = null;
-            this.allInventoryData = [];
+        async initializeInventoryStore() {
+            // Create a custom aggregator function that loads all inventory tabs
+            const loadAllInventoryData = async () => {
+                try {
+                    // Get all available tabs for INVENTORY
+                    const tabs = await Requests.getAvailableTabs('INVENTORY');
+                    const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
 
-            try {
-                // Get all available tabs for INVENTORY
-                const tabs = await Requests.getAvailableTabs('INVENTORY');
-                const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
-
-                // Load data from each tab
-                for (const tab of inventoryTabs) {
-                    try {
-                        const tabData = await Requests.getInventoryTabData(tab.title);
-                        
-                        // Add tab information to each item
-                        if (Array.isArray(tabData)) {
-                            const itemsWithTab = tabData.map(item => ({
-                                ...item,
-                                tab: tab.title
-                            }));
-                            this.allInventoryData.push(...itemsWithTab);
-                            this.isLoading = false;
+                    const allData = [];
+                    
+                    // Load data from each tab
+                    for (const tab of inventoryTabs) {
+                        try {
+                            const tabData = await Requests.getInventoryTabData(tab.title);
+                            
+                            // Add tab information to each item
+                            if (Array.isArray(tabData)) {
+                                const itemsWithTab = tabData.map(item => ({
+                                    ...item,
+                                    tab: tab.title
+                                }));
+                                allData.push(...itemsWithTab);
+                            }
+                        } catch (tabError) {
+                            console.warn(`Failed to load data from tab ${tab.title}:`, tabError);
+                            // Continue loading other tabs even if one fails
                         }
-                    } catch (tabError) {
-                        console.warn(`Failed to load data from tab ${tab.title}:`, tabError);
-                        // Continue loading other tabs even if one fails
                     }
+                    
+                    return allData;
+                } catch (error) {
+                    console.error('Failed to load inventory overview data:', error);
+                    this.$modal.error('Failed to load inventory overview data. Please try refreshing or contact support if the problem persists.', 'Inventory Load Error');
+                    throw error;
                 }
-
-            } catch (error) {
-                console.error('Failed to load inventory overview data:', error);
-                this.error = 'Failed to load inventory data';
-                this.$modal.error('Failed to load inventory overview data. Please try refreshing or contact support if the problem persists.', 'Inventory Load Error');
-            } finally {
-                this.isLoading = false;
-            }
+            };
+            
+            // Create analysis config for image URLs
+            const analysisConfig = [
+                createAnalysisConfig(
+                    Requests.getItemImageUrl,
+                    'imageUrl',
+                    'Loading item images...',
+                    ['itemNumber'],
+                    [],
+                    'imageUrl',
+                    false,
+                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
+                )
+            ];
+            
+            // Initialize reactive store with the aggregator function and analysis
+            this.inventoryStore = getReactiveStore(
+                loadAllInventoryData,
+                null, // No save function (read-only)
+                [], // No arguments
+                analysisConfig
+            );
+            
+            // Load the data
+            await this.inventoryStore.load('Loading all inventory data...');
         },
         async handleRefresh() {
-            // Reload all inventory data (cache will be automatically invalidated)
-            await this.loadAllInventoryData();
+            // Reload all inventory data using reactive store
+            if (this.inventoryStore) {
+                await this.inventoryStore.load('Refreshing inventory data...');
+            }
         },
         handleCellEdit(rowIdx, colIdx, value) {
             // Read-only for overview table
@@ -117,28 +148,6 @@ export const InventoryOverviewTableComponent = {
         async handleSave() {
             // No save functionality for overview table
             this.$modal.alert('This overview table is read-only. No changes to save.', 'Info');
-        },
-        async getItemImageUrl(itemNumber) {
-            console.log('InventoryOverviewTable.getItemImageUrl called with:', { itemNumber, type: typeof itemNumber });
-            
-            if (!itemNumber) return 'images/placeholder.png';
-            
-            // Check cache first
-            if (this.imageCache.has(itemNumber)) {
-                return this.imageCache.get(itemNumber);
-            }
-            
-            try {
-                const imageUrl = await Requests.getItemImageUrl(itemNumber);
-                const finalUrl = imageUrl || 'images/placeholder.png';
-                this.imageCache.set(itemNumber, finalUrl);
-                return finalUrl;
-            } catch (error) {
-                console.error('Error loading image for item:', itemNumber, error);
-                const fallbackUrl = 'images/placeholder.png';
-                this.imageCache.set(itemNumber, fallbackUrl);
-                return fallbackUrl;
-            }
         },
         handleCategoryClick(tabName) {
             // Navigate to the specific category view
@@ -185,6 +194,7 @@ export const InventoryOverviewTableComponent = {
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
+                        :imageUrl="row.imageUrl"
                     />
                 </template>
             </TableComponent>

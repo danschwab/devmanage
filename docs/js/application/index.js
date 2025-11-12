@@ -7,6 +7,7 @@ export { CacheInvalidationBus } from '../data_management/utils/caching.js';
 export { html } from './utils/template-helpers.js';
 export { Auth, authState } from './utils/auth.js';
 export { getReactiveStore, createAnalysisConfig, getStoreStatus, findMatchingStores } from './utils/reactiveStores.js';
+export { Priority } from './utils/priorityQueue.js';
 
 // Navigation components
 export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';

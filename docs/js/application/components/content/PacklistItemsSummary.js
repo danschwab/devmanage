@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, Priority } from '../../index.js';
 
 /**
  * Component for displaying item quantities summary with progressive analysis
@@ -85,7 +85,9 @@ export const PacklistItemsSummary = {
                     'Getting inventory tab names...',
                     ['itemId'],
                     [],
-                    'tabName'
+                    'tabName',
+                    false,
+                    Priority.USER_ACTION // Used for navigation buttons
                 ),
                 createAnalysisConfig(
                     Requests.getItemInventoryQuantity,
@@ -101,7 +103,9 @@ export const PacklistItemsSummary = {
                     'Finding overlapping shows...',
                     ['itemId'],
                     [this.projectIdentifier],
-                    'overlappingShows'
+                    'overlappingShows',
+                    false,
+                    Priority.USER_ACTION // Used for navigation buttons
                 ),
                 createAnalysisConfig(
                     (itemId, currentProjectId) => Requests.calculateRemainingQuantity(currentProjectId, itemId),
@@ -110,6 +114,16 @@ export const PacklistItemsSummary = {
                     ['itemId'],
                     [this.projectIdentifier],
                     'remaining'
+                ),
+                createAnalysisConfig(
+                    Requests.getItemImageUrl,
+                    'imageUrl',
+                    'Loading item images...',
+                    ['itemId'],
+                    [],
+                    'imageUrl',
+                    false,
+                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 )
             ];
 
@@ -182,6 +196,7 @@ export const PacklistItemsSummary = {
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
+                            :imageUrl="row.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">

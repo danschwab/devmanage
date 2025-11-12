@@ -1,4 +1,8 @@
 import { CacheInvalidationBus } from '../index.js';
+import { PriorityQueue, Priority } from './priorityQueue.js';
+
+// Re-export Priority for component use
+export { Priority };
 
 /**
  * Reactive Store System with Configurable Analysis
@@ -45,7 +49,13 @@ import { CacheInvalidationBus } from '../index.js';
  */
 
 // Modular reactive store factory for any generic data, with async API calls for load and save
-export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null) {
+export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null, priorityConfig = null) {
+    // Priority configuration with defaults
+    const priorities = {
+        load: priorityConfig?.load !== undefined ? priorityConfig.load : Priority.LOAD,      // Default: 8
+        save: priorityConfig?.save !== undefined ? priorityConfig.save : Priority.SAVE,      // Default: 9
+        analysis: priorityConfig?.analysis !== undefined ? priorityConfig.analysis : Priority.ANALYSIS  // Default: 1
+    };
     // Helper to recursively add AppData to all objects in an array (and nested arrays)
     function appDataInit(arr) {
         if (!Array.isArray(arr)) return arr;
@@ -192,7 +202,13 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.setLoading(true, message);
             this.setError(null);
             try {
-                const result = await apiCall(...apiArgs);
+                // Use priority queue for load operations (high priority)
+                const result = await PriorityQueue.enqueue(
+                    apiCall,
+                    apiArgs,
+                    priorities.load,
+                    { label: message, type: 'load', store: 'reactive' }
+                );
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
                 this.setOriginalData(dataToSet);
@@ -216,7 +232,13 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             try {
                 // Remove all objects marked for deletion and analysis target columns before saving
                 const cleanData = removeAppData(this.data, this.analysisConfig);
-                const result = await saveCall(cleanData, ...apiArgs);
+                // Use priority queue for save operations (highest priority)
+                const result = await PriorityQueue.enqueue(
+                    saveCall,
+                    [cleanData, ...apiArgs],
+                    priorities.save,
+                    { label: message, type: 'save', store: 'reactive' }
+                );
                 // now remove the rows marked for deletion from live data without breaking reactivity:
                 this.removeMarkedRows();
                 return result;
@@ -454,12 +476,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     for (let i = 0; i < this.data.length; i += batchSize) {
                         const batch = this.data.slice(i, i + batchSize);
                         
-                        // Process items sequentially to respect dependencies
-                        for (const item of batch) {
-                            if (!item || typeof item !== 'object') continue;
+                        // Create batch promises for concurrent execution via priority queue
+                        const batchPromises = batch.map(async (item) => {
+                            if (!item || typeof item !== 'object') return;
                             if (!item.AppData) item.AppData = {};
                             
-                            if (skipIfAnalyzed && item.AppData._analyzed) continue;
+                            if (skipIfAnalyzed && item.AppData._analyzed) return;
                             item.AppData._analyzing = true;
 
                             try {
@@ -469,7 +491,19 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                     // Use full item if passFullItem is true, otherwise use extracted value
                                     const firstParam = config.passFullItem ? item : inputValue;
                                     const apiParams = [firstParam, ...(config.additionalParams || [])];
-                                    const result = await config.apiFunction(...apiParams);
+                                    
+                                    // Use priority queue for analysis calls (low priority)
+                                    const result = await PriorityQueue.enqueue(
+                                        config.apiFunction,
+                                        apiParams,
+                                        config.priority !== undefined ? config.priority : priorities.analysis,
+                                        {
+                                            label: config.label || config.resultKey,
+                                            type: 'analysis',
+                                            resultKey: config.resultKey,
+                                            store: 'reactive'
+                                        }
+                                    );
                                     
                                     // Store result based on return value:
                                     // - undefined: preserve existing value (do nothing)
@@ -495,8 +529,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                             
                             item.AppData._analyzing = false;
                             item.AppData._analyzed = true;
-                            completedOperations++;
-                        }
+                        });
+                        
+                        // Wait for entire batch to complete
+                        await Promise.all(batchPromises);
+                        
+                        completedOperations += batch.length;
 
                         this.analysisProgress = Math.min((completedOperations / totalOperations) * 100, 100);
 
@@ -519,12 +557,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                             for (let i = 0; i < nestedArray.length; i += batchSize) {
                                 const batch = nestedArray.slice(i, i + batchSize);
                                 
-                                // Process items sequentially to respect dependencies
-                                for (const nestedItem of batch) {
-                                    if (!nestedItem || typeof nestedItem !== 'object') continue;
+                                // Create batch promises for concurrent execution via priority queue
+                                const batchPromises = batch.map(async (nestedItem) => {
+                                    if (!nestedItem || typeof nestedItem !== 'object') return;
                                     if (!nestedItem.AppData) nestedItem.AppData = {};
                                     
-                                    if (skipIfAnalyzed && nestedItem.AppData._analyzed) continue;
+                                    if (skipIfAnalyzed && nestedItem.AppData._analyzed) return;
                                     nestedItem.AppData._analyzing = true;
 
                                     try {
@@ -541,13 +579,31 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                             // Use full item if passFullItem is true, otherwise use extracted value
                                             const firstParam = config.passFullItem ? nestedItem : inputValue;
                                             const apiParams = [firstParam, ...(config.additionalParams || [])];
-                                            const result = await config.apiFunction(...apiParams);
                                             
-                                            // Store result in target column or AppData
-                                            if (config.targetColumn) {
-                                                nestedItem[config.targetColumn] = result;
-                                            } else {
-                                                nestedItem.AppData[config.resultKey] = result;
+                                            // Use priority queue for analysis calls (low priority)
+                                            const result = await PriorityQueue.enqueue(
+                                                config.apiFunction,
+                                                apiParams,
+                                                config.priority !== undefined ? config.priority : priorities.analysis,
+                                                {
+                                                    label: config.label || config.resultKey,
+                                                    type: 'analysis',
+                                                    resultKey: config.resultKey,
+                                                    nested: arrayKey,
+                                                    store: 'reactive'
+                                                }
+                                            );
+                                            
+                                            // Store result based on return value:
+                                            // - undefined: preserve existing value (do nothing)
+                                            // - null: explicitly clear the value
+                                            // - any other value: update with new value
+                                            if (result !== undefined) {
+                                                if (config.targetColumn) {
+                                                    nestedItem[config.targetColumn] = result;
+                                                } else {
+                                                    nestedItem.AppData[config.resultKey] = result;
+                                                }
                                             }
                                         }
                                         
@@ -562,8 +618,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                     
                                     nestedItem.AppData._analyzing = false;
                                     nestedItem.AppData._analyzed = true;
-                                    completedOperations++;
-                                }
+                                });
+                                
+                                // Wait for entire batch to complete
+                                await Promise.all(batchPromises);
+                                
+                                completedOperations += batch.length;
 
                                 this.analysisProgress = Math.min((completedOperations / totalOperations) * 100, 100);
 
@@ -752,13 +812,14 @@ function extractMethodName(apiFunction) {
  * @param {Array} apiArgs - Arguments to pass to the API function
  * @param {Array} analysisConfig - Optional analysis configuration array
  * @param {boolean} autoLoad - Whether to automatically load data on first creation (default: true)
+ * @param {Object} priorityConfig - Optional priority configuration for load/save/analysis
  * @returns {Object} The reactive store instance
  */
-export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true) {
+export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true, priorityConfig = null) {
     const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
     
     if (!reactiveStoreRegistry[key]) {
-        const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig);
+        const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig);
         reactiveStoreRegistry[key] = store;
         
         // Setup cache invalidation subscriptions
@@ -831,9 +892,11 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
  * @param {string|Array<string>} sourceColumns - Column(s) to extract value from (ordered array for priority)
  * @param {Array} additionalParams - Additional parameters to pass to API function
  * @param {string} targetColumn - Optional: column name to store results directly in data (not AppData)
+ * @param {boolean} passFullItem - If true, pass entire item as first param instead of extracted value
+ * @param {number} priority - Priority level (0-9, default: Priority.ANALYSIS=1)
  * @returns {Object} Analysis configuration object
  */
-export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false) {
+export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false, priority = Priority.ANALYSIS) {
     return {
         apiFunction,
         resultKey,
@@ -841,7 +904,8 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
         sourceColumns: Array.isArray(sourceColumns) ? sourceColumns : (sourceColumns ? [sourceColumns] : []),
         additionalParams,
         targetColumn, // If set, results go to this column instead of AppData
-        passFullItem // If true, pass entire item even when sourceColumns specified
+        passFullItem, // If true, pass entire item even when sourceColumns specified
+        priority // Priority level for queue processing
     };
 }
 
