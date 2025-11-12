@@ -96,13 +96,13 @@ class database_uncached {
         console.log('Database.getItemImageUrl called with:', { itemNumber, folderId });
         
         if (!itemNumber) {
-            console.log('No itemNumber provided, returning placeholder');
-            return '';
+            console.log('No itemNumber provided, returning null');
+            return null; // Return null (not found) instead of empty string
         }
         
         if (typeof itemNumber !== 'string') {
             console.error('itemNumber must be a string, received:', typeof itemNumber, itemNumber);
-            return '';
+            return null; // Return null (not found) instead of empty string
         }
                 
         // Try different file extensions
@@ -117,8 +117,8 @@ class database_uncached {
             }
         }
         
-        console.log(`No image found for item: ${itemNumber}, returning placeholder`);
-        return ''; // Return placeholder if no image found
+        console.log(`No image found for item: ${itemNumber}, returning null`);
+        return null; // Return null (not found) instead of empty string - allows retry on refresh
     }
 
 

@@ -1082,7 +1082,16 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 
-/*.loading-bar-fill.progress-indeterminate*/
+.loading-bar-fill.progress-indeterminate {
+    position: absolute;
+    content: "";
+    inset: 0;
+    background: linear-gradient(90deg,
+            transparent,
+            var(--color-primary),
+            transparent);
+    animation: loading-bar-slide 2s infinite linear;
+}
 .loading-bar-track::before {
     position: absolute;
     content: "";
@@ -1284,6 +1293,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         width: var(--page-width-card);
         grid-column: span 1;
     }
+
 }
 
 
@@ -1310,6 +1320,10 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
     .button-bar {
         width: 100%;
+    }
+
+    .hide-when-narrow {
+        display: none !important;
     }
 }
 

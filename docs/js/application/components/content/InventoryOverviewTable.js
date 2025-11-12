@@ -62,11 +62,14 @@ export const InventoryOverviewTableComponent = {
         isLoading() {
             return this.inventoryStore?.isLoading || false;
         },
+        isAnalyzing() {
+            return this.inventoryStore?.isAnalyzing || false;
+        },
         error() {
             return this.inventoryStore?.error || null;
         },
         loadingMessage() {
-            return this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
+            return this.isAnalyzing ? this.inventoryStore?.analyzingMessage : this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
         }
     },
     async mounted() {
@@ -169,6 +172,7 @@ export const InventoryOverviewTableComponent = {
                 :originalData="originalData"
                 :columns="columns"
                 :isLoading="isLoading"
+                :isAnalyzing="isAnalyzing"
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"

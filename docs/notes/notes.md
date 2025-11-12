@@ -39,6 +39,7 @@ Need features:
 - [ ] label as "some data may be out of date"
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] add context variables to live site github
+- [ ] refresh buttons should clear caches
 
 **problems**
 
@@ -46,12 +47,13 @@ Need features:
 - [x] error causing early dashboard changes to be overwritten by an empty dashboard
 - [x] error causing card component to lose analytics details on reload after cache clear???
 - [ ] ensure log out/in does not break things: the pin button currently breaks on reauth
-- [ ] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
+- [x] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
 - [ ] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 - [ ] scrolling issue when navigating
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [ ] error causing imperfect or corrupted analytics information on data refresh after auth
 - [ ] github deployment needs to be rerun every time due to config.js build issues?
+- [ ] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
 
 **Application tasks**
 
@@ -67,7 +69,7 @@ Architecture Improvements
 - [x] save history: dateTime, userName, fields edited & old values
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
-      reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
+- [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
 
@@ -77,9 +79,11 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Input items into Google Sheets
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - [ ] change the packlist export to export all items correctly
-- [ ] make sure panel and hardware part numbers come in correctly
+- [x] make sure panel and hardware part numbers come in correctly
 - [ ] Categorize all booth parts according to Pack List Rules (preferences)
 - [ ] Improve and test this system
+- [ ] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
+- [ ] verify panel and hardware and other possible edge-cases
 
 HIGH PRIORITY: analysis of pack list against current inventory
 
@@ -106,6 +110,7 @@ Pack Lists in Web
 - [x] Allow moving items
 - [x] Allow editing item contents
 - [x] allow saving edits to google sheet
+- [ ] allow packlist main page to be refreshed (cards-grid refresh button)
 - [ ] Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
 - [ ] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)

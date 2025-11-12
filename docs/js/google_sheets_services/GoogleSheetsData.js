@@ -448,9 +448,6 @@ export class GoogleSheetsService {
     static async searchDriveFileInFolder(fileName, folderId) {
         return await this.withExponentialBackoff(async () => {
             try {
-                // Add parameter validation and debugging
-                console.log('GoogleSheetsService.searchDriveFileInFolder called with:', { fileName, folderId });
-                
                 if (typeof fileName !== 'string') {
                     console.error('fileName must be a string, received:', typeof fileName, fileName);
                     return null;
@@ -462,7 +459,6 @@ export class GoogleSheetsService {
                 }
                 
                 const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
-                console.log('Drive API query:', query);
                 
                 const response = await gapi.client.request({
                     path: 'https://www.googleapis.com/drive/v3/files',
@@ -478,12 +474,6 @@ export class GoogleSheetsService {
                     
                     // Create direct image URL using the file ID
                     const directImageUrl = `https://lh3.googleusercontent.com/d/${file.id}?authuser=1/view`;//`https://drive.google.com/uc?id=${file.id}&export=view`;
-                    console.log('Found file:', {
-                        id: file.id,
-                        name: file.name,
-                        webViewLink: file.webViewLink,
-                        directImageUrl: directImageUrl
-                    });
                     
                     return {
                         id: file.id,
@@ -492,10 +482,10 @@ export class GoogleSheetsService {
                         directImageUrl: directImageUrl
                     };
                 }
-                return "";
+                return null; // Return null instead of empty string when no file found
             } catch (error) {
                 console.error('Error searching Drive file:', error);
-                return "";
+                return null; // Return null instead of empty string on error
             }
         });
     }

@@ -1459,7 +1459,7 @@ export const TableComponent = {
                 <slot 
                     name="table-header-area"
                 ></slot>
-                <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
+                <p v-if="isAnalyzing">{{ loadingMessage }}</p>
                 <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
                     <input
                         v-if="showSearch"
@@ -1713,7 +1713,7 @@ export const TableComponent = {
                 <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
             </div>
             <div key="empty-state" v-else-if="showFooter" class="content-footer">
-                <p>{{ emptyMessage }}</p>
+                <p>{{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}</p>
             </div>
         </div>
     `
