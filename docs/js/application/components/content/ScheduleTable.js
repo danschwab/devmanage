@@ -86,6 +86,12 @@ export const ScheduleTableComponent = {
         isLoading() {
             return this.scheduleTableStore ? this.scheduleTableStore.isLoading : false;
         },
+        isAnalyzing() {
+            return this.scheduleTableStore ? this.scheduleTableStore.isAnalyzing : false;
+        },
+        analysisProgress() {
+            return this.scheduleTableStore ? this.scheduleTableStore.analysisProgress : 0;
+        },
         tableTitle() {
             // Helper to format date as 'mmm d, yyyy'
             function formatDate(dateStr) {
@@ -359,6 +365,8 @@ export const ScheduleTableComponent = {
             :originalData="originalData"
             :columns="columns"
             :isLoading="isLoading"
+            :isAnalyzing="isAnalyzing"
+            :loading-progress="analysisProgress"
             :error="error"
             :showRefresh="true"
             :title="tableTitle"

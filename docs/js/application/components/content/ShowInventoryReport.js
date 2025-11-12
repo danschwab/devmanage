@@ -15,6 +15,8 @@ export const ShowInventoryReport = {
             reportStore: null,
             showIdentifiers: [], // List of show IDs from search
             error: null,
+            isLoadingShows: false, // Loading state for fetching shows before store creation
+            showLoadingMessage: '', // Message for show loading phase
             NavigationRegistry // Make NavigationRegistry available in template
         };
     },
@@ -36,6 +38,7 @@ export const ShowInventoryReport = {
                 key: 'remaining',
                 label: 'Remaining',
                 format: 'number',
+                columnClass: 'green',
                 cellClass: (value, row) => {
                     // Compute remaining on the fly
                     const remaining = this.calculateRemaining(row);
@@ -84,7 +87,7 @@ export const ShowInventoryReport = {
         },
         
         isLoading() {
-            return this.reportStore?.isLoading || false;
+            return this.isLoadingShows || this.reportStore?.isLoading || false;
         },
         
         isAnalyzing() {
@@ -93,6 +96,13 @@ export const ShowInventoryReport = {
         
         tableData() {
             return this.reportStore?.data || [];
+        },
+        
+        loadingMessage() {
+            if (this.isLoadingShows) {
+                return this.showLoadingMessage;
+            }
+            return this.reportStore?.loadingMessage || 'Loading...';
         },
 
         // Navigation-based parameters from NavigationRegistry
@@ -107,7 +117,20 @@ export const ShowInventoryReport = {
     },
     methods: {
         async loadShowsFromSearch(searchData) {
-            if (!searchData) return;
+            // Handle empty/null search - clear the report
+            if (!searchData) {
+                this.showIdentifiers = [];
+                this.reportStore = null;
+                this.error = null;
+                this.isLoadingShows = false;
+                return;
+            }
+            
+            // Set loading state immediately when search starts
+            this.isLoadingShows = true;
+            this.showLoadingMessage = 'Finding shows...';
+            this.error = null;
+            this.reportStore = null; // Clear previous store
             
             // Parse search to get date filter and search params
             const filter = {};
@@ -139,6 +162,9 @@ export const ShowInventoryReport = {
                 // Get overlapping shows based on filter
                 const shows = await Requests.getProductionScheduleData(filter, searchParams);
                 
+                // Update loading message for identifier computation phase
+                this.showLoadingMessage = `Computing identifiers for ${shows.length} show${shows.length !== 1 ? 's' : ''}...`;
+                
                 // Extract identifiers from shows - use API to compute if not present
                 this.showIdentifiers = await Promise.all(
                     shows.map(async (s) => {
@@ -156,6 +182,9 @@ export const ShowInventoryReport = {
                 
                 console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
                 
+                // Clear the loading state now that we have identifiers
+                this.isLoadingShows = false;
+                
                 // Initialize report store with these shows
                 if (this.showIdentifiers.length > 0) {
                     this.initializeReportStore();
@@ -165,6 +194,7 @@ export const ShowInventoryReport = {
             } catch (err) {
                 console.error('[ShowInventoryReport] Error loading shows:', err);
                 this.error = 'Failed to load shows: ' + err.message;
+                this.isLoadingShows = false;
                 this.$modal.error('Failed to load shows for the inventory report. Please check your search criteria and try again.', 'Show Load Error');
             }
         },
@@ -246,7 +276,7 @@ export const ShowInventoryReport = {
                 :readonly="true"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
-                :loading-message="reportStore ? reportStore.loadingMessage : 'Loading...'"
+                :loading-message="loadingMessage"
                 :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
                 empty-message="Select a saved search to load shows and generate report"
                 class="show-inventory-report-table"

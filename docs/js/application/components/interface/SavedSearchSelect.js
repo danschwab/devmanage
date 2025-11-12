@@ -154,6 +154,19 @@ export const SavedSearchSelect = {
             this.isUsingUrlParams = false;
             this.selectedValue = value;
             
+            // Handle "Select..." (empty value) - emit null to clear search
+            if (value === '' || !value) {
+                this.emitSearchData(null);
+                
+                // Clear URL parameters
+                NavigationRegistry.setNavigationParameters(this.containerPath, {});
+                if (this.navigateToPath) {
+                    const path = NavigationRegistry.buildPath(this.containerPath, {});
+                    this.navigateToPath(path);
+                }
+                return;
+            }
+            
             // Find the selected option
             const option = this.availableOptions.find(opt => opt.value === value);
             

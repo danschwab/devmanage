@@ -112,6 +112,12 @@ export const ScheduleContent = {
     },
     methods: {
         handleSearchSelected(searchData) {
+            // Handle empty/null search - clear the filter
+            if (!searchData) {
+                this.filter = null;
+                return;
+            }
+            
             if (searchData.type === 'year') {
                 // Handle year selection
                 this.filter = { 
