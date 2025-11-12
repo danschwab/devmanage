@@ -6,6 +6,7 @@ import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig,
  */
 export const ShowInventoryReport = {
     components: { TableComponent, ItemImageComponent, SavedSearchSelect },
+    inject: ['$modal'],
     props: {
         containerPath: { type: String, default: '' },
         navigateToPath: Function
