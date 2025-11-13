@@ -151,7 +151,7 @@ export const InventoryContent = {
         inventoryNavigation() {
             return [
                 { id: 'categories', label: 'Categories', path: 'inventory/categories' },
-                { id: 'reports', label: 'Generate Report', path: 'inventory/reports' },
+                { id: 'reports', label: 'Reports', path: 'inventory/reports' },
                 { id: 'new', label: 'New Item', path: 'inventory/new' }
             ];
         },

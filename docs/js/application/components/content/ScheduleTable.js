@@ -142,6 +142,12 @@ export const ScheduleTableComponent = {
     },
     methods: {
         recreateStore() {
+            // If no filter is provided, don't create a store (show empty table)
+            if (this.filter === null) {
+                this.scheduleTableStore = null;
+                return;
+            }
+            
             // Create analysis configuration to check packlist existence for each row
             const analysisConfig = [
                 createAnalysisConfig(

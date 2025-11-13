@@ -1,13 +1,14 @@
-import { CacheInvalidationBus } from '../index.js';
+import { CacheInvalidationBus, Requests, authState } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
 
 // Re-export Priority for component use
 export { Priority };
 
 /**
- * Reactive Store System with Configurable Analysis
+ * Reactive Store System with Configurable Analysis and Auto-Save
  * 
- * This system provides Vue 3 reactive data stores with optional automatic analysis.
+ * This system provides Vue 3 reactive data stores with optional automatic analysis
+ * and automatic backup to user data.
  * 
  * Example usage with analysis:
  * 
@@ -46,6 +47,13 @@ export { Priority };
  * - Progress tracking with meaningful UI labels
  * - Error isolation - individual analysis failures don't stop the process
  * - Declarative configuration - no manual step creation needed
+ * 
+ * Auto-Save Features:
+ * - Dirty stores automatically backed up to user data every 20 minutes
+ * - Backups restored on store initialization if present
+ * - Backups removed automatically after successful save
+ * - Auto-save timer starts when first store is created
+ * - Auto-save timer stops when all stores are cleared (logout)
  */
 
 // Modular reactive store factory for any generic data, with async API calls for load and save
@@ -241,6 +249,11 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 );
                 // now remove the rows marked for deletion from live data without breaking reactivity:
                 this.removeMarkedRows();
+                
+                // Remove backup from user data after successful save
+                const storeKey = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+                await removeStoreBackupFromUserData(storeKey);
+                
                 return result;
             } catch (err) {
                 this.setError(err.message || 'Failed to save data');
@@ -715,6 +728,213 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
 // Central registry for reactive stores, keyed by apiCall.toString() + JSON.stringify(apiArgs)
 const reactiveStoreRegistry = Vue.reactive({});
 
+// Auto-save timer for dirty stores
+let autoSaveInterval = null;
+const AUTO_SAVE_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
+
+/**
+ * Calculate diff between original and current data
+ * @param {Array} originalData - Original data
+ * @param {Array} currentData - Current modified data
+ * @returns {Array} Array of changes with indices and modified fields
+ */
+function calculateStoreDiff(originalData, currentData) {
+    if (!Array.isArray(originalData) || !Array.isArray(currentData)) {
+        return null;
+    }
+    
+    const changes = [];
+    
+    currentData.forEach((item, index) => {
+        if (!item || typeof item !== 'object') return;
+        
+        const original = originalData[index];
+        if (!original || typeof original !== 'object') {
+            // New item added
+            changes.push({
+                index,
+                type: 'added',
+                data: { ...item }
+            });
+            return;
+        }
+        
+        // Check for modified fields
+        const modifiedFields = {};
+        Object.keys(item).forEach(key => {
+            if (key === 'AppData') return; // Skip AppData
+            if (JSON.stringify(item[key]) !== JSON.stringify(original[key])) {
+                modifiedFields[key] = item[key];
+            }
+        });
+        
+        if (Object.keys(modifiedFields).length > 0) {
+            changes.push({
+                index,
+                type: 'modified',
+                data: modifiedFields
+            });
+        }
+    });
+    
+    // Check for deleted items
+    if (originalData.length > currentData.length) {
+        for (let i = currentData.length; i < originalData.length; i++) {
+            changes.push({
+                index: i,
+                type: 'deleted'
+            });
+        }
+    }
+    
+    return changes.length > 0 ? changes : null;
+}
+
+/**
+ * Save dirty stores to user data
+ */
+async function saveDirtyStoresToUserData() {
+    if (!authState.isAuthenticated || !authState.user?.email) {
+        console.log('[ReactiveStore AutoSave] User not authenticated, skipping auto-save');
+        return;
+    }
+    
+    try {
+        const dirtyStores = {};
+        let dirtyCount = 0;
+        
+        // Collect all dirty stores
+        for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
+            if (store.isModified && store.originalData && store.data) {
+                const diff = calculateStoreDiff(store.originalData, store.data);
+                if (diff) {
+                    dirtyStores[key] = {
+                        diff,
+                        timestamp: new Date().toISOString()
+                    };
+                    dirtyCount++;
+                }
+            }
+        }
+        
+        if (dirtyCount > 0) {
+            console.log(`[ReactiveStore AutoSave] Saving ${dirtyCount} dirty store(s) to user data`);
+            await Requests.storeUserData(dirtyStores, authState.user.email, 'reactive_stores_backup');
+            console.log('[ReactiveStore AutoSave] Successfully saved dirty stores');
+        } else {
+            console.log('[ReactiveStore AutoSave] No dirty stores to save');
+        }
+    } catch (error) {
+        console.error('[ReactiveStore AutoSave] Failed to save dirty stores:', error);
+    }
+}
+
+/**
+ * Start auto-save timer
+ */
+function startAutoSaveTimer() {
+    if (autoSaveInterval) {
+        return; // Already running
+    }
+    
+    console.log('[ReactiveStore AutoSave] Starting auto-save timer (20 minutes)');
+    autoSaveInterval = setInterval(() => {
+        const storeCount = Object.keys(reactiveStoreRegistry).length;
+        if (storeCount > 0) {
+            saveDirtyStoresToUserData();
+        } else {
+            console.log('[ReactiveStore AutoSave] No stores in registry, skipping auto-save');
+        }
+    }, AUTO_SAVE_INTERVAL_MS);
+}
+
+/**
+ * Stop auto-save timer
+ */
+function stopAutoSaveTimer() {
+    if (autoSaveInterval) {
+        console.log('[ReactiveStore AutoSave] Stopping auto-save timer');
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+    }
+}
+
+/**
+ * Apply saved diff from user data to store data
+ * @param {Array} data - Store data to apply changes to
+ * @param {Array} diff - Array of changes to apply
+ * @returns {Array} Modified data
+ */
+function applyDiffToData(data, diff) {
+    if (!Array.isArray(data) || !Array.isArray(diff)) {
+        return data;
+    }
+    
+    const result = [...data];
+    
+    diff.forEach(change => {
+        if (change.type === 'modified' && change.index < result.length) {
+            // Apply modified fields
+            result[change.index] = {
+                ...result[change.index],
+                ...change.data
+            };
+        } else if (change.type === 'added') {
+            // Add new item if not already present
+            if (change.index >= result.length) {
+                result.push(change.data);
+            }
+        }
+        // Note: We don't apply 'deleted' changes on restore to avoid data loss
+    });
+    
+    return result;
+}
+
+/**
+ * Load saved store data from user data
+ * @param {string} storeKey - Store registry key
+ * @returns {Array|null} Diff to apply, or null if none found
+ */
+async function loadStoreBackupFromUserData(storeKey) {
+    if (!authState.isAuthenticated || !authState.user?.email) {
+        return null;
+    }
+    
+    try {
+        const backupData = await Requests.getUserData(authState.user.email, 'reactive_stores_backup');
+        if (backupData && backupData[storeKey]) {
+            console.log(`[ReactiveStore] Found backup for store, timestamp: ${backupData[storeKey].timestamp}`);
+            return backupData[storeKey].diff;
+        }
+    } catch (error) {
+        console.warn('[ReactiveStore] Failed to load backup from user data:', error);
+    }
+    
+    return null;
+}
+
+/**
+ * Remove store backup from user data
+ * @param {string} storeKey - Store registry key
+ */
+async function removeStoreBackupFromUserData(storeKey) {
+    if (!authState.isAuthenticated || !authState.user?.email) {
+        return;
+    }
+    
+    try {
+        const backupData = await Requests.getUserData(authState.user.email, 'reactive_stores_backup');
+        if (backupData && backupData[storeKey]) {
+            delete backupData[storeKey];
+            await Requests.storeUserData(backupData, authState.user.email, 'reactive_stores_backup');
+            console.log(`[ReactiveStore] Removed backup for store after save`);
+        }
+    } catch (error) {
+        console.warn('[ReactiveStore] Failed to remove backup from user data:', error);
+    }
+}
+
 /**
  * Find stores that match the given criteria (partial matching)
  * Useful for finding stores when you don't know the exact analysis config
@@ -825,9 +1045,20 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         // Setup cache invalidation subscriptions
         setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig);
         
+        // Start auto-save timer if not already running
+        startAutoSaveTimer();
+        
         if (autoLoad) {
             // Initial load with proper error handling for empty/null responses
-            store.load('Loading data...').catch(err => {
+            store.load('Loading data...').then(async () => {
+                // After initial load, check for backup and apply if found
+                const backup = await loadStoreBackupFromUserData(key);
+                if (backup && store.data) {
+                    console.log('[ReactiveStore] Applying backup to store data');
+                    const restoredData = applyDiffToData(store.data, backup);
+                    store.setData(restoredData);
+                }
+            }).catch(err => {
                 console.warn('[ReactiveStore] Initial load failed:', err);
                 // Store will have empty arrays initialized, allowing dynamic property addition
             });
@@ -909,3 +1140,23 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
     };
 }
 
+/**
+ * Clear all reactive stores from the registry
+ * Useful for logout or when switching users
+ */
+export function clearAllReactiveStores() {
+    console.log('[ReactiveStore] Clearing all stores from registry');
+    
+    // Get count before clearing
+    const storeCount = Object.keys(reactiveStoreRegistry).length;
+    
+    // Stop auto-save timer
+    stopAutoSaveTimer();
+    
+    // Clear all stores
+    Object.keys(reactiveStoreRegistry).forEach(key => {
+        delete reactiveStoreRegistry[key];
+    });
+    
+    console.log(`[ReactiveStore] Cleared ${storeCount} store(s) from registry`);
+}

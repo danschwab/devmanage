@@ -21,6 +21,10 @@ export const SavedSearchSelect = {
         navigateToPath: {
             type: Function,
             default: null
+        },
+        defaultSearch: {
+            type: String,
+            default: null
         }
     },
     data() {
@@ -59,6 +63,10 @@ export const SavedSearchSelect = {
                 if (this.pendingUrlParams && newSavedSearches && newSavedSearches.length > 0) {
                     this.matchUrlToSavedSearch(this.pendingUrlParams);
                 }
+                // If no selection yet and we have a default, try to apply it now
+                else if (!this.selectedValue && this.defaultSearch && newSavedSearches && newSavedSearches.length > 0) {
+                    this.applyDefaultSearch();
+                }
             },
             deep: true
         }
@@ -67,10 +75,15 @@ export const SavedSearchSelect = {
         await this.initializeSavedSearchesStore();
         await this.buildOptions();
         
-        // Try to load from URL parameters
+        // Try to load from URL parameters first (highest priority)
         if (!this.loadFromURL()) {
-            // No URL params, emit ready event
-            this.$emit('ready');
+            // No URL params, try to apply default search if provided
+            if (this.defaultSearch) {
+                this.applyDefaultSearch();
+            } else {
+                // No URL params and no default, emit ready event
+                this.$emit('ready');
+            }
         }
     },
     methods: {
@@ -249,6 +262,63 @@ export const SavedSearchSelect = {
                 const path = NavigationRegistry.buildPath(this.containerPath, params);
                 this.navigateToPath(path);
             }
+        },
+        
+        applyDefaultSearch() {
+            if (!this.defaultSearch) return;
+            
+            console.log('[SavedSearchSelect] Attempting to apply default search:', this.defaultSearch);
+            
+            // Check if default is a year (for year-based searches)
+            if (this.includeYears && /^\d{4}$/.test(this.defaultSearch)) {
+                const yearOption = this.availableOptions.find(
+                    opt => opt.value === this.defaultSearch && opt.type === 'year'
+                );
+                
+                if (yearOption) {
+                    console.log('[SavedSearchSelect] Found matching year option:', this.defaultSearch);
+                    this.selectedValue = this.defaultSearch;
+                    
+                    const year = parseInt(this.defaultSearch);
+                    const searchData = {
+                        type: 'year',
+                        year: year,
+                        startDate: `${year}-01-01`,
+                        endDate: `${year}-12-31`,
+                        byShowDate: true
+                    };
+                    
+                    this.emitSearchData(searchData);
+                    return;
+                }
+            }
+            
+            // Check if default matches a saved search by name
+            const savedSearches = this.savedSearchesStore?.data || [];
+            const matchedSearchIndex = savedSearches.findIndex(
+                search => search.name === this.defaultSearch
+            );
+            
+            if (matchedSearchIndex >= 0) {
+                console.log('[SavedSearchSelect] Found matching saved search:', this.defaultSearch);
+                this.selectedValue = `search-${matchedSearchIndex}`;
+                
+                const matchedSearch = savedSearches[matchedSearchIndex];
+                const searchData = {
+                    type: 'search',
+                    name: matchedSearch.name,
+                    dateSearch: matchedSearch.dateSearch,
+                    textFilters: matchedSearch.textFilters || [],
+                    byShowDate: matchedSearch.byShowDate || false
+                };
+                
+                this.emitSearchData(searchData);
+                return;
+            }
+            
+            // Default not found, remain in unselected state
+            console.log('[SavedSearchSelect] Default search not found in options:', this.defaultSearch);
+            this.$emit('ready');
         },
         
         matchUrlToSavedSearch(urlSearchData) {

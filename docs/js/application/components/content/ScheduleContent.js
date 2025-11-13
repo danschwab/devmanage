@@ -183,6 +183,7 @@ export const ScheduleContent = {
                                 :include-years="true"
                                 :start-year="2023"
                                 :navigate-to-path="navigateToPath"
+                                default-search="Upcoming"
                                 @search-selected="handleSearchSelected"
                             />
                             <button @click="navigateToPath('schedule/advanced-search')">
