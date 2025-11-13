@@ -240,8 +240,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Release lock BEFORE running analysis so analysis can proceed
                 this.isReloadingMainData = false;
                 
-                // After data is loaded, run analysis if configured
-                if (this.analysisConfig && this.analysisConfig.length > 0) {
+                // After data is loaded, run analysis if configured and data exists
+                if (this.analysisConfig && this.analysisConfig.length > 0 && this.data.length > 0) {
                     await this.runConfiguredAnalysis();
                 }
             } catch (err) {
@@ -828,6 +828,7 @@ function calculateStoreDiff(originalData, currentData) {
 
 /**
  * Save dirty stores to user data
+ * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
  */
 async function saveDirtyStoresToUserData() {
     if (!authState.isAuthenticated || !authState.user?.email) {
@@ -847,27 +848,26 @@ async function saveDirtyStoresToUserData() {
     }
     
     try {
-        const dirtyStores = {};
-        let dirtyCount = 0;
+        let savedCount = 0;
         
-        // Collect all dirty stores
+        // Save each dirty store as a separate user data entry
         for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
             if (store.isModified && store.originalData && store.data) {
                 const diff = calculateStoreDiff(store.originalData, store.data);
                 if (diff) {
-                    dirtyStores[key] = {
-                        diff,
-                        timestamp: new Date().toISOString()
-                    };
-                    dirtyCount++;
+                    // Save with storeKey as ID and diff as Value (with timestamp)
+                    await Requests.storeUserData(
+                        { diff, timestamp: new Date().toISOString() },
+                        authState.user.email,
+                        key // Use the store key as the unique ID
+                    );
+                    savedCount++;
                 }
             }
         }
         
-        if (dirtyCount > 0) {
-            console.log(`[ReactiveStore AutoSave] Saving ${dirtyCount} dirty store(s) to user data`);
-            await Requests.storeUserData(dirtyStores, authState.user.email, 'reactive_stores_backup');
-            console.log('[ReactiveStore AutoSave] Successfully saved dirty stores');
+        if (savedCount > 0) {
+            console.log(`[ReactiveStore AutoSave] Successfully saved ${savedCount} dirty store(s) to user data`);
         } else {
             console.log('[ReactiveStore AutoSave] No dirty stores to save');
         }
@@ -940,7 +940,7 @@ function applyDiffToData(data, diff) {
 
 /**
  * Load saved store data from user data
- * @param {string} storeKey - Store registry key
+ * @param {string} storeKey - Store registry key (used as the user data ID)
  * @returns {Array|null} Diff to apply, or null if none found
  */
 async function loadStoreBackupFromUserData(storeKey) {
@@ -949,10 +949,12 @@ async function loadStoreBackupFromUserData(storeKey) {
     }
     
     try {
-        const backupData = await Requests.getUserData(authState.user.email, 'reactive_stores_backup');
-        if (backupData && backupData[storeKey]) {
-            console.log(`[ReactiveStore] Found backup for store, timestamp: ${backupData[storeKey].timestamp}`);
-            return backupData[storeKey].diff;
+        // Retrieve using the storeKey as the ID
+        const backupData = await Requests.getUserData(authState.user.email, storeKey);
+        // Check for null (deleted entry) or missing data
+        if (backupData && backupData !== null && backupData.diff) {
+            console.log(`[ReactiveStore] Found backup for store, timestamp: ${backupData.timestamp}`);
+            return backupData.diff;
         }
     } catch (error) {
         console.warn('[ReactiveStore] Failed to load backup from user data:', error);
@@ -963,7 +965,7 @@ async function loadStoreBackupFromUserData(storeKey) {
 
 /**
  * Remove store backup from user data
- * @param {string} storeKey - Store registry key
+ * @param {string} storeKey - Store registry key (used as the user data ID)
  */
 async function removeStoreBackupFromUserData(storeKey) {
     if (!authState.isAuthenticated || !authState.user?.email) {
@@ -971,12 +973,9 @@ async function removeStoreBackupFromUserData(storeKey) {
     }
     
     try {
-        const backupData = await Requests.getUserData(authState.user.email, 'reactive_stores_backup');
-        if (backupData && backupData[storeKey]) {
-            delete backupData[storeKey];
-            await Requests.storeUserData(backupData, authState.user.email, 'reactive_stores_backup');
-            console.log(`[ReactiveStore] Removed backup for store after save`);
-        }
+        // Store null to effectively delete the backup entry
+        await Requests.storeUserData(null, authState.user.email, storeKey);
+        console.log(`[ReactiveStore] Removed backup for store after save`);
     } catch (error) {
         console.warn('[ReactiveStore] Failed to remove backup from user data:', error);
     }
