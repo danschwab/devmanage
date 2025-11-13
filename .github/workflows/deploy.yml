@@ -2,6 +2,9 @@ name: Deploy static site to Pages
 on:
   push:
     branches: ["main"]
+concurrency:
+  group: pages
+  cancel-in-progress: false
 permissions:
   contents: read
   pages: write
@@ -25,28 +28,19 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Inject config.js from secrets and variables
         run: |
+          mkdir -p docs/js/google_sheets_services
           cat > docs/js/google_sheets_services/config.js << EOF
-          window.APP_CONFIG = {
-            API_KEY: '${API_KEY}',
-            CLIENT_ID: '${CLIENT_ID}',
-            SCOPES: '${SCOPES}'
-          };
-          window.SPREADSHEET_IDS = {
-            INVENTORY: '${INVENTORY}',
-            PACK_LISTS: '${PACK_LISTS}',
-            PROD_SCHED: '${PROD_SCHED}',
-            CACHE: '${CACHE}'
-          };
-          // Build: \$(date -u +%Y%m%d%H%M%S)
+          window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };
+          window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };
+          // Build timestamp: $(date -u +%Y%m%d%H%M%S)
           EOF
-          echo "Generated config.js contents:"
-          cat docs/js/google_sheets_services/config.js
-      - name: Add cache-busting to index.html
+          chmod 644 docs/js/google_sheets_services/config.js
+          ls -la docs/js/google_sheets_services/config.js
+          echo "Config file size: $(wc -c < docs/js/google_sheets_services/config.js) bytes"
+      - name: Verify docs structure
         run: |
-          BUILD_ID=$(date -u +%Y%m%d%H%M%S)
-          sed -i "s|js/google_sheets_services/config.js|js/google_sheets_services/config.js?v=${BUILD_ID}|g" docs/index.html
-          echo "Updated index.html with build ID: ${BUILD_ID}"
-          grep "config.js" docs/index.html
+          echo "=== Directory structure ==="
+          find docs/js/google_sheets_services -type f -ls
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
