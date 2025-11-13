@@ -178,7 +178,16 @@ const App = {
         // Handle container expansion by navigating to its path
         expandContainer(containerData) {
             const targetPath = containerData.containerPath || containerData.path;
-            this.navigateToPath(targetPath);
+            
+            // Get current navigation parameters for this container path
+            const params = NavigationRegistry.getNavigationParameters(targetPath);
+            
+            // Build path with parameters if they exist
+            const fullPath = Object.keys(params).length > 0 
+                ? NavigationRegistry.buildPath(targetPath, params)
+                : targetPath;
+            
+            this.navigateToPath(fullPath);
         },
 
         async toggleDashboardPresence(containerData) {

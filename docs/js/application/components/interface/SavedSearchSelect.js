@@ -5,6 +5,7 @@ import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildD
  * Handles saved searches, URL parameters, and emits search data to parent
  */
 export const SavedSearchSelect = {
+    inject: ['appContext'],
     props: {
         containerPath: {
             type: String,
@@ -51,6 +52,10 @@ export const SavedSearchSelect = {
         
         isLoading() {
             return this.savedSearchesStore?.isLoading || this.isLoadingOptions;
+        },
+        
+        isOnDashboard() {
+            return this.appContext?.currentPage === 'dashboard';
         }
     },
     watch: {
@@ -173,10 +178,13 @@ export const SavedSearchSelect = {
                 
                 // Clear URL parameters
                 NavigationRegistry.setNavigationParameters(this.containerPath, {});
-                if (this.navigateToPath) {
+                
+                // Only navigate to update URL if NOT on dashboard
+                if (!this.isOnDashboard && this.navigateToPath) {
                     const path = NavigationRegistry.buildPath(this.containerPath, {});
                     this.navigateToPath(path);
                 }
+                
                 return;
             }
             
@@ -226,8 +234,8 @@ export const SavedSearchSelect = {
             // Update navigation parameters
             NavigationRegistry.setNavigationParameters(this.containerPath, params);
             
-            // Navigate to update URL if function provided
-            if (this.navigateToPath) {
+            // Only navigate to update URL if NOT on dashboard
+            if (!this.isOnDashboard && this.navigateToPath) {
                 const path = NavigationRegistry.buildPath(this.containerPath, params);
                 this.navigateToPath(path);
             }
@@ -257,8 +265,8 @@ export const SavedSearchSelect = {
             // Update navigation parameters
             NavigationRegistry.setNavigationParameters(this.containerPath, params);
             
-            // Navigate to update URL if function provided
-            if (this.navigateToPath) {
+            // Only navigate to update URL if NOT on dashboard
+            if (!this.isOnDashboard && this.navigateToPath) {
                 const path = NavigationRegistry.buildPath(this.containerPath, params);
                 this.navigateToPath(path);
             }
@@ -288,6 +296,8 @@ export const SavedSearchSelect = {
                         byShowDate: true
                     };
                     
+                    // Save to URL using the same method as manual selection
+                    this.saveYearToURL(year);
                     this.emitSearchData(searchData);
                     return;
                 }
@@ -312,6 +322,8 @@ export const SavedSearchSelect = {
                     byShowDate: matchedSearch.byShowDate || false
                 };
                 
+                // Save to URL using the same method as manual selection
+                this.saveToURL(matchedSearch);
                 this.emitSearchData(searchData);
                 return;
             }

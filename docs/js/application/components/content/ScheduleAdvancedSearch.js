@@ -6,7 +6,7 @@ export const AdvancedSearchComponent = {
         ScheduleTableComponent,
         LoadingBarComponent
     },
-    inject: ['$modal'],
+    inject: ['$modal', 'appContext'],
     props: {
         containerPath: String,
         navigateToPath: Function
@@ -118,6 +118,9 @@ export const AdvancedSearchComponent = {
             }
             return years;
         },
+        isOnDashboard() {
+            return this.appContext?.currentPage === 'dashboard';
+        },
         filteredShows() {
             if (!this.allShows || this.allShows.length === 0) {
                 return [];
@@ -219,8 +222,11 @@ export const AdvancedSearchComponent = {
             );
         },
         loadFiltersFromURL() {
+            // Use containerPath prop instead of hardcoded path
+            const targetPath = this.containerPath || 'schedule/advanced-search';
+            
             // Get URL parameters from NavigationRegistry
-            const params = NavigationRegistry.getNavigationParameters('schedule/advanced-search');
+            const params = NavigationRegistry.getNavigationParameters(targetPath);
             
             if (Object.keys(params).length === 0) return;
             
@@ -352,12 +358,15 @@ export const AdvancedSearchComponent = {
             const textFilterParams = buildTextFilterParameters(this.textFilters);
             Object.assign(params, textFilterParams);
             
-            // Update navigation parameters and URL
-            NavigationRegistry.setNavigationParameters('schedule/advanced-search', params);
+            // Use containerPath prop instead of hardcoded path
+            const targetPath = this.containerPath || 'schedule/advanced-search';
             
-            // Navigate to update URL (this will trigger URL update)
-            if (this.navigateToPath) {
-                const path = NavigationRegistry.buildPath('schedule/advanced-search', params);
+            // Update navigation parameters
+            NavigationRegistry.setNavigationParameters(targetPath, params);
+            
+            // Only navigate to update URL if NOT on dashboard
+            if (!this.isOnDashboard && this.navigateToPath) {
+                const path = NavigationRegistry.buildPath(targetPath, params);
                 this.navigateToPath(path);
             }
         },
@@ -543,10 +552,15 @@ export const AdvancedSearchComponent = {
             this.activeFilter = null;
             this.activeSearchParams = null;
             
+            // Use containerPath prop instead of hardcoded path
+            const targetPath = this.containerPath || 'schedule/advanced-search';
+            
             // Clear URL parameters
-            NavigationRegistry.clearNavigationParameters('schedule/advanced-search');
-            if (this.navigateToPath) {
-                this.navigateToPath('schedule/advanced-search');
+            NavigationRegistry.clearNavigationParameters(targetPath);
+            
+            // Only navigate to update URL if NOT on dashboard
+            if (!this.isOnDashboard && this.navigateToPath) {
+                this.navigateToPath(targetPath);
             }
         },
         handleSavedSearchSelection() {
