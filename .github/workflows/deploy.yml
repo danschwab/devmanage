@@ -25,9 +25,28 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Inject config.js from secrets and variables
         run: |
-          echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
-          echo "window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };" >> docs/js/google_sheets_services/config.js
-          echo "// Build timestamp: $(date -u +%Y%m%d%H%M%S)" >> docs/js/google_sheets_services/config.js
+          cat > docs/js/google_sheets_services/config.js << EOF
+          window.APP_CONFIG = {
+            API_KEY: '${API_KEY}',
+            CLIENT_ID: '${CLIENT_ID}',
+            SCOPES: '${SCOPES}'
+          };
+          window.SPREADSHEET_IDS = {
+            INVENTORY: '${INVENTORY}',
+            PACK_LISTS: '${PACK_LISTS}',
+            PROD_SCHED: '${PROD_SCHED}',
+            CACHE: '${CACHE}'
+          };
+          // Build: \$(date -u +%Y%m%d%H%M%S)
+          EOF
+          echo "Generated config.js contents:"
+          cat docs/js/google_sheets_services/config.js
+      - name: Add cache-busting to index.html
+        run: |
+          BUILD_ID=$(date -u +%Y%m%d%H%M%S)
+          sed -i "s|js/google_sheets_services/config.js|js/google_sheets_services/config.js?v=${BUILD_ID}|g" docs/index.html
+          echo "Updated index.html with build ID: ${BUILD_ID}"
+          grep "config.js" docs/index.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
