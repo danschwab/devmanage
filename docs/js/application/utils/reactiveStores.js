@@ -237,6 +237,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setOriginalData(dataToSet);
                 this.setData(dataToSet);
                 
+                // Release lock BEFORE running analysis so analysis can proceed
+                this.isReloadingMainData = false;
+                
                 // After data is loaded, run analysis if configured
                 if (this.analysisConfig && this.analysisConfig.length > 0) {
                     await this.runConfiguredAnalysis();
@@ -248,7 +251,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setData([]);
             } finally {
                 this.setLoading(false, '');
-                this.isReloadingMainData = false; // Release lock after load completes
+                // Ensure lock is released even if analysis fails
+                this.isReloadingMainData = false;
             }
         },
         async save(message = 'Saving data...') {
