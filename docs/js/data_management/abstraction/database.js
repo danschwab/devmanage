@@ -108,10 +108,9 @@ class database_uncached {
         }
         
         console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
-                console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
                 
         // Try different file extensions
-        const extensions = ['jpg', 'jpeg', 'png', 'gif'];
+        const extensions = ['jpg', 'jpeg', 'png'];
         
         for (const ext of extensions) {
             const fileName = `${itemNumberStr}.${ext}`;            
@@ -123,7 +122,15 @@ class database_uncached {
             }
         }
         
-        console.log(`[Database.getItemImageUrl] No image found for item: ${itemNumberStr}, returning empty string`);
+        // Fallback: Try splitting on common separators and search for the first part
+        const separators = /[\s\-_]+/; // Split on space, hyphen, or underscore
+        const parts = itemNumberStr.split(separators);
+        
+        if (parts.length > 1 && parts[0]) {
+            // Recursively search with the first part (benefits from caching via deps.call)
+            return await deps.call(Database.getItemImageUrl, parts[0], folderId);
+        }
+        
         return ''; // Return empty string if no image found
     }
 
