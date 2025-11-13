@@ -62,14 +62,11 @@ export const InventoryOverviewTableComponent = {
         isLoading() {
             return this.inventoryStore?.isLoading || false;
         },
-        isAnalyzing() {
-            return this.inventoryStore?.isAnalyzing || false;
-        },
         error() {
             return this.inventoryStore?.error || null;
         },
         loadingMessage() {
-            return this.isAnalyzing ? this.inventoryStore?.analyzingMessage : this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
+            return this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
         }
     },
     async mounted() {
@@ -121,7 +118,7 @@ export const InventoryOverviewTableComponent = {
                     'Loading item images...',
                     ['itemNumber'],
                     [],
-                    'imageUrl',
+                    null, // Store in AppData, not a column
                     false,
                     Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 )
@@ -172,7 +169,6 @@ export const InventoryOverviewTableComponent = {
                 :originalData="originalData"
                 :columns="columns"
                 :isLoading="isLoading"
-                :isAnalyzing="isAnalyzing"
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"
@@ -198,7 +194,7 @@ export const InventoryOverviewTableComponent = {
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
-                        :imageUrl="row.imageUrl"
+                        :imageUrl="row.AppData && row.AppData.imageUrl"
                     />
                 </template>
             </TableComponent>

@@ -861,7 +861,7 @@ export const AdvancedSearchComponent = {
                                 Click to activate
                             </small>
                         </div>
-                        <div :class="dateFilterMode === 'dateRange' ? 'content' : 'content hide-when-narrow'">
+                        <div class="content">
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
                                 <span>Start Date:</span>
                                 <div class="button-bar">
@@ -936,7 +936,7 @@ export const AdvancedSearchComponent = {
                             key="date-range"
                             :is-loading="isLoadingShows"
                         />
-                        <div :class="dateFilterMode === 'overlap' ? 'content' : 'content hide-when-narrow'">
+                        <div class="content">
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
                                 <span>Filter Shows by Year:</span>
                                 <select 
@@ -1003,14 +1003,13 @@ export const AdvancedSearchComponent = {
                                 {{ col }}
                             </option>
                         </select>
-
-                        <span :class="{ 'hide-when-narrow': !filter.column }">Search Text:</span>
+                    
+                        <span>Search Text:</span>
                         <input 
                             type="text" 
                             v-model="filter.value" 
                             :placeholder="filter.column ? 'Search in ' + filter.column : 'Select a column first'"
                             :disabled="!filter.column"
-                            :class="{ 'hide-when-narrow': !filter.column }"
                             style="flex: 1;"
                         />
                         

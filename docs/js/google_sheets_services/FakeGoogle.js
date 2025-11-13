@@ -1127,7 +1127,7 @@ export class FakeGoogleSheetsService {
             };
         }
         
-        return null; // Return null instead of empty string when file not found (matches real implementation)
+        return ""; // File not found
     }
 
     /**

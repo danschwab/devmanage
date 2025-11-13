@@ -482,10 +482,10 @@ export class GoogleSheetsService {
                         directImageUrl: directImageUrl
                     };
                 }
-                return null; // Return null instead of empty string when no file found
+                return "";
             } catch (error) {
                 console.error('Error searching Drive file:', error);
-                return null; // Return null instead of empty string on error
+                return "";
             }
         });
     }

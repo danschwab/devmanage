@@ -93,32 +93,38 @@ class database_uncached {
      * @returns {Promise<string|null>} Direct image URL or null if not found
      */
     static async getItemImageUrl(deps, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
-        console.log('Database.getItemImageUrl called with:', { itemNumber, folderId });
-        
-        if (!itemNumber) {
-            console.log('No itemNumber provided, returning null');
-            return null; // Return null (not found) instead of empty string
+        // Defensive: handle null, undefined, or non-string values
+        if (!itemNumber || itemNumber === null || itemNumber === undefined) {
+            console.warn('[Database.getItemImageUrl] No itemNumber provided, returning empty string');
+            return '';
         }
         
-        if (typeof itemNumber !== 'string') {
-            console.error('itemNumber must be a string, received:', typeof itemNumber, itemNumber);
-            return null; // Return null (not found) instead of empty string
+        // Convert to string if not already
+        const itemNumberStr = String(itemNumber).trim();
+        
+        if (!itemNumberStr) {
+            console.warn('[Database.getItemImageUrl] Empty itemNumber after trim, returning empty string');
+            return '';
         }
+        
+        console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
+                console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
                 
         // Try different file extensions
         const extensions = ['jpg', 'jpeg', 'png', 'gif'];
         
         for (const ext of extensions) {
-            const fileName = `${itemNumber}.${ext}`;            
+            const fileName = `${itemNumberStr}.${ext}`;            
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
             if (file && file.directImageUrl) {
+                console.log(`[Database.getItemImageUrl] Found image for ${itemNumberStr}: ${file.directImageUrl}`);
                 return file.directImageUrl;
             }
         }
         
-        console.log(`No image found for item: ${itemNumber}, returning null`);
-        return null; // Return null (not found) instead of empty string - allows retry on refresh
+        console.log(`[Database.getItemImageUrl] No image found for item: ${itemNumberStr}, returning empty string`);
+        return ''; // Return empty string if no image found
     }
 
 

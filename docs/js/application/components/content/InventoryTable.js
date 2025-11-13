@@ -148,7 +148,7 @@ export const InventoryTableComponent = {
                 'Loading item images...',
                 ['itemNumber'],
                 [],
-                'imageUrl',
+                null, // Store in AppData, not a column
                 false,
                 Priority.BACKGROUND // Images are visual enhancements, lowest priority
             )
@@ -207,7 +207,7 @@ export const InventoryTableComponent = {
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :itemNumber="row.itemNumber"
-                        :imageUrl="row.imageUrl"
+                        :imageUrl="row.AppData && row.AppData.imageUrl"
                     />
                 </template>
             </TableComponent>

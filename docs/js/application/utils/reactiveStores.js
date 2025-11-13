@@ -83,65 +83,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         });
     }
 
-    // Helper to preserve analysis results from old data when merging with new data
-    function preserveAnalysisResults(newArr, oldArr, analysisConfig, identifierKey = null) {
-        if (!Array.isArray(newArr) || !Array.isArray(oldArr) || !analysisConfig || oldArr.length === 0) {
-            return newArr;
-        }
-        
-        // Build a map of old items by identifier or index
-        const oldItemsMap = new Map();
-        oldArr.forEach((item, index) => {
-            const key = identifierKey && item[identifierKey] ? item[identifierKey] : index;
-            oldItemsMap.set(key, item);
-        });
-        
-        // Copy analysis results from old items to new items
-        newArr.forEach((newItem, index) => {
-            if (!newItem || typeof newItem !== 'object') return;
-            
-            const key = identifierKey && newItem[identifierKey] ? newItem[identifierKey] : index;
-            const oldItem = oldItemsMap.get(key);
-            
-            if (oldItem && typeof oldItem === 'object') {
-                // Copy analysis target columns
-                analysisConfig.forEach(config => {
-                    if (config.targetColumn && oldItem[config.targetColumn] !== undefined) {
-                        newItem[config.targetColumn] = oldItem[config.targetColumn];
-                    }
-                });
-                
-                // Copy AppData analysis results
-                if (oldItem.AppData) {
-                    if (!newItem.AppData) newItem.AppData = {};
-                    analysisConfig.forEach(config => {
-                        if (config.resultKey && oldItem.AppData[config.resultKey] !== undefined) {
-                            newItem.AppData[config.resultKey] = oldItem.AppData[config.resultKey];
-                        }
-                        // Preserve analyzed state
-                        if (oldItem.AppData._analyzed) {
-                            newItem.AppData._analyzed = true;
-                        }
-                    });
-                }
-                
-                // Recursively preserve nested arrays
-                Object.keys(oldItem).forEach(key => {
-                    if (Array.isArray(oldItem[key]) && Array.isArray(newItem[key])) {
-                        newItem[key] = preserveAnalysisResults(
-                            newItem[key], 
-                            oldItem[key], 
-                            analysisConfig, 
-                            identifierKey
-                        );
-                    }
-                });
-            }
-        });
-        
-        return newArr;
-    }
-
     // Helper to clear analysis results from AppData and target columns
     function clearAnalysisResults(arr, analysisConfig) {
         if (!Array.isArray(arr) || !analysisConfig) return arr;
@@ -211,28 +152,20 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             return JSON.stringify(cleanCurrent) !== JSON.stringify(cleanOriginal);
         },
         
-        setData(newData, preserveAnalysis = true) {
+        setData(newData) {
             // Deep clone and initialize AppData
-            let processedData = appDataInit(JSON.parse(JSON.stringify(newData)));
-            
-            // Preserve existing analysis results from current data if requested
-            if (preserveAnalysis && this.analysisConfig && this.data && this.data.length > 0) {
-                // Try to find an identifier key from analysis config
-                const identifierKey = this.analysisConfig[0]?.sourceColumns?.[0] || null;
-                processedData = preserveAnalysisResults(processedData, this.data, this.analysisConfig, identifierKey);
-            } else if (this.analysisConfig) {
-                // Clear any existing analysis results if not preserving
+            const processedData = appDataInit(JSON.parse(JSON.stringify(newData)));
+            // Clear any existing analysis results if analysis is configured
+            if (this.analysisConfig) {
                 clearAnalysisResults(processedData, this.analysisConfig);
             }
-            
             this.data = processedData;
             
             // Automatically run analysis if configured and data is loaded
-            // Skip items that already have analysis results
             if (this.analysisConfig && this.data.length > 0 && !this.isAnalyzing) {
                 // Use nextTick to ensure Vue has updated the DOM and reactive properties
                 Vue.nextTick(() => {
-                    this.runConfiguredAnalysis({ skipIfAnalyzed: preserveAnalysis });
+                    this.runConfiguredAnalysis();
                 });
             }
         },
@@ -548,18 +481,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                             if (!item || typeof item !== 'object') return;
                             if (!item.AppData) item.AppData = {};
                             
-                            // Skip if already analyzed and skipIfAnalyzed is true
-                            // Check both the analyzed flag and whether the result already exists
-                            if (skipIfAnalyzed) {
-                                const hasResult = config.targetColumn 
-                                    ? (item[config.targetColumn] !== undefined && item[config.targetColumn] !== null && item[config.targetColumn] !== '')
-                                    : (item.AppData[config.resultKey] !== undefined && item.AppData[config.resultKey] !== null && item.AppData[config.resultKey] !== '');
-                                
-                                if (hasResult || item.AppData._analyzed) {
-                                    return;
-                                }
-                            }
-                            
+                            if (skipIfAnalyzed && item.AppData._analyzed) return;
                             item.AppData._analyzing = true;
 
                             try {
@@ -640,18 +562,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                     if (!nestedItem || typeof nestedItem !== 'object') return;
                                     if (!nestedItem.AppData) nestedItem.AppData = {};
                                     
-                                    // Skip if already analyzed and skipIfAnalyzed is true
-                                    // Check both the analyzed flag and whether the result already exists
-                                    if (skipIfAnalyzed) {
-                                        const hasResult = config.targetColumn 
-                                            ? (nestedItem[config.targetColumn] !== undefined && nestedItem[config.targetColumn] !== null && nestedItem[config.targetColumn] !== '')
-                                            : (nestedItem.AppData[config.resultKey] !== undefined && nestedItem.AppData[config.resultKey] !== null && nestedItem.AppData[config.resultKey] !== '');
-                                        
-                                        if (hasResult || nestedItem.AppData._analyzed) {
-                                            return;
-                                        }
-                                    }
-                                    
+                                    if (skipIfAnalyzed && nestedItem.AppData._analyzed) return;
                                     nestedItem.AppData._analyzing = true;
 
                                     try {

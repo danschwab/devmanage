@@ -262,7 +262,7 @@ export const ShowInventoryReport = {
                     'Loading item images...',
                     ['itemId'],
                     [],
-                    'imageUrl',
+                    null, // Store in AppData, not a column
                     false,
                     Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 )
@@ -344,7 +344,7 @@ export const ShowInventoryReport = {
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
-                            :imageUrl="row.imageUrl"
+                            :imageUrl="row.AppData && row.AppData.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">
