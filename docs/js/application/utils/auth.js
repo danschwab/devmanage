@@ -33,6 +33,17 @@ export const authState = Vue.reactive({
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { clearAllReactiveStores } from './reactiveStores.js';
 
+// Import modalManager for re-authentication prompts
+let modalManager;
+// Lazy load to avoid circular dependency
+async function getModalManager() {
+    if (!modalManager) {
+        const module = await import('../components/interface/modalComponent.js');
+        modalManager = module.modalManager;
+    }
+    return modalManager;
+}
+
 /**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
@@ -121,6 +132,76 @@ export class Auth {
             await this.initialize();
         }
         return GoogleSheetsAuth.checkAuth();
+    }
+
+    /**
+     * Check authentication and prompt for re-authentication if needed
+     * @param {Object} options - Configuration options
+     * @param {string} options.context - Context description for the modal (e.g., "auto-save", "data operation")
+     * @param {string} options.message - Custom message to show in the modal (optional)
+     * @param {boolean} options.showModal - Whether to show re-authentication modal (default: true)
+     * @returns {Promise<boolean>} True if authenticated, false otherwise
+     */
+    static async checkAuthWithPrompt(options = {}) {
+        const {
+            context = 'operation',
+            message = null,
+            showModal = true
+        } = options;
+
+        try {
+            // Check current auth state
+            const isAuthenticated = await this.checkAuth();
+            
+            if (!isAuthenticated && showModal) {
+                console.warn(`[Auth] Authentication check failed for ${context}`);
+                
+                const manager = await getModalManager();
+                
+                // Show modal with re-authentication option
+                return new Promise((resolve) => {
+                    const defaultMessage = `Your session has expired. Would you like to maintain your current session? This will re-authenticate and continue your ${context}.`;
+                    
+                    manager.confirm(
+                        message || defaultMessage,
+                        async () => {
+                            // User clicked "Maintain Current Session"
+                            try {
+                                console.log(`[Auth] Attempting re-authentication for ${context}...`);
+                                await Auth.initialize();
+                                
+                                if (authState.isAuthenticated) {
+                                    console.log(`[Auth] Re-authentication successful for ${context}`);
+                                    manager.alert('Successfully re-authenticated.', 'Success');
+                                    resolve(true);
+                                } else {
+                                    console.error(`[Auth] Re-authentication failed for ${context}`);
+                                    manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
+                                    resolve(false);
+                                }
+                            } catch (error) {
+                                console.error(`[Auth] Re-authentication error for ${context}:`, error);
+                                manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
+                                resolve(false);
+                            }
+                        },
+                        () => {
+                            // User cancelled
+                            console.log(`[Auth] User declined re-authentication for ${context}`);
+                            resolve(false);
+                        },
+                        'Session Expired',
+                        'Maintain Current Session',
+                        'Cancel'
+                    );
+                });
+            }
+            
+            return isAuthenticated;
+        } catch (error) {
+            console.error(`[Auth] Auth check error for ${context}:`, error);
+            return false;
+        }
     }
 
     static get state() {

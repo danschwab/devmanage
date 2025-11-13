@@ -47,7 +47,7 @@ export class URLRouter {
     /**
      * Handle browser back/forward buttons
      */
-    handlePopState(event) {
+    async handlePopState(event) {
         console.log('[URLRouter] Handling popstate:', event.state);
         const path = this.getCurrentURLPath();
         if (path) {
@@ -55,7 +55,7 @@ export class URLRouter {
             this.isHandlingBrowserNavigation = true;
             
             // Let NavigationSystem handle the actual navigation, mark as browser navigation
-            this.navigationRegistry.handleNavigateToPath({ 
+            await this.navigationRegistry.handleNavigateToPath({ 
                 targetPath: path, 
                 isBrowserNavigation: true 
             }, this.appContext);

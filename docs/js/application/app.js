@@ -115,7 +115,7 @@ const App = {
             // Apply current URL state if user is already authenticated
             const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
             if (currentUrl && currentUrl !== 'dashboard') {
-                NavigationRegistry.handleNavigateToPath({ 
+                await NavigationRegistry.handleNavigateToPath({ 
                     targetPath: currentUrl, 
                     isBrowserNavigation: true 
                 }, this);
@@ -130,7 +130,7 @@ const App = {
                 // Apply current URL when user logs in
                 const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
                 if (currentUrl && currentUrl !== 'dashboard') {
-                    NavigationRegistry.handleNavigateToPath({ 
+                    await NavigationRegistry.handleNavigateToPath({ 
                         targetPath: currentUrl, 
                         isBrowserNavigation: true 
                     }, this);
@@ -172,6 +172,7 @@ const App = {
         navigateToPath(pathOrData) {
             // Handle both string paths and navigation data objects
             const targetPath = typeof pathOrData === 'string' ? pathOrData : pathOrData.targetPath;
+            // Don't await - let navigation happen asynchronously
             NavigationRegistry.handleNavigateToPath({ targetPath }, this);
         },
         

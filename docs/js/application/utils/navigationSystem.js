@@ -1,5 +1,5 @@
 import { html } from '../index.js';
-import { authState } from '../index.js';
+import { authState, Auth } from '../index.js';
 import { URLRouter } from './urlRouter.js';
 import { DashboardRegistry } from './DashboardRegistry.js';
 
@@ -317,8 +317,19 @@ export const NavigationRegistry = {
     /**
      * Navigation handlers - consolidated
      */
-    handleNavigateToPath(navigationData, appContext) {
+    async handleNavigateToPath(navigationData, appContext) {
         const { targetPath, isBrowserNavigation } = navigationData;
+        
+        // Check authentication before allowing navigation
+        const isAuthenticated = await Auth.checkAuthWithPrompt({
+            context: 'navigation',
+            message: 'Your session has expired. Would you like to re-authenticate to continue navigating?'
+        });
+        
+        if (!isAuthenticated) {
+            console.log('[NavigationRegistry] Navigation blocked - authentication failed');
+            return { action: 'navigation_blocked', reason: 'authentication_failed' };
+        }
         
         const pathInfo = this.parsePath(targetPath);
         const basePage = pathInfo.path.split('/')[0];

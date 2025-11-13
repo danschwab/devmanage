@@ -1,4 +1,4 @@
-import { CacheInvalidationBus, Requests, authState } from '../index.js';
+import { CacheInvalidationBus, Requests, authState, Auth } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
 
 // Re-export Priority for component use
@@ -762,7 +762,7 @@ const reactiveStoreRegistry = Vue.reactive({});
 
 // Auto-save timer for dirty stores
 let autoSaveInterval = null;
-const AUTO_SAVE_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
+const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Calculate diff between original and current data
@@ -828,6 +828,17 @@ function calculateStoreDiff(originalData, currentData) {
 async function saveDirtyStoresToUserData() {
     if (!authState.isAuthenticated || !authState.user?.email) {
         console.log('[ReactiveStore AutoSave] User not authenticated, skipping auto-save');
+        return;
+    }
+    
+    // Check authentication before attempting to save
+    const isAuthenticated = await Auth.checkAuthWithPrompt({
+        context: 'auto-save',
+        message: 'Your session has expired. Would you like to maintain your current session? This will re-authenticate and save your unsaved changes.'
+    });
+    
+    if (!isAuthenticated) {
+        console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
         return;
     }
     

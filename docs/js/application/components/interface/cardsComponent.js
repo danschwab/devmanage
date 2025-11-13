@@ -15,6 +15,10 @@ export const CardsComponent = {
             type: Function,
             required: true
         },
+        onRefresh: {
+            type: Function,
+            default: null
+        },
         isLoading: {
             type: Boolean,
             default: false
@@ -40,6 +44,10 @@ export const CardsComponent = {
             default: 'gray'
         },
         showHeader: {
+            type: Boolean,
+            default: false
+        },
+        showRefresh: {
             type: Boolean,
             default: false
         },
@@ -117,6 +125,11 @@ export const CardsComponent = {
                 event.preventDefault();
                 this.handleCardClick(item);
             }
+        },
+        handleRefresh() {
+            if (this.onRefresh && typeof this.onRefresh === 'function') {
+                this.onRefresh();
+            }
         }
     },
     template: html`
@@ -141,7 +154,7 @@ export const CardsComponent = {
                 <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
                 <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
                 
-                <div v-if="showSearch" class="button-bar">
+                <div v-if="showRefresh || showSearch" class="button-bar">
                     <input
                         v-if="showSearch"
                         type="text"
@@ -149,29 +162,14 @@ export const CardsComponent = {
                         placeholder="Find..."
                         class="search-input"
                     />
-                    <!--button
-                        v-if="showSaveButton || allowSaveEvent"
-                        @click="handleSave"
-                        :disabled="isLoading || !allowSaveEvent"
-                        class="save-button green"
-                    >
-                        Save
-                    </button>
                     <button 
                         v-if="showRefresh" 
                         @click="handleRefresh" 
                         :disabled="isLoading" 
-                        :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
+                        class="refresh-button"
                     >
-                        {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                        {{ isLoading ? 'Loading...' : 'Refresh' }}
                     </button>
-                    <button
-                        v-if="hamburgerMenuComponent"
-                        @click="handleHamburgerMenu"
-                        class="button-symbol white"
-                    >
-                        ☰
-                    </button-->
                 </div>
                 <!-- Loading/Analysis Progress Indicator -->
                 <LoadingBarComponent

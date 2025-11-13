@@ -63,7 +63,7 @@ Architecture Improvements
 - [x] user preferences storage
 - [ ] consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
 - [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
-- [ ] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
+- [t] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
 - [x] extra spreadsheet MetaData column
 - [ ] impliment metadata for packlists
 - [x] save history: dateTime, userName, fields edited & old values
@@ -79,26 +79,22 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Input items into Google Sheets
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - [ ] change the packlist export to export all items correctly
+- [ ] fix CABINET item numbers in inventor
+- [ ] fix FURNITURE item numbers in inventor
+- [ ] fix HANGING SIGN item numbers in inventor
 - [x] make sure panel and hardware part numbers come in correctly
-- [ ] Categorize all booth parts according to Pack List Rules (preferences)
-- [ ] Improve and test this system
-- [ ] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
+- [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
 - [ ] verify panel and hardware and other possible edge-cases
+- [ ] Improve and test this system
+      Categorize all booth parts according to Pack List Rules (preferences)
 
-HIGH PRIORITY: analysis of pack list against current inventory
+analysis of pack list against current inventory
 
 - [x] quantities
 - [x] overlapping shows
 - [x] low stock warnings
 - [x] description updates
 - [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
-      "show inventory report" for the schedule/advanced search
-      Original data gets all items in the shows during a time period.
-      First analytics gets inventory data loaded from reactive store.
-      Custom configure analytics to add a column for the quantities for each show...
-      Final step subtracts all and shows result.
-      columns: Thumbnail, Item #, Inv Qty, Show quantities... (narrow) , Remaining.
-      allow loading custom url-params into page?
 
 Pack Lists in Web
 
@@ -110,7 +106,7 @@ Pack Lists in Web
 - [x] Allow moving items
 - [x] Allow editing item contents
 - [x] allow saving edits to google sheet
-- [ ] allow packlist main page to be refreshed (cards-grid refresh button)
+- [x] allow packlist main page to be refreshed (cards-grid refresh button)
 - [ ] Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
 - [ ] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
@@ -129,7 +125,10 @@ inventory updates
 - [ ] allow adding new items
 - [x] add existing item thumbnails
 - [ ] track crate information to further streamline pack list generation
-- [ ] make thumbnails be a cached analytics step
+- [x] make thumbnails be a cached analytics step
+- [ ] add all FURNITURE
+- [ ] update LIGHTBOXES
+- [ ] add all LIGHTING
       allow uploading new item thumbnails
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
