@@ -54,6 +54,18 @@ export { Priority };
  * - Backups removed automatically after successful save
  * - Auto-save timer starts when first store is created
  * - Auto-save timer stops when all stores are cleared (logout)
+ * 
+ * Cache Invalidation & Analysis Flow:
+ * - When main data is invalidated (e.g., after save):
+ *   1. isReloadingMainData lock is set to prevent concurrent analysis
+ *   2. Data is reloaded from server
+ *   3. Analysis runs automatically after load completes
+ *   4. Lock is released
+ * - When analysis data is invalidated:
+ *   1. 50ms delay allows main reload to register if happening simultaneously
+ *   2. If main reload is active, analysis is skipped (will run after reload)
+ *   3. Otherwise, specific analysis step is cleared and re-run
+ * - This prevents analysis from running on empty/stale data during reload
  */
 
 // Modular reactive store factory for any generic data, with async API calls for load and save
@@ -137,6 +149,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         loadingMessage: '',
         error: null,
         isAnalyzing: false,
+        isReloadingMainData: false, // Lock to prevent analysis during main data reload
         analysisProgress: 0,
         analysisMessage: '',
         analysisConfig,
@@ -170,7 +183,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.data = processedData;
             
             // Automatically run analysis if configured and data is loaded
-            if (this.analysisConfig && this.data.length > 0 && !this.isAnalyzing) {
+            // Skip if main data is being reloaded (will run after reload completes)
+            if (this.analysisConfig && this.data.length > 0 && !this.isAnalyzing && !this.isReloadingMainData) {
                 // Use nextTick to ensure Vue has updated the DOM and reactive properties
                 Vue.nextTick(() => {
                     this.runConfiguredAnalysis();
@@ -208,6 +222,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 return;
             }
             this.setLoading(true, message);
+            this.isReloadingMainData = true; // Lock to prevent analysis during reload
             this.setError(null);
             try {
                 // Use priority queue for load operations (high priority)
@@ -221,6 +236,11 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
                 this.setOriginalData(dataToSet);
                 this.setData(dataToSet);
+                
+                // After data is loaded, run analysis if configured
+                if (this.analysisConfig && this.analysisConfig.length > 0) {
+                    await this.runConfiguredAnalysis();
+                }
             } catch (err) {
                 this.setError(err.message || 'Failed to load data');
                 // Initialize with empty arrays to allow dynamic property addition
@@ -228,6 +248,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setData([]);
             } finally {
                 this.setLoading(false, '');
+                this.isReloadingMainData = false; // Release lock after load completes
             }
         },
         async save(message = 'Saving data...') {
@@ -365,6 +386,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             });
         },
         async runConfiguredAnalysis(options = {}) {
+            // Check if main data is being reloaded - don't run analysis during reload
+            if (this.isReloadingMainData) {
+                console.log('[ReactiveStore] Skipping analysis - main data is being reloaded');
+                return;
+            }
+            
             if (!this.analysisConfig || this.isAnalyzing) {
                 return;
             }
@@ -664,6 +691,11 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         async handleInvalidation() {
             // Reload both originalData and data from the server
+            // The load() method will:
+            // 1. Set isReloadingMainData = true (prevents concurrent analysis)
+            // 2. Load fresh data from API
+            // 3. Run analysis automatically after data loads
+            // 4. Set isReloadingMainData = false
             await this.load('Reloading data due to invalidation...');
         }
     });
@@ -1104,9 +1136,20 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
             if (analysisMethodName) {
                 const analysisPattern = `api:${analysisMethodName}`;
                 
-                CacheInvalidationBus.on(analysisPattern, (eventData) => {
+                CacheInvalidationBus.on(analysisPattern, async (eventData) => {
+                    console.log(`[ReactiveStore] Analysis invalidation received for ${analysisMethodName}`);
+                    
+                    // Add small delay to allow main data reload to register if happening simultaneously
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    // Check if main data is being reloaded - if so, skip (analysis will run after load)
+                    if (store.isReloadingMainData) {
+                        console.log(`[ReactiveStore] Skipping analysis rerun for ${analysisMethodName} - main data is reloading`);
+                        return;
+                    }
+                    
                     // Clear and rerun only the specific analysis that was invalidated
-                    console.log(`[ReactiveStore] Analysis invalidation received for ${analysisMethodName}, re-running analysis step ${index + 1}`);
+                    console.log(`[ReactiveStore] Re-running analysis step ${index + 1} for ${analysisMethodName}`);
                     store.clearSpecificAnalysisResults([config.resultKey || config.targetColumn]);
                     store.runConfiguredAnalysis({ skipIfAnalyzed: false });
                 });
