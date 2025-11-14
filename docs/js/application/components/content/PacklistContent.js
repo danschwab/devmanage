@@ -306,7 +306,7 @@ export const PacklistContent = {
                 :loading-message="analysisMessage"
                 empty-message="No packlists available"
             >
-                <template #table-header-area>
+                <template #header-area>
                     <saved-search-select
                         :container-path="containerPath"
                         :include-years="true"
