@@ -137,16 +137,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         const clearResults = (item) => {
             if (item && item.AppData) {
                 analysisConfig.forEach(config => {
-                    if (config.targetColumn) {
-                        // Do NOT clear target column data - preserve existing values
-                        // Analysis will only update if result is not null
-                        // Clear any AppData error for this target column
-                        delete item.AppData[`${config.targetColumn}_error`];
-                    } else {
-                        // Clear AppData results
-                        delete item.AppData[config.resultKey];
-                        delete item.AppData[`${config.resultKey}_error`];
-                    }
+                    clearAnalysisResultsFromItem(item, config, false); // Don't clear target column data
                 });
                 // Clear analysis state
                 delete item.AppData._analyzed;
@@ -180,6 +171,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         analysisProgress: 0,
         analysisMessage: '',
         analysisConfig,
+        initialLoad: false, // True if this is the first load of the store
         
         // Computed property to check if data has been modified
         get isModified() {
@@ -188,21 +180,21 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             
             // Create clean copies without AppData and analysis columns for comparison
             const cleanCurrent = removeAppData(
-                JSON.parse(JSON.stringify(this.data)), 
+                deepClone(this.data), 
                 this.analysisConfig
             );
             const cleanOriginal = removeAppData(
-                JSON.parse(JSON.stringify(this.originalData)), 
+                deepClone(this.originalData), 
                 this.analysisConfig
             );
             
             // Deep comparison using JSON serialization
-            return JSON.stringify(cleanCurrent) !== JSON.stringify(cleanOriginal);
+            return !areValuesEqual(cleanCurrent, cleanOriginal);
         },
         
         setData(newData) {
             // Deep clone and initialize AppData
-            const processedData = appDataInit(JSON.parse(JSON.stringify(newData)));
+            const processedData = appDataInit(deepClone(newData));
             // Clear any existing analysis results if analysis is configured
             if (this.analysisConfig) {
                 clearAnalysisResults(processedData, this.analysisConfig);
@@ -220,7 +212,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         setOriginalData(newOriginalData) {
             // Deep clone and initialize AppData
-            this.originalData = appDataInit(JSON.parse(JSON.stringify(newOriginalData)));
+            this.originalData = appDataInit(deepClone(newOriginalData));
         },
         setError(err) {
             this.error = err;
@@ -387,18 +379,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                           identifiers.includes(config.targetColumn);
                         
                         if (shouldClear) {
-                            if (config.targetColumn) {
-                                // Clear target column data
-                                if (item.hasOwnProperty(config.targetColumn)) {
-                                    item[config.targetColumn] = null;
-                                }
-                                // Clear any AppData error for this target column
-                                delete item.AppData[`${config.targetColumn}_error`];
-                            } else {
-                                // Clear AppData results
-                                delete item.AppData[config.resultKey];
-                                delete item.AppData[`${config.resultKey}_error`];
-                            }
+                            clearAnalysisResultsFromItem(item, config, true); // Clear target column data
                         }
                     });
                 }
@@ -576,26 +557,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                         }
                                     );
                                     
-                                    // Store result based on return value:
-                                    // - undefined: preserve existing value (do nothing)
-                                    // - null: explicitly clear the value
-                                    // - any other value: update with new value
-                                    if (result !== undefined) {
-                                        if (config.targetColumn) {
-                                            item[config.targetColumn] = result;
-                                        } else {
-                                            item.AppData[config.resultKey] = result;
-                                        }
-                                    }
+                                    storeAnalysisResult(item, config, result);
                                 }
                                 
                             } catch (error) {
                                 console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
-                                if (config.targetColumn) {
-                                    item.AppData[`${config.targetColumn}_error`] = error.message;
-                                } else {
-                                    item.AppData[`${config.resultKey}_error`] = error.message;
-                                }
+                                storeAnalysisError(item, config, error);
                             }
                             
                             item.AppData._analyzing = false;
@@ -665,26 +632,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                                 }
                                             );
                                             
-                                            // Store result based on return value:
-                                            // - undefined: preserve existing value (do nothing)
-                                            // - null: explicitly clear the value
-                                            // - any other value: update with new value
-                                            if (result !== undefined) {
-                                                if (config.targetColumn) {
-                                                    nestedItem[config.targetColumn] = result;
-                                                } else {
-                                                    nestedItem.AppData[config.resultKey] = result;
-                                                }
-                                            }
+                                            storeAnalysisResult(nestedItem, config, result);
                                         }
                                         
                                     } catch (error) {
                                         console.error(`[ConfiguredAnalysis] Error in ${config.label || config.resultKey}:`, error);
-                                        if (config.targetColumn) {
-                                            nestedItem.AppData[`${config.targetColumn}_error`] = error.message;
-                                        } else {
-                                            nestedItem.AppData[`${config.resultKey}_error`] = error.message;
-                                        }
+                                        storeAnalysisError(nestedItem, config, error);
                                     }
                                     
                                     nestedItem.AppData._analyzing = false;
@@ -731,36 +684,138 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         }
     });
 
-    // Helper to strip AppData and analysis target columns from objects (including filtering out items marked for deletion)
-    function removeAppData(arr, analysisConfig = null) {
-        if (!Array.isArray(arr)) return arr;
-        
-        // Get list of target columns to remove
-        const targetColumns = new Set();
+    /**
+     * Build a set of columns that should be excluded from comparisons and saves
+     * @param {Array} analysisConfig - Analysis configuration
+     * @returns {Set} Set of column names to exclude
+     */
+    function getExcludedColumns(analysisConfig = null) {
+        const excludedColumns = new Set(['AppData', 'MetaData']);
         if (analysisConfig && Array.isArray(analysisConfig)) {
             analysisConfig.forEach(config => {
                 if (config.targetColumn) {
-                    targetColumns.add(config.targetColumn);
+                    excludedColumns.add(config.targetColumn);
                 }
             });
         }
+        return excludedColumns;
+    }
+
+    /**
+     * Check if a key should be excluded from data operations
+     * @param {string} key - The key to check
+     * @param {Set} excludedColumns - Set of excluded column names
+     * @returns {boolean} True if should be excluded
+     */
+    function shouldExcludeColumn(key, excludedColumns) {
+        return excludedColumns.has(key);
+    }
+
+    /**
+     * Check if an item is marked for deletion
+     * @param {Object} obj - The object to check
+     * @returns {boolean} True if marked for deletion
+     */
+    function isMarkedForDeletion(obj) {
+        return isValidObject(obj) && obj.AppData && obj.AppData['marked-for-deletion'];
+    }
+
+    /**
+     * Compare two values for equality using JSON serialization
+     * @param {*} value1 - First value
+     * @param {*} value2 - Second value
+     * @returns {boolean} True if values are equal
+     */
+    function areValuesEqual(value1, value2) {
+        return JSON.stringify(value1) === JSON.stringify(value2);
+    }
+
+    /**
+     * Deep clone a value using JSON serialization
+     * @param {*} value - Value to clone
+     * @returns {*} Deep cloned value
+     */
+    function deepClone(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    /**
+     * Check if a value is a valid object (not null, not an array)
+     * @param {*} value - Value to check
+     * @returns {boolean} True if value is an object
+     */
+    function isValidObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    /**
+     * Store an analysis result on an item based on configuration
+     * @param {Object} item - The item to store the result on
+     * @param {Object} config - The analysis configuration
+     * @param {*} result - The result to store
+     */
+    function storeAnalysisResult(item, config, result) {
+        // Store result based on return value:
+        // - undefined: preserve existing value (do nothing)
+        // - null: explicitly clear the value
+        // - any other value: update with new value
+        if (result !== undefined) {
+            if (config.targetColumn) {
+                item[config.targetColumn] = result;
+            } else {
+                item.AppData[config.resultKey] = result;
+            }
+        }
+    }
+
+    /**
+     * Store an analysis error on an item based on configuration
+     * @param {Object} item - The item to store the error on
+     * @param {Object} config - The analysis configuration
+     * @param {Error} error - The error to store
+     */
+    function storeAnalysisError(item, config, error) {
+        if (config.targetColumn) {
+            item.AppData[`${config.targetColumn}_error`] = error.message;
+        } else {
+            item.AppData[`${config.resultKey}_error`] = error.message;
+        }
+    }
+
+    /**
+     * Clear analysis results from an item based on configuration
+     * @param {Object} item - The item to clear results from
+     * @param {Object} config - The analysis configuration
+     * @param {boolean} clearTargetColumn - Whether to clear target column data (used in clearSpecificAnalysisResults)
+     */
+    function clearAnalysisResultsFromItem(item, config, clearTargetColumn = false) {
+        if (!item || !item.AppData) return;
+        
+        if (config.targetColumn) {
+            if (clearTargetColumn && item.hasOwnProperty(config.targetColumn)) {
+                item[config.targetColumn] = null;
+            }
+            delete item.AppData[`${config.targetColumn}_error`];
+        } else {
+            delete item.AppData[config.resultKey];
+            delete item.AppData[`${config.resultKey}_error`];
+        }
+    }
+
+    // Helper to strip AppData, MetaData, and analysis target columns from objects (including filtering out items marked for deletion)
+    function removeAppData(arr, analysisConfig = null) {
+        if (!Array.isArray(arr)) return arr;
+        
+        const excludedColumns = getExcludedColumns(analysisConfig);
         
         return arr
-            .filter(obj => {
-                // Filter out items marked for deletion
-                if (obj && typeof obj === 'object' && obj.AppData && obj.AppData['marked-for-deletion']) {
-                    return false;
-                }
-                return true;
-            })
+            .filter(obj => !isMarkedForDeletion(obj))
             .map(obj => {
-                if (obj && typeof obj === 'object') {
+                if (isValidObject(obj)) {
                     const newObj = { ...obj };
-                    // Remove AppData before sending to API
-                    delete newObj.AppData;
                     
-                    // Remove analysis target columns before sending to API
-                    targetColumns.forEach(column => {
+                    // Remove excluded columns
+                    excludedColumns.forEach(column => {
                         delete newObj[column];
                     });
                     
@@ -799,30 +854,33 @@ const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
  * Calculate diff between original and current data recursively
  * Only stores row indices with their changed fields for efficiency
  * Handles nested arrays recursively
+ * Excludes AppData, MetaData, and analysis target columns
  * @param {Array} originalData - Original data
  * @param {Array} currentData - Current modified data
+ * @param {Array} analysisConfig - Analysis configuration to identify columns to exclude
  * @returns {Array} Array of changes with indices and modified fields
  */
-function calculateStoreDiff(originalData, currentData) {
+function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
     if (!Array.isArray(originalData) || !Array.isArray(currentData)) {
         return null;
     }
     
+    const excludedColumns = getExcludedColumns(analysisConfig);
     const changes = [];
     
     currentData.forEach((item, index) => {
-        if (!item || typeof item !== 'object') return;
+        if (!isValidObject(item)) return;
         
         const original = originalData[index];
-        if (!original || typeof original !== 'object') {
+        if (!isValidObject(original)) {
             // New item added - recursively process nested arrays
             const cleanData = {};
             Object.keys(item).forEach(key => {
-                if (key === 'AppData') return; // Skip AppData
+                if (shouldExcludeColumn(key, excludedColumns)) return;
                 
                 if (Array.isArray(item[key])) {
                     // For nested arrays, calculate diff recursively
-                    const nestedDiff = calculateStoreDiff([], item[key]);
+                    const nestedDiff = calculateStoreDiff([], item[key], analysisConfig);
                     if (nestedDiff) {
                         cleanData[key] = { _nestedDiff: nestedDiff };
                     }
@@ -841,15 +899,15 @@ function calculateStoreDiff(originalData, currentData) {
         // Check for modified fields recursively
         const modifiedFields = {};
         Object.keys(item).forEach(key => {
-            if (key === 'AppData') return; // Skip AppData
+            if (shouldExcludeColumn(key, excludedColumns)) return;
             
             if (Array.isArray(item[key]) && Array.isArray(original[key])) {
                 // For nested arrays, calculate diff recursively
-                const nestedDiff = calculateStoreDiff(original[key], item[key]);
+                const nestedDiff = calculateStoreDiff(original[key], item[key], analysisConfig);
                 if (nestedDiff) {
                     modifiedFields[key] = { _nestedDiff: nestedDiff };
                 }
-            } else if (JSON.stringify(item[key]) !== JSON.stringify(original[key])) {
+            } else if (!areValuesEqual(item[key], original[key])) {
                 modifiedFields[key] = item[key];
             }
         });
@@ -903,7 +961,7 @@ async function saveDirtyStoresToUserData() {
         // Save each dirty store as a separate user data entry
         for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
             if (store.isModified && store.originalData && store.data) {
-                const diff = calculateStoreDiff(store.originalData, store.data);
+                const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
                 if (diff) {
                     // Save with storeKey as ID and diff as Value (with timestamp)
                     await Requests.storeUserData(
@@ -1084,29 +1142,6 @@ export function findMatchingStores(apiCall, apiArgs = []) {
 }
 
 /**
- * Check if a reactive store exists and get its modification status
- * @param {Function} apiCall - The API function used to create the store
- * @param {Function} saveCall - The save function (optional, can be null)
- * @param {Array} apiArgs - Arguments passed to the API function
- * @param {Array} analysisConfig - Analysis configuration (optional)
- * @returns {Object|null} { exists: boolean, isModified: boolean, store: Object } or null if not found
- */
-export function getStoreStatus(apiCall, saveCall = null, apiArgs = [], analysisConfig = null) {
-    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
-    const store = reactiveStoreRegistry[key];
-    
-    if (!store) {
-        return { exists: false, isModified: false, store: null };
-    }
-    
-    return {
-        exists: true,
-        isModified: store.isModified || false,
-        store: store
-    };
-}
-
-/**
  * Helper to extract method name from API function
  * @param {Function} apiFunction - The API function
  * @returns {string|null} - Method name or null
@@ -1161,6 +1196,10 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig);
         reactiveStoreRegistry[key] = store;
         
+        // Mark as initial load and set loading state
+        store.initialLoad = true;
+        store.setLoading(true, 'Initializing...');
+        
         // Setup cache invalidation subscriptions
         setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig);
         
@@ -1168,28 +1207,46 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         startAutoSaveTimer();
         
         if (autoLoad) {
-            // Check for backup first to decide whether to skip initial analysis
-            loadStoreBackupFromUserData(key).then(async (backup) => {
-                const hasBackup = backup && backup.length > 0;
-                
-                // Initial load - skip analysis if we have a backup to apply
-                await store.load('Loading data...', hasBackup);
-                
-                // Apply backup after load if found
-                if (hasBackup && store.data) {
-                    console.log('[ReactiveStore] Applying backup to store data');
-                    const restoredData = applyDiffToData(store.data, backup);
-                    store.setData(restoredData);
-                    // setData will trigger analysis automatically if configured
+            // Perform async initialization without blocking store return
+            (async () => {
+                try {
+                    store.setLoading(true, 'Checking for saved changes...');
+                    
+                    // Check for backup first
+                    const backup = await loadStoreBackupFromUserData(key);
+                    const hasBackup = backup && backup.length > 0;
+                    
+                    if (hasBackup) {
+                        store.setLoading(true, 'Restoring saved changes...');
+                    }
+                    
+                    // Load data - skip initial analysis if we have a backup to apply
+                    store.setLoading(true, 'Loading data...');
+                    await store.load('Loading data...', hasBackup);
+                    
+                    // Apply backup after load if found
+                    if (hasBackup && store.data) {
+                        console.log('[ReactiveStore] Applying backup to store data');
+                        const restoredData = applyDiffToData(store.data, backup);
+                        store.setData(restoredData);
+                        // setData will trigger analysis automatically if configured
+                    }
+                    
+                    store.initialLoad = false;
+                } catch (err) {
+                    console.warn('[ReactiveStore] Initial load failed:', err);
+                    store.setError(err);
+                    store.setLoading(false);
+                    store.initialLoad = false;
+                    // Store will have empty arrays initialized, allowing dynamic property addition
                 }
-            }).catch(err => {
-                console.warn('[ReactiveStore] Initial load failed:', err);
-                // Store will have empty arrays initialized, allowing dynamic property addition
-            });
+            })();
         } else {
             // Initialize with empty arrays to allow dynamic property addition
             store.setOriginalData([]);
             store.setData([]);
+            store.setLoading(false);
+            store.initialLoad = false;
         }
     }
     

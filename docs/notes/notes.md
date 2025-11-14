@@ -46,13 +46,13 @@ Need features:
 - [x] container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 - [x] error causing early dashboard changes to be overwritten by an empty dashboard
 - [x] error causing card component to lose analytics details on reload after cache clear???
-- [ ] ensure log out/in does not break things: the pin button currently breaks on reauth
+- [t] ensure log out/in does not break things: the pin button currently breaks on reauth (was test data missing email on reauth...)
 - [x] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
 - [ ] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 - [ ] scrolling issue when navigating
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
-- [ ] error causing imperfect or corrupted analytics information on data refresh after auth
-- [ ] github deployment needs to be rerun every time due to config.js build issues?
+- [t] error causing imperfect or corrupted analytics information on data refresh after auth
+- [x] github deployment needs to be rerun every time due to config.js build issues? (need to set up deployment via actions in github settings)
 - [ ] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
 
 **Application tasks**
