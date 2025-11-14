@@ -80,6 +80,38 @@ class applicationUtils_uncached {
     }
     
     /**
+     * Check if a user data key or key prefix exists
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to find the tab for
+     * @param {string} keyOrPrefix - The exact key or prefix to check for
+     * @param {boolean} prefixMatch - If true, checks for keys starting with keyOrPrefix; if false, checks for exact match
+     * @returns {Promise<boolean>} True if key/prefix exists, false otherwise
+     */
+    static async hasUserDataKey(deps, username, keyOrPrefix, prefixMatch = false) {
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `UserData_${sanitizedUsername}`;
+        
+        // Check if tab exists
+        const userTab = await deps.call(Database.findTabByName, 'CACHE', tabName);
+        if (!userTab) {
+            return false; // Tab doesn't exist
+        }
+        
+        // Get tab data as JS objects
+        const tabData = await deps.call(Database.getData, 'CACHE', tabName, { ID: 'ID', Value: 'Value' });
+        if (!tabData || tabData.length === 0) {
+            return false; // No data in tab
+        }
+        
+        // Check for exact match or prefix match
+        if (prefixMatch) {
+            return tabData.some(obj => obj.ID && obj.ID.startsWith(keyOrPrefix));
+        } else {
+            return tabData.some(obj => obj.ID === keyOrPrefix);
+        }
+    }
+    
+    /**
      * Retrieve user data from a user-specific tab within the CACHE sheet
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} username - The username to find the tab for

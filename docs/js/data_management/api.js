@@ -279,6 +279,18 @@ class Requests_uncached {
     }
     
     /**
+     * Check if a user data key or key prefix exists
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to check for
+     * @param {string} keyOrPrefix - The exact key or prefix to check for
+     * @param {boolean} prefixMatch - If true, checks for keys starting with keyOrPrefix
+     * @returns {Promise<boolean>} True if key/prefix exists
+     */
+    static async hasUserDataKey(deps, username, keyOrPrefix, prefixMatch = false) {
+        return await deps.call(ApplicationUtils.hasUserDataKey, username, keyOrPrefix, prefixMatch);
+    }
+    
+    /**
      * Get mapped inventory tab data (with default mapping and optional filters).
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabOrItemName - Tab name or item name to resolve tab

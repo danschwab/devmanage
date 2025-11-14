@@ -91,7 +91,7 @@ function getMethodIdentifier(fn) {
  * @param {Array} analysisConfig - Analysis configuration
  * @returns {string} The generated store key
  */
-function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
+export function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
     return getMethodIdentifier(apiCall) + ':' + getMethodIdentifier(saveCall) + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
 }
 

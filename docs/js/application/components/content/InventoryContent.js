@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, generateStoreKey, authState } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 
@@ -143,7 +143,8 @@ export const InventoryContent = {
     inject: ['$modal'],
     data() {
         return {
-            categoriesStore: null // Reactive store for inventory categories
+            categoriesStore: null, // Reactive store for inventory categories
+            autoSavedCategories: new Set() // Track which categories have auto-saved data
         };
     },
     computed: {
@@ -170,8 +171,9 @@ export const InventoryContent = {
                         [cat.title, undefined, undefined]
                     );
                     
-                    // Check if any matching store has unsaved changes
-                    const hasUnsavedChanges = matchingStores.some(match => match.isModified);
+                    // Check if any matching store has unsaved changes OR if auto-save data exists
+                    const hasUnsavedChanges = matchingStores.some(match => match.isModified) || 
+                                             this.autoSavedCategories.has(cat.title);
                     
                     // Determine card styling based on store state
                     const cardClass = hasUnsavedChanges ? 'button red' : 'button purple';
@@ -201,6 +203,50 @@ export const InventoryContent = {
         }
     },
     methods: {
+        async checkAutoSavedCategories() {
+            if (!authState.isAuthenticated || !authState.user?.email) return;
+            
+            // Check if any category has auto-saved data
+            // Generate a prefix for all inventory stores
+            const storePrefix = generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [], null).split(':')[0] + ':' + 
+                               generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [], null).split(':')[1] + ':';
+            
+            try {
+                const hasAutoSave = await Requests.hasUserDataKey(
+                    authState.user.email,
+                    storePrefix,
+                    true // prefix match
+                );
+                
+                if (hasAutoSave && this.categoriesStore?.data) {
+                    // Check each individual category
+                    for (const cat of this.categoriesStore.data) {
+                        if (cat.title === 'INDEX') continue;
+                        
+                        // Generate the store key for this specific category
+                        const storeKey = generateStoreKey(
+                            Requests.getInventoryTabData,
+                            Requests.saveInventoryTabData,
+                            [cat.title, undefined, undefined],
+                            null // We don't know the exact analysis config
+                        );
+                        
+                        // Check if this specific key exists (prefix match since analysis config might vary)
+                        const hasThisCategory = await Requests.hasUserDataKey(
+                            authState.user.email,
+                            storeKey.substring(0, storeKey.lastIndexOf(':')), // Remove analysis config part
+                            true
+                        );
+                        
+                        if (hasThisCategory) {
+                            this.autoSavedCategories.add(cat.title);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[InventoryContent] Error checking auto-saved categories:', error);
+            }
+        },
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
         }
@@ -216,6 +262,9 @@ export const InventoryContent = {
         
         // Load categories
         await this.categoriesStore.load('Loading inventory categories...');
+        
+        // Check for auto-saved categories
+        await this.checkAutoSavedCategories();
 
 
         // Register inventory navigation routes
