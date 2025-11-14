@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parseDateSearchParameter } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -60,7 +60,7 @@ export const PacklistContent = {
         'packlist-table': PacklistTable,
         'cards-grid': CardsComponent,
         'PacklistItemsSummary': PacklistItemsSummary,
-        'SavedSearchSelect': SavedSearchSelect
+        'saved-search-select': SavedSearchSelect
     },
     props: {
         containerPath: String,
@@ -71,8 +71,8 @@ export const PacklistContent = {
         return {
             packlistsStore: null, // Reactive store for packlists
             autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
-            filter: null, // Filter for schedule overlaps (date range or identifier)
-            scheduleData: null // Cached schedule data for filtering
+            selectedYear: new Date().getFullYear(), // Default to current year
+            showIdentifiersForYear: [] // Array of show identifiers for the selected year
         };
     },
     computed: {
@@ -99,19 +99,19 @@ export const PacklistContent = {
         // Computed properties for cards grid
         availablePacklists() {
             if (!this.packlistsStore) return [];
-            let tabs = this.packlistsStore.data || [];
-            
-            // Filter by schedule overlap if filter is set
-            if (this.filter && this.scheduleData) {
-                const matchingIdentifiers = new Set(
-                    this.scheduleData.map(show => show.Identifier)
-                );
-                tabs = tabs.filter(tab => matchingIdentifiers.has(tab.title));
-            }
-            
+            const tabs = this.packlistsStore.data || [];
             // Filter out TEMPLATE and format for CardsComponent
             return tabs
                 .filter(tab => tab.title !== 'TEMPLATE')
+                .filter(tab => {
+                    // Filter by comparing with show identifiers from production schedule
+                    if (!this.showIdentifiersForYear || this.showIdentifiersForYear.length === 0) {
+                        return true; // No filter active, show all
+                    }
+                    
+                    // Check if packlist title matches any show identifier
+                    return this.showIdentifiersForYear.some(showId => showId === tab.title);
+                })
                 .map(tab => {
                     // Find any reactive stores for this packlist (regardless of analysis config)
                     const matchingStores = findMatchingStores(
@@ -219,70 +219,6 @@ export const PacklistContent = {
         // Note: checkAutoSavedPacklists will be called by the watcher when data loads
     },
     methods: {
-        async handleSearchSelected(searchData) {
-            if (!searchData) {
-                // Empty selection - clear filter
-                this.filter = null;
-                this.scheduleData = null;
-                return;
-            }
-
-            // Build filter from search data
-            const filter = {};
-            
-            if (searchData.type === 'year') {
-                // Handle year selection
-                filter.startDate = searchData.startDate;
-                filter.endDate = searchData.endDate;
-                filter.byShowDate = true;
-            } else {
-                // Handle saved search - parse DateSearch parameter
-                if (searchData.dateSearch) {
-                    const dateFilter = parseDateSearchParameter(searchData.dateSearch);
-                    Object.assign(filter, dateFilter);
-                }
-                
-                // Add byShowDate flag if present
-                if (searchData.byShowDate) {
-                    filter.byShowDate = true;
-                }
-            }
-            
-            this.filter = filter;
-            
-            // Fetch schedule data using the filter
-            await this.loadScheduleData();
-        },
-        async loadScheduleData() {
-            if (!this.filter) {
-                this.scheduleData = null;
-                return;
-            }
-
-            try {
-                // Build parameters for getProductionScheduleData
-                // It expects parameters (identifier or date range) and optional searchParams
-                let parameters = null;
-                
-                if (this.filter.overlapShowIdentifier) {
-                    // Searching by overlap with a specific show
-                    parameters = { identifier: this.filter.overlapShowIdentifier };
-                } else if (this.filter.startDate || this.filter.endDate) {
-                    // Searching by date range
-                    parameters = {
-                        startDate: this.filter.startDate,
-                        endDate: this.filter.endDate,
-                        byShowDate: this.filter.byShowDate
-                    };
-                }
-                
-                const shows = await Requests.getProductionScheduleData(parameters);
-                this.scheduleData = shows;
-            } catch (error) {
-                console.error('Error loading schedule data for filtering:', error);
-                this.scheduleData = [];
-            }
-        },
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
@@ -322,6 +258,36 @@ export const PacklistContent = {
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
+        },
+        async handleYearSelected(searchData) {
+            if (!searchData) {
+                // Clear filter
+                this.selectedYear = null;
+                this.showIdentifiersForYear = [];
+            } else if (searchData.type === 'year') {
+                // Set year filter and fetch show identifiers from production schedule
+                this.selectedYear = searchData.year;
+                
+                try {
+                    // Query production schedule for shows in this year
+                    const shows = await Requests.getProductionScheduleData({
+                        startDate: searchData.startDate,
+                        endDate: searchData.endDate,
+                        byShowDate: true,
+                        year: searchData.year
+                    });
+                    
+                    // Extract show identifiers (these should match packlist titles)
+                    this.showIdentifiersForYear = shows
+                        .filter(show => show.Identifier)
+                        .map(show => show.Identifier);
+                    
+                    console.log('[PacklistContent] Loaded show identifiers for year', searchData.year, ':', this.showIdentifiersForYear);
+                } catch (error) {
+                    console.error('[PacklistContent] Error loading shows for year:', error);
+                    this.showIdentifiersForYear = [];
+                }
+            }
         }
     },
     template: html `
@@ -340,15 +306,13 @@ export const PacklistContent = {
                 :loading-message="analysisMessage"
                 empty-message="No packlists available"
             >
-                <template #header-area>
-                    <SavedSearchSelect
-                        :domain="'production_schedule'"
+                <template #table-header-area>
+                    <saved-search-select
+                        :container-path="containerPath"
                         :include-years="true"
                         :start-year="2023"
-                        :default-search="'2025'"
-                        :container-path="containerPath"
-                        :navigate-to-path="navigateToPath"
-                        @search-selected="handleSearchSelected"
+                        :default-search="selectedYear ? selectedYear.toString() : new Date().getFullYear().toString()"
+                        @search-selected="handleYearSelected"
                     />
                 </template>
             </cards-grid>

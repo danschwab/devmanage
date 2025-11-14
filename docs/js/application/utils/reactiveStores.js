@@ -95,6 +95,124 @@ export function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
     return getMethodIdentifier(apiCall) + ':' + getMethodIdentifier(saveCall) + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
 }
 
+/**
+ * Build a set of columns that should be excluded from comparisons and saves
+ * @param {Array} analysisConfig - Analysis configuration
+ * @returns {Set} Set of column names to exclude
+ */
+function getExcludedColumns(analysisConfig = null) {
+    const excludedColumns = new Set(['AppData', 'MetaData']);
+    if (analysisConfig && Array.isArray(analysisConfig)) {
+        analysisConfig.forEach(config => {
+            if (config.targetColumn) {
+                excludedColumns.add(config.targetColumn);
+            }
+        });
+    }
+    return excludedColumns;
+}
+
+/**
+ * Check if a key should be excluded from data operations
+ * @param {string} key - The key to check
+ * @param {Set} excludedColumns - Set of excluded column names
+ * @returns {boolean} True if should be excluded
+ */
+function shouldExcludeColumn(key, excludedColumns) {
+    return excludedColumns.has(key);
+}
+
+/**
+ * Check if an item is marked for deletion
+ * @param {Object} obj - The object to check
+ * @returns {boolean} True if marked for deletion
+ */
+function isMarkedForDeletion(obj) {
+    return isValidObject(obj) && obj.AppData && obj.AppData['marked-for-deletion'];
+}
+
+/**
+ * Compare two values for equality using JSON serialization
+ * @param {*} value1 - First value
+ * @param {*} value2 - Second value
+ * @returns {boolean} True if values are equal
+ */
+function areValuesEqual(value1, value2) {
+    return JSON.stringify(value1) === JSON.stringify(value2);
+}
+
+/**
+ * Deep clone a value using JSON serialization
+ * @param {*} value - Value to clone
+ * @returns {*} Deep cloned value
+ */
+function deepClone(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * Check if a value is a valid object (not null, not an array)
+ * @param {*} value - Value to check
+ * @returns {boolean} True if value is an object
+ */
+function isValidObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Store an analysis result on an item based on configuration
+ * @param {Object} item - The item to store the result on
+ * @param {Object} config - The analysis configuration
+ * @param {*} result - The result to store
+ */
+function storeAnalysisResult(item, config, result) {
+    // Store result based on return value:
+    // - undefined: preserve existing value (do nothing)
+    // - null: explicitly clear the value
+    // - any other value: update with new value
+    if (result !== undefined) {
+        if (config.targetColumn) {
+            item[config.targetColumn] = result;
+        } else {
+            item.AppData[config.resultKey] = result;
+        }
+    }
+}
+
+/**
+ * Store an analysis error on an item based on configuration
+ * @param {Object} item - The item to store the error on
+ * @param {Object} config - The analysis configuration
+ * @param {Error} error - The error to store
+ */
+function storeAnalysisError(item, config, error) {
+    if (config.targetColumn) {
+        item.AppData[`${config.targetColumn}_error`] = error.message;
+    } else {
+        item.AppData[`${config.resultKey}_error`] = error.message;
+    }
+}
+
+/**
+ * Clear analysis results from an item based on configuration
+ * @param {Object} item - The item to clear results from
+ * @param {Object} config - The analysis configuration
+ * @param {boolean} clearTargetColumn - Whether to clear target column data (used in clearSpecificAnalysisResults)
+ */
+function clearAnalysisResultsFromItem(item, config, clearTargetColumn = false) {
+    if (!item || !item.AppData) return;
+    
+    if (config.targetColumn) {
+        if (clearTargetColumn && item.hasOwnProperty(config.targetColumn)) {
+            item[config.targetColumn] = null;
+        }
+        delete item.AppData[`${config.targetColumn}_error`];
+    } else {
+        delete item.AppData[config.resultKey];
+        delete item.AppData[`${config.resultKey}_error`];
+    }
+}
+
 // Modular reactive store factory for any generic data, with async API calls for load and save
 export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null, priorityConfig = null) {
     // Priority configuration with defaults
@@ -685,124 +803,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             await this.load('Reloading data due to invalidation...');
         }
     });
-
-    /**
-     * Build a set of columns that should be excluded from comparisons and saves
-     * @param {Array} analysisConfig - Analysis configuration
-     * @returns {Set} Set of column names to exclude
-     */
-    function getExcludedColumns(analysisConfig = null) {
-        const excludedColumns = new Set(['AppData', 'MetaData']);
-        if (analysisConfig && Array.isArray(analysisConfig)) {
-            analysisConfig.forEach(config => {
-                if (config.targetColumn) {
-                    excludedColumns.add(config.targetColumn);
-                }
-            });
-        }
-        return excludedColumns;
-    }
-
-    /**
-     * Check if a key should be excluded from data operations
-     * @param {string} key - The key to check
-     * @param {Set} excludedColumns - Set of excluded column names
-     * @returns {boolean} True if should be excluded
-     */
-    function shouldExcludeColumn(key, excludedColumns) {
-        return excludedColumns.has(key);
-    }
-
-    /**
-     * Check if an item is marked for deletion
-     * @param {Object} obj - The object to check
-     * @returns {boolean} True if marked for deletion
-     */
-    function isMarkedForDeletion(obj) {
-        return isValidObject(obj) && obj.AppData && obj.AppData['marked-for-deletion'];
-    }
-
-    /**
-     * Compare two values for equality using JSON serialization
-     * @param {*} value1 - First value
-     * @param {*} value2 - Second value
-     * @returns {boolean} True if values are equal
-     */
-    function areValuesEqual(value1, value2) {
-        return JSON.stringify(value1) === JSON.stringify(value2);
-    }
-
-    /**
-     * Deep clone a value using JSON serialization
-     * @param {*} value - Value to clone
-     * @returns {*} Deep cloned value
-     */
-    function deepClone(value) {
-        return JSON.parse(JSON.stringify(value));
-    }
-
-    /**
-     * Check if a value is a valid object (not null, not an array)
-     * @param {*} value - Value to check
-     * @returns {boolean} True if value is an object
-     */
-    function isValidObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    /**
-     * Store an analysis result on an item based on configuration
-     * @param {Object} item - The item to store the result on
-     * @param {Object} config - The analysis configuration
-     * @param {*} result - The result to store
-     */
-    function storeAnalysisResult(item, config, result) {
-        // Store result based on return value:
-        // - undefined: preserve existing value (do nothing)
-        // - null: explicitly clear the value
-        // - any other value: update with new value
-        if (result !== undefined) {
-            if (config.targetColumn) {
-                item[config.targetColumn] = result;
-            } else {
-                item.AppData[config.resultKey] = result;
-            }
-        }
-    }
-
-    /**
-     * Store an analysis error on an item based on configuration
-     * @param {Object} item - The item to store the error on
-     * @param {Object} config - The analysis configuration
-     * @param {Error} error - The error to store
-     */
-    function storeAnalysisError(item, config, error) {
-        if (config.targetColumn) {
-            item.AppData[`${config.targetColumn}_error`] = error.message;
-        } else {
-            item.AppData[`${config.resultKey}_error`] = error.message;
-        }
-    }
-
-    /**
-     * Clear analysis results from an item based on configuration
-     * @param {Object} item - The item to clear results from
-     * @param {Object} config - The analysis configuration
-     * @param {boolean} clearTargetColumn - Whether to clear target column data (used in clearSpecificAnalysisResults)
-     */
-    function clearAnalysisResultsFromItem(item, config, clearTargetColumn = false) {
-        if (!item || !item.AppData) return;
-        
-        if (config.targetColumn) {
-            if (clearTargetColumn && item.hasOwnProperty(config.targetColumn)) {
-                item[config.targetColumn] = null;
-            }
-            delete item.AppData[`${config.targetColumn}_error`];
-        } else {
-            delete item.AppData[config.resultKey];
-            delete item.AppData[`${config.resultKey}_error`];
-        }
-    }
 
     // Helper to strip AppData, MetaData, and analysis target columns from objects (including filtering out items marked for deletion)
     function removeAppData(arr, analysisConfig = null) {
