@@ -48,12 +48,26 @@ class applicationUtils_uncached {
             // Find the row with matching ID
             const rowIndex = existingData.findIndex(row => row.ID === id);
             
-            if (rowIndex !== -1) {
-                // Update existing row
-                existingData[rowIndex].Value = serializedData;
+            // If data is null, delete the entry
+            if (data === null) {
+                if (rowIndex !== -1) {
+                    // Remove the row from existingData
+                    existingData.splice(rowIndex, 1);
+                    console.log('Deleting user data entry for ID:', id);
+                } else {
+                    // Entry doesn't exist, nothing to delete
+                    console.log('User data entry not found for deletion, ID:', id);
+                    return;
+                }
             } else {
-                // Add new row
-                existingData.push({ ID: id, Value: serializedData });
+                // Normal update/insert logic
+                if (rowIndex !== -1) {
+                    // Update existing row
+                    existingData[rowIndex].Value = serializedData;
+                } else {
+                    // Add new row
+                    existingData.push({ ID: id, Value: serializedData });
+                }
             }
             
             console.log('Storing user data - writing all rows:', existingData);

@@ -68,6 +68,33 @@ export { Priority };
  * - This prevents analysis from running on empty/stale data during reload
  */
 
+/**
+ * Generate a clean identifier for a function, using cache metadata when available
+ * @param {Function} fn - The function to identify
+ * @returns {string} A clean identifier string
+ */
+function getMethodIdentifier(fn) {
+    if (!fn) return '';
+    // If function has cache wrapper metadata, use it for a clean identifier
+    if (fn._namespace && fn._methodName) {
+        return `${fn._namespace}.${fn._methodName}`;
+    }
+    // Otherwise fall back to toString (for unwrapped functions)
+    return fn.toString();
+}
+
+/**
+ * Generate a store key from API calls and parameters
+ * @param {Function} apiCall - The API load function
+ * @param {Function} saveCall - The API save function
+ * @param {Array} apiArgs - Arguments for the API call
+ * @param {Array} analysisConfig - Analysis configuration
+ * @returns {string} The generated store key
+ */
+function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
+    return getMethodIdentifier(apiCall) + ':' + getMethodIdentifier(saveCall) + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+}
+
 // Modular reactive store factory for any generic data, with async API calls for load and save
 export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null, priorityConfig = null) {
     // Priority configuration with defaults
@@ -212,7 +239,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.analysisProgress = 0;
             this.analysisMessage = '';
         },
-        async load(message = 'Loading data...') {
+        async load(message = 'Loading data...', skipAnalysis = false) {
             //this.reset();
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
@@ -240,8 +267,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Release lock BEFORE running analysis so analysis can proceed
                 this.isReloadingMainData = false;
                 
-                // After data is loaded, run analysis if configured and data exists
-                if (this.analysisConfig && this.analysisConfig.length > 0 && this.data.length > 0) {
+                // After data is loaded, run analysis if configured, data exists, and not skipped
+                if (!skipAnalysis && this.analysisConfig && this.analysisConfig.length > 0 && this.data.length > 0) {
                     await this.runConfiguredAnalysis();
                 }
             } catch (err) {
@@ -276,7 +303,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.removeMarkedRows();
                 
                 // Remove backup from user data after successful save
-                const storeKey = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+                const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
                 await removeStoreBackupFromUserData(storeKey);
                 
                 return result;
@@ -770,6 +797,7 @@ const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Calculate diff between original and current data
+ * Only stores row indices with their changed fields for efficiency
  * @param {Array} originalData - Original data
  * @param {Array} currentData - Current modified data
  * @returns {Array} Array of changes with indices and modified fields
@@ -786,16 +814,22 @@ function calculateStoreDiff(originalData, currentData) {
         
         const original = originalData[index];
         if (!original || typeof original !== 'object') {
-            // New item added
+            // New item added - store only non-AppData fields
+            const cleanData = {};
+            Object.keys(item).forEach(key => {
+                if (key !== 'AppData') {
+                    cleanData[key] = item[key];
+                }
+            });
             changes.push({
                 index,
                 type: 'added',
-                data: { ...item }
+                data: cleanData
             });
             return;
         }
         
-        // Check for modified fields
+        // Check for modified fields (skip AppData)
         const modifiedFields = {};
         Object.keys(item).forEach(key => {
             if (key === 'AppData') return; // Skip AppData
@@ -1082,7 +1116,7 @@ function extractMethodName(apiFunction) {
  * @returns {Object} The reactive store instance
  */
 export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true, priorityConfig = null) {
-    const key = apiCall?.toString() + ':' + (saveCall?.toString() || '') + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+    const key = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
     
     if (!reactiveStoreRegistry[key]) {
         const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig);
@@ -1095,14 +1129,19 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         startAutoSaveTimer();
         
         if (autoLoad) {
-            // Initial load with proper error handling for empty/null responses
-            store.load('Loading data...').then(async () => {
-                // After initial load, check for backup and apply if found
-                const backup = await loadStoreBackupFromUserData(key);
-                if (backup && store.data) {
+            // Check for backup first to decide whether to skip initial analysis
+            loadStoreBackupFromUserData(key).then(async (backup) => {
+                const hasBackup = backup && backup.length > 0;
+                
+                // Initial load - skip analysis if we have a backup to apply
+                await store.load('Loading data...', hasBackup);
+                
+                // Apply backup after load if found
+                if (hasBackup && store.data) {
                     console.log('[ReactiveStore] Applying backup to store data');
                     const restoredData = applyDiffToData(store.data, backup);
                     store.setData(restoredData);
+                    // setData will trigger analysis automatically if configured
                 }
             }).catch(err => {
                 console.warn('[ReactiveStore] Initial load failed:', err);
