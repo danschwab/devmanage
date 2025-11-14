@@ -26,6 +26,10 @@ export const SavedSearchSelect = {
         defaultSearch: {
             type: String,
             default: null
+        },
+        allowShowAll: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
@@ -124,6 +128,15 @@ export const SavedSearchSelect = {
             try {
                 const options = [];
                 
+                // Add "Show All" option if allowed
+                if (this.allowShowAll) {
+                    options.push({
+                        value: 'show-all',
+                        label: 'Show All',
+                        type: 'show-all'
+                    });
+                }
+                
                 // Add years if requested
                 if (this.includeYears) {
                     const currentYear = new Date().getFullYear();
@@ -195,7 +208,23 @@ export const SavedSearchSelect = {
                 return;
             }
             
-            if (option.type === 'year') {
+            if (option.type === 'show-all') {
+                // Emit "show all" signal
+                const searchData = {
+                    type: 'show-all'
+                };
+                
+                // Clear URL parameters for "show all"
+                NavigationRegistry.setNavigationParameters(this.containerPath, {});
+                
+                // Only navigate to update URL if NOT on dashboard
+                if (!this.isOnDashboard && this.navigateToPath) {
+                    const path = NavigationRegistry.buildPath(this.containerPath, {});
+                    this.navigateToPath(path);
+                }
+                
+                this.emitSearchData(searchData);
+            } else if (option.type === 'year') {
                 // Emit year selection
                 const year = parseInt(value);
                 const searchData = {
