@@ -1,0 +1,36 @@
+/* Scrollbar styling for WebKit browsers (Chrome, Safari) */
+
+::-webkit-scrollbar {
+    z-index: 1000;
+    width: 10px;
+    height: 10px;
+    background: var(--color-gray-bg);
+    border-radius: var(--radius-lg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-gray);
+    margin: 2px;
+    border-radius: var(--radius-lg);
+    width: 8px;
+}
+
+div#app-content::-webkit-scrollbar {
+    background: transparent;
+}
+
+div#app-content::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+}
+
+
+
+
+
+/* Specific CSS rules for Firefox go here */
+@-moz-document url-prefix() {
+    /* firefox doesn't center text for some odd reason. Looks bad in symbol buttons. */
+    .button-symbol {
+        padding-bottom: 1px;
+    }
+}

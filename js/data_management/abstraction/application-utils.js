@@ -1,0 +1,162 @@
+import { Database, wrapMethods } from '../index.js';
+
+/**
+ * Utility functions for application-specific operations
+ */
+class applicationUtils_uncached {
+    /**
+     * Store user data in a user-specific tab within the CACHE sheet
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to create/find a tab for
+     * @param {string} id - The ID to find/create a row for
+     * @param {Array} data - Array of data to store in the row
+     * @returns {Promise<boolean>} Success status
+     */
+    static async storeUserData(username, id, data) {
+        // Sanitize username and compose tab name consistently with getUserData
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `UserData_${sanitizedUsername}`;
+        
+        // Convert data to JSON string if it's not already a string
+        let serializedData;
+        if (typeof data === 'string') {
+            serializedData = data;
+        } else {
+            serializedData = JSON.stringify(data);
+        }
+
+        // Ensure tab exists (create with proper structure if not)
+        const allTabs = await Database.getTabs('CACHE');
+        let tab = allTabs.find(t => t.title === tabName);
+        if (!tab) {
+            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
+            // Initialize the tab with headers and a single data row as a 2D array
+            return await Database.setData(
+                'CACHE',
+                tabName,
+                [
+                    ['ID', 'Value'],
+                    [id, serializedData]
+                ],
+                null,
+                { skipMetadata: true } // User data doesn't need change tracking
+            );
+        } else {   
+            // Tab exists - need to read all existing data, update/add the row, then write back
+            const existingData = await Database.getData('CACHE', tabName, { ID: 'ID', Value: 'Value' });
+            
+            // Find the row with matching ID
+            const rowIndex = existingData.findIndex(row => row.ID === id);
+            
+            // If data is null, delete the entry
+            if (data === null) {
+                if (rowIndex !== -1) {
+                    // Remove the row from existingData
+                    existingData.splice(rowIndex, 1);
+                    console.log('Deleting user data entry for ID:', id);
+                } else {
+                    // Entry doesn't exist, nothing to delete
+                    console.log('User data entry not found for deletion, ID:', id);
+                    return;
+                }
+            } else {
+                // Normal update/insert logic
+                if (rowIndex !== -1) {
+                    // Update existing row
+                    existingData[rowIndex].Value = serializedData;
+                } else {
+                    // Add new row
+                    existingData.push({ ID: id, Value: serializedData });
+                }
+            }
+            
+            console.log('Storing user data - writing all rows:', existingData);
+            
+            // Write back ALL rows to the sheet
+            return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' }, {
+                skipMetadata: true // User data doesn't need change tracking
+            });
+        }
+    }
+    
+    /**
+     * Retrieve user data from a user-specific tab within the CACHE sheet
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to find the tab for
+     * @param {string} id - The ID to find the row for
+     * @returns {Promise<Array|null>} Array of data from the row, or null if not found
+     */
+    static async getUserData(deps, username, id) {
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `UserData_${sanitizedUsername}`;
+        // Check if tab exists
+        const userTab = await deps.call(Database.findTabByName, 'CACHE', tabName);
+        if (!userTab) {
+            // Tab doesn't exist - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
+            return null; // Tab doesn't exist, no data stored yet
+        }
+        // Get tab data as JS objects
+        const tabData = await deps.call(Database.getData, 'CACHE', tabName, { ID: 'ID', Value: 'Value' });
+        if (!tabData || tabData.length === 0) {
+            // No data in tab - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
+            return null; // No data in tab
+        }
+        // Find object with the ID
+        const foundObj = tabData.find(obj => obj.ID === id);
+        if (!foundObj) {
+            // ID not found - if requesting saved_searches, initialize with defaults
+            if (id === 'saved_searches') {
+                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            }
+            return null; // ID not found
+        }
+        
+        // Parse the stored value if it's a JSON string, otherwise return as-is
+        let parsedValue;
+        try {
+            parsedValue = JSON.parse(foundObj.Value);
+        } catch (error) {
+            // If parsing fails, return the raw string value
+            parsedValue = foundObj.Value;
+        }
+        
+        // If requesting saved_searches and result is empty array, initialize with defaults
+        if (id === 'saved_searches' && Array.isArray(parsedValue) && parsedValue.length === 0) {
+            return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+        }
+        
+        return parsedValue;
+    }
+    
+    /**
+     * Initialize default saved searches for a user if they don't exist
+     * @param {string} username - The username to initialize searches for
+     * @returns {Promise<Array>} Array of saved searches (newly created defaults)
+     */
+    static async initializeDefaultSavedSearches(username) {
+        // Don't check getUserData again - we're called because data doesn't exist!
+        // Just create and store the defaults to avoid infinite recursion
+        
+        // Create default saved searches
+        const defaultSearches = [
+            {
+                name: 'Upcoming',
+                dateSearch: '0,30', // Today to 30 days in the future
+                textFilters: []
+            }
+        ];
+        
+        // Store the default searches
+        await applicationUtils_uncached.storeUserData(username, 'saved_searches', defaultSearches);
+        
+        return defaultSearches;
+    }
+}
+
+export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData', 'initializeDefaultSavedSearches']);

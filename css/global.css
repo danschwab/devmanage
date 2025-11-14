@@ -1,0 +1,370 @@
+/* Vue Transitions */
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 0.15s ease-in-out;
+}
+.fade-enter-from, .fade-leave-to {
+    opacity: 0;
+}
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.15s ease-in-out !important;
+}
+
+
+.longfade-enter-active,
+.longfade-leave-active {
+    transition: opacity 0.5s ease-in-out;
+}
+
+.longfade-enter-from,
+.longfade-leave-to {
+    opacity: 0;
+}
+
+.longfade-enter-active,
+.longfade-leave-active {
+    transition: opacity 0.5s ease-in-out !important;
+}
+
+
+.expand-enter-from {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+}
+.expand-enter-to {
+    max-height: 1000px;
+    opacity: 1;
+}
+.expand-leave-from {
+    max-height: 1000px;
+    opacity: 1;
+}
+.expand-leave-to {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+}
+.expand-enter-active,
+.expand-leave-active {
+    transition: all .3s ease-in-out !important;
+    overflow: hidden;
+}
+
+/* other transitions */
+body, div, span, p, h1, h2, h3, h4, h5, h6,
+th, td, ::after, ::before,
+input[type="submit"], input[type="button"], select, button {
+    position: relative;
+    transition: background-color 0.1s ease-in-out, color 0.1s ease-in-out, opacity 0.05s ease-in-out !important;
+}
+
+
+
+/* Main interface defaults */
+
+html, body {
+    font-family: Arial, sans-serif;
+}
+.font-narrow {
+    font-family: "Arial Narrow", sans-serif; 
+    font-weight: 10;
+    letter-spacing: -0.5px;
+}
+.font-black {font-family: "Arial Black", sans-serif; font-weight: 800;}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin: 0;
+    font-family: unset;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"],
+select {
+    color: unset;
+    outline: none;
+    border: 1px solid var(--color-text);
+    border-radius: var(--radius-md);
+    background-color: var(--background-color);
+    padding: .5rem;
+    box-sizing: border-box;
+}
+
+input[type="text"],
+select {
+    min-width: 100px;
+}
+input[type="number"] {
+    min-width: 30px;
+}
+
+/* Button styles */
+input[type="submit"],
+input[type="button"],
+button {
+    position: relative;
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
+    border: none;
+    cursor: pointer;
+    /*max-width: 250px;
+    min-width: 100px;
+    height: 38px;*/
+    width: 120px;
+    flex-grow: 2;
+    flex-shrink: 1;
+
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: var(--radius-md);
+    box-shadow: 2px 2px 8px -4px var(--color-shadow);
+    overflow: hidden;
+}
+
+input[type="submit"]:hover,
+input[type="button"]:hover,
+button:hover {
+    background-color: var(--color-blue-hover);
+}
+input[type="submit"]:disabled,
+input[type="button"]:disabled,
+button:disabled {
+    pointer-events: none;
+    opacity: .3;
+    /*overflow: visible;*/
+}
+
+/*input[type="submit"]:after,
+input[type="button"]:after,
+button:after {
+    content: "";
+    pointer-events: none;
+    display: block;
+    position: absolute;
+    inset: -.5px;
+    cursor: default;
+    background-color: var(--background-color-transparent);
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+input[type="submit"]:disabled:after,
+input[type="button"]:disabled:after,
+button:disabled:after {
+    opacity: 1;
+}*/
+
+
+
+
+
+
+
+/* apply colors */
+
+div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)) {
+    border-color: var(--color-border);
+    background-color: var(--background-color);
+    color: var(--color-text)
+}
+div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)) {
+    border-color: var(--color-gray);
+    background-color: var(--color-gray-bg);
+    color: var(--color-text)
+}
+div.purple, span.purple, col.purple, tr.purple {
+    border-color: var(--color-purple);
+    background-color: var(--color-purple-bg);
+    color: var(--color-text)
+}
+div.red, span.red, col.red, tr.red {
+    border-color: var(--color-red);
+    background-color: var(--color-red-bg);
+    color: var(--color-text)
+}
+div.orange, span.orange, col.orange, tr.orange {
+    border-color: var(--color-orange);
+    background-color: var(--color-orange-bg);
+    color: var(--color-text)
+}
+div.yellow, span.yellow, col.yellow, tr.yellow {
+    border-color: var(--color-yellow);
+    background-color: var(--color-yellow-bg);
+    color: var(--color-text)
+}
+div.blue, span.blue, col.blue, tr.blue {
+    border-color: var(--color-blue);
+    background-color: var(--color-blue-bg);
+    color: var(--color-text)
+}
+div.green, span.green, col.green, tr.green {
+    border-color: var(--color-green);
+    background-color: var(--color-green-bg);
+    color: var(--color-text)
+}
+
+
+div.clickable.white:hover, span.clickable.white:hover, col.clickable.white:hover, tr.clickable.white:hover {
+    background-color: var(--background-color-hover);
+}
+div.clickable.gray:hover, span.clickable.gray:hover, col.clickable.gray:hover, tr.clickable.gray:hover {
+    background-color: var(--color-gray-bg-hover);
+}
+div.clickable.purple:hover, span.clickable.purple:hover, col.clickable.purple:hover, tr.clickable.purple:hover {
+    background-color: var(--color-purple-bg-hover);
+}
+div.clickable.red:hover, span.clickable.red:hover, col.clickable.red:hover, tr.clickable.red:hover {
+    background-color: var(--color-red-bg-hover);
+}
+div.clickable.orange:hover, span.clickable.orange:hover, col.clickable.orange:hover, tr.clickable.orange:hover {
+    background-color: var(--color-orange-bg-hover);
+}
+div.clickable.yellow:hover, span.clickable.yellow:hover, col.clickable.yellow:hover, tr.clickable.yellow:hover {
+    background-color: var(--color-yellow-bg-hover);
+}
+div.clickable.blue:hover, span.clickable.blue:hover, col.clickable.blue:hover, tr.clickable.blue:hover {
+    background-color: var(--color-blue-bg-hover);
+}
+div.clickable.green:hover, span.clickable.green:hover, col.clickable.green:hover, tr.clickable.green:hover {
+    background-color: var(--color-green-bg-hover);
+}
+
+
+button.white, input[type="button"].white, input[type="submit"].white, .button.white {
+    background-color: var(--background-color);
+    color: var(--color-text-light);
+    border: 1px solid var(--color-border);
+}
+button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray {
+    background-color: var(--color-gray);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple {
+    background-color: var(--color-purple);
+    color: var(--color-text-inverted);
+    border: none;
+}
+button.red, input[type="button"].red, input[type="submit"].red, .button.red {
+    background-color: var(--color-red);
+    color: var(--color-text-inverted);
+    border: none;
+}
+button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange {
+    background-color: var(--color-orange);
+    color: var(--color-text-inverted);
+    border: none;
+}
+button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow {
+    background-color: var(--color-yellow);
+    color: var(--color-text);
+    border: none;
+}
+button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue {
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
+    border: none;
+}
+button.green, input[type="button"].green, input[type="submit"].green, .button.green {
+    background-color: var(--color-green);
+    color: var(--color-text-inverted);
+    border: none;
+}
+
+button.white:hover, input[type="button"].white:hover, input[type="submit"].white:hover, .button.white:hover {
+    background-color: var(--background-color-hover);
+}
+button.gray:hover, input[type="button"].gray:hover, input[type="submit"].gray:hover, .button.gray:hover {
+    background-color: var(--color-gray-hover);
+}
+button.purple:hover, input[type="button"].purple:hover, input[type="submit"].purple:hover, .button.purple:hover {
+    background-color: var(--color-purple-hover);
+}
+button.red:hover, input[type="button"].red:hover, input[type="submit"].red:hover, .button.red:hover {
+    background-color: var(--color-red-hover);
+}
+button.orange:hover, input[type="button"].orange:hover, input[type="submit"].orange:hover, .button.orange:hover {
+    background-color: var(--color-orange-hover);
+}
+button.yellow:hover, input[type="button"].yellow:hover, input[type="submit"].yellow:hover, .button.yellow:hover {
+    background-color: var(--color-yellow-hover);
+}
+button.blue:hover, input[type="button"].blue:hover, input[type="submit"].blue:hover, .button.blue:hover {
+    background-color: var(--color-blue-hover);
+}
+button.green:hover, input[type="button"].green:hover, input[type="submit"].green:hover, .button.green:hover {
+    background-color: var(--color-green-hover);
+}
+
+
+p.white, h1.white, h2.white, h3.white, h4.white, h5.white, h6.white {
+    color: var(--color-text-inverted);
+}
+p.gray, h1.gray, h2.gray, h3.gray, h4.gray, h5.gray, h6.gray {
+    color: var(--color-text-light);
+}
+p.purple, h1.purple, h2.purple, h3.purple, h4.purple, h5.purple, h6.purple {
+    color: var(--color-purple);
+}
+p.red, h1.red, h2.red, h3.red, h4.red, h5.red, h6.red {
+    color: var(--color-red);
+}
+p.orange, h1.orange, h2.orange, h3.orange, h4.orange, h5.orange, h6.orange {
+    color: var(--color-orange);
+}
+p.yellow, h1.yellow, h2.yellow, h3.yellow, h4.yellow, h5.yellow, h6.yellow {
+    color: var(--color-yellow);
+}
+p.blue, h1.blue, h2.blue, h3.blue, h4.blue, h5.blue, h6.blue {
+    color: var(--color-blue);
+}
+p.green, h1.green, h2.green, h3.green, h4.green, h5.green, h6.green {
+    color: var(--color-green);
+}
+
+
+table.white th, td.white th, th.white, td.white {
+    background-color: var(--background-color);
+    color: var(--color-text);
+}
+table.gray th, td.gray th, th.gray, td.gray {
+    background-color: var(--color-gray);
+    color: var(--color-text);
+}
+table.purple th, td.purple th, th.purple, td.purple {
+    background-color: var(--color-purple);
+    color: var(--color-text-inverted);
+}
+table.red th, td.red th, th.red, td.red {
+    background-color: var(--color-red);
+    color: var(--color-text-inverted);
+}
+table.orange th, td.orange th, th.orange, td.orange {
+    background-color: var(--color-orange);
+    color: var(--color-text-inverted);
+}
+table.yellow th, td.yellow th, th.yellow, td.yellow {
+    background-color: var(--color-yellow);
+    color: var(--color-text);
+}
+table.blue th, td.blue th, th.blue, td.blue {
+    background-color: var(--color-blue);
+    color: var(--color-text-inverted);
+}
+table.green th, td.green th, th.green, td.green {
+    background-color: var(--color-green);
+    color: var(--color-text-inverted);
+}

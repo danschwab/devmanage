@@ -1,0 +1,3 @@
+window.APP_CONFIG = { API_KEY: 'AIzaSyCDA4ynZWF1xbuFQ2exsX2orRYQPpsiX1U', CLIENT_ID: '381868581846-a5hdjs5520u9u1jve5rdalm3kua2iqpf.apps.googleusercontent.com', SCOPES: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file' };
+window.SPREADSHEET_IDS = { INVENTORY: '1qHAJ0FgHJjtqXiyCGohzaL1fuzdYQMF2n4YiDSc5uYE', PACK_LISTS: '1mPHa1lEkhHhZ7WYTDetJyUrhjwVEb3l5J1EBLcO17Z0', PROD_SCHED: '1BacxHxdGXSkS__ZtCv6WqgyxvTs_a2Hsv8NJnNiHU18', CACHE: '1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw' };
+// Build: fb3ef4f7-1763134097
