@@ -939,12 +939,7 @@ function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
  * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
  */
 async function saveDirtyStoresToUserData() {
-    if (!authState.isAuthenticated || !authState.user?.email) {
-        console.log('[ReactiveStore AutoSave] User not authenticated, skipping auto-save');
-        return;
-    }
-    
-    // Check authentication before attempting to save
+    // Check authentication before attempting to save (with prompt if expired)
     const isAuthenticated = await Auth.checkAuthWithPrompt({
         context: 'auto-save',
         message: 'Your session has expired. Would you like to maintain your current session? This will re-authenticate and save your unsaved changes.'
@@ -952,6 +947,11 @@ async function saveDirtyStoresToUserData() {
     
     if (!isAuthenticated) {
         console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
+        return;
+    }
+    
+    if (!authState.user?.email) {
+        console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
         return;
     }
     
