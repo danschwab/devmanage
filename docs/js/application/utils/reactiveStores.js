@@ -796,8 +796,9 @@ let autoSaveInterval = null;
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Calculate diff between original and current data
+ * Calculate diff between original and current data recursively
  * Only stores row indices with their changed fields for efficiency
+ * Handles nested arrays recursively
  * @param {Array} originalData - Original data
  * @param {Array} currentData - Current modified data
  * @returns {Array} Array of changes with indices and modified fields
@@ -814,10 +815,18 @@ function calculateStoreDiff(originalData, currentData) {
         
         const original = originalData[index];
         if (!original || typeof original !== 'object') {
-            // New item added - store only non-AppData fields
+            // New item added - recursively process nested arrays
             const cleanData = {};
             Object.keys(item).forEach(key => {
-                if (key !== 'AppData') {
+                if (key === 'AppData') return; // Skip AppData
+                
+                if (Array.isArray(item[key])) {
+                    // For nested arrays, calculate diff recursively
+                    const nestedDiff = calculateStoreDiff([], item[key]);
+                    if (nestedDiff) {
+                        cleanData[key] = { _nestedDiff: nestedDiff };
+                    }
+                } else {
                     cleanData[key] = item[key];
                 }
             });
@@ -829,11 +838,18 @@ function calculateStoreDiff(originalData, currentData) {
             return;
         }
         
-        // Check for modified fields (skip AppData)
+        // Check for modified fields recursively
         const modifiedFields = {};
         Object.keys(item).forEach(key => {
             if (key === 'AppData') return; // Skip AppData
-            if (JSON.stringify(item[key]) !== JSON.stringify(original[key])) {
+            
+            if (Array.isArray(item[key]) && Array.isArray(original[key])) {
+                // For nested arrays, calculate diff recursively
+                const nestedDiff = calculateStoreDiff(original[key], item[key]);
+                if (nestedDiff) {
+                    modifiedFields[key] = { _nestedDiff: nestedDiff };
+                }
+            } else if (JSON.stringify(item[key]) !== JSON.stringify(original[key])) {
                 modifiedFields[key] = item[key];
             }
         });
@@ -941,7 +957,7 @@ function stopAutoSaveTimer() {
 }
 
 /**
- * Apply saved diff from user data to store data
+ * Apply saved diff from user data to store data recursively
  * @param {Array} data - Store data to apply changes to
  * @param {Array} diff - Array of changes to apply
  * @returns {Array} Modified data
@@ -955,15 +971,38 @@ function applyDiffToData(data, diff) {
     
     diff.forEach(change => {
         if (change.type === 'modified' && change.index < result.length) {
-            // Apply modified fields
-            result[change.index] = {
-                ...result[change.index],
-                ...change.data
-            };
+            // Apply modified fields, handling nested diffs
+            const updatedItem = { ...result[change.index] };
+            
+            Object.keys(change.data).forEach(key => {
+                const value = change.data[key];
+                
+                // Check if this is a nested diff
+                if (value && typeof value === 'object' && value._nestedDiff) {
+                    // Recursively apply nested diff
+                    const currentNestedData = updatedItem[key] || [];
+                    updatedItem[key] = applyDiffToData(currentNestedData, value._nestedDiff);
+                } else {
+                    updatedItem[key] = value;
+                }
+            });
+            
+            result[change.index] = updatedItem;
         } else if (change.type === 'added') {
-            // Add new item if not already present
+            // Add new item if not already present, handling nested diffs
             if (change.index >= result.length) {
-                result.push(change.data);
+                const newItem = { ...change.data };
+                
+                // Process any nested diffs in the added item
+                Object.keys(newItem).forEach(key => {
+                    const value = newItem[key];
+                    if (value && typeof value === 'object' && value._nestedDiff) {
+                        // Recursively apply nested diff
+                        newItem[key] = applyDiffToData([], value._nestedDiff);
+                    }
+                });
+                
+                result.push(newItem);
             }
         }
         // Note: We don't apply 'deleted' changes on restore to avoid data loss

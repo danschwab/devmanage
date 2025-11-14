@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: github-pages
+    #environment: github-pages
     env:
       SCOPES: ${{ vars.SCOPES }}
       INVENTORY: ${{ vars.INVENTORY }}
