@@ -1,19 +1,13 @@
-name: Deploy static site to Pages
-
+name: TopShelf Deploy to Github Pages testing
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 permissions:
-  contents: write
-
+  contents: read
+  pages: write
+  id-token: write
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     environment: github-pages
     env:
@@ -27,26 +21,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
       - name: Inject config.js from secrets and variables
         run: |
-          mkdir -p docs/js/google_sheets_services
-          BUILD_ID="${GITHUB_SHA:0:8}-$(date +%s)"
-          cat > docs/js/google_sheets_services/config.js << EOF
-          window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };
-          window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };
-          // Build: ${BUILD_ID}
-          EOF
-          chmod 644 docs/js/google_sheets_services/config.js
-          touch docs/.nojekyll
-          echo "${BUILD_ID}" > docs/BUILD_ID
-          ls -la docs/js/google_sheets_services/config.js
-          echo "Config file created with ${BUILD_ID}"
-      
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
+          echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
+          echo "window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };" >> docs/js/google_sheets_services/config.js
+          echo "// Build timestamp: $(date -u +%Y%m%d%H%M%S)" >> docs/js/google_sheets_services/config.js
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: docs
-          branch: gh-pages
-          clean: true
-          single-commit: true
+          path: docs/
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
