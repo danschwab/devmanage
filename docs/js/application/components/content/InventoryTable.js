@@ -186,6 +186,7 @@ export const InventoryTableComponent = {
         <slot>
             <TableComponent
                 ref="tableComponent"
+                theme="purple"
                 :data="tableData"
                 :title="inventoryName || tabTitle"
                 :originalData="originalData"

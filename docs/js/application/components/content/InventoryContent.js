@@ -298,7 +298,7 @@ export const InventoryContent = {
                     <button 
                         v-for="nav in inventoryNavigation" 
                         :key="nav.id"
-                        class="alert"
+                        class="purple"
                         @click="navigateToPath(nav.path)">
                         {{ nav.label }}
                     </button>
@@ -335,13 +335,13 @@ export const InventoryContent = {
             />
 
             <!-- New Item View -->
-            <slot v-else-if="containerPath === 'inventory/new'">
+            <div v-else-if="containerPath === 'inventory/new'" class="content">
                 <h3>Add New Item</h3>
                 <p>Add a new item to the inventory.</p>
                 <div style="margin: 1rem 0;">
                     <button @click="$modal.alert('Add new item functionality coming soon!', 'Info')">Create New Item</button>
                 </div>
-            </slot>
+            </div>
         </slot>
     `
 };

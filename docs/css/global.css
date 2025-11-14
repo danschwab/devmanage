@@ -243,42 +243,42 @@ div.clickable.green:hover, span.clickable.green:hover, col.clickable.green:hover
 }
 
 
-button.white, input[type="button"].white, input[type="submit"].white, .button.white {
+button.white, input[type="button"].white, input[type="submit"].white, .button.white, thead.white > tr > th {
     background-color: var(--background-color);
     color: var(--color-text-light);
     border: 1px solid var(--color-border);
 }
-button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray {
+button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray, thead.gray > tr > th {
     background-color: var(--color-gray);
     color: var(--color-text);
     border: 1px solid var(--color-border);
 }
-button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple {
+button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple, thead.purple > tr > th {
     background-color: var(--color-purple);
     color: var(--color-text-inverted);
     border: none;
 }
-button.red, input[type="button"].red, input[type="submit"].red, .button.red {
+button.red, input[type="button"].red, input[type="submit"].red, .button.red, thead.red > tr > th {
     background-color: var(--color-red);
     color: var(--color-text-inverted);
     border: none;
 }
-button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange {
+button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange, thead.orange > tr > th {
     background-color: var(--color-orange);
     color: var(--color-text-inverted);
     border: none;
 }
-button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow {
+button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow, thead.yellow > tr > th {
     background-color: var(--color-yellow);
     color: var(--color-text);
     border: none;
 }
-button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue {
+button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue, thead.blue > tr > th {
     background-color: var(--color-blue);
     color: var(--color-text-inverted);
     border: none;
 }
-button.green, input[type="button"].green, input[type="submit"].green, .button.green {
+button.green, input[type="button"].green, input[type="submit"].green, .button.green, thead.green > tr > th {
     background-color: var(--color-green);
     color: var(--color-text-inverted);
     border: none;

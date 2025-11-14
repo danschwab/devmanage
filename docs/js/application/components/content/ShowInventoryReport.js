@@ -326,7 +326,7 @@ export const ShowInventoryReport = {
                 class="show-inventory-report-table"
                 @refresh="handleRefresh"
             >
-                <template #table-header-area>
+                <template #header-area>
                     <div class="button-bar">
                         <SavedSearchSelect
                             :container-path="containerPath || 'inventory/reports/show-inventory'"

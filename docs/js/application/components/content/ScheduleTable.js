@@ -384,8 +384,8 @@ export const ScheduleTableComponent = {
             :allowDetails="true"
             @refresh="handleRefresh"
         >
-            <template #table-header-area>
-                <slot name="table-header-area"></slot>
+            <template #header-area>
+                <slot name="header-area"></slot>
             </template>
             <template #default="{ row, column }">
                 <!-- Add estimated ship date cards in Ship column -->

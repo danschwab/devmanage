@@ -188,7 +188,7 @@ export const PacklistItemsSummary = {
                 class="items-summary-table"
                 @refresh="handleRefresh"
             >
-                <template #table-header-area>
+                <template #header-area>
                     
                 </template>
                 <template #default="{ row, column }">

@@ -176,7 +176,7 @@ export const ScheduleContent = {
                     :search-params="tableSearchParams"
                     @navigate-to-path="(event) => navigateToPath(event.targetPath)"
                 >
-                    <template #table-header-area>
+                    <template #header-area>
                         <div class="button-bar">
                             <SavedSearchSelect
                                 container-path="schedule"

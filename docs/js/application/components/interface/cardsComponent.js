@@ -149,7 +149,7 @@ export const CardsComponent = {
             <div key="content-header" v-if="showHeader" class="content-header">
                 <!--h3 v-if="title">{{ title }}</h3-->
                 <slot 
-                    name="table-header-area"
+                    name="header-area"
                 ></slot>
                 <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
                 <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>

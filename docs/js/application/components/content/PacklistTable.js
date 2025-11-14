@@ -438,7 +438,7 @@ export const PacklistTable = {
                     @new-row="handleAddCrate"
                     @on-save="handleSave"
                 >
-                    <template #table-header-area>
+                    <template #header-area>
                         <!-- Navigation Controls -->
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->

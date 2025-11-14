@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parseDateSearchParameter } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -59,7 +59,8 @@ export const PacklistContent = {
     components: {
         'packlist-table': PacklistTable,
         'cards-grid': CardsComponent,
-        'PacklistItemsSummary': PacklistItemsSummary
+        'PacklistItemsSummary': PacklistItemsSummary,
+        'SavedSearchSelect': SavedSearchSelect
     },
     props: {
         containerPath: String,
@@ -69,7 +70,9 @@ export const PacklistContent = {
     data() {
         return {
             packlistsStore: null, // Reactive store for packlists
-            autoSavedPacklists: new Set() // Track which packlists have auto-saved data
+            autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
+            filter: null, // Filter for schedule overlaps (date range or identifier)
+            scheduleData: null // Cached schedule data for filtering
         };
     },
     computed: {
@@ -96,7 +99,16 @@ export const PacklistContent = {
         // Computed properties for cards grid
         availablePacklists() {
             if (!this.packlistsStore) return [];
-            const tabs = this.packlistsStore.data || [];
+            let tabs = this.packlistsStore.data || [];
+            
+            // Filter by schedule overlap if filter is set
+            if (this.filter && this.scheduleData) {
+                const matchingIdentifiers = new Set(
+                    this.scheduleData.map(show => show.Identifier)
+                );
+                tabs = tabs.filter(tab => matchingIdentifiers.has(tab.title));
+            }
+            
             // Filter out TEMPLATE and format for CardsComponent
             return tabs
                 .filter(tab => tab.title !== 'TEMPLATE')
@@ -207,6 +219,70 @@ export const PacklistContent = {
         // Note: checkAutoSavedPacklists will be called by the watcher when data loads
     },
     methods: {
+        async handleSearchSelected(searchData) {
+            if (!searchData) {
+                // Empty selection - clear filter
+                this.filter = null;
+                this.scheduleData = null;
+                return;
+            }
+
+            // Build filter from search data
+            const filter = {};
+            
+            if (searchData.type === 'year') {
+                // Handle year selection
+                filter.startDate = searchData.startDate;
+                filter.endDate = searchData.endDate;
+                filter.byShowDate = true;
+            } else {
+                // Handle saved search - parse DateSearch parameter
+                if (searchData.dateSearch) {
+                    const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+                    Object.assign(filter, dateFilter);
+                }
+                
+                // Add byShowDate flag if present
+                if (searchData.byShowDate) {
+                    filter.byShowDate = true;
+                }
+            }
+            
+            this.filter = filter;
+            
+            // Fetch schedule data using the filter
+            await this.loadScheduleData();
+        },
+        async loadScheduleData() {
+            if (!this.filter) {
+                this.scheduleData = null;
+                return;
+            }
+
+            try {
+                // Build parameters for getProductionScheduleData
+                // It expects parameters (identifier or date range) and optional searchParams
+                let parameters = null;
+                
+                if (this.filter.overlapShowIdentifier) {
+                    // Searching by overlap with a specific show
+                    parameters = { identifier: this.filter.overlapShowIdentifier };
+                } else if (this.filter.startDate || this.filter.endDate) {
+                    // Searching by date range
+                    parameters = {
+                        startDate: this.filter.startDate,
+                        endDate: this.filter.endDate,
+                        byShowDate: this.filter.byShowDate
+                    };
+                }
+                
+                const shows = await Requests.getProductionScheduleData(parameters);
+                this.scheduleData = shows;
+            } catch (error) {
+                console.error('Error loading schedule data for filtering:', error);
+                this.scheduleData = [];
+            }
+        },
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
@@ -263,7 +339,19 @@ export const PacklistContent = {
                 :loading-progress="loadingProgress"
                 :loading-message="analysisMessage"
                 empty-message="No packlists available"
-            />
+            >
+                <template #header-area>
+                    <SavedSearchSelect
+                        :domain="'production_schedule'"
+                        :include-years="true"
+                        :start-year="2023"
+                        :default-search="'2025'"
+                        :container-path="containerPath"
+                        :navigate-to-path="navigateToPath"
+                        @search-selected="handleSearchSelected"
+                    />
+                </template>
+            </cards-grid>
             
             <!-- Individual Packlist View (Read-only or Edit mode) -->
             <packlist-table 

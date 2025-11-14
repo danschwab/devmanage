@@ -420,9 +420,6 @@ button.card {
 .cards-grid.two {
     grid-template-columns: repeat(2, 1fr);
 }
-.content-header + .cards-grid {
-    padding-top: var(--padding-sm);
-}
 
 .cards-grid .card {
     display: flex;
@@ -1033,8 +1030,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 /* Messages */
 .loading-message, .empty-message {
     text-align: center;
-    padding: 1rem;
-    color: #666;
+    color: var(--color-text-light);
     font-style: italic;
 }
 .loading-message img {

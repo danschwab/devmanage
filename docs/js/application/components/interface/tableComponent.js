@@ -397,6 +397,10 @@ export const TableComponent = {
             type: String,
             default: 'defaultkey'
         },
+        theme: {
+            type: String,
+            default: ''
+        },
         data: {
             type: Array,
             default: () => []
@@ -1454,10 +1458,10 @@ export const TableComponent = {
                 <span>Error: {{ error }}</span>
             </div>
 
-            <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" class="content-header">
+            <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
                 <!--h3 v-if="title">{{ title }}</h3-->
                 <slot 
-                    name="table-header-area"
+                    name="header-area"
                 ></slot>
                 <p v-if="isAnalyzing">{{ loadingMessage }}</p>
                 <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
@@ -1515,7 +1519,7 @@ export const TableComponent = {
                         />
                         <col v-if="allowDetails" />
                     </colgroup>
-                    <thead :class="{ 'drop-target-header': dropTarget?.type === 'header' }">
+                    <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header' }">
                         <tr>
                             <th v-if="draggable" class="spacer-cell"></th>
                             <th 
@@ -1708,11 +1712,11 @@ export const TableComponent = {
             <div key="unsaved-changes" v-if="showFooter && allowSaveEvent" class="content-footer red">
                 <p>There are unsaved changes in this table.</p>
             </div>
-            <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" class="content-footer">
+            <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" :class="['content-footer', theme]">
                 <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                 <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
             </div>
-            <div key="empty-state" v-else-if="showFooter" class="content-footer">
+            <div key="empty-state" v-else-if="showFooter" :class="['content-footer', theme]">
                 <p>{{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}</p>
             </div>
         </div>

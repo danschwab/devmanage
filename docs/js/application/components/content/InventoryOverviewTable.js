@@ -164,9 +164,10 @@ export const InventoryOverviewTableComponent = {
         }
     },
     template: html `
-        <div class="inventory-overview-table-component">
+        <slot>
             <TableComponent
                 ref="tableComponent"
+                theme="purple"
                 :data="tableData"
                 title="All Inventory Overview"
                 :originalData="originalData"
@@ -202,6 +203,6 @@ export const InventoryOverviewTableComponent = {
                     />
                 </template>
             </TableComponent>
-        </div>
+        </slot>
     `
 };

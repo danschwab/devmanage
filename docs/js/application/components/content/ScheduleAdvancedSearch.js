@@ -1101,7 +1101,7 @@ export const AdvancedSearchComponent = {
                     :search-params="activeSearchParams"
                     :hideRowsOnSearch="false"
                 >
-                    <template #table-header-area>
+                    <template #header-area>
                         <h3>Search Results:</h3>
                     </template>
                 </ScheduleTableComponent>
