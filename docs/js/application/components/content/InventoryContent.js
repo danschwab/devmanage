@@ -171,9 +171,10 @@ export const InventoryContent = {
                         [cat.title, undefined, undefined]
                     );
                     
-                    // Check if any matching store has unsaved changes OR if auto-save data exists
-                    const hasUnsavedChanges = matchingStores.some(match => match.isModified) || 
-                                             this.autoSavedCategories.has(cat.title);
+                    // If a reactive store exists, use its state. Otherwise check userData for auto-save
+                    const hasUnsavedChanges = matchingStores.length > 0
+                        ? matchingStores.some(match => match.isModified)
+                        : this.autoSavedCategories.has(cat.title);
                     
                     // Determine card styling based on store state
                     const cardClass = hasUnsavedChanges ? 'button red' : 'button purple';
@@ -202,45 +203,43 @@ export const InventoryContent = {
             return this.categoriesStore?.isLoading || false;
         }
     },
+    watch: {
+        // Watch for when categories data is loaded and check for auto-saved data
+        'categoriesStore.data': {
+            handler(newData) {
+                if (newData && newData.length > 0 && !this.categoriesStore.isLoading) {
+                    this.checkAutoSavedCategories();
+                }
+            },
+            deep: false
+        }
+    },
     methods: {
         async checkAutoSavedCategories() {
-            if (!authState.isAuthenticated || !authState.user?.email) return;
-            
-            // Check if any category has auto-saved data
-            // Generate a prefix for all inventory stores
-            const storePrefix = generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [], null).split(':')[0] + ':' + 
-                               generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [], null).split(':')[1] + ':';
+            if (!authState.isAuthenticated || !authState.user?.email || !this.categoriesStore?.data) return;
             
             try {
-                const hasAutoSave = await Requests.hasUserDataKey(
-                    authState.user.email,
-                    storePrefix,
-                    true // prefix match
-                );
-                
-                if (hasAutoSave && this.categoriesStore?.data) {
-                    // Check each individual category
-                    for (const cat of this.categoriesStore.data) {
-                        if (cat.title === 'INDEX') continue;
-                        
-                        // Generate the store key for this specific category
-                        const storeKey = generateStoreKey(
-                            Requests.getInventoryTabData,
-                            Requests.saveInventoryTabData,
-                            [cat.title, undefined, undefined],
-                            null // We don't know the exact analysis config
-                        );
-                        
-                        // Check if this specific key exists (prefix match since analysis config might vary)
-                        const hasThisCategory = await Requests.hasUserDataKey(
-                            authState.user.email,
-                            storeKey.substring(0, storeKey.lastIndexOf(':')), // Remove analysis config part
-                            true
-                        );
-                        
-                        if (hasThisCategory) {
-                            this.autoSavedCategories.add(cat.title);
-                        }
+                // Check each individual category for auto-saved data
+                for (const cat of this.categoriesStore.data) {
+                    if (cat.title === 'INDEX') continue;
+                    
+                    // Generate the store key prefix (without analysis config)
+                    const storeKeyPrefix = generateStoreKey(
+                        Requests.getInventoryTabData,
+                        Requests.saveInventoryTabData,
+                        [cat.title, undefined, undefined],
+                        null
+                    ).substring(0, generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [cat.title, undefined, undefined], null).lastIndexOf(':'));
+                    
+                    // Check if this specific key exists (prefix match since analysis config might vary)
+                    const hasAutoSave = await Requests.hasUserDataKey(
+                        authState.user.email,
+                        storeKeyPrefix,
+                        true // prefix match
+                    );
+                    
+                    if (hasAutoSave) {
+                        this.autoSavedCategories.add(cat.title);
                     }
                 }
             } catch (error) {
@@ -260,11 +259,7 @@ export const InventoryContent = {
             null // No analysis config
         );
         
-        // Load categories
-        await this.categoriesStore.load('Loading inventory categories...');
-        
-        // Check for auto-saved categories
-        await this.checkAutoSavedCategories();
+        // Note: checkAutoSavedCategories will be called by the watcher when data loads
 
 
         // Register inventory navigation routes

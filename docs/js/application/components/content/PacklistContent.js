@@ -107,9 +107,10 @@ export const PacklistContent = {
                         [tab.title]
                     );
                     
-                    // Check if any matching store has unsaved changes OR if auto-save data exists
-                    const hasUnsavedChanges = matchingStores.some(match => match.isModified) || 
-                                             this.autoSavedPacklists.has(tab.title);
+                    // If a reactive store exists, use its state. Otherwise check userData for auto-save
+                    const hasUnsavedChanges = matchingStores.length > 0
+                        ? matchingStores.some(match => match.isModified)
+                        : this.autoSavedPacklists.has(tab.title);
                     
                     // Determine card styling based on store state
                     const cardClass = hasUnsavedChanges ? 'red' : 'gray';
@@ -142,6 +143,17 @@ export const PacklistContent = {
         },
         analysisMessage() {
             return this.packlistsStore ? this.packlistsStore.analysisMessage : 'Loading...';
+        }
+    },
+    watch: {
+        // Watch for when packlists data is loaded and check for auto-saved data
+        'packlistsStore.data': {
+            handler(newData) {
+                if (newData && newData.length > 0 && !this.packlistsStore.isLoading) {
+                    this.checkAutoSavedPacklists();
+                }
+            },
+            deep: false
         }
     },
     mounted() {
@@ -192,48 +204,34 @@ export const PacklistContent = {
             analysisConfig
         );
         
-        // Check for auto-saved packlists
-        this.checkAutoSavedPacklists();
+        // Note: checkAutoSavedPacklists will be called by the watcher when data loads
     },
     methods: {
         async checkAutoSavedPacklists() {
-            if (!authState.isAuthenticated || !authState.user?.email) return;
-            
-            // Check if any packlist has auto-saved data
-            // Generate a prefix for all packlist stores: "api.getPackList:"
-            const storePrefix = generateStoreKey(Requests.getPackList, Requests.savePackList, [], null).split(':')[0] + ':' + 
-                               generateStoreKey(Requests.getPackList, Requests.savePackList, [], null).split(':')[1] + ':';
+            if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
             try {
-                const hasAutoSave = await Requests.hasUserDataKey(
-                    authState.user.email,
-                    storePrefix,
-                    true // prefix match
-                );
-                
-                if (hasAutoSave && this.packlistsStore?.data) {
-                    // Check each individual packlist
-                    for (const tab of this.packlistsStore.data) {
-                        if (tab.title === 'TEMPLATE') continue;
-                        
-                        // Generate the store key for this specific packlist
-                        const storeKey = generateStoreKey(
-                            Requests.getPackList,
-                            Requests.savePackList,
-                            [tab.title],
-                            null // We don't know the exact analysis config, but the key starts with this
-                        );
-                        
-                        // Check if this specific key exists (prefix match since analysis config might vary)
-                        const hasThisPacklist = await Requests.hasUserDataKey(
-                            authState.user.email,
-                            storeKey.substring(0, storeKey.lastIndexOf(':')), // Remove analysis config part
-                            true
-                        );
-                        
-                        if (hasThisPacklist) {
-                            this.autoSavedPacklists.add(tab.title);
-                        }
+                // Check each individual packlist for auto-saved data
+                for (const tab of this.packlistsStore.data) {
+                    if (tab.title === 'TEMPLATE') continue;
+                    
+                    // Generate the store key prefix (without analysis config)
+                    const storeKeyPrefix = generateStoreKey(
+                        Requests.getPackList,
+                        Requests.savePackList,
+                        [tab.title],
+                        null
+                    ).substring(0, generateStoreKey(Requests.getPackList, Requests.savePackList, [tab.title], null).lastIndexOf(':'));
+                    
+                    // Check if this specific key exists (prefix match since analysis config might vary)
+                    const hasAutoSave = await Requests.hasUserDataKey(
+                        authState.user.email,
+                        storeKeyPrefix,
+                        true // prefix match
+                    );
+                    
+                    if (hasAutoSave) {
+                        this.autoSavedPacklists.add(tab.title);
                     }
                 }
             } catch (error) {
