@@ -1122,14 +1122,14 @@ async function removeStoreBackupFromUserData(storeKey) {
 export function findMatchingStores(apiCall, apiArgs = []) {
     if (!apiCall) return [];
     
-    const apiCallStr = apiCall.toString();
+    const apiCallIdentifier = getMethodIdentifier(apiCall);
     const apiArgsStr = JSON.stringify(apiArgs);
     const matches = [];
     
     // Search through all registered stores
     for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
-        // Check if the key starts with the apiCall and contains the apiArgs
-        if (key.includes(apiCallStr) && key.includes(apiArgsStr)) {
+        // Check if the key starts with the apiCall identifier and contains the apiArgs
+        if (key.startsWith(apiCallIdentifier + ':') && key.includes(apiArgsStr)) {
             matches.push({
                 key,
                 store,

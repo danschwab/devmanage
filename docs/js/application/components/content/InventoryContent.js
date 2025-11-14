@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 
@@ -160,10 +160,30 @@ export const InventoryContent = {
             const categories = this.categoriesStore?.data || [];
             return categories
                 .filter(cat => cat.title !== 'INDEX')
-                .map(cat => ({
-                    id: cat.sheetId,
-                    title: cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : ''
-                }));
+                .map(cat => {
+                    const categoryTitle = cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : '';
+                    
+                    // Find any reactive stores for this inventory category (regardless of analysis config)
+                    // Note: Stores are created with [tabTitle, undefined, undefined] where tabTitle is uppercase
+                    const matchingStores = findMatchingStores(
+                        Requests.getInventoryTabData,
+                        [cat.title, undefined, undefined]
+                    );
+                    
+                    // Check if any matching store has unsaved changes
+                    const hasUnsavedChanges = matchingStores.some(match => match.isModified);
+                    
+                    // Determine card styling based on store state
+                    const cardClass = hasUnsavedChanges ? 'button red' : 'button purple';
+                    const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
+                    
+                    return {
+                        id: cat.sheetId,
+                        title: categoryTitle,
+                        cardClass: cardClass,
+                        contentFooter: contentFooter
+                    };
+                });
         },
         // Get current category name from path for specific category views
         currentCategoryName() {
@@ -251,7 +271,6 @@ export const InventoryContent = {
                 :items="categoryList"
                 :on-item-click="handleCategorySelect"
                 :is-loading="isLoadingCategories"
-                default-card-class="button purple"
                 loading-message="Loading categories..."
                 empty-message="No categories available"
             />
