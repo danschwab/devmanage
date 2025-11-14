@@ -172,6 +172,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         analysisMessage: '',
         analysisConfig,
         initialLoad: false, // True if this is the first load of the store
+        autoSaved: false, // True if this store has been auto-saved or loaded from auto-save
         
         // Computed property to check if data has been modified
         get isModified() {
@@ -297,6 +298,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Remove backup from user data after successful save
                 const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
                 await removeStoreBackupFromUserData(storeKey);
+                this.autoSaved = false; // Clear auto-save flag after successful save
                 
                 return result;
             } catch (err) {
@@ -957,27 +959,41 @@ async function saveDirtyStoresToUserData() {
     
     try {
         let savedCount = 0;
+        let cleanedCount = 0;
         
         // Save each dirty store as a separate user data entry
         for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
-            if (store.isModified && store.originalData && store.data) {
-                const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
-                if (diff) {
-                    // Save with storeKey as ID and diff as Value (with timestamp)
-                    await Requests.storeUserData(
-                        { diff, timestamp: new Date().toISOString() },
-                        authState.user.email,
-                        key // Use the store key as the unique ID
-                    );
-                    savedCount++;
-                }
+            const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
+            
+            if (store.isModified && store.originalData && store.data && diff) {
+                // Store has changes - save the diff
+                await Requests.storeUserData(
+                    { diff, timestamp: new Date().toISOString() },
+                    authState.user.email,
+                    key // Use the store key as the unique ID
+                );
+                store.autoSaved = true;
+                savedCount++;
+            } else if (!diff && store.autoSaved) {
+                // Store is clean but was previously auto-saved - clean up the entry
+                await Requests.storeUserData(
+                    null, // Setting to null will delete the entry
+                    authState.user.email,
+                    key
+                );
+                store.autoSaved = false;
+                cleanedCount++;
             }
         }
         
         if (savedCount > 0) {
             console.log(`[ReactiveStore AutoSave] Successfully saved ${savedCount} dirty store(s) to user data`);
-        } else {
-            console.log('[ReactiveStore AutoSave] No dirty stores to save');
+        }
+        if (cleanedCount > 0) {
+            console.log(`[ReactiveStore AutoSave] Cleaned up ${cleanedCount} resolved auto-save entries`);
+        }
+        if (savedCount === 0 && cleanedCount === 0) {
+            console.log('[ReactiveStore AutoSave] No changes to save or clean up');
         }
     } catch (error) {
         console.error('[ReactiveStore AutoSave] Failed to save dirty stores:', error);
@@ -1229,6 +1245,7 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
                         console.log('[ReactiveStore] Applying backup to store data');
                         const restoredData = applyDiffToData(store.data, backup);
                         store.setData(restoredData);
+                        store.autoSaved = true; // Mark that this store was loaded from auto-save
                         // setData will trigger analysis automatically if configured
                     }
                     

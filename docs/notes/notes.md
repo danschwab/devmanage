@@ -129,6 +129,7 @@ inventory updates
 - [ ] add all FURNITURE
 - [ ] update LIGHTBOXES
 - [ ] add all LIGHTING
+      optimize thumbnail finding: cached call that gets thumbnail folder contents once
       allow uploading new item thumbnails
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
