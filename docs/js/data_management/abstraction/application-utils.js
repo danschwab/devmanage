@@ -4,6 +4,16 @@ import { Database, wrapMethods } from '../index.js';
  * Utility functions for application-specific operations
  */
 class applicationUtils_uncached {
+    // Create default saved searches
+    static DEFAULT_SEARCHES = [
+        {
+            name: 'Upcoming',
+            dateSearch: '0,30', // Today to 30 days in the future
+            textFilters: []
+        }
+    ];
+    
+    
     /**
      * Store user data in a user-specific tab within the CACHE sheet
      * @param {Object} deps - Dependency decorator for tracking calls
@@ -126,7 +136,7 @@ class applicationUtils_uncached {
         if (!userTab) {
             // Tab doesn't exist - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
-                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+                await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
             }
             return null; // Tab doesn't exist, no data stored yet
         }
@@ -135,7 +145,7 @@ class applicationUtils_uncached {
         if (!tabData || tabData.length === 0) {
             // No data in tab - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
-                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+                await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
             }
             return null; // No data in tab
         }
@@ -144,7 +154,7 @@ class applicationUtils_uncached {
         if (!foundObj) {
             // ID not found - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
-                return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+                await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
             }
             return null; // ID not found
         }
@@ -160,34 +170,10 @@ class applicationUtils_uncached {
         
         // If requesting saved_searches and result is empty array, initialize with defaults
         if (id === 'saved_searches' && Array.isArray(parsedValue) && parsedValue.length === 0) {
-            return await deps.call(applicationUtils_uncached.initializeDefaultSavedSearches, username);
+            await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
         }
         
         return parsedValue;
-    }
-    
-    /**
-     * Initialize default saved searches for a user if they don't exist
-     * @param {string} username - The username to initialize searches for
-     * @returns {Promise<Array>} Array of saved searches (newly created defaults)
-     */
-    static async initializeDefaultSavedSearches(username) {
-        // Don't check getUserData again - we're called because data doesn't exist!
-        // Just create and store the defaults to avoid infinite recursion
-        
-        // Create default saved searches
-        const defaultSearches = [
-            {
-                name: 'Upcoming',
-                dateSearch: '0,30', // Today to 30 days in the future
-                textFilters: []
-            }
-        ];
-        
-        // Store the default searches
-        await applicationUtils_uncached.storeUserData(username, 'saved_searches', defaultSearches);
-        
-        return defaultSearches;
     }
 }
 

@@ -28,7 +28,6 @@ export class URLRouter {
      * Initialize URL routing system
      */
     initialize() {
-        console.log('[URLRouter] Initializing URL routing system');
         
         // Listen for browser back/forward
         window.addEventListener('popstate', this.handlePopState.bind(this));
@@ -48,7 +47,6 @@ export class URLRouter {
      * Handle browser back/forward buttons
      */
     async handlePopState(event) {
-        console.log('[URLRouter] Handling popstate:', event.state);
         const path = this.getCurrentURLPath();
         if (path) {
             // Set flag to prevent URL updates during browser navigation
@@ -84,8 +82,6 @@ export class URLRouter {
                 : currentPath;
             const encodedPath = this.encodePath(fullPath);
             const url = `#${encodedPath}`;
-            
-            console.log('[URLRouter] Updating URL:', fullPath, '-> encoded:', url, pushToHistory ? '(push)' : '(replace)');
             
             if (pushToHistory) {
                 history.pushState({ path: fullPath }, '', url);

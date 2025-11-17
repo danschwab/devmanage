@@ -69,7 +69,6 @@ export const NavigationRegistry = {
         if (!this.urlRouter) {
             this.urlRouter = new URLRouter(this, appContext);
             this.urlRouter.initialize();
-            console.log('[NavigationRegistry] URL router initialized successfully');
         }
     },
 

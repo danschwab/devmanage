@@ -657,6 +657,79 @@ class packListUtils_uncached {
             };
         }
     }
+
+    /**
+     * Get filtered packlists based on schedule parameters
+     * Returns all packlist tabs (excluding TEMPLATE) optionally filtered by schedule overlap
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object|string} filter - Filter parameters:
+     *   - null: returns empty array (no filter selected)
+     *   - { type: 'show-all' }: returns all packlists
+     *   - { startDate, endDate, byShowDate, overlapShowIdentifier }: filters by schedule overlap
+     * @returns {Promise<Array>} Array of packlist tab objects with title, sheetId
+     */
+    static async getPacklists(deps, filter = null) {
+        // Get all available packlist tabs
+        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        
+        // Filter out TEMPLATE and hidden tabs
+        let tabs = allTabs.filter(tab => tab.title !== 'TEMPLATE' && !tab.title.startsWith('_'));
+        
+        // If no filter, return empty array (user must select a filter)
+        if (!filter) {
+            return [];
+        }
+        
+        // If "show all" filter, return all tabs
+        if (filter.type === 'show-all') {
+            return tabs;
+        }
+        
+        // Otherwise, filter by schedule overlap
+        try {
+            // Build parameters for getOverlappingShows
+            let parameters = null;
+            
+            if (filter.overlapShowIdentifier) {
+                // Searching by overlap with a specific show
+                parameters = { identifier: filter.overlapShowIdentifier };
+            } else if (filter.startDate || filter.endDate) {
+                // Searching by date range
+                parameters = {
+                    startDate: filter.startDate,
+                    endDate: filter.endDate,
+                    byShowDate: filter.byShowDate
+                };
+            }
+            
+            if (!parameters) {
+                return [];
+            }
+            
+            // Get overlapping shows from production schedule
+            const shows = await deps.call(ProductionUtils.getOverlappingShows, parameters);
+            
+            // Compute identifiers for each show
+            const identifiers = new Set();
+            for (const show of shows) {
+                if (show.Show && show.Client && show.Year) {
+                    const identifier = await deps.call(
+                        ProductionUtils.computeIdentifier,
+                        show.Show,
+                        show.Client,
+                        parseInt(show.Year)
+                    );
+                    identifiers.add(identifier);
+                }
+            }
+            
+            // Filter tabs to only those matching show identifiers
+            return tabs.filter(tab => identifiers.has(tab.title));
+        } catch (error) {
+            console.error('[PackListUtils] Error filtering packlists by schedule:', error);
+            return [];
+        }
+    }
 }
 
 export const PackListUtils = wrapMethods(packListUtils_uncached, 'packlist_utils', ['savePackList']);

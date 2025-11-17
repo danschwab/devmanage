@@ -71,8 +71,7 @@ export const PacklistContent = {
         return {
             packlistsStore: null, // Reactive store for packlists
             autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
-            filter: null, // Filter for schedule overlaps (date range or identifier)
-            scheduleData: null // Cached schedule data for filtering
+            filter: null // Filter for schedule overlaps (date range or identifier)
         };
     },
     computed: {
@@ -100,33 +99,10 @@ export const PacklistContent = {
         availablePacklists() {
             if (!this.packlistsStore) return [];
             
-            // If "show all" is selected, show all packlists
-            if (this.filter && this.filter.type === 'show-all') {
-                let tabs = this.packlistsStore.data || [];
-                
-                // Filter out TEMPLATE and format for CardsComponent
-                return tabs
-                    .filter(tab => tab.title !== 'TEMPLATE')
-                    .map(tab => this.formatPacklistCard(tab));
-            }
+            const tabs = this.packlistsStore.data || [];
             
-            // Return empty array if no filter is selected
-            if (!this.filter || !this.scheduleData) {
-                return [];
-            }
-            
-            let tabs = this.packlistsStore.data || [];
-            
-            // Filter by schedule overlap
-            const matchingIdentifiers = new Set(
-                this.scheduleData.map(show => show.Identifier)
-            );
-            tabs = tabs.filter(tab => matchingIdentifiers.has(tab.title));
-            
-            // Filter out TEMPLATE and format for CardsComponent
-            return tabs
-                .filter(tab => tab.title !== 'TEMPLATE')
-                .map(tab => this.formatPacklistCard(tab));
+            // Format tabs for CardsComponent
+            return tabs.map(tab => this.formatPacklistCard(tab));
         },
         isLoading() {
             return this.packlistsStore ? (this.packlistsStore.isLoading || this.packlistsStore.isAnalyzing) : false;
@@ -180,41 +156,24 @@ export const PacklistContent = {
             }
         });
         
-        // Configure analysis for packlist descriptions
-        const analysisConfig = [
-            createAnalysisConfig(
-                Requests.getPacklistDescription,
-                'description',
-                'Loading packlist details...',
-                ['title'], // Use title as the source (project identifier)
-                [],
-                'description' // Store result in 'description' column
-            )
-        ];
-        
-        // Initialize reactive store for available packlists with analysis
-        this.packlistsStore = getReactiveStore(
-            Requests.getAvailableTabs,
-            null,
-            ['PACK_LISTS'],
-            analysisConfig
-        );
+        // Initialize reactive store with null filter (will show no packlists until user selects)
+        this.recreateStore();
         
         // Note: checkAutoSavedPacklists will be called by the watcher when data loads
     },
     methods: {
         async handleSearchSelected(searchData) {
             if (!searchData) {
-                // Empty selection - clear filter
+                // Empty selection - clear filter and recreate store
                 this.filter = null;
-                this.scheduleData = null;
+                this.recreateStore();
                 return;
             }
 
             // Handle "show all" - set special filter type
             if (searchData.type === 'show-all') {
                 this.filter = { type: 'show-all' };
-                this.scheduleData = null;
+                this.recreateStore();
                 return;
             }
 
@@ -241,8 +200,29 @@ export const PacklistContent = {
             
             this.filter = filter;
             
-            // Fetch schedule data using the filter
-            await this.loadScheduleData();
+            // Recreate the store with the new filter
+            this.recreateStore();
+        },
+        recreateStore() {
+            // Configure analysis for packlist descriptions
+            const analysisConfig = [
+                createAnalysisConfig(
+                    Requests.getPacklistDescription,
+                    'description',
+                    'Loading packlist details...',
+                    ['title'], // Use title as the source (project identifier)
+                    [],
+                    'description' // Store result in 'description' column
+                )
+            ];
+            
+            // Create new reactive store with the current filter
+            this.packlistsStore = getReactiveStore(
+                Requests.getPacklists,
+                null,
+                [this.filter],
+                analysisConfig
+            );
         },
         formatPacklistCard(tab) {
             // Find any reactive stores for this packlist (regardless of analysis config)
@@ -274,36 +254,6 @@ export const PacklistContent = {
                 cardClass: cardClass,
                 contentFooter: contentFooter
             };
-        },
-        async loadScheduleData() {
-            if (!this.filter) {
-                this.scheduleData = null;
-                return;
-            }
-
-            try {
-                // Build parameters for getProductionScheduleData
-                // It expects parameters (identifier or date range) and optional searchParams
-                let parameters = null;
-                
-                if (this.filter.overlapShowIdentifier) {
-                    // Searching by overlap with a specific show
-                    parameters = { identifier: this.filter.overlapShowIdentifier };
-                } else if (this.filter.startDate || this.filter.endDate) {
-                    // Searching by date range
-                    parameters = {
-                        startDate: this.filter.startDate,
-                        endDate: this.filter.endDate,
-                        byShowDate: this.filter.byShowDate
-                    };
-                }
-                
-                const shows = await Requests.getProductionScheduleData(parameters);
-                this.scheduleData = shows;
-            } catch (error) {
-                console.error('Error loading schedule data for filtering:', error);
-                this.scheduleData = [];
-            }
         },
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;

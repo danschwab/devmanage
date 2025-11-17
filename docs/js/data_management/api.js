@@ -242,6 +242,16 @@ class Requests_uncached {
     }
     
     /**
+     * Get filtered packlists based on schedule parameters
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object|string} filter - Filter parameters (null, {type: 'show-all'}, or schedule filter)
+     * @returns {Promise<Array<Object>>} Array of packlist tab objects
+     */
+    static async getPacklists(deps, filter = null) {
+        return await deps.call(PackListUtils.getPacklists, filter);
+    }
+    
+    /**
      * Find projects that overlap with the given project or date range
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string|Object} parameters - Project identifier or date range parameters

@@ -850,7 +850,7 @@ const reactiveStoreRegistry = Vue.reactive({});
 
 // Auto-save timer for dirty stores
 let autoSaveInterval = null;
-const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const AUTO_SAVE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
  * Calculate diff between original and current data recursively
@@ -1008,7 +1008,7 @@ function startAutoSaveTimer() {
         return; // Already running
     }
     
-    console.log('[ReactiveStore AutoSave] Starting auto-save timer (20 minutes)');
+    console.log('[ReactiveStore AutoSave] Starting auto-save timer');
     autoSaveInterval = setInterval(() => {
         const storeCount = Object.keys(reactiveStoreRegistry).length;
         if (storeCount > 0) {
