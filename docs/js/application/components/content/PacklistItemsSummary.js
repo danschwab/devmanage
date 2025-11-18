@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, Priority } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying item quantities summary with progressive analysis
@@ -138,9 +138,9 @@ export const PacklistItemsSummary = {
         },
 
         async handleRefresh() {
-            if (this.itemsSummaryStore) {
-                await this.itemsSummaryStore.load('Refreshing item summary...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.projectIdentifier] }
+            ], true);
         },
 
         navigateBackToPacklist() {

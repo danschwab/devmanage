@@ -179,7 +179,7 @@ class CacheManager {
         
         // Log only when there are dependents (useful for debugging cascades)
         if (dependents.length > 0) {
-            console.log(`[CacheManager] Invalidating ${key} → cascading to ${dependents.length} dependents`);
+            //console.log(`[CacheManager] Invalidating ${key} → cascading to ${dependents.length} dependents`);
         }
         
         // Recursively invalidate dependents with the same invalidation stack
@@ -241,7 +241,6 @@ class CacheManager {
      */
     static invalidateCache(cacheEntries, invalidateByPrefix = false) {
         if (!Array.isArray(cacheEntries)) return;
-        
         cacheEntries.forEach(({ namespace, methodName, args }) => {
             if (namespace && methodName && args) {
                 if (invalidateByPrefix) {

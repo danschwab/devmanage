@@ -60,6 +60,11 @@ export const SavedSearchSelect = {
         
         isOnDashboard() {
             return this.appContext?.currentPage === 'dashboard';
+        },
+        
+        // Computed property to reactively track navigation parameters
+        navigationParameters() {
+            return NavigationRegistry.getNavigationParameters(this.containerPath);
         }
     },
     watch: {
@@ -72,9 +77,34 @@ export const SavedSearchSelect = {
                 if (this.pendingUrlParams && newSavedSearches && newSavedSearches.length > 0) {
                     this.matchUrlToSavedSearch(this.pendingUrlParams);
                 }
-                // If no selection yet and we have a default, try to apply it now
-                else if (!this.selectedValue && this.defaultSearch && newSavedSearches && newSavedSearches.length > 0) {
-                    this.applyDefaultSearch();
+                // If no selection yet, check URL params before applying default
+                else if (!this.selectedValue && newSavedSearches && newSavedSearches.length > 0) {
+                    // Try to load from URL first
+                    if (!this.loadFromURL()) {
+                        // Only apply default if no URL params exist
+                        if (this.defaultSearch) {
+                            this.applyDefaultSearch();
+                        }
+                    }
+                }
+            },
+            deep: true
+        },
+        // Watch for navigation parameter changes (reactive to URL changes)
+        navigationParameters: {
+            handler(newParams, oldParams) {
+                // Skip if this is the first load (handled by mounted)
+                if (!oldParams) return;
+                
+                // Skip if parameters haven't actually changed
+                if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+                
+                console.log('[SavedSearchSelect] Navigation parameters changed:', oldParams, '->', newParams);
+                
+                // If we have no selection and parameters exist, try to load from URL
+                if (Object.keys(newParams).length > 0 && !this.selectedValue && !this.isUsingUrlParams) {
+                    console.log('[SavedSearchSelect] Loading from URL due to parameter change');
+                    this.loadFromURL();
                 }
             },
             deep: true

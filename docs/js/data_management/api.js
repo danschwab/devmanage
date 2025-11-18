@@ -164,7 +164,7 @@ class Requests_uncached {
      * @returns {Promise<Array<string>>} - Array of item column headers
      */
     static async getItemHeaders(deps, tabName) {
-        const packlistData = await deps.call(Requests.getPackList, tabName);
+        const packlistData = await deps.call(PackListUtils.getContent, tabName);
         if (Array.isArray(packlistData)) {
             // Find the first crate that has items with actual data
             for (const crate of packlistData) {
@@ -174,7 +174,7 @@ class Requests_uncached {
             }
         }
         // Return default schema if no data found
-        return ['Item ID', 'Quantity', 'Available', 'Remaining', 'Status', 'Has Warning'];
+        return;
     }
     
     /**
@@ -424,30 +424,17 @@ class Requests_uncached {
      * @returns {Promise<Object>} Object with { exists: boolean, identifier: string|null }
      */
     static async checkPacklistExists(deps, scheduleRow) {
-        try {
-            // Compute the identifier from the row data
-            const identifier = await deps.call(
-                Requests.computeIdentifier,
-                scheduleRow.Show,
-                scheduleRow.Client,
-                parseInt(scheduleRow.Year)
-            );
-            
-            // Get available tabs and check if packlist exists
-            const availableTabs = await deps.call(Requests.getAvailableTabs, 'PACK_LISTS');
-            const tab = availableTabs.find(tab => tab.title === identifier);
-            
-            return {
-                exists: !!tab,
-                identifier: identifier
-            };
-        } catch (error) {
-            console.warn('Failed to check packlist existence:', error);
-            return {
-                exists: false,
-                identifier: null
-            };
-        }
+        // Compute the identifier from the row data
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, parseInt(scheduleRow.Year));
+        
+        // Get available tabs and check if packlist exists
+        const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const tab = availableTabs.find(tab => tab.title === identifier);
+        
+        return {
+            exists: !!tab,
+            identifier: identifier
+        };
     }
 
     /**

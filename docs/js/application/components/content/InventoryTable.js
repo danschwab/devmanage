@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache } from '../../index.js';
 
 
 
@@ -165,9 +165,9 @@ export const InventoryTableComponent = {
     methods: {
         async handleRefresh() {
             // Reload inventory data (cache will be automatically invalidated)
-            if (this.inventoryTableStore) {
-                await this.inventoryTableStore.load('Reloading inventory...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
+            ], true);
         },
         handleCellEdit(rowIdx, colIdx, value) {
             const colKey = this.columns[colIdx]?.key;

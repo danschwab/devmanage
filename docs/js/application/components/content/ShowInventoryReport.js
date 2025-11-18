@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter, findMatchingStores, Priority } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
@@ -299,9 +299,11 @@ export const ShowInventoryReport = {
         },
 
         async handleRefresh() {
-            if (this.reportStore) {
-                await this.reportStore.load('Refreshing report...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED'] },
+                { namespace: 'database', methodName: 'getData', args: ['INVENTORY'] },
+                { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS'] }
+            ], true);
         }
     },
     template: html`

@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -105,9 +105,9 @@ export const InventoryOverviewTableComponent = {
         },
         async handleRefresh() {
             // Reload all inventory data using reactive store
-            if (this.inventoryStore) {
-                await this.inventoryStore.load('Refreshing inventory data...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['INVENTORY'] }
+            ], true);
         },
         handleCellEdit(rowIdx, colIdx, value) {
             // Read-only for overview table

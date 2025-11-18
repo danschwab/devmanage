@@ -4,7 +4,7 @@ import { SheetSql } from './sheetSql.js';
 export class GoogleSheetsService {
 
     // Exponential backoff helper for Google Sheets API calls
-    static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
+    static async withExponentialBackoff(fn, maxRetries = 8, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
         let lastError = null;
@@ -35,7 +35,7 @@ export class GoogleSheetsService {
                         err.result.error.message?.toLowerCase().includes('quota')
                     ))
                 );
-                if (!isRateLimit || attempt >= maxRetries) throw err;
+                if (attempt >= maxRetries) throw err;
                 await new Promise(res => setTimeout(res, delay));
                 delay *= 2;
                 attempt++;

@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig } from '../../index.js';
+import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache } from '../../index.js';
 
 export const ScheduleTableComponent = {
     components: {
@@ -191,9 +191,9 @@ export const ScheduleTableComponent = {
         },
         async handleRefresh() {
             // Reload schedule data (cache will be automatically invalidated)
-            if (this.scheduleTableStore) {
-                await this.scheduleTableStore.load('Reloading schedule...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED'] }
+            ], true);
         },
         formatColumnLabel(header) {
             // Convert header to a more readable label

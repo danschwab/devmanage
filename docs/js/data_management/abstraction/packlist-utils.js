@@ -143,7 +143,9 @@ class packListUtils_uncached {
      */
     static async getContent(deps, projectIdentifier, itemColumnsStart = "Pack") {
         // First verify the tab exists
-        const tabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const tabs = await Database.getTabs('PACK_LISTS'); // Not adding as a dependency to avoid unnecessary cache invalidation.
+                                                           // This only works if null is returned on failure to avoid this function being cached.
+
         const tabExists = tabs.some(tab => tab.title === projectIdentifier);
         if (!tabExists) {
             //console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);

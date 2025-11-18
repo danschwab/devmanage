@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parseDateSearchParameter } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parseDateSearchParameter, invalidateCache } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -282,10 +282,10 @@ export const PacklistContent = {
             }
         },
         async handleRefresh() {
-            // Reload packlists data using reactive store
-            if (this.packlistsStore) {
-                await this.packlistsStore.load('Refreshing packlists...');
-            }
+            // Invalidate the getTabs cache to force reload
+            invalidateCache([
+                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
+            ]);
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);

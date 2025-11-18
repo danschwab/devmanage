@@ -1,7 +1,7 @@
 // API
 export { Requests } from '../data_management/api.js';
 export { parseDate, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
-export { CacheInvalidationBus } from '../data_management/utils/caching.js';
+export { CacheInvalidationBus, invalidateCache } from '../data_management/utils/caching.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';

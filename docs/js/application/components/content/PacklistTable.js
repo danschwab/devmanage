@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache } from '../../index.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
@@ -216,9 +216,9 @@ export const PacklistTable = {
             }
         },
         async handleRefresh() {
-            if (this.packlistTableStore) {
-                await this.packlistTableStore.load('Reloading packlist...');
-            }
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
+            ], true);
         },
         handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             if (type === 'main') {
