@@ -208,7 +208,11 @@ function clearAnalysisResultsFromItem(item, config, clearTargetColumn = false) {
         }
         delete item.AppData[`${config.targetColumn}_error`];
     } else {
-        delete item.AppData[config.resultKey];
+        // Don't delete the resultKey - set to null instead to maintain Vue reactivity
+        // The field was initialized in appDataInit and must remain defined for reactive tracking
+        if (config.resultKey in item.AppData) {
+            item.AppData[config.resultKey] = null;
+        }
         delete item.AppData[`${config.resultKey}_error`];
     }
 }
@@ -228,11 +232,15 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             if (obj && typeof obj === 'object') {
                 if (!('AppData' in obj)) obj['AppData'] = {};
                 
-                // Initialize analysis target columns if they don't exist
+                // Initialize analysis target columns and AppData result keys if they don't exist
                 if (analysisConfig && Array.isArray(analysisConfig)) {
                     analysisConfig.forEach(config => {
                         if (config.targetColumn && !(config.targetColumn in obj)) {
                             obj[config.targetColumn] = null; // Initialize to null for proper placeholder display
+                        }
+                        // Also initialize AppData result keys for proper reactivity
+                        if (config.resultKey && !(config.resultKey in obj.AppData)) {
+                            obj.AppData[config.resultKey] = null;
                         }
                     });
                 }
@@ -936,27 +944,14 @@ function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
     return changes.length > 0 ? changes : null;
 }
 
+
+
+
 /**
  * Save dirty stores to user data
  * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
  */
 async function saveDirtyStoresToUserData() {
-    // Check authentication before attempting to save (with prompt if expired)
-    const isAuthenticated = await Auth.checkAuthWithPrompt({
-        context: 'auto-save',
-        message: 'Your session has expired. Would you like to maintain your current session? This will re-authenticate and save your unsaved changes.'
-    });
-    
-    if (!isAuthenticated) {
-        console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
-        return;
-    }
-    
-    if (!authState.user?.email) {
-        console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
-        return;
-    }
-    
     try {
         let savedCount = 0;
         let cleanedCount = 0;
@@ -966,23 +961,27 @@ async function saveDirtyStoresToUserData() {
             const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
             
             if (store.isModified && store.originalData && store.data && diff) {
-                // Store has changes - save the diff
-                await Requests.storeUserData(
-                    { diff, timestamp: new Date().toISOString() },
-                    authState.user.email,
-                    key // Use the store key as the unique ID
-                );
-                store.autoSaved = true;
-                savedCount++;
+                if (Auth.checkAuthWithPrompt({ context: 'auto-save', message: 'Your session has expired and you might lose unsaved changes.' }) === true) {
+                    // Store has changes - save the diff
+                    await Requests.storeUserData(
+                        { diff, timestamp: new Date().toISOString() },
+                        authState.user.email,
+                        key // Use the store key as the unique ID
+                    );
+                    store.autoSaved = true;
+                    savedCount++;
+                }
             } else if (!diff && store.autoSaved) {
-                // Store is clean but was previously auto-saved - clean up the entry
-                await Requests.storeUserData(
-                    null, // Setting to null will delete the entry
-                    authState.user.email,
-                    key
-                );
-                store.autoSaved = false;
-                cleanedCount++;
+                if (Auth.checkAuth() === true) {
+                    // Store is clean but was previously auto-saved - clean up the entry
+                    await Requests.storeUserData(
+                        null, // Setting to null will delete the entry
+                        authState.user.email,
+                        key
+                    );
+                    store.autoSaved = false;
+                    cleanedCount++;
+                }
             }
         }
         
@@ -1353,19 +1352,31 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
  * Clear all reactive stores from the registry
  * Useful for logout or when switching users
  */
-export function clearAllReactiveStores() {
-    console.log('[ReactiveStore] Clearing all stores from registry');
+export async function clearAllReactiveStores() {
+    console.log('[ReactiveStore] Starting cleanup of all stores');
     
     // Get count before clearing
     const storeCount = Object.keys(reactiveStoreRegistry).length;
     
-    // Stop auto-save timer
+    // Step 1: Immediately stop and clear all tasks in the Priority queue
+    console.log('[ReactiveStore] Step 1: Stopping and clearing Priority Queue');
+    PriorityQueue.stopProcessing();
+    PriorityQueue.clearAll();
+    
+    // Step 2: Stop the autosave timer and run autosaving on all stores
+    console.log('[ReactiveStore] Step 2: Stopping auto-save timer and saving dirty stores');
     stopAutoSaveTimer();
     
-    // Clear all stores
+    // Run auto-save directly (bypassing Priority Queue since it's stopped)
+    // This ensures all unsaved changes are preserved before clearing stores
+    await saveDirtyStoresToUserData();
+    
+    // Step 3: Remove all reactive stores from registry
+    console.log('[ReactiveStore] Step 3: Clearing all stores from registry');
     Object.keys(reactiveStoreRegistry).forEach(key => {
         delete reactiveStoreRegistry[key];
     });
     
-    console.log(`[ReactiveStore] Cleared ${storeCount} store(s) from registry`);
+    console.log(`[ReactiveStore] Cleanup complete - cleared ${storeCount} store(s) from registry`);
 }
+

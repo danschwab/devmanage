@@ -155,18 +155,13 @@ export const PacklistContent = {
                 refreshCallback: this.handleRefresh
             }
         });
-        
-        // Initialize reactive store with null filter (will show no packlists until user selects)
-        this.recreateStore();
-        
-        // Note: checkAutoSavedPacklists will be called by the watcher when data loads
     },
     methods: {
         async handleSearchSelected(searchData) {
             if (!searchData) {
                 // Empty selection - clear filter and recreate store
                 this.filter = null;
-                this.recreateStore();
+                this.packlistsStore = null;
                 return;
             }
 
@@ -310,7 +305,7 @@ export const PacklistContent = {
                 :is-analyzing="isAnalyzing"
                 :loading-progress="loadingProgress"
                 :loading-message="analysisMessage"
-                empty-message="No packlists available"
+                :empty-message="packlistsStore ? 'No packlists available' : ''"
             >
                 <template #header-area>
                     <SavedSearchSelect

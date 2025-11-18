@@ -313,6 +313,41 @@ class Requests_uncached {
     }
     
     /**
+     * Get all inventory data from all tabs (excluding INDEX)
+     * Each item is tagged with its category tab
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Array<Object>>} - All inventory items with tab property
+     */
+    static async getAllInventoryData(deps) {
+        // Get all available tabs for INVENTORY
+        const tabs = await deps.call(Requests.getAvailableTabs, 'INVENTORY');
+        const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
+        
+        const allData = [];
+        
+        // Load data from each tab
+        for (const tab of inventoryTabs) {
+            try {
+                const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title);
+                
+                // Add tab information to each item
+                if (Array.isArray(tabData)) {
+                    const itemsWithTab = tabData.map(item => ({
+                        ...item,
+                        tab: tab.title
+                    }));
+                    allData.push(...itemsWithTab);
+                }
+            } catch (tabError) {
+                console.warn(`[API] Failed to load data from tab ${tab.title}:`, tabError);
+                // Continue loading other tabs even if one fails
+            }
+        }
+        
+        return allData;
+    }
+    
+    /**
      * Save mapped inventory tab data (with default mapping and optional filters).
      * 
      * MUTATION METHOD - Excluded from caching

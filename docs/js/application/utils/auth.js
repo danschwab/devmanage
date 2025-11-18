@@ -105,8 +105,11 @@ export class Auth {
             await DashboardRegistry.saveNow();
             DashboardRegistry.cleanup();
 
-            // Clear all reactive stores
-            clearAllReactiveStores();
+            // Clear all reactive stores with proper cleanup sequence:
+            // 1. Stop priority queue
+            // 2. Auto-save all dirty stores
+            // 3. Clear store registry
+            await clearAllReactiveStores();
 
             await GoogleSheetsAuth.logout();
             
@@ -168,11 +171,10 @@ export class Auth {
                             // User clicked "Maintain Current Session"
                             try {
                                 console.log(`[Auth] Attempting re-authentication for ${context}...`);
-                                await Auth.initialize();
+                                await Auth.login();
                                 
                                 if (authState.isAuthenticated) {
                                     console.log(`[Auth] Re-authentication successful for ${context}`);
-                                    manager.alert('Successfully re-authenticated.', 'Success');
                                     resolve(true);
                                 } else {
                                     console.error(`[Auth] Re-authentication failed for ${context}`);
@@ -191,7 +193,7 @@ export class Auth {
                             resolve(false);
                         },
                         'Session Expired',
-                        'Maintain Current Session',
+                        'Maintain Session',
                         'Cancel'
                     );
                 });

@@ -77,42 +77,6 @@ export const InventoryOverviewTableComponent = {
     },
     methods: {
         async initializeInventoryStore() {
-            // Create a custom aggregator function that loads all inventory tabs
-            const loadAllInventoryData = async () => {
-                try {
-                    // Get all available tabs for INVENTORY
-                    const tabs = await Requests.getAvailableTabs('INVENTORY');
-                    const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
-
-                    const allData = [];
-                    
-                    // Load data from each tab
-                    for (const tab of inventoryTabs) {
-                        try {
-                            const tabData = await Requests.getInventoryTabData(tab.title);
-                            
-                            // Add tab information to each item
-                            if (Array.isArray(tabData)) {
-                                const itemsWithTab = tabData.map(item => ({
-                                    ...item,
-                                    tab: tab.title
-                                }));
-                                allData.push(...itemsWithTab);
-                            }
-                        } catch (tabError) {
-                            console.warn(`Failed to load data from tab ${tab.title}:`, tabError);
-                            // Continue loading other tabs even if one fails
-                        }
-                    }
-                    
-                    return allData;
-                } catch (error) {
-                    console.error('Failed to load inventory overview data:', error);
-                    this.$modal.error('Failed to load inventory overview data. Please try refreshing or contact support if the problem persists.', 'Inventory Load Error');
-                    throw error;
-                }
-            };
-            
             // Create analysis config for image URLs
             const analysisConfig = [
                 createAnalysisConfig(
@@ -127,16 +91,17 @@ export const InventoryOverviewTableComponent = {
                 )
             ];
             
-            // Initialize reactive store with the aggregator function and analysis
+            // Initialize reactive store using the new API method
+            // Note: autoLoad is true by default, so data will load automatically
             this.inventoryStore = getReactiveStore(
-                loadAllInventoryData,
+                Requests.getAllInventoryData,
                 null, // No save function (read-only)
                 [], // No arguments
                 analysisConfig
             );
             
-            // Load the data
-            await this.inventoryStore.load('Loading all inventory data...');
+            // Don't call load() here - autoLoad=true handles it automatically
+            // Calling load() again would cause a race condition or double-load
         },
         async handleRefresh() {
             // Reload all inventory data using reactive store
@@ -187,7 +152,7 @@ export const InventoryOverviewTableComponent = {
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
             >
-                <template #default="{ row, column }">
+                <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <button 
                         v-if="column.key === 'tab'"
                         @click="handleCategoryClick(row.tab)"
@@ -199,7 +164,7 @@ export const InventoryOverviewTableComponent = {
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
-                        :imageUrl="row.AppData && row.AppData.imageUrl"
+                        :imageUrl="row.AppData?.imageUrl"
                     />
                 </template>
             </TableComponent>

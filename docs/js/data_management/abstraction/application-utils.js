@@ -137,6 +137,7 @@ class applicationUtils_uncached {
             // Tab doesn't exist - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
                 await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
+                return applicationUtils_uncached.DEFAULT_SEARCHES;
             }
             return null; // Tab doesn't exist, no data stored yet
         }
@@ -146,6 +147,7 @@ class applicationUtils_uncached {
             // No data in tab - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
                 await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
+                return applicationUtils_uncached.DEFAULT_SEARCHES;
             }
             return null; // No data in tab
         }
@@ -155,6 +157,7 @@ class applicationUtils_uncached {
             // ID not found - if requesting saved_searches, initialize with defaults
             if (id === 'saved_searches') {
                 await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
+                return applicationUtils_uncached.DEFAULT_SEARCHES;
             }
             return null; // ID not found
         }
@@ -171,6 +174,7 @@ class applicationUtils_uncached {
         // If requesting saved_searches and result is empty array, initialize with defaults
         if (id === 'saved_searches' && Array.isArray(parsedValue) && parsedValue.length === 0) {
             await applicationUtils_uncached.storeUserData(username, 'saved_searches', applicationUtils_uncached.DEFAULT_SEARCHES);
+            return applicationUtils_uncached.DEFAULT_SEARCHES;
         }
         
         return parsedValue;
