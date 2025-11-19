@@ -70,7 +70,7 @@ export const PacklistContent = {
     data() {
         return {
             packlistsStore: null, // Reactive store for packlists
-            autoSavedPacklists: {}, // Track which packlists have auto-saved data (object for reactivity)
+            autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
             filter: null // Filter for schedule overlaps (date range or identifier)
         };
     },
@@ -129,6 +129,15 @@ export const PacklistContent = {
         }
     },
     mounted() {
+        // Initialize packlists store with default year filter (matches SavedSearchSelect default)
+        // This ensures checkAutoSavedPacklists() runs immediately via the watcher
+        const currentYear = new Date().getFullYear();
+        this.filter = {
+            startDate: `${currentYear}-01-01`,
+            endDate: `${currentYear}-12-31`,
+            byShowDate: true
+        };
+        this.recreateStore();
 
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {
@@ -229,7 +238,7 @@ export const PacklistContent = {
             // If a reactive store exists, use its state. Otherwise check userData for auto-save
             const hasUnsavedChanges = matchingStores.length > 0
                 ? matchingStores.some(match => match.isModified)
-                : this.autoSavedPacklists[tab.title];
+                : this.autoSavedPacklists.has(tab.title);
             
             // Determine card styling based on store state
             const cardClass = hasUnsavedChanges ? 'red' : 'gray';
@@ -274,9 +283,7 @@ export const PacklistContent = {
                     );
                     
                     if (hasAutoSave) {
-                        this.$set(this.autoSavedPacklists, tab.title, true);
-                    } else {
-                        this.$delete(this.autoSavedPacklists, tab.title);
+                        this.autoSavedPacklists.add(tab.title);
                     }
                 }
             } catch (error) {
