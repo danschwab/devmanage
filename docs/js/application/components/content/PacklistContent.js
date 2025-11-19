@@ -70,7 +70,7 @@ export const PacklistContent = {
     data() {
         return {
             packlistsStore: null, // Reactive store for packlists
-            autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
+            autoSavedPacklists: {}, // Track which packlists have auto-saved data (object for reactivity)
             filter: null // Filter for schedule overlaps (date range or identifier)
         };
     },
@@ -229,7 +229,7 @@ export const PacklistContent = {
             // If a reactive store exists, use its state. Otherwise check userData for auto-save
             const hasUnsavedChanges = matchingStores.length > 0
                 ? matchingStores.some(match => match.isModified)
-                : this.autoSavedPacklists.has(tab.title);
+                : this.autoSavedPacklists[tab.title];
             
             // Determine card styling based on store state
             const cardClass = hasUnsavedChanges ? 'red' : 'gray';
@@ -274,7 +274,9 @@ export const PacklistContent = {
                     );
                     
                     if (hasAutoSave) {
-                        this.autoSavedPacklists.add(tab.title);
+                        this.$set(this.autoSavedPacklists, tab.title, true);
+                    } else {
+                        this.$delete(this.autoSavedPacklists, tab.title);
                     }
                 }
             } catch (error) {
