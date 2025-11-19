@@ -952,36 +952,48 @@ function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
  * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
  */
 async function saveDirtyStoresToUserData() {
+    // Check authentication before attempting to save (with prompt if expired)
+    const isAuthenticated = await Auth.checkAuthWithPrompt({
+        context: 'auto-save',
+        message: 'Your session has expired. Would you like to maintain your current session? This will re-authenticate and save your unsaved changes.'
+    });
+    
+    if (!isAuthenticated) {
+        console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
+        return;
+    }
+    
+    if (!authState.user?.email) {
+        console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+        return;
+    }
+    
     try {
         let savedCount = 0;
         let cleanedCount = 0;
-        
         // Save each dirty store as a separate user data entry
         for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
+            const isModified = store.isModified;
             const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
             
-            if (store.isModified && store.originalData && store.data && diff) {
-                if (Auth.checkAuthWithPrompt({ context: 'auto-save', message: 'Your session has expired and you might lose unsaved changes.' }) === true) {
-                    // Store has changes - save the diff
-                    await Requests.storeUserData(
-                        { diff, timestamp: new Date().toISOString() },
-                        authState.user.email,
-                        key // Use the store key as the unique ID
-                    );
-                    store.autoSaved = true;
-                    savedCount++;
-                }
+            if (isModified && store.originalData && store.data && diff) {
+                // Store has changes - save the diff
+                await Requests.storeUserData(
+                    { diff, timestamp: new Date().toISOString() },
+                    authState.user.email,
+                    key // Use the store key as the unique ID
+                );
+                store.autoSaved = true;
+                savedCount++;
             } else if (!diff && store.autoSaved) {
-                if (Auth.checkAuth() === true) {
-                    // Store is clean but was previously auto-saved - clean up the entry
-                    await Requests.storeUserData(
-                        null, // Setting to null will delete the entry
-                        authState.user.email,
-                        key
-                    );
-                    store.autoSaved = false;
-                    cleanedCount++;
-                }
+                // Store is clean but was previously auto-saved - clean up the entry
+                await Requests.storeUserData(
+                    null, // Setting to null will delete the entry
+                    authState.user.email,
+                    key
+                );
+                store.autoSaved = false;
+                cleanedCount++;
             }
         }
         
