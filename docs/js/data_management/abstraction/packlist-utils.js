@@ -689,27 +689,8 @@ class packListUtils_uncached {
         
         // Otherwise, filter by schedule overlap
         try {
-            // Build parameters for getOverlappingShows
-            let parameters = null;
-            
-            if (filter.overlapShowIdentifier) {
-                // Searching by overlap with a specific show
-                parameters = { identifier: filter.overlapShowIdentifier };
-            } else if (filter.startDate || filter.endDate) {
-                // Searching by date range
-                parameters = {
-                    startDate: filter.startDate,
-                    endDate: filter.endDate,
-                    byShowDate: filter.byShowDate
-                };
-            }
-            
-            if (!parameters) {
-                return [];
-            }
-            
             // Get overlapping shows from production schedule
-            const shows = await deps.call(ProductionUtils.getOverlappingShows, parameters);
+            const shows = await deps.call(ProductionUtils.getOverlappingShows, filter);
             
             // Compute identifiers for each show
             const identifiers = new Set();
