@@ -151,6 +151,16 @@ export class GoogleSheetsAuth {
             // No valid token available - user must authenticate interactively
             return false;
         }
+        
+        // Token exists in gapi.client - verify it's not expired
+        const savedToken = this.getStoredToken();
+        if (savedToken && this.isTokenExpired(savedToken)) {
+            // Token is expired - clear it
+            gapi.client.setToken(null);
+            this.clearStoredToken();
+            return false;
+        }
+        
         return true;
     }
 

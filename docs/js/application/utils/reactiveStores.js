@@ -299,6 +299,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         analysisConfig,
         initialLoad: false, // True if this is the first load of the store
         autoSaved: false, // True if this store has been auto-saved or loaded from auto-save
+        lastAutoSaveHash: null, // Hash of data when last auto-saved, to prevent redundant saves
         
         // Computed property to check if data has been modified
         get isModified() {
@@ -327,6 +328,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 clearAnalysisResults(processedData, this.analysisConfig);
             }
             this.data = processedData;
+            // Clear auto-save hash when data changes
+            this.lastAutoSaveHash = null;
             
             // Automatically run analysis if configured and data is loaded
             // Skip if main data is being reloaded (will run after reload completes)
@@ -425,6 +428,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
                 await removeStoreBackupFromUserData(storeKey);
                 this.autoSaved = false; // Clear auto-save flag after successful save
+                this.lastAutoSaveHash = null; // Clear auto-save hash after manual save
                 
                 return result;
             } catch (err) {
@@ -955,7 +959,7 @@ async function saveDirtyStoresToUserData() {
     // Check authentication before attempting to save (with prompt if expired)
     const isAuthenticated = await Auth.checkAuthWithPrompt({
         context: 'auto-save',
-        message: 'Your session has expired. Would you like to maintain your current session? This will re-authenticate and save your unsaved changes.'
+        message: 'Your session has expired.'
     });
     
     if (!isAuthenticated) {
@@ -971,20 +975,31 @@ async function saveDirtyStoresToUserData() {
     try {
         let savedCount = 0;
         let cleanedCount = 0;
+        let skippedCount = 0;
+        
         // Save each dirty store as a separate user data entry
         for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
             const isModified = store.isModified;
             const diff = calculateStoreDiff(store.originalData, store.data, store.analysisConfig);
             
             if (isModified && store.originalData && store.data && diff) {
-                // Store has changes - save the diff
-                await Requests.storeUserData(
-                    { diff, timestamp: new Date().toISOString() },
-                    authState.user.email,
-                    key // Use the store key as the unique ID
-                );
-                store.autoSaved = true;
-                savedCount++;
+                // Calculate hash of current diff to check if already saved
+                const currentHash = JSON.stringify(diff);
+                
+                // Only save if this exact state hasn't been auto-saved already
+                if (store.lastAutoSaveHash !== currentHash) {
+                    // Store has changes - save the diff
+                    await Requests.storeUserData(
+                        { diff, timestamp: new Date().toISOString() },
+                        authState.user.email,
+                        key // Use the store key as the unique ID
+                    );
+                    store.autoSaved = true;
+                    store.lastAutoSaveHash = currentHash; // Record this state as saved
+                    savedCount++;
+                } else {
+                    skippedCount++;
+                }
             } else if (!diff && store.autoSaved) {
                 // Store is clean but was previously auto-saved - clean up the entry
                 await Requests.storeUserData(
@@ -1003,7 +1018,10 @@ async function saveDirtyStoresToUserData() {
         if (cleanedCount > 0) {
             console.log(`[ReactiveStore AutoSave] Cleaned up ${cleanedCount} resolved auto-save entries`);
         }
-        if (savedCount === 0 && cleanedCount === 0) {
+        if (skippedCount > 0) {
+            console.log(`[ReactiveStore AutoSave] Skipped ${skippedCount} store(s) - already auto-saved in current state`);
+        }
+        if (savedCount === 0 && cleanedCount === 0 && skippedCount === 0) {
             console.log('[ReactiveStore AutoSave] No changes to save or clean up');
         }
     } catch (error) {
