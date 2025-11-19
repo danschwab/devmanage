@@ -262,7 +262,12 @@ export const PacklistContent = {
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
+            console.log('[PacklistContent] Checking auto-saved packlists...');
+            
             try {
+                // Clear the set before checking to avoid stale entries
+                this.autoSavedPacklists.clear();
+                
                 // Check each individual packlist for auto-saved data
                 for (const tab of this.packlistsStore.data) {
                     if (tab.title === 'TEMPLATE') continue;
@@ -283,9 +288,12 @@ export const PacklistContent = {
                     );
                     
                     if (hasAutoSave) {
+                        console.log(`[PacklistContent] Found auto-save for: ${tab.title}`);
                         this.autoSavedPacklists.add(tab.title);
                     }
                 }
+                
+                console.log('[PacklistContent] Auto-saved packlists:', Array.from(this.autoSavedPacklists));
             } catch (error) {
                 console.error('[PacklistContent] Error checking auto-saved packlists:', error);
             }
