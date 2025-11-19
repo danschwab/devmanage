@@ -44,6 +44,9 @@ async function getModalManager() {
     return modalManager;
 }
 
+// Track if auth prompt is already showing to prevent multiple modals
+let authPromptPending = null;
+
 /**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
@@ -157,12 +160,18 @@ export class Auth {
             const isAuthenticated = await this.checkAuth();
             
             if (!isAuthenticated && showModal) {
+                // If auth prompt is already pending, return that promise instead of showing another modal
+                if (authPromptPending) {
+                    console.log(`[Auth] Auth prompt already showing for another ${context}, reusing existing prompt`);
+                    return authPromptPending;
+                }
+                
                 console.warn(`[Auth] Authentication check failed for ${context}`);
                 
                 const manager = await getModalManager();
                 
-                // Show modal with re-authentication option
-                return new Promise((resolve) => {
+                // Create and store the pending promise to prevent duplicate modals
+                authPromptPending = new Promise((resolve) => {
                     const defaultMessage = `Your session has expired. Would you like to maintain your current session? This will re-authenticate and continue your ${context}.`;
                     
                     manager.confirm(
@@ -175,21 +184,25 @@ export class Auth {
                                 
                                 if (authState.isAuthenticated) {
                                     console.log(`[Auth] Re-authentication successful for ${context}`);
+                                    authPromptPending = null; // Clear pending state
                                     resolve(true);
                                 } else {
                                     console.error(`[Auth] Re-authentication failed for ${context}`);
                                     manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
+                                    authPromptPending = null; // Clear pending state
                                     resolve(false);
                                 }
                             } catch (error) {
                                 console.error(`[Auth] Re-authentication error for ${context}:`, error);
                                 manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
+                                authPromptPending = null; // Clear pending state
                                 resolve(false);
                             }
                         },
                         () => {
                             // User cancelled
                             console.log(`[Auth] User declined re-authentication for ${context}`);
+                            authPromptPending = null; // Clear pending state
                             resolve(false);
                         },
                         'Session Expired',
@@ -197,6 +210,8 @@ export class Auth {
                         'Cancel'
                     );
                 });
+                
+                return authPromptPending;
             }
             
             return isAuthenticated;

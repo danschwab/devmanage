@@ -956,6 +956,11 @@ function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
  * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
  */
 async function saveDirtyStoresToUserData() {
+    if (Auth.authPromptPending) {
+        console.log('[ReactiveStore AutoSave] Auth prompt pending, skipping auto-save');
+        return;
+    }
+    
     // Check authentication before attempting to save (with prompt if expired)
     const isAuthenticated = await Auth.checkAuthWithPrompt({
         context: 'auto-save',

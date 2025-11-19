@@ -126,18 +126,18 @@ export const PacklistContent = {
                 }
             },
             deep: false
+        },
+        // Also watch for loading state change to catch initial load completion
+        'packlistsStore.isLoading': {
+            handler(isLoading, wasLoading) {
+                // When loading completes (isLoading goes from true to false)
+                if (wasLoading && !isLoading && this.packlistsStore.data && this.packlistsStore.data.length > 0) {
+                    this.checkAutoSavedPacklists();
+                }
+            }
         }
     },
     mounted() {
-        // Initialize packlists store with default year filter (matches SavedSearchSelect default)
-        // This ensures checkAutoSavedPacklists() runs immediately via the watcher
-        const currentYear = new Date().getFullYear();
-        this.filter = {
-            startDate: `${currentYear}-01-01`,
-            endDate: `${currentYear}-12-31`,
-            byShowDate: true
-        };
-        this.recreateStore();
 
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {
