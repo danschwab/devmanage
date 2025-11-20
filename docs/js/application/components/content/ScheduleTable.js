@@ -192,7 +192,7 @@ export const ScheduleTableComponent = {
         async handleRefresh() {
             // Reload schedule data (cache will be automatically invalidated)
             invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED'] }
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED'] } // invalidate all prod sched tabs to force refresh of client and show ref info as well
             ], true);
         },
         formatColumnLabel(header) {

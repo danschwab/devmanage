@@ -299,10 +299,12 @@ export const PacklistContent = {
             }
         },
         async handleRefresh() {
+            console.log('PacklistContent: Refresh requested');
             // Invalidate the getTabs cache to force reload
             invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'ProductionSchedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
-            ]);
+            ], true);
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
@@ -317,12 +319,12 @@ export const PacklistContent = {
                 :show-refresh="true"
                 :items="availablePacklists"
                 :on-item-click="handlePacklistSelect"
-                :on-refresh="handleRefresh"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
                 :loading-progress="loadingProgress"
                 :loading-message="analysisMessage"
                 :empty-message="packlistsStore ? 'No packlists available' : ''"
+                @refresh="handleRefresh"
             >
                 <template #header-area>
                     <SavedSearchSelect

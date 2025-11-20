@@ -15,10 +15,6 @@ export const CardsComponent = {
             type: Function,
             required: true
         },
-        onRefresh: {
-            type: Function,
-            default: null
-        },
         isLoading: {
             type: Boolean,
             default: false
@@ -127,9 +123,8 @@ export const CardsComponent = {
             }
         },
         handleRefresh() {
-            if (this.onRefresh && typeof this.onRefresh === 'function') {
-                this.onRefresh();
-            }
+            console.log('CardsComponent: Refresh requested');
+            this.$emit('refresh');
         }
     },
     template: html`
