@@ -177,7 +177,7 @@ export class Auth {
                     manager.confirm(
                         message || defaultMessage,
                         async () => {
-                            // User clicked "Maintain Current Session"
+                            // User clicked "Log in"
                             try {
                                 console.log(`[Auth] Attempting re-authentication for ${context}...`);
                                 await Auth.login();
@@ -202,11 +202,12 @@ export class Auth {
                         () => {
                             // User cancelled
                             console.log(`[Auth] User declined re-authentication for ${context}`);
+                            Auth.logout();
                             authPromptPending = null; // Clear pending state
                             resolve(false);
                         },
                         'Session Expired',
-                        'Maintain Session',
+                        'Log In',
                         'Cancel'
                     );
                 });
