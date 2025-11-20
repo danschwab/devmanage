@@ -161,8 +161,13 @@ const App = {
                         if (containerElement) {
                             // Get element position relative to the scrollable container
                             const elementTop = containerElement.offsetTop;
-                            // Scroll to 50 pixels down from element top
-                            appContent.scrollTo({ top: elementTop - 110, behavior: 'smooth' });
+                            // Calculate offset from CSS variables (navbar height + padding)
+                            const computedStyle = getComputedStyle(document.documentElement);
+                            const navbarHeight = parseInt(computedStyle.getPropertyValue('--navbar-height')) || 0;
+                            const paddingLg = parseInt(computedStyle.getPropertyValue('--padding-lg')) || 0;
+                            const scrollOffset = navbarHeight + paddingLg;
+                            // Scroll to position with dynamic offset
+                            appContent.scrollTo({ top: elementTop - scrollOffset, behavior: 'smooth' });
                         } else {
                             appContent.scrollTop = 0;
                         }

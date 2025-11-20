@@ -618,7 +618,10 @@ button.card {
     border-top: 0;
 }
 
-
+thead {
+    z-index: 10;
+    position: relative;
+}
 th, td {
     padding: 0.5rem;
     border: 1px solid var(--color-border);
@@ -1402,7 +1405,6 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     footer {
         display: none;
     }
-
     table thead th div span {
         color: white !important;
         font-size: 10pt !important;

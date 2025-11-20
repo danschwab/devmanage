@@ -695,12 +695,58 @@ export const TableComponent = {
         document.addEventListener('click', this.handleOutsideClick);
         // Listen for keyboard shortcuts (Escape, Delete)
         document.addEventListener('keydown', this.handleEscapeKey);
+        
+        // Set up sticky header positioning
+        const appContent = document.querySelector('#app-content');
+        if (appContent) {
+            this.handleStickyHeaders = () => {
+                const thead = this.$el.querySelector('thead');
+                if (!thead) return;
+                
+                const table = this.$el.querySelector('table');
+                if (!table) return;
+                
+                // Get CSS variable values
+                const computedStyle = getComputedStyle(document.documentElement);
+                const navbarHeight = parseInt(computedStyle.getPropertyValue('--navbar-height')) || 0;
+                const paddingLg = parseInt(computedStyle.getPropertyValue('--padding-lg')) || 0;
+                const stickyOffset = navbarHeight;
+                
+                // Get positions
+                const tableRect = table.getBoundingClientRect();
+                const theadRect = thead.getBoundingClientRect();
+                const appContentRect = appContent.getBoundingClientRect();
+                
+                // Calculate if header should stick
+                const tableTop = tableRect.top - appContentRect.top;
+                const tableBottom = tableRect.bottom - appContentRect.top;
+                
+                if (tableTop <= stickyOffset && tableBottom > stickyOffset + theadRect.height) {
+                    // Table is scrolled past the sticky point and not at bottom
+                    thead.style.transform = `translateY(${stickyOffset - tableTop}px)`;
+                    thead.style.boxShadow = '0 4px 8px var(--color-shadow)';
+                } else {
+                    // Reset to normal position
+                    thead.style.transform = '';
+                    thead.style.boxShadow = '';
+                }
+            };
+            
+            appContent.addEventListener('scroll', this.handleStickyHeaders, { passive: true });
+            this.handleStickyHeaders(); // Initial position
+        }
     },
     beforeUnmount() {
         document.removeEventListener('click', this.handleOutsideClick);
         document.removeEventListener('keydown', this.handleEscapeKey);
         // Clean up any active click state
         this.resetClickState();
+        
+        // Clean up sticky header scroll listener
+        const appContent = document.querySelector('#app-content');
+        if (appContent && this.handleStickyHeaders) {
+            appContent.removeEventListener('scroll', this.handleStickyHeaders);
+        }
     },
     methods: {
         handleRefresh() {
