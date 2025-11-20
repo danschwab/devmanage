@@ -55,6 +55,10 @@ const App = {
         dashboardLoading() {
             return NavigationRegistry.dashboardRegistry.isLoading;
         },
+        // Check if dashboard is doing initial load (triggers app loading indicator)
+        isDashboardInitialLoad() {
+            return NavigationRegistry.dashboardRegistry.isInitialLoad;
+        },
         // Reactive containers based on current page and authentication state
         containers() {
             if (!authState.isAuthenticated) {
@@ -136,6 +140,40 @@ const App = {
                     }, this);
                 }
             }
+        });
+
+        // Watch for page/path changes to reset scroll position
+        this.$watch(() => [this.currentPage, this.currentPath], ([newPage, newPath], [oldPage, oldPath]) => {
+            this.$nextTick(() => {
+                const appContent = document.querySelector('#app-content');
+                if (!appContent) return;
+                
+                // Check if navigating TO dashboard FROM a page that's ON the dashboard
+                // Use oldPath from watcher since it captures the previous state before change
+                if (newPage === 'dashboard' && oldPage !== 'dashboard' && oldPath && oldPath !== 'dashboard') {
+                    const isOnDashboard = NavigationRegistry.dashboardRegistry.has(oldPath);
+                    
+                    if (isOnDashboard) {
+                        const containerType = NavigationRegistry.getTypeFromPath(oldPath);
+                        const containerId = `${containerType}-${oldPath.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                        const containerElement = appContent.querySelector(`[data-container-id="${containerId}"]`);
+                        
+                        if (containerElement) {
+                            // Get element position relative to the scrollable container
+                            const elementTop = containerElement.offsetTop;
+                            // Scroll to 50 pixels down from element top
+                            appContent.scrollTo({ top: elementTop - 110, behavior: 'smooth' });
+                        } else {
+                            appContent.scrollTop = 0;
+                        }
+                    } else {
+                        appContent.scrollTop = 0;
+                    }
+                } else {
+                    // For all other navigation, scroll to top
+                    appContent.scrollTop = 0;
+                }
+            });
         });
 
         this.appLoading = false;
@@ -228,10 +266,10 @@ const App = {
                 </div>
                 
                 <!-- App loading indicator -->
-                <div v-else-if="appLoading" :class="'container' + (currentPage === 'dashboard' ? ' dashboard-card' : '')" style="display:flex; align-items: center; justify-content: center;">
+                <div v-else-if="appLoading || (isDashboardInitialLoad && currentPage === 'dashboard')" :class="'container' + (currentPage === 'dashboard' ? ' dashboard-card' : '')" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">
                         <img src="images/loading.gif" alt="..."/>
-                        <p>{{ appLoadingMessage }}</p>
+                        <p>{{ isDashboardInitialLoad ? 'Loading dashboard...' : appLoadingMessage }}</p>
                     </div>
                 </div>
 
@@ -254,6 +292,7 @@ const App = {
                     <app-container 
                         v-for="container in containers" 
                         :key="container.key"
+                        :data-container-id="container.key"
                         :container-id="container.key"
                         :container-type="container.type"
                         :title="container.title"

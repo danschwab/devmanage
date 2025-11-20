@@ -96,6 +96,7 @@ export class Auth {
             return false;
         } finally {
             authState.isLoading = false;
+            authPromptPending = null;
         }
     }
 
@@ -130,6 +131,7 @@ export class Auth {
             authState.error = error.message;
         } finally {
             authState.isLoading = false;
+            authPromptPending = null;
         }
     }
 

@@ -37,6 +37,13 @@ export const DashboardRegistry = {
     },
 
     /**
+     * Check if this is the initial load (first time loading dashboard data)
+     */
+    get isInitialLoad() {
+        return this.store?.initialLoad && this.store?.isLoading;
+    },
+
+    /**
      * Get loading message (only shown during initial load)
      */
     get loadingMessage() {

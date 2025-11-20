@@ -23,9 +23,9 @@ Need features:
 
 ## Primary Use Cases
 
-- [30%] We can have pack lists generated from Inventor
-- [90%] We can know if there are item shortages as pack lists are generated
-- [30%] If we add bematrix stuff to pack lists, we can also check inventory qty of them
+- [50%] We can have pack lists generated from Inventor
+- [95%] We can know if there are item shortages as pack lists are generated
+- [80%] If we add bematrix stuff to pack lists, we can also check inventory qty of them
 - [ 0%] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
 - [ 0%] We can get an inventory report of item quantities throughout the year
 - [ 0%] We can migrate all our checklists and schedule management to this system
@@ -39,7 +39,7 @@ Need features:
 - [ ] label as "some data may be out of date"
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] add context variables to live site github
-- [ ] refresh buttons should clear caches
+- [?] refresh buttons should clear caches
 
 **problems**
 
@@ -48,12 +48,12 @@ Need features:
 - [x] error causing card component to lose analytics details on reload after cache clear???
 - [t] ensure log out/in does not break things: the pin button currently breaks on reauth (was test data missing email on reauth...)
 - [x] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
-- [ ] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
-- [ ] scrolling issue when navigating
+- [x] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
+- [x] scrolling issue when navigating
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [t] error causing imperfect or corrupted analytics information on data refresh after auth
 - [x] github deployment needs to be rerun every time due to config.js build issues? (need to set up deployment via actions in github settings)
-- [ ] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
+- [?] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
 
 **Application tasks**
 
@@ -61,11 +61,11 @@ Architecture Improvements
 
 - [x] dashboard configuration
 - [x] user preferences storage
-- [ ] consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
 - [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
+      consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
 - [t] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
 - [x] extra spreadsheet MetaData column
-- [ ] impliment metadata for packlists
+- [ ] impliment metadata for packlists (complete for inventory, not complete for multilayer packlist data)
 - [x] save history: dateTime, userName, fields edited & old values
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
@@ -78,6 +78,8 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Create new pack list in Google Sheets
 - [x] Input items into Google Sheets
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
+- [ ] allow pack list export from project manager
+- [ ] fix system that checks for diff and allows updates to existing packlist instead of full overwrite
 - [ ] change the packlist export to export all items correctly
 - [ ] fix CABINET item numbers in inventor
 - [ ] fix FURNITURE item numbers in inventor
@@ -110,7 +112,7 @@ Pack Lists in Web
 - [ ] Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
 - [ ] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
-- [ ] automations interface, packlist rules
+- [ ] !!! automations interface, packlist rules
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?
 - [ ] description change recommendations for common or similar items that checks or aggregates history potentially?
@@ -138,6 +140,8 @@ show management system
 
 - [x] link shows to pack lists
 - [x] advanced search and preset system
+- [ ] interface to allow "overlap" vs "show date" options for advanced search
+- [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
 - [x] default schedule ship date as analytics step
 - [ ] create and edit shows
       express checklist columns as checkboxes

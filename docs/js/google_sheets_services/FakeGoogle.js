@@ -733,10 +733,9 @@ export class FakeGoogleSheetsService {
             ]
         },
         'CACHE': {
-            'CacheData': [
-                ['Key', 'Value', 'Timestamp'],
-                ['last_sync', '2025-07-10T10:30:00Z', '1720606200000'],
-                ['inventory_count', '475', '1720606200000']
+            'UserData_test_example_com': [
+                ['ID', 'Value'],
+                ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ]
         }
     };
@@ -769,7 +768,7 @@ export class FakeGoogleSheetsService {
             { title: 'Shows', sheetId: 2 }
         ],
         'CACHE': [
-            { title: 'CacheData', sheetId: 0 }
+            { title: 'UserData_test_example_com', sheetId: 0 }
         ]
     };
 
