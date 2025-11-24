@@ -35,6 +35,9 @@ Need features:
 
 **chores**
 
+      make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
+
+- [ ] remove hamburger buttons that do nothing
 - [ ] packlist print titleblock??
 - [ ] label as "some data may be out of date"
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
@@ -43,6 +46,11 @@ Need features:
 
 **problems**
 
+- [ ] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
+- [ ] make navigation modal not allow exit
+- [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
+- [ ] buttons dont work on reports
+- [ ] changing url doesnt immidiately update saved search
 - [x] container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 - [x] error causing early dashboard changes to be overwritten by an empty dashboard
 - [x] error causing card component to lose analytics details on reload after cache clear???

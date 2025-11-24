@@ -175,6 +175,11 @@ div#app-content > div.empty-message {
     text-align: left;
     overflow: visible;
 }
+.container:has(.wide-table) {
+    max-width: 100%;
+}
+
+
 .container-header {
     display: flex;
     flex-wrap: wrap-reverse;
@@ -621,6 +626,7 @@ button.card {
 thead {
     z-index: 10;
     position: relative;
+    transition: transform 0s linear;
 }
 th, td {
     padding: 0.5rem;
@@ -698,7 +704,7 @@ td:has(img) {
 thead:hover .sort-button {
     opacity: .5;
 }
-.sort-button:hover, .sort-button.active, thead:hover .sort-button.active {
+thead:hover .sort-button:hover, .sort-button.active, thead:hover .sort-button.active {
     background-color: var(--color-gray-bg-hover);
     opacity: 1;
 }

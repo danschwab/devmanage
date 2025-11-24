@@ -10,7 +10,7 @@ class packListUtils_uncached {
      * @param {string} text - Text to search for item information
      * @returns {Promise<Object>} Object with {quantity: number, itemNumber: string|null, description: string}
      */
-    static async extractItemFromText(deps, text) {
+    static async extractItemFromText(deps, text, itemCategoryFilter = undefined) {
         if (!text || typeof text !== 'string') {
             return {
                 quantity: 1,
@@ -29,7 +29,8 @@ class packListUtils_uncached {
             const tabName = await deps.call(InventoryUtils.getTabNameForItem, itemNumber);
             
             // Only return the item if its prefix exists in the inventory index
-            if (tabName) {
+            // and matches the optional array itemCategoryFilter (case insensitive)
+            if (tabName && (!itemCategoryFilter || itemCategoryFilter.some(cat => cat.toUpperCase() === tabName.toUpperCase()))) {
                 if (tabName === 'HARDWARE') {
                     return await deps.call(PackListUtils.extractHardwareFromText, text);
                 } else {
@@ -48,12 +49,15 @@ class packListUtils_uncached {
             }
         }
         
-        // No item found in text, attempt a hardware search
-        const hardwareResult = await deps.call(PackListUtils.extractHardwareFromText, text);
-        if (hardwareResult.itemNumber) {
-            return hardwareResult;
+        if (itemCategoryFilter && itemCategoryFilter.includes('HARDWARE')) {
+            // No item found in text, attempt a hardware search
+            const hardwareResult = await deps.call(PackListUtils.extractHardwareFromText, text);
+            if (hardwareResult.itemNumber) {
+                return hardwareResult;
+            }
         }
 
+        // No item found in text within the specified categories
         return {
             quantity: 1,
             itemNumber: null,
@@ -206,7 +210,7 @@ class packListUtils_uncached {
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Map of itemId to quantity
      */
-    static async extractItems(deps, projectIdentifier) {
+    static async extractItems(deps, projectIdentifier, itemCategoryFilter = undefined) {
         // Get pack list content (array of crate objects with Items arrays)
         const crates = await deps.call(PackListUtils.getContent, projectIdentifier, "Pack");
 
@@ -221,7 +225,7 @@ class packListUtils_uncached {
                     // For each property in the item object, check for item codes
                     for (const cell of Object.values(itemObj)) {
                         if (!cell) continue;
-                        const extracted = await deps.call(PackListUtils.extractItemFromText, cell);
+                        const extracted = await deps.call(PackListUtils.extractItemFromText, cell, itemCategoryFilter);
                         if (extracted.itemNumber) {
                             itemMap[extracted.itemNumber] = (itemMap[extracted.itemNumber] || 0) + extracted.quantity;
                         }
@@ -575,13 +579,13 @@ class packListUtils_uncached {
      * @param {Array<string>} projectIdentifiers - Array of project identifiers to extract items from
      * @returns {Promise<Array>} Array of items with quantities per show and total
      */
-    static async extractItemsFromMultipleShows(deps, projectIdentifiers) {
+    static async extractItemsFromMultipleShows(deps, projectIdentifiers, itemCategoryFilter = undefined) {
         const allItemsMap = {};
         
         // Extract items from each show
         for (const projectId of projectIdentifiers) {
             try {
-                const itemsMap = await deps.call(PackListUtils.extractItems, projectId);
+                const itemsMap = await deps.call(PackListUtils.extractItems, projectId, itemCategoryFilter);
                 
                 // Aggregate all unique items
                 for (const [itemId, quantity] of Object.entries(itemsMap)) {

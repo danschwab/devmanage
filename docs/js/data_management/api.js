@@ -578,8 +578,8 @@ class Requests_uncached {
      * @param {Array<string>} projectIdentifiers - Array of project identifiers
      * @returns {Promise<Array<Object>>} Array of item objects with quantities per show
      */
-    static async getMultipleShowsItemsSummary(deps, projectIdentifiers) {
-        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers);
+    static async getMultipleShowsItemsSummary(deps, projectIdentifiers, itemCategoryFilter = undefined) {
+        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, itemCategoryFilter);
     }
 
     /**

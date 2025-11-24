@@ -14,6 +14,8 @@ export const ShowInventoryReport = {
     data() {
         return {
             reportStore: null,
+            inventoryCategoriesStore: null,
+            itemCategoryFilter: undefined, // Optional filter for item categories
             showIdentifiers: [], // List of show IDs from search
             error: null,
             isLoadingShows: false, // Loading state for fetching shows before store creation
@@ -115,6 +117,31 @@ export const ShowInventoryReport = {
         // Get search term from URL parameters
         initialSearchTerm() {
             return this.navParams?.searchTerm || '';
+        },
+        initialItemCategoryFilter() {
+            // Get item category filter from URL parameters as a single string in an array
+            const filterParam = this.navParams?.itemCategoryFilter || null;
+            if (filterParam) {
+                return [filterParam];
+            }
+            return undefined;
+        }
+    },
+    watch: {
+        // watch for isLoading state of inventoryCategoriesStore to apply url filter
+        'inventoryCategoriesStore.isLoading': {
+            handler(isLoading, wasLoading) {
+                // When loading completes (isLoading goes from true to false)
+                if (wasLoading && !isLoading && this.inventoryCategoriesStore.data && this.inventoryCategoriesStore.data.length > 0) {
+                    this.$nextTick(() => {
+                        // ensure the select box changes
+                        this.itemCategoryFilter = this.initialItemCategoryFilter;
+                        this.initializeReportStore();
+                    });
+                    // no need to watch further
+                    this.$watchers['inventoryCategoriesStore.isLoading'].teardown();
+                }
+            }
         }
     },
     methods: {
@@ -271,7 +298,7 @@ export const ShowInventoryReport = {
             this.reportStore = getReactiveStore(
                 Requests.getMultipleShowsItemsSummary,
                 null,
-                [this.showIdentifiers],
+                [this.showIdentifiers, this.itemCategoryFilter],
                 analysisConfig,
                 true // Auto-load
             );
@@ -307,8 +334,19 @@ export const ShowInventoryReport = {
             ], true);
         }
     },
+    mounted() {
+        
+        this.inventoryCategoriesStore = getReactiveStore(
+            Requests.getAvailableTabs,
+            null, // No save function
+            ['INVENTORY'], // Arguments
+            null // No analysis config
+        );
+        
+        this.itemCategoryFilter = this.initialItemCategoryFilter;
+    },
     template: html`
-        <div class="show-inventory-report">
+        <div :class="(tableColumns && tableColumns.length > 10) ? 'wide-table' : ''">
             <div v-if="error" class="error-message">
                 <p>{{ error }}</p>
             </div>
@@ -326,7 +364,6 @@ export const ShowInventoryReport = {
                 :loading-message="loadingMessage"
                 :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
                 empty-message="Select a saved search to load shows and generate report"
-                class="show-inventory-report-table"
                 @refresh="handleRefresh"
             >
                 <template #header-area>
@@ -339,6 +376,22 @@ export const ShowInventoryReport = {
                         <span v-if="showIdentifiers.length > 0 || isLoading" class="card gray">
                             {{ showIdentifiers.length }} show{{ showIdentifiers.length !== 1 ? 's' : '' }} {{isLoading ? 'loading...' : 'loaded'}}
                         </span>
+                        <select 
+                            :value="itemCategoryFilter ? itemCategoryFilter[0] : ''" 
+                            :disabled="inventoryCategoriesStore && inventoryCategoriesStore.isLoading"
+                            @change="itemCategoryFilter = $event.target.value ? [$event.target.value] : undefined; initializeReportStore();"
+                            >
+                            <option v-for="category in inventoryCategoriesStore?.data || []" 
+                                    v-show= "category.title != 'INDEX'"
+                                    :key="category.title"
+                                    :value="category.title"
+                                    @click="itemCategoryFilter = [category.title]; initializeReportStore();">
+                                {{ category.title }}
+                            </option>
+                            <option value="" @click="itemCategoryFilter = undefined; initializeReportStore();">
+                                All Items
+                            </option>
+                        </select>
                     </div>
                 </template>
 

@@ -275,6 +275,7 @@ export const InventoryContent = {
                     displayName: 'Reports',
                     dashboardTitle: 'Inventory Reports',
                     icon: 'assessment',
+                    children: {}
                 },
                 new: {
                     displayName: 'New Item',
