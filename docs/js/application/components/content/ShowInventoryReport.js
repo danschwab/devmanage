@@ -138,8 +138,6 @@ export const ShowInventoryReport = {
                         this.itemCategoryFilter = this.initialItemCategoryFilter;
                         this.initializeReportStore();
                     });
-                    // no need to watch further
-                    this.$watchers['inventoryCategoriesStore.isLoading'].teardown();
                 }
             }
         }
