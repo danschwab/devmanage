@@ -62,14 +62,33 @@ class PriorityQueueManager {
     enqueue(apiFunction, args = [], priority = 5, metadata = {}) {
         // Validate priority
         priority = Math.max(0, Math.min(9, priority));
-        
+
+        // Create a unique key for deduplication (function ref + JSON args)
+        const fnKey = apiFunction && apiFunction._methodName ? apiFunction._methodName : apiFunction.toString();
+        const argsKey = JSON.stringify(args);
+        const dedupeKey = `${fnKey}:${argsKey}`;
+
+        // Cancel any pending identical calls in this priority bucket
+        const queue = this.queues[priority];
+        for (let i = queue.length - 1; i >= 0; i--) {
+            const entry = queue[i];
+            const entryFnKey = entry.apiFunction && entry.apiFunction._methodName ? entry.apiFunction._methodName : entry.apiFunction.toString();
+            const entryArgsKey = JSON.stringify(entry.args);
+            const entryDedupeKey = `${entryFnKey}:${entryArgsKey}`;
+            if (entryDedupeKey === dedupeKey) {
+                // Cancel earlier entry
+                entry.reject(new Error('Cancelled due to newer identical call'));
+                queue.splice(i, 1);
+            }
+        }
+
         // Create a deferred promise
         let resolveCallback, rejectCallback;
         const promise = new Promise((resolve, reject) => {
             resolveCallback = resolve;
             rejectCallback = reject;
         });
-        
+
         // Create queue entry
         const entry = {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -79,21 +98,22 @@ class PriorityQueueManager {
             metadata,
             resolve: resolveCallback,
             reject: rejectCallback,
-            enqueuedAt: Date.now()
+            enqueuedAt: Date.now(),
+            dedupeKey
         };
-        
+
         // Add to appropriate priority queue
-        this.queues[priority].push(entry);
-        
+        queue.push(entry);
+
         // Update statistics
         this.stats.totalEnqueued++;
         this.stats.byPriority[priority].enqueued++;
-        
+
         // Start processing if not already running
         if (!this.isProcessing) {
             this.startProcessing();
         }
-        
+
         return promise;
     }
     
