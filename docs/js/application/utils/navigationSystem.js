@@ -325,24 +325,24 @@ export const NavigationRegistry = {
         // GUARD: Check if this navigation is for the current active path
         // This prevents stale async operations from navigating away from where the user currently is
         // Only apply this guard for programmatic navigation (not browser back/forward)
-        if (!isBrowserNavigation && appContext.currentPath && appContext.currentPath !== pathInfo.path) {
-            // Check if the target path is a parent or child of current path
-            const currentSegments = appContext.currentPath.split('/').filter(s => s);
-            const targetSegments = pathInfo.path.split('/').filter(s => s);
+        // if (!isBrowserNavigation && appContext.currentPath && appContext.currentPath !== pathInfo.path) {
+        //     // Check if the target path is a parent or child of current path
+        //     const currentSegments = appContext.currentPath.split('/').filter(s => s);
+        //     const targetSegments = pathInfo.path.split('/').filter(s => s);
             
-            // Allow navigation if target is parent (going up) or sibling/unrelated (intentional navigation)
-            // Block if target appears to be the same page/section the user left
-            const isSameBaseSection = currentSegments[0] === targetSegments[0];
-            const targetIsCurrentOrChild = pathInfo.path.startsWith(appContext.currentPath) || 
-                                          appContext.currentPath.startsWith(pathInfo.path);
+        //     // Allow navigation if target is parent (going up) or sibling/unrelated (intentional navigation)
+        //     // Block if target appears to be the same page/section the user left
+        //     const isSameBaseSection = currentSegments[0] === targetSegments[0];
+        //     const targetIsCurrentOrChild = pathInfo.path.startsWith(appContext.currentPath) || 
+        //                                   appContext.currentPath.startsWith(pathInfo.path);
             
-            // Only block if we're trying to navigate to a different path within the same section
-            // This catches the case where async operations try to navigate back to where they started
-            if (isSameBaseSection && !targetIsCurrentOrChild && targetSegments.length > 1) {
-                console.log('[NavigationRegistry] Ignoring stale navigation request to:', pathInfo.path, '(current:', appContext.currentPath + ')');
-                return { action: 'navigation_ignored', reason: 'stale_request', targetPath: pathInfo.path, currentPath: appContext.currentPath };
-            }
-        }
+        //     // Only block if we're trying to navigate to a different path within the same section
+        //     // This catches the case where async operations try to navigate back to where they started
+        //     if (isSameBaseSection && !targetIsCurrentOrChild && targetSegments.length > 1) {
+        //         console.log('[NavigationRegistry] Ignoring stale navigation request to:', pathInfo.path, '(current:', appContext.currentPath + ')');
+        //         return { action: 'navigation_ignored', reason: 'stale_request', targetPath: pathInfo.path, currentPath: appContext.currentPath };
+        //     }
+        // }
         
         // Check authentication before allowing navigation
         const isAuthenticated = await Auth.checkAuthWithPrompt({

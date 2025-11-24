@@ -46,6 +46,7 @@ Need features:
 
 **problems**
 
+- [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
 - [ ] make navigation modal not allow exit
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
