@@ -699,6 +699,9 @@ export const TableComponent = {
         // Set up sticky header positioning
         const appContent = document.querySelector('#app-content');
         if (appContent) {
+            // Create a clone of thead for sticky positioning
+            this.stickyHeaderClone = null;
+            
             this.handleStickyHeaders = () => {
                 const thead = this.$el.querySelector('thead');
                 if (!thead) return;
@@ -709,26 +712,74 @@ export const TableComponent = {
                 // Get CSS variable values
                 const computedStyle = getComputedStyle(document.documentElement);
                 const navbarHeight = parseInt(computedStyle.getPropertyValue('--navbar-height')) || 0;
-                const paddingLg = parseInt(computedStyle.getPropertyValue('--padding-lg')) || 0;
                 const stickyOffset = navbarHeight;
                 
                 // Get positions
                 const tableRect = table.getBoundingClientRect();
                 const theadRect = thead.getBoundingClientRect();
-                const appContentRect = appContent.getBoundingClientRect();
                 
                 // Calculate if header should stick
-                const tableTop = tableRect.top - appContentRect.top;
-                const tableBottom = tableRect.bottom - appContentRect.top;
+                const shouldStick = tableRect.top <= stickyOffset && 
+                                   tableRect.bottom > stickyOffset + theadRect.height;
                 
-                if (tableTop <= stickyOffset && tableBottom > stickyOffset + theadRect.height) {
-                    // Table is scrolled past the sticky point and not at bottom
-                    thead.style.transform = `translateY(${stickyOffset - tableTop}px)`;
-                    thead.style.boxShadow = '0 4px 8px var(--color-shadow)';
-                } else {
-                    // Reset to normal position
-                    thead.style.transform = '';
-                    thead.style.boxShadow = '';
+                if (shouldStick && !this.stickyHeaderClone) {
+                    // Create and position the clone
+                    this.stickyHeaderClone = thead.cloneNode(true);
+                    this.stickyHeaderClone.style.position = 'fixed';
+                    this.stickyHeaderClone.style.top = stickyOffset + 'px';
+                    this.stickyHeaderClone.style.left = tableRect.left + 'px';
+                    this.stickyHeaderClone.style.width = tableRect.width + 'px';
+                    this.stickyHeaderClone.style.zIndex = '10';
+                    this.stickyHeaderClone.style.boxShadow = '0 4px 8px var(--color-shadow)';
+                    this.stickyHeaderClone.style.tableLayout = 'fixed';
+                    this.stickyHeaderClone.classList.add('sticky-header-clone');
+                    
+                    // Create a wrapper table to maintain proper table structure
+                    const wrapperTable = document.createElement('table');
+                    wrapperTable.style.position = 'fixed';
+                    wrapperTable.style.top = stickyOffset + 'px';
+                    wrapperTable.style.left = tableRect.left + 'px';
+                    wrapperTable.style.width = tableRect.width + 'px';
+                    wrapperTable.style.zIndex = '10';
+                    wrapperTable.style.boxShadow = '0 4px 8px var(--color-shadow)';
+                    wrapperTable.style.tableLayout = 'fixed';
+                    wrapperTable.style.borderCollapse = 'collapse';
+                    wrapperTable.style.background = 'var(--background-color)';
+                    wrapperTable.className = table.className;
+                    
+                    // Clone colgroup to preserve column widths
+                    const colgroup = table.querySelector('colgroup');
+                    if (colgroup) {
+                        const clonedColgroup = colgroup.cloneNode(true);
+                        wrapperTable.appendChild(clonedColgroup);
+                    }
+                    
+                    // Append cloned thead to wrapper table
+                    wrapperTable.appendChild(this.stickyHeaderClone);
+                    
+                    // Copy exact computed widths from original header cells to clone cells
+                    const originalCells = thead.querySelectorAll('th');
+                    const cloneCells = this.stickyHeaderClone.querySelectorAll('th');
+                    originalCells.forEach((cell, i) => {
+                        if (cloneCells[i]) {
+                            const computedWidth = window.getComputedStyle(cell).width;
+                            cloneCells[i].style.width = computedWidth;
+                            cloneCells[i].style.minWidth = computedWidth;
+                            cloneCells[i].style.maxWidth = computedWidth;
+                        }
+                    });
+                    
+                    // Store reference to wrapper table
+                    this.stickyHeaderWrapper = wrapperTable;
+                    table.parentElement.appendChild(wrapperTable);
+                } else if (!shouldStick && this.stickyHeaderWrapper) {
+                    // Remove the clone
+                    this.stickyHeaderWrapper.remove();
+                    this.stickyHeaderWrapper = null;
+                    this.stickyHeaderClone = null;
+                } else if (shouldStick && this.stickyHeaderWrapper) {
+                    // Update position if scrolling horizontally
+                    this.stickyHeaderWrapper.style.left = tableRect.left + 'px';
                 }
             };
             
@@ -742,10 +793,15 @@ export const TableComponent = {
         // Clean up any active click state
         this.resetClickState();
         
-        // Clean up sticky header scroll listener
+        // Clean up sticky header clone and scroll listener
         const appContent = document.querySelector('#app-content');
         if (appContent && this.handleStickyHeaders) {
             appContent.removeEventListener('scroll', this.handleStickyHeaders);
+        }
+        if (this.stickyHeaderWrapper) {
+            this.stickyHeaderWrapper.remove();
+            this.stickyHeaderWrapper = null;
+            this.stickyHeaderClone = null;
         }
     },
     methods: {
