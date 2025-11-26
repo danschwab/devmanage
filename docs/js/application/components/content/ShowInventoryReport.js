@@ -318,7 +318,7 @@ export const ShowInventoryReport = {
 
         // Calculate remaining quantity for a row
         calculateRemaining(row) {
-            if (!row || row.available === null || row.available === undefined) {
+            if (!row) {
                 return null;
             }
             
