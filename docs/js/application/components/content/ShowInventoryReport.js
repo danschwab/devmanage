@@ -323,10 +323,9 @@ export const ShowInventoryReport = {
             }
             
             let available = 0;
-            if (row.available == '—') {
-                available = 0;
-            } else {
-                available = parseInt(row.available);
+            //if row.available is a number, then use it directly
+            if (typeof row.available === 'number') {
+                available = row.available;
             }
 
             const totalUsed = Object.values(row.shows || {}).reduce(
