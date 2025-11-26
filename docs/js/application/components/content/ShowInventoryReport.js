@@ -322,6 +322,13 @@ export const ShowInventoryReport = {
                 return null;
             }
             
+            let available = 0;
+            if (row.available == '—') {
+                available = 0;
+            } else {
+                available = parseInt(row.available);
+            }
+
             const totalUsed = Object.values(row.shows || {}).reduce(
                 (sum, qty) => sum + (qty || 0), 
                 0
