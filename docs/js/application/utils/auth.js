@@ -1,15 +1,6 @@
 // Dynamically select GoogleSheetsAuth based on environment
+import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
 let GoogleSheetsAuth;
-function isLocalhost() {
-    return (
-        typeof window !== 'undefined' &&
-        (
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.protocol === 'file:'
-        )
-    );
-}
 if (isLocalhost()) {
     // eslint-disable-next-line no-undef
     ({ GoogleSheetsAuth } = await import('../../google_sheets_services/FakeGoogle.js'));

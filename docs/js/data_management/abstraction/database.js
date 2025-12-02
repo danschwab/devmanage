@@ -1,16 +1,6 @@
 // Dynamic Google Sheets Service selection
+import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
 let GoogleSheetsService, GoogleSheetsAuth;
-
-function isLocalhost() {
-    return (
-        typeof window !== 'undefined' &&
-        (
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.protocol === 'file:'
-        )
-    );
-}
 
 if (isLocalhost()) {
     // Dynamically import fake services

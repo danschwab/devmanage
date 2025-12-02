@@ -4,6 +4,19 @@
  */
 
 import { SheetSql } from './sheetSql.js';
+import { BaseTokenManager } from './GoogleSheetsAuth.js';
+
+// Environment detection utility
+export function isLocalhost() {
+    return (
+        typeof window !== 'undefined' &&
+        (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.protocol === 'file:'
+        )
+    );
+}
 
 export class FakeGoogleSheetsAuth {
     static userEmail = 'test@example.com';
@@ -28,7 +41,7 @@ export class FakeGoogleSheetsAuth {
             expires_in: 3600,
             timestamp: Date.now()
         };
-        this.storeToken(mockToken);
+        BaseTokenManager.storeToken(mockToken);
         return true;
     }
 
@@ -36,33 +49,11 @@ export class FakeGoogleSheetsAuth {
         if (!this.isInitialized) {
             await this.initialize();
         }
-        return this.isAuthenticatedState && !this.isTokenExpired(this.getStoredToken());
-    }
-
-    static storeToken(token) {
-        if (!token) return;
-        token.timestamp = new Date().getTime();
-        localStorage.setItem('fake_gapi_token', JSON.stringify(token));
-    }
-
-    static getStoredToken() {
-        const tokenStr = localStorage.getItem('fake_gapi_token');
-        return tokenStr ? JSON.parse(tokenStr) : null;
-    }
-
-    static isTokenExpired(token) {
-        if (!token || !token.timestamp) return true;
-        const tokenAge = (new Date().getTime() - token.timestamp) / 1000;
-        return tokenAge > 3500; // 1 hour minus buffer
-    }
-
-    static clearStoredToken() {
-        localStorage.removeItem('fake_gapi_token');
-        localStorage.removeItem('fake_last_email');
+        return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
     }
 
     static isAuthenticated() {
-        return this.isAuthenticatedState && !this.isTokenExpired(this.getStoredToken());
+        return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
     }
 
     static async getUserEmail() {
@@ -73,7 +64,7 @@ export class FakeGoogleSheetsAuth {
     static async logout() {
         this.userEmail = null;
         this.isAuthenticatedState = false;
-        this.clearStoredToken();
+        BaseTokenManager.clearStoredToken();
         await this.delay(100);
     }
 

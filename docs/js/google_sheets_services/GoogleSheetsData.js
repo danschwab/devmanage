@@ -4,7 +4,7 @@ import { SheetSql } from './sheetSql.js';
 export class GoogleSheetsService {
 
     // Exponential backoff helper for Google Sheets API calls
-    static async withExponentialBackoff(fn, maxRetries = 8, initialDelay = 500) {
+    static async withExponentialBackoff(fn, maxRetries = 5, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
         let lastError = null;
@@ -53,7 +53,7 @@ export class GoogleSheetsService {
     static async getSheetData(tableId, range) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[GoogleSheetsData.getSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
 
         // Remove try/catch to allow errors to bubble up to reactive store
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -81,7 +81,7 @@ export class GoogleSheetsService {
     static async setSheetData(tableId, tabName, updates, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
-        if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
+        if (!spreadsheetId) throw new Error(`[GoogleSheetsData.setSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         // Convert JS objects to sheet format
         let values;
         if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
@@ -95,7 +95,7 @@ export class GoogleSheetsService {
                 values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
             }
         } else {
-            throw new Error('No valid updates provided');
+            throw new Error('[GoogleSheetsData.setSheetData] VALIDATION_ERROR: No valid updates provided');
         }
         // Setup range
         const range = `${tabName}`;
@@ -369,7 +369,7 @@ export class GoogleSheetsService {
             const parsedQuery = SheetSql.parseQuery(query);
             
             if (!parsedQuery.from) {
-                throw new Error('Invalid query: FROM clause is required');
+                throw new Error('[GoogleSheetsData.querySheetData] VALIDATION_ERROR: Invalid query - FROM clause is required');
             }
             
             // Get the data from the sheet

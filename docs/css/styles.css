@@ -283,6 +283,9 @@ div#app-content > div.empty-message {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: none;
 }
+.content-header:not(:first-of-type):not(:last-child) {
+    border-radius: 0;
+}
 .content-footer {
     display: flex;
     flex-wrap: wrap;
