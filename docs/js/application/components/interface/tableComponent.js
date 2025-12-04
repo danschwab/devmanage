@@ -477,6 +477,11 @@ export const TableComponent = {
             type: Array,
             default: () => []
         },
+        // Global sortable prop - can be overridden per-column using column.sortable
+        // Example column configuration:
+        // { key: 'name', label: 'Name', sortable: true }   - Always sortable
+        // { key: 'id', label: 'ID', sortable: false }      - Never sortable  
+        // { key: 'date', label: 'Date' }                   - Uses table's sortable prop
         sortable: {
             type: Boolean,
             default: false
@@ -610,9 +615,11 @@ export const TableComponent = {
                 });
             }
 
-            // Apply sorting if sortColumn is set
-            if (this.sortColumn && this.sortable) {
-                filteredData.sort((a, b) => {
+            // Apply sorting if sortColumn is set and the column is sortable
+            if (this.sortColumn) {
+                const sortColumn = this.columns.find(col => col.key === this.sortColumn);
+                if (sortColumn && this.isColumnSortable(sortColumn)) {
+                    filteredData.sort((a, b) => {
                     const aValue = a.row[this.sortColumn];
                     const bValue = b.row[this.sortColumn];
                     
@@ -647,7 +654,8 @@ export const TableComponent = {
                     }
                     
                     return this.sortDirection === 'desc' ? -comparison : comparison;
-                });
+                    });
+                }
             }
 
             return filteredData;
@@ -855,7 +863,9 @@ export const TableComponent = {
         },
 
         handleSort(columnKey) {
-            if (!this.sortable) return;
+            // Check if this specific column is sortable
+            const column = this.columns.find(col => col.key === columnKey);
+            if (!column || !this.isColumnSortable(column)) return;
             
             if (this.sortColumn === columnKey) {
                 // Toggle sort direction if same column
@@ -866,9 +876,15 @@ export const TableComponent = {
                 this.sortDirection = 'asc';
             }
         },
+        
+        isColumnSortable(column) {
+            // Check if column has explicit sortable property, otherwise fall back to table-wide sortable
+            return column.sortable !== undefined ? column.sortable : this.sortable;
+        },
 
         getSortIcon(columnKey) {
-            if (!this.sortable || this.sortColumn !== columnKey) return '';
+            const column = this.columns.find(col => col.key === columnKey);
+            if (!this.isColumnSortable(column) || this.sortColumn !== columnKey) return '';
             return this.sortDirection === 'asc' ? '⭡' : '⭣';
         },
         
@@ -1656,16 +1672,16 @@ export const TableComponent = {
                                 <div>
                                     <span>{{ column.label }}</span>
                                     <button 
-                                        v-if="sortable"
+                                        v-if="isColumnSortable(column)"
                                         @click="handleSort(column.key)"
-                                        :class="'sort-button ' + (sortColumn === column.key ? 'active' : '')"
+                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
                                         {{ getSortIcon(column.key) || '⭥' }}
                                     </button>
                                     <button 
                                         v-if="column.allowHide"
                                         @click="handleHideColumn(column.key)"
-                                        class="sort-button"
+                                        class="column-button"
                                         title="Hide this column"
                                     >
                                         ✕

@@ -85,11 +85,13 @@ export const InventoryTableComponent = {
                 key: 'image', 
                 label: 'IMG',
                 width: 1,
+                sortable: false
             },
             { 
                 key: 'itemNumber', 
                 label: 'ITEM#',
-                width: 120
+                width: 120,
+                sortable: true
             },
             { 
                 key: 'quantity', 
@@ -97,17 +99,20 @@ export const InventoryTableComponent = {
                 format: 'number',
                 editable: this.editMode,
                 autoColor: true,
-                width: 120
+                width: 120,
+                sortable: true
             },
             { 
                 key: 'description', 
                 label: 'Description (visible in pack lists)',
-                editable: this.editMode
+                editable: this.editMode,
+                sortable: true
             },
             { 
                 key: 'notes', 
                 label: 'Notes (internal only)',
-                editable: this.editMode
+                editable: this.editMode,
+                sortable: false
             }
         ];
         return {

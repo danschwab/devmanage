@@ -18,35 +18,41 @@ export const InventoryOverviewTableComponent = {
                 { 
                     key: 'tab', 
                     label: 'Category',
-                    width: 120
+                    width: 120,
+                    sortable: true
                 },
                 { 
                     key: 'image', 
                     label: 'I',
                     width: 1,
+                    sortable: false
                 },
                 { 
                     key: 'itemNumber', 
                     label: 'ITEM#',
+                    sortable: true
                 },
                 { 
                     key: 'description', 
                     label: 'Description',
                     editable: false,
-                    details: true
+                    details: true,
+                    sortable: true
                 },
                 { 
                     key: 'notes', 
                     label: 'Notes',
                     editable: false,
-                    details: true
+                    details: true,
+                    sortable: false
                 },
                 { 
                     key: 'quantity', 
                     label: 'QTY',
                     format: 'number',
                     editable: false,
-                    autoColor: true
+                    autoColor: true,
+                    sortable: true
                 }
             ],
             inventoryStore: null, // Reactive store for aggregated inventory
@@ -142,7 +148,6 @@ export const InventoryOverviewTableComponent = {
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"
-                :sortable="true"
                 :showHeader="true"
                 :showFooter="true"
                 :allowDetails="true"

@@ -52,6 +52,16 @@ export const ScheduleTableComponent = {
                     column.details = true;
                 }
 
+                // Add sortable configuration for useful columns
+                const sortableColumns = ['Show', 'Client', 'Ship', 'City', 'Size'];
+                const dateColumns = ['Start Date', 'End Date', 'Load In', 'Load Out', 'Event Start', 'Event End'];
+                
+                if (sortableColumns.includes(header) || dateColumns.includes(header)) {
+                    column.sortable = true;
+                } else {
+                    column.sortable = false;
+                }
+
                 // Apply rational formatting based on column name patterns
                 this.applyColumnFormatting(column, header);
 
@@ -62,7 +72,8 @@ export const ScheduleTableComponent = {
             dynamicColumns.push({
                 key: 'packlist',
                 label: 'Packlist',
-                width: 120
+                width: 120,
+                sortable: false
             });
 
             return dynamicColumns;
@@ -381,7 +392,6 @@ export const ScheduleTableComponent = {
             :loading-message="loadingMessage"
             :showSearch="true"
             :hideRowsOnSearch="hideRowsOnSearch"
-            :sortable="true"
             :allowDetails="true"
             @refresh="handleRefresh"
         >

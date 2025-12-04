@@ -30,18 +30,20 @@ export const PacklistItemsSummary = {
                     key: 'image', 
                     label: 'IMG',
                     width: 1,
+                    sortable: false
                 },
-                { key: 'itemId', label: 'Item#'},
-                { key: 'quantity', label: 'Quantity'},
-                { key: 'available', label: 'Inv. Qty.'},
-                { key: 'tabName', label: 'Tab'},
+                { key: 'itemId', label: 'Item#', sortable: true},
+                { key: 'quantity', label: 'Quantity', sortable: true},
+                { key: 'available', label: 'Inv. Qty.', sortable: true},
+                { key: 'tabName', label: 'Tab', sortable: true},
                 { 
                     key: 'remaining', 
                     label: 'Remaining', 
                     format: 'number',
-                    autoColor: true
+                    autoColor: true,
+                    sortable: true
                 },
-                { key: 'overlappingShows', label: 'Overlapping Shows'}
+                { key: 'overlappingShows', label: 'Overlapping Shows', sortable: false}
             ];
         },
         isLoading() {

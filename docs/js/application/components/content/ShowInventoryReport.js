@@ -32,10 +32,11 @@ export const ShowInventoryReport = {
                     key: 'image', 
                     label: 'IMG',
                     width: 1,
+                    sortable: false
                 },
-                { key: 'itemId', label: 'Item#' },
-                { key: 'description', label: 'Item Description', details: true },
-                { key: 'available', label: 'Inv Qty.' },
+                { key: 'itemId', label: 'Item#', sortable: true },
+                { key: 'description', label: 'Item Description', details: true, sortable: true },
+                { key: 'available', label: 'Inv Qty.', sortable: true },
             ];
             
             // Add remaining column with custom cellClass function (before show columns)
@@ -44,9 +45,10 @@ export const ShowInventoryReport = {
                 label: 'Remaining',
                 format: 'number',
                 columnClass: 'green',
+                sortable: true,
                 cellClass: (value, row) => {
-                    // Compute remaining on the fly
-                    const remaining = this.calculateRemaining(row);
+                    // Use the pre-computed remaining value from row data
+                    const remaining = row.remaining;
                     if (remaining === null || remaining === undefined) return '';
                     if (remaining < 0) return 'red';
                     if (remaining < 5) return 'orange';
@@ -84,7 +86,8 @@ export const ShowInventoryReport = {
                     format: 'number',
                     font: 'narrow',
                     columnClass: 'striped gray', // Every other column gets gray background
-                    allowHide: true // Enable hide button for show columns
+                    allowHide: true, // Enable hide button for show columns
+                    sortable: true
                 };
             });
             
@@ -100,7 +103,26 @@ export const ShowInventoryReport = {
         },
         
         tableData() {
-            return this.reportStore?.data || [];
+            const data = this.reportStore?.data || [];
+            // Enhance each row with computed remaining value and flattened show data for sorting
+            return data.map(row => {
+                const enhancedRow = {
+                    ...row,
+                    remaining: this.calculateRemaining(row)
+                };
+                
+                // Flatten show data for sorting - add show quantities as direct properties
+                if (row.shows) {
+                    this.showIdentifiers.forEach(showId => {
+                        const showValue = row.shows[showId];
+                        // Only set the value if it exists and is not null/undefined
+                        // This allows proper sorting while maintaining dashes for display
+                        enhancedRow[`show_${showId}`] = (showValue !== null && showValue !== undefined) ? showValue : null;
+                    });
+                }
+                
+                return enhancedRow;
+            });
         },
         
         loadingMessage() {
@@ -430,11 +452,11 @@ export const ShowInventoryReport = {
                         <span v-else>{{ row.itemId }}</span>
                     </slot>
                     <slot v-else-if="column.key === 'remaining'">
-                        {{ calculateRemaining(row) !== null ? calculateRemaining(row) : '—' }}
+                        {{ row.remaining !== null ? row.remaining : '—' }}
                     </slot>
                     <slot v-else-if="column.key.startsWith('show_')">
-                        <span v-if="row.shows && row.shows[column.key.replace('show_', '')]">
-                            {{ row.shows[column.key.replace('show_', '')] }}
+                        <span v-if="row[column.key] !== undefined && row[column.key] !== null && row[column.key] !== 0">
+                            {{ row[column.key] }}
                         </span>
                         <span v-else>—</span>
                     </slot>

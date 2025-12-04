@@ -135,8 +135,8 @@ div#app-content.dashboard:not(:has(> div.empty-message)) {
     align-items: start;
     grid-template-columns: repeat(auto-fit, var(--page-width-card));
     gap: var(--padding-lg);
-    padding-left: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2);
-    padding-right: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2);
+    padding-left: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px);
+    padding-right: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px);
     width: auto;
 }
 
@@ -635,7 +635,7 @@ th, td {
     padding: 0.5rem;
     border: 1px solid var(--color-border);
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
     /*min-width: 30px;*/
     min-height: 30px;
     max-width: 300px; /* Set maximum width for cells */
@@ -686,7 +686,8 @@ td:has(img) {
     padding: 0;
 }
 
-.sort-button {
+
+.column-button {
     position: absolute;
     min-width: 0;
     width:20px;
@@ -704,10 +705,14 @@ td:has(img) {
     color: var(--color-text-light);
     opacity: 0;
 }
-thead:hover .sort-button {
+.column-button:not(:first-of-type) {
+    right: 22px;
+}
+
+thead:hover .column-button {
     opacity: .5;
 }
-thead:hover .sort-button:hover, .sort-button.active, thead:hover .sort-button.active {
+thead:hover .column-button:hover, .column-button.active, thead:hover .column-button.active {
     background-color: var(--color-gray-bg-hover);
     opacity: 1;
 }
@@ -1182,14 +1187,12 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 
-.inventory-table-component td, .items-summary-table td {
-    vertical-align: middle;
+.packlist-table td {
+    vertical-align: top;
 }
-
 .packlist-crates>tbody>tr>td {
     border-bottom: 3px double var(--color-border);
 }
-
 .packlist-crates:not(.editing) table tr:first-child td {
     border-top: none;
 }
