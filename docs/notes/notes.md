@@ -50,6 +50,7 @@ Need features:
 - [ ] reports column headers percentage based and dynamically abbreviate
 - [ ] basic schedule table needs to have return and show date columns visible
 - [ ] basic schedule table needs to allow wide table
+- [ ] packlist interface somehow show "was previously" during edits
 
 **problems**
 

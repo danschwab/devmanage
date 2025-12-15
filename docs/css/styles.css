@@ -612,6 +612,19 @@ button.card {
     table-layout: fixed;
 }
 
+/* Sticky Header Styles */
+table.sticky-header {
+    position: fixed;
+    top: var(--sticky-top, 0);
+    left: var(--sticky-left, 0);
+    width: var(--sticky-width, auto);
+    z-index: 1000;
+    background: var(--background-color);
+    box-shadow: 0 2px 8px var(--color-shadow);
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
 .table-wrapper:has(tbody:empty)::after {
     content: "No content";
     display: block;
@@ -647,7 +660,6 @@ th {
     background-color: var(--color-gray);
     color: var(--color-text-inverted);
     font-weight: 400;
-    position: sticky;
     text-wrap: nowrap;
     top: 0;
     z-index: 1;

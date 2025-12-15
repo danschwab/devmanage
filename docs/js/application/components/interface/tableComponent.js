@@ -530,7 +530,9 @@ export const TableComponent = {
             lastKnownMouseX: null,
             lastKnownMouseY: null,
             mouseMoveCounter: 0,
-            hiddenColumns: [] // Reactive property for dynamically hiding columns (internal use only)
+            hiddenColumns: [], // Reactive property for dynamically hiding columns (internal use only)
+            showStickyHeader: false, // Controls visibility of sticky header
+            stickyColumnWidths: [] // Store actual column widths from original table
         };
     },
     watch: {
@@ -707,9 +709,6 @@ export const TableComponent = {
         // Set up sticky header positioning
         const appContent = document.querySelector('#app-content');
         if (appContent) {
-            // Create a clone of thead for sticky positioning
-            this.stickyHeaderClone = null;
-            
             this.handleStickyHeaders = () => {
                 const thead = this.$el.querySelector('thead');
                 if (!thead) return;
@@ -725,6 +724,13 @@ export const TableComponent = {
                 // Get positions
                 const tableRect = table.getBoundingClientRect();
                 const theadRect = thead.getBoundingClientRect();
+
+                // Capture actual column widths from the original table header
+                const headerCells = thead.querySelectorAll('th');
+                this.stickyColumnWidths = Array.from(headerCells).map(th => {
+                    const rect = th.getBoundingClientRect();
+                    return rect.width;
+                });
 
                 // Find the closest .container ancestor
                 let containerEl = table.closest('.container');
@@ -753,68 +759,31 @@ export const TableComponent = {
                     }
                 }
 
-                if (shouldStick && !this.stickyHeaderClone) {
-                    // Create and position the clone
-                    this.stickyHeaderClone = thead.cloneNode(true);
-                    this.stickyHeaderClone.style.position = 'fixed';
-                    this.stickyHeaderClone.style.top = stickyOffset + 'px';
-                    this.stickyHeaderClone.style.left = tableRect.left + 'px';
-                    this.stickyHeaderClone.style.width = tableRect.width + 'px';
-                    this.stickyHeaderClone.style.zIndex = '10';
-                    this.stickyHeaderClone.style.boxShadow = '0 4px 8px var(--color-shadow)';
-                    this.stickyHeaderClone.style.tableLayout = 'fixed';
-                    this.stickyHeaderClone.classList.add('sticky-header-clone');
-                    
-                    // Create a wrapper table to maintain proper table structure
-                    const wrapperTable = document.createElement('table');
-                    wrapperTable.style.position = 'fixed';
-                    wrapperTable.style.top = stickyOffset + 'px';
-                    wrapperTable.style.left = tableRect.left + 'px';
-                    wrapperTable.style.width = tableRect.width + 'px';
-                    wrapperTable.style.zIndex = '10';
-                    wrapperTable.style.boxShadow = '0 4px 8px var(--color-shadow)';
-                    wrapperTable.style.tableLayout = 'fixed';
-                    wrapperTable.style.borderCollapse = 'collapse';
-                    wrapperTable.style.background = 'var(--background-color)';
-                    wrapperTable.className = table.className;
-                    
-                    // Clone colgroup to preserve column widths
-                    const colgroup = table.querySelector('colgroup');
-                    if (colgroup) {
-                        const clonedColgroup = colgroup.cloneNode(true);
-                        wrapperTable.appendChild(clonedColgroup);
-                    }
-                    
-                    // Append cloned thead to wrapper table
-                    wrapperTable.appendChild(this.stickyHeaderClone);
-                    
-                    // Copy exact computed widths from original header cells to clone cells
-                    const originalCells = thead.querySelectorAll('th');
-                    const cloneCells = this.stickyHeaderClone.querySelectorAll('th');
-                    originalCells.forEach((cell, i) => {
-                        if (cloneCells[i]) {
-                            const computedWidth = window.getComputedStyle(cell).width;
-                            cloneCells[i].style.width = computedWidth;
-                            cloneCells[i].style.minWidth = computedWidth;
-                            cloneCells[i].style.maxWidth = computedWidth;
+                // Check if table is horizontally overflowing (disable sticky header if scrollable)
+                if (shouldStick) {
+                    const tableWrapper = table.closest('.table-wrapper');
+                    if (tableWrapper) {
+                        const isHorizontallyScrollable = tableWrapper.scrollWidth > tableWrapper.clientWidth;
+                        if (isHorizontallyScrollable) {
+                            shouldStick = false;
                         }
-                    });
-                    
-                    // Store reference to wrapper table
-                    this.stickyHeaderWrapper = wrapperTable;
-                    table.parentElement.appendChild(wrapperTable);
-                } else if (!shouldStick && this.stickyHeaderWrapper) {
-                    // Remove the clone
-                    this.stickyHeaderWrapper.remove();
-                    this.stickyHeaderWrapper = null;
-                    this.stickyHeaderClone = null;
-                } else if (shouldStick && this.stickyHeaderWrapper) {
-                    // Update position if scrolling horizontally
-                    this.stickyHeaderWrapper.style.left = tableRect.left + 'px';
+                    }
+                }
+
+                // Update sticky header visibility and CSS variables for positioning
+                if (shouldStick) {
+                    this.showStickyHeader = true;
+                    // Set CSS custom properties for dynamic positioning
+                    this.$el.style.setProperty('--sticky-top', stickyOffset + 'px');
+                    this.$el.style.setProperty('--sticky-left', tableRect.left + 'px');
+                    this.$el.style.setProperty('--sticky-width', tableRect.width + 'px');
+                } else {
+                    this.showStickyHeader = false;
                 }
             };
             
             appContent.addEventListener('scroll', this.handleStickyHeaders, { passive: true });
+            window.addEventListener('resize', this.handleStickyHeaders, { passive: true });
             this.handleStickyHeaders(); // Initial position
         }
     },
@@ -824,15 +793,14 @@ export const TableComponent = {
         // Clean up any active click state
         this.resetClickState();
         
-        // Clean up sticky header clone and scroll listener
+        // Clean up sticky header scroll listener
         const appContent = document.querySelector('#app-content');
         if (appContent && this.handleStickyHeaders) {
             appContent.removeEventListener('scroll', this.handleStickyHeaders);
         }
-        if (this.stickyHeaderWrapper) {
-            this.stickyHeaderWrapper.remove();
-            this.stickyHeaderWrapper = null;
-            this.stickyHeaderClone = null;
+        // Clean up resize listener
+        if (this.handleStickyHeaders) {
+            window.removeEventListener('resize', this.handleStickyHeaders);
         }
     },
     methods: {
@@ -1842,6 +1810,51 @@ export const TableComponent = {
                 </table>
             </div>
         
+
+            <!-- Sticky Header Template -->
+            <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }">
+                <colgroup>
+                    <col v-if="draggable" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : { width: '20px' }" />
+                    <col v-for="(column, colIdx) in visibleColumns" 
+                        :key="column.key"
+                        :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
+                        :class="column.columnClass || ''"
+                    />
+                    <col v-if="allowDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
+                </colgroup>
+                <thead :class="{ [theme]: true }">
+                    <tr>
+                        <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
+                        <th 
+                            v-for="(column, colIdx) in visibleColumns" 
+                            :key="column.key"
+                            :class="getColumnFont(column)"
+                            :title="column.title || column.label"
+                            :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}"
+                        >
+                            <div>
+                                <span>{{ column.label }}</span>
+                                <button 
+                                    v-if="isColumnSortable(column)"
+                                    @click="handleSort(column.key)"
+                                    :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
+                                >
+                                    {{ getSortIcon(column.key) || '⭥' }}
+                                </button>
+                                <button 
+                                    v-if="column.allowHide"
+                                    @click="handleHideColumn(column.key)"
+                                    class="column-button"
+                                    title="Hide this column"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </th>
+                        <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
+                    </tr>
+                </thead>
+            </table>
 
             <!-- Loading State >
             <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">
