@@ -145,7 +145,7 @@ export const ContainerComponent = {
                     :title="title"
                     :card-style="cardStyle"
                     :container-id="containerId"
-                    @navigate-to-path="(event) => $emit('navigate-to-path', event)" />
+                    @navigate-to-path="(path) => $emit('navigate-to-path', path)" />
                 <div style="flex-grow: 1;"></div>
                 <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
                     <button v-if="!cardStyle"

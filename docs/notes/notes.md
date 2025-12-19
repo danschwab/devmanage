@@ -21,6 +21,16 @@ Need features:
 - consolidate, but still track items (beMatrix panels and hardware)
 - track unique items (electronics with serial numbers, passwords, locations)
 
+For design and project queue:
+
+- checklists for each item? Define checklists for items somehow? Checklists with username requirements? User table? Checklists with linked data entry fields?
+- show what pdfs are exported for each project
+- nebulus project stages, base on current system: projects are requested, updated, communicated via email. Put all information in one place, but allow tags and filters? Or force update notes to be connected to a category or checklist?
+- if certain documents exist, they are assumed correct - force approvals? Assume approvals for certain types of projects? Allow document approvals to be revoked? Approvals are just checklists?
+- checklists need to have the ability to link to styles in schedule views. We have advanced search, maybe add "Advanced Views" that allows custom columns, column styling based on rules, etc? Should this be hardcoded?
+- allow calendar view of shows. Allow drag and drop scheduling for show dates and ship/ret date thresholds? Maybe the interface should allow "card view", "table view", and "calendar view" for things? Hard code, or option for user?
+- Notifications system? Integrate emails? Allow checkbox or defaults for recipients? Default text? Allow templates? Should the system allow changes via email replies?
+
 ## Primary Use Cases
 
 - [50%] We can have pack lists generated from Inventor
@@ -37,10 +47,9 @@ Need features:
 
       make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 
+- [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] remove hamburger buttons that do nothing
 - [ ] packlist print titleblock??
-- [ ] label as "some data may be out of date"
-- [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] add context variables to live site github
 - [?] refresh buttons should clear caches
 - [ ] fix packlist table header alignment
@@ -74,6 +83,13 @@ Need features:
 - [?] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
 
 **Application tasks**
+
+dropbox integration
+
+- [ ] dropbox service account and auth sync
+- [ ] identify and show versions/dates of output files
+- [ ] allow opening link to dropbox pdfs
+- [ ] migrate thumbnails to dropbox and allow uploading new thumbnails to dropbox
 
 inventory updates
 

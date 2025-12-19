@@ -52,9 +52,6 @@ export const NavigationRegistry = {
     // URL Router integration
     urlRouter: null,
 
-    // Central navigation parameters store (reactive)
-    navigationParameters: Vue.reactive({}),
-
     /**
      * Initialize dashboard registry
      */
@@ -160,57 +157,38 @@ export const NavigationRegistry = {
 
     /**
      * Build path with parameters
-     * @param {string} path - The base path
-     * @param {Object} parameters - Parameters to append as query string
-     * @returns {string} Full path with parameters
+     * @param {string} path - The base path (may include existing query parameters)
+     * @param {Object} parameters - Parameters to add/replace in query string
+     * @returns {string} Full path with merged parameters
      */
     buildPath(path, parameters = {}) {
-        if (!parameters || Object.keys(parameters).length === 0) {
-            return path;
-        }
+        // Split path and existing query string
+        const [cleanPath, existingQuery] = path.split('?');
         
-        const queryString = new URLSearchParams();
+        // Start with existing parameters
+        const queryString = new URLSearchParams(existingQuery || '');
+        
+        // Add/replace with new parameters
         Object.entries(parameters).forEach(([key, value]) => {
-            queryString.append(key, String(value));
+            queryString.set(key, String(value));
         });
         
-        return `${path}?${queryString.toString()}`;
+        // Return path without query string if no parameters
+        if (queryString.toString() === '') {
+            return cleanPath;
+        }
+        
+        return `${cleanPath}?${queryString.toString()}`;
     },
 
     /**
-     * Set navigation parameters for a specific path
-     * @param {string} path - The path to set parameters for
-     * @param {Object} parameters - The parameters to set
-     */
-    setNavigationParameters(path, parameters) {
-        this.navigationParameters[path] = { ...parameters };
-    },
-
-    /**
-     * Get navigation parameters for a specific path
-     * @param {string} path - The path to get parameters for
+     * Get navigation parameters from a path (parses query string)
+     * @param {string} path - The path with potential parameters
      * @returns {Object} The parameters object
      */
     getNavigationParameters(path) {
-        return this.navigationParameters[path] || {};
-    },
-
-    /**
-     * Get current navigation parameters based on app context
-     * @param {Object} appContext - The app context object
-     * @returns {Object} Current navigation parameters
-     */
-    getCurrentNavigationParameters(appContext) {
-        const currentPath = appContext.currentPath || appContext.currentPage || 'dashboard';
-        return this.getNavigationParameters(currentPath);
-    },
-
-    /**
-     * Clear navigation parameters for a specific path
-     * @param {string} path - The path to clear parameters for
-     */
-    clearNavigationParameters(path) {
-        delete this.navigationParameters[path];
+        const pathInfo = this.parsePath(path);
+        return pathInfo.parameters;
     },
 
     /**
@@ -220,7 +198,9 @@ export const NavigationRegistry = {
      * @returns {string} Display name or dashboard title
      */
     getDisplayName(path, preferDashboardTitle = false) {
-        const route = this.getRoute(path);
+        // Strip query parameters before processing
+        const cleanPath = path.split('?')[0];
+        const route = this.getRoute(cleanPath);
         if (route) {
             if (preferDashboardTitle && route.dashboardTitle) {
                 return route.dashboardTitle;
@@ -229,7 +209,7 @@ export const NavigationRegistry = {
         }
         
         // Fallback: generate from last segment
-        const segments = path.split('/').filter(segment => segment.length > 0);
+        const segments = cleanPath.split('/').filter(segment => segment.length > 0);
         const lastSegment = segments[segments.length - 1];
         return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Unknown';
     },
@@ -269,43 +249,14 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Get all available paths (for dashboard container configuration)
-     * @param {boolean} [subPathsOnly=false] - If true, only return paths with sub-sections (containing '/')
-     * @returns {Array} Array of available paths
-     */
-    getAllPaths(subPathsOnly = false) {
-        const paths = [];
-        
-        const collectPaths = (routeObj, currentPath = '') => {
-            if (routeObj.path && currentPath !== routeObj.path) {
-                paths.push(routeObj.path);
-            }
-            
-            if (routeObj.children) {
-                Object.values(routeObj.children).forEach(child => {
-                    collectPaths(child, routeObj.path);
-                });
-            }
-        };
-        
-        Object.values(this.routes).forEach(route => {
-            collectPaths(route);
-        });
-        
-        return subPathsOnly ? paths.filter(path => path.includes('/')) : paths;
-    },
-
-
-
-
-
-    /**
      * Get container type from path - consolidated logic
      * @param {string} path - The container path
      * @returns {string} Container type
      */
     getTypeFromPath(path) {
-        const segments = path.split('/').filter(segment => segment.length > 0);
+        // Strip query parameters before processing
+        const cleanPath = path.split('?')[0];
+        const segments = cleanPath.split('/').filter(segment => segment.length > 0);
         const firstSegment = segments[0];
         if (this.routes[firstSegment] && this.routes[firstSegment].isMainSection) {
             return firstSegment;
@@ -321,28 +272,10 @@ export const NavigationRegistry = {
         
         // Parse the target path to get the clean path
         const pathInfo = this.parsePath(targetPath);
+        const currentPathInfo = this.parsePath(appContext.currentPath || '');
         
-        // GUARD: Check if this navigation is for the current active path
-        // This prevents stale async operations from navigating away from where the user currently is
-        // Only apply this guard for programmatic navigation (not browser back/forward)
-        // if (!isBrowserNavigation && appContext.currentPath && appContext.currentPath !== pathInfo.path) {
-        //     // Check if the target path is a parent or child of current path
-        //     const currentSegments = appContext.currentPath.split('/').filter(s => s);
-        //     const targetSegments = pathInfo.path.split('/').filter(s => s);
-            
-        //     // Allow navigation if target is parent (going up) or sibling/unrelated (intentional navigation)
-        //     // Block if target appears to be the same page/section the user left
-        //     const isSameBaseSection = currentSegments[0] === targetSegments[0];
-        //     const targetIsCurrentOrChild = pathInfo.path.startsWith(appContext.currentPath) || 
-        //                                   appContext.currentPath.startsWith(pathInfo.path);
-            
-        //     // Only block if we're trying to navigate to a different path within the same section
-        //     // This catches the case where async operations try to navigate back to where they started
-        //     if (isSameBaseSection && !targetIsCurrentOrChild && targetSegments.length > 1) {
-        //         console.log('[NavigationRegistry] Ignoring stale navigation request to:', pathInfo.path, '(current:', appContext.currentPath + ')');
-        //         return { action: 'navigation_ignored', reason: 'stale_request', targetPath: pathInfo.path, currentPath: appContext.currentPath };
-        //     }
-        // }
+        // Check if we're navigating to the same base path (just parameter change)
+        const isSameBasePath = pathInfo.path === currentPathInfo.path;
         
         // Check authentication before allowing navigation
         const isAuthenticated = await Auth.checkAuthWithPrompt({
@@ -355,53 +288,26 @@ export const NavigationRegistry = {
             return { action: 'navigation_blocked', reason: 'authentication_failed' };
         }
         
-        const basePage = pathInfo.path.split('/')[0];
+        console.log('[NavigationRegistry] Navigation to:', pathInfo.fullPath, isSameBasePath ? '(parameter change)' : '(new location)');
         
-        console.log('[NavigationRegistry] Navigation to:', pathInfo.path);
+        // Update app state
+        appContext.currentPath = pathInfo.fullPath;
         
-        // Handle dashboard navigation
-        if (pathInfo.path === 'dashboard') {
-            this.navigateToPage('dashboard', appContext);
-            // Clear parameters for dashboard
-            this.clearNavigationParameters('dashboard');
-            return { action: 'navigate_to_dashboard', targetPage: 'dashboard', parameters: pathInfo.parameters };
+        // Only close menu if navigating to a different base path
+        if (!isSameBasePath) {
+            appContext.isMenuOpen = false;
         }
         
-        // Navigate to base page WITHOUT updating URL to preserve the full path
-        this.navigateToPage(basePage, appContext, false);
-        
-        // Set the full path for the container to use
-        appContext.currentPath = pathInfo.path;
-        
-        // Store navigation parameters for the current path
-        if (pathInfo.hasParameters) {
-            this.setNavigationParameters(pathInfo.path, pathInfo.parameters);
-            console.log('[NavigationRegistry] Set navigation parameters for', pathInfo.path, ':', pathInfo.parameters);
-        } else {
-            // Clear parameters if none provided
-            this.clearNavigationParameters(pathInfo.path);
-        }
-        
-        // Update URL with full path if not browser navigation
+        // Update URL if not browser navigation
         if (!isBrowserNavigation && this.urlRouter) {
-            this.urlRouter.updateURL(pathInfo.path, pathInfo.parameters);
+            this.urlRouter.updateURL(pathInfo.fullPath);
         }
         
-        return { action: 'navigate_to_page', targetPage: basePage, parameters: pathInfo.parameters };
+        return { 
+            action: isSameBasePath ? 'parameter_change' : 'navigate', 
+            path: pathInfo.fullPath, 
+            parameters: pathInfo.parameters 
+        };
     },
 
-    navigateToPage(pagePath, appContext, updateURL = true) {
-        appContext.currentPage = pagePath;
-        appContext.currentPath = pagePath; // Set to same as page for base navigation
-        appContext.isMenuOpen = false;
-        console.log(`Navigating to: ${pagePath}`);
-        
-        // Update URL when navigation occurs - only if explicitly requested
-        if (updateURL && this.urlRouter) {
-            console.log('[NavigationRegistry] Updating URL via URLRouter to:', pagePath);
-            this.urlRouter.updateURL(pagePath, {});
-        } else if (!this.urlRouter) {
-            console.warn('[NavigationRegistry] URLRouter not initialized, cannot update URL');
-        }
-    }
 };

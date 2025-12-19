@@ -128,7 +128,7 @@ export const PacklistTable = {
             if (newValue && !this.editMode && this.tabName) {
                 // Navigate to edit mode when data becomes dirty
                 const editPath = `packlist/${this.tabName}?edit=true`;
-                this.$emit('navigate-to-path', { targetPath: editPath });
+                this.$emit('navigate-to-path', editPath);
             }
         }
     },
@@ -384,12 +384,12 @@ export const PacklistTable = {
             
             // Navigate to the details endpoint with the item number as a search parameter
             const targetPath = `packlist/${this.tabName}/details?searchTerm=${encodeURIComponent(itemNumber)}`;
-            this.$emit('navigate-to-path', { targetPath });
+            this.$emit('navigate-to-path', targetPath);
         },
 
         async handlePrint() {
             //if not on the packlist page, navigate to the packlist page first
-            this.$emit('navigate-to-path', { targetPath: this.containerPath});
+            this.$emit('navigate-to-path', this.containerPath);
 
             this.isPrinting = true;
             
@@ -443,19 +443,19 @@ export const PacklistTable = {
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->
                             <template v-if="!editMode">
-                                <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '?edit=true' }) : null">
+                                <button @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName + '?edit=true') : null">
                                     Edit Packlist
                                 </button>
                             </template>
                             <template v-else>
                                 <button 
-                                    @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName }) : null"
+                                    @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName) : null"
                                     :disabled="isDirty"
                                     :title="isDirty ? 'Save or discard changes before returning to view mode' : 'Return to view mode'">
                                     Back to View
                                 </button>
                             </template>
-                            <button @click="() => tabName ? $emit('navigate-to-path', { targetPath: 'packlist/' + tabName + '/details' }) : null">
+                            <button @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName + '/details') : null">
                                 Details
                             </button>
 

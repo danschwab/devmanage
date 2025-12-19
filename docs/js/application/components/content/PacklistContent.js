@@ -76,7 +76,9 @@ export const PacklistContent = {
     },
     computed: {
         pathSegments() {
-            return this.containerPath.split('/').filter(segment => segment.length > 0);
+            // Strip query parameters before splitting
+            const cleanPath = this.containerPath.split('?')[0];
+            return cleanPath.split('/').filter(segment => segment.length > 0);
         },
         currentView() {
             // For packlist paths, the view is always 'packlist'
@@ -346,7 +348,7 @@ export const PacklistContent = {
                 :tab-name="currentPacklist"
                 :edit-mode="isEditView"
                 :container-path="containerPath"
-                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+                @navigate-to-path="navigateToPath"
             />
             
             <!-- Packlist Details View (Summary Table Only) -->
@@ -354,7 +356,7 @@ export const PacklistContent = {
                 v-else-if="isDetailsView"
                 :project-identifier="currentPacklist"
                 :container-path="containerPath"
-                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+                @navigate-to-path="navigateToPath"
             />
         </slot>
     `

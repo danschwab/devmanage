@@ -10,7 +10,7 @@ export const PrimaryNavComponent = {
             type: Array,
             default: () => []
         },
-        currentPage: {
+        currentPath: {
             type: String,
             default: 'dashboard'
         },
@@ -40,6 +40,10 @@ export const PrimaryNavComponent = {
         };
     },
     computed: {
+        currentPage() {
+            const cleanPath = this.currentPath.split('?')[0];
+            return cleanPath.split('/')[0];
+        },
         isDarkMode() {
             // Use matchMedia to detect dark mode
             return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -148,9 +152,14 @@ export const BreadcrumbComponent = {
         };
     },
     computed: {
+        // Extract clean path without query parameters for breadcrumb display
+        cleanPath() {
+            if (!this.containerPath) return '';
+            return this.containerPath.split('?')[0];
+        },
         pathSegments() {
-            if (!this.containerPath) return [];
-            return this.containerPath.split('/').filter(segment => segment.length > 0);
+            if (!this.cleanPath) return [];
+            return this.cleanPath.split('/').filter(segment => segment.length > 0);
         },
         pathSegmentsWithNames() {
             if (!this.pathSegments.length) return [];
@@ -178,10 +187,6 @@ export const BreadcrumbComponent = {
                 }
             }
             return this.title;
-        },
-        currentPage() {
-            if (this.pathSegments.length === 0) return '';
-            return this.pathSegments[0];
         },
         canGoBack() {
             if (this.pathSegments.length <= 1) return false;
@@ -218,10 +223,8 @@ export const BreadcrumbComponent = {
             if (index < this.pathSegments.length - 1) {
                 const targetPath = this.pathSegments.slice(0, index + 1).join('/');
                 
-                // Emit simple path-based navigation
-                this.$emit('navigate-to-path', {
-                    targetPath: targetPath
-                });
+                // Emit string path for navigation
+                this.$emit('navigate-to-path', targetPath);
             }
         },
         showHoverBreadcrumb() {
@@ -352,7 +355,7 @@ export const DashboardToggleComponent = {
     template: html`
         <div>
             <!-- Dashboard card styling controls (only show on dashboard page) -->
-            <div v-if="(this.appContext.currentPage === 'dashboard') && isOnDashboard" class="button-bar">
+            <div v-if="(this.appContext.currentPath?.split('/')[0] === 'dashboard') && isOnDashboard" class="button-bar">
                 <button @click="toggleDashboardClass('wide');" :disabled="isLoading" 
                         :class="{ 'green': containerClasses.has('wide'), 'blue': !containerClasses.has('wide') }">
                     Wide
@@ -364,7 +367,7 @@ export const DashboardToggleComponent = {
             </div>
             
             <!-- Dashboard ordering controls (only show on dashboard page) -->
-            <div v-if="(this.appContext.currentPage === 'dashboard') && isOnDashboard" class="button-bar">
+            <div v-if="(this.appContext.currentPath?.split('/')[0] === 'dashboard') && isOnDashboard" class="button-bar">
                 <button @click="moveLeft" :disabled="isLoading || !canMoveLeft" 
                         :class="{ 'blue': canMoveLeft && !isLoading, 'disabled': !canMoveLeft || isLoading }">
                     ← Move Left

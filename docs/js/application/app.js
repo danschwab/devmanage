@@ -32,13 +32,17 @@ const App = {
             appLoadingMessage: 'Loading application...',
             isMenuOpen: false,
             navigationItems: NavigationRegistry.primaryNavigation,
-            currentPage: 'dashboard',
             currentPath: 'dashboard',
             modals: [],
             currentYear: new Date().getFullYear()
         };
     },
     computed: {
+        // Derive current page from currentPath (strip query params first)
+        currentPage() {
+            const cleanPath = this.currentPath.split('?')[0];
+            return cleanPath.split('/')[0];
+        },
         // Make auth state reactive in the component
         isAuthenticated() {
             return authState.isAuthenticated;
@@ -142,16 +146,21 @@ const App = {
             }
         });
 
-        // Watch for page/path changes to reset scroll position
-        this.$watch(() => [this.currentPage, this.currentPath], ([newPage, newPath], [oldPage, oldPath]) => {
+        // Watch for path changes to reset scroll position
+        this.$watch(() => this.currentPath, (newPath, oldPath) => {
             this.$nextTick(() => {
                 const appContent = document.querySelector('#app-content');
                 if (!appContent) return;
                 
+                // Strip query parameters for page comparison
+                const newCleanPath = newPath.split('?')[0];
+                const oldCleanPath = oldPath.split('?')[0];
+                const newPage = newCleanPath.split('/')[0];
+                const oldPage = oldCleanPath.split('/')[0];
+                
                 // Check if navigating TO dashboard FROM a page that's ON the dashboard
-                // Use oldPath from watcher since it captures the previous state before change
-                if (newPage === 'dashboard' && oldPage !== 'dashboard' && oldPath && oldPath !== 'dashboard') {
-                    const isOnDashboard = NavigationRegistry.dashboardRegistry.has(oldPath);
+                if (newPage === 'dashboard' && oldPage !== 'dashboard' && oldCleanPath && oldCleanPath !== 'dashboard') {
+                    const isOnDashboard = NavigationRegistry.dashboardRegistry.has(oldCleanPath);
                     
                     if (isOnDashboard) {
                         const containerType = NavigationRegistry.getTypeFromPath(oldPath);
@@ -212,26 +221,17 @@ const App = {
                 modalManager.error('Failed to log out. Please try again or refresh the page.', 'Logout Error');
             }
         },
-        navigateToPath(pathOrData) {
-            // Handle both string paths and navigation data objects
-            const targetPath = typeof pathOrData === 'string' ? pathOrData : pathOrData.targetPath;
+        navigateToPath(targetPath) {
+            // Only accept string paths for simplicity
             // Don't await - let navigation happen asynchronously
             NavigationRegistry.handleNavigateToPath({ targetPath }, this);
         },
         
         // Handle container expansion by navigating to its path
         expandContainer(containerData) {
+            // containerPath already contains the full path with parameters
             const targetPath = containerData.containerPath || containerData.path;
-            
-            // Get current navigation parameters for this container path
-            const params = NavigationRegistry.getNavigationParameters(targetPath);
-            
-            // Build path with parameters if they exist
-            const fullPath = Object.keys(params).length > 0 
-                ? NavigationRegistry.buildPath(targetPath, params)
-                : targetPath;
-            
-            this.navigateToPath(fullPath);
+            this.navigateToPath(targetPath);
         },
 
         async toggleDashboardPresence(containerData) {
@@ -251,7 +251,7 @@ const App = {
             <primary-nav
                 :is-menu-open="isMenuOpen"
                 :navigation-items="navigationItems"
-                :current-page="currentPage"
+                :current-path="currentPath"
                 :is-authenticated="isAuthenticated"
                 :is-auth-loading="isAuthLoading"
                 :current-user="currentUser"

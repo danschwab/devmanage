@@ -126,7 +126,7 @@ export const InventoryOverviewTableComponent = {
         handleCategoryClick(tabName) {
             // Navigate to the specific category view
             const categoryName = tabName.toLowerCase();
-            this.$emit('navigate-to-path', { targetPath: `inventory/categories/${categoryName}` });
+            this.$emit('navigate-to-path', `inventory/categories/${categoryName}`);
         },
         formatCategoryLabel(tabName) {
             if (!tabName) return '';

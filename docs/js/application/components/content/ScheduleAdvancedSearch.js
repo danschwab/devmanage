@@ -1,15 +1,15 @@
-import { html, ScheduleTableComponent, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore, createAnalysisConfig } from '../../index.js';
+import { html, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, parseScheduleFilter, buildScheduleFilter, getReactiveStore, createAnalysisConfig } from '../../index.js';
 
-// Advanced Search Component for Schedule
+// Advanced Search Component for Schedule - Filter Creation UI Only
 export const AdvancedSearchComponent = {
     components: {
-        ScheduleTableComponent,
         LoadingBarComponent
     },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: String,
-        navigateToPath: Function
+        navigateToPath: Function,
+        onSearchSelected: Function // Callback for when used in modal
     },
     data() {
         return {
@@ -27,10 +27,6 @@ export const AdvancedSearchComponent = {
                 { id: 1, column: '', value: '' }
             ],
             nextFilterId: 2,
-            
-            // Computed filter for table
-            activeFilter: null,
-            activeSearchParams: null,
             
             // Flag to prevent watchers from clearing during programmatic updates
             isApplyingFilters: false,
@@ -104,12 +100,6 @@ export const AdvancedSearchComponent = {
         isLoadingColumns() {
             return this.scheduleStore?.isLoading || false;
         },
-        hasDateRangeFilter() {
-            return this.startDate || this.endDate || this.overlapShowIdentifier;
-        },
-        hasTextSearchFilter() {
-            return this.textFilters.some(f => f.column && f.value);
-        },
         availableYears() {
             const currentYear = new Date().getFullYear();
             const years = [];
@@ -119,7 +109,22 @@ export const AdvancedSearchComponent = {
             return years;
         },
         isOnDashboard() {
-            return this.appContext?.currentPage === 'dashboard';
+            return this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+        },
+        // Extract current URL parameters for this component's containerPath
+        currentUrlParameters() {
+            if (!this.appContext?.currentPath) return {};
+            
+            // Check if current path matches this component's containerPath
+            const currentCleanPath = this.appContext.currentPath.split('?')[0];
+            const containerCleanPath = (this.containerPath || 'schedule/advanced-search').split('?')[0];
+            
+            // Only return parameters if we're on the matching path
+            if (currentCleanPath === containerCleanPath) {
+                return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+            }
+            
+            return {};
         },
         filteredShows() {
             if (!this.allShows || this.allShows.length === 0) {
@@ -149,32 +154,21 @@ export const AdvancedSearchComponent = {
         // Initialize saved searches store
         await this.initializeSavedSearchesStore();
         
-        // Load filters from URL parameters if present
-        this.loadFiltersFromURL();
+        // Sync filters with URL parameters
+        this.syncWithURL();
     },
     watch: {
-        // Watch for changes to any filter input and clear active filters
-        startDate() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        endDate() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        startDatePreset() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        endDatePreset() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        overlapShowIdentifier() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        dateFilterMode() {
-            if (!this.isApplyingFilters) this.clearActiveFilters();
-        },
-        textFilters: {
-            handler() {
-                if (!this.isApplyingFilters) this.clearActiveFilters();
+        // Watch for URL parameter changes
+        currentUrlParameters: {
+            handler(newParams, oldParams) {
+                // Skip initial load (handled by mounted)
+                if (!oldParams) return;
+                
+                // Skip if params haven't actually changed
+                if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+                
+                console.log('[AdvancedSearch] URL parameters changed, syncing filters');
+                this.syncWithURL();
             },
             deep: true
         }
@@ -221,62 +215,33 @@ export const AdvancedSearchComponent = {
                 true // Auto-load
             );
         },
-        loadFiltersFromURL() {
-            // Use containerPath prop instead of hardcoded path
-            const targetPath = this.containerPath || 'schedule/advanced-search';
+        syncWithURL() {
+            const params = this.currentUrlParameters;
             
-            // Get URL parameters from NavigationRegistry
-            const params = NavigationRegistry.getNavigationParameters(targetPath);
+            // No URL parameters - clear filters
+            if (Object.keys(params).length === 0) {
+                this.clearAllFilters();
+                return;
+            }
             
-            if (Object.keys(params).length === 0) return;
+            // Parse unified scheduleFilter parameter
+            if (!params.scheduleFilter) {
+                this.clearAllFilters();
+                return;
+            }
             
             // Set flag to prevent watchers from clearing during URL load
             this.isApplyingFilters = true;
             
-            // Parse URL parameters to searchData format for comparison
-            const urlSearchData = {
-                dateSearch: params.DateSearch || null,
-                textFilters: parseTextFilterParameters(params)
-            };
+            const filter = parseScheduleFilter(params.scheduleFilter);
             
-            // Check if URL parameters match any saved search
-            let matchedSearchIndex = null;
-            if (this.savedSearches && this.savedSearches.length > 0) {
-                matchedSearchIndex = this.savedSearches.findIndex(search => {
-                    // Compare dateSearch
-                    if (search.dateSearch !== urlSearchData.dateSearch) {
-                        return false;
-                    }
-                    
-                    // Compare text filters (order-independent)
-                    const searchFilters = search.textFilters || [];
-                    const urlFilters = urlSearchData.textFilters || [];
-                    
-                    if (searchFilters.length !== urlFilters.length) {
-                        return false;
-                    }
-                    
-                    // Check if all filters match (ignoring order)
-                    return searchFilters.every(sf => 
-                        urlFilters.some(uf => uf.column === sf.column && uf.value === sf.value)
-                    ) && urlFilters.every(uf => 
-                        searchFilters.some(sf => sf.column === uf.column && sf.value === uf.value)
-                    );
-                });
-            }
+            // Try to match URL to a saved search (just sets selectedSavedSearchIndex)
+            this.matchUrlToSavedSearch(filter);
             
-            // If URL matches a saved search, select it and use handleSavedSearchSelection
-            if (matchedSearchIndex !== null && matchedSearchIndex >= 0) {
-                this.selectedSavedSearchIndex = matchedSearchIndex;
-                this.handleSavedSearchSelection();
-                this.isApplyingFilters = false;
-                return;
-            }
-            
-            // Otherwise, load URL parameters as custom search
-            // Parse DateSearch parameter using utility
-            if (params.DateSearch) {
-                const dateFilter = parseDateSearchParameter(params.DateSearch);
+            // Load URL parameters into filter fields
+            // Parse dateSearch to extract dates and offsets
+            if (filter.dateSearch) {
+                const dateFilter = parseDateSearchParameter(filter.dateSearch);
                 
                 // Handle offsets - map back to presets if they match known values
                 if (dateFilter.startDateOffset !== undefined) {
@@ -311,6 +276,17 @@ export const AdvancedSearchComponent = {
                 
                 // Handle show identifier for overlap
                 if (dateFilter.overlapShowIdentifier) {
+                    // Extract year from identifier format: "ClientMatch Year ShowMatch"
+                    // Split by spaces and find the year (4-digit number)
+                    const parts = dateFilter.overlapShowIdentifier.split(' ');
+                    const yearMatch = parts.find(part => /^\d{4}$/.test(part));
+                    
+                    // Set year filter first so filteredShows will include the target show
+                    if (yearMatch) {
+                        this.overlapShowYearFilter = yearMatch;
+                    }
+                    
+                    // Then set the show identifier
                     this.overlapShowIdentifier = dateFilter.overlapShowIdentifier;
                     this.dateFilterMode = 'overlap';
                 } else if (dateFilter.startDate || dateFilter.endDate || dateFilter.startDateOffset !== undefined || dateFilter.endDateOffset !== undefined) {
@@ -318,57 +294,75 @@ export const AdvancedSearchComponent = {
                 }
             }
             
-            // Parse text filters using utility
-            const textFilters = parseTextFilterParameters(params);
-            if (textFilters.length > 0) {
+            // Load text filters
+            if (filter.textFilters && filter.textFilters.length > 0) {
                 // Add IDs for Vue reactivity
-                this.textFilters = textFilters.map((filter, index) => ({
+                this.textFilters = filter.textFilters.map((filter, index) => ({
                     id: index + 1,
                     column: filter.column,
                     value: filter.value
                 }));
-                this.nextFilterId = textFilters.length + 1;
-            }
-            
-            // Auto-apply filters if URL parameters were loaded
-            if (params.DateSearch || textFilters.length > 0) {
-                this.applyFilters();
+                this.nextFilterId = filter.textFilters.length + 1;
             }
             
             // Reset flag after loading completes
             this.isApplyingFilters = false;
         },
         saveFiltersToURL() {
-            const params = {};
+            // Only navigate to update URL if NOT on dashboard
+            if (this.isOnDashboard) return;
             
-            // Build DateSearch parameter using utility
-            const dateSearch = buildDateSearchParameter({
-                startDateOffset: this.getStartDateOffset(),
-                endDateOffset: this.getEndDateOffset(),
-                startDate: this.startDate,
-                endDate: this.endDate,
-                overlapShowIdentifier: this.dateFilterMode === 'overlap' ? this.overlapShowIdentifier : null
-            });
+            // Build dateSearch value (without mode prefix)
+            let dateSearchValue = null;
             
-            if (dateSearch) {
-                params.DateSearch = dateSearch;
+            const startOffset = this.getStartDateOffset();
+            const endOffset = this.getEndDateOffset();
+            
+            if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
+                dateSearchValue = this.overlapShowIdentifier;
+            } else if (startOffset !== null) {
+                dateSearchValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+            } else if (this.startDate || this.endDate) {
+                dateSearchValue = `${this.startDate || ''},${this.endDate || ''}`;
             }
             
-            // Build text filter parameters using utility
-            const textFilterParams = buildTextFilterParameters(this.textFilters);
-            Object.assign(params, textFilterParams);
+            // Build unified scheduleFilter parameter
+            const scheduleFilter = buildScheduleFilter({
+                dateSearch: dateSearchValue,
+                textFilters: this.textFilters
+                    .filter(f => f.column && f.value)
+                    .map(f => ({ column: f.column, value: f.value })), // Strip id property
+                byShowDate: false // ScheduleAdvancedSearch always uses overlap mode
+            });
             
             // Use containerPath prop instead of hardcoded path
             const targetPath = this.containerPath || 'schedule/advanced-search';
             
-            // Update navigation parameters
-            NavigationRegistry.setNavigationParameters(targetPath, params);
-            
-            // Only navigate to update URL if NOT on dashboard
-            if (!this.isOnDashboard && this.navigateToPath) {
+            if (this.navigateToPath) {
+                const params = scheduleFilter ? { scheduleFilter } : {};
                 const path = NavigationRegistry.buildPath(targetPath, params);
                 this.navigateToPath(path);
             }
+            
+            // Emit search-selected event with filter data for table display
+            this.emitSearchSelected();
+        },
+        clearAllFilters() {
+            this.isApplyingFilters = true;
+            
+            // Clear date filters
+            this.startDate = '';
+            this.endDate = '';
+            this.startDatePreset = '';
+            this.endDatePreset = '';
+            this.overlapShowIdentifier = '';
+            this.dateFilterMode = 'dateRange';
+            
+            // Clear text filters
+            this.textFilters = [{ id: 1, column: '', value: '' }];
+            this.nextFilterId = 2;
+            
+            this.isApplyingFilters = false;
         },
         addTextFilter() {
             this.textFilters.push({
@@ -382,6 +376,48 @@ export const AdvancedSearchComponent = {
             if (this.textFilters.length > 1) {
                 this.textFilters = this.textFilters.filter(f => f.id !== filterId);
             }
+        },
+        matchUrlToSavedSearch(urlSearchData) {
+            const savedSearches = this.savedSearchesStore?.data || [];
+            
+            if (!savedSearches || savedSearches.length === 0) {
+                return false;
+            }
+            
+            const matchedSearchIndex = savedSearches.findIndex(search => {
+                // Compare dateSearch (without mode prefix)
+                if (search.dateSearch !== urlSearchData.dateSearch) {
+                    return false;
+                }
+                
+                // Compare byShowDate flag
+                if ((search.byShowDate || false) !== urlSearchData.byShowDate) {
+                    return false;
+                }
+                
+                // Compare text filters (order-independent)
+                const searchFilters = search.textFilters || [];
+                const urlFilters = urlSearchData.textFilters || [];
+                
+                if (searchFilters.length !== urlFilters.length) {
+                    return false;
+                }
+                
+                // Check if all filters match (ignoring order)
+                return searchFilters.every(sf => 
+                    urlFilters.some(uf => uf.column === sf.column && uf.value === sf.value)
+                ) && urlFilters.every(uf => 
+                    searchFilters.some(sf => sf.column === uf.column && sf.value === uf.value)
+                );
+            });
+            
+            // If URL matches a saved search, just select it (don't trigger handleSavedSearchSelection during URL sync)
+            if (matchedSearchIndex >= 0) {
+                this.selectedSavedSearchIndex = matchedSearchIndex;
+                return true;
+            }
+            
+            return false;
         },
         setStartDatePreset(preset) {
             this.startDatePreset = preset;
@@ -449,11 +485,6 @@ export const AdvancedSearchComponent = {
                 }
             }
         },
-        clearActiveFilters() {
-            // Clear active filters when any input changes (user must click Apply Filters again)
-            this.activeFilter = null;
-            this.activeSearchParams = null;
-        },
         getDatePickerCardClasses(cardDateFilterMode) {
             // Helper function to get CSS classes for date picker based on active mode
             // ['card', dateFilterMode === 'overlap' ? 'green' : 'white clickable']
@@ -482,85 +513,6 @@ export const AdvancedSearchComponent = {
                     'clickable': true,
                     'analyzing' : this.isApplyingFilters
                 };
-            }
-        },
-        applyFilters() {
-            // Set flag to prevent watchers from clearing during apply
-            this.isApplyingFilters = true;
-            
-            // Build filter object for date range (parameters to getOverlappingShows)
-            let filter = null;
-            let searchParams = null;
-
-            // Date range or overlap filtering based on active mode
-            if (this.hasDateRangeFilter) {
-                if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                    // Use identifier-based overlap detection
-                    filter = { identifier: this.overlapShowIdentifier };
-                } else if (this.dateFilterMode === 'dateRange' && (this.startDate || this.endDate)) {
-                    // Use date range - prefer offsets if presets are selected
-                    filter = {};
-                    
-                    const startOffset = this.getStartDateOffset();
-                    const endOffset = this.getEndDateOffset();
-                    
-                    if (startOffset !== null) {
-                        filter.startDateOffset = startOffset;
-                    } else if (this.startDate) {
-                        filter.startDate = this.startDate;
-                    }
-                    
-                    if (endOffset !== null) {
-                        filter.endDateOffset = endOffset;
-                    } else if (this.endDate) {
-                        filter.endDate = this.endDate;
-                    }
-                }
-            }
-
-            // Text search filtering (searchParams uses searchFilter)
-            if (this.hasTextSearchFilter) {
-                searchParams = {};
-                // Build search params from dynamic text filters
-                this.textFilters.forEach(f => {
-                    if (f.column && f.value) {
-                        searchParams[f.column] = f.value;
-                    }
-                });
-            }
-
-            // Set the filters
-            this.activeFilter = filter;
-            this.activeSearchParams = searchParams;
-            
-            // Save filters to URL
-            this.saveFiltersToURL();
-            
-            // Reset flag after applying completes
-            this.isApplyingFilters = false;
-        },
-        clearFilters() {
-            this.startDate = '';
-            this.endDate = '';
-            this.startDatePreset = '';
-            this.endDatePreset = '';
-            this.overlapShowIdentifier = '';
-            this.overlapShowYearFilter = new Date().getFullYear().toString();
-            this.dateFilterMode = 'dateRange';
-            this.textFilters = [{ id: 1, column: '', value: '' }];
-            this.nextFilterId = 2;
-            this.activeFilter = null;
-            this.activeSearchParams = null;
-            
-            // Use containerPath prop instead of hardcoded path
-            const targetPath = this.containerPath || 'schedule/advanced-search';
-            
-            // Clear URL parameters
-            NavigationRegistry.clearNavigationParameters(targetPath);
-            
-            // Only navigate to update URL if NOT on dashboard
-            if (!this.isOnDashboard && this.navigateToPath) {
-                this.navigateToPath(targetPath);
             }
         },
         handleSavedSearchSelection() {
@@ -637,11 +589,10 @@ export const AdvancedSearchComponent = {
                 this.nextFilterId = 2;
             }
             
-            // Apply the loaded filters
-            this.applyFilters();
-            
             // Reset flag
             this.isApplyingFilters = false;
+            
+            // Note: Don't call saveFiltersToURL here - let user click Apply Filters to update URL
         },
         async updateSavedSearch() {
             if (this.selectedSavedSearchIndex === null || !this.selectedSavedSearch) {
@@ -659,17 +610,21 @@ export const AdvancedSearchComponent = {
                 const searchData = {
                     name: this.selectedSavedSearch.name, // Keep the same name
                     dateSearch: null,
-                    textFilters: []
+                    textFilters: [],
+                    byShowDate: false
                 };
                 
-                // Build DateSearch parameter
-                searchData.dateSearch = buildDateSearchParameter({
-                    startDateOffset: this.getStartDateOffset(),
-                    endDateOffset: this.getEndDateOffset(),
-                    startDate: this.startDate,
-                    endDate: this.endDate,
-                    overlapShowIdentifier: this.dateFilterMode === 'overlap' ? this.overlapShowIdentifier : null
-                });
+                // Build dateSearch value (without mode prefix)
+                const startOffset = this.getStartDateOffset();
+                const endOffset = this.getEndDateOffset();
+                
+                if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
+                    searchData.dateSearch = this.overlapShowIdentifier;
+                } else if (startOffset !== null) {
+                    searchData.dateSearch = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+                } else if (this.startDate || this.endDate) {
+                    searchData.dateSearch = `${this.startDate || ''},${this.endDate || ''}`;
+                }
                 
                 // Add text filters
                 if (this.textFilters && this.textFilters.length > 0) {
@@ -775,17 +730,18 @@ export const AdvancedSearchComponent = {
                             const searchData = {
                                 name: this.searchName.trim(),
                                 dateSearch: null,
-                                textFilters: []
+                                textFilters: [],
+                                byShowDate: false
                             };
                             
-                            // Build DateSearch parameter using utility (same as saveFiltersToURL)
-                            searchData.dateSearch = buildDateSearchParameter({
-                                startDateOffset: this.startDateOffset,
-                                endDateOffset: this.endDateOffset,
-                                startDate: this.startDate,
-                                endDate: this.endDate,
-                                overlapShowIdentifier: this.overlapShowIdentifier
-                            });
+                            // Build dateSearch value (without mode prefix)
+                            if (this.overlapShowIdentifier) {
+                                searchData.dateSearch = this.overlapShowIdentifier;
+                            } else if (this.startDateOffset !== null) {
+                                searchData.dateSearch = `${this.startDateOffset},${this.endDateOffset !== null ? this.endDateOffset : ''}`;
+                            } else if (this.startDate || this.endDate) {
+                                searchData.dateSearch = `${this.startDate || ''},${this.endDate || ''}`;
+                            }
                             
                             // Add text filters (strip IDs, just keep column/value)
                             if (this.textFilters && this.textFilters.length > 0) {
@@ -854,6 +810,42 @@ export const AdvancedSearchComponent = {
                 savedSearchesStore: this.savedSearchesStore,
                 advancedSearchComponent: this
             }, 'Save Search');
+        },
+        emitSearchSelected() {
+            // Build dateSearch value (without mode prefix)
+            let dateSearchValue = null;
+            
+            const startOffset = this.getStartDateOffset();
+            const endOffset = this.getEndDateOffset();
+            
+            if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
+                dateSearchValue = this.overlapShowIdentifier;
+            } else if (startOffset !== null) {
+                dateSearchValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+            } else if (this.startDate || this.endDate) {
+                dateSearchValue = `${this.startDate || ''},${this.endDate || ''}`;
+            }
+            
+            // Build search data in the same format as SavedSearchSelect
+            const searchData = {
+                dateSearch: dateSearchValue,
+                textFilters: this.textFilters
+                    .filter(filter => filter.column && filter.value)
+                    .map(filter => ({
+                        column: filter.column,
+                        value: filter.value
+                    })),
+                byShowDate: false
+            };
+            
+            // Call callback if in modal mode, otherwise emit to parent
+            if (this.onSearchSelected) {
+                this.onSearchSelected(searchData);
+                // Close the modal after applying filters
+                this.$emit('close-modal');
+            } else {
+                this.$emit('search-selected', searchData);
+            }
         }
     },
     template: html`
@@ -871,9 +863,9 @@ export const AdvancedSearchComponent = {
                             <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
                                 Active filter
                             </small>
-                            <small v-else style="display: block; color: var(--color-text-light);">
+                            <!--small v-else style="display: block; color: var(--color-text-light);">
                                 Click to activate
-                            </small>
+                            </small-->
                         </div>
                         <div :class="dateFilterMode === 'dateRange' ? 'content' : 'content hide-when-narrow'">
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -936,15 +928,12 @@ export const AdvancedSearchComponent = {
                             <small v-if="isLoadingShows" style="display: block; color: var(--color-text-light);">
                                 Loading shows...
                             </small>
-                            <small v-else-if="filteredShows.length === 0" style="display: block; color: var(--color-text-light);">
-                                No shows available for selected year filter
-                            </small>
                             <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
-                                Active filter - showing {{ filteredShows.length }} show(s)
+                                Active filter
                             </small>
-                            <small v-else style="display: block; color: var(--color-text-light);">
-                                Click to activate ({{ filteredShows.length }} show(s) available)
-                            </small>
+                            <!--small v-else style="display: block; color: var(--color-text-light);">
+                                Click to activate 
+                            </small-->
                         </div>
                         <LoadingBarComponent
                             key="date-range"
@@ -970,7 +959,7 @@ export const AdvancedSearchComponent = {
                             </label>
                             
                             <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span>Overlaps with Show:</span>
+                                <span>Overlaps with Show: ({{ filteredShows.length }} available)</span>
                                 <select 
                                     v-model="overlapShowIdentifier" 
                                     :disabled="isLoadingShows || filteredShows.length === 0"
@@ -1050,7 +1039,7 @@ export const AdvancedSearchComponent = {
 
                 <!-- Action Buttons -->
                 <div class="button-bar">
-                    <button @click="applyFilters" class="green">View Search Results</button>
+                    <button @click="saveFiltersToURL" class="green">Apply Filters</button>
                     
                     <!-- Saved Search Dropdown -->
                     <select 
@@ -1087,26 +1076,8 @@ export const AdvancedSearchComponent = {
                     >
                         Delete Saved Search
                     </button>
+                    <button v-if="selectedSavedSearchIndex === null" @click="clearAllFilters" class="white">Clear Filters</button>
                     
-                    <button v-if="selectedSavedSearchIndex === null" @click="clearFilters" class="white">Clear All</button>
-                </div>
-            </div>
-
-            <!-- Results Table -->
-            <div class="search-results-section">
-                <ScheduleTableComponent 
-                    key="search-results"
-                    v-if="activeFilter !== null || activeSearchParams !== null"
-                    :filter="activeFilter"
-                    :search-params="activeSearchParams"
-                    :hideRowsOnSearch="false"
-                >
-                    <template #header-area>
-                        <h3>Search Results:</h3>
-                    </template>
-                </ScheduleTableComponent>
-                <div v-else class="content-header">
-                    <p class="loading-message">Configure your search criteria above and click "View Search Results" to see results.</p>
                 </div>
             </div>
         </div>

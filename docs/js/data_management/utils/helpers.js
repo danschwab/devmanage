@@ -339,20 +339,36 @@ export function GetParagraphMatchRating(text1, text2) {
 
 /**
  * Parse a DateSearch URL parameter into a filter object
- * Format: 'offset,offset' or 'date,date' or 'showIdentifier'
+ * Format: '[mode:]value' where mode is 'show' or 'overlap'
+ *   - 'show:date,date' or 'overlap:date,date' (explicit mode)
+ *   - 'offset,offset' or 'date,date' or 'showIdentifier' (defaults to overlap for backwards compatibility)
  * 
  * @param {string} dateSearch - The DateSearch parameter from URL
- * @returns {Object} Filter object with startDate, endDate, startDateOffset, endDateOffset, or overlapShowIdentifier
+ * @returns {Object} Filter object with startDate, endDate, startDateOffset, endDateOffset, overlapShowIdentifier, and byShowDate
  */
 export function parseDateSearchParameter(dateSearch) {
     const filter = {};
     
     if (!dateSearch) return filter;
     
+    // Check for mode prefix (show: or overlap:)
+    let mode = 'overlap'; // default
+    let value = dateSearch;
+    
+    if (dateSearch.startsWith('show:')) {
+        mode = 'show';
+        value = dateSearch.substring(5);
+    } else if (dateSearch.startsWith('overlap:')) {
+        mode = 'overlap';
+        value = dateSearch.substring(8);
+    }
+    
+    filter.byShowDate = (mode === 'show');
+    
     // Check if it's an offset (starts with + or - or is a number followed by comma)
-    if (dateSearch.startsWith('+') || dateSearch.startsWith('-') || /^-?\d+,/.test(dateSearch)) {
+    if (value.startsWith('+') || value.startsWith('-') || /^-?\d+,/.test(value)) {
         // Format: offset,offset (e.g., '-30,365' or '0,30')
-        const [start, end] = dateSearch.split(',');
+        const [start, end] = value.split(',');
         
         if (start !== undefined && start !== '') {
             filter.startDateOffset = parseInt(start);
@@ -360,9 +376,9 @@ export function parseDateSearchParameter(dateSearch) {
         if (end !== undefined && end !== '') {
             filter.endDateOffset = parseInt(end);
         }
-    } else if (dateSearch.includes(',')) {
+    } else if (value.includes(',')) {
         // Format: date,date (e.g., '2025-01-01,2025-12-31')
-        const [start, end] = dateSearch.split(',');
+        const [start, end] = value.split(',');
         
         if (start && start !== '') {
             filter.startDate = start;
@@ -372,7 +388,7 @@ export function parseDateSearchParameter(dateSearch) {
         }
     } else {
         // Just a show identifier for overlap
-        filter.overlapShowIdentifier = dateSearch;
+        filter.overlapShowIdentifier = value;
     }
     
     return filter;
@@ -387,29 +403,34 @@ export function parseDateSearchParameter(dateSearch) {
  * @param {string} options.startDate - Start date string (YYYY-MM-DD)
  * @param {string} options.endDate - End date string (YYYY-MM-DD)
  * @param {string} options.overlapShowIdentifier - Show identifier for overlap
+ * @param {boolean} options.byShowDate - If true, use 'show:' prefix; otherwise 'overlap:'
  * @returns {string|null} DateSearch parameter string or null if no date criteria
  */
 export function buildDateSearchParameter(options) {
-    const { startDateOffset, endDateOffset, startDate, endDate, overlapShowIdentifier } = options;
+    const { startDateOffset, endDateOffset, startDate, endDate, overlapShowIdentifier, byShowDate } = options;
+    
+    let value = null;
     
     // If there's an overlap identifier, return it directly
     if (overlapShowIdentifier) {
-        return overlapShowIdentifier;
+        value = overlapShowIdentifier;
     }
-    
     // If we have offsets, use them
-    if (startDateOffset !== null && startDateOffset !== undefined) {
+    else if (startDateOffset !== null && startDateOffset !== undefined) {
         const start = startDateOffset;
         const end = endDateOffset !== null && endDateOffset !== undefined ? endDateOffset : '';
-        return `${start},${end}`;
+        value = `${start},${end}`;
     }
-    
     // If we have explicit dates, use them
-    if (startDate || endDate) {
-        return `${startDate || ''},${endDate || ''}`;
+    else if (startDate || endDate) {
+        value = `${startDate || ''},${endDate || ''}`;
     }
     
-    return null;
+    if (!value) return null;
+    
+    // Add mode prefix
+    const prefix = byShowDate ? 'show:' : 'overlap:';
+    return `${prefix}${value}`;
 }
 
 /**
@@ -484,4 +505,90 @@ export function parseSearchParameters(params) {
     });
     
     return result;
+}
+
+/**
+ * Parse unified scheduleFilter URL parameter
+ * Format: JSON-encoded object with dateSearch, textFilters, view properties
+ * Note: Expects already-decoded JSON string (NavigationRegistry.getNavigationParameters handles decoding)
+ * 
+ * @param {string} scheduleFilter - JSON filter string from URL (already decoded)
+ * @returns {Object} Parsed filter object with {dateSearch, textFilters, byShowDate, view}
+ */
+export function parseScheduleFilter(scheduleFilter) {
+    const result = {
+        dateSearch: null,
+        textFilters: [],
+        byShowDate: false,
+        view: null
+    };
+    
+    if (!scheduleFilter) return result;
+    
+    try {
+        const parsed = JSON.parse(scheduleFilter);
+        
+        if (parsed.dateSearch) {
+            result.dateSearch = parsed.dateSearch;
+        }
+        
+        if (parsed.textFilters && Array.isArray(parsed.textFilters)) {
+            result.textFilters = parsed.textFilters;
+        }
+        
+        if (parsed.byShowDate !== undefined) {
+            result.byShowDate = parsed.byShowDate;
+        }
+        
+        if (parsed.view) {
+            result.view = parsed.view;
+        }
+    } catch (error) {
+        console.error('[parseScheduleFilter] Failed to parse scheduleFilter:', error);
+    }
+    
+    return result;
+}
+
+/**
+ * Build unified scheduleFilter URL parameter
+ * Encodes all filter components into a single JSON parameter
+ * Note: Returns unencoded JSON string - NavigationRegistry.buildPath will handle URL encoding
+ * 
+ * @param {Object} options - Filter options
+ * @param {string} options.dateSearch - Date search string (without mode prefix)
+ * @param {Array} options.textFilters - Array of {column, value} objects
+ * @param {boolean} options.byShowDate - If true, filters by show date; otherwise by overlap
+ * @param {string} options.view - View mode (e.g., 'all')
+ * @returns {string|null} JSON string or null if empty
+ */
+export function buildScheduleFilter(options) {
+    const { dateSearch, textFilters, byShowDate, view } = options;
+    
+    const filter = {};
+    
+    if (dateSearch) {
+        filter.dateSearch = dateSearch;
+    }
+    
+    if (textFilters && textFilters.length > 0) {
+        // Only include filters that have both column and value
+        const validFilters = textFilters.filter(f => f.column && f.value);
+        if (validFilters.length > 0) {
+            filter.textFilters = validFilters;
+        }
+    }
+    
+    if (byShowDate !== undefined) {
+        filter.byShowDate = byShowDate;
+    }
+    
+    if (view) {
+        filter.view = view;
+    }
+    
+    // Return null if filter is empty
+    if (Object.keys(filter).length === 0) return null;
+    
+    return JSON.stringify(filter);
 }

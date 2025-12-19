@@ -64,6 +64,7 @@ export const ScheduleContent = {
         AdvancedSearchComponent,
         SavedSearchSelect
     },
+    inject: ['$modal'],
     props: {
         navigateToPath: Function,
         containerPath: {
@@ -78,7 +79,8 @@ export const ScheduleContent = {
     },
     computed: {
         isAdvancedSearchView() {
-            return this.containerPath === 'schedule/advanced-search';
+            const cleanPath = this.containerPath.split('?')[0];
+            return cleanPath === 'schedule/advanced-search';
         },
         // Split filter into dateFilter and searchParams for table
         dateFilter() {
@@ -165,16 +167,27 @@ export const ScheduleContent = {
             }
             
             this.filter = filter;
+        },
+        openAdvancedSearchModal() {
+            // Open AdvancedSearchComponent in a modal
+            // The modal will auto-close when AdvancedSearchComponent emits 'close-modal'
+            this.$modal.custom(AdvancedSearchComponent, {
+                containerPath: this.containerPath,
+                navigateToPath: this.navigateToPath,
+                onSearchSelected: (searchData) => {
+                    this.handleSearchSelected(searchData);
+                }
+            }, 'Advanced Search', { size: 'large' });
         }
     },
     template: html`
         <slot>
-            <!-- Main Schedule View (Year Selector) -->
-            <div v-if="containerPath === 'schedule'" class="schedule-page">
+            <!-- Main Schedule View (Year Selector & Results Table) -->
+            <div class="schedule-page">
                 <ScheduleTableComponent 
                     :filter="dateFilter"
                     :search-params="tableSearchParams"
-                    @navigate-to-path="(event) => navigateToPath(event.targetPath)"
+                    @navigate-to-path="navigateToPath"
                 >
                     <template #header-area>
                         <div class="button-bar">
@@ -186,21 +199,13 @@ export const ScheduleContent = {
                                 default-search="Upcoming"
                                 @search-selected="handleSearchSelected"
                             />
-                            <button @click="navigateToPath('schedule/advanced-search')">
+                            <button @click="openAdvancedSearchModal">
                                 Advanced
                             </button>
                         </div>
                     </template>
                 </ScheduleTableComponent>
             </div>
-
-            <!-- Advanced Search View -->
-            <AdvancedSearchComponent 
-                v-else-if="isAdvancedSearchView"
-                :container-path="containerPath"
-                :navigate-to-path="navigateToPath"
-                @navigate-to-path="(event) => navigateToPath(event.targetPath)"
-            />
         </slot>
     `
 };

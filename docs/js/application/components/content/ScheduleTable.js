@@ -323,7 +323,7 @@ export const ScheduleTableComponent = {
                 return;
             }
             
-            this.$emit('navigate-to-path', { targetPath: `packlist/${packlistInfo.identifier}` });
+            this.$emit('navigate-to-path', `packlist/${packlistInfo.identifier}`);
         },
         getShipDateCards(row, columnKey) {
             // Only show estimated ship date cards in the ship column
