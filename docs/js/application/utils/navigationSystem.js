@@ -104,6 +104,32 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Parse JSON segment from path
+     * @param {string} jsonString - The JSON string from path
+     * @returns {Object|null} Parsed JSON object or null
+     */
+    parseJsonPathSegment(jsonString) {
+        if (!jsonString) return null;
+        
+        try {
+            return JSON.parse(jsonString);
+        } catch (e) {
+            console.warn('[NavigationRegistry] Failed to parse JSON path segment:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Build JSON path segment from parameters
+     * @param {Object} parameters - Parameters to encode as JSON
+     * @returns {string} JSON string for path segment
+     */
+    buildJsonPathSegment(parameters) {
+        if (!parameters || Object.keys(parameters).length === 0) return '';
+        return JSON.stringify(parameters);
+    },
+
+    /**
      * Get route configuration by path
      * @param {string} path - The route path (e.g., 'inventory/categories')
      * @returns {Object|null} Route configuration or null if not found
@@ -123,24 +149,40 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Parse path with parameters (supports query string parameters)
-     * @param {string} path - The path with potential parameters (e.g., 'inventory/categories?searchTerm=item&hideRowsOnSearch=false')
+     * Parse path with parameters (supports JSON path segments)
+     * @param {string} path - The path with potential JSON parameters (e.g., 'schedule?{"dateSearch":"0,30"}')
      * @returns {Object} Object with path, parameters, and route information
      */
     parsePath(path) {
-        // Split path from query parameters
-        const [cleanPath, queryString] = path.split('?');
-        const parameters = {};
+        let cleanPath = path;
+        let parameters = {};
         
-        // Parse query string parameters
-        if (queryString) {
-            const searchParams = new URLSearchParams(queryString);
-            for (const [key, value] of searchParams) {
-                // Try to parse boolean and number values
-                if (value === 'true') parameters[key] = true;
-                else if (value === 'false') parameters[key] = false;
-                else if (!isNaN(value) && !isNaN(parseFloat(value))) parameters[key] = parseFloat(value);
-                else parameters[key] = value;
+        // Split on ? to separate route from parameters
+        if (path.includes('?')) {
+            const [pathPart, paramPart] = path.split('?');
+            cleanPath = pathPart;
+            
+            if (paramPart) {
+                // Decode URL-encoded parameter string
+                const decodedParamPart = decodeURIComponent(paramPart);
+                
+                // Check if decoded paramPart is JSON
+                if (decodedParamPart.startsWith('{') || decodedParamPart.startsWith('[')) {
+                    const parsedJson = this.parseJsonPathSegment(decodedParamPart);
+                    if (parsedJson) {
+                        parameters = parsedJson;
+                    }
+                } else {
+                    // Fallback: old query string format for backwards compatibility
+                    const searchParams = new URLSearchParams(paramPart);
+                    for (const [key, value] of searchParams) {
+                        // Try to parse boolean and number values
+                        if (value === 'true') parameters[key] = true;
+                        else if (value === 'false') parameters[key] = false;
+                        else if (!isNaN(value) && !isNaN(parseFloat(value))) parameters[key] = parseFloat(value);
+                        else parameters[key] = value;
+                    }
+                }
             }
         }
         
@@ -156,29 +198,28 @@ export const NavigationRegistry = {
     },
 
     /**
-     * Build path with parameters
-     * @param {string} path - The base path (may include existing query parameters)
-     * @param {Object} parameters - Parameters to add/replace in query string
-     * @returns {string} Full path with merged parameters
+     * Build path with parameters as JSON segment
+     * @param {string} path - The base path (may include existing JSON segment or query parameters)
+     * @param {Object} parameters - Parameters to add/replace
+     * @returns {string} Full path with JSON segment
      */
     buildPath(path, parameters = {}) {
-        // Split path and existing query string
-        const [cleanPath, existingQuery] = path.split('?');
+        // Parse existing path to extract clean path and existing parameters
+        const pathInfo = this.parsePath(path);
+        const cleanPath = pathInfo.path;
         
-        // Start with existing parameters
-        const queryString = new URLSearchParams(existingQuery || '');
+        // Merge existing parameters with new ones (new ones take precedence)
+        const mergedParameters = { ...pathInfo.parameters, ...parameters };
         
-        // Add/replace with new parameters
-        Object.entries(parameters).forEach(([key, value]) => {
-            queryString.set(key, String(value));
-        });
-        
-        // Return path without query string if no parameters
-        if (queryString.toString() === '') {
+        // Return clean path if no parameters
+        if (Object.keys(mergedParameters).length === 0) {
             return cleanPath;
         }
         
-        return `${cleanPath}?${queryString.toString()}`;
+        // Build JSON segment
+        const jsonSegment = this.buildJsonPathSegment(mergedParameters);
+        
+        return `${cleanPath}?${jsonSegment}`;
     },
 
     /**
@@ -189,6 +230,39 @@ export const NavigationRegistry = {
     getNavigationParameters(path) {
         const pathInfo = this.parsePath(path);
         return pathInfo.parameters;
+    },
+
+    /**
+     * Get parameters for a container, respecting context (dashboard vs regular navigation)
+     * This is the preferred method for components to retrieve their parameters
+     * @param {string} containerPath - The container's path
+     * @param {string} currentPath - The app's current path (from appContext.currentPath)
+     * @returns {Object} The parameters object for this container
+     */
+    getParametersForContainer(containerPath, currentPath) {
+        if (!currentPath) return {};
+        
+        const currentCleanPath = currentPath.split('?')[0];
+        const containerCleanPath = containerPath.split('?')[0];
+        const isOnDashboard = currentCleanPath.split('/')[0] === 'dashboard';
+        
+        if (isOnDashboard) {
+            // On dashboard: get parameters from dashboard registry
+            const dashboardContainer = this.dashboardRegistry.getContainer(containerPath);
+            if (dashboardContainer) {
+                const containerFullPath = typeof dashboardContainer === 'string' 
+                    ? dashboardContainer 
+                    : dashboardContainer.path;
+                return this.getNavigationParameters(containerFullPath);
+            }
+            return {};
+        } else {
+            // Not on dashboard: check if current path matches container path
+            if (currentCleanPath === containerCleanPath) {
+                return this.getNavigationParameters(currentPath);
+            }
+            return {};
+        }
     },
 
     /**

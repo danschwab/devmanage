@@ -2,15 +2,16 @@
 
 ## Overview
 
-The TopShelfLiveInventory application uses a hash-based URL routing system built on Vue 3 reactivity. The navigation system is designed to be simple, predictable, and maintain a single source of truth for application state.
+The TopShelfLiveInventory application uses a hash-based URL routing system with JSON parameters, built on Vue 3 reactivity. The navigation system maintains application state in URLs and supports both regular page navigation and dashboard containers with independent parameter persistence.
 
 ## Core Principles
 
-1. **Single Source of Truth**: `appContext.currentPath` contains the full path with query parameters
-2. **URL = State**: All navigation state is encoded in the URL - no separate parameter storage
-3. **Reactive Flow**: Components watch `currentPath` and reactively update when it changes
-4. **Parameter Merging**: New parameters merge with existing ones, not replace them
-5. **Mode Prefixes**: Date search modes are encoded in the parameter value (e.g., `show:` or `overlap:`)
+1. **Single Source of Truth**: `appContext.currentPath` contains the full path with JSON parameters
+2. **URL = State**: Navigation state is encoded in URLs, with dashboard containers storing their own paths
+3. **JSON Parameters**: Uses readable JSON format: `#route?{"param":"value"}` instead of query strings
+4. **Context-Aware Parameters**: Components retrieve parameters differently based on dashboard vs regular navigation
+5. **Parameter Merging**: New parameters merge with existing ones via `buildPath()`
+6. **Dashboard Persistence**: Dashboard containers maintain their own parameter state in DashboardRegistry
 
 ## Architecture
 
@@ -20,24 +21,41 @@ The TopShelfLiveInventory application uses a hash-based URL routing system built
 ┌─────────────────────────────────────────────────────┐
 │  UI Layer (Vue Components)                          │
 │  - SavedSearchSelect, ScheduleContent, etc.         │
-│  - Watch currentUrlParameters computed              │
+│  - Use getParametersForContainer() for params       │
 │  - Emit events, call navigateToPath()               │
+│  - Update dashboard via updatePath() when on dash   │
 └─────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────┐
 │  Navigation Registry                                 │
 │  - Route definitions and metadata                    │
 │  - handleNavigateToPath() - main entry point        │
-│  - parsePath() / buildPath() utilities              │
+│  - parsePath() / buildPath() - JSON parameters      │
+│  - getParametersForContainer() - context-aware      │
 └─────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────┐
-│  URL Router                                          │
+│  URL Router + Dashboard Registry                     │
 │  - Browser history sync (pushState/popState)        │
-│  - Hash-based URL format (#path?params)             │
-│  - Encodes/decodes paths for URL safety             │
+│  - Hash-based URL: #path?{json}                     │
+│  - Dashboard: stores container paths with params    │
 └─────────────────────────────────────────────────────┘
 ```
+
+## URL Format
+
+### JSON Path Segments
+
+**Format**: `#route?{"param":"value","another":"data"}`
+
+**Example**: `#schedule?{"dateSearch":"0,30","searchMode":"upcoming"}`
+
+**Key Features**:
+
+- Unencoded JSON in hash fragment (human-readable)
+- Browser may encode on paste: automatically decoded via `decodeURIComponent()`
+- `?` delimiter separates route from parameters
+- Parameters are parsed/built via `parseJsonPathSegment()` / `buildJsonPathSegment()`
 
 ## Key Components
 
@@ -47,15 +65,29 @@ The TopShelfLiveInventory application uses a hash-based URL routing system built
 
 **Key Methods**:
 
-- `parsePath(path)` - Splits path and query string, parses parameters into object
+- `parseJsonPathSegment(jsonString)` - Parses JSON parameter string into object
 
   ```javascript
-  parsePath('inventory/categories?Col1=Name&Val1=Table')
+  parseJsonPathSegment('{"dateSearch":"0,30","mode":"upcoming"}');
+  // Returns: { dateSearch: '0,30', mode: 'upcoming' }
+  ```
+
+- `buildJsonPathSegment(parameters)` - Converts object to JSON string
+
+  ```javascript
+  buildJsonPathSegment({ dateSearch: "0,30", mode: "upcoming" });
+  // Returns: '{"dateSearch":"0,30","mode":"upcoming"}'
+  ```
+
+- `parsePath(path)` - Splits path and JSON parameters, decodes URL encoding
+
+  ```javascript
+  parsePath('schedule?{"dateSearch":"0,30"}')
   // Returns:
   {
-    path: 'inventory/categories',
-    fullPath: 'inventory/categories?Col1=Name&Val1=Table',
-    parameters: { Col1: 'Name', Val1: 'Table' },
+    path: 'schedule',
+    fullPath: 'schedule?{"dateSearch":"0,30"}',
+    parameters: { dateSearch: '0,30' },
     route: {...},
     hasParameters: true
   }
@@ -64,8 +96,40 @@ The TopShelfLiveInventory application uses a hash-based URL routing system built
 - `buildPath(path, parameters)` - Merges parameters into path, replacing duplicates
 
   ```javascript
-  buildPath("inventory?Col1=Name", { Col2: "Value", Col1: "NewName" });
-  // Returns: 'inventory?Col1=NewName&Col2=Value'
+  buildPath('schedule?{"dateSearch":"0,30"}', {
+    mode: "upcoming",
+    dateSearch: "0,60",
+  });
+  // Returns: 'schedule?{"dateSearch":"0,60","mode":"upcoming"}'
+  ```
+
+- `getNavigationParameters(path)` - Extracts parameters from a path
+
+  ```javascript
+  getNavigationParameters('schedule?{"dateSearch":"0,30"}');
+  // Returns: { dateSearch: '0,30' }
+  ```
+
+- `getParametersForContainer(containerPath, currentPath)` - **Context-aware parameter retrieval**
+
+  **This is the preferred method for components to get their parameters**
+
+  - On dashboard: Retrieves parameters from DashboardRegistry
+  - Not on dashboard: Retrieves parameters from currentPath if paths match
+  - Handles the complexity of different contexts automatically
+
+  ```javascript
+  // On dashboard page (currentPath = 'dashboard')
+  getParametersForContainer("schedule", "dashboard");
+  // Returns parameters stored in dashboard registry for schedule container
+
+  // On regular page (currentPath = 'schedule?{"dateSearch":"0,30"}')
+  getParametersForContainer("schedule", 'schedule?{"dateSearch":"0,30"}');
+  // Returns: { dateSearch: '0,30' }
+
+  // Wrong page (currentPath = 'inventory')
+  getParametersForContainer("schedule", "inventory");
+  // Returns: {}
   ```
 
 - `handleNavigateToPath(navigationData, appContext)` - Main navigation handler
@@ -80,17 +144,49 @@ The TopShelfLiveInventory application uses a hash-based URL routing system built
 
 ```javascript
 routes: {
-  dashboard: { isMainSection: true, displayName: 'Dashboard' },
-  inventory: {
+  dashboard: {
     isMainSection: true,
-    displayName: 'Inventory',
-    icon: 'inventory',
-    routes: {
-      categories: { displayName: 'Categories' },
-      'add-item': { displayName: 'Add Item' }
+    displayName: 'Dashboard',
+    children: {}
+  },
+  schedule: {
+    isMainSection: true,
+    displayName: 'Schedule',
+    icon: 'event',
+    children: {
+      'advanced-search': { displayName: 'Advanced Search' }
     }
   }
 }
+```
+
+### DashboardRegistry
+
+**Purpose**: Manages dashboard container persistence with parameter state
+
+**Key Features**:
+
+- Stores full container paths including parameters
+- Compares clean paths (without params) for matching
+- Auto-saves changes with 5-second debounce
+- Integrated with NavigationRegistry
+
+**Key Methods**:
+
+- `has(containerPathWithParams)` - Check if container is on dashboard (compares clean paths)
+- `getContainer(containerPathWithParams)` - Get container with its stored path (compares clean paths)
+- `add(containerPathWithParams)` - Add container to dashboard with parameters
+- `updatePath(cleanPath, newPathWithParams)` - Update container's path with new parameters
+- `remove(containerPathWithParams)` - Remove container from dashboard
+- `toggleClass(containerPathWithParams, className)` - Toggle CSS class (wide/tall)
+
+**Data Structure**:
+
+```javascript
+containers: [
+  { path: 'schedule?{"dateSearch":"0,30"}', classes: "wide" },
+  { path: "inventory", classes: "" },
+];
 ```
 
 ### URLRouter
@@ -99,10 +195,10 @@ routes: {
 
 **Key Features**:
 
-- Hash-based routing (`#path?params`)
-- Space encoding (replaces spaces with `+`)
+- Hash-based routing (`#path?{json}`)
+- Space encoding (replaces spaces with `+` in URL)
 - Browser back/forward support via `popstate` event
-- Distinguishes browser navigation from app navigation via `isBrowserNavigation` flag
+- Distinguishes browser navigation from app navigation
 
 **Key Methods**:
 
@@ -110,187 +206,217 @@ routes: {
 - `handlePopState()` - Responds to browser back/forward buttons
 - `getCurrentURLPath()` - Reads current path from `window.location.hash`
 
-### App Component
+### Component Integration Pattern
 
-**Purpose**: Main Vue app managing navigation state
-
-**Key Reactive Properties**:
-
-- `currentPath` (data) - Full path with parameters (e.g., `'schedule?DateSearch=show:2024-01-01,2024-12-31'`)
-- `currentPage` (computed) - Base page from path (e.g., `'schedule'`)
-- `containers` (computed) - Active container configurations based on path
-
-**Navigation Flow**:
-
-```javascript
-User action → navigateToPath('schedule?params')
-  ↓
-handleNavigateToPath({ targetPath, isBrowserNavigation: false })
-  ↓
-currentPath = 'schedule?params'
-  ↓
-Components watch currentUrlParameters
-  ↓
-Components sync with new parameters
-```
-
-## Navigation Types
-
-### 1. Same-Base-Path Navigation (Parameter Change)
-
-**When**: Navigating to the same page with different parameters
-**Example**: `schedule?DateSearch=show:2023...` → `schedule?DateSearch=show:2024...`
-
-**Behavior**:
-
-- Updates `currentPath`
-- Updates browser URL
-- **Keeps menu open**
-- Components react to parameter changes
-- Returns `{ action: 'parameter_change' }`
-
-### 2. New-Location Navigation
-
-**When**: Navigating to a different page
-**Example**: `schedule` → `schedule/advanced-search`
-
-**Behavior**:
-
-- Updates `currentPath`
-- Updates browser URL
-- **Closes menu**
-- Components load/unmount as needed
-- Returns `{ action: 'navigate' }`
-
-### 3. Browser Navigation (Back/Forward)
-
-**When**: User clicks browser back/forward buttons
-
-**Behavior**:
-
-- `popstate` event triggers `handlePopState()`
-- Calls `handleNavigateToPath()` with `isBrowserNavigation: true`
-- Updates `currentPath` without calling `updateURL()` (prevents loop)
-- Components react to new path
-
-## URL Parameter Encoding
-
-### Date Search Parameters
-
-**Format**: `DateSearch=[mode:]value`
-
-**Modes**:
-
-- `show:` - Filter by precise show date
-- `overlap:` - Filter by ship-to-return overlap range
-
-**Examples**:
-
-```
-DateSearch=show:2024-01-01,2024-12-31        (year search by show date)
-DateSearch=overlap:2024-01-01,2024-12-31     (year search by overlap)
-DateSearch=show:-30,365                       (offset search by show date)
-DateSearch=overlap:SHOW-2024-001              (overlap with specific show)
-```
-
-**Parsing**: `parseDateSearchParameter()` extracts mode and returns object:
-
-```javascript
-{
-  startDate: '2024-01-01',
-  endDate: '2024-12-31',
-  byShowDate: true  // true for 'show:', false for 'overlap:'
-}
-```
-
-**Building**: `buildDateSearchParameter()` encodes mode into string:
-
-```javascript
-buildDateSearchParameter({
-  startDate: "2024-01-01",
-  endDate: "2024-12-31",
-  byShowDate: true,
-});
-// Returns: 'show:2024-01-01,2024-12-31'
-```
-
-### Text Filter Parameters
-
-**Format**: `Col[N]=column&Val[N]=value`
-
-**Example**: `Col1=Show&Val1=Tech%20Expo&Col2=Client&Val2=ACME`
-
-**Parsing**: `parseTextFilterParameters()` returns array:
-
-```javascript
-[
-  { column: "Show", value: "Tech Expo" },
-  { column: "Client", value: "ACME" },
-];
-```
-
-**Building**: `buildTextFilterParameters()` returns object:
-
-```javascript
-{ Col1: 'Show', Val1: 'Tech Expo', Col2: 'Client', Val2: 'ACME' }
-```
-
-## Component Integration
-
-### SavedSearchSelect Component
-
-**Purpose**: Dropdown for year/saved search selection with URL sync
-
-**Key Features**:
-
-- Watches `currentUrlParameters` computed property
-- Syncs dropdown selection with URL on changes
-- Only applies default when URL has NO parameters
-- User selections update URL, which triggers other components to sync
+**Purpose**: Components retrieve parameters context-aware for both regular and dashboard navigation
 
 **Reactive Flow**:
 
 ```javascript
-// Computed property extracts parameters for this component's path
-currentUrlParameters() {
-  const currentCleanPath = this.appContext.currentPath.split('?')[0];
-  const containerCleanPath = this.containerPath.split('?')[0];
+computed: {
+  currentUrlParameters() {
+    if (!this.appContext?.currentPath) return {};
 
-  if (currentCleanPath === containerCleanPath) {
-    return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+    // Use context-aware parameter retrieval
+    return NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext.currentPath
+    );
   }
-  return {};
-}
-
-// Watcher reacts to URL changes
+},
 watch: {
-  currentUrlParameters(newParams, oldParams) {
-    if (!oldParams) return; // Skip initial load
-    if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
-
-    this.syncWithURL(); // Sync dropdown with new URL
+  currentUrlParameters: {
+    handler(newParams) {
+      this.syncWithURL(); // React to parameter changes
+    },
+    deep: true
   }
 }
 ```
 
-**Initialization Flow**:
+**Update Flow (with dashboard support)**:
 
-1. `mounted()` - Initialize store and options
-2. `syncWithURL()` - Check URL parameters
-3. If parameters exist → parse and sync dropdown
-4. If no parameters → apply default and navigate to it
+```javascript
+methods: {
+  updateFilters(newParams) {
+    const isOnDashboard = this.appContext.currentPath.split('/')[0] === 'dashboard';
 
-**User Selection Flow**:
+    if (isOnDashboard) {
+      // On dashboard: update dashboard registry
+      const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
+      dashboardRegistry.updatePath(this.containerPath.split('?')[0], newPath);
+    } else {
+      // Regular navigation: update URL
+      const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
+      this.navigateToPath(newPath);
+    }
+  }
+}
+```
 
-1. User selects option → `handleChange()`
-2. `applyOption()` builds search data and parameters
-3. `updateURL()` navigates to new path with parameters
-4. URL change triggers watcher in this and other components
-5. Components sync with new parameters
+## Navigation Flow
+
+### Regular Navigation Flow
+
+```
+User action → Component updates parameters
+  ↓
+navigateToPath(buildPath(containerPath, newParams))
+  ↓
+handleNavigateToPath({ targetPath, isBrowserNavigation: false })
+  ↓
+appContext.currentPath = newPath
+  ↓
+URLRouter.updateURL() - updates browser address bar
+  ↓
+Components' currentUrlParameters computed updates
+  ↓
+Watchers fire → components sync with new parameters
+```
+
+### Dashboard Navigation Flow
+
+```
+User action on dashboard container → Component updates parameters
+  ↓
+dashboardRegistry.updatePath(containerPath, buildPath(containerPath, newParams))
+  ↓
+Dashboard registry stores new path with parameters
+  ↓
+Components' getParametersForContainer() reads from dashboard registry
+  ↓
+currentUrlParameters computed updates
+  ↓
+Watchers fire → components sync with new parameters
+  ↓
+(Browser URL stays as #dashboard - container params stored in registry)
+```
+
+### Browser Back/Forward
+
+```
+User clicks back/forward
+  ↓
+popstate event fires
+  ↓
+URLRouter.handlePopState()
+  ↓
+handleNavigateToPath({ targetPath, isBrowserNavigation: true })
+  ↓
+appContext.currentPath = pathFromURL
+  ↓
+(No updateURL call - prevents loop)
+  ↓
+Components react to currentPath change
+```
+
+## Parameter Handling
+
+### JSON Parameter Format
+
+All parameters use JSON format in URLs for readability and type preservation:
+
+```javascript
+// Build parameters
+const params = { dateSearch: "0,30", mode: "upcoming", isActive: true };
+const path = NavigationRegistry.buildPath("schedule", params);
+// Result: 'schedule?{"dateSearch":"0,30","mode":"upcoming","isActive":true}'
+
+// Parse parameters
+const pathInfo = NavigationRegistry.parsePath('schedule?{"dateSearch":"0,30"}');
+// pathInfo.parameters = { dateSearch: '0,30' }
+```
+
+### Parameter Merging
+
+`buildPath()` automatically merges new parameters with existing ones:
+
+```javascript
+const currentPath = 'schedule?{"dateSearch":"0,30","mode":"upcoming"}';
+const newPath = NavigationRegistry.buildPath(currentPath, {
+  mode: "past", // Replaces existing
+  filter: "active", // Adds new
+});
+// Result: 'schedule?{"dateSearch":"0,30","mode":"past","filter":"active"}'
+```
+
+### Context-Aware Parameter Retrieval
+
+Components should always use `getParametersForContainer()` to retrieve parameters:
+
+```javascript
+// ✓ CORRECT: Context-aware retrieval
+computed: {
+  currentUrlParameters() {
+    return NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext.currentPath
+    );
+  }
+}
+
+// ✗ INCORRECT: Direct parsing doesn't handle dashboard
+computed: {
+  currentUrlParameters() {
+    return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+    // Fails on dashboard - returns {} because currentPath is 'dashboard'
+  }
+}
+```
+
+## Component Examples
+
+### SavedSearchSelect Component
+
+**Purpose**: Dropdown for year/saved search selection with URL sync and dashboard support
+
+**Key Implementation**:
+
+```javascript
+computed: {
+  isOnDashboard() {
+    return this.appContext.currentPath.split('/')[0] === 'dashboard';
+  },
+
+  // Context-aware parameter retrieval
+  currentUrlParameters() {
+    if (!this.appContext?.currentPath) return {};
+    return NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext.currentPath
+    );
+  }
+},
+
+watch: {
+  currentUrlParameters(newParams, oldParams) {
+    if (!oldParams) return; // Skip initial load
+    if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+    this.syncWithURL(); // Sync dropdown with new URL
+  }
+},
+
+methods: {
+  updateURL(params) {
+    if (this.isOnDashboard) {
+      // Update dashboard registry
+      const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+      dashboardRegistry.updatePath(
+        this.containerPath.split('?')[0],
+        newPath
+      );
+    } else {
+      // Regular navigation
+      const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+      this.navigateToPath(newPath);
+    }
+  }
+}
+```
 
 ### ScheduleContent Component
 
-**Purpose**: Main schedule view with table and search controls
+**Purpose**: Main schedule view coordinating search and table display
 
 **Key Features**:
 
@@ -299,88 +425,75 @@ watch: {
 - Handles `search-selected` event from SavedSearchSelect
 - Transforms search data into filter format for ScheduleTable
 
-**Search Data Flow**:
-
-```javascript
-handleSearchSelected(searchData) {
-  if (!searchData) {
-    this.filter = null; // Clear filter
-    return;
-  }
-
-  if (searchData.type === 'year') {
-    this.filter = {
-      startDate: searchData.startDate,
-      endDate: searchData.endDate,
-      year: searchData.year,
-      byShowDate: searchData.byShowDate
-    };
-  } else {
-    this.applySavedSearch(searchData);
-  }
-}
-```
-
-### ScheduleAdvancedSearch Component
-
-**Purpose**: Advanced search interface with date ranges and text filters
-
-**Key Features**:
-
-- Always uses `byShowDate: false` (overlap mode)
-- Builds DateSearch with `overlap:` prefix
-- Saves filters to URL via `saveFiltersToURL()`
-- Loads filters from URL via `loadFiltersFromURL()`
-
 ## Best Practices
 
 ### For Component Developers
 
-1. **Watch URL parameters, not path props**
+1. **Always use getParametersForContainer() for parameter retrieval**
 
    ```javascript
-   // ✓ Good: Watch reactive URL parameters
+   // ✓ CORRECT: Context-aware, works everywhere
    computed: {
      currentUrlParameters() {
-       return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+       return NavigationRegistry.getParametersForContainer(
+         this.containerPath,
+         this.appContext.currentPath
+       );
      }
-   },
-   watch: {
-     currentUrlParameters() { /* react to changes */ }
    }
 
-   // ✗ Bad: Watch static path prop
-   watch: {
-     containerPath() { /* this rarely changes */ }
+   // ✗ INCORRECT: Path comparison fails on dashboard
+   computed: {
+     currentUrlParameters() {
+       const currentCleanPath = this.appContext.currentPath.split('?')[0];
+       if (currentCleanPath === this.containerPath) {
+         return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+       }
+       return {};
+     }
    }
    ```
 
 2. **Use buildPath() for parameter updates**
 
    ```javascript
-   // ✓ Good: Merges parameters
-   const newPath = NavigationRegistry.buildPath(currentPath, { Col1: "Name" });
+   // ✓ CORRECT: Merges parameters
+   const newPath = NavigationRegistry.buildPath(currentPath, {
+     mode: "upcoming",
+   });
 
-   // ✗ Bad: Manual string concatenation
-   const newPath = currentPath + "?Col1=Name"; // Loses existing params
+   // ✗ INCORRECT: Manual JSON loses existing params
+   const newPath = currentPath + '?{"mode":"upcoming"}';
    ```
 
-3. **Always use mode prefixes in DateSearch**
+3. **Check dashboard context when updating parameters**
 
    ```javascript
-   // ✓ Good: Explicit mode
-   DateSearch: "show:2024-01-01,2024-12-31";
+   // ✓ CORRECT: Updates dashboard registry or navigates appropriately
+   updateFilters(newParams) {
+     const isOnDashboard = this.appContext.currentPath.split('/')[0] === 'dashboard';
+     const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
 
-   // ✗ Bad: Unprefixed (ambiguous)
-   DateSearch: "2024-01-01,2024-12-31";
+     if (isOnDashboard) {
+       dashboardRegistry.updatePath(this.containerPath.split('?')[0], newPath);
+     } else {
+       this.navigateToPath(newPath);
+     }
+   }
+
+   // ✗ INCORRECT: Always navigates, doesn't persist dashboard state
+   updateFilters(newParams) {
+     const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
+     this.navigateToPath(newPath);
+   }
    ```
 
 4. **Navigate for user actions, sync for URL changes**
 
    ```javascript
-   // User action: Navigate to update URL
+   // User action: Update parameters
    handleUserSelection() {
-     this.navigateToPath(NavigationRegistry.buildPath(path, params));
+     this.updateFilters({ mode: 'upcoming' });
    }
 
    // URL change: Sync component state
@@ -393,59 +506,71 @@ handleSearchSelected(searchData) {
 
 ### For Navigation Logic
 
-1. **Check authentication before navigation**
+1. **Check authentication before navigation** - Done automatically in `handleNavigateToPath()`
 
-   - Done automatically in `handleNavigateToPath()`
-   - Prompts user if session expired
-
-2. **Distinguish parameter changes from page changes**
-
-   - Used to decide whether to close menu
-   - Can be used for scroll position management
+2. **Distinguish parameter changes from page changes** - Used to decide whether to close menu
 
 3. **Never duplicate parameter storage**
-   - URL is the single source of truth
-   - Parse parameters from `currentPath` when needed
-   - Don't store parameters in separate reactive objects
+   - Regular navigation: URL is the source of truth
+   - Dashboard: DashboardRegistry stores container paths
+   - Components read via `getParametersForContainer()`
 
 ## Common Patterns
 
-### Pattern: Filtered List with URL Sync
+### Pattern: Component with URL Sync and Dashboard Support
 
 ```javascript
-export const MyListComponent = {
+export const MyComponent = {
   inject: ["appContext"],
   props: {
     containerPath: String,
     navigateToPath: Function,
   },
+
   computed: {
+    isOnDashboard() {
+      return this.appContext.currentPath.split("/")[0] === "dashboard";
+    },
+
+    // Context-aware parameter retrieval
     currentUrlParameters() {
-      const currentCleanPath = this.appContext.currentPath.split("?")[0];
-      if (currentCleanPath === this.containerPath) {
-        return NavigationRegistry.getNavigationParameters(
-          this.appContext.currentPath
-        );
-      }
-      return {};
+      if (!this.appContext?.currentPath) return {};
+      return NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        this.appContext.currentPath
+      );
     },
   },
+
   watch: {
     currentUrlParameters: {
       handler(newParams) {
-        this.applyFilters(newParams);
+        this.syncWithURL(newParams);
       },
       deep: true,
     },
   },
+
   methods: {
-    applyFilters(params) {
-      // Parse params and update display
+    syncWithURL(params) {
+      // Update component state from parameters
+      this.mode = params.mode || "default";
+      this.filter = params.filter || "";
     },
-    updateFilters(newFilters) {
-      // User changed filters - navigate to update URL
-      const path = NavigationRegistry.buildPath(this.containerPath, newFilters);
-      this.navigateToPath(path);
+
+    updateParameters(newParams) {
+      const newPath = NavigationRegistry.buildPath(
+        this.containerPath,
+        newParams
+      );
+
+      if (this.isOnDashboard) {
+        // On dashboard: update registry
+        dashboardRegistry.updatePath(this.containerPath.split("?")[0], newPath);
+      } else {
+        // Regular navigation: update URL
+        this.navigateToPath(newPath);
+      }
     },
   },
 };
@@ -463,7 +588,7 @@ async mounted() {
     this.applyDefault();
   } else {
     // URL has parameters - sync with them
-    this.syncWithURL();
+    this.syncWithURL(params);
   }
 }
 ```
@@ -472,23 +597,39 @@ async mounted() {
 
 When multiple components need to react to the same URL parameters:
 
-1. Each component watches `currentUrlParameters`
-2. User action in one component updates URL
-3. URL change triggers watchers in all components
-4. Each component syncs independently
+**Regular Navigation:**
 
 ```
-User clicks year in SavedSearchSelect
+User changes filter in ComponentA
   ↓
-navigateToPath('schedule?DateSearch=show:2024-01-01,2024-12-31')
+ComponentA.updateParameters({ filter: 'new' })
   ↓
-currentPath updates
+navigateToPath('schedule?{"filter":"new"}')
+  ↓
+appContext.currentPath updates
   ↓
 ┌────────────────────┬────────────────────┐
-│ SavedSearchSelect  │ ScheduleTable      │
+│ ComponentA         │ ComponentB         │
 │ watcher fires      │ watcher fires      │
-│ syncWithURL()      │ applyFilters()     │
-│ selects "2024"     │ filters to 2024    │
+│ syncWithURL()      │ syncWithURL()      │
+└────────────────────┴────────────────────┘
+```
+
+**Dashboard Navigation:**
+
+```
+User changes filter in ComponentA on dashboard
+  ↓
+ComponentA.updateParameters({ filter: 'new' })
+  ↓
+dashboardRegistry.updatePath('schedule', 'schedule?{"filter":"new"}')
+  ↓
+getParametersForContainer() returns new params
+  ↓
+┌────────────────────┬────────────────────┐
+│ ComponentA         │ ComponentB         │
+│ watcher fires      │ watcher fires      │
+│ syncWithURL()      │ syncWithURL()      │
 └────────────────────┴────────────────────┘
 ```
 
@@ -496,14 +637,17 @@ currentPath updates
 
 ### Issue: Component not reacting to URL changes
 
-**Cause**: Not watching `currentUrlParameters`
+**Cause**: Not watching `currentUrlParameters` or not using `getParametersForContainer()`
 
-**Solution**: Add computed property and watcher:
+**Solution**: Use the standard pattern:
 
 ```javascript
 computed: {
   currentUrlParameters() {
-    return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
+    return NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext.currentPath
+    );
   }
 },
 watch: {
@@ -514,15 +658,63 @@ watch: {
 }
 ```
 
+### Issue: Parameters empty on dashboard
+
+**Cause**: Using direct path comparison instead of `getParametersForContainer()`
+
+**Solution**: Always use context-aware retrieval:
+
+```javascript
+// ✓ CORRECT
+NavigationRegistry.getParametersForContainer(
+  containerPath,
+  appContext.currentPath
+);
+
+// ✗ INCORRECT - fails on dashboard
+if (appContext.currentPath.includes("schedule")) {
+  return NavigationRegistry.getNavigationParameters(appContext.currentPath);
+}
+```
+
+### Issue: Dashboard parameters not persisting
+
+**Cause**: Using `navigateToPath()` instead of `dashboardRegistry.updatePath()`
+
+**Solution**: Check context before updating:
+
+```javascript
+updateParameters(newParams) {
+  const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
+  const isOnDashboard = this.appContext.currentPath.split('/')[0] === 'dashboard';
+
+  if (isOnDashboard) {
+    dashboardRegistry.updatePath(this.containerPath.split('?')[0], newPath);
+  } else {
+    this.navigateToPath(newPath);
+  }
+}
+```
+
 ### Issue: Parameters being overwritten instead of merged
 
-**Cause**: Not using `buildPath()` or building query string manually
+**Cause**: Not using `buildPath()` or building JSON manually
 
 **Solution**: Always use `buildPath()`:
 
 ```javascript
+// ✓ CORRECT
 const newPath = NavigationRegistry.buildPath(currentPath, newParams);
+
+// ✗ INCORRECT
+const newPath = currentPath.split("?")[0] + "?" + JSON.stringify(newParams);
 ```
+
+### Issue: JSON parsing error on URL load
+
+**Cause**: Browser URL-encodes the JSON when user pastes or bookmarks
+
+**Solution**: Already handled - `parsePath()` uses `decodeURIComponent()` before parsing
 
 ### Issue: Default always being applied even with URL params
 
@@ -533,6 +725,8 @@ const newPath = NavigationRegistry.buildPath(currentPath, newParams);
 ```javascript
 if (Object.keys(this.currentUrlParameters).length === 0) {
   this.applyDefault();
+} else {
+  this.syncWithURL(this.currentUrlParameters);
 }
 ```
 
@@ -543,14 +737,14 @@ if (Object.keys(this.currentUrlParameters).length === 0) {
 **Solution**: Only navigate on user actions, sync on URL changes:
 
 ```javascript
-// ✓ Good
+// ✓ CORRECT
 watch: {
   currentUrlParameters() {
     this.syncStateWithoutNavigating();
   }
 }
 
-// ✗ Bad
+// ✗ INCORRECT
 watch: {
   currentUrlParameters() {
     this.navigateToPath(somePath); // Creates loop!
@@ -558,25 +752,15 @@ watch: {
 }
 ```
 
-## Future Considerations
-
-### Potential Enhancements
-
-1. **Navigation Guards**: Pre-navigation hooks for validation
-2. **History Management**: Custom history stack for complex undo/redo
-3. **Deep Linking**: Direct links to specific filtered views
-4. **State Snapshots**: Save/restore complete navigation state
-5. **Analytics Integration**: Track navigation patterns
-
-### Deprecation Notes
-
-- **Removed**: Separate `navigationParameters` reactive object (use URL parsing)
-- **Removed**: `currentPage` data property (use computed from `currentPath`)
-- **Removed**: `navigateToPage()` method (merged into `handleNavigateToPath()`)
-- **Removed**: `isHandlingBrowserNavigation` flag and setTimeout workaround
-- **Removed**: Separate `ByShowDate` URL parameter (use mode prefix in `DateSearch`)
-- **Removed**: Unprefixed DateSearch format (always use `show:` or `overlap:` prefix)
-
 ## Summary
 
-The navigation system provides a clean, reactive way to manage application state through URLs. By maintaining a single source of truth (`currentPath`), encoding all state in URL parameters, and using Vue's reactivity system, components stay synchronized automatically. The key is to **navigate on user actions** and **sync on URL changes**, never mixing the two flows.
+The navigation system provides a clean, reactive way to manage application state through URLs and dashboard persistence:
+
+- **Regular Navigation**: State encoded in URL using JSON format (`#route?{"param":"value"}`)
+- **Dashboard Navigation**: Container paths with parameters stored in DashboardRegistry
+- **Context-Aware**: Components use `getParametersForContainer()` to retrieve parameters correctly in both contexts
+- **Single Source of Truth**: Regular pages use URL, dashboard containers use registry
+- **Reactive Updates**: Components watch parameters and sync automatically
+- **Best Practice**: Navigate on user actions, sync on parameter changes
+
+The key is to **always use `getParametersForContainer()`** for reading parameters, **check dashboard context** when updating, and **never mix the read/write flows**.

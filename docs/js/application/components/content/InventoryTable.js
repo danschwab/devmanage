@@ -60,6 +60,7 @@ export const InventoryTableComponent = {
         TableComponent,
         ItemImageComponent
     },
+    inject: ['appContext'],
     props: {
         containerPath: {
             type: String,
@@ -141,7 +142,13 @@ export const InventoryTableComponent = {
         },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
-            return NavigationRegistry.getNavigationParameters(this.containerPath);
+            if (!this.appContext?.currentPath) return {};
+            
+            // Use NavigationRegistry's context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext.currentPath
+            );
         }
     },
     async mounted() {

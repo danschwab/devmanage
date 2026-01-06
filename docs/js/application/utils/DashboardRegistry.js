@@ -68,28 +68,34 @@ export const DashboardRegistry = {
 
     /**
      * Check if a container is on the dashboard
+     * Compares clean paths (without parameters) for matching
      */
-    has(containerId) {
-        return this.containerIds.includes(containerId);
+    has(containerPathWithParams) {
+        const cleanPathToCheck = containerPathWithParams.split('?')[0];
+        return this.containerIds.some(id => id.split('?')[0] === cleanPathToCheck);
     },
 
     /**
      * Get container metadata (for classes like wide/tall)
+     * Compares clean paths (without parameters) for matching
      */
-    getContainer(containerId) {
-        return this.containers.find(container => 
-            (typeof container === 'string' ? container : container.path) === containerId
-        );
+    getContainer(containerPathWithParams) {
+        const cleanPathToCheck = containerPathWithParams.split('?')[0];
+        return this.containers.find(container => {
+            const containerPath = typeof container === 'string' ? container : container.path;
+            return containerPath.split('?')[0] === cleanPathToCheck;
+        });
     },
 
     /**
      * Add container to dashboard
+     * Stores full path including parameters
      */
-    async add(containerId) {
-        if (!this.has(containerId)) {
+    async add(containerPathWithParams) {
+        if (!this.has(containerPathWithParams)) {
             // Add as object with metadata
             const newContainer = {
-                path: containerId,
+                path: containerPathWithParams,
                 classes: ''
             };
             this.store.data.push(newContainer);
@@ -98,12 +104,35 @@ export const DashboardRegistry = {
     },
 
     /**
-     * Remove container from dashboard
+     * Update existing container's path with new parameters
+     * This allows dashboard containers to preserve parameter state
      */
-    async remove(containerId) {
-        const index = this.store.data.findIndex(container => 
-            (typeof container === 'string' ? container : container.path) === containerId
-        );
+    async updatePath(cleanPath, newPathWithParams) {
+        const index = this.store.data.findIndex(container => {
+            const containerPath = typeof container === 'string' ? container : container.path;
+            return containerPath.split('?')[0] === cleanPath;
+        });
+        
+        if (index > -1) {
+            if (typeof this.store.data[index] === 'string') {
+                this.store.data[index] = newPathWithParams;
+            } else {
+                this.store.data[index].path = newPathWithParams;
+            }
+            await this.save();
+        }
+    },
+
+    /**
+     * Remove container from dashboard
+     * Compares clean paths (without parameters) for matching
+     */
+    async remove(containerPathWithParams) {
+        const cleanPathToRemove = containerPathWithParams.split('?')[0];
+        const index = this.store.data.findIndex(container => {
+            const containerPath = typeof container === 'string' ? container : container.path;
+            return containerPath.split('?')[0] === cleanPathToRemove;
+        });
         if (index > -1) {
             this.store.data.splice(index, 1);
             await this.save();
@@ -113,20 +142,24 @@ export const DashboardRegistry = {
     /**
      * Toggle a CSS class on a container
      */
-    async toggleClass(containerId, className) {
-        const container = this.getContainer(containerId);
+    async toggleClass(containerPathWithParams, className) {
+        const cleanPath = containerPathWithParams.split('?')[0];
+        const container = this.getContainer(containerPathWithParams);
         if (!container) return;
 
         // Ensure container is an object with classes property
         if (typeof container === 'string') {
             // Convert string ID to object
-            const index = this.store.data.findIndex(c => c === containerId);
+            const index = this.store.data.findIndex(c => {
+                const path = typeof c === 'string' ? c : c.path;
+                return path.split('?')[0] === cleanPath;
+            });
             if (index > -1) {
-                this.store.data[index] = { path: containerId, classes: '' };
+                this.store.data[index] = { path: containerPathWithParams, classes: '' };
             }
         }
 
-        const containerObj = this.getContainer(containerId);
+        const containerObj = this.getContainer(containerPathWithParams);
         if (!containerObj) return;
 
         const classes = new Set(containerObj.classes ? containerObj.classes.split(' ').filter(c => c.length > 0) : []);

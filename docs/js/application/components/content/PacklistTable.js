@@ -105,13 +105,20 @@ export const PacklistTable = {
         },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
+            if (!this.appContext?.currentPath) return {};
+            
             // Use the containerPath as the primary source - it should be the full path
             // If containerPath is empty/undefined, fall back to constructing from tabName
             let path = this.containerPath;
             if (!path && this.tabName) {
                 path = `packlist/${this.tabName}`;
             }
-            return NavigationRegistry.getNavigationParameters(path || '');
+            
+            // Use context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                path,
+                this.appContext.currentPath
+            );
         },
         // Get search term from URL parameters
         initialSearchTerm() {

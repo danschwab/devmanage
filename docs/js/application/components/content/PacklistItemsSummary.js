@@ -54,15 +54,13 @@ export const PacklistItemsSummary = {
         },
         // Navigation-based parameters from NavigationRegistry
         navParams() {
-            let path = this.containerPath;
-            if (!path && this.projectIdentifier) {
-                path = `packlist/${this.projectIdentifier}/details`;
-            }
-            return NavigationRegistry.getNavigationParameters(path || '');
-        },
-        // Get search term from URL parameters
-        initialSearchTerm() {
-            return this.navParams?.searchTerm || '';
+            if (!this.appContext?.currentPath) return {};
+            
+            // Use NavigationRegistry's context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext.currentPath
+            );
         }
     },
     watch: {

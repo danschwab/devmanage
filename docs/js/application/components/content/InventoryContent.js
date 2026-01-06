@@ -148,6 +148,10 @@ export const InventoryContent = {
         };
     },
     computed: {
+        // Centralized clean path without parameters
+        cleanContainerPath() {
+            return this.containerPath.split('?')[0];
+        },
         // Direct navigation options for inventory
         inventoryNavigation() {
             return [
@@ -190,10 +194,8 @@ export const InventoryContent = {
         },
         // Get current category name from path for specific category views
         currentCategoryName() {
-            // Strip query parameters before checking path
-            const cleanPath = this.containerPath.split('?')[0];
-            if (cleanPath.startsWith('inventory/categories/')) {
-                const categorySlug = cleanPath.replace('inventory/categories/', '');
+            if (this.cleanContainerPath.startsWith('inventory/categories/')) {
+                const categorySlug = this.cleanContainerPath.replace('inventory/categories/', '');
                 const match = this.categoryList.find(c => {
                     return c.title.toLowerCase() === categorySlug.toLowerCase();
                 });
@@ -296,7 +298,7 @@ export const InventoryContent = {
     template: html `
         <slot>
             <!-- Main Inventory View -->
-            <slot v-if="containerPath.split('?')[0] === 'inventory'">
+            <slot v-if="cleanContainerPath === 'inventory'">
                 <div class="content"><div class="button-bar">
                     <button 
                         v-for="nav in inventoryNavigation" 
@@ -314,7 +316,7 @@ export const InventoryContent = {
             
             <!-- Categories View -->
             <cards-grid
-                v-else-if="containerPath.split('?')[0] === 'inventory/categories'"
+                v-else-if="cleanContainerPath === 'inventory/categories'"
                 :items="categoryList"
                 :on-item-click="handleCategorySelect"
                 :is-loading="isLoadingCategories"
@@ -332,13 +334,13 @@ export const InventoryContent = {
 
             <!-- Show Inventory Report View -->
             <show-inventory-report
-                v-else-if="containerPath.split('?')[0] === 'inventory/reports'"
+                v-else-if="cleanContainerPath === 'inventory/reports'"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />
 
             <!-- New Item View -->
-            <div v-else-if="containerPath.split('?')[0] === 'inventory/new'" class="content">
+            <div v-else-if="cleanContainerPath === 'inventory/new'" class="content">
                 <h3>Add New Item</h3>
                 <p>Add a new item to the inventory.</p>
                 <div style="margin: 1rem 0;">

@@ -455,6 +455,7 @@ button.card {
     display: flex;
     gap: 2px;
 }
+
 .button-bar :first-child:not(:last-child) {
     border-radius: var(--radius-md) 0 0 var(--radius-md);
     /*border-right: 2px solid var(--background-color);*/
@@ -580,12 +581,16 @@ button.card {
     max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
     overflow: auto;
 }
-.modal-content button {
+.modal-content button, .modal-content .button-bar {
     margin: 0;
-    /*margin-top: 4px;*/
+    margin-top: 2px;
     max-width:100%;
     width: 100%;
 }
+.modal-content .button-bar button {
+    margin: 0;
+}
+
 .modal-content ul {
     list-style: none;
     min-width: calc(var(--page-width-card) - var(--padding-lg) * 2);

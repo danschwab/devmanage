@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseDateSearchParameter, parseTextFilterParameters, parseScheduleFilter, buildScheduleFilter } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseDateSearchParameter, parseTextFilterParameters } from '../../index.js';
 
 /**
  * Reusable component for saved search selection with optional year options
@@ -57,16 +57,11 @@ export const SavedSearchSelect = {
         currentUrlParameters() {
             if (!this.appContext?.currentPath) return {};
             
-            // Check if current path matches this component's containerPath
-            const currentCleanPath = this.appContext.currentPath.split('?')[0];
-            const containerCleanPath = this.containerPath.split('?')[0];
-            
-            // Only return parameters if we're on the matching path
-            if (currentCleanPath === containerCleanPath) {
-                return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
-            }
-            
-            return {};
+            // Use NavigationRegistry's context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext.currentPath
+            );
         }
     },
     watch: {
@@ -195,8 +190,7 @@ export const SavedSearchSelect = {
         applyOption(option) {
             if (option.type === 'show-all') {
                 this.emitSearchData({ type: 'show-all' });
-                const scheduleFilter = buildScheduleFilter({ view: 'all' });
-                this.updateURL(scheduleFilter ? { scheduleFilter } : {});
+                this.updateURL({ view: 'all' });
             } else if (option.type === 'year') {
                 const year = parseInt(option.value);
                 const searchData = {
@@ -207,11 +201,10 @@ export const SavedSearchSelect = {
                     byShowDate: true
                 };
                 this.emitSearchData(searchData);
-                const scheduleFilter = buildScheduleFilter({
+                this.updateURL({
                     dateSearch: `${year}-01-01,${year}-12-31`,
                     byShowDate: true
                 });
-                this.updateURL(scheduleFilter ? { scheduleFilter } : {});
             } else if (option.type === 'search') {
                 const searchData = {
                     type: 'search',
@@ -227,8 +220,15 @@ export const SavedSearchSelect = {
         },
         
         updateURL(params) {
-            // Only navigate to update URL if NOT on dashboard
-            if (!this.isOnDashboard && this.navigateToPath) {
+            // Update URL or dashboard registry depending on context
+            if (this.isOnDashboard) {
+                // Update dashboard registry with new path including params
+                const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    this.containerPath.split('?')[0],
+                    newPath
+                );
+            } else if (this.navigateToPath) {
                 const path = NavigationRegistry.buildPath(this.containerPath, params);
                 this.navigateToPath(path);
             }
@@ -237,13 +237,21 @@ export const SavedSearchSelect = {
         updateURLFromSearch(searchData) {
             if (!searchData) return;
             
-            const scheduleFilter = buildScheduleFilter({
-                dateSearch: searchData.dateSearch || null,
-                textFilters: searchData.textFilters || [],
-                byShowDate: searchData.byShowDate || false
-            });
+            const params = {};
             
-            this.updateURL(scheduleFilter ? { scheduleFilter } : {});
+            if (searchData.dateSearch) {
+                params.dateSearch = searchData.dateSearch;
+            }
+            
+            if (searchData.textFilters && searchData.textFilters.length > 0) {
+                params.textFilters = searchData.textFilters;
+            }
+            
+            if (searchData.byShowDate !== undefined) {
+                params.byShowDate = searchData.byShowDate;
+            }
+            
+            this.updateURL(params);
         },
         
         applyDefaultSearch() {
@@ -328,15 +336,12 @@ export const SavedSearchSelect = {
                 return;
             }
             
-            // Parse unified scheduleFilter parameter
-            if (!params.scheduleFilter) {
-                if (this.defaultSearch) {
-                    this.applyDefaultSearch();
-                }
-                return;
-            }
-            
-            const filter = parseScheduleFilter(params.scheduleFilter);
+            const filter = {
+                dateSearch: params.dateSearch || null,
+                textFilters: params.textFilters || [],
+                byShowDate: params.byShowDate || false,
+                view: params.view || null
+            };
             
             // Check for view=all (show-all)
             if (filter.view === 'all' && this.allowShowAll) {

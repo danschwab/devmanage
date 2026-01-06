@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, parseScheduleFilter, buildScheduleFilter, getReactiveStore, createAnalysisConfig } from '../../index.js';
+import { html, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore, createAnalysisConfig } from '../../index.js';
 
 // Advanced Search Component for Schedule - Filter Creation UI Only
 export const AdvancedSearchComponent = {
@@ -115,16 +115,11 @@ export const AdvancedSearchComponent = {
         currentUrlParameters() {
             if (!this.appContext?.currentPath) return {};
             
-            // Check if current path matches this component's containerPath
-            const currentCleanPath = this.appContext.currentPath.split('?')[0];
-            const containerCleanPath = (this.containerPath || 'schedule/advanced-search').split('?')[0];
-            
-            // Only return parameters if we're on the matching path
-            if (currentCleanPath === containerCleanPath) {
-                return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
-            }
-            
-            return {};
+            // Use NavigationRegistry's context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'schedule/advanced-search',
+                this.appContext.currentPath
+            );
         },
         filteredShows() {
             if (!this.allShows || this.allShows.length === 0) {
@@ -224,16 +219,15 @@ export const AdvancedSearchComponent = {
                 return;
             }
             
-            // Parse unified scheduleFilter parameter
-            if (!params.scheduleFilter) {
-                this.clearAllFilters();
-                return;
-            }
-            
             // Set flag to prevent watchers from clearing during URL load
             this.isApplyingFilters = true;
             
-            const filter = parseScheduleFilter(params.scheduleFilter);
+            const filter = {
+                dateSearch: params.dateSearch || null,
+                textFilters: params.textFilters || [],
+                byShowDate: params.byShowDate || false,
+                view: params.view || null
+            };
             
             // Try to match URL to a saved search (just sets selectedSavedSearchIndex)
             this.matchUrlToSavedSearch(filter);
@@ -309,9 +303,6 @@ export const AdvancedSearchComponent = {
             this.isApplyingFilters = false;
         },
         saveFiltersToURL() {
-            // Only navigate to update URL if NOT on dashboard
-            if (this.isOnDashboard) return;
-            
             // Build dateSearch value (without mode prefix)
             let dateSearchValue = null;
             
@@ -326,22 +317,40 @@ export const AdvancedSearchComponent = {
                 dateSearchValue = `${this.startDate || ''},${this.endDate || ''}`;
             }
             
-            // Build unified scheduleFilter parameter
-            const scheduleFilter = buildScheduleFilter({
-                dateSearch: dateSearchValue,
-                textFilters: this.textFilters
-                    .filter(f => f.column && f.value)
-                    .map(f => ({ column: f.column, value: f.value })), // Strip id property
-                byShowDate: false // ScheduleAdvancedSearch always uses overlap mode
-            });
+            // Build parameters object directly
+            const params = {};
+            
+            if (dateSearchValue) {
+                params.dateSearch = dateSearchValue;
+            }
+            
+            // Add text filters (strip id property)
+            const validTextFilters = this.textFilters
+                .filter(f => f.column && f.value)
+                .map(f => ({ column: f.column, value: f.value }));
+            
+            if (validTextFilters.length > 0) {
+                params.textFilters = validTextFilters;
+            }
+            
+            // ScheduleAdvancedSearch always uses overlap mode
+            params.byShowDate = false;
             
             // Use containerPath prop instead of hardcoded path
             const targetPath = this.containerPath || 'schedule/advanced-search';
             
             if (this.navigateToPath) {
-                const params = scheduleFilter ? { scheduleFilter } : {};
                 const path = NavigationRegistry.buildPath(targetPath, params);
-                this.navigateToPath(path);
+                
+                if (this.isOnDashboard) {
+                    // Update dashboard registry with new path including params
+                    NavigationRegistry.dashboardRegistry.updatePath(
+                        targetPath.split('?')[0],
+                        path
+                    );
+                } else {
+                    this.navigateToPath(path);
+                }
             }
             
             // Emit search-selected event with filter data for table display

@@ -6,7 +6,7 @@ import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig,
  */
 export const ShowInventoryReport = {
     components: { TableComponent, ItemImageComponent, SavedSearchSelect },
-    inject: ['$modal'],
+    inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
         navigateToPath: Function
@@ -134,7 +134,12 @@ export const ShowInventoryReport = {
 
         // Navigation-based parameters from NavigationRegistry
         navParams() {
-            return NavigationRegistry.getNavigationParameters(this.containerPath || 'inventory/reports/show-inventory');
+            if (!this.appContext?.currentPath) return {};            
+            // Use NavigationRegistry's context-aware parameter retrieval
+            return NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'inventory/reports/show-inventory',
+                this.appContext.currentPath
+            );
         },
 
         // Get search term from URL parameters
