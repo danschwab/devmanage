@@ -6,6 +6,7 @@ import { Requests } from '../../data_management/api.js';
 export const DashboardRegistry = {
     store: null,
     saveTimeout: null,
+    isSaving: false, // Track save state to prevent invalidation-triggered reloads
     SAVE_DELAY_MS: 5000, // 5 seconds
     
     /**
@@ -17,12 +18,23 @@ export const DashboardRegistry = {
         }
         
         try {
-            // Use existing reactive store system
+            // Use existing reactive store system with custom save wrapper
             this.store = getReactiveStore(
                 Requests.getUserData,
-                Requests.storeUserData,
+                null, // No automatic save call - we'll handle it manually
                 [authState.user.email, 'dashboard_containers']
             );
+            
+            // Override handleInvalidation to prevent reloads during save
+            const originalHandleInvalidation = this.store.handleInvalidation.bind(this.store);
+            this.store.handleInvalidation = async () => {
+                // Skip reload if we're in the middle of saving
+                if (this.isSaving) {
+                    console.log('[DashboardRegistry] Skipping reload during save operation');
+                    return;
+                }
+                await originalHandleInvalidation();
+            };
 
         } catch (error) {
             console.error('Failed to initialize dashboard registry:', error);
@@ -219,25 +231,19 @@ export const DashboardRegistry = {
      * Save dashboard state with debouncing
      */
     async save() {
-        if (this.store && typeof this.store.save === 'function') {
-            // Clear any existing timeout
-            if (this.saveTimeout) {
-                clearTimeout(this.saveTimeout);
-            }
-            
-            // Set new timeout for delayed save
-            this.saveTimeout = setTimeout(async () => {
-                try {
-                    await this.store.save();
-                    console.log('[DashboardRegistry] Dashboard saved successfully');
-                } catch (error) {
-                    console.error('[DashboardRegistry] Failed to save dashboard:', error);
-                }
-                this.saveTimeout = null;
-            }, this.SAVE_DELAY_MS);
-            
-            console.log('[DashboardRegistry] Dashboard save queued for', this.SAVE_DELAY_MS, 'ms');
+        if (!this.store) return;
+        
+        // Clear any existing timeout
+        if (this.saveTimeout) {
+            clearTimeout(this.saveTimeout);
         }
+        
+        // Set new timeout for delayed save
+        this.saveTimeout = setTimeout(async () => {
+            await this._performSave();
+        }, this.SAVE_DELAY_MS);
+        
+        console.log('[DashboardRegistry] Dashboard save queued for', this.SAVE_DELAY_MS, 'ms');
     },
 
     /**
@@ -249,13 +255,40 @@ export const DashboardRegistry = {
             this.saveTimeout = null;
         }
         
-        if (this.store && typeof this.store.save === 'function') {
-            try {
-                await this.store.save();
-                console.log('[DashboardRegistry] Dashboard saved immediately');
-            } catch (error) {
-                console.error('[DashboardRegistry] Failed to save dashboard immediately:', error);
-            }
+        await this._performSave();
+    },
+    
+    /**
+     * Internal save implementation that updates originalData without reloading
+     */
+    async _performSave() {
+        if (!this.store) return;
+        
+        this.isSaving = true;
+        this.store.setLoading(true, 'Saving dashboard...');
+        this.store.setError(null);
+        
+        try {
+            // Save current data to user storage
+            const dataToSave = JSON.parse(JSON.stringify(this.store.data));
+            await Requests.storeUserData(
+                authState.user.email, 
+                'dashboard_containers', 
+                dataToSave
+            );
+            
+            // Update originalData to match current data (split-data pattern)
+            // This makes the store "clean" without reloading from server
+            this.store.setOriginalData(dataToSave);
+            
+            console.log('[DashboardRegistry] Dashboard saved successfully');
+        } catch (error) {
+            console.error('[DashboardRegistry] Failed to save dashboard:', error);
+            this.store.setError(error.message || 'Failed to save dashboard');
+        } finally {
+            this.store.setLoading(false, '');
+            this.isSaving = false;
+            this.saveTimeout = null;
         }
     },
 

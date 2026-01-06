@@ -356,11 +356,11 @@ export const DashboardToggleComponent = {
         <div>
             <!-- Dashboard card styling controls (only show on dashboard page) -->
             <div v-if="(this.appContext.currentPath?.split('/')[0] === 'dashboard') && isOnDashboard" class="button-bar">
-                <button @click="toggleDashboardClass('wide');" :disabled="isLoading" 
+                <button @click="toggleDashboardClass('wide');" 
                         :class="{ 'green': containerClasses.has('wide'), 'blue': !containerClasses.has('wide') }">
                     Wide
                 </button>
-                <button @click="toggleDashboardClass('tall');" :disabled="isLoading" 
+                <button @click="toggleDashboardClass('tall');" 
                         :class="{ 'green': containerClasses.has('tall'), 'blue': !containerClasses.has('tall') }">
                     Tall
                 </button>
@@ -368,12 +368,12 @@ export const DashboardToggleComponent = {
             
             <!-- Dashboard ordering controls (only show on dashboard page) -->
             <div v-if="(this.appContext.currentPath?.split('/')[0] === 'dashboard') && isOnDashboard" class="button-bar">
-                <button @click="moveLeft" :disabled="isLoading || !canMoveLeft" 
-                        :class="{ 'blue': canMoveLeft && !isLoading, 'disabled': !canMoveLeft || isLoading }">
+                <button @click="moveLeft" :disabled="!canMoveLeft" 
+                        :class="{ 'blue': canMoveLeft, 'disabled': !canMoveLeft }">
                     ← Move Left
                 </button>
-                <button @click="moveRight" :disabled="isLoading || !canMoveRight" 
-                        :class="{ 'blue': canMoveRight && !isLoading, 'disabled': !canMoveRight || isLoading }">
+                <button @click="moveRight" :disabled="!canMoveRight" 
+                        :class="{ 'blue': canMoveRight, 'disabled': !canMoveRight }">
                     Move Right →
                 </button>
             </div>
@@ -381,9 +381,8 @@ export const DashboardToggleComponent = {
             <!-- Add/Remove from dashboard -->
             <button 
                 @click="toggleDashboardPresence"
-                :disabled="isLoading"
-                :class="{ 'red': isOnDashboard && !isLoading, 'green': !isOnDashboard && !isLoading, 'disabled': isLoading }">
-                {{ isLoading ? loadingMessage : (isOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard') }}
+                :class="{ 'red': isOnDashboard, 'green': !isOnDashboard }">
+                {{ isOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard' }}
             </button>
         </div>
     `

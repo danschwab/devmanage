@@ -81,10 +81,6 @@ export const ContainerComponent = {
         // Get navigation parameters from NavigationRegistry
         navigationParameters() {
             return NavigationRegistry.getNavigationParameters(this.containerPath);
-        },
-        dashboardIsLoading() {
-            // Check if dashboard registry is currently loading (prevents pin/unpin during load)
-            return NavigationRegistry.dashboardRegistry.isLoading || false;
         }
     },
     methods: {
@@ -150,7 +146,6 @@ export const ContainerComponent = {
                 <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
                     <button v-if="!cardStyle"
                             class="button-symbol white"
-                            :disabled="dashboardIsLoading"
                             @click="toggleDashboardState" 
                             title="Pin to dashboard">
                         <span class="material-symbols-outlined">{{ pinnedToDashboard ? 'keep_off' : 'keep' }}</span>
