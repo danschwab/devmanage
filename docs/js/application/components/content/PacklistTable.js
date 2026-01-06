@@ -103,30 +103,30 @@ export const PacklistTable = {
         isDirty() {
             return this.packlistTableStore?.isModified || false;
         },
-        // Navigation-based parameters from NavigationRegistry
-        navParams() {
-            if (!this.appContext?.currentPath) return {};
-            
-            // Use the containerPath as the primary source - it should be the full path
-            // If containerPath is empty/undefined, fall back to constructing from tabName
+        
+        // Get search term from URL parameters
+        initialSearchTerm() {
             let path = this.containerPath;
             if (!path && this.tabName) {
                 path = `packlist/${this.tabName}`;
             }
-            
-            // Use context-aware parameter retrieval
-            return NavigationRegistry.getParametersForContainer(
+            const params = NavigationRegistry.getParametersForContainer(
                 path,
-                this.appContext.currentPath
+                this.appContext?.currentPath
             );
+            return params?.searchTerm || '';
         },
-        // Get search term from URL parameters
-        initialSearchTerm() {
-            return this.navParams?.searchTerm || '';
-        },
+        
         editMode() {
-            // Check if we're viewing the edit subview
-            return this.navParams?.edit === true;
+            let path = this.containerPath;
+            if (!path && this.tabName) {
+                path = `packlist/${this.tabName}`;
+            }
+            const params = NavigationRegistry.getParametersForContainer(
+                path,
+                this.appContext?.currentPath
+            );
+            return params?.edit === true;
         }
     },
     watch: {

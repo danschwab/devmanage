@@ -51,16 +51,6 @@ export const PacklistItemsSummary = {
         },
         tableData() {
             return this.itemsSummaryStore ? this.itemsSummaryStore.data : [];
-        },
-        // Navigation-based parameters from NavigationRegistry
-        navParams() {
-            if (!this.appContext?.currentPath) return {};
-            
-            // Use NavigationRegistry's context-aware parameter retrieval
-            return NavigationRegistry.getParametersForContainer(
-                this.containerPath,
-                this.appContext.currentPath
-            );
         }
     },
     watch: {

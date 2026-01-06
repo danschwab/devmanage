@@ -140,14 +140,12 @@ export const InventoryTableComponent = {
         isLoading() {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
         },
-        // Navigation-based parameters from NavigationRegistry
-        navParams() {
-            if (!this.appContext?.currentPath) return {};
-            
-            // Use NavigationRegistry's context-aware parameter retrieval
+        
+        // Get URL parameters for this container
+        urlParameters() {
             return NavigationRegistry.getParametersForContainer(
                 this.containerPath,
-                this.appContext.currentPath
+                this.appContext?.currentPath
             );
         }
     },

@@ -3,6 +3,7 @@
 whenever possible, rely on the caching system instead of data from live tables.
 Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
+We can potentially save Dropbox service account keys in google drive and use them to access our dropbox files without user auth. This risks key exposure.
 
 Inventory Handling:
 Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING

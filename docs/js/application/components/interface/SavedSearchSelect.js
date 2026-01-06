@@ -51,17 +51,6 @@ export const SavedSearchSelect = {
         
         isOnDashboard() {
             return this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
-        },
-        
-        // Extract current URL parameters for this component's containerPath
-        currentUrlParameters() {
-            if (!this.appContext?.currentPath) return {};
-            
-            // Use NavigationRegistry's context-aware parameter retrieval
-            return NavigationRegistry.getParametersForContainer(
-                this.containerPath,
-                this.appContext.currentPath
-            );
         }
     },
     watch: {
@@ -70,10 +59,20 @@ export const SavedSearchSelect = {
             this.buildOptions();
         },
         // Watch for URL parameter changes
-        currentUrlParameters: {
-            handler(newParams, oldParams) {
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
                 // Skip initial load (handled by mounted)
-                if (!oldParams) return;
+                if (!oldPath) return;
+                
+                // Get params for both paths
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    oldPath
+                );
                 
                 // Skip if params haven't actually changed
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
@@ -326,7 +325,10 @@ export const SavedSearchSelect = {
         },
         
         syncWithURL() {
-            const params = this.currentUrlParameters;
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext?.currentPath
+            );
             
             // No URL parameters - apply default if provided
             if (Object.keys(params).length === 0) {

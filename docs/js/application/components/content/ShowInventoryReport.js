@@ -132,23 +132,21 @@ export const ShowInventoryReport = {
             return this.reportStore?.loadingMessage || 'Loading...';
         },
 
-        // Navigation-based parameters from NavigationRegistry
-        navParams() {
-            if (!this.appContext?.currentPath) return {};            
-            // Use NavigationRegistry's context-aware parameter retrieval
-            return NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-inventory',
-                this.appContext.currentPath
-            );
-        },
-
         // Get search term from URL parameters
         initialSearchTerm() {
-            return this.navParams?.searchTerm || '';
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'inventory/reports/show-inventory',
+                this.appContext?.currentPath
+            );
+            return params?.searchTerm || '';
         },
+        
         initialItemCategoryFilter() {
-            // Get item category filter from URL parameters as a single string in an array
-            const filterParam = this.navParams?.itemCategoryFilter || null;
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'inventory/reports/show-inventory',
+                this.appContext?.currentPath
+            );
+            const filterParam = params?.itemCategoryFilter || null;
             if (filterParam) {
                 return [filterParam];
             }

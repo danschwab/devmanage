@@ -111,16 +111,7 @@ export const AdvancedSearchComponent = {
         isOnDashboard() {
             return this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
         },
-        // Extract current URL parameters for this component's containerPath
-        currentUrlParameters() {
-            if (!this.appContext?.currentPath) return {};
-            
-            // Use NavigationRegistry's context-aware parameter retrieval
-            return NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'schedule/advanced-search',
-                this.appContext.currentPath
-            );
-        },
+        
         filteredShows() {
             if (!this.allShows || this.allShows.length === 0) {
                 return [];
@@ -154,18 +145,27 @@ export const AdvancedSearchComponent = {
     },
     watch: {
         // Watch for URL parameter changes
-        currentUrlParameters: {
-            handler(newParams, oldParams) {
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
                 // Skip initial load (handled by mounted)
-                if (!oldParams) return;
+                if (!oldPath) return;
+                
+                // Get params for both paths
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath || 'schedule/advanced-search',
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath || 'schedule/advanced-search',
+                    oldPath
+                );
                 
                 // Skip if params haven't actually changed
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
                 
                 console.log('[AdvancedSearch] URL parameters changed, syncing filters');
                 this.syncWithURL();
-            },
-            deep: true
+            }
         }
     },
     methods: {
