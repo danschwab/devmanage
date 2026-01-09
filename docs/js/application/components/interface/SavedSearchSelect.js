@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseDateSearchParameter, parseTextFilterParameters } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parsedateFilterParameter, parseTextFilterParameters } from '../../index.js';
 
 /**
  * Reusable component for saved search selection with optional year options
@@ -91,6 +91,25 @@ export const SavedSearchSelect = {
         this.syncWithURL();
     },
     methods: {
+        /**
+         * Check if this component is still active (user hasn't navigated away)
+         * Prevents stale navigation from async operations
+         */
+        isComponentActive() {
+            if (!this.appContext?.currentPath) return false;
+            
+            const currentCleanPath = this.appContext.currentPath.split('?')[0];
+            const containerCleanPath = this.containerPath.split('?')[0];
+            
+            // On dashboard, we're always active if on dashboard page
+            if (this.isOnDashboard) {
+                return currentCleanPath.startsWith('dashboard');
+            }
+            
+            // Not on dashboard, check if current path matches our container
+            return currentCleanPath === containerCleanPath;
+        },
+        
         async initializeSavedSearchesStore() {
             if (!authState.isAuthenticated || !authState.user?.email) {
                 console.log('[SavedSearchSelect] User not authenticated, skipping initialization');
@@ -201,7 +220,7 @@ export const SavedSearchSelect = {
                 };
                 this.emitSearchData(searchData);
                 this.updateURL({
-                    dateSearch: `${year}-01-01,${year}-12-31`,
+                    dateFilter: `${year}-01-01,${year}-12-31`,
                     byShowDate: true
                 });
             } else if (option.type === 'search') {
@@ -219,16 +238,25 @@ export const SavedSearchSelect = {
         },
         
         updateURL(params) {
+            // Guard: Don't navigate if component is no longer active
+            // This prevents race conditions where user navigates away before async operations complete
+            if (!this.isComponentActive()) {
+                console.log('[SavedSearchSelect] Skipping navigation - component no longer active');
+                return;
+            }
+            
             // Update URL or dashboard registry depending on context
+            // Use clean container path (without query params) to avoid merging with old params
+            const cleanPath = this.containerPath.split('?')[0];
             if (this.isOnDashboard) {
                 // Update dashboard registry with new path including params
-                const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+                const newPath = NavigationRegistry.buildPath(cleanPath, params);
                 NavigationRegistry.dashboardRegistry.updatePath(
-                    this.containerPath.split('?')[0],
+                    cleanPath,
                     newPath
                 );
             } else if (this.navigateToPath) {
-                const path = NavigationRegistry.buildPath(this.containerPath, params);
+                const path = NavigationRegistry.buildPath(cleanPath, params);
                 this.navigateToPath(path);
             }
         },
@@ -238,8 +266,8 @@ export const SavedSearchSelect = {
             
             const params = {};
             
-            if (searchData.dateSearch) {
-                params.dateSearch = searchData.dateSearch;
+            if (searchData.dateFilter) {
+                params.dateFilter = searchData.dateFilter;
             }
             
             if (searchData.textFilters && searchData.textFilters.length > 0) {
@@ -281,8 +309,8 @@ export const SavedSearchSelect = {
             }
             
             const matchedSearchIndex = savedSearches.findIndex(search => {
-                // Compare dateSearch
-                if (search.dateSearch !== urlSearchData.dateSearch) {
+                // Compare dateFilter
+                if (search.dateFilter !== urlSearchData.dateFilter) {
                     return false;
                 }
                 
@@ -314,7 +342,7 @@ export const SavedSearchSelect = {
                 this.emitSearchData({
                     type: 'search',
                     name: matchedSearch.name,
-                    dateSearch: matchedSearch.dateSearch,
+                    dateFilter: matchedSearch.dateFilter,
                     textFilters: matchedSearch.textFilters || [],
                     byShowDate: matchedSearch.byShowDate || false
                 });
@@ -339,7 +367,7 @@ export const SavedSearchSelect = {
             }
             
             const filter = {
-                dateSearch: params.dateSearch || null,
+                dateFilter: params.dateFilter || null,
                 textFilters: params.textFilters || [],
                 byShowDate: params.byShowDate || false,
                 view: params.view || null
@@ -353,11 +381,11 @@ export const SavedSearchSelect = {
             }
             
             // Try to match year selection
-            if (this.includeYears && filter.dateSearch && !filter.textFilters.length && filter.byShowDate) {
-                const dateSearchMatch = filter.dateSearch.match(/^(\d{4})-01-01,(\d{4})-12-31$/);
+            if (this.includeYears && filter.dateFilter && !filter.textFilters.length && filter.byShowDate) {
+                const dateFilterMatch = filter.dateFilter.match(/^(\d{4})-01-01,(\d{4})-12-31$/);
                 
-                if (dateSearchMatch && dateSearchMatch[1] === dateSearchMatch[2]) {
-                    const year = dateSearchMatch[1];
+                if (dateFilterMatch && dateFilterMatch[1] === dateFilterMatch[2]) {
+                    const year = dateFilterMatch[1];
                     const yearOption = this.availableOptions.find(opt => opt.value === year && opt.type === 'year');
                     
                     if (yearOption) {
@@ -384,7 +412,7 @@ export const SavedSearchSelect = {
             this.emitSearchData({
                 type: 'url',
                 name: 'Custom',
-                dateSearch: filter.dateSearch,
+                dateFilter: filter.dateFilter,
                 textFilters: filter.textFilters,
                 byShowDate: filter.byShowDate
             });

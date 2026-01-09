@@ -134,9 +134,18 @@ export const PacklistItemsSummary = {
         },
 
         navigateBackToPacklist() {
-            if (this.projectIdentifier && this.appContext?.navigateToPath) {
-                this.appContext.navigateToPath(`packlist/${this.projectIdentifier}`);
+            if (!this.projectIdentifier || !this.appContext?.navigateToPath) return;
+            
+            // Guard: Only navigate if we're still on the details page
+            const currentPath = this.appContext.currentPath?.split('?')[0] || '';
+            const expectedPath = `packlist/${this.projectIdentifier}/details`;
+            
+            if (!currentPath.includes(expectedPath)) {
+                console.log('[PacklistItemsSummary] Skipping navigation - user already navigated away');
+                return;
             }
+            
+            this.appContext.navigateToPath(`packlist/${this.projectIdentifier}`);
         },
 
         async loadShowDetails() {
@@ -167,7 +176,9 @@ export const PacklistItemsSummary = {
                 :columns="tableColumns"
                 :hide-columns="['tabName']"
                 :show-search="true"
-                :search-term="initialSearchTerm"
+                :sync-search-with-url="true"
+                :container-path="containerPath || 'packlist/' + projectIdentifier + '/details'"
+                :navigate-to-path="appContext.navigateToPath"
                 :hide-rows-on-search="false"
                 :readonly="true"
                 :is-loading="itemsSummaryStore ? itemsSummaryStore.isLoading : false"

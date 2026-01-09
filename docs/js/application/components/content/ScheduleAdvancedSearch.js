@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, LoadingBarComponent, authState, parseDateSearchParameter, buildDateSearchParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore, createAnalysisConfig } from '../../index.js';
+import { html, Requests, NavigationRegistry, LoadingBarComponent, authState, parsedateFilterParameter, builddateFilterParameter, parseTextFilterParameters, buildTextFilterParameters, getReactiveStore, createAnalysisConfig } from '../../index.js';
 
 // Advanced Search Component for Schedule - Filter Creation UI Only
 export const AdvancedSearchComponent = {
@@ -211,7 +211,10 @@ export const AdvancedSearchComponent = {
             );
         },
         syncWithURL() {
-            const params = this.currentUrlParameters;
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'schedule/advanced-search',
+                this.appContext?.currentPath
+            );
             
             // No URL parameters - clear filters
             if (Object.keys(params).length === 0) {
@@ -223,7 +226,7 @@ export const AdvancedSearchComponent = {
             this.isApplyingFilters = true;
             
             const filter = {
-                dateSearch: params.dateSearch || null,
+                dateFilter: params.dateFilter || null,
                 textFilters: params.textFilters || [],
                 byShowDate: params.byShowDate || false,
                 view: params.view || null
@@ -233,9 +236,9 @@ export const AdvancedSearchComponent = {
             this.matchUrlToSavedSearch(filter);
             
             // Load URL parameters into filter fields
-            // Parse dateSearch to extract dates and offsets
-            if (filter.dateSearch) {
-                const dateFilter = parseDateSearchParameter(filter.dateSearch);
+            // Parse dateFilter to extract dates and offsets
+            if (filter.dateFilter) {
+                const dateFilter = parsedateFilterParameter(filter.dateFilter);
                 
                 // Handle offsets - map back to presets if they match known values
                 if (dateFilter.startDateOffset !== undefined) {
@@ -303,25 +306,25 @@ export const AdvancedSearchComponent = {
             this.isApplyingFilters = false;
         },
         saveFiltersToURL() {
-            // Build dateSearch value (without mode prefix)
-            let dateSearchValue = null;
+            // Build dateFilter value (without mode prefix)
+            let dateFilterValue = null;
             
             const startOffset = this.getStartDateOffset();
             const endOffset = this.getEndDateOffset();
             
             if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                dateSearchValue = this.overlapShowIdentifier;
+                dateFilterValue = this.overlapShowIdentifier;
             } else if (startOffset !== null) {
-                dateSearchValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+                dateFilterValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
             } else if (this.startDate || this.endDate) {
-                dateSearchValue = `${this.startDate || ''},${this.endDate || ''}`;
+                dateFilterValue = `${this.startDate || ''},${this.endDate || ''}`;
             }
             
             // Build parameters object directly
             const params = {};
             
-            if (dateSearchValue) {
-                params.dateSearch = dateSearchValue;
+            if (dateFilterValue) {
+                params.dateFilter = dateFilterValue;
             }
             
             // Add text filters (strip id property)
@@ -394,8 +397,8 @@ export const AdvancedSearchComponent = {
             }
             
             const matchedSearchIndex = savedSearches.findIndex(search => {
-                // Compare dateSearch (without mode prefix)
-                if (search.dateSearch !== urlSearchData.dateSearch) {
+                // Compare dateFilter (without mode prefix)
+                if (search.dateFilter !== urlSearchData.dateFilter) {
                     return false;
                 }
                 
@@ -538,8 +541,8 @@ export const AdvancedSearchComponent = {
             this.isApplyingFilters = true;
             
             // Parse and load the saved search
-            if (search.dateSearch) {
-                const dateFilter = parseDateSearchParameter(search.dateSearch);
+            if (search.dateFilter) {
+                const dateFilter = parsedateFilterParameter(search.dateFilter);
                 
                 // Handle offsets
                 if (dateFilter.startDateOffset !== undefined) {
@@ -618,21 +621,21 @@ export const AdvancedSearchComponent = {
                 // Build updated search data
                 const searchData = {
                     name: this.selectedSavedSearch.name, // Keep the same name
-                    dateSearch: null,
+                    dateFilter: null,
                     textFilters: [],
                     byShowDate: false
                 };
                 
-                // Build dateSearch value (without mode prefix)
+                // Build dateFilter value (without mode prefix)
                 const startOffset = this.getStartDateOffset();
                 const endOffset = this.getEndDateOffset();
                 
                 if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                    searchData.dateSearch = this.overlapShowIdentifier;
+                    searchData.dateFilter = this.overlapShowIdentifier;
                 } else if (startOffset !== null) {
-                    searchData.dateSearch = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+                    searchData.dateFilter = `${startOffset},${endOffset !== null ? endOffset : ''}`;
                 } else if (this.startDate || this.endDate) {
-                    searchData.dateSearch = `${this.startDate || ''},${this.endDate || ''}`;
+                    searchData.dateFilter = `${this.startDate || ''},${this.endDate || ''}`;
                 }
                 
                 // Add text filters
@@ -738,18 +741,18 @@ export const AdvancedSearchComponent = {
                             // Get current search parameters
                             const searchData = {
                                 name: this.searchName.trim(),
-                                dateSearch: null,
+                                dateFilter: null,
                                 textFilters: [],
                                 byShowDate: false
                             };
                             
-                            // Build dateSearch value (without mode prefix)
+                            // Build dateFilter value (without mode prefix)
                             if (this.overlapShowIdentifier) {
-                                searchData.dateSearch = this.overlapShowIdentifier;
+                                searchData.dateFilter = this.overlapShowIdentifier;
                             } else if (this.startDateOffset !== null) {
-                                searchData.dateSearch = `${this.startDateOffset},${this.endDateOffset !== null ? this.endDateOffset : ''}`;
+                                searchData.dateFilter = `${this.startDateOffset},${this.endDateOffset !== null ? this.endDateOffset : ''}`;
                             } else if (this.startDate || this.endDate) {
-                                searchData.dateSearch = `${this.startDate || ''},${this.endDate || ''}`;
+                                searchData.dateFilter = `${this.startDate || ''},${this.endDate || ''}`;
                             }
                             
                             // Add text filters (strip IDs, just keep column/value)
@@ -821,23 +824,23 @@ export const AdvancedSearchComponent = {
             }, 'Save Search');
         },
         emitSearchSelected() {
-            // Build dateSearch value (without mode prefix)
-            let dateSearchValue = null;
+            // Build dateFilter value (without mode prefix)
+            let dateFilterValue = null;
             
             const startOffset = this.getStartDateOffset();
             const endOffset = this.getEndDateOffset();
             
             if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                dateSearchValue = this.overlapShowIdentifier;
+                dateFilterValue = this.overlapShowIdentifier;
             } else if (startOffset !== null) {
-                dateSearchValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
+                dateFilterValue = `${startOffset},${endOffset !== null ? endOffset : ''}`;
             } else if (this.startDate || this.endDate) {
-                dateSearchValue = `${this.startDate || ''},${this.endDate || ''}`;
+                dateFilterValue = `${this.startDate || ''},${this.endDate || ''}`;
             }
             
             // Build search data in the same format as SavedSearchSelect
             const searchData = {
-                dateSearch: dateSearchValue,
+                dateFilter: dateFilterValue,
                 textFilters: this.textFilters
                     .filter(filter => filter.column && filter.value)
                     .map(filter => ({

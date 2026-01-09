@@ -8,7 +8,7 @@ class applicationUtils_uncached {
     static DEFAULT_SEARCHES = [
         {
             name: 'Upcoming',
-            dateSearch: '0,30', // Today to 30 days in the future
+            dateFilter: '0,30', // Today to 30 days in the future
             textFilters: []
         }
     ];

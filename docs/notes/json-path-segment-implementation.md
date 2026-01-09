@@ -9,13 +9,13 @@ The navigation system now uses **JSON path segments** instead of URL query param
 ### New Format (JSON Path Segments)
 
 ```
-http://domain.com/docs/#schedule?{"dateSearch":"0,30","textFilters":[{"column":"Elec","value":"g"}],"byShowDate":false}
+http://domain.com/docs/#schedule?{"dateFilter":"0,30","textFilters":[{"column":"Elec","value":"g"}],"byShowDate":false}
 ```
 
 ### Old Format (Query Parameters) - Still Supported for Backwards Compatibility
 
 ```
-http://domain.com/docs/#schedule?scheduleFilter=%7B%22dateSearch%22%3A%220%2C30%22%2C%22textFilters%22%3A%5B%7B%22column%22%3A%22Elec%22%2C%22value%22%3A%22g%22%7D%5D%2C%22byShowDate%22%3Afalse%7D
+http://domain.com/docs/#schedule?scheduleFilter=%7B%22dateFilter%22%3A%220%2C30%22%2C%22textFilters%22%3A%5B%7B%22column%22%3A%22Elec%22%2C%22value%22%3A%22g%22%7D%5D%2C%22byShowDate%22%3Afalse%7D
 ```
 
 ## Benefits
@@ -30,19 +30,19 @@ http://domain.com/docs/#schedule?scheduleFilter=%7B%22dateSearch%22%3A%220%2C30%
 ### Schedule Page - Year Filter (by Show Date)
 
 ```
-#schedule?{"dateSearch":"2024-01-01,2024-12-31","byShowDate":true}
+#schedule?{"dateFilter":"2024-01-01,2024-12-31","byShowDate":true}
 ```
 
 ### Schedule Page - Overlap Filter with Text Search
 
 ```
-#schedule?{"dateSearch":"ACME 2024 Tech Expo","textFilters":[{"column":"Status","value":"Confirmed"}],"byShowDate":false}
+#schedule?{"dateFilter":"ACME 2024 Tech Expo","textFilters":[{"column":"Status","value":"Confirmed"}],"byShowDate":false}
 ```
 
 ### Schedule Page - Date Range with Multiple Text Filters
 
 ```
-#schedule?{"dateSearch":"0,30","textFilters":[{"column":"Elec","value":"g"},{"column":"Client","value":"ACME"}],"byShowDate":false}
+#schedule?{"dateFilter":"0,30","textFilters":[{"column":"Elec","value":"g"},{"column":"Client","value":"ACME"}],"byShowDate":false}
 ```
 
 ### Schedule Page - Show All
@@ -68,8 +68,8 @@ Added two new utility methods:
 Extracts and parses JSON from parameter string:
 
 ```javascript
-parseJsonPathSegment('{"dateSearch":"0,30"}');
-// Returns: { dateSearch: "0,30" }
+parseJsonPathSegment('{"dateFilter":"0,30"}');
+// Returns: { dateFilter: "0,30" }
 ```
 
 #### `buildJsonPathSegment(parameters)`
@@ -77,8 +77,8 @@ parseJsonPathSegment('{"dateSearch":"0,30"}');
 Builds JSON string from parameters object:
 
 ```javascript
-buildJsonPathSegment({ dateSearch: "0,30", byShowDate: false });
-// Returns: '{"dateSearch":"0,30","byShowDate":false}'
+buildJsonPathSegment({ dateFilter: "0,30", byShowDate: false });
+// Returns: '{"dateFilter":"0,30","byShowDate":false}'
 ```
 
 ### Updated `parsePath(path)`
@@ -107,10 +107,10 @@ All components now use standard NavigationRegistry methods:
 ```javascript
 // Build path with parameters
 const path = NavigationRegistry.buildPath("schedule", {
-  dateSearch: "2024-01-01,2024-12-31",
+  dateFilter: "2024-01-01,2024-12-31",
   byShowDate: true,
 });
-// Result: 'schedule?{"dateSearch":"2024-01-01,2024-12-31","byShowDate":true}'
+// Result: 'schedule?{"dateFilter":"2024-01-01,2024-12-31","byShowDate":true}'
 
 // Navigate to path
 this.navigateToPath(path);
@@ -123,11 +123,11 @@ this.navigateToPath(path);
 const params = NavigationRegistry.getNavigationParameters(
   this.appContext.currentPath
 );
-// Returns: { dateSearch: "2024-01-01,2024-12-31", byShowDate: true }
+// Returns: { dateFilter: "2024-01-01,2024-12-31", byShowDate: true }
 
 // Access specific parameters
-if (params.dateSearch) {
-  // Use dateSearch value
+if (params.dateFilter) {
+  // Use dateFilter value
 }
 ```
 

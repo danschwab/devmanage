@@ -50,11 +50,17 @@ export const PrimaryNavComponent = {
         },
         logoSrc() {
             return this.isDarkMode ? 'images/logoW.png' : 'images/logo.png';
+        },
+        isMobileView() {
+            // Mobile view is max-width: 800px
+            return window.innerWidth <= 800;
         }
     },
     methods: {
         handleNavClick(item) {
-            if (this.currentPage === item.path && !this.isMenuOpen) {
+            // In mobile view: if menu is closed, open it first; if open, then navigate
+            // In desktop view: always navigate
+            if (this.isMobileView && !this.isMenuOpen) {
                 this.$emit('toggle-menu');
             } else {
                 this.$emit('navigate-to-path', item.path);

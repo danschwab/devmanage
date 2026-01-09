@@ -338,29 +338,29 @@ export function GetParagraphMatchRating(text1, text2) {
 }
 
 /**
- * Parse a DateSearch URL parameter into a filter object
+ * Parse a dateFilter URL parameter into a filter object
  * Format: '[mode:]value' where mode is 'show' or 'overlap'
  *   - 'show:date,date' or 'overlap:date,date' (explicit mode)
  *   - 'offset,offset' or 'date,date' or 'showIdentifier' (defaults to overlap for backwards compatibility)
  * 
- * @param {string} dateSearch - The DateSearch parameter from URL
+ * @param {string} dateFilter - The dateFilter parameter from URL
  * @returns {Object} Filter object with startDate, endDate, startDateOffset, endDateOffset, overlapShowIdentifier, and byShowDate
  */
-export function parseDateSearchParameter(dateSearch) {
+export function parsedateFilterParameter(dateFilter) {
     const filter = {};
     
-    if (!dateSearch) return filter;
+    if (!dateFilter) return filter;
     
     // Check for mode prefix (show: or overlap:)
     let mode = 'overlap'; // default
-    let value = dateSearch;
+    let value = dateFilter;
     
-    if (dateSearch.startsWith('show:')) {
+    if (dateFilter.startsWith('show:')) {
         mode = 'show';
-        value = dateSearch.substring(5);
-    } else if (dateSearch.startsWith('overlap:')) {
+        value = dateFilter.substring(5);
+    } else if (dateFilter.startsWith('overlap:')) {
         mode = 'overlap';
-        value = dateSearch.substring(8);
+        value = dateFilter.substring(8);
     }
     
     filter.byShowDate = (mode === 'show');
@@ -395,7 +395,7 @@ export function parseDateSearchParameter(dateSearch) {
 }
 
 /**
- * Build a DateSearch URL parameter from filter components
+ * Build a dateFilter URL parameter from filter components
  * 
  * @param {Object} options - Filter options
  * @param {number} options.startDateOffset - Start date offset in days
@@ -404,9 +404,9 @@ export function parseDateSearchParameter(dateSearch) {
  * @param {string} options.endDate - End date string (YYYY-MM-DD)
  * @param {string} options.overlapShowIdentifier - Show identifier for overlap
  * @param {boolean} options.byShowDate - If true, use 'show:' prefix; otherwise 'overlap:'
- * @returns {string|null} DateSearch parameter string or null if no date criteria
+ * @returns {string|null} dateFilter parameter string or null if no date criteria
  */
-export function buildDateSearchParameter(options) {
+export function builddateFilterParameter(options) {
     const { startDateOffset, endDateOffset, startDate, endDate, overlapShowIdentifier, byShowDate } = options;
     
     let value = null;
@@ -480,7 +480,7 @@ export function buildTextFilterParameters(textFilters) {
 
 /**
  * Parse all search parameters from URL params object
- * Combines DateSearch and text filter parsing
+ * Combines dateFilter and text filter parsing
  * 
  * @param {Object} params - URL parameters object
  * @returns {Object} Object with {dateFilter, searchParams}
@@ -491,9 +491,9 @@ export function parseSearchParameters(params) {
         searchParams: {}
     };
     
-    // Parse DateSearch parameter
-    if (params.DateSearch) {
-        result.dateFilter = parseDateSearchParameter(params.DateSearch);
+    // Parse dateFilter parameter
+    if (params.dateFilter) {
+        result.dateFilter = parsedateFilterParameter(params.dateFilter);
     }
     
     // Parse text filters into searchParams

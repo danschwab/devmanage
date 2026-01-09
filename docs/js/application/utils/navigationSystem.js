@@ -150,7 +150,7 @@ export const NavigationRegistry = {
 
     /**
      * Parse path with parameters (supports JSON path segments)
-     * @param {string} path - The path with potential JSON parameters (e.g., 'schedule?{"dateSearch":"0,30"}')
+     * @param {string} path - The path with potential JSON parameters (e.g., 'schedule?{"dateFilter":"0,30"}')
      * @returns {Object} Object with path, parameters, and route information
      */
     parsePath(path) {
@@ -342,10 +342,22 @@ export const NavigationRegistry = {
      * Navigation handlers - consolidated
      */
     async handleNavigateToPath(navigationData, appContext) {
-        const { targetPath, isBrowserNavigation } = navigationData;
+        let { targetPath, isBrowserNavigation } = navigationData;
         
         // Parse the target path to get the clean path
-        const pathInfo = this.parsePath(targetPath);
+        let pathInfo = this.parsePath(targetPath);
+        
+        // Apply cached parameters if no explicit parameters provided
+        if (!pathInfo.hasParameters) {
+            const route = this.getRoute(pathInfo.path);
+            if (route?.lastParameters && Object.keys(route.lastParameters).length > 0) {
+                // Build path with cached parameters
+                targetPath = this.buildPath(pathInfo.path, route.lastParameters);
+                pathInfo = this.parsePath(targetPath); // Re-parse with cached params
+                console.log('[NavigationRegistry] Applied cached parameters:', route.lastParameters);
+            }
+        }
+        
         const currentPathInfo = this.parsePath(appContext.currentPath || '');
         
         // Check if we're navigating to the same base path (just parameter change)
@@ -366,6 +378,16 @@ export const NavigationRegistry = {
         
         // Update app state
         appContext.currentPath = pathInfo.fullPath;
+        
+        // Cache parameters for future navigation (only if not on dashboard)
+        const isOnDashboard = pathInfo.path.split('/')[0] === 'dashboard';
+        if (!isOnDashboard && pathInfo.hasParameters) {
+            const route = this.getRoute(pathInfo.path);
+            if (route) {
+                route.lastParameters = { ...pathInfo.parameters };
+                console.log('[NavigationRegistry] Cached parameters for', pathInfo.path, ':', route.lastParameters);
+            }
+        }
         
         // Only close menu if navigating to a different base path
         if (!isSameBasePath) {

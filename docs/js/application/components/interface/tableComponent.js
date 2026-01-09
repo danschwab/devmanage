@@ -1,4 +1,4 @@
-import { html, parseDate, LoadingBarComponent } from '../../index.js';
+import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
@@ -392,6 +392,7 @@ export const tableRowSelectionState = Vue.reactive({
 export const TableComponent = {
     name: 'TableComponent',
     components: { LoadingBarComponent },
+    inject: ['appContext'],
     props: {
         key: {
             type: String,
@@ -486,9 +487,17 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
-        searchTerm: {
+        syncSearchWithUrl: {
+            type: Boolean,
+            default: false
+        },
+        containerPath: {
             type: String,
             default: ''
+        },
+        navigateToPath: {
+            type: Function,
+            default: null
         },
         hideRowsOnSearch: {
             type: Boolean,
@@ -505,7 +514,7 @@ export const TableComponent = {
             dirtyCells: {},
             allowSaveEvent: false,
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
-            searchValue: this.searchTerm || '', // Initialize with searchTerm prop
+            searchValue: '', // Will be initialized from URL in mounted if syncSearchWithUrl
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
@@ -536,10 +545,27 @@ export const TableComponent = {
         };
     },
     watch: {
-        // Watch for changes to searchTerm prop and update internal searchValue
-        searchTerm(newValue) {
-            this.searchValue = newValue || '';
+        // Watch for URL parameter changes when syncSearchWithUrl is enabled
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
+                if (!this.syncSearchWithUrl || !oldPath) return;
+                
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    oldPath
+                );
+                
+                // Only update if searchTerm parameter changed
+                if (newParams?.searchTerm !== oldParams?.searchTerm) {
+                    this.searchValue = newParams?.searchTerm || '';
+                }
+            }
         },
+
         // Watch for changes to originalData prop and recompare dirty state
         originalData: {
             handler() {
@@ -548,6 +574,37 @@ export const TableComponent = {
                 });
             },
             deep: true
+        },
+        allowSaveEvent(val) {
+            // Emit to parent if dirty state changes
+            this.$emit('inner-table-dirty', val);
+        },
+        data: {
+            handler() {
+                this.$nextTick(() => {
+                    this.updateAllEditableCells();
+                    this.compareAllCellsDirty();
+                });
+            },
+            deep: true
+        },
+        isLoading(val) {
+            // When loading state changes, update cells and compare dirty
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+                this.compareAllCellsDirty();
+            });
+        },
+        visibleRows() {
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+            });
+        },
+        draggable() {
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+                this.compareAllCellsDirty();
+            });
         }
     },
     computed: {
@@ -663,40 +720,18 @@ export const TableComponent = {
             return filteredData;
         }
     },
-    watch: {
-        allowSaveEvent(val) {
-            // Emit to parent if dirty state changes
-            this.$emit('inner-table-dirty', val);
-        },
-        data: {
-            handler() {
-                this.$nextTick(() => {
-                    this.updateAllEditableCells();
-                    this.compareAllCellsDirty();
-                });
-            },
-            deep: true
-        },
-        isLoading(val) {
-            // When loading state changes, update cells and compare dirty
-            this.$nextTick(() => {
-                this.updateAllEditableCells();
-                this.compareAllCellsDirty();
-            });
-        },
-        visibleRows() {
-            this.$nextTick(() => {
-                this.updateAllEditableCells();
-            });
-        },
-        draggable() {
-            this.$nextTick(() => {
-                this.updateAllEditableCells();
-                this.compareAllCellsDirty();
-            });
-        }
-    },
     mounted() {
+        // Initialize searchValue from URL if syncSearchWithUrl is enabled
+        if (this.syncSearchWithUrl && this.containerPath && this.appContext?.currentPath) {
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext.currentPath
+            );
+            if (params?.searchTerm) {
+                this.searchValue = params.searchTerm;
+            }
+        }
+        
         this.$nextTick(() => {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();
@@ -716,10 +751,9 @@ export const TableComponent = {
                 const table = this.$el.querySelector('table');
                 if (!table) return;
 
-                // Get CSS variable values
-                const computedStyle = getComputedStyle(document.documentElement);
-                const navbarHeight = parseInt(computedStyle.getPropertyValue('--navbar-height')) || 0;
-                const stickyOffset = navbarHeight;
+                // Get navbar bottom position for sticky offset
+                const navbar = document.querySelector('#navbar');
+                const stickyOffset = navbar ? navbar.getBoundingClientRect().bottom : 0;
 
                 // Get positions
                 const tableRect = table.getBoundingClientRect();
@@ -804,6 +838,44 @@ export const TableComponent = {
         }
     },
     methods: {
+        /**
+         * Update searchTerm parameter in URL when syncSearchWithUrl is enabled
+         */
+        updateSearchInURL(searchValue) {
+            if (!this.syncSearchWithUrl || !this.containerPath || !this.navigateToPath) {
+                return;
+            }
+            
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            
+            // Get current parameters and update only searchTerm
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext?.currentPath
+            );
+            
+            // Build new params with searchTerm updated or removed
+            const params = { ...currentParams };
+            if (searchValue && searchValue.trim()) {
+                params.searchTerm = searchValue;
+            } else {
+                delete params.searchTerm;
+            }
+            
+            const newPath = NavigationRegistry.buildPath(this.containerPath.split('?')[0], params);
+            
+            if (isOnDashboard) {
+                // Update dashboard registry
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    this.containerPath.split('?')[0],
+                    newPath
+                );
+            } else {
+                // Regular navigation
+                this.navigateToPath(newPath);
+            }
+        },
+        
         handleRefresh() {
             this.$emit('refresh');
             // Clear hidden columns on refresh
@@ -1578,6 +1650,7 @@ export const TableComponent = {
                         v-if="showSearch"
                         type="text"
                         v-model="searchValue"
+                        @blur="syncSearchWithUrl && updateSearchInURL(searchValue)"
                         placeholder="Find..."
                         class="search-input"
                     />

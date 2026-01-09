@@ -1,8 +1,9 @@
-import { html, LoadingBarComponent } from '../../index.js';
+import { html, LoadingBarComponent, NavigationRegistry } from '../../index.js';
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
     components: { LoadingBarComponent },
+    inject: ['appContext'],
     props: {
         items: {
             type: Array,
@@ -51,9 +52,17 @@ export const CardsComponent = {
             type: Boolean,
             default: false
         },
-        searchTerm: {
+        syncSearchWithUrl: {
+            type: Boolean,
+            default: false
+        },
+        containerPath: {
             type: String,
             default: ''
+        },
+        navigateToPath: {
+            type: Function,
+            default: null
         },
         hideCardsOnSearch: {
             type: Boolean,
@@ -62,14 +71,31 @@ export const CardsComponent = {
     },
     data() {
         return {
-            searchValue: this.searchTerm || '', // Initialize with searchTerm prop
+            searchValue: '', // Will be initialized from URL in mounted if syncSearchWithUrl
         };
     },
     watch: {
-        // Watch for changes to searchTerm prop and update internal searchValue
-        searchTerm(newValue) {
-            this.searchValue = newValue || '';
-        }
+        // Watch for URL parameter changes when syncSearchWithUrl is enabled
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
+                if (!this.syncSearchWithUrl || !oldPath) return;
+                
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    oldPath
+                );
+                
+                // Only update if searchTerm parameter changed
+                if (newParams?.searchTerm !== oldParams?.searchTerm) {
+                    this.searchValue = newParams?.searchTerm || '';
+                }
+            }
+        },
+
     },
     computed: {
         shouldShowEmpty() {
@@ -106,7 +132,57 @@ export const CardsComponent = {
             return filteredData;
         }
     },
+    mounted() {
+        // Initialize searchValue from URL if syncSearchWithUrl is enabled
+        if (this.syncSearchWithUrl && this.containerPath && this.appContext?.currentPath) {
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext.currentPath
+            );
+            if (params?.searchTerm) {
+                this.searchValue = params.searchTerm;
+            }
+        }
+    },
     methods: {
+        /**
+         * Update searchTerm parameter in URL when syncSearchWithUrl is enabled
+         */
+        updateSearchInURL(searchValue) {
+            if (!this.syncSearchWithUrl || !this.containerPath || !this.navigateToPath) {
+                return;
+            }
+            
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            
+            // Get current parameters and update only searchTerm
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext?.currentPath
+            );
+            
+            // Build new params with searchTerm updated or removed
+            const params = { ...currentParams };
+            if (searchValue && searchValue.trim()) {
+                params.searchTerm = searchValue;
+            } else {
+                delete params.searchTerm;
+            }
+            
+            const newPath = NavigationRegistry.buildPath(this.containerPath.split('?')[0], params);
+            
+            if (isOnDashboard) {
+                // Update dashboard registry
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    this.containerPath.split('?')[0],
+                    newPath
+                );
+            } else {
+                // Regular navigation
+                this.navigateToPath(newPath);
+            }
+        },
+        
         handleCardClick(item) {
             // Call item-specific onClick handler if provided, otherwise use component-level handler
             if (item.onClick && typeof item.onClick === 'function') {
@@ -154,6 +230,7 @@ export const CardsComponent = {
                         v-if="showSearch"
                         type="text"
                         v-model="searchValue"
+                        @blur="syncSearchWithUrl && updateSearchInURL(searchValue)"
                         placeholder="Find..."
                         class="search-input"
                     />

@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parseDateSearchParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parsedateFilterParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
@@ -131,15 +131,6 @@ export const ShowInventoryReport = {
             }
             return this.reportStore?.loadingMessage || 'Loading...';
         },
-
-        // Get search term from URL parameters
-        initialSearchTerm() {
-            const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-inventory',
-                this.appContext?.currentPath
-            );
-            return params?.searchTerm || '';
-        },
         
         initialItemCategoryFilter() {
             const params = NavigationRegistry.getParametersForContainer(
@@ -189,8 +180,8 @@ export const ShowInventoryReport = {
             const filter = {};
             const searchParams = {};
             
-            if (searchData.dateSearch) {
-                const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+            if (searchData.dateFilter) {
+                const dateFilter = parsedateFilterParameter(searchData.dateFilter);
                 
                 // Check if this is an overlap search (has overlapShowIdentifier)
                 if (dateFilter.overlapShowIdentifier) {
@@ -373,6 +364,32 @@ export const ShowInventoryReport = {
                 { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS'] },
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
             ], true);
+        },
+
+        updateCategoryFilterInUrl(newFilter) {
+            // Get current parameters
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'inventory/reports/show-inventory',
+                this.appContext?.currentPath
+            );
+
+            // Build new parameters with updated category filter
+            const newParams = {
+                ...currentParams,
+                itemCategoryFilter: newFilter && newFilter.length > 0 ? newFilter[0] : undefined
+            };
+
+            // Remove undefined values
+            if (newParams.itemCategoryFilter === undefined) {
+                delete newParams.itemCategoryFilter;
+            }
+
+            // Build and navigate to new path
+            const newPath = NavigationRegistry.buildPath(
+                this.containerPath || 'inventory/reports/show-inventory',
+                newParams
+            );
+            this.navigateToPath(newPath);
         }
     },
     mounted() {
@@ -397,7 +414,9 @@ export const ShowInventoryReport = {
                 :columns="tableColumns"
                 :hide-columns="['tabName']"
                 :show-search="true"
-                :search-term="initialSearchTerm"
+                :sync-search-with-url="true"
+                :container-path="containerPath || 'inventory/reports/show-inventory'"
+                :navigate-to-path="navigateToPath"
                 :hide-rows-on-search="false"
                 :readonly="true"
                 :allowDetails="true"
@@ -421,16 +440,15 @@ export const ShowInventoryReport = {
                         <select 
                             :value="itemCategoryFilter ? itemCategoryFilter[0] : ''" 
                             :disabled="inventoryCategoriesStore && inventoryCategoriesStore.isLoading"
-                            @change="itemCategoryFilter = $event.target.value ? [$event.target.value] : undefined; initializeReportStore();"
+                            @change="itemCategoryFilter = $event.target.value ? [$event.target.value] : undefined; updateCategoryFilterInUrl(itemCategoryFilter); initializeReportStore();"
                             >
                             <option v-for="category in inventoryCategoriesStore?.data || []" 
                                     v-show= "category.title != 'INDEX'"
                                     :key="category.title"
-                                    :value="category.title"
-                                    @click="itemCategoryFilter = [category.title]; initializeReportStore();">
+                                    :value="category.title">
                                 {{ category.title }}
                             </option>
-                            <option value="" @click="itemCategoryFilter = undefined; initializeReportStore();">
+                            <option value="">
                                 All Items
                             </option>
                         </select>

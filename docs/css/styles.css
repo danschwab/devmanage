@@ -9,6 +9,12 @@ body, #app {
     position: fixed;
 }
 
+/* Hide print-only elements on screen */
+.print-header,
+.print-footer {
+    display: none;
+}
+
 
 /* Primary Navigation */
 header nav {
@@ -1204,7 +1210,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 
-.packlist-table td {
+.packlist-table td:not(.row-drag-handle) {
     vertical-align: top;
 }
 .packlist-crates>tbody>tr>td {
@@ -1283,7 +1289,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         margin-top: var(--padding-lg);
     }
     nav #navbar button {
-        margin-top: var(--padding-sm);
+        margin-top: var(--padding-lg);
         margin-bottom: var(--padding-sm);
     }
     nav:not(.open) #navbar a:not(.active), 
@@ -1360,7 +1366,74 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
 
 @media print {
-    p, td, th, span, li, label {
+    /* Set page margins to allow space for browser headers/footers */
+    @page {
+        margin-top: .125in;    /* Space for browser header + our header */
+        margin-bottom: 0.5in;  /* Space for browser footer */
+        margin-left: 0.25in;
+        margin-right: 0.25in;
+        size: auto;
+    }
+    
+    /* Print-only header */
+    .print-header {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: .85in;
+        padding: .05in 0 .05in 0;
+        margin: 0;
+        box-sizing: border-box;
+        z-index:9999;
+    }
+    
+    .print-header .print-logo {
+        height: .75in;
+        width: auto;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .print-header h1 {
+        display: inline-block;
+        vertical-align: middle;
+        margin: 0 0 0 .25in;
+        font-size: 22pt;
+    }
+
+    .print-header h1 strong {
+        font-family: "Arial Black", sans-serif;
+        font-weight: 800;
+    }
+
+    .page-number {
+        position: fixed;
+        top: 0;
+        right: 0;
+        padding: 3pt;
+        text-align: right;
+        z-index: 9999;
+    }
+    
+    /* Page numbering - will show "Page X of Y" where supported, "Page X" elsewhere */
+    /*@supports (content: counter(page)) {
+        .page-number::before {
+            content: "Page " counter(page);
+            font-size: 10pt;
+            color: black !important;
+        }
+    }
+    */
+    /* Add total pages where supported (Chromium-based browsers with print extensions) */
+    /*@supports (content: counter(pages)) {
+        .page-number::before {
+            content: "Page " counter(page) " of " counter(pages);
+        }
+    }*/
+
+    p, h1, h2, h3, h4, h5, h6, td, th, span, li, label {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact; /* Non-Webkit Browsers */
 
@@ -1368,48 +1441,21 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         font-size: 10pt !important;
     }
     
-    button, header nav #navbar, .breadcrumb-segment, .breadcrumb-separator {
+    button, header, footer, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header {
         display: none;
     }
-
-    header nav {
-        box-shadow: none !important;
-        border: none !important;
-        background: transparent !important;
-    }
-
-
-    #app header {
-        position: absolute;
-        height: 0px;
-    }
-
-    .breadcrumb-segment.active {
-        position: fixed;
-        left: 100px;
-        top: 0;
-        line-height: 80px;
-        display: table-header-group;
-        font-family: "Arial Black";
-    }
-
-    .content {
-        position: relative !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        width: 100% !important;
-    }
-
-
 
     body,
     footer,
     header,
+    table,
     #app,
     div#app-content, 
     .container,
-    .container-header {  
-        position: static !important;
+    .container-header,
+    .container-content,
+    .content {  
+        position: relative !important;
         width: 100% !important;
         max-height: 100% !important;
         overflow: visible !important;
@@ -1418,39 +1464,27 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         border: none !important;
         padding: 0 !important;
         margin: 0 !important;
-    }
-
-
-    .container {
-        width: 100%;
-        padding: 0;
-        margin: 0 !important;
         box-sizing: border-box;
-        top: 0 !important;
     }
 
-    .content-header,
-    .content-footer,
-    footer {
-        display: none;
-    }
+
     table thead th div span {
         color: white !important;
         font-size: 10pt !important;
         font-weight: 600 !important;
     }
-    table thead th {
-        box-shadow: 0 -200px var(--color-gray) inset !important;
-        padding: 2px;
-    }
-    td {
-        padding: 2px;
-    }
-    table thead:before {
+    table thead::before {
+        /*this should be a padding element sufficient for the height of the packlist header component*/
         content: "";
-        width: 100%;
         display: block;
-        height: 80px;
+        height: 0;
+        height: 1in;
+    }
+    th {
+        box-shadow: 0 -200px var(--color-gray) inset !important;
+    }
+    td, th {
+        padding: 1pt;
     }
     
     .packlist-crates {
@@ -1459,7 +1493,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         width: 100%;
     }
     .packlist-crates > tbody > tr > td {
-        border-bottom: 6px solid var(--color-border) !important;
+        border-bottom: 4pt solid var(--color-border) !important;
     }
     .items-table tr {
         page-break-inside: avoid;

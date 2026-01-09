@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parseDateSearchParameter, SavedSearchSelect, AdvancedSearchComponent } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parsedateFilterParameter, SavedSearchSelect, AdvancedSearchComponent } from '../../index.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
@@ -138,9 +138,9 @@ export const ScheduleContent = {
                 searchParams: {}
             };
             
-            // Parse DateSearch from saved search
-            if (searchData.dateSearch) {
-                const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+            // Parse dateFilter from saved search
+            if (searchData.dateFilter) {
+                const dateFilter = parsedateFilterParameter(searchData.dateFilter);
                 
                 // Check if this is an overlap search (has overlapShowIdentifier)
                 if (dateFilter.overlapShowIdentifier) {

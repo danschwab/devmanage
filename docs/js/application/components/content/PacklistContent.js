@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parseDateSearchParameter, invalidateCache } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parsedateFilterParameter, invalidateCache } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -66,7 +66,7 @@ export const PacklistContent = {
         containerPath: String,
         navigateToPath: Function
     },
-    inject: ['$modal'],
+    inject: ['$modal', 'appContext'],
     data() {
         return {
             packlistsStore: null, // Reactive store for packlists
@@ -192,9 +192,9 @@ export const PacklistContent = {
                 filter.endDate = searchData.endDate;
                 filter.byShowDate = true;
             } else {
-                // Handle saved search - parse DateSearch parameter
-                if (searchData.dateSearch) {
-                    const dateFilter = parseDateSearchParameter(searchData.dateSearch);
+                // Handle saved search - parse dateFilter parameter
+                if (searchData.dateFilter) {
+                    const dateFilter = parsedateFilterParameter(searchData.dateFilter);
                     Object.assign(filter, dateFilter);
                 }
                 
@@ -318,6 +318,9 @@ export const PacklistContent = {
                 v-if="!isViewingPacklist"
                 :show-header="true"
                 :show-search="true"
+                :sync-search-with-url="true"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
                 :show-refresh="true"
                 :items="availablePacklists"
                 :on-item-click="handlePacklistSelect"
@@ -346,7 +349,6 @@ export const PacklistContent = {
             <packlist-table 
                 v-else-if="!isDetailsView"
                 :tab-name="currentPacklist"
-                :edit-mode="isEditView"
                 :container-path="containerPath"
                 @navigate-to-path="navigateToPath"
             />

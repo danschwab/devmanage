@@ -50,11 +50,11 @@ For design and project queue:
 
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [ ] remove hamburger buttons that do nothing
-- [ ] packlist print titleblock??
-- [ ] add context variables to live site github
+- [x] packlist print titleblock??
+- [x] add context variables to live site github
 - [?] refresh buttons should clear caches
 - [ ] fix packlist table header alignment
-- [ ] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
+- [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [ ] tableComponent finder needs: a clear all button, and a hide rows toggle
 - [ ] make table headers accessible when scrolling
 - [ ] reports column headers percentage based and dynamically abbreviate
@@ -64,13 +64,17 @@ For design and project queue:
 
 **problems**
 
+- [ ] redundancy and overcomplexity in navigation still must be reduced
+- [ ] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
 - [ ] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
 - [ ] make navigation modal not allow exit
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
-- [ ] buttons dont work on reports
-- [ ] changing url doesnt immidiately update saved search
+- [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
+- [ ] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
+- [x] buttons dont work on reports
+- [x] changing url doesnt immidiately update saved search
 - [x] container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 - [x] error causing early dashboard changes to be overwritten by an empty dashboard
 - [x] error causing card component to lose analytics details on reload after cache clear???
@@ -78,7 +82,6 @@ For design and project queue:
 - [x] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
 - [x] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 - [x] scrolling issue when navigating
-- [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [t] error causing imperfect or corrupted analytics information on data refresh after auth
 - [x] github deployment needs to be rerun every time due to config.js build issues? (need to set up deployment via actions in github settings)
 - [?] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
@@ -153,7 +156,7 @@ analysis of pack list against current inventory
 - [x] low stock warnings
 - [x] description updates
 - [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
-- [ ] make url param updates correctly propegate into components, and fix report url generation
+- [x] make url param updates correctly propegate into components, and fix report url generation
 - [ ] increase the filtering options in reports
 - [ ] link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)
 - [ ] allow report text filtering
@@ -169,6 +172,7 @@ Pack Lists in Web
 - [x] Allow editing item contents
 - [x] allow saving edits to google sheet
 - [x] allow packlist main page to be refreshed (cards-grid refresh button)
+- [ ] new items from inventory with easy navigation
 - [ ] create a more advanced filtering component for tables that includes multi-select, ranges, and text search and integrates with urlparams similar to the advanced search select
 - [ ] add filtering to packlist-details table
 - [ ] allow packlist text search and filtering

@@ -139,14 +139,6 @@ export const InventoryTableComponent = {
         },
         isLoading() {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
-        },
-        
-        // Get URL parameters for this container
-        urlParameters() {
-            return NavigationRegistry.getParametersForContainer(
-                this.containerPath,
-                this.appContext?.currentPath
-            );
         }
     },
     async mounted() {
@@ -205,10 +197,11 @@ export const InventoryTableComponent = {
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"
+                :sync-search-with-url="true"
+                :container-path="containerPath"
+                :navigate-to-path="appContext.navigateToPath"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
-                :searchTerm="navParams?.searchTerm || ''"
-                :hideRowsOnSearch="navParams?.hideRowsOnSearch !== false"
                 class="inventory-table-component"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"

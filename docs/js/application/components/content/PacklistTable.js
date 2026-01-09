@@ -3,7 +3,7 @@ import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, c
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
     components: { TableComponent },
-    inject: ['$modal'],
+    inject: ['$modal', 'appContext'],
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
@@ -15,7 +15,8 @@ export const PacklistTable = {
             isPrinting: false,
             error: null,
             databaseItemHeaders: null,
-            hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty']
+            hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty'],
+            NavigationRegistry // Make available in template
         };
     },
     computed: {
@@ -104,19 +105,6 @@ export const PacklistTable = {
             return this.packlistTableStore?.isModified || false;
         },
         
-        // Get search term from URL parameters
-        initialSearchTerm() {
-            let path = this.containerPath;
-            if (!path && this.tabName) {
-                path = `packlist/${this.tabName}`;
-            }
-            const params = NavigationRegistry.getParametersForContainer(
-                path,
-                this.appContext?.currentPath
-            );
-            return params?.searchTerm || '';
-        },
-        
         editMode() {
             let path = this.containerPath;
             if (!path && this.tabName) {
@@ -126,7 +114,8 @@ export const PacklistTable = {
                 path,
                 this.appContext?.currentPath
             );
-            return params?.edit === true;
+            // Handle both boolean true and string "true" from URL parameters
+            return params?.edit === true || params?.edit === 'true';
         }
     },
     watch: {
@@ -134,7 +123,10 @@ export const PacklistTable = {
         isDirty(newValue) {
             if (newValue && !this.editMode && this.tabName) {
                 // Navigate to edit mode when data becomes dirty
-                const editPath = `packlist/${this.tabName}?edit=true`;
+                const editPath = NavigationRegistry.buildPath(
+                    `packlist/${this.tabName}`,
+                    { edit: true }
+                );
                 this.$emit('navigate-to-path', editPath);
             }
         }
@@ -419,6 +411,13 @@ export const PacklistTable = {
     },
     template: html`
         <div class="packlist-table">
+            <!-- Print-only Header -->
+            <div class="print-header">
+                <img src="images/logo.png" alt="Top Shelf Exhibits Logo" class="print-logo" />
+                <h1>Pack List: <strong>{{ tabName }}</strong></h1>
+                <span class="page-number"></span>
+            </div>
+            
             <div v-if="error" class="error-message">
                 <p>Error: {{ error }}</p>
             </div>
@@ -431,6 +430,11 @@ export const PacklistTable = {
                     :columns="mainColumns"
                     :title="tabName"
                     :showRefresh="true"
+                    :showSearch="true"
+                    :sync-search-with-url="true"
+                    :container-path="containerPath || 'packlist/' + tabName"
+                    :navigate-to-path="(path) => $emit('navigate-to-path', path)"
+                    :hideRowsOnSearch="false"
                     :emptyMessage="'No crates'"
                     :draggable="editMode"
                     :newRow="editMode"
@@ -450,7 +454,7 @@ export const PacklistTable = {
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->
                             <template v-if="!editMode">
-                                <button @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName + '?edit=true') : null">
+                                <button @click="() => tabName ? $emit('navigate-to-path', NavigationRegistry.buildPath('packlist/' + tabName, { edit: true })) : null">
                                     Edit Packlist
                                 </button>
                             </template>
@@ -466,7 +470,7 @@ export const PacklistTable = {
                                 Details
                             </button>
 
-                            <button v-if="!editMode" @click="handlePrint" class="white">Print</button>
+                            <button v-if="!editMode" @click="handlePrint" :disabled="isLoading || isAnalyzing" class="white">Print</button>
                         </div>
                     </template>
                     <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">

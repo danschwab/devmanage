@@ -48,7 +48,7 @@ The TopShelfLiveInventory application uses a hash-based URL routing system with 
 
 **Format**: `#route?{"param":"value","another":"data"}`
 
-**Example**: `#schedule?{"dateSearch":"0,30","searchMode":"upcoming"}`
+**Example**: `#schedule?{"dateFilter":"0,30","searchMode":"upcoming"}`
 
 **Key Features**:
 
@@ -68,26 +68,26 @@ The TopShelfLiveInventory application uses a hash-based URL routing system with 
 - `parseJsonPathSegment(jsonString)` - Parses JSON parameter string into object
 
   ```javascript
-  parseJsonPathSegment('{"dateSearch":"0,30","mode":"upcoming"}');
-  // Returns: { dateSearch: '0,30', mode: 'upcoming' }
+  parseJsonPathSegment('{"dateFilter":"0,30","mode":"upcoming"}');
+  // Returns: { dateFilter: '0,30', mode: 'upcoming' }
   ```
 
 - `buildJsonPathSegment(parameters)` - Converts object to JSON string
 
   ```javascript
-  buildJsonPathSegment({ dateSearch: "0,30", mode: "upcoming" });
-  // Returns: '{"dateSearch":"0,30","mode":"upcoming"}'
+  buildJsonPathSegment({ dateFilter: "0,30", mode: "upcoming" });
+  // Returns: '{"dateFilter":"0,30","mode":"upcoming"}'
   ```
 
 - `parsePath(path)` - Splits path and JSON parameters, decodes URL encoding
 
   ```javascript
-  parsePath('schedule?{"dateSearch":"0,30"}')
+  parsePath('schedule?{"dateFilter":"0,30"}')
   // Returns:
   {
     path: 'schedule',
-    fullPath: 'schedule?{"dateSearch":"0,30"}',
-    parameters: { dateSearch: '0,30' },
+    fullPath: 'schedule?{"dateFilter":"0,30"}',
+    parameters: { dateFilter: '0,30' },
     route: {...},
     hasParameters: true
   }
@@ -96,18 +96,18 @@ The TopShelfLiveInventory application uses a hash-based URL routing system with 
 - `buildPath(path, parameters)` - Merges parameters into path, replacing duplicates
 
   ```javascript
-  buildPath('schedule?{"dateSearch":"0,30"}', {
+  buildPath('schedule?{"dateFilter":"0,30"}', {
     mode: "upcoming",
-    dateSearch: "0,60",
+    dateFilter: "0,60",
   });
-  // Returns: 'schedule?{"dateSearch":"0,60","mode":"upcoming"}'
+  // Returns: 'schedule?{"dateFilter":"0,60","mode":"upcoming"}'
   ```
 
 - `getNavigationParameters(path)` - Extracts parameters from a path
 
   ```javascript
-  getNavigationParameters('schedule?{"dateSearch":"0,30"}');
-  // Returns: { dateSearch: '0,30' }
+  getNavigationParameters('schedule?{"dateFilter":"0,30"}');
+  // Returns: { dateFilter: '0,30' }
   ```
 
 - `getParametersForContainer(containerPath, currentPath)` - **Context-aware parameter retrieval**
@@ -123,9 +123,9 @@ The TopShelfLiveInventory application uses a hash-based URL routing system with 
   getParametersForContainer("schedule", "dashboard");
   // Returns parameters stored in dashboard registry for schedule container
 
-  // On regular page (currentPath = 'schedule?{"dateSearch":"0,30"}')
-  getParametersForContainer("schedule", 'schedule?{"dateSearch":"0,30"}');
-  // Returns: { dateSearch: '0,30' }
+  // On regular page (currentPath = 'schedule?{"dateFilter":"0,30"}')
+  getParametersForContainer("schedule", 'schedule?{"dateFilter":"0,30"}');
+  // Returns: { dateFilter: '0,30' }
 
   // Wrong page (currentPath = 'inventory')
   getParametersForContainer("schedule", "inventory");
@@ -184,7 +184,7 @@ routes: {
 
 ```javascript
 containers: [
-  { path: 'schedule?{"dateSearch":"0,30"}', classes: "wide" },
+  { path: 'schedule?{"dateFilter":"0,30"}', classes: "wide" },
   { path: "inventory", classes: "" },
 ];
 ```
@@ -208,28 +208,43 @@ containers: [
 
 ### Component Integration Pattern
 
-**Purpose**: Components retrieve parameters context-aware for both regular and dashboard navigation
+**Purpose**: Components retrieve parameters directly from NavigationRegistry for both regular and dashboard navigation
 
 **Reactive Flow**:
 
 ```javascript
-computed: {
-  currentUrlParameters() {
-    if (!this.appContext?.currentPath) return {};
+watch: {
+  'appContext.currentPath': {
+    handler(newPath, oldPath) {
+      if (!oldPath) return; // Skip initial load
 
-    // Use context-aware parameter retrieval
-    return NavigationRegistry.getParametersForContainer(
-      this.containerPath,
-      this.appContext.currentPath
-    );
+      // Get params for both paths to compare
+      const newParams = NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        newPath
+      );
+      const oldParams = NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        oldPath
+      );
+
+      // Only sync if parameters actually changed
+      if (JSON.stringify(newParams) !== JSON.stringify(oldParams)) {
+        this.syncWithURL();
+      }
+    }
   }
 },
-watch: {
-  currentUrlParameters: {
-    handler(newParams) {
-      this.syncWithURL(); // React to parameter changes
-    },
-    deep: true
+methods: {
+  syncWithURL() {
+    // Call getParametersForContainer directly when needed
+    const params = NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext?.currentPath
+    );
+
+    // Apply parameters to component state
+    this.applyFilters(params);
   }
 }
 ```
@@ -254,6 +269,43 @@ methods: {
 }
 ```
 
+**Navigation Guard Pattern** (prevents stale navigation):
+
+```javascript
+methods: {
+  /**
+   * Check if this component is still active (user hasn't navigated away)
+   * Prevents stale navigation from async operations
+   */
+  isComponentActive() {
+    if (!this.appContext?.currentPath) return false;
+
+    const currentCleanPath = this.appContext.currentPath.split('?')[0];
+    const containerCleanPath = this.containerPath.split('?')[0];
+
+    // On dashboard, we're always active if on dashboard page
+    if (this.isOnDashboard) {
+      return currentCleanPath.startsWith('dashboard');
+    }
+
+    // Not on dashboard, check if current path matches our container
+    return currentCleanPath === containerCleanPath;
+  },
+
+  updateURL(params) {
+    // Guard: Don't navigate if component is no longer active
+    if (!this.isComponentActive()) {
+      console.log('[Component] Skipping navigation - component no longer active');
+      return;
+    }
+
+    // Proceed with navigation...
+    const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+    this.navigateToPath(newPath);
+  }
+}
+```
+
 ## Navigation Flow
 
 ### Regular Navigation Flow
@@ -269,9 +321,11 @@ appContext.currentPath = newPath
   ↓
 URLRouter.updateURL() - updates browser address bar
   ↓
-Components' currentUrlParameters computed updates
+appContext.currentPath watcher fires
   ↓
-Watchers fire → components sync with new parameters
+Components call getParametersForContainer() to read new params
+  ↓
+Components sync with new parameters
 ```
 
 ### Dashboard Navigation Flow
@@ -283,11 +337,13 @@ dashboardRegistry.updatePath(containerPath, buildPath(containerPath, newParams))
   ↓
 Dashboard registry stores new path with parameters
   ↓
-Components' getParametersForContainer() reads from dashboard registry
+appContext.currentPath watcher may fire (but path stays 'dashboard')
   ↓
-currentUrlParameters computed updates
+Components call getParametersForContainer()
   ↓
-Watchers fire → components sync with new parameters
+getParametersForContainer() reads from dashboard registry
+  ↓
+Components sync with new parameters
   ↓
 (Browser URL stays as #dashboard - container params stored in registry)
 ```
@@ -318,13 +374,13 @@ All parameters use JSON format in URLs for readability and type preservation:
 
 ```javascript
 // Build parameters
-const params = { dateSearch: "0,30", mode: "upcoming", isActive: true };
+const params = { dateFilter: "0,30", mode: "upcoming", isActive: true };
 const path = NavigationRegistry.buildPath("schedule", params);
-// Result: 'schedule?{"dateSearch":"0,30","mode":"upcoming","isActive":true}'
+// Result: 'schedule?{"dateFilter":"0,30","mode":"upcoming","isActive":true}'
 
 // Parse parameters
-const pathInfo = NavigationRegistry.parsePath('schedule?{"dateSearch":"0,30"}');
-// pathInfo.parameters = { dateSearch: '0,30' }
+const pathInfo = NavigationRegistry.parsePath('schedule?{"dateFilter":"0,30"}');
+// pathInfo.parameters = { dateFilter: '0,30' }
 ```
 
 ### Parameter Merging
@@ -332,32 +388,56 @@ const pathInfo = NavigationRegistry.parsePath('schedule?{"dateSearch":"0,30"}');
 `buildPath()` automatically merges new parameters with existing ones:
 
 ```javascript
-const currentPath = 'schedule?{"dateSearch":"0,30","mode":"upcoming"}';
+const currentPath = 'schedule?{"dateFilter":"0,30","mode":"upcoming"}';
 const newPath = NavigationRegistry.buildPath(currentPath, {
   mode: "past", // Replaces existing
   filter: "active", // Adds new
 });
-// Result: 'schedule?{"dateSearch":"0,30","mode":"past","filter":"active"}'
+// Result: 'schedule?{"dateFilter":"0,30","mode":"past","filter":"active"}'
 ```
 
-### Context-Aware Parameter Retrieval
+### Direct Parameter Retrieval
 
-Components should always use `getParametersForContainer()` to retrieve parameters:
+Components should call `getParametersForContainer()` directly when they need parameters, rather than caching in a computed property:
 
 ```javascript
-// ✓ CORRECT: Context-aware retrieval
-computed: {
-  currentUrlParameters() {
-    return NavigationRegistry.getParametersForContainer(
+// ✓ CORRECT: Direct call when parameters are needed
+methods: {
+  syncWithURL() {
+    const params = NavigationRegistry.getParametersForContainer(
       this.containerPath,
-      this.appContext.currentPath
+      this.appContext?.currentPath
     );
+
+    // Use params directly
+    this.mode = params.mode || 'default';
+    this.filter = params.filter || '';
+  },
+
+  applyFilters() {
+    const params = NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext?.currentPath
+    );
+
+    this.filters = params.textFilters || [];
   }
 }
 
-// ✗ INCORRECT: Direct parsing doesn't handle dashboard
+// ✓ ACCEPTABLE: Cached computed if used multiple times in template
 computed: {
-  currentUrlParameters() {
+  urlParameters() {
+    return NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext?.currentPath
+    );
+  }
+}
+// Template: {{ urlParameters.searchTerm }}, {{ urlParameters.mode }}
+
+// ✗ INCORRECT: Direct parsing doesn't handle dashboard
+methods: {
+  getParams() {
     return NavigationRegistry.getNavigationParameters(this.appContext.currentPath);
     // Fails on dashboard - returns {} because currentPath is 'dashboard'
   }
@@ -376,28 +456,70 @@ computed: {
 computed: {
   isOnDashboard() {
     return this.appContext.currentPath.split('/')[0] === 'dashboard';
-  },
-
-  // Context-aware parameter retrieval
-  currentUrlParameters() {
-    if (!this.appContext?.currentPath) return {};
-    return NavigationRegistry.getParametersForContainer(
-      this.containerPath,
-      this.appContext.currentPath
-    );
   }
 },
 
 watch: {
-  currentUrlParameters(newParams, oldParams) {
-    if (!oldParams) return; // Skip initial load
-    if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
-    this.syncWithURL(); // Sync dropdown with new URL
+  'appContext.currentPath': {
+    handler(newPath, oldPath) {
+      if (!oldPath) return; // Skip initial load
+
+      // Get params for both paths
+      const newParams = NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        newPath
+      );
+      const oldParams = NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        oldPath
+      );
+
+      // Skip if params haven't actually changed
+      if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+
+      this.syncWithURL();
+    }
   }
 },
 
 methods: {
+  syncWithURL() {
+    const params = NavigationRegistry.getParametersForContainer(
+      this.containerPath,
+      this.appContext?.currentPath
+    );
+
+    if (Object.keys(params).length === 0) {
+      this.applyDefaultSearch();
+      return;
+    }
+
+    // Apply parameters to dropdown selection
+    this.matchUrlToSelection(params);
+  },
+
+  /**
+   * Navigation guard - prevents stale navigation after user has navigated away
+   */
+  isComponentActive() {
+    if (!this.appContext?.currentPath) return false;
+
+    const currentCleanPath = this.appContext.currentPath.split('?')[0];
+    const containerCleanPath = this.containerPath.split('?')[0];
+
+    if (this.isOnDashboard) {
+      return currentCleanPath.startsWith('dashboard');
+    }
+
+    return currentCleanPath === containerCleanPath;
+  },
+
   updateURL(params) {
+    // Guard against stale navigation
+    if (!this.isComponentActive()) {
+      console.log('[SavedSearchSelect] Skipping navigation - component no longer active');
+      return;
+    }
     if (this.isOnDashboard) {
       // Update dashboard registry
       const newPath = NavigationRegistry.buildPath(this.containerPath, params);
@@ -429,15 +551,27 @@ methods: {
 
 ### For Component Developers
 
-1. **Always use getParametersForContainer() for parameter retrieval**
+1. **Call getParametersForContainer() directly when needed**
 
    ```javascript
-   // ✓ CORRECT: Context-aware, works everywhere
+   // ✓ CORRECT: Direct call when parameters are needed
+   methods: {
+     syncWithURL() {
+       const params = NavigationRegistry.getParametersForContainer(
+         this.containerPath,
+         this.appContext?.currentPath
+       );
+
+       this.mode = params.mode || 'default';
+     }
+   }
+
+   // ✓ ACCEPTABLE: Cached computed if used multiple times in template
    computed: {
-     currentUrlParameters() {
+     urlParameters() {
        return NavigationRegistry.getParametersForContainer(
          this.containerPath,
-         this.appContext.currentPath
+         this.appContext?.currentPath
        );
      }
    }
@@ -488,15 +622,78 @@ methods: {
    }
    ```
 
-4. **Navigate for user actions, sync for URL changes**
+4. **Use navigation guards to prevent stale navigation**
 
    ```javascript
-   // User action: Update parameters
-   handleUserSelection() {
-     this.updateFilters({ mode: 'upcoming' });
+   // ✓ CORRECT: Guard against navigation after user has moved away
+   methods: {
+     isComponentActive() {
+       if (!this.appContext?.currentPath) return false;
+
+       const currentCleanPath = this.appContext.currentPath.split('?')[0];
+       const containerCleanPath = this.containerPath.split('?')[0];
+
+       if (this.isOnDashboard) {
+         return currentCleanPath.startsWith('dashboard');
+       }
+
+       return currentCleanPath === containerCleanPath;
+     },
+
+     updateURL(params) {
+       // Guard against stale navigation
+       if (!this.isComponentActive()) {
+         console.log('Skipping navigation - component no longer active');
+         return;
+       }
+
+       // Proceed with navigation...
+       const newPath = NavigationRegistry.buildPath(this.containerPath, params);
+       this.navigateToPath(newPath);
+     }
    }
 
-   // URL change: Sync component state
+   // ✗ INCORRECT: No guard - async operations can redirect user back
+   methods: {
+     async mounted() {
+       await this.loadData();
+       // User may have navigated away during loadData()
+       this.navigateToPath(defaultPath); // Bad! Redirects user back
+     }
+   }
+   ```
+
+5. **Watch appContext.currentPath for parameter changes**
+
+   ```javascript
+   // ✓ CORRECT: Watch the source path and compare parameters
+   watch: {
+     'appContext.currentPath': {
+       handler(newPath, oldPath) {
+         if (!oldPath) return;
+
+         const newParams = NavigationRegistry.getParametersForContainer(
+           this.containerPath,
+           newPath
+         );
+         const oldParams = NavigationRegistry.getParametersForContainer(
+           this.containerPath,
+           oldPath
+         );
+
+         if (JSON.stringify(newParams) !== JSON.stringify(oldParams)) {
+           this.syncWithURL();
+         }
+       }
+     }
+   }
+
+   // ✗ AVOID: Wrapper computed property adds unnecessary layer
+   computed: {
+     currentUrlParameters() {
+       return NavigationRegistry.getParametersForContainer(...);
+     }
+   },
    watch: {
      currentUrlParameters() {
        this.syncWithURL();
@@ -511,9 +708,12 @@ methods: {
 2. **Distinguish parameter changes from page changes** - Used to decide whether to close menu
 
 3. **Never duplicate parameter storage**
+
    - Regular navigation: URL is the source of truth
    - Dashboard: DashboardRegistry stores container paths
    - Components read via `getParametersForContainer()`
+
+4. **Always use navigation guards for async operations** - Prevents redirecting users who have navigated away
 
 ## Common Patterns
 
@@ -521,35 +721,92 @@ methods: {
 
 ```javascript
 export const MyComponent = {
-  inject: ["appContext"],
+  inject: ['appContext'],
   props: {
     containerPath: String,
-    navigateToPath: Function,
+    navigateToPath: Function
   },
 
   computed: {
     isOnDashboard() {
-      return this.appContext.currentPath.split("/")[0] === "dashboard";
-    },
-
-    // Context-aware parameter retrieval
-    currentUrlParameters() {
-      if (!this.appContext?.currentPath) return {};
-      return NavigationRegistry.getParametersForContainer(
-        this.containerPath,
-        this.appContext.currentPath
-      );
-    },
+      return this.appContext.currentPath.split('/')[0] === 'dashboard';
+    }
   },
 
   watch: {
-    currentUrlParameters: {
-      handler(newParams) {
-        this.syncWithURL(newParams);
-      },
-      deep: true,
-    },
+    'appContext.currentPath': {
+      handler(newPath, oldPath) {
+        if (!oldPath) return; // Skip initial load
+
+        // Get params for both paths
+        const newParams = NavigationRegistry.getParametersForContainer(
+          this.containerPath,
+          newPath
+        );
+        const oldParams = NavigationRegistry.getParametersForContainer(
+          this.containerPath,
+          oldPath
+        );
+
+        // Only sync if params changed
+        if (JSON.stringify(newParams) !== JSON.stringify(oldParams)) {
+          this.syncWithURL();
+        }
+      }
+    }
   },
+
+  methods: {
+    syncWithURL() {
+      // Get current parameters
+      const params = NavigationRegistry.getParametersForContainer(
+        this.containerPath,
+        this.appContext?.currentPath
+      );
+
+      // Update component state from parameters
+      this.mode = params.mode || 'default';
+      this.filter = params.filter || '';
+    },
+
+    /**
+     * Navigation guard - check if component is still active
+     */
+    isComponentActive() {
+      if (!this.appContext?.currentPath) return false;
+
+      const currentCleanPath = this.appContext.currentPath.split('?')[0];
+      const containerCleanPath = this.containerPath.split('?')[0];
+
+      if (this.isOnDashboard) {
+        return currentCleanPath.startsWith('dashboard');
+      }
+
+      return currentCleanPath === containerCleanPath;
+    },
+
+    updateParameters(newParams) {
+      // Guard against stale navigation
+      if (!this.isComponentActive()) {
+        console.log('[MyComponent] Skipping navigation - component no longer active');
+        return;
+      }
+
+      const newPath = NavigationRegistry.buildPath(this.containerPath, newParams);
+
+      if (this.isOnDashboard) {
+        // On dashboard: update registry
+        dashboardRegistry.updatePath(
+          this.containerPath.split('?')[0],
+          newPath
+        );
+      } else {
+        // Regular navigation: update URL
+        this.navigateToPath(newPath);
+      }
+    }
+  }
+};
 
   methods: {
     syncWithURL(params) {
