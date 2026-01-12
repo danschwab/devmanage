@@ -54,6 +54,7 @@ export const ModalComponent = {
         title: { type: String, default: '' },
         isVisible: { type: Boolean, default: false },
         components: { type: Array, required: true },
+        modalClass: { type: String, default: '' },
         componentProps: { type: Object, default: () => ({}) }
     },
     methods: {
@@ -61,7 +62,7 @@ export const ModalComponent = {
     },
     template: html`
         <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
-            <div class="modal">
+            <div :class="['modal', modalClass]">
                 <div class="modal-header">
                     <h3>{{ title }}</h3>
                     <button class="close-button" @click="closeModal">✖</button>
@@ -87,12 +88,16 @@ export class ModalManager {
     }
 
     _create(title, components, props) {
+        // Extract modalClass from props if present
+        const { modalClass, ...componentProps } = props || {};
+        
         const modal = {
             id: `modal-${this.nextId++}`,
             title,
             isVisible: true,
             components: Array.isArray(components) ? components : [components],
-            componentProps: props || {}
+            modalClass: modalClass || '',
+            componentProps
         };
         this.modals.push(modal);
         return modal;

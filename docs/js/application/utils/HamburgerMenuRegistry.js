@@ -34,6 +34,7 @@ export class HamburgerMenuRegistry {
             containerType,
             currentView: this.getCurrentView(containerPath),
             title: NavigationRegistry.getDisplayName(containerPath, true), // Use centralized display logic
+            modalClass: 'hamburger-menu',
             // Merge with menu-specific props
             ...menu.props
         };

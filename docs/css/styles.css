@@ -538,6 +538,7 @@ button.card {
     box-shadow: 0 4px 8px var(--color-shadow);
     border-radius: var(--radius-lg);
     overflow: hidden;
+    margin: var(--padding-md);
 }
 .modal:has(.modal-header) {
     padding-top: 0px;
@@ -587,23 +588,32 @@ button.card {
     max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
     overflow: auto;
 }
-.modal-content button, .modal-content .button-bar {
+
+/* Hamburger Menu & Other Specific Modal Styles */
+
+.page-menu {
+    width: var(--page-width-small);
+    height: calc(100vh - var(--padding-md) * 2);
+}
+
+
+.hamburger-menu button, .hamburger-menu .button-bar {
     margin: 0;
     margin-top: 2px;
     max-width:100%;
     width: 100%;
 }
-.modal-content .button-bar button {
+.hamburger-menu .button-bar button {
     margin: 0;
 }
 
-.modal-content ul {
+.hamburger-menu ul {
     list-style: none;
     min-width: calc(var(--page-width-card) - var(--padding-lg) * 2);
     padding: 0;
     margin:0;
 }
-.modal-content ul li:first-child button {
+.hamburger-menu ul li:first-child button {
     margin: 0;
 }
 

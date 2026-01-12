@@ -1,4 +1,5 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
+import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
@@ -243,11 +244,226 @@ export const PacklistTable = {
             }
         },
         handleAddItem(crateIdx) {
+            // Show modal with options for adding a new item
+            const AddItemModal = {
+                props: ['onAddEmpty', 'onAddFromInventory'],
+                template: html`
+                    <div style="text-align: center; padding: 1rem;">
+                        <p style="margin-bottom: 1rem;">Choose how to add a new item:</p>
+                        <div class="button-bar">
+                            <button @click="handleAddEmpty">Add Empty</button>
+                            <button @click="handleAddFromInventory">From Inventory</button>
+                        </div>
+                    </div>
+                `,
+                methods: {
+                    handleAddEmpty() {
+                        this.onAddEmpty?.();
+                        this.$emit('close-modal');
+                    },
+                    handleAddFromInventory() {
+                        this.onAddFromInventory?.();
+                        this.$emit('close-modal');
+                    }
+                }
+            };
+
+            this.$modal.custom(AddItemModal, {
+                onAddEmpty: () => this.addEmptyItem(crateIdx),
+                onAddFromInventory: () => this.showInventorySelector(crateIdx)
+            }, 'Add Item');
+        },
+        
+        addEmptyItem(crateIdx) {
             const itemHeaders = this.itemHeaders;
             const itemObj = {};
             itemHeaders.forEach(label => {
                 itemObj[label] = '';
             });
+            // Use the store's addNestedRow to ensure reactivity and correct initialization
+            if (
+                this.packlistTableStore &&
+                typeof this.packlistTableStore.addNestedRow === 'function'
+            ) {
+                this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj);
+            }
+        },
+        
+        showInventorySelector(crateIdx) {
+            // Create inventory selector modal component
+            const InventorySelectorModal = {
+                components: { TableComponent, ItemImageComponent },
+                data() {
+                    return {
+                        inventoryStore: null,
+                        categories: [],
+                        selectedCategory: null,
+                        isLoading: true,
+                        error: null
+                    };
+                },
+                computed: {
+                    columns() {
+                        return [
+                            { key: 'image', label: 'IMG', width: 1, sortable: false },
+                            { key: 'itemNumber', label: 'Item #', width: 120, sortable: true },
+                            { key: 'description', label: 'Description', sortable: true },
+                            { key: 'quantity', label: 'Available', width: 100, sortable: true },
+                            { key: 'actions', label: '', width: 100, sortable: false }
+                        ];
+                    },
+                    inventoryData() {
+                        return this.inventoryStore ? this.inventoryStore.data : [];
+                    },
+                    originalData() {
+                        return this.inventoryStore && Array.isArray(this.inventoryStore.originalData)
+                            ? JSON.parse(JSON.stringify(this.inventoryStore.originalData))
+                            : [];
+                    }
+                },
+                async mounted() {
+                    try {
+                        this.isLoading = true;
+                        // Load available inventory categories
+                        const tabs = await Requests.getAvailableTabs('INVENTORY');
+                        this.categories = tabs.filter(tab => tab.title !== 'INDEX');
+                        
+                        // Select first category by default
+                        if (this.categories.length > 0) {
+                            this.selectedCategory = this.categories[0].title;
+                            await this.loadCategoryData();
+                        }
+                    } catch (error) {
+                        console.error('Failed to load inventory categories:', error);
+                        this.error = 'Failed to load inventory categories';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                watch: {
+                    async selectedCategory(newCategory) {
+                        if (newCategory) {
+                            await this.loadCategoryData();
+                        }
+                    }
+                },
+                methods: {
+                    async loadCategoryData() {
+                        try {
+                            this.isLoading = true;
+                            this.error = null;
+                            
+                            // Create analysis config for image URLs
+                            const analysisConfig = [
+                                createAnalysisConfig(
+                                    Requests.getItemImageUrl,
+                                    'imageUrl',
+                                    'Loading item images...',
+                                    ['itemNumber'],
+                                    [],
+                                    null, // Store in AppData, not a column
+                                    false,
+                                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
+                                )
+                            ];
+                            
+                            // Create or update reactive store for selected category
+                            this.inventoryStore = getReactiveStore(
+                                Requests.getInventoryTabData,
+                                null, // No save function needed for read-only modal
+                                [this.selectedCategory, undefined, undefined],
+                                analysisConfig
+                            );
+                        } catch (error) {
+                            console.error('Failed to load inventory data:', error);
+                            this.error = 'Failed to load inventory data';
+                        } finally {
+                            this.isLoading = false;
+                        }
+                    },
+                    selectItem(item) {
+                        this.$emit('item-selected', item);
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <div v-if="error" class="error-message">{{ error }}</div>
+                    <TableComponent
+                        v-else
+                        theme="purple"
+                        :data="inventoryData"
+                        :originalData="originalData"
+                        :columns="columns"
+                        :isLoading="isLoading || (inventoryStore && inventoryStore.isAnalyzing)"
+                        :showSearch="true"
+                        :showRefresh="false"
+                        :showFooter="true"
+                        :sortable="true"
+                        :emptyMessage="'No inventory items found'"
+                        :loadingMessage="inventoryStore && inventoryStore.isAnalyzing ? 'Loading images...' : 'Loading inventory...'"
+                    >
+                        <template #header-area>
+                            <select 
+                                id="category-select"
+                                v-model="selectedCategory"
+                            >
+                                <option v-for="cat in categories" :key="cat.title" :value="cat.title">
+                                    {{ cat.title }}
+                                </option>
+                            </select>
+                        </template>
+                        <template #default="{ row, column }">
+                            <template v-if="column.key === 'image'">
+                                <ItemImageComponent
+                                    :imageUrl="row.AppData?.imageUrl"
+                                    :itemNumber="row.itemNumber"
+                                    :imageSize="48"
+                                />
+                            </template>
+                            <template v-else-if="column.key === 'actions'">
+                                <button @click="selectItem(row)" class="purple">Select</button>
+                            </template>
+                            <template v-else>
+                                {{ row[column.key] }}
+                            </template>
+                        </template>
+                    </TableComponent>
+                `
+            };
+
+            // Show the inventory selector modal
+            this.$modal.custom(InventorySelectorModal, {
+                onItemSelected: (item) => this.addItemFromInventory(crateIdx, item),
+                modalClass: 'page-menu'
+            }, 'Select Item from Inventory');
+        },
+        
+        addItemFromInventory(crateIdx, inventoryItem) {
+            // Create a new item row populated with inventory data
+            const itemHeaders = this.itemHeaders;
+            const itemObj = {};
+            
+            // Initialize all fields to empty string
+            itemHeaders.forEach(label => {
+                itemObj[label] = '';
+            });
+            
+            // Populate with inventory data
+            // Format: (1) ITEM# Description
+            const itemNumber = inventoryItem.itemNumber || '';
+            const description = inventoryItem.description || '';
+            const formattedDescription = `(1) ${itemNumber} ${description}`;
+            
+            // Set the description field
+            if (itemHeaders.includes('Description')) {
+                itemObj['Description'] = formattedDescription;
+            }
+            
+            // Set quantity if there's a field for it
+            if (itemHeaders.includes('Qty')) {
+                itemObj['Qty'] = '1';
+            }
+            
             // Use the store's addNestedRow to ensure reactivity and correct initialization
             if (
                 this.packlistTableStore &&

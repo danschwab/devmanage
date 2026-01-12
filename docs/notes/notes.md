@@ -64,6 +64,7 @@ For design and project queue:
 
 **problems**
 
+- [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
@@ -72,7 +73,7 @@ For design and project queue:
 - [ ] make navigation modal not allow exit
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
-- [ ] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
+- [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
 - [x] buttons dont work on reports
 - [x] changing url doesnt immidiately update saved search
 - [x] container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
