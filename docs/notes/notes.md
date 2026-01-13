@@ -173,7 +173,8 @@ Pack Lists in Web
 - [x] Allow editing item contents
 - [x] allow saving edits to google sheet
 - [x] allow packlist main page to be refreshed (cards-grid refresh button)
-- [ ] new items from inventory with easy navigation
+- [x] new items from inventory with easy navigation
+- [ ] allow adding items to inventory through packlist via simple interface (use item as description, extract quantity if exists, user choose category, auto add and save)
 - [ ] create a more advanced filtering component for tables that includes multi-select, ranges, and text search and integrates with urlparams similar to the advanced search select
 - [ ] add filtering to packlist-details table
 - [ ] allow packlist text search and filtering

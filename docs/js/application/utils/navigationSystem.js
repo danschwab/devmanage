@@ -266,6 +266,30 @@ export const NavigationRegistry = {
     },
 
     /**
+     * Build path with updated parameters, preserving existing ones
+     * Convenience method that gets current parameters and merges with new ones
+     * Parameters with undefined, null, or empty string values are removed
+     * @param {string} containerPath - The container's clean path
+     * @param {string} currentPath - The app's current path (from appContext.currentPath)
+     * @param {Object} newParams - Parameters to add/update (use undefined/null/'' to remove)
+     * @returns {string} Full path with merged parameters
+     */
+    buildPathWithCurrentParams(containerPath, currentPath, newParams = {}) {
+        const cleanPath = containerPath.split('?')[0];
+        const currentParams = this.getParametersForContainer(containerPath, currentPath);
+        const mergedParams = { ...currentParams, ...newParams };
+        
+        // Remove parameters with undefined, null, or empty string values
+        Object.keys(mergedParams).forEach(key => {
+            if (mergedParams[key] === undefined || mergedParams[key] === null || mergedParams[key] === '') {
+                delete mergedParams[key];
+            }
+        });
+        
+        return this.buildPath(cleanPath, mergedParams);
+    },
+
+    /**
      * Get display name for a path
      * @param {string} path - The path to get display name for
      * @param {boolean} [preferDashboardTitle=false] - If true, prefer dashboardTitle over displayName

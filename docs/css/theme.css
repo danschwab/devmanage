@@ -17,7 +17,7 @@
 
     /* Border Radius */
     --radius-md: 4px;
-    --radius-lg: 16px;
+    --radius-lg: 2px;/*16px;*/
     
     /* Primary Brand Colors */
     --color-primary: #156bcc;

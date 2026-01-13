@@ -155,21 +155,16 @@ export const CardsComponent = {
             
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
-            // Get current parameters and update only searchTerm
-            const currentParams = NavigationRegistry.getParametersForContainer(
-                this.containerPath,
-                this.appContext?.currentPath
+            // Set searchTerm or undefined to remove it
+            const params = {
+                searchTerm: (searchValue && searchValue.trim()) ? searchValue : undefined
+            };
+            
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                this.containerPath.split('?')[0],
+                this.appContext?.currentPath,
+                params
             );
-            
-            // Build new params with searchTerm updated or removed
-            const params = { ...currentParams };
-            if (searchValue && searchValue.trim()) {
-                params.searchTerm = searchValue;
-            } else {
-                delete params.searchTerm;
-            }
-            
-            const newPath = NavigationRegistry.buildPath(this.containerPath.split('?')[0], params);
             
             if (isOnDashboard) {
                 // Update dashboard registry

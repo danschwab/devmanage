@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parsedateFilterParameter, SavedSearchSelect, AdvancedSearchComponent } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parsedateFilterParameter, SavedSearchSelect } from '../../index.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
@@ -13,11 +13,6 @@ export const ScheduleMenuComponent = {
     computed: {
         menuItems() {
             const items = [];
-            
-            // Only show Advanced Search if not already on advanced search page
-            if (this.containerPath !== 'schedule/advanced-search') {
-                items.push({ label: 'Advanced Search', action: 'advancedSearch' });
-            }
             
             items.push(
                 { label: 'Calendar View', action: 'showCalendarView', disabled: true },
@@ -61,7 +56,6 @@ export const ScheduleMenuComponent = {
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
-        AdvancedSearchComponent,
         SavedSearchSelect
     },
     inject: ['$modal'],
@@ -78,10 +72,6 @@ export const ScheduleContent = {
         };
     },
     computed: {
-        isAdvancedSearchView() {
-            const cleanPath = this.containerPath.split('?')[0];
-            return cleanPath === 'schedule/advanced-search';
-        },
         // Split filter into dateFilter and searchParams for table
         dateFilter() {
             if (!this.filter) return null;
@@ -96,11 +86,11 @@ export const ScheduleContent = {
         // Register schedule navigation routes
         NavigationRegistry.registerNavigation('schedule', {
             routes: {
-                'advanced-search': {
-                    displayName: 'Advanced Search',
-                    dashboardTitle: 'Schedule Advanced Search',
-                    icon: 'search'
-                }
+                //advanced-search': {
+                //    displayName: 'Advanced Search',
+                //    dashboardTitle: 'Schedule Advanced Search',
+                //    icon: 'search'
+                //}
             }
         });
 
@@ -167,17 +157,6 @@ export const ScheduleContent = {
             }
             
             this.filter = filter;
-        },
-        openAdvancedSearchModal() {
-            // Open AdvancedSearchComponent in a modal
-            // The modal will auto-close when AdvancedSearchComponent emits 'close-modal'
-            this.$modal.custom(AdvancedSearchComponent, {
-                containerPath: this.containerPath,
-                navigateToPath: this.navigateToPath,
-                onSearchSelected: (searchData) => {
-                    this.handleSearchSelected(searchData);
-                }
-            }, 'Advanced Search', { size: 'large' });
         }
     },
     template: html`
@@ -196,12 +175,10 @@ export const ScheduleContent = {
                                 :include-years="true"
                                 :start-year="2023"
                                 :navigate-to-path="navigateToPath"
+                                :show-advanced-button="true"
                                 default-search="Upcoming"
                                 @search-selected="handleSearchSelected"
                             />
-                            <button @click="openAdvancedSearchModal">
-                                Advanced
-                            </button>
                         </div>
                     </template>
                 </ScheduleTableComponent>

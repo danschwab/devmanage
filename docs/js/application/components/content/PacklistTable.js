@@ -123,9 +123,10 @@ export const PacklistTable = {
         // Auto-switch to edit mode when data becomes dirty in view mode
         isDirty(newValue) {
             if (newValue && !this.editMode && this.tabName) {
-                // Navigate to edit mode when data becomes dirty
-                const editPath = NavigationRegistry.buildPath(
+                // Navigate to edit mode when data becomes dirty, preserving existing params
+                const editPath = NavigationRegistry.buildPathWithCurrentParams(
                     `packlist/${this.tabName}`,
+                    this.appContext?.currentPath,
                     { edit: true }
                 );
                 this.$emit('navigate-to-path', editPath);
@@ -244,34 +245,8 @@ export const PacklistTable = {
             }
         },
         handleAddItem(crateIdx) {
-            // Show modal with options for adding a new item
-            const AddItemModal = {
-                props: ['onAddEmpty', 'onAddFromInventory'],
-                template: html`
-                    <div style="text-align: center; padding: 1rem;">
-                        <p style="margin-bottom: 1rem;">Choose how to add a new item:</p>
-                        <div class="button-bar">
-                            <button @click="handleAddEmpty">Add Empty</button>
-                            <button @click="handleAddFromInventory">From Inventory</button>
-                        </div>
-                    </div>
-                `,
-                methods: {
-                    handleAddEmpty() {
-                        this.onAddEmpty?.();
-                        this.$emit('close-modal');
-                    },
-                    handleAddFromInventory() {
-                        this.onAddFromInventory?.();
-                        this.$emit('close-modal');
-                    }
-                }
-            };
-
-            this.$modal.custom(AddItemModal, {
-                onAddEmpty: () => this.addEmptyItem(crateIdx),
-                onAddFromInventory: () => this.showInventorySelector(crateIdx)
-            }, 'Add Item');
+            // Immediately show inventory selector modal
+            this.showInventorySelector(crateIdx);
         },
         
         addEmptyItem(crateIdx) {
@@ -384,6 +359,10 @@ export const PacklistTable = {
                     selectItem(item) {
                         this.$emit('item-selected', item);
                         this.$emit('close-modal');
+                    },
+                    addEmpty() {
+                        this.$emit('add-empty');
+                        this.$emit('close-modal');
                     }
                 },
                 template: html`
@@ -403,14 +382,17 @@ export const PacklistTable = {
                         :loadingMessage="inventoryStore && inventoryStore.isAnalyzing ? 'Loading images...' : 'Loading inventory...'"
                     >
                         <template #header-area>
-                            <select 
-                                id="category-select"
-                                v-model="selectedCategory"
-                            >
-                                <option v-for="cat in categories" :key="cat.title" :value="cat.title">
-                                    {{ cat.title }}
-                                </option>
-                            </select>
+                            <div class="button-bar">
+                                <button @click="addEmpty" class="white">Empty Row</button>
+                                <select 
+                                    id="category-select"
+                                    v-model="selectedCategory"
+                                >
+                                    <option v-for="cat in categories" :key="cat.title" :value="cat.title">
+                                        {{ cat.title }}
+                                    </option>
+                                </select>
+                            </div>
                         </template>
                         <template #default="{ row, column }">
                             <template v-if="column.key === 'image'">
@@ -435,7 +417,7 @@ export const PacklistTable = {
             this.$modal.custom(InventorySelectorModal, {
                 onItemSelected: (item) => this.addItemFromInventory(crateIdx, item),
                 modalClass: 'page-menu'
-            }, 'Select Item from Inventory');
+            }, 'Add New Row');
         },
         
         addItemFromInventory(crateIdx, inventoryItem) {
@@ -670,13 +652,19 @@ export const PacklistTable = {
                         <div class="button-bar">
                             <!-- Edit Mode Toggle -->
                             <template v-if="!editMode">
-                                <button @click="() => tabName ? $emit('navigate-to-path', NavigationRegistry.buildPath('packlist/' + tabName, { edit: true })) : null">
+                                <button @click="() => tabName ? $emit('navigate-to-path', NavigationRegistry.buildPathWithCurrentParams('packlist/' + tabName, appContext?.currentPath, { edit: true })) : null">
                                     Edit Packlist
                                 </button>
                             </template>
                             <template v-else>
                                 <button 
-                                    @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName) : null"
+                                    @click="() => {
+                                        if (tabName) {
+                                            const currentParams = NavigationRegistry.getParametersForContainer('packlist/' + tabName, appContext?.currentPath);
+                                            const { edit, ...paramsWithoutEdit } = currentParams;
+                                            $emit('navigate-to-path', NavigationRegistry.buildPath('packlist/' + tabName, paramsWithoutEdit));
+                                        }
+                                    }"
                                     :disabled="isDirty"
                                     :title="isDirty ? 'Save or discard changes before returning to view mode' : 'Return to view mode'">
                                     Back to View
@@ -718,6 +706,9 @@ export const PacklistTable = {
                                 :showHeader="false"
                                 :isLoading="isLoading"
                                 :drag-id="'packlist-items'"
+                                :parent-search-value="$refs.mainTableComponent?.searchValue || ''"
+                                :showSearch="true"
+                                :hideRowsOnSearch="false"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; }"
                                 @new-row="() => { handleAddItem(rowIndex); }"
                                 @inner-table-dirty="(isDirty) => { 

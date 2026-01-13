@@ -252,7 +252,7 @@ div#app-content > div.empty-message {
     border-radius: var(--radius-lg);
     background: var(--color-modal-bg-gradient);
 }
-.container-expand-overlay span.material-symbols-outlined {
+.container-expand-overlay span.material-icons-outlined, .container-expand-overlay span.material-symbols-outlined {
     color: var(--color-text-inverted);
     font-size: 64px;
 }
@@ -490,7 +490,7 @@ button.card {
     height: auto;
 }
 
-.material-symbols-outlined {
+.material-icons-outlined, .material-symbols-outlined {
     font-size: 14pt;
     line-height: 27px !important;
 }
@@ -1302,6 +1302,10 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         margin-top: var(--padding-lg);
         margin-bottom: var(--padding-sm);
     }
+    nav #navbar button:only-child {
+        margin-top: var(--padding-sm);
+    }
+
     nav:not(.open) #navbar a:not(.active), 
     nav:not(.open) #navbar button:not(.active) {
         max-height: 0;

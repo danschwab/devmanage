@@ -506,6 +506,10 @@ export const TableComponent = {
         allowDetails: {
             type: Boolean,
             default: false
+        },
+        parentSearchValue: {
+            type: String,
+            default: ''
         }
     },
     emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
@@ -611,6 +615,10 @@ export const TableComponent = {
         selectedRowCount() {
             return tableRowSelectionState.getArraySelectionCount(this.data);
         },
+        activeSearchValue() {
+            // Use parentSearchValue if provided, otherwise use local searchValue
+            return this.parentSearchValue || this.searchValue;
+        },
         showSaveButton() {
             // True if any editable cell or add row button is present
             const hasEditable = this.columns.some(col => col.editable);
@@ -660,9 +668,9 @@ export const TableComponent = {
                 .map((row, idx) => ({ row, idx }))
                 .filter(({ row }) => row); // Only filter out null/undefined rows
 
-            // Apply search filter if searchValue is provided and hideRowsOnSearch is enabled
-            if (this.searchValue && this.searchValue.trim() && this.hideRowsOnSearch) {
-                const searchTerm = this.searchValue.toLowerCase().trim();
+            // Apply search filter if activeSearchValue is provided and hideRowsOnSearch is enabled
+            if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearch) {
+                const searchTerm = this.activeSearchValue.toLowerCase().trim();
                 filteredData = filteredData.filter(({ row }) => {
                     if (!row) return false;
                     // Only search visible columns (exclude hidden columns)
@@ -848,21 +856,16 @@ export const TableComponent = {
             
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
-            // Get current parameters and update only searchTerm
-            const currentParams = NavigationRegistry.getParametersForContainer(
-                this.containerPath,
-                this.appContext?.currentPath
+            // Set searchTerm or undefined to remove it
+            const params = {
+                searchTerm: (searchValue && searchValue.trim()) ? searchValue : undefined
+            };
+            
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                this.containerPath.split('?')[0],
+                this.appContext?.currentPath,
+                params
             );
-            
-            // Build new params with searchTerm updated or removed
-            const params = { ...currentParams };
-            if (searchValue && searchValue.trim()) {
-                params.searchTerm = searchValue;
-            } else {
-                delete params.searchTerm;
-            }
-            
-            const newPath = NavigationRegistry.buildPath(this.containerPath.split('?')[0], params);
             
             if (isOnDashboard) {
                 // Update dashboard registry
@@ -968,7 +971,7 @@ export const TableComponent = {
             const formattedValue = this.formatCellValue(value, column);
             
             // If no search value or empty formatted value, return as-is
-            if (!this.searchValue || !this.searchValue.trim() || !formattedValue) {
+            if (!this.activeSearchValue || !this.activeSearchValue.trim() || !formattedValue) {
                 return formattedValue;
             }
             
@@ -981,7 +984,7 @@ export const TableComponent = {
                 .replace(/'/g, '&#039;');
             
             // Escape the search term for regex
-            const searchTerm = this.searchValue.trim();
+            const searchTerm = this.activeSearchValue.trim();
             const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             
             // Create case-insensitive regex to find matches
@@ -993,14 +996,14 @@ export const TableComponent = {
 
         // Check if a value contains the search text (for CSS-based highlighting in inputs)
         hasSearchMatch(value, column) {
-            if (!this.searchValue || !this.searchValue.trim()) {
+            if (!this.activeSearchValue || !this.activeSearchValue.trim()) {
                 return false;
             }
             
             const formattedValue = this.formatCellValue(value, column);
             if (!formattedValue) return false;
             
-            const searchTerm = this.searchValue.trim().toLowerCase();
+            const searchTerm = this.activeSearchValue.trim().toLowerCase();
             return String(formattedValue).toLowerCase().includes(searchTerm);
         },
 
@@ -1618,10 +1621,10 @@ export const TableComponent = {
         },
 
         hasDetailsSearchMatch(row) {
-            if (!this.searchValue || !this.searchValue.trim()) {
+            if (!this.activeSearchValue || !this.activeSearchValue.trim()) {
                 return false;
             }
-            const searchTerm = this.searchValue.trim().toLowerCase();
+            const searchTerm = this.activeSearchValue.trim().toLowerCase();
             return this.detailsColumns.some(column => {
                 const value = row[column.key];
                 return value && String(value).toLowerCase().includes(searchTerm);

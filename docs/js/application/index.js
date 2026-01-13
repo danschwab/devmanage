@@ -32,5 +32,5 @@ export { PacklistContent, PacklistMenuComponent } from './components/content/Pac
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
-export { AdvancedSearchComponent } from './components/content/ScheduleAdvancedSearch.js';
+export { AdvancedSearchComponent } from './components/interface/SavedSearchSelect.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';

@@ -405,7 +405,7 @@ export const ShowInventoryReport = {
     },
     template: html`
         <div :class="(tableColumns && tableColumns.length > 10) ? 'wide-table' : ''">
-            <div v-if="error" class="error-message">
+            <div v-if="error" class="card red">
                 <p>{{ error }}</p>
             </div>
 
@@ -432,6 +432,7 @@ export const ShowInventoryReport = {
                         <SavedSearchSelect
                             :container-path="containerPath || 'inventory/reports/show-inventory'"
                             :navigate-to-path="navigateToPath"
+                            :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
                         <span v-if="showIdentifiers.length > 0 || isLoading" class="card gray">

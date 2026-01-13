@@ -332,16 +332,19 @@ export const PacklistContent = {
                 @refresh="handleRefresh"
             >
                 <template #header-area>
-                    <SavedSearchSelect
-                        :domain="'production_schedule'"
-                        :include-years="true"
-                        :start-year="2023"
-                        :default-search="'2025'"
-                        :allow-show-all="true"
-                        :container-path="containerPath"
-                        :navigate-to-path="navigateToPath"
-                        @search-selected="handleSearchSelected"
-                    />
+                    <div class="button-bar">
+                        <SavedSearchSelect
+                            :domain="'production_schedule'"
+                            :include-years="true"
+                            :start-year="2023"
+                            :default-search="'2025'"
+                            :allow-show-all="true"
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                            :show-advanced-button="true"
+                            @search-selected="handleSearchSelected"
+                        />
+                    </div>
                 </template>
             </cards-grid>
             
