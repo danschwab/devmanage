@@ -268,6 +268,7 @@ export const PacklistTable = {
             // Create inventory selector modal component
             const InventorySelectorModal = {
                 components: { TableComponent, ItemImageComponent },
+                props: ['onAddEmpty', 'onItemSelected'],
                 data() {
                     return {
                         inventoryStore: null,
@@ -357,11 +358,15 @@ export const PacklistTable = {
                         }
                     },
                     selectItem(item) {
-                        this.$emit('item-selected', item);
+                        if (this.onItemSelected) {
+                            this.onItemSelected(item);
+                        }
                         this.$emit('close-modal');
                     },
                     addEmpty() {
-                        this.$emit('add-empty');
+                        if (this.onAddEmpty) {
+                            this.onAddEmpty();
+                        }
                         this.$emit('close-modal');
                     }
                 },
@@ -416,8 +421,9 @@ export const PacklistTable = {
             // Show the inventory selector modal
             this.$modal.custom(InventorySelectorModal, {
                 onItemSelected: (item) => this.addItemFromInventory(crateIdx, item),
-                modalClass: 'page-menu'
-            }, 'Add New Row');
+                modalClass: 'page-menu',
+                onAddEmpty: () => this.addEmptyItem(crateIdx)
+            }, 'Add Item');
         },
         
         addItemFromInventory(crateIdx, inventoryItem) {
