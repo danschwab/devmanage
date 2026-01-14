@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
@@ -145,6 +145,20 @@ export const PacklistTable = {
                 this.initializeStore();
             }
         }, { immediate: true });
+        
+        // Register drop-onto callback with global state
+        // This allows nested tables to trigger modals with access to $modal
+        console.log('PacklistTable mounted - registering onDropOntoCallback');
+        tableRowSelectionState.onDropOntoCallback = (event) => {
+            console.log('onDropOntoCallback triggered in PacklistTable!', event);
+            this.handleDropOntoItem(event);
+        };
+    },
+    beforeUnmount() {
+        // Clean up callback
+        if (tableRowSelectionState.onDropOntoCallback) {
+            tableRowSelectionState.onDropOntoCallback = null;
+        }
     },
     methods: {
         initializeStore() {
@@ -611,6 +625,32 @@ export const PacklistTable = {
                 this.hiddenColumns = originalHidden;
                 this.isPrinting = false;
             }, 100);
+        },
+        handleDropOntoItem(event) {
+            console.log('handleDropOntoItem called!', event);
+            // event contains: { targetIndex, targetRow, selectedRows, targetArray }
+            const targetItem = event.targetRow;
+            const droppedItems = event.selectedRows;
+            
+            console.log('Showing modal for drop onto:', targetItem, droppedItems);
+            
+            // For now, show a modal with the drop information
+            const message = `Drop Onto Registered!<br><br>Target Item: <strong>${targetItem?.Description || 'Unknown'}</strong><br>Dropped <strong>${droppedItems.length}</strong> item(s) onto it`;
+            
+            this.$modal.confirm(
+                message,
+                () => {
+                    // User confirmed - will implement grouping logic here
+                    console.log('User confirmed drop onto');
+                },
+                () => {
+                    // User cancelled
+                    console.log('User cancelled drop onto');
+                },
+                'Drop Onto Item',
+                'Create Group',
+                'Cancel'
+            );
         }
     },
     template: html`
@@ -708,6 +748,7 @@ export const PacklistTable = {
                                 :emptyMessage="'No items'"
                                 :draggable="editMode"
                                 :newRow="editMode"
+                                :allowDropOnto="editMode"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"

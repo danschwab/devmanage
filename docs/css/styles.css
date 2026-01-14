@@ -918,7 +918,7 @@ tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:firs
     content: "";
     border-bottom: 2px solid var(--color-blue);
 }
-:has(.dragging) tr:hover > td.empty-message::after {
+:has(.dragging) tr:hover > td.empty-message::after, .drop-target-onto>td::after {
     content: "";
     background: var(--color-blue);
     opacity: .4;

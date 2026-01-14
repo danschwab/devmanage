@@ -14,6 +14,7 @@ export const tableRowSelectionState = Vue.reactive({
     dragTargetArray: null,
     dragId: null, // The dragId of the table group participating in drag operations
     currentDropTarget: null, // Current registered drop target from tables
+    onDropOntoCallback: null, // Callback for handling 'onto' drops
     
     // Generate unique selection key for a row in a specific table
     _getSelectionKey(rowIndex, sourceArray) {
@@ -272,6 +273,31 @@ export const tableRowSelectionState = Vue.reactive({
             return false;
         }
         
+        // Handle "onto" drop type
+        if (dropTarget.type === 'onto') {
+            console.log('DROP ONTO detected! Callback exists:', !!this.onDropOntoCallback);
+            // Call the registered callback with drop information
+            if (this.onDropOntoCallback) {
+                const selectedRows = this.getSelectedRowData(this.dragTargetArray);
+                console.log('Calling onDropOntoCallback with:', {
+                    targetIndex: dropTarget.targetIndex,
+                    targetRow: this.dragTargetArray[dropTarget.targetIndex],
+                    selectedRows: selectedRows
+                });
+                this.onDropOntoCallback({
+                    targetIndex: dropTarget.targetIndex,
+                    targetRow: this.dragTargetArray[dropTarget.targetIndex],
+                    selectedRows: selectedRows,
+                    targetArray: this.dragTargetArray
+                });
+            } else {
+                console.warn('No onDropOntoCallback registered!');
+            }
+            this.stopDrag();
+            this.clearAll();
+            return true;
+        }
+        
         // Group selections by source array
         const selectionsBySource = this.getSelectionSummary();
         
@@ -383,6 +409,7 @@ export const tableRowSelectionState = Vue.reactive({
         this.dragTargetArray = null;
         this.dragId = null;
         this.currentDropTarget = null;
+        // Keep onDropOntoCallback registered between drags (managed by component lifecycle)
         
         // Remove global mouse up listener
         document.removeEventListener('mouseup', this.handleGlobalMouseUp);
@@ -510,9 +537,13 @@ export const TableComponent = {
         parentSearchValue: {
             type: String,
             default: ''
+        },
+        allowDropOnto: {
+            type: Boolean,
+            default: false
         }
     },
-    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
+    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search', 'drop-onto'],
     data() {
         return {
             dirtyCells: {},
@@ -1414,6 +1445,34 @@ export const TableComponent = {
                     const rowRect = row.getBoundingClientRect();
                     
                     if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+                        const rowHeight = rowRect.height;
+                        const rowTop = rowRect.top;
+                        const relativeY = mouseY - rowTop;
+                        
+                        // Split row into thirds if allowDropOnto is enabled
+                        if (this.allowDropOnto) {
+                            const topThird = rowHeight / 3;
+                            const bottomThird = (rowHeight * 2) / 3;
+                            
+                            if (relativeY >= topThird && relativeY <= bottomThird) {
+                                // Middle third - check if target row is not selected before allowing drop onto
+                                const currentVisibleRow = this.visibleRows[i];
+                                const targetIndex = currentVisibleRow ? currentVisibleRow.idx : i;
+                                
+                                // Only allow drop onto if target row is NOT selected
+                                if (!tableRowSelectionState.hasRow(this.data, targetIndex)) {
+                                    newDropTarget = {
+                                        type: 'onto',
+                                        targetIndex: targetIndex
+                                    };
+                                    console.log('Drop ONTO target found:', newDropTarget, 'visual index:', i, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                                    break;
+                                }
+                                // If target row IS selected, fall through to between logic below
+                            }
+                        }
+                        
+                        // Top or bottom third (or allowDropOnto is false) - normal between behavior
                         const midpoint = rowRect.top + rowRect.height / 2;
                         const isAbove = mouseY < midpoint;
                         
@@ -1745,7 +1804,8 @@ export const TableComponent = {
                                     'analyzing': isRowAnalyzing(idx),
                                     'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
                                     'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
-                                    'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1
+                                    'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1,
+                                    'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx
                                 }"
                             >
                                 <td v-if="draggable"
