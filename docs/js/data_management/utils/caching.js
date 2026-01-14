@@ -274,9 +274,10 @@ class CacheManager {
      * @param {Object} targetClass - The class to wrap
      * @param {string} namespace - Cache namespace
      * @param {Array<string>} [mutationKeys] - Array of method names to skip wrapping (mutation methods)
+     * @param {Array<string>} [infiniteCacheMethods] - Array of method names that should have infinite cache (no expiration)
      * @returns {Object} - Wrapped class with caching and dependency tracking
      */
-    static wrapMethods(targetClass, namespace, mutationKeys = []) {
+    static wrapMethods(targetClass, namespace, mutationKeys = [], infiniteCacheMethods = []) {
         const wrappedClass = {};
         wrappedClass._namespace = namespace;
         
@@ -318,7 +319,10 @@ class CacheManager {
                         
                         // Execute method with dependency decorator as first parameter
                         const result = await targetClass[methodName](deps, ...args);
-                        CacheManager.set(cacheKey, result);
+                        
+                        // Use infinite cache (null expiration) for specified methods
+                        const expirationMs = infiniteCacheMethods.includes(methodName) ? null : undefined;
+                        CacheManager.set(cacheKey, result, expirationMs);
                         
                         return result;
                     } finally {

@@ -302,7 +302,14 @@ class database_uncached {
     }
 }
 
-export const Database = wrapMethods(database_uncached, 'database', ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow']);
+// Wrap and export the class with caching, excluding mutation methods
+// Image URLs get infinite cache since they rarely change and are expensive Google Drive API calls
+export const Database = wrapMethods(
+    database_uncached, 
+    'database', 
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow'],
+    ['getItemImageUrl'] // Infinite cache for image URLs
+);
 
 
 /**
