@@ -150,18 +150,6 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [ ] Improve and test this system
       Categorize all booth parts according to Pack List Rules (preferences)
 
-analysis of pack list against current inventory
-
-- [x] quantities
-- [x] overlapping shows
-- [x] low stock warnings
-- [x] description updates
-- [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
-- [x] make url param updates correctly propegate into components, and fix report url generation
-- [ ] increase the filtering options in reports
-- [ ] link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)
-- [ ] allow report text filtering
-
 Pack Lists in Web
 
 - [x] Get pack list data from web and display
@@ -174,10 +162,8 @@ Pack Lists in Web
 - [x] allow saving edits to google sheet
 - [x] allow packlist main page to be refreshed (cards-grid refresh button)
 - [x] new items from inventory with easy navigation
-- [ ] allow adding items to inventory through packlist via simple interface (use item as description, extract quantity if exists, user choose category, auto add and save)
-- [ ] create a more advanced filtering component for tables that includes multi-select, ranges, and text search and integrates with urlparams similar to the advanced search select
-- [ ] add filtering to packlist-details table
-- [ ] allow packlist text search and filtering
+- [ ] add category filtering to packlist-details table
+- [x] allow packlist text search and filtering
 - [ ] Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
 - [ ] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
@@ -186,6 +172,8 @@ Pack Lists in Web
 - [ ] automatic packlist rule suggestion jobs run in the background?
 - [ ] description change recommendations for common or similar items that checks or aggregates history potentially?
 - [ ] automations automatically allow for quick addition of typical client or show items
+      create a more advanced filtering component for tables that includes multi-select, ranges, and text search and integrates with urlparams similar to the advanced search select
+      allow adding items to inventory through packlist via simple interface (use item as description, extract quantity if exists, user choose category, auto add and save)
 
 show management system
 
@@ -218,6 +206,18 @@ checklist, reports, and notes system
       allow logical checklist creation from data (ex: packlist items checklist)
       integrate with notifications
       integrate with automations
+
+analysis of pack list against current inventory
+
+- [x] quantities
+- [x] overlapping shows
+- [x] low stock warnings
+- [x] description updates
+- [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
+- [x] make url param updates correctly propegate into components, and fix report url generation
+- [x] allow report text filtering
+      increase the filtering options in reports
+      link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)
 
 **maybe**
 change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.

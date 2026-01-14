@@ -1,11 +1,11 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, SavedSearchSelect, parsedateFilterParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, parsedateFilterParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
  * Shows: Item ID, Inventory Qty, quantities for each show, Remaining
  */
 export const ShowInventoryReport = {
-    components: { TableComponent, ItemImageComponent, SavedSearchSelect },
+    components: { TableComponent, ItemImageComponent, ScheduleFilterSelect },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -203,7 +203,7 @@ export const ShowInventoryReport = {
             }
             
             try {
-                // Try to find existing schedule store from ScheduleAdvancedSearch
+                // Try to find existing schedule store from ScheduleAdvancedFilter
                 const existingStores = findMatchingStores(
                     Requests.getProductionScheduleData,
                     []
@@ -353,7 +353,7 @@ export const ShowInventoryReport = {
         },
 
         async handleSearchSelected(searchData) {
-            // Called when SavedSearchSelect emits search-selected event
+            // Called when ScheduleFilterSelect emits search-selected event
             await this.loadShowsFromSearch(searchData);
         },
 
@@ -429,7 +429,7 @@ export const ShowInventoryReport = {
             >
                 <template #header-area>
                     <div class="button-bar">
-                        <SavedSearchSelect
+                        <ScheduleFilterSelect
                             :container-path="containerPath || 'inventory/reports/show-inventory'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"

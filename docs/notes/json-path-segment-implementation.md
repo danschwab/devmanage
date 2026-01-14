@@ -148,8 +148,8 @@ The system maintains backwards compatibility with old query parameter URLs:
 
 ### Updated Components
 
-- `ScheduleAdvancedSearch.js` - Uses NavigationRegistry methods directly
-- `SavedSearchSelect.js` - Uses NavigationRegistry methods directly
+- `ScheduleAdvancedFilter.js` - Uses NavigationRegistry methods directly
+- `ScheduleFilterSelect.js` - Uses NavigationRegistry methods directly
 - All other components already used NavigationRegistry properly
 
 ## Technical Considerations

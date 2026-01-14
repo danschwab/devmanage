@@ -20,7 +20,7 @@ The TopShelfLiveInventory application uses a hash-based URL routing system with 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  UI Layer (Vue Components)                          │
-│  - SavedSearchSelect, ScheduleContent, etc.         │
+│  - ScheduleFilterSelect, ScheduleContent, etc.         │
 │  - Use getParametersForContainer() for params       │
 │  - Emit events, call navigateToPath()               │
 │  - Update dashboard via updatePath() when on dash   │
@@ -446,7 +446,7 @@ methods: {
 
 ## Component Examples
 
-### SavedSearchSelect Component
+### ScheduleFilterSelect Component
 
 **Purpose**: Dropdown for year/saved search selection with URL sync and dashboard support
 
@@ -517,7 +517,7 @@ methods: {
   updateURL(params) {
     // Guard against stale navigation
     if (!this.isComponentActive()) {
-      console.log('[SavedSearchSelect] Skipping navigation - component no longer active');
+      console.log('[ScheduleFilterSelect] Skipping navigation - component no longer active');
       return;
     }
     if (this.isOnDashboard) {
@@ -544,7 +544,7 @@ methods: {
 
 - Receives `containerPath` prop (e.g., `'schedule'`)
 - Passes `navigateToPath` to child components
-- Handles `search-selected` event from SavedSearchSelect
+- Handles `search-selected` event from ScheduleFilterSelect
 - Transforms search data into filter format for ScheduleTable
 
 ## Best Practices

@@ -589,8 +589,8 @@ export default {
 - `docs/js/application/components/content/ShowInventoryReport.js`
 - `docs/js/application/components/content/PacklistItemsSummary.js`
 - `docs/js/application/components/content/InventoryOverviewTable.js`
-- `docs/js/application/components/content/ScheduleAdvancedSearch.js`
-- `docs/js/application/components/interface/SavedSearchSelect.js`
+- `docs/js/application/components/content/ScheduleAdvancedFilter.js`
+- `docs/js/application/components/interface/ScheduleFilterSelect.js`
 - (All components using `getReactiveStore()`)
 
 **Changes:**

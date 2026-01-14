@@ -200,7 +200,7 @@ this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
 // PacklistContent - calls prop function
 this.navigateToPath('packlist/' + packlistName);
 
-// ScheduleAdvancedSearch - builds path first, then navigates
+// ScheduleAdvancedFilter - builds path first, then navigates
 const path = NavigationRegistry.buildPath(this.containerPath, params);
 if (!this.isOnDashboard && this.navigateToPath) {
     this.navigateToPath(path);

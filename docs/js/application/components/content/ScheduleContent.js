@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parsedateFilterParameter, SavedSearchSelect } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, parsedateFilterParameter, ScheduleFilterSelect } from '../../index.js';
 
 // Schedule Hamburger Menu Component
 export const ScheduleMenuComponent = {
@@ -56,7 +56,7 @@ export const ScheduleMenuComponent = {
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
-        SavedSearchSelect
+        ScheduleFilterSelect
     },
     inject: ['$modal'],
     props: {
@@ -170,7 +170,7 @@ export const ScheduleContent = {
                 >
                     <template #header-area>
                         <div class="button-bar">
-                            <SavedSearchSelect
+                            <ScheduleFilterSelect
                                 container-path="schedule"
                                 :include-years="true"
                                 :start-year="2023"

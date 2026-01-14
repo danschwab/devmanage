@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tables and cards components support automatic URL synchronization for search terms, following the same pattern as `SavedSearchSelect`. When enabled, search terms are automatically stored in and retrieved from URL parameters, allowing:
+Tables and cards components support automatic URL synchronization for search terms, following the same pattern as `ScheduleFilterSelect`. When enabled, search terms are automatically stored in and retrieved from URL parameters, allowing:
 
 - Multiple tables/cards to stay synchronized on the same page
 - Search state to persist across navigation
@@ -12,16 +12,18 @@ Tables and cards components support automatic URL synchronization for search ter
 ## Core Principle
 
 **URL-Driven Search**: Components do not accept search values as props. Instead, they either:
+
 1. Sync with URL parameters (when `syncSearchWithUrl` is enabled), OR
 2. Maintain purely local search state (when `syncSearchWithUrl` is disabled)
 
-This follows the same pattern as `SavedSearchSelect`, which doesn't have a `dateFilter` prop but instead syncs entirely with URL parameters.
+This follows the same pattern as `ScheduleFilterSelect`, which doesn't have a `dateFilter` prop but instead syncs entirely with URL parameters.
 
 ## Implementation
 
 ### TableComponent
 
 **Props:**
+
 ```javascript
 {
   showSearch: Boolean,              // Enable/disable search input (default: false)
@@ -33,10 +35,12 @@ This follows the same pattern as `SavedSearchSelect`, which doesn't have a `date
 ```
 
 **URL Parameter:**
+
 - Parameter name: `searchTerm`
 - Location: Part of JSON path segment (e.g., `#inventory?{"searchTerm":"table"}`)
 
 **Behavior:**
+
 - When `syncSearchWithUrl` is `false`: Search is purely local, no URL interaction
 - When `syncSearchWithUrl` is `true`:
   - On mount: Reads `searchTerm` from URL parameters
@@ -49,6 +53,7 @@ This follows the same pattern as `SavedSearchSelect`, which doesn't have a `date
 Follows identical pattern to `TableComponent`:
 
 **Props:**
+
 ```javascript
 {
   showSearch: Boolean,              // Enable/disable search input (default: false)
@@ -133,10 +138,10 @@ When rendered on dashboard, updates go to `DashboardRegistry.updatePath()` inste
 
 ```javascript
 export const MyComponent = {
-  inject: ['appContext'],
+  inject: ["appContext"],
   props: {
     containerPath: String,
-    navigateToPath: Function
+    navigateToPath: Function,
   },
   template: html`
     <TableComponent
@@ -147,40 +152,48 @@ export const MyComponent = {
       :data="items"
       :columns="columns"
     />
-  `
-}
+  `,
+};
 ```
 
 ### Required Injections
 
 Components using URL-synced search must have:
+
 - `inject: ['appContext']` - Provides access to `appContext.currentPath` for URL monitoring
 - `NavigationRegistry` imported - Used for parameter parsing and path building
 
 ### Implementation Details
 
 **Internal Flow:**
+
 1. **Mount**: Read `searchTerm` from `NavigationRegistry.getParametersForContainer()`
 2. **User types**: Update internal `searchValue` → trigger debounced URL update
 3. **URL changes**: Watch `appContext.currentPath` → update `searchValue` if `searchTerm` changed
 4. **URL update**: Call `NavigationRegistry.buildPath()` with `{ searchTerm }` → navigate
 
 **Debouncing:**
+
 - 300ms debounce on URL updates to avoid excessive navigation
 - Clears previous timeout before setting new one
 
 **Dashboard Detection:**
+
 ```javascript
-const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+const isOnDashboard =
+  this.appContext?.currentPath?.split("?")[0].split("/")[0] === "dashboard";
 ```
 
 ## Benefits
 
 ### 1. Consistency with Other URL Parameters
-Follows the same pattern as `SavedSearchSelect` for `dateFilter`, creating a consistent mental model across the application.
+
+Follows the same pattern as `ScheduleFilterSelect` for `dateFilter`, creating a consistent mental model across the application.
 
 ### 2. Automatic Synchronization
+
 Multiple tables/cards on the same page automatically stay in sync without manual coordination:
+
 ```javascript
 // Both tables filter by the same search term
 <TableComponent :sync-search-with-url="true" :container-path="path" ... />
@@ -188,16 +201,20 @@ Multiple tables/cards on the same page automatically stay in sync without manual
 ```
 
 ### 3. Persistent Search Context
+
 - Search terms persist through navigation (via parameter caching in routes)
 - Breadcrumb navigation restores last-used search terms
 - Users can bookmark searches
 - Back/forward buttons preserve search state
 
 ### 4. Dashboard Independence
+
 Dashboard containers maintain independent search state via `DashboardRegistry`, separate from browser URL.
 
 ### 5. Simplified Component API
+
 No need for:
+
 - `initialSearchTerm` computed properties
 - Manual parameter extraction
 - Explicit search term props
@@ -208,6 +225,7 @@ Just one boolean prop (`syncSearchWithUrl`) controls everything.
 ## Migration from Old Pattern
 
 ### Old Pattern (Deprecated)
+
 ```javascript
 // Parent computed property
 computed: {
@@ -228,6 +246,7 @@ computed: {
 ```
 
 ### New Pattern
+
 ```javascript
 // No computed property needed!
 
@@ -254,11 +273,12 @@ computed: {
 ### Watchers
 
 **URL Parameter Changes:**
+
 ```javascript
 'appContext.currentPath': {
   handler(newPath, oldPath) {
     if (!this.syncSearchWithUrl || !oldPath) return;
-    
+
     const newParams = NavigationRegistry.getParametersForContainer(
       this.containerPath,
       newPath
@@ -267,7 +287,7 @@ computed: {
       this.containerPath,
       oldPath
     );
-    
+
     // Only update if searchTerm parameter changed
     if (newParams?.searchTerm !== oldParams?.searchTerm) {
       this.searchValue = newParams?.searchTerm || '';
@@ -277,10 +297,11 @@ computed: {
 ```
 
 **Search Value Changes:**
+
 ```javascript
 searchValue(newValue, oldValue) {
   if (!this.syncSearchWithUrl || newValue === oldValue) return;
-  
+
   // Debounce URL updates
   clearTimeout(this._searchDebounce);
   this._searchDebounce = setTimeout(() => {
@@ -296,17 +317,17 @@ updateSearchInURL(searchValue) {
   if (!this.syncSearchWithUrl || !this.containerPath || !this.navigateToPath) {
     return;
   }
-  
+
   const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
   const params = { searchTerm: searchValue || undefined };
-  
+
   // Remove undefined values
   if (params.searchTerm === undefined) {
     delete params.searchTerm;
   }
-  
+
   const newPath = NavigationRegistry.buildPath(this.containerPath, params);
-  
+
   if (isOnDashboard) {
     // Update dashboard registry
     NavigationRegistry.dashboardRegistry.updatePath(
@@ -340,19 +361,25 @@ mounted() {
 ## Best Practices
 
 ### 1. Always Use URL Sync for Navigable Content
+
 Enable `syncSearchWithUrl` when:
+
 - Users might navigate away and return
 - Multiple tables/cards should stay synchronized
 - Search state should be bookmarkable
 
 ### 2. Use Local Search for Temporary Filters
+
 Disable `syncSearchWithUrl` when:
+
 - Search is purely transient (e.g., modal dialogs)
 - Multiple independent searches on same page
 - Search doesn't affect primary content state
 
 ### 3. Consistent Container Paths
+
 Use consistent `containerPath` values across components that should share search state:
+
 ```javascript
 // Good - same path, synchronized search
 const path = 'inventory/categories/furniture';
@@ -365,7 +392,9 @@ const path = 'inventory/categories/furniture';
 ```
 
 ### 4. Provide navigateToPath
+
 Always pass `navigateToPath` function from parent:
+
 ```javascript
 // Good
 <TableComponent :navigate-to-path="navigateToPath" />
@@ -378,26 +407,28 @@ Always pass `navigateToPath` function from parent:
 ```
 
 ### 5. Inject appContext
+
 Parent components must inject appContext for URL monitoring:
+
 ```javascript
 export const MyComponent = {
-  inject: ['appContext'],  // Required!
+  inject: ["appContext"], // Required!
   // ...
-}
+};
 ```
 
-## Comparison with SavedSearchSelect
+## Comparison with ScheduleFilterSelect
 
-| Feature | SavedSearchSelect | Table/Card Search |
-|---------|------------------|------------------|
-| **Value Prop** | None (no `dateFilter` prop) | None (no `searchTerm` prop) |
-| **URL Sync Toggle** | Always enabled | `syncSearchWithUrl` boolean |
-| **Parameter Name** | `dateFilter`, `textFilters`, etc. | `searchTerm` |
-| **Required Props** | `containerPath`, `navigateToPath` | `containerPath`, `navigateToPath` |
-| **Dashboard Support** | ✅ Via DashboardRegistry | ✅ Via DashboardRegistry |
-| **URL Monitoring** | Watches `appContext.currentPath` | Watches `appContext.currentPath` |
-| **Parameter Building** | `NavigationRegistry.buildPath()` | `NavigationRegistry.buildPath()` |
-| **Debouncing** | None (dropdown selection) | 300ms (typing input) |
+| Feature                | ScheduleFilterSelect              | Table/Card Search                 |
+| ---------------------- | --------------------------------- | --------------------------------- |
+| **Value Prop**         | None (no `dateFilter` prop)       | None (no `searchTerm` prop)       |
+| **URL Sync Toggle**    | Always enabled                    | `syncSearchWithUrl` boolean       |
+| **Parameter Name**     | `dateFilter`, `textFilters`, etc. | `searchTerm`                      |
+| **Required Props**     | `containerPath`, `navigateToPath` | `containerPath`, `navigateToPath` |
+| **Dashboard Support**  | ✅ Via DashboardRegistry          | ✅ Via DashboardRegistry          |
+| **URL Monitoring**     | Watches `appContext.currentPath`  | Watches `appContext.currentPath`  |
+| **Parameter Building** | `NavigationRegistry.buildPath()`  | `NavigationRegistry.buildPath()`  |
+| **Debouncing**         | None (dropdown selection)         | 300ms (typing input)              |
 
 Both follow the same architectural pattern: **purely URL-driven with no value props**.
 
@@ -406,6 +437,7 @@ Both follow the same architectural pattern: **purely URL-driven with no value pr
 ### Search Not Syncing to URL
 
 **Check:**
+
 1. Is `syncSearchWithUrl` set to `true`?
 2. Is `containerPath` provided?
 3. Is `navigateToPath` provided?
@@ -415,18 +447,21 @@ Both follow the same architectural pattern: **purely URL-driven with no value pr
 ### Multiple Tables Out of Sync
 
 **Check:**
+
 1. Do they have the same `containerPath`?
 2. Are they both using `syncSearchWithUrl="true"`?
 
 ### Search Clears on Navigation
 
 **Check:**
+
 1. Is the navigation using `NavigationRegistry.buildPath()` to preserve parameters?
 2. Is the route configured to cache parameters (automatic with navigation system)?
 
 ### Dashboard Search Not Persisting
 
 **Check:**
+
 1. Is container path registered in DashboardRegistry?
 2. Is `updatePath()` being called correctly?
 3. Check browser console for dashboard registry logs

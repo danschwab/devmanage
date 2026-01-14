@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, SavedSearchSelect, parsedateFilterParameter, invalidateCache } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, parsedateFilterParameter, invalidateCache } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 
 export const PacklistMenuComponent = {
@@ -60,7 +60,7 @@ export const PacklistContent = {
         'packlist-table': PacklistTable,
         'cards-grid': CardsComponent,
         'PacklistItemsSummary': PacklistItemsSummary,
-        'SavedSearchSelect': SavedSearchSelect
+        'ScheduleFilterSelect': ScheduleFilterSelect
     },
     props: {
         containerPath: String,
@@ -219,6 +219,14 @@ export const PacklistContent = {
                     ['title'], // Use title as the source (project identifier)
                     [],
                     'description' // Store result in 'description' column
+                ),
+                createAnalysisConfig(
+                    Requests.getShowDetails,
+                    'showDetails',
+                    'Loading show details...',
+                    ['title'], // Use title as the source (project identifier)
+                    [],
+                    'showDetails' // Store entire show row in 'showDetails' column
                 )
             ];
             
@@ -247,7 +255,15 @@ export const PacklistContent = {
             const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
             
             // Use description from analysis or show loading placeholder
-            const content = tab.description || '...';
+            let content = tab.description || '...';
+            
+            // Add ship date to content if available (use <br> to match description format)
+            if (tab.showDetails && tab.showDetails.Ship) {
+                content += `<br>Ship Date: ${tab.showDetails.Ship}`;
+            } else if (tab.description && !tab.showDetails) {
+                // Show details analysis not complete yet
+                content += '<br>Ship Date: ...';
+            }
 
             if (!tab.description && !(this.packlistsStore.isAnalyzing || this.packlistsStore.isLoading)) {
                 this.packlistsStore.runConfiguredAnalysis();
@@ -333,7 +349,7 @@ export const PacklistContent = {
             >
                 <template #header-area>
                     <div class="button-bar">
-                        <SavedSearchSelect
+                        <ScheduleFilterSelect
                             :domain="'production_schedule'"
                             :include-years="true"
                             :start-year="2023"
