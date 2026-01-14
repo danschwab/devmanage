@@ -254,15 +254,23 @@ export const PacklistContent = {
             const cardClass = hasUnsavedChanges ? 'red' : 'gray';
             const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
             
-            // Use description from analysis or show loading placeholder
-            let content = tab.description || '...';
+            // Build content with ship date first, then description
+            let content = '';
             
-            // Add ship date to content if available (use <br> to match description format)
+            // Add ship date first if available (use <br> to match description format)
             if (tab.showDetails && tab.showDetails.Ship) {
-                content += `<br>Ship Date: ${tab.showDetails.Ship}`;
+                content = `Ship Date: ${tab.showDetails.Ship}`;
             } else if (tab.description && !tab.showDetails) {
                 // Show details analysis not complete yet
-                content += '<br>Ship Date: ...';
+                content = 'Ship Date: ...';
+            }
+            
+            // Add description after ship date
+            const description = tab.description || '...';
+            if (content) {
+                content += `<br>${description}`;
+            } else {
+                content = description;
             }
 
             if (!tab.description && !(this.packlistsStore.isAnalyzing || this.packlistsStore.isLoading)) {
