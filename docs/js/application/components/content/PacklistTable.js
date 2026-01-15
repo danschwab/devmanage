@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, MetaDataUtils } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
@@ -145,20 +145,6 @@ export const PacklistTable = {
                 this.initializeStore();
             }
         }, { immediate: true });
-        
-        // Register drop-onto callback with global state
-        // This allows nested tables to trigger modals with access to $modal
-        console.log('PacklistTable mounted - registering onDropOntoCallback');
-        tableRowSelectionState.onDropOntoCallback = (event) => {
-            console.log('onDropOntoCallback triggered in PacklistTable!', event);
-            this.handleDropOntoItem(event);
-        };
-    },
-    beforeUnmount() {
-        // Clean up callback
-        if (tableRowSelectionState.onDropOntoCallback) {
-            tableRowSelectionState.onDropOntoCallback = null;
-        }
     },
     methods: {
         initializeStore() {
@@ -630,27 +616,65 @@ export const PacklistTable = {
             console.log('handleDropOntoItem called!', event);
             // event contains: { targetIndex, targetRow, selectedRows, targetArray }
             const targetItem = event.targetRow;
+            const targetIndex = event.targetIndex;
             const droppedItems = event.selectedRows;
+            const targetArray = event.targetArray;
             
-            console.log('Showing modal for drop onto:', targetItem, droppedItems);
+            if (!targetItem || !droppedItems || droppedItems.length === 0) {
+                console.warn('Invalid drop onto event data');
+                return;
+            }
             
-            // For now, show a modal with the drop information
-            const message = `Drop Onto Registered!<br><br>Target Item: <strong>${targetItem?.Description || 'Unknown'}</strong><br>Dropped <strong>${droppedItems.length}</strong> item(s) onto it`;
+            // Check if target is already a group master
+            const targetMetadata = MetaDataUtils.parseMetaData(targetItem.MetaData);
+            const targetGrouping = targetMetadata?.s?.grouping;
             
-            this.$modal.confirm(
-                message,
-                () => {
-                    // User confirmed - will implement grouping logic here
-                    console.log('User confirmed drop onto');
-                },
-                () => {
-                    // User cancelled
-                    console.log('User cancelled drop onto');
-                },
-                'Drop Onto Item',
-                'Create Group',
-                'Cancel'
+            // Use existing groupId or generate new one
+            const groupId = targetGrouping?.groupId || `G${Date.now()}`;
+            
+            // Update target item to be group master (if not already)
+            if (!targetGrouping?.isGroupMaster) {
+                const newTargetMetadata = MetaDataUtils.setUserSetting(
+                    targetItem.MetaData || '',
+                    'grouping',
+                    {
+                        groupId: groupId,
+                        isGroupMaster: true,
+                        masterItemIndex: targetIndex
+                    }
+                );
+                targetItem.MetaData = newTargetMetadata;
+                // Mark metadata as dirty to trigger save state
+                if (!targetItem.AppData) targetItem.AppData = {};
+                targetItem.AppData['MetadataDirty'] = true;
+                console.log('Set target as group master:', groupId, 'index:', targetIndex);
+            }
+            
+            // Update dropped items to be grouped with target
+            droppedItems.forEach(droppedItem => {
+                const newMetadata = MetaDataUtils.setUserSetting(
+                    droppedItem.MetaData || '',
+                    'grouping',
+                    {
+                        groupId: groupId,
+                        isGroupMaster: false,
+                        masterItemIndex: targetIndex
+                    }
+                );
+                droppedItem.MetaData = newMetadata;
+                // Mark metadata as dirty to trigger save state
+                if (!droppedItem.AppData) droppedItem.AppData = {};
+                droppedItem.AppData['MetadataDirty'] = true;
+                console.log('Grouped item with master:', groupId, 'item:', droppedItem.Description);
+            });
+            
+            // Alert user of successful grouping
+            this.$modal.alert(
+                `Successfully grouped <strong>${droppedItems.length}</strong> item(s) under:<br><strong>${targetItem.Description || 'master item'}</strong><br><br>Group ID: ${groupId}`,
+                'Items Grouped'
             );
+            
+            console.log('Grouping complete. Remember to save to persist changes.');
         }
     },
     template: html`
@@ -749,6 +773,7 @@ export const PacklistTable = {
                                 :draggable="editMode"
                                 :newRow="editMode"
                                 :allowDropOnto="editMode"
+                                :enableGrouping="editMode"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
@@ -764,6 +789,7 @@ export const PacklistTable = {
                                     }
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
+                                @drop-onto="handleDropOntoGrouping"
                                 class="table-fixed"
                             >
                                 <!-- Default slot for cell content -->

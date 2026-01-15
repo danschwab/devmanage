@@ -1,4 +1,5 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
+import { MetaDataUtils } from '../../index.js'; // Used by tableRowSelectionState
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
@@ -14,7 +15,6 @@ export const tableRowSelectionState = Vue.reactive({
     dragTargetArray: null,
     dragId: null, // The dragId of the table group participating in drag operations
     currentDropTarget: null, // Current registered drop target from tables
-    onDropOntoCallback: null, // Callback for handling 'onto' drops
     
     // Generate unique selection key for a row in a specific table
     _getSelectionKey(rowIndex, sourceArray) {
@@ -27,6 +27,47 @@ export const tableRowSelectionState = Vue.reactive({
         return `${sourceArray._tableId}_${rowIndex}`;
     },
     
+    // Helper to get all children indices of a group master
+    _getGroupChildren(rowIndex, sourceArray) {
+        const row = sourceArray[rowIndex];
+        if (!row || !row.MetaData) return [];
+        
+        const metadata = MetaDataUtils.parseMetaData(row.MetaData);
+        const grouping = metadata?.s?.grouping;
+        
+        // Only proceed if this row is a group master
+        if (!grouping || !grouping.isGroupMaster) return [];
+        
+        const groupId = grouping.groupId;
+        const children = [];
+        
+        // Find all rows with matching groupId that are NOT masters
+        for (let i = 0; i < sourceArray.length; i++) {
+            if (i === rowIndex) continue; // Skip the master itself
+            
+            const childRow = sourceArray[i];
+            if (!childRow || !childRow.MetaData) continue;
+            
+            const childMetadata = MetaDataUtils.parseMetaData(childRow.MetaData);
+            const childGrouping = childMetadata?.s?.grouping;
+            
+            if (childGrouping && childGrouping.groupId === groupId && !childGrouping.isGroupMaster) {
+                children.push(i);
+            }
+        }
+        
+        return children;
+    },
+    
+    // Shared helper to get grouping metadata from a row
+    _getRowGrouping(rowIndex, sourceArray) {
+        const row = sourceArray[rowIndex];
+        if (!row || !row.MetaData) return null;
+        
+        const metadata = MetaDataUtils.parseMetaData(row.MetaData);
+        return metadata?.s?.grouping || null;
+    },
+
     // Add a row to global selection
     addRow(rowIndex, sourceArray, dragId = null) {
         if (dragId && dragId !== this.dragId) {
@@ -40,20 +81,50 @@ export const tableRowSelectionState = Vue.reactive({
             dragId: dragId
         });
         this.dragId = dragId;
+        
+        // Auto-select all children if this is a group master
+        const children = this._getGroupChildren(rowIndex, sourceArray);
+        children.forEach(childIndex => {
+            const childKey = this._getSelectionKey(childIndex, sourceArray);
+            this.selections.set(childKey, {
+                rowIndex: childIndex,
+                sourceArray: sourceArray,
+                dragId: dragId
+            });
+        });
     },
     
     // Remove a row from global selection
     removeRow(rowIndex, sourceArray) {
+        // Check if this row is a group child
+        const grouping = this._getRowGrouping(rowIndex, sourceArray);
+        if (grouping && !grouping.isGroupMaster) {
+            // This is a group child - check if its master is selected
+            const masterIndex = grouping.masterItemIndex;
+            if (this.hasRow(sourceArray, masterIndex)) {
+                // Master is selected, don't allow child to be unselected independently
+                console.log(`Cannot unselect row ${rowIndex} - its group master is selected`);
+                return;
+            }
+        }
+        
         const selectionKey = this._getSelectionKey(rowIndex, sourceArray);
         this.selections.delete(selectionKey);
+        
+        // Auto-deselect all children if this is a group master
+        const children = this._getGroupChildren(rowIndex, sourceArray);
+        children.forEach(childIndex => {
+            const childKey = this._getSelectionKey(childIndex, sourceArray);
+            this.selections.delete(childKey);
+        });
     },
     
     // Toggle row selection
     toggleRow(rowIndex, sourceArray, dragId = null) {
         if (this.hasRow(sourceArray, rowIndex)) {
-            this.removeRow(rowIndex, sourceArray)
+            this.removeRow(rowIndex, sourceArray); // removeRow handles children
         } else {
-            this.addRow(rowIndex, sourceArray, dragId)
+            this.addRow(rowIndex, sourceArray, dragId); // addRow handles children
         }
     },
     
@@ -129,6 +200,179 @@ export const tableRowSelectionState = Vue.reactive({
         return rows;
     },
     
+    // Check if any selected row is a group master
+    hasAnyGroupMaster() {
+        for (const selection of this.selections.values()) {
+            const grouping = this._getRowGrouping(selection.rowIndex, selection.sourceArray);
+            if (grouping && grouping.isGroupMaster === true) {
+                return true;
+            }
+        }
+        return false;
+    },
+    
+    // Check if a specific row is in a group (is a child, not a master)
+    isRowInGroup(rowIndex, sourceArray) {
+        const grouping = this._getRowGrouping(rowIndex, sourceArray);
+        return grouping && !grouping.isGroupMaster;
+    },
+    
+    // Check if a specific row is a group master
+    isRowGroupMaster(rowIndex, sourceArray) {
+        const grouping = this._getRowGrouping(rowIndex, sourceArray);
+        return grouping && grouping.isGroupMaster === true;
+    },
+    
+    // Check if inserting at a position would split a group
+    wouldSplitGroup(insertIndex, sourceArray) {
+        if (!sourceArray || sourceArray.length === 0) return false;
+        
+        // Get the rows immediately before and after the insertion point
+        const rowBefore = insertIndex > 0 ? sourceArray[insertIndex - 1] : null;
+        const rowAfter = insertIndex < sourceArray.length ? sourceArray[insertIndex] : null;
+        
+        if (!rowBefore && !rowAfter) return false;
+        
+        // Get grouping metadata for both rows
+        const beforeGrouping = rowBefore ? this._getRowGrouping(insertIndex - 1, sourceArray) : null;
+        const afterGrouping = rowAfter ? this._getRowGrouping(insertIndex, sourceArray) : null;
+        
+        // If neither row is in a group, no split possible
+        if (!beforeGrouping && !afterGrouping) return false;
+        
+        // Check if both rows belong to the same group
+        if (beforeGrouping && afterGrouping && beforeGrouping.groupId === afterGrouping.groupId) {
+            return true; // Would split the group
+        }
+        
+        return false;
+    },
+    
+    // Clean up group masters that have no children
+    _cleanupOrphanedGroupMasters(sourceArray) {
+        if (!sourceArray || sourceArray.length === 0) return;
+        
+        for (let i = 0; i < sourceArray.length; i++) {
+            const grouping = this._getRowGrouping(i, sourceArray);
+            
+            // Only check rows that are group masters
+            if (grouping && grouping.isGroupMaster) {
+                const children = this._getGroupChildren(i, sourceArray);
+                
+                // If master has no children, remove its grouping metadata
+                if (children.length === 0) {
+                    const item = sourceArray[i];
+                    if (item) {
+                        const newMetadata = MetaDataUtils.setUserSetting(
+                            item.MetaData || '',
+                            'grouping',
+                            null
+                        );
+                        item.MetaData = newMetadata;
+                        // Mark metadata as dirty for save state
+                        if (!item.AppData) item.AppData = {};
+                        item.AppData['MetadataDirty'] = true;
+                        console.log(`Removed orphaned group master at index ${i} (no children found)`);
+                    }
+                }
+            }
+        }
+    },
+    
+    // Group selected items under a target row (similar to markSelectedForDeletion)
+    groupSelectedItemsUnder(targetIndex, targetArray) {
+        if (this.selections.size === 0) {
+            console.log('No selections to group');
+            return null;
+        }
+        
+        const targetItem = targetArray[targetIndex];
+        if (!targetItem) {
+            console.warn('Invalid target item for grouping');
+            return null;
+        }
+        
+        // Get all selected items from the target array
+        const selectedRows = this.getSelectedRows(targetArray);
+        const droppedItems = selectedRows.map(r => r.data);
+        
+        if (droppedItems.length === 0) {
+            console.log('No items from target array selected');
+            return null;
+        }
+        
+        // Check if target is already a group master
+        const targetMetadata = MetaDataUtils.parseMetaData(targetItem.MetaData);
+        const targetGrouping = targetMetadata?.s?.grouping;
+        
+        // Use existing groupId or generate new one
+        const groupId = targetGrouping?.groupId || `G${Date.now()}`;
+        
+        // Update target item to be group master (if not already)
+        if (!targetGrouping?.isGroupMaster) {
+            const newTargetMetadata = MetaDataUtils.setUserSetting(
+                targetItem.MetaData || '',
+                'grouping',
+                {
+                    groupId: groupId,
+                    isGroupMaster: true,
+                    masterItemIndex: targetIndex
+                }
+            );
+            targetItem.MetaData = newTargetMetadata;
+            // Mark metadata as dirty to trigger save state
+            if (!targetItem.AppData) targetItem.AppData = {};
+            targetItem.AppData['MetadataDirty'] = true;
+            console.log('Set target as group master:', groupId, 'index:', targetIndex);
+        }
+        
+        // Find indices of dropped items in the target array
+        const droppedIndices = droppedItems
+            .map(item => targetArray.indexOf(item))
+            .filter(idx => idx !== -1)
+            .sort((a, b) => b - a); // Sort in descending order for safe removal
+        
+        // Remove dropped items from their current positions (reverse order to maintain indices)
+        droppedIndices.forEach(idx => {
+            targetArray.splice(idx, 1);
+        });
+        
+        // Find new target index after removals (may have shifted)
+        const newTargetIndex = targetArray.indexOf(targetItem);
+        
+        // Insert dropped items right after the target
+        const insertPosition = newTargetIndex + 1;
+        targetArray.splice(insertPosition, 0, ...droppedItems);
+        
+        // Update dropped items metadata with correct masterItemIndex
+        droppedItems.forEach(droppedItem => {
+            const newMetadata = MetaDataUtils.setUserSetting(
+                droppedItem.MetaData || '',
+                'grouping',
+                {
+                    groupId: groupId,
+                    isGroupMaster: false,
+                    masterItemIndex: newTargetIndex // Use the new index after reordering
+                }
+            );
+            droppedItem.MetaData = newMetadata;
+            // Mark metadata as dirty to trigger save state
+            if (!droppedItem.AppData) droppedItem.AppData = {};
+            droppedItem.AppData['MetadataDirty'] = true;
+            console.log('Grouped item with master:', groupId);
+        });
+        
+        console.log(`Grouped ${droppedItems.length} items under target with groupId: ${groupId}`);
+        
+        // Return grouping info for potential UI feedback
+        return {
+            groupId,
+            targetItem,
+            droppedItems,
+            targetIndex: newTargetIndex
+        };
+    },
+    
     // Get all unique source arrays that have selections
     getSelectedDataSources() {
         const sources = new Set();
@@ -159,8 +403,17 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Check if selections are all from the same data source
     areSelectionsFromSameSource() {
-        const sources = this.getSelectedDataSources();
-        return sources.length <= 1;
+        if (this.selections.size <= 1) return true;
+        
+        let firstSource = null;
+        for (const selection of this.selections.values()) {
+            if (firstSource === null) {
+                firstSource = selection.sourceArray;
+            } else if (firstSource !== selection.sourceArray) {
+                return false;
+            }
+        }
+        return true;
     },
     
     // Validate if the current selection can be dragged
@@ -175,13 +428,7 @@ export const tableRowSelectionState = Vue.reactive({
         return true;
     },
     
-    // Keyboard action methods
-    clearAllSelections() {
-        // Clear all selections (used by Escape key)
-        this.clearAll();
-        console.log('All selections cleared via keyboard');
-    },
-    
+    // Mark all selected rows for deletion (used by Delete key)
     markSelectedForDeletion(Value = true) {
         // Mark all selected rows for deletion (used by Delete key)
         if (this.selections.size === 0) {
@@ -273,29 +520,105 @@ export const tableRowSelectionState = Vue.reactive({
             return false;
         }
         
-        // Handle "onto" drop type
+        // Handle "onto" drop type - call groupSelectedItemsUnder directly
         if (dropTarget.type === 'onto') {
-            console.log('DROP ONTO detected! Callback exists:', !!this.onDropOntoCallback);
-            // Call the registered callback with drop information
-            if (this.onDropOntoCallback) {
-                const selectedRows = this.getSelectedRowData(this.dragTargetArray);
-                console.log('Calling onDropOntoCallback with:', {
-                    targetIndex: dropTarget.targetIndex,
-                    targetRow: this.dragTargetArray[dropTarget.targetIndex],
-                    selectedRows: selectedRows
-                });
-                this.onDropOntoCallback({
-                    targetIndex: dropTarget.targetIndex,
-                    targetRow: this.dragTargetArray[dropTarget.targetIndex],
-                    selectedRows: selectedRows,
-                    targetArray: this.dragTargetArray
-                });
+            console.log('DROP ONTO detected! Calling groupSelectedItemsUnder...');
+            const result = this.groupSelectedItemsUnder(
+                dropTarget.targetIndex,
+                this.dragTargetArray
+            );
+            
+            if (result) {
+                console.log(`Grouped ${result.droppedItems.length} items under target with groupId: ${result.groupId}`);
             } else {
-                console.warn('No onDropOntoCallback registered!');
+                console.warn('Grouping failed or no items to group');
             }
+            
             this.stopDrag();
             this.clearAll();
             return true;
+        }
+        
+        // Check if "between" drop would split a group - if so, treat as "onto" drop on group master
+        if (dropTarget.type === 'between' && this.wouldSplitGroup(dropTarget.targetIndex, this.dragTargetArray)) {
+            console.log('DROP BETWEEN would split group! Converting to DROP ONTO group master...');
+            
+            // Find the group master for the group that would be split
+            const rowBefore = dropTarget.targetIndex > 0 ? this.dragTargetArray[dropTarget.targetIndex - 1] : null;
+            const rowAfter = dropTarget.targetIndex < this.dragTargetArray.length ? this.dragTargetArray[dropTarget.targetIndex] : null;
+            
+            // Get grouping info from adjacent rows
+            const beforeGrouping = rowBefore ? this._getRowGrouping(dropTarget.targetIndex - 1, this.dragTargetArray) : null;
+            const afterGrouping = rowAfter ? this._getRowGrouping(dropTarget.targetIndex, this.dragTargetArray) : null;
+            
+            // Use the groupId from either adjacent row (they should match if wouldSplitGroup returned true)
+            const groupId = beforeGrouping?.groupId || afterGrouping?.groupId;
+            
+            if (groupId) {
+                // Find the group master with this groupId
+                let masterIndex = -1;
+                for (let i = 0; i < this.dragTargetArray.length; i++) {
+                    const grouping = this._getRowGrouping(i, this.dragTargetArray);
+                    if (grouping && grouping.groupId === groupId && grouping.isGroupMaster) {
+                        masterIndex = i;
+                        break;
+                    }
+                }
+                
+                if (masterIndex !== -1) {
+                    console.log(`Found group master at index ${masterIndex} for groupId ${groupId}`);
+                    const result = this.groupSelectedItemsUnder(masterIndex, this.dragTargetArray);
+                    
+                    if (result) {
+                        console.log(`Grouped ${result.droppedItems.length} items under group master with groupId: ${result.groupId}`);
+                    } else {
+                        console.warn('Grouping failed');
+                    }
+                    
+                    this.stopDrag();
+                    this.clearAll();
+                    return true;
+                } else {
+                    console.warn('Could not find group master for groupId:', groupId);
+                    // Fall through to normal between logic
+                }
+            }
+        }
+        
+        // Check if "between" drop does NOT split a group - remove grouping from non-master rows
+        if (dropTarget.type === 'between' && !this.wouldSplitGroup(dropTarget.targetIndex, this.dragTargetArray)) {
+            console.log('DROP BETWEEN does not split group - removing grouping from non-master rows...');
+            
+            // Remove grouping from all dragged rows that are NOT group masters
+            for (const selection of this.selections.values()) {
+                const { rowIndex, sourceArray } = selection;
+                const grouping = this._getRowGrouping(rowIndex, sourceArray);
+                
+                // Only remove grouping if row is in a group but NOT a master
+                if (grouping && !grouping.isGroupMaster) {
+                    // Check if the master of this child is also in the selection
+                    const masterIndex = grouping.masterItemIndex;
+                    const masterIsSelected = this.hasRow(sourceArray, masterIndex);
+                    
+                    // Only ungroup if the master is NOT being dragged with the child
+                    if (!masterIsSelected) {
+                        const item = sourceArray[rowIndex];
+                        if (item) {
+                            // Remove grouping metadata
+                            const newMetadata = MetaDataUtils.setUserSetting(
+                                item.MetaData || '',
+                                'grouping',
+                                null
+                            );
+                            item.MetaData = newMetadata;
+                            // Mark metadata as dirty to trigger save state
+                            if (!item.AppData) item.AppData = {};
+                            item.AppData['MetadataDirty'] = true;
+                            console.log(`Removed grouping from row ${rowIndex} (between drop, master not selected)`);
+                        }
+                    }
+                }
+            }
         }
         
         // Group selections by source array
@@ -390,6 +713,9 @@ export const tableRowSelectionState = Vue.reactive({
             this.stopDrag();
             return false;
         }
+        
+        // Clean up any group masters that no longer have children
+        this._cleanupOrphanedGroupMasters(this.dragTargetArray);
         
         // Clear selection and drag state
         this.stopDrag(true);
@@ -539,6 +865,10 @@ export const TableComponent = {
             default: ''
         },
         allowDropOnto: {
+            type: Boolean,
+            default: false
+        },
+        enableGrouping: {
             type: Boolean,
             default: false
         }
@@ -775,6 +1105,7 @@ export const TableComponent = {
             this.updateAllEditableCells();
             this.compareAllCellsDirty();
         });
+        
         // Listen for clicks outside details area to close expanded details
         document.addEventListener('click', this.handleOutsideClick);
         // Listen for keyboard shortcuts (Escape, Delete)
@@ -934,6 +1265,18 @@ export const TableComponent = {
             // Check if this row is currently being analyzed
             const row = this.data[rowIndex];
             return row && row.AppData && row.AppData._analyzing === true;
+        },
+
+        isRowInGroup(rowIndex) {
+            return tableRowSelectionState.isRowInGroup(rowIndex, this.data);
+        },
+
+        isRowGroupMaster(rowIndex) {
+            return tableRowSelectionState.isRowGroupMaster(rowIndex, this.data);
+        },
+
+        wouldSplitGroup(insertIndex) {
+            return tableRowSelectionState.wouldSplitGroup(insertIndex, this.data);
         },
 
         handleSort(columnKey) {
@@ -1197,9 +1540,26 @@ export const TableComponent = {
                 Object.keys(this.nestedTableDirtyCells[row]).length > 0
             );
             this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
-            // Also, if any row is marked for deletion, allow save event
+            // Also, if any row is marked for deletion or has dirty metadata, allow save event
             if (!this.allowSaveEvent && Array.isArray(this.data)) {
-                this.allowSaveEvent = this.data.some(row => row && row.AppData && row.AppData['marked-for-deletion']);
+                this.allowSaveEvent = this.data.some(row => {
+                    if (!row || !row.AppData) return false;
+                    // Check main row
+                    if (row.AppData['marked-for-deletion'] || row.AppData['MetadataDirty']) {
+                        return true;
+                    }
+                    // Also check nested arrays (e.g., Items within crates)
+                    for (const key of Object.keys(row)) {
+                        if (Array.isArray(row[key])) {
+                            const hasNestedFlag = row[key].some(nestedRow => 
+                                nestedRow && nestedRow.AppData && 
+                                (nestedRow.AppData['marked-for-deletion'] || nestedRow.AppData['MetadataDirty'])
+                            );
+                            if (hasNestedFlag) return true;
+                        }
+                    }
+                    return false;
+                });
             }
         },
         handleSave() {
@@ -1455,12 +1815,19 @@ export const TableComponent = {
                             const bottomThird = (rowHeight * 2) / 3;
                             
                             if (relativeY >= topThird && relativeY <= bottomThird) {
-                                // Middle third - check if target row is not selected before allowing drop onto
+                                // Middle third - check if target row is eligible for drop-onto
                                 const currentVisibleRow = this.visibleRows[i];
                                 const targetIndex = currentVisibleRow ? currentVisibleRow.idx : i;
                                 
-                                // Only allow drop onto if target row is NOT selected
-                                if (!tableRowSelectionState.hasRow(this.data, targetIndex)) {
+                                // Don't allow drop onto if:
+                                // 1. Any selected row is a group master
+                                // 2. Target row is a group child (in-group)
+                                // 3. Target row is an empty placeholder (data array is empty or row has class 'empty-drop-target')
+                                const hasGroupMasterSelected = tableRowSelectionState.hasAnyGroupMaster();
+                                const isEmptyPlaceholder = !this.data || this.data.length === 0 || row.classList.contains('empty-drop-target');
+                                const isGroupChild = this.isRowInGroup(targetIndex);
+                                
+                                if (!hasGroupMasterSelected && !isGroupChild && !isEmptyPlaceholder) {
                                     newDropTarget = {
                                         type: 'onto',
                                         targetIndex: targetIndex
@@ -1468,7 +1835,7 @@ export const TableComponent = {
                                     console.log('Drop ONTO target found:', newDropTarget, 'visual index:', i, 'mouseY:', mouseY, 'rowRect:', rowRect);
                                     break;
                                 }
-                                // If target row IS selected, fall through to between logic below
+                                // If any condition fails, fall through to between logic below
                             }
                         }
                         
@@ -1492,6 +1859,13 @@ export const TableComponent = {
                             // Insert after this row
                             const currentVisibleRow = this.visibleRows[i];
                             targetIndex = currentVisibleRow ? currentVisibleRow.idx + 1 : this.data.length;
+                        }
+                        
+                        // Check if a group master is selected and this position would split a group
+                        const hasGroupMasterSelected = tableRowSelectionState.hasAnyGroupMaster();
+                        if (hasGroupMasterSelected && this.wouldSplitGroup(targetIndex)) {
+                            // Don't allow drop between group rows
+                            continue;
                         }
                         
                         newDropTarget = {
@@ -1803,6 +2177,8 @@ export const TableComponent = {
                                     'selected': isRowSelected(idx),
                                     'analyzing': isRowAnalyzing(idx),
                                     'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
+                                    'in-group': isRowInGroup(idx),
+                                    'is-group': isRowGroupMaster(idx),
                                     'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
                                     'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1,
                                     'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx

@@ -101,7 +101,7 @@ export function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
  * @returns {Set} Set of column names to exclude
  */
 function getExcludedColumns(analysisConfig = null) {
-    const excludedColumns = new Set(['AppData', 'MetaData']);
+    const excludedColumns = new Set(['AppData']); // MetaData should persist, only AppData is ephemeral
     if (analysisConfig && Array.isArray(analysisConfig)) {
         analysisConfig.forEach(config => {
             if (config.targetColumn) {
@@ -326,6 +326,24 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // Clear any existing analysis results if analysis is configured
             if (this.analysisConfig) {
                 clearAnalysisResults(processedData, this.analysisConfig);
+            }
+            // Clear MetadataDirty flags after data refresh
+            if (Array.isArray(processedData)) {
+                processedData.forEach(item => {
+                    if (item && item.AppData && item.AppData['MetadataDirty']) {
+                        delete item.AppData['MetadataDirty'];
+                    }
+                    // Also clear in nested arrays
+                    Object.keys(item).forEach(key => {
+                        if (Array.isArray(item[key])) {
+                            item[key].forEach(nestedItem => {
+                                if (nestedItem && nestedItem.AppData && nestedItem.AppData['MetadataDirty']) {
+                                    delete nestedItem.AppData['MetadataDirty'];
+                                }
+                            });
+                        }
+                    });
+                });
             }
             this.data = processedData;
             // Clear auto-save hash when data changes

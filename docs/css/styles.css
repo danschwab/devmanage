@@ -849,7 +849,7 @@ td.spacer-cell, th.spacer-cell {
 .content-header + .table-wrapper > table > tfoot > tr > td.spacer-cell {
     border: 1px solid var(--color-border);
 }
-.content-header + .table-wrapper > table > thead > tr > th.spacer-cell {
+.content-header + .table-wrapper > table > thead > tr > th.spacer-cell, .content-header + .loading-bar-container + .table-wrapper>table>thead>tr>th.spacer-cell, .sticky-header th.spacer-cell {
     border-left: 1px solid var(--color-border);
     border-top: 1px solid var(--color-gray-bg);
     background-color: var(--color-gray-bg);
@@ -942,7 +942,23 @@ tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
 
 
 
-
+/* Table Group Styling */
+tr.is-group {
+    border-bottom: 2px solid var(--color-blue);
+}
+tr.in-group {
+    background-color: var(--color-blue-bg);
+}
+tr.in-group > td.row-drag-handle {
+    background-color: var(--color-blue-bg);
+    border-color: var(--color-blue);
+}
+tr.in-group > td {
+    border-color: var(--color-blue);
+}
+tr.in-group:not(:has(~ .in-group)) > td {
+    box-shadow: inset 0 -12px 12px -12px var(--color-shadow);
+}
 
 /* Table Details Styling */
 
