@@ -703,6 +703,13 @@ export const tableRowSelectionState = Vue.reactive({
                 // Extract row data BEFORE removal using ascending order to preserve original sequence
                 const rowsData = sortedIndicesAsc.map(index => sourceArray[index]).filter(row => row !== undefined);
                 
+                // Clear AppData from all moved rows (drag operations reset analytics state)
+                rowsData.forEach(row => {
+                    if (row) {
+                        delete row.AppData;
+                    }
+                });
+                
                 if (sourceArray === this.dragTargetArray) {
                     // Same array: reorder rows
                     console.log('Same array reorder - insertPosition:', insertPosition + totalRowsInserted);

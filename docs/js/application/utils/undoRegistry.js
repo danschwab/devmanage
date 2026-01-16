@@ -63,7 +63,7 @@ export const undoRegistry = Vue.reactive({
         
         const stacks = this._getRouteStacks(routeKey);
         
-        // Create snapshot of the array
+        // Create snapshot of the array (excluding AppData)
         const snapshot = {
             type: 'cell-edit',
             timestamp: Date.now(),
@@ -72,7 +72,7 @@ export const undoRegistry = Vue.reactive({
             arrays: [{
                 tableId: tableId,
                 arrayRef: sourceArray,
-                snapshot: JSON.parse(JSON.stringify(sourceArray))
+                snapshot: this._createSnapshotWithoutAppData(sourceArray)
             }]
         };
         
@@ -101,6 +101,32 @@ export const undoRegistry = Vue.reactive({
         this._currentEditCapture = null;
     },
     
+    // Create a snapshot of an array without AppData (to avoid interfering with analytics)
+    _createSnapshotWithoutAppData(array) {
+        return array.map(row => {
+            if (!row) return row;
+            const rowCopy = { ...row };
+            delete rowCopy.AppData; // Remove AppData from snapshot
+            return rowCopy;
+        });
+    },
+    
+    // Restore a snapshot while preserving current AppData
+    _restoreSnapshotPreservingAppData(targetArray, snapshot) {
+        // Save current AppData for each row
+        const currentAppData = targetArray.map(row => row?.AppData);
+        
+        // Clear and restore from snapshot
+        targetArray.splice(0, targetArray.length, ...snapshot);
+        
+        // Restore AppData for rows that existed before and still exist
+        for (let i = 0; i < Math.min(currentAppData.length, targetArray.length); i++) {
+            if (currentAppData[i] && targetArray[i]) {
+                targetArray[i].AppData = currentAppData[i];
+            }
+        }
+    },
+    
     // Capture state before a drag operation
     // Takes array of arrays to capture (both source and target arrays)
     captureBeforeDrag(arrays, routeKey) {
@@ -111,11 +137,11 @@ export const undoRegistry = Vue.reactive({
         
         const stacks = this._getRouteStacks(routeKey);
         
-        // Create snapshots of all involved arrays
+        // Create snapshots of all involved arrays (excluding AppData)
         const arraySnapshots = arrays.map(arr => ({
             tableId: arr._tableId || 'unknown',
             arrayRef: arr,
-            snapshot: JSON.parse(JSON.stringify(arr))
+            snapshot: this._createSnapshotWithoutAppData(arr)
         }));
         
         const snapshot = {
@@ -164,7 +190,7 @@ export const undoRegistry = Vue.reactive({
         // Pop state from undo stack
         const state = stacks.undoStack.pop();
         
-        // Save current state to redo stack before restoring
+        // Save current state to redo stack before restoring (excluding AppData)
         const redoState = {
             type: state.type,
             timestamp: Date.now(),
@@ -173,18 +199,18 @@ export const undoRegistry = Vue.reactive({
             arrays: state.arrays.map(arrSnapshot => ({
                 tableId: arrSnapshot.tableId,
                 arrayRef: arrSnapshot.arrayRef,
-                snapshot: JSON.parse(JSON.stringify(arrSnapshot.arrayRef))
+                snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
             }))
         };
         stacks.redoStack.push(redoState);
         
-        // Restore state
+        // Restore state while preserving AppData
         state.arrays.forEach(arrSnapshot => {
             const targetArray = arrSnapshot.arrayRef;
             const snapshot = arrSnapshot.snapshot;
             
-            // Clear array and restore from snapshot
-            targetArray.splice(0, targetArray.length, ...snapshot);
+            // Restore snapshot while preserving current AppData
+            this._restoreSnapshotPreservingAppData(targetArray, snapshot);
         });
         
         // Clear current edit capture so subsequent edits can create new snapshots
@@ -216,7 +242,7 @@ export const undoRegistry = Vue.reactive({
         // Pop state from redo stack
         const state = stacks.redoStack.pop();
         
-        // Save current state to undo stack before restoring
+        // Save current state to undo stack before restoring (excluding AppData)
         const undoState = {
             type: state.type,
             timestamp: Date.now(),
@@ -225,18 +251,18 @@ export const undoRegistry = Vue.reactive({
             arrays: state.arrays.map(arrSnapshot => ({
                 tableId: arrSnapshot.tableId,
                 arrayRef: arrSnapshot.arrayRef,
-                snapshot: JSON.parse(JSON.stringify(arrSnapshot.arrayRef))
+                snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
             }))
         };
         stacks.undoStack.push(undoState);
         
-        // Restore state
+        // Restore state while preserving AppData
         state.arrays.forEach(arrSnapshot => {
             const targetArray = arrSnapshot.arrayRef;
             const snapshot = arrSnapshot.snapshot;
             
-            // Clear array and restore from snapshot
-            targetArray.splice(0, targetArray.length, ...snapshot);
+            // Restore snapshot while preserving current AppData
+            this._restoreSnapshotPreservingAppData(targetArray, snapshot);
         });
         
         // Clear current edit capture so subsequent edits can create new snapshots
