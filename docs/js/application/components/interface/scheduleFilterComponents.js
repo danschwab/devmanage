@@ -1032,12 +1032,16 @@ export const ScheduleFilterSelect = {
         }
     },
     watch: {
-        savedSearches() {
-            // Rebuild options when saved searches change
-            this.buildOptions();
-            
-            // Perform initial sync when saved searches first load
-            if (!this.hasPerformedInitialSync && this.savedSearchesStore && !this.savedSearchesStore.isLoading) {
+        savedSearches: {
+            async handler() {
+                // Rebuild options when saved searches change
+                await this.buildOptions();
+            },
+            deep: true
+        },
+        availableOptions() {
+            // Perform initial sync when options are first available
+            if (!this.hasPerformedInitialSync && this.availableOptions.length > 0) {
                 this.hasPerformedInitialSync = true;
                 this.syncWithURL();
             }
@@ -1076,7 +1080,7 @@ export const ScheduleFilterSelect = {
             this.hasPerformedInitialSync = true;
             this.syncWithURL();
         }
-        // Otherwise, the savedSearches watcher will call syncWithURL when data loads
+        // Otherwise, the availableOptions watcher will call syncWithURL when options are built
     },
     methods: {
         async buildOptions() {
@@ -1202,12 +1206,14 @@ export const ScheduleFilterSelect = {
         applyDefaultSearch() {
             if (!this.defaultSearch) return;
             
+            // Convert defaultSearch to string for comparison since year values are stored as strings
+            const defaultStr = String(this.defaultSearch);
             const option = this.availableOptions.find(
-                opt => opt.value === this.defaultSearch || opt.label === this.defaultSearch
+                opt => opt.value === defaultStr || opt.label === defaultStr
             );
             
             if (!option) {
-                console.warn('[ScheduleFilterSelect] Default search not found:', this.defaultSearch);
+                console.warn('[ScheduleFilterSelect] Default search not found:', this.defaultSearch, 'in', this.availableOptions.map(o => o.value));
                 return;
             }
             
