@@ -888,6 +888,10 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        hideGroupMembers: {
+            type: Boolean,
+            default: false
+        },
         syncSearchWithUrl: {
             type: Boolean,
             default: false
@@ -1079,6 +1083,14 @@ export const TableComponent = {
             let filteredData = this.data
                 .map((row, idx) => ({ row, idx }))
                 .filter(({ row }) => row); // Only filter out null/undefined rows
+
+            // Hide group members if flag is set
+            if (this.hideGroupMembers) {
+                filteredData = filteredData.filter(({ row }) => {
+                    const grouping = MetaDataUtils.parseMetaData(row.MetaData)?.s?.grouping;
+                    return !grouping || grouping.isGroupMaster;
+                });
+            }
 
             // Apply search filter if activeSearchValue is provided and hideRowsOnSearch is enabled
             if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearch) {

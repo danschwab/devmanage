@@ -943,21 +943,32 @@ tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
 
 
 /* Table Group Styling */
-tr.is-group {
-    border-bottom: 2px solid var(--color-blue);
+tr.is-group:has(+ .in-group) {
+    border-bottom: 1px solid var(--color-text);
+    /*border-top: 1px solid var(--color-gray);*/
+    /*border-left: 2px solid var(--color-gray);*/
 }
 tr.in-group {
-    background-color: var(--color-blue-bg);
+    background-color: var(--color-gray-bg);
+    box-shadow: inset 0 12px 12px -12px var(--color-shadow);
+    /*border-left: 2px double var(--color-gray);*/
+    transform: translateX(2px);
+}
+tr.in-group + tr.in-group {
+    border-top: none;
+    box-shadow: none;
 }
 tr.in-group > td.row-drag-handle {
-    background-color: var(--color-blue-bg);
-    border-color: var(--color-blue);
+    /*background-color: var(--color-gray-bg);*/
+    /*border-color: var(--color-gray);*/
+    /*border-left: 8px solid var(--background-color);*/
 }
-tr.in-group > td {
-    border-color: var(--color-blue);
+tr.in-group > td:not(.row-drag-handle) {
+    border: none; /*1px solid var(--color-gray);*/
 }
-tr.in-group:not(:has(~ .in-group)) > td {
+tr.in-group:not(:has(+ .in-group)) > td:not(.row-drag-handle) {
     box-shadow: inset 0 -12px 12px -12px var(--color-shadow);
+    /*border-bottom: 4px double var(--color-border);*/
 }
 
 /* Table Details Styling */

@@ -345,7 +345,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     });
                 });
             }
-            this.data = processedData;
+            // Mutate existing array in place to preserve references (critical for undo system)
+            this.data.splice(0, this.data.length, ...processedData);
             // Clear auto-save hash when data changes
             this.lastAutoSaveHash = null;
             
@@ -360,7 +361,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         setOriginalData(newOriginalData) {
             // Deep clone and initialize AppData
-            this.originalData = appDataInit(deepClone(newOriginalData));
+            const processedData = appDataInit(deepClone(newOriginalData));
+            // Mutate existing array in place to preserve references
+            this.originalData.splice(0, this.originalData.length, ...processedData);
         },
         setError(err) {
             this.error = err;
@@ -370,8 +373,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.loadingMessage = message;
         },
         reset() {
-            this.data = [];
-            this.originalData = [];
+            // Clear arrays in place to preserve references for undo system
+            this.data.splice(0, this.data.length);
+            this.originalData.splice(0, this.originalData.length);
             this.isLoading = false;
             this.loadingMessage = '';
             this.error = null;
@@ -476,7 +480,24 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         // Remove all rows marked for deletion (and nested arrays)
         removeMarkedRows() {
-            this.data = removeAppData(this.data, this.analysisConfig);
+            // Filter in place to preserve array reference for undo system
+            const filteredData = this.data.filter(obj => !isMarkedForDeletion(obj));
+            
+            // Recursively filter nested arrays in place too
+            filteredData.forEach(obj => {
+                if (isValidObject(obj)) {
+                    Object.keys(obj).forEach(key => {
+                        if (Array.isArray(obj[key])) {
+                            // Filter nested array in place
+                            const filteredNested = obj[key].filter(nestedObj => !isMarkedForDeletion(nestedObj));
+                            obj[key].splice(0, obj[key].length, ...filteredNested);
+                        }
+                    });
+                }
+            });
+            
+            // Replace data array contents in place (preserves reference)
+            this.data.splice(0, this.data.length, ...filteredData);
         },
         addRow(row, fieldNames = null) {
             // Ensure AppData is set and nested arrays are initialized

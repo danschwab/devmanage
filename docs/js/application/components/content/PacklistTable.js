@@ -774,6 +774,7 @@ export const PacklistTable = {
                                 :newRow="editMode"
                                 :allowDropOnto="editMode"
                                 :enableGrouping="editMode"
+                                :hide-group-members="!editMode"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
