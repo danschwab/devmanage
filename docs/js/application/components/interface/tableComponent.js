@@ -1,6 +1,8 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
 import { MetaDataUtils } from '../../index.js'; // Used by tableRowSelectionState
 
+import { undoRegistry } from '../../utils/undoRegistry.js';
+
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
     // Selection map with unique keys to handle multiple tables
@@ -15,6 +17,14 @@ export const tableRowSelectionState = Vue.reactive({
     dragTargetArray: null,
     dragId: null, // The dragId of the table group participating in drag operations
     currentDropTarget: null, // Current registered drop target from tables
+    
+    // Undo/redo support - track current route for undo captures
+    currentRouteKey: null,
+    
+    // Set active route for undo tracking
+    setActiveRoute(routeKey) {
+        this.currentRouteKey = routeKey;
+    },
     
     // Generate unique selection key for a row in a specific table
     _getSelectionKey(rowIndex, sourceArray) {
@@ -292,12 +302,28 @@ export const tableRowSelectionState = Vue.reactive({
             return null;
         }
         
-        // Get all selected items from the target array
-        const selectedRows = this.getSelectedRows(targetArray);
-        const droppedItems = selectedRows.map(r => r.data);
+        // Get ALL selected items regardless of source array (for cross-table grouping)
+        const allSelectedRows = [];
+        const sourceArraysToProcess = new Map(); // Track which arrays we need to remove from
+        
+        for (const [selectionKey, selection] of this.selections) {
+            const { rowIndex, sourceArray } = selection;
+            const item = sourceArray[rowIndex];
+            if (item) {
+                allSelectedRows.push({ index: rowIndex, data: item, sourceArray });
+                
+                // Track items to remove from each source array
+                if (!sourceArraysToProcess.has(sourceArray)) {
+                    sourceArraysToProcess.set(sourceArray, []);
+                }
+                sourceArraysToProcess.get(sourceArray).push(rowIndex);
+            }
+        }
+        
+        const droppedItems = allSelectedRows.map(r => r.data);
         
         if (droppedItems.length === 0) {
-            console.log('No items from target array selected');
+            console.log('No selected items found');
             return null;
         }
         
@@ -326,18 +352,17 @@ export const tableRowSelectionState = Vue.reactive({
             console.log('Set target as group master:', groupId, 'index:', targetIndex);
         }
         
-        // Find indices of dropped items in the target array
-        const droppedIndices = droppedItems
-            .map(item => targetArray.indexOf(item))
-            .filter(idx => idx !== -1)
-            .sort((a, b) => b - a); // Sort in descending order for safe removal
+        // Remove dropped items from their source arrays (in reverse order to maintain indices)
+        for (const [sourceArray, indices] of sourceArraysToProcess) {
+            const sortedIndices = indices.sort((a, b) => b - a); // Descending order
+            sortedIndices.forEach(idx => {
+                if (idx < sourceArray.length) {
+                    sourceArray.splice(idx, 1);
+                }
+            });
+        }
         
-        // Remove dropped items from their current positions (reverse order to maintain indices)
-        droppedIndices.forEach(idx => {
-            targetArray.splice(idx, 1);
-        });
-        
-        // Find new target index after removals (may have shifted)
+        // Find new target index after removals (may have shifted if items were removed from same array)
         const newTargetIndex = targetArray.indexOf(targetItem);
         
         // Insert dropped items right after the target
@@ -518,6 +543,22 @@ export const tableRowSelectionState = Vue.reactive({
             console.log('completeDrag early exit - conditions not met');
             this.stopDrag();
             return false;
+        }
+        
+        // Capture state before drag mutation for undo
+        // Need to capture ALL arrays involved: both source arrays and target array
+        if (this.currentRouteKey) {
+            const arraysToCapture = new Set();
+            
+            // Add target array
+            arraysToCapture.add(this.dragTargetArray);
+            
+            // Add all source arrays from selections
+            for (const selection of this.selections.values()) {
+                arraysToCapture.add(selection.sourceArray);
+            }
+            
+            undoRegistry.captureBeforeDrag(Array.from(arraysToCapture), this.currentRouteKey);
         }
         
         // Handle "onto" drop type - call groupSelectedItemsUnder directly
@@ -883,6 +924,8 @@ export const TableComponent = {
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
+            hasUndoCaptured: false, // Track if first edit has been captured for undo
+            lastEditTimestamp: null, // Track last edit time for 5-second idle detection
             clickState: {
                 isMouseDown: false,
                 startRowIndex: null,
@@ -951,7 +994,8 @@ export const TableComponent = {
                     this.compareAllCellsDirty();
                 });
             },
-            deep: true
+            deep: true,
+            flush: 'post' // Ensure DOM updates happen after data changes
         },
         isLoading(val) {
             // When loading state changes, update cells and compare dirty
@@ -1090,6 +1134,13 @@ export const TableComponent = {
         }
     },
     mounted() {
+        // Register route with undo system and tableRowSelectionState
+        if (this.appContext?.currentPath) {
+            const routeKey = this.appContext.currentPath.split('?')[0]; // Remove query params
+            undoRegistry.setActiveRoute(routeKey);
+            tableRowSelectionState.setActiveRoute(routeKey);
+        }
+        
         // Initialize searchValue from URL if syncSearchWithUrl is enabled
         if (this.syncSearchWithUrl && this.containerPath && this.appContext?.currentPath) {
             const params = NavigationRegistry.getParametersForContainer(
@@ -1484,6 +1535,23 @@ export const TableComponent = {
             return column.font ? 'font-' + column.font : '';
         },
         handleCellEdit(rowIndex, colIndex, value) {
+            const now = Date.now();
+            const timeSinceLastEdit = this.lastEditTimestamp ? now - this.lastEditTimestamp : Infinity;
+            
+            // Create new snapshot if:
+            // 1. No snapshot captured yet (!hasUndoCaptured)
+            // 2. More than 5 seconds since last edit (timeSinceLastEdit >= 5000)
+            if ((!this.hasUndoCaptured || timeSinceLastEdit >= 5000) && this.appContext?.currentPath) {
+                // Clear previous capture to force new snapshot
+                undoRegistry.clearCurrentEditCapture();
+                const routeKey = this.appContext.currentPath.split('?')[0];
+                undoRegistry.captureBeforeCellEdit(this.data, rowIndex, colIndex, routeKey);
+                this.hasUndoCaptured = true;
+            }
+            
+            // Update last edit timestamp
+            this.lastEditTimestamp = now;
+            
             this.$emit('cell-edit', rowIndex, colIndex, value);
             // Dirty check for single cell
             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
@@ -1494,6 +1562,15 @@ export const TableComponent = {
                 delete this.dirtyCells[rowIndex][colIndex];
             }
             this.checkDirtyCells();
+        },
+        handleCellFocus(rowIndex, colIndex, event) {
+            // No undo capture on focus - only capture when user starts typing in handleCellEdit
+        },
+        handleCellBlur(rowIndex, colIndex, event) {
+            // Clear flags when cell loses focus (enables new snapshot on next focus+edit)
+            this.hasUndoCaptured = false;
+            this.lastEditTimestamp = null;
+            undoRegistry.clearCurrentEditCapture();
         },
         compareAllCellsDirty() {
             // Compare all cells in data vs originalData and update dirtyCells
@@ -2218,6 +2295,8 @@ export const TableComponent = {
                                             :data-row-index="idx"
                                             :data-col-index="colIndex"
                                             @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
+                                            @focus="handleCellFocus(idx, colIndex, $event)"
+                                            @blur="handleCellBlur(idx, colIndex, $event)"
                                             class="table-edit-textarea"
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"

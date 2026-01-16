@@ -6,6 +6,7 @@ import { Auth, authState } from './index.js';
 import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
+import { undoRegistry } from './utils/undoRegistry.js';
 
 const { createApp } = Vue;
 
@@ -110,8 +111,8 @@ const App = {
         // Initialize URL routing system
         NavigationRegistry.initializeURLRouting(this);
         
-        // Add ESC key support for closing modals
-        document.addEventListener('keydown', this.handleKeyDown);
+        // Add keyboard shortcuts for undo/redo
+        document.addEventListener('keydown', this.handleGlobalKeyDown);
 
         // Pass the reactive modals array to modalManager for all modal operations
         modalManager.setReactiveModals(this.modals);
@@ -194,7 +195,7 @@ const App = {
     },
     beforeUnmount() {
         // Clean up event listener
-        document.removeEventListener('keydown', this.handleKeyDown);
+        document.removeEventListener('keydown', this.handleGlobalKeyDown);
         
         // Save any pending dashboard changes before unmounting
         NavigationRegistry.dashboardRegistry.saveNow();
@@ -239,6 +240,19 @@ const App = {
                 await NavigationRegistry.dashboardRegistry.remove(containerData.containerPath);
             } else {
                 await NavigationRegistry.dashboardRegistry.add(containerData.containerPath);
+            }
+        },
+        
+        handleGlobalKeyDown(event) {
+            // Ctrl+Z or Cmd+Z for undo
+            if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                undoRegistry.undo();
+            }
+            // Ctrl+Y or Ctrl+Shift+Z or Cmd+Shift+Z for redo
+            else if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.shiftKey && event.key === 'z'))) {
+                event.preventDefault();
+                undoRegistry.redo();
             }
         },
     },
