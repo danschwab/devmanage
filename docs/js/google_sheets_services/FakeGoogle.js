@@ -101,7 +101,10 @@ export class FakeGoogleSheetsService {
      */
     static reverseTransformSheetData(mapping, mappedData) {
         if (!mappedData || mappedData.length === 0) return [];
-        const headers = Object.values(mapping);
+        
+        // Use _orderedHeaders if provided (to preserve column order), otherwise fall back to Object.values
+        const headers = mapping._orderedHeaders || Object.values(mapping).filter(v => v !== mapping._orderedHeaders);
+        
         const rows = mappedData.map(obj => headers.map(h => {
             const key = Object.keys(mapping).find(k => mapping[k] === h);
             return key ? obj[key] ?? '' : '';

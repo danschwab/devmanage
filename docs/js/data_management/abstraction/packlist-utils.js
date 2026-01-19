@@ -328,6 +328,9 @@ class packListUtils_uncached {
             }
         });
         
+        // Add _orderedHeaders property to preserve column order (Object.values doesn't guarantee order)
+        packlistMapping._orderedHeaders = allHeaders;
+        
         // Flatten crates into row objects with ALL column properties
         const rowObjects = [];
         cleanCrates.forEach(crate => {
