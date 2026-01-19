@@ -43,37 +43,60 @@ export const undoRegistry = Vue.reactive({
         console.log(`[Undo] Active route set to: ${routeKey}`);
     },
     
-    // Capture state before a cell edit
-    captureBeforeCellEdit(sourceArray, rowIndex, colIndex, routeKey) {
-        if (!routeKey || !sourceArray) {
-            console.warn('[Undo] Cannot capture - missing routeKey or sourceArray');
+    // Unified capture function for all operations
+    // Can handle single array (cell edits) or multiple arrays (drags, deletions)
+    capture(arrays, routeKey, options = {}) {
+        const {
+            type = 'operation',
+            cellInfo = null,
+            preventDuplicates = false
+        } = options;
+        
+        // Normalize arrays to always be an array of data arrays
+        // Check if arrays is already an array of arrays (has _tableId property) or a single data array
+        let arrayList;
+        if (Array.isArray(arrays)) {
+            // Check if this is an array of data arrays or a single data array
+            // A data array will have _tableId property or first element will be a plain object (row)
+            const isArrayOfArrays = arrays.length > 0 && arrays[0] && typeof arrays[0] === 'object' && arrays[0]._tableId !== undefined;
+            arrayList = isArrayOfArrays ? arrays : [arrays];
+        } else {
+            arrayList = [arrays];
+        }
+        
+        if (!routeKey || !arrayList || arrayList.length === 0) {
+            console.warn('[Undo] Cannot capture - missing routeKey or arrays');
             return;
         }
         
-        // Check if this is a duplicate capture for the same cell
-        const tableId = sourceArray._tableId || 'unknown';
-        if (this._currentEditCapture &&
-            this._currentEditCapture.routeKey === routeKey &&
-            this._currentEditCapture.tableId === tableId &&
-            this._currentEditCapture.rowIndex === rowIndex &&
-            this._currentEditCapture.colIndex === colIndex) {
-            console.log(`[Undo] Skipping duplicate capture for cell [${rowIndex}, ${colIndex}]`);
-            return;
+        // Duplicate prevention for cell edits
+        if (preventDuplicates && cellInfo) {
+            const tableId = arrayList[0]._tableId || 'unknown';
+            if (this._currentEditCapture &&
+                this._currentEditCapture.routeKey === routeKey &&
+                this._currentEditCapture.tableId === tableId &&
+                this._currentEditCapture.rowIndex === cellInfo.rowIndex &&
+                this._currentEditCapture.colIndex === cellInfo.colIndex) {
+                console.log(`[Undo] Skipping duplicate capture for cell [${cellInfo.rowIndex}, ${cellInfo.colIndex}]`);
+                return;
+            }
         }
         
         const stacks = this._getRouteStacks(routeKey);
         
-        // Create snapshot of the array (excluding AppData)
+        // Create snapshots of all involved arrays (excluding AppData)
+        const arraySnapshots = arrayList.map(arr => ({
+            tableId: arr._tableId || 'unknown',
+            arrayRef: arr,
+            snapshot: this._createSnapshotWithoutAppData(arr)
+        }));
+        
         const snapshot = {
-            type: 'cell-edit',
+            type,
             timestamp: Date.now(),
-            routeKey: routeKey,
-            cellInfo: { tableId, rowIndex, colIndex },
-            arrays: [{
-                tableId: tableId,
-                arrayRef: sourceArray,
-                snapshot: this._createSnapshotWithoutAppData(sourceArray)
-            }]
+            routeKey,
+            cellInfo,
+            arrays: arraySnapshots
         };
         
         // Add to undo stack
@@ -82,18 +105,22 @@ export const undoRegistry = Vue.reactive({
         // Clear redo stack (new action invalidates redo)
         stacks.redoStack = [];
         
-        // Register array reference
-        stacks.arrayRefs.add(sourceArray);
+        // Register array references
+        arrayList.forEach(arr => stacks.arrayRefs.add(arr));
         
         // Limit stack size
         if (stacks.undoStack.length > this.maxUndoSteps) {
             stacks.undoStack.shift();
         }
         
-        // Mark this cell as captured
-        this._currentEditCapture = { routeKey, tableId, rowIndex, colIndex };
+        // Mark cell as captured if this was a cell edit with duplicate prevention
+        if (preventDuplicates && cellInfo) {
+            const tableId = arrayList[0]._tableId || 'unknown';
+            this._currentEditCapture = { routeKey, tableId, rowIndex: cellInfo.rowIndex, colIndex: cellInfo.colIndex };
+        }
         
-        console.log(`[Undo] Captured cell edit [${rowIndex}, ${colIndex}] for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
+        const opDesc = cellInfo ? `cell edit [${cellInfo.rowIndex}, ${cellInfo.colIndex}]` : `${type} with ${arrayList.length} array(s)`;
+        console.log(`[Undo] Captured ${opDesc} for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
     },
     
     // Clear current edit capture (called on blur or route change)
@@ -125,47 +152,6 @@ export const undoRegistry = Vue.reactive({
                 targetArray[i].AppData = currentAppData[i];
             }
         }
-    },
-    
-    // Capture state before a drag operation
-    // Takes array of arrays to capture (both source and target arrays)
-    captureBeforeDrag(arrays, routeKey) {
-        if (!routeKey || !arrays || arrays.length === 0) {
-            console.warn('[Undo] Cannot capture drag - missing routeKey or arrays');
-            return;
-        }
-        
-        const stacks = this._getRouteStacks(routeKey);
-        
-        // Create snapshots of all involved arrays (excluding AppData)
-        const arraySnapshots = arrays.map(arr => ({
-            tableId: arr._tableId || 'unknown',
-            arrayRef: arr,
-            snapshot: this._createSnapshotWithoutAppData(arr)
-        }));
-        
-        const snapshot = {
-            type: 'drag',
-            timestamp: Date.now(),
-            routeKey: routeKey,
-            arrays: arraySnapshots
-        };
-        
-        // Add to undo stack
-        stacks.undoStack.push(snapshot);
-        
-        // Clear redo stack
-        stacks.redoStack = [];
-        
-        // Register array references
-        arrays.forEach(arr => stacks.arrayRefs.add(arr));
-        
-        // Limit stack size
-        if (stacks.undoStack.length > this.maxUndoSteps) {
-            stacks.undoStack.shift();
-        }
-        
-        console.log(`[Undo] Captured drag operation with ${arrays.length} array(s) for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
     },
     
     // Undo last operation for current route

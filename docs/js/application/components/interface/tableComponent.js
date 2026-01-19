@@ -503,7 +503,7 @@ export const tableRowSelectionState = Vue.reactive({
             for (const selection of this.selections.values()) {
                 arraysToCapture.add(selection.sourceArray);
             }
-            undoRegistry.captureBeforeDrag(Array.from(arraysToCapture), this.currentRouteKey);
+            undoRegistry.capture(Array.from(arraysToCapture), this.currentRouteKey, { type: 'deletion' });
         }
         
         let deletedCount = 0;
@@ -622,7 +622,7 @@ export const tableRowSelectionState = Vue.reactive({
                 arraysToCapture.add(selection.sourceArray);
             }
             
-            undoRegistry.captureBeforeDrag(Array.from(arraysToCapture), this.currentRouteKey);
+            undoRegistry.capture(Array.from(arraysToCapture), this.currentRouteKey, { type: 'drag' });
         }
         
         // Handle "onto" drop type - call groupSelectedItemsUnder directly
@@ -1804,7 +1804,11 @@ export const TableComponent = {
                 // Clear previous capture to force new snapshot
                 undoRegistry.clearCurrentEditCapture();
                 const routeKey = this.appContext.currentPath.split('?')[0];
-                undoRegistry.captureBeforeCellEdit(this.data, rowIndex, colIndex, routeKey);
+                undoRegistry.capture(this.data, routeKey, {
+                    type: 'cell-edit',
+                    cellInfo: { rowIndex, colIndex },
+                    preventDuplicates: true
+                });
                 this.hasUndoCaptured = true;
             }
             
