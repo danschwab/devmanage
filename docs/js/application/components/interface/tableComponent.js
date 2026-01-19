@@ -225,6 +225,19 @@ export const tableRowSelectionState = Vue.reactive({
         return rows;
     },
     
+    // Get all selected rows across all tables
+    getAllSelectedRows() {
+        const rows = [];
+        for (const [selectionKey, selection] of this.selections) {
+            rows.push({
+                index: selection.rowIndex,
+                row: selection.sourceArray[selection.rowIndex],
+                sourceArray: selection.sourceArray
+            });
+        }
+        return rows;
+    },
+    
     // Check if any selected row is a group master
     hasAnyGroupMaster() {
         for (const selection of this.selections.values()) {
@@ -484,17 +497,45 @@ export const tableRowSelectionState = Vue.reactive({
             return;
         }
         
+        // Capture state for undo before marking for deletion
+        if (Value && this.currentRouteKey) {
+            const arraysToCapture = new Set();
+            for (const selection of this.selections.values()) {
+                arraysToCapture.add(selection.sourceArray);
+            }
+            undoRegistry.captureBeforeDrag(Array.from(arraysToCapture), this.currentRouteKey);
+        }
+        
         let deletedCount = 0;
         for (const [selectionKey, selection] of this.selections) {
             const { rowIndex, sourceArray } = selection;
             if (sourceArray[rowIndex]) {
-                // Ensure AppData exists
-                if (!sourceArray[rowIndex].AppData) {
-                    sourceArray[rowIndex].AppData = {};
+                const row = sourceArray[rowIndex];
+                
+                // Parse existing MetaData
+                let metadata = {};
+                if (row.MetaData) {
+                    try {
+                        metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                    } catch (e) {
+                        console.warn('Failed to parse MetaData:', e);
+                    }
                 }
                 
-                // Mark for deletion
-                sourceArray[rowIndex].AppData['marked-for-deletion'] = Value;
+                // Set or remove deletion flag
+                if (Value) {
+                    metadata.deletion = { marked: true };
+                } else {
+                    delete metadata.deletion;
+                }
+                
+                // Save back to MetaData
+                row.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null;
+                
+                // Mark MetaData as dirty
+                if (!row.AppData) row.AppData = {};
+                row.AppData['MetaDataDirty'] = true;
+                
                 deletedCount++;
             }
         }
@@ -1099,6 +1140,21 @@ export const TableComponent = {
             }
             return true; // All consecutive
         },
+        areAllSelectedMarkedForDeletion() {
+            // Check if all selected rows across all tables are marked for deletion
+            const allSelectedRows = tableRowSelectionState.getAllSelectedRows();
+            if (allSelectedRows.length === 0) return false;
+            
+            return allSelectedRows.every(({ row }) => {
+                if (!row || !row.MetaData) return false;
+                try {
+                    const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                    return metadata?.deletion?.marked === true;
+                } catch (e) {
+                    return false;
+                }
+            });
+        },
         firstSelectedVisibleRowIndex() {
             // Find the chronologically first selected row (from global selection state)
             // that exists in this table's visible rows
@@ -1464,6 +1520,16 @@ export const TableComponent = {
             return tableRowSelectionState.isRowGroupMaster(rowIndex, this.data);
         },
 
+        isRowMarkedForDeletion(row) {
+            if (!row || !row.MetaData) return false;
+            try {
+                const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                return metadata?.deletion?.marked === true;
+            } catch (e) {
+                return false;
+            }
+        },
+
         wouldSplitGroup(insertIndex) {
             return tableRowSelectionState.wouldSplitGroup(insertIndex, this.data);
         },
@@ -1507,10 +1573,11 @@ export const TableComponent = {
         },
 
         handleDeleteSelected() {
-            // future: allow selected rows to be "undeleted"
-            // Mark all selected rows for deletion across all tables
+            // Toggle deletion state for all selected rows
             if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                tableRowSelectionState.markSelectedForDeletion(true);
+                // If all selected rows are marked, unmark them; otherwise mark them
+                const shouldMark = !this.areAllSelectedMarkedForDeletion;
+                tableRowSelectionState.markSelectedForDeletion(shouldMark);
                 tableRowSelectionState.clearAll();
             }
         },
@@ -1811,18 +1878,28 @@ export const TableComponent = {
             this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
             // Also, if any row is marked for deletion or has dirty edithistory/group data, allow save event
             if (!this.allowSaveEvent && Array.isArray(this.data)) {
+                // Helper to check if row has deletion flag in MetaData
+                const hasDeleteFlag = (r) => {
+                    if (!r || !r.MetaData) return false;
+                    try {
+                        const metadata = typeof r.MetaData === 'string' ? JSON.parse(r.MetaData) : r.MetaData;
+                        return metadata?.deletion?.marked === true;
+                    } catch (e) {
+                        return false;
+                    }
+                };
+                
                 this.allowSaveEvent = this.data.some(row => {
-                    if (!row || !row.AppData) return false;
+                    if (!row) return false;
                     // Check main row
-                    if (row.AppData['marked-for-deletion'] || row.AppData['MetadataDirty'] || row.AppData['MetaDataDirty']) {
+                    if (hasDeleteFlag(row) || (row.AppData && (row.AppData['MetadataDirty'] || row.AppData['MetaDataDirty']))) {
                         return true;
                     }
                     // Also check nested arrays (e.g., Items within crates)
                     for (const key of Object.keys(row)) {
                         if (Array.isArray(row[key])) {
                             const hasNestedFlag = row[key].some(nestedRow => 
-                                nestedRow && nestedRow.AppData && 
-                                (nestedRow.AppData['marked-for-deletion'] || nestedRow.AppData['MetadataDirty'] || nestedRow.AppData['MetaDataDirty'])
+                                hasDeleteFlag(nestedRow) || (nestedRow && nestedRow.AppData && (nestedRow.AppData['MetadataDirty'] || nestedRow.AppData['MetaDataDirty']))
                             );
                             if (hasNestedFlag) return true;
                         }
@@ -2087,16 +2164,21 @@ export const TableComponent = {
                                 // Middle third - check if target row is eligible for drop-onto
                                 const currentVisibleRow = this.visibleRows[i];
                                 const targetIndex = currentVisibleRow ? currentVisibleRow.idx : i;
+                                const targetRow = this.data[targetIndex];
                                 
                                 // Don't allow drop onto if:
                                 // 1. Any selected row is a group master
                                 // 2. Target row is a group child (in-group)
                                 // 3. Target row is an empty placeholder (data array is empty or row has class 'empty-drop-target')
+                                // 4. Target row is currently selected
+                                // 5. Target row is marked for deletion
                                 const hasGroupMasterSelected = tableRowSelectionState.hasAnyGroupMaster();
                                 const isEmptyPlaceholder = !this.data || this.data.length === 0 || row.classList.contains('empty-drop-target');
                                 const isGroupChild = this.isRowInGroup(targetIndex);
+                                const isTargetSelected = tableRowSelectionState.hasRow(this.data, targetIndex);
+                                const isMarkedForDeletion = this.isRowMarkedForDeletion(targetRow);
                                 
-                                if (!hasGroupMasterSelected && !isGroupChild && !isEmptyPlaceholder) {
+                                if (!hasGroupMasterSelected && !isGroupChild && !isEmptyPlaceholder && !isTargetSelected && !isMarkedForDeletion) {
                                     newDropTarget = {
                                         type: 'onto',
                                         targetIndex: targetIndex
@@ -2315,6 +2397,7 @@ export const TableComponent = {
             // Handle Delete key - mark selected rows for deletion
             if (event.key === 'Delete' || event.key === 'Backspace') {
                 if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+
                     tableRowSelectionState.markSelectedForDeletion(true);
                     tableRowSelectionState.clearAll();
                     event.preventDefault();
@@ -2343,7 +2426,7 @@ export const TableComponent = {
             <transition name="fade">
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white">+</button>
-                    <button @click="handleDeleteSelected" class="button-symbol red">✖</button>
+                    <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']">✖</button>
                     <button v-if="selectedRowCount > 1" @click="handleUnselectSelected" class="button-symbol">☒</button>
                     <button class="button-symbol blue">☰</button>
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white">+</button>
@@ -2464,7 +2547,7 @@ export const TableComponent = {
                                     'drag-over': false,
                                     'selected': isRowSelected(idx),
                                     'analyzing': isRowAnalyzing(idx),
-                                    'marked-for-deletion': row.AppData && row.AppData['marked-for-deletion'],
+                                    'marked-for-deletion': isRowMarkedForDeletion(row),
                                     'in-group': isRowInGroup(idx),
                                     'is-group': isRowGroupMaster(idx),
                                     'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,

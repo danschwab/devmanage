@@ -755,7 +755,15 @@ export const PacklistTable = {
                             <!-- Only count visible (not marked-for-deletion) rows for Piece # -->
                             {{
                                 mainTableData
-                                    .filter(r => !(r.AppData && r.AppData['marked-for-deletion']))
+                                    .filter(r => {
+                                        if (!r || !r.MetaData) return true;
+                                        try {
+                                            const metadata = typeof r.MetaData === 'string' ? JSON.parse(r.MetaData) : r.MetaData;
+                                            return metadata?.deletion?.marked !== true;
+                                        } catch (e) {
+                                            return true;
+                                        }
+                                    })
                                     .findIndex(r => r === row) + 1
                             }}
                         </template>

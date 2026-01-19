@@ -128,7 +128,13 @@ function shouldExcludeColumn(key, excludedColumns) {
  * @returns {boolean} True if marked for deletion
  */
 function isMarkedForDeletion(obj) {
-    return isValidObject(obj) && obj.AppData && obj.AppData['marked-for-deletion'];
+    if (!isValidObject(obj) || !obj.MetaData) return false;
+    try {
+        const metadata = typeof obj.MetaData === 'string' ? JSON.parse(obj.MetaData) : obj.MetaData;
+        return metadata?.deletion?.marked === true;
+    } catch (e) {
+        return false;
+    }
 }
 
 /**
@@ -460,17 +466,40 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setLoading(false, '');
             }
         },
-        // Mark/unmark for deletion by index using AppData
+        // Mark/unmark for deletion by index using MetaData
         markRowForDeletion(idx, value = true) {
             if (this.data[idx]) {
-                if (!this.data[idx].AppData) this.data[idx].AppData = {};
-                this.data[idx].AppData['marked-for-deletion'] = value;
+                const row = this.data[idx];
+                
+                // Parse existing MetaData
+                let metadata = {};
+                if (row.MetaData) {
+                    try {
+                        metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                    } catch (e) {
+                        console.warn('Failed to parse MetaData:', e);
+                    }
+                }
+                
+                // Set or remove deletion flag
+                if (value) {
+                    metadata.deletion = { marked: true };
+                } else {
+                    delete metadata.deletion;
+                }
+                
+                // Save back to MetaData
+                row.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null;
+                
+                // Mark MetaData as dirty
+                if (!row.AppData) row.AppData = {};
+                row.AppData['MetaDataDirty'] = true;
+                
                 // If marking for deletion and row is empty, remove immediately
                 if (value) {
-                    const row = this.data[idx];
-                    // Check if all fields (except 'AppData') are empty/falsy
+                    // Check if all fields (except 'AppData' and 'MetaData') are empty/falsy
                     const hasContent = Object.keys(row).some(
-                        key => key !== 'AppData' && !!row[key]
+                        key => key !== 'AppData' && key !== 'MetaData' && !!row[key]
                     );
                     if (!hasContent) {
                         this.data.splice(idx, 1);
