@@ -9,7 +9,7 @@ class inventoryUtils_uncached {
         quantity: 'QTY',
         description: 'Description',
         notes: 'NOTES',
-        metadata: 'MetaData'
+        edithistory: 'EditHistory'
     };
 
     static async getTabNameForItem(deps, itemName) {
@@ -161,7 +161,7 @@ class inventoryUtils_uncached {
             mappedData = Array.from(mappedData);
         }
 
-        // Save JS objects using mapping with metadata options
+        // Save JS objects using mapping with edithistory options
         return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
             username,
             identifierKey: 'itemNumber'

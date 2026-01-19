@@ -1,5 +1,4 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
-import { MetaDataUtils } from '../../index.js'; // Used by tableRowSelectionState
 
 import { undoRegistry } from '../../utils/undoRegistry.js';
 
@@ -42,8 +41,14 @@ export const tableRowSelectionState = Vue.reactive({
         const row = sourceArray[rowIndex];
         if (!row || !row.MetaData) return [];
         
-        const metadata = MetaDataUtils.parseMetaData(row.MetaData);
-        const grouping = metadata?.s?.grouping;
+        let metadata;
+        try {
+            metadata = JSON.parse(row.MetaData);
+        } catch (e) {
+            return [];
+        }
+        
+        const grouping = metadata?.grouping;
         
         // Only proceed if this row is a group master
         if (!grouping || !grouping.isGroupMaster) return [];
@@ -58,8 +63,14 @@ export const tableRowSelectionState = Vue.reactive({
             const childRow = sourceArray[i];
             if (!childRow || !childRow.MetaData) continue;
             
-            const childMetadata = MetaDataUtils.parseMetaData(childRow.MetaData);
-            const childGrouping = childMetadata?.s?.grouping;
+            let childMetadata;
+            try {
+                childMetadata = JSON.parse(childRow.MetaData);
+            } catch (e) {
+                continue;
+            }
+            
+            const childGrouping = childMetadata?.grouping;
             
             if (childGrouping && childGrouping.groupId === groupId && !childGrouping.isGroupMaster) {
                 children.push(i);
@@ -69,13 +80,17 @@ export const tableRowSelectionState = Vue.reactive({
         return children;
     },
     
-    // Shared helper to get grouping metadata from a row
+    // Shared helper to get grouping edithistory from a row
     _getRowGrouping(rowIndex, sourceArray) {
         const row = sourceArray[rowIndex];
         if (!row || !row.MetaData) return null;
         
-        const metadata = MetaDataUtils.parseMetaData(row.MetaData);
-        return metadata?.s?.grouping || null;
+        try {
+            const metadata = JSON.parse(row.MetaData);
+            return metadata?.grouping || null;
+        } catch (e) {
+            return null;
+        }
     },
 
     // Add a row to global selection
@@ -243,7 +258,7 @@ export const tableRowSelectionState = Vue.reactive({
         
         if (!rowBefore && !rowAfter) return false;
         
-        // Get grouping metadata for both rows
+        // Get grouping edithistory for both rows
         const beforeGrouping = rowBefore ? this._getRowGrouping(insertIndex - 1, sourceArray) : null;
         const afterGrouping = rowAfter ? this._getRowGrouping(insertIndex, sourceArray) : null;
         
@@ -269,19 +284,22 @@ export const tableRowSelectionState = Vue.reactive({
             if (grouping && grouping.isGroupMaster) {
                 const children = this._getGroupChildren(i, sourceArray);
                 
-                // If master has no children, remove its grouping metadata
+                // If master has no children, remove its grouping data
                 if (children.length === 0) {
                     const item = sourceArray[i];
                     if (item) {
-                        const newMetadata = MetaDataUtils.setUserSetting(
-                            item.MetaData || '',
-                            'grouping',
-                            null
-                        );
-                        item.MetaData = newMetadata;
-                        // Mark metadata as dirty for save state
+                        // Parse existing metadata and remove only grouping
+                        let metadata = {};
+                        try {
+                            metadata = JSON.parse(item.MetaData || '{}');
+                        } catch (e) {
+                            metadata = {};
+                        }
+                        delete metadata.grouping;
+                        item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
+                        // Mark as dirty for save state
                         if (!item.AppData) item.AppData = {};
-                        item.AppData['MetadataDirty'] = true;
+                        item.AppData['MetaDataDirty'] = true;
                         console.log(`Removed orphaned group master at index ${i} (no children found)`);
                     }
                 }
@@ -328,27 +346,29 @@ export const tableRowSelectionState = Vue.reactive({
         }
         
         // Check if target is already a group master
-        const targetMetadata = MetaDataUtils.parseMetaData(targetItem.MetaData);
-        const targetGrouping = targetMetadata?.s?.grouping;
+        const targetGrouping = this._getRowGrouping(targetIndex, targetArray);
         
         // Use existing groupId or generate new one
         const groupId = targetGrouping?.groupId || `G${Date.now()}`;
         
         // Update target item to be group master (if not already)
         if (!targetGrouping?.isGroupMaster) {
-            const newTargetMetadata = MetaDataUtils.setUserSetting(
-                targetItem.MetaData || '',
-                'grouping',
-                {
-                    groupId: groupId,
-                    isGroupMaster: true,
-                    masterItemIndex: targetIndex
-                }
-            );
-            targetItem.MetaData = newTargetMetadata;
-            // Mark metadata as dirty to trigger save state
+            // Parse existing metadata and add/update grouping
+            let metadata = {};
+            try {
+                metadata = JSON.parse(targetItem.MetaData || '{}');
+            } catch (e) {
+                metadata = {};
+            }
+            metadata.grouping = {
+                groupId: groupId,
+                isGroupMaster: true,
+                masterItemIndex: targetIndex
+            };
+            targetItem.MetaData = JSON.stringify(metadata);
+            // Mark as dirty to trigger save state
             if (!targetItem.AppData) targetItem.AppData = {};
-            targetItem.AppData['MetadataDirty'] = true;
+            targetItem.AppData['MetaDataDirty'] = true;
             console.log('Set target as group master:', groupId, 'index:', targetIndex);
         }
         
@@ -369,21 +389,24 @@ export const tableRowSelectionState = Vue.reactive({
         const insertPosition = newTargetIndex + 1;
         targetArray.splice(insertPosition, 0, ...droppedItems);
         
-        // Update dropped items metadata with correct masterItemIndex
+        // Update dropped items MetaData with correct masterItemIndex
         droppedItems.forEach(droppedItem => {
-            const newMetadata = MetaDataUtils.setUserSetting(
-                droppedItem.MetaData || '',
-                'grouping',
-                {
-                    groupId: groupId,
-                    isGroupMaster: false,
-                    masterItemIndex: newTargetIndex // Use the new index after reordering
-                }
-            );
-            droppedItem.MetaData = newMetadata;
-            // Mark metadata as dirty to trigger save state
+            // Parse existing metadata and add/update grouping
+            let metadata = {};
+            try {
+                metadata = JSON.parse(droppedItem.MetaData || '{}');
+            } catch (e) {
+                metadata = {};
+            }
+            metadata.grouping = {
+                groupId: groupId,
+                isGroupMaster: false,
+                masterItemIndex: newTargetIndex // Use the new index after reordering
+            };
+            droppedItem.MetaData = JSON.stringify(metadata);
+            // Mark as dirty to trigger save state
             if (!droppedItem.AppData) droppedItem.AppData = {};
-            droppedItem.AppData['MetadataDirty'] = true;
+            droppedItem.AppData['MetaDataDirty'] = true;
             console.log('Grouped item with master:', groupId);
         });
         
@@ -645,16 +668,18 @@ export const tableRowSelectionState = Vue.reactive({
                     if (!masterIsSelected) {
                         const item = sourceArray[rowIndex];
                         if (item) {
-                            // Remove grouping metadata
-                            const newMetadata = MetaDataUtils.setUserSetting(
-                                item.MetaData || '',
-                                'grouping',
-                                null
-                            );
-                            item.MetaData = newMetadata;
-                            // Mark metadata as dirty to trigger save state
+                            // Parse existing metadata and remove only grouping
+                            let metadata = {};
+                            try {
+                                metadata = JSON.parse(item.MetaData || '{}');
+                            } catch (e) {
+                                metadata = {};
+                            }
+                            delete metadata.grouping;
+                            item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
+                            // Mark as dirty to trigger save state
                             if (!item.AppData) item.AppData = {};
-                            item.AppData['MetadataDirty'] = true;
+                            item.AppData['MetaDataDirty'] = true;
                             console.log(`Removed grouping from row ${rowIndex} (between drop, master not selected)`);
                         }
                     }
@@ -1046,8 +1071,8 @@ export const TableComponent = {
             return this.columns.some(col => col.editable);
         },
         hideSet() {
-            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData' and 'MetaData'
-            return new Set([...(this.hideColumns || []), 'AppData', 'MetaData', ...(this.hiddenColumns || [])]);
+            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
+            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', 'MetaData', ...(this.hiddenColumns || [])]);
         },
         mainTableColumns() {
             // find columns marked with a colspan property and eliminate the extra columns following them
@@ -1087,8 +1112,14 @@ export const TableComponent = {
             // Hide group members if flag is set
             if (this.hideGroupMembers) {
                 filteredData = filteredData.filter(({ row }) => {
-                    const grouping = MetaDataUtils.parseMetaData(row.MetaData)?.s?.grouping;
-                    return !grouping || grouping.isGroupMaster;
+                    if (!row.MetaData) return true;
+                    try {
+                        const metadata = JSON.parse(row.MetaData);
+                        const grouping = metadata?.grouping;
+                        return !grouping || grouping.isGroupMaster;
+                    } catch (e) {
+                        return true;
+                    }
                 });
             }
 
@@ -1636,12 +1667,12 @@ export const TableComponent = {
                 Object.keys(this.nestedTableDirtyCells[row]).length > 0
             );
             this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
-            // Also, if any row is marked for deletion or has dirty metadata, allow save event
+            // Also, if any row is marked for deletion or has dirty edithistory/group data, allow save event
             if (!this.allowSaveEvent && Array.isArray(this.data)) {
                 this.allowSaveEvent = this.data.some(row => {
                     if (!row || !row.AppData) return false;
                     // Check main row
-                    if (row.AppData['marked-for-deletion'] || row.AppData['MetadataDirty']) {
+                    if (row.AppData['marked-for-deletion'] || row.AppData['MetadataDirty'] || row.AppData['MetaDataDirty']) {
                         return true;
                     }
                     // Also check nested arrays (e.g., Items within crates)
@@ -1649,7 +1680,7 @@ export const TableComponent = {
                         if (Array.isArray(row[key])) {
                             const hasNestedFlag = row[key].some(nestedRow => 
                                 nestedRow && nestedRow.AppData && 
-                                (nestedRow.AppData['marked-for-deletion'] || nestedRow.AppData['MetadataDirty'])
+                                (nestedRow.AppData['marked-for-deletion'] || nestedRow.AppData['MetadataDirty'] || nestedRow.AppData['MetaDataDirty'])
                             );
                             if (hasNestedFlag) return true;
                         }

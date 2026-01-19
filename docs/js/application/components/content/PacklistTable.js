@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, MetaDataUtils } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
@@ -626,7 +626,7 @@ export const PacklistTable = {
             }
             
             // Check if target is already a group master
-            const targetMetadata = MetaDataUtils.parseMetaData(targetItem.MetaData);
+            const targetMetadata = EditHistoryUtils.parseEditHistory(targetItem.EditHistory);
             const targetGrouping = targetMetadata?.s?.grouping;
             
             // Use existing groupId or generate new one
@@ -634,8 +634,8 @@ export const PacklistTable = {
             
             // Update target item to be group master (if not already)
             if (!targetGrouping?.isGroupMaster) {
-                const newTargetMetadata = MetaDataUtils.setUserSetting(
-                    targetItem.MetaData || '',
+                const newTargetMetadata = EditHistoryUtils.setUserSetting(
+                    targetItem.EditHistory || '',
                     'grouping',
                     {
                         groupId: groupId,
@@ -643,8 +643,8 @@ export const PacklistTable = {
                         masterItemIndex: targetIndex
                     }
                 );
-                targetItem.MetaData = newTargetMetadata;
-                // Mark metadata as dirty to trigger save state
+                targetItem.EditHistory = newTargetMetadata;
+                // Mark edithistory as dirty to trigger save state
                 if (!targetItem.AppData) targetItem.AppData = {};
                 targetItem.AppData['MetadataDirty'] = true;
                 console.log('Set target as group master:', groupId, 'index:', targetIndex);
@@ -652,8 +652,8 @@ export const PacklistTable = {
             
             // Update dropped items to be grouped with target
             droppedItems.forEach(droppedItem => {
-                const newMetadata = MetaDataUtils.setUserSetting(
-                    droppedItem.MetaData || '',
+                const newMetadata = EditHistoryUtils.setUserSetting(
+                    droppedItem.EditHistory || '',
                     'grouping',
                     {
                         groupId: groupId,
@@ -661,8 +661,8 @@ export const PacklistTable = {
                         masterItemIndex: targetIndex
                     }
                 );
-                droppedItem.MetaData = newMetadata;
-                // Mark metadata as dirty to trigger save state
+                droppedItem.EditHistory = newMetadata;
+                // Mark edithistory as dirty to trigger save state
                 if (!droppedItem.AppData) droppedItem.AppData = {};
                 droppedItem.AppData['MetadataDirty'] = true;
                 console.log('Grouped item with master:', groupId, 'item:', droppedItem.Description);

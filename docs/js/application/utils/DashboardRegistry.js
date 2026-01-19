@@ -88,7 +88,7 @@ export const DashboardRegistry = {
     },
 
     /**
-     * Get container metadata (for classes like wide/tall)
+     * Get container edithistory (for classes like wide/tall)
      * Compares clean paths (without parameters) for matching
      */
     getContainer(containerPathWithParams) {
@@ -105,7 +105,7 @@ export const DashboardRegistry = {
      */
     async add(containerPathWithParams) {
         if (!this.has(containerPathWithParams)) {
-            // Add as object with metadata
+            // Add as object with edithistory
             const newContainer = {
                 path: containerPathWithParams,
                 classes: ''

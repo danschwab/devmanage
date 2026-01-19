@@ -69,13 +69,13 @@ export { Priority };
  */
 
 /**
- * Generate a clean identifier for a function, using cache metadata when available
+ * Generate a clean identifier for a function, using cache edithistory when available
  * @param {Function} fn - The function to identify
  * @returns {string} A clean identifier string
  */
 function getMethodIdentifier(fn) {
     if (!fn) return '';
-    // If function has cache wrapper metadata, use it for a clean identifier
+    // If function has cache wrapper edithistory, use it for a clean identifier
     if (fn._namespace && fn._methodName) {
         return `${fn._namespace}.${fn._methodName}`;
     }
@@ -101,7 +101,7 @@ export function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
  * @returns {Set} Set of column names to exclude
  */
 function getExcludedColumns(analysisConfig = null) {
-    const excludedColumns = new Set(['AppData']); // MetaData should persist, only AppData is ephemeral
+    const excludedColumns = new Set(['AppData']); // EditHistory should persist, only AppData is ephemeral
     if (analysisConfig && Array.isArray(analysisConfig)) {
         analysisConfig.forEach(config => {
             if (config.targetColumn) {
@@ -855,7 +855,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         }
     });
 
-    // Helper to strip AppData, MetaData, and analysis target columns from objects (including filtering out items marked for deletion)
+    // Helper to strip AppData, EditHistory, and analysis target columns from objects (including filtering out items marked for deletion)
     function removeAppData(arr, analysisConfig = null) {
         if (!Array.isArray(arr)) return arr;
         
@@ -907,7 +907,7 @@ const AUTO_SAVE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
  * Calculate diff between original and current data recursively
  * Only stores row indices with their changed fields for efficiency
  * Handles nested arrays recursively
- * Excludes AppData, MetaData, and analysis target columns
+ * Excludes AppData, EditHistory, and analysis target columns
  * @param {Array} originalData - Original data
  * @param {Array} currentData - Current modified data
  * @param {Array} analysisConfig - Analysis configuration to identify columns to exclude

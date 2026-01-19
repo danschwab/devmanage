@@ -121,10 +121,10 @@ Architecture Improvements
 - [x] dashboard configuration
 - [x] user preferences storage
 - [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
-      consider always checking the metadata last-edited date before saving to prevent overwriting simultaneous changes?
+      consider always checking the edithistory last-edited date before saving to prevent overwriting simultaneous changes?
 - [x] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
-- [x] extra spreadsheet MetaData column
-- [ ] impliment metadata for packlists (complete for inventory, not complete for multilayer packlist data)
+- [x] extra spreadsheet EditHistory column
+- [ ] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [x] save history: dateTime, userName, fields edited & old values
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history

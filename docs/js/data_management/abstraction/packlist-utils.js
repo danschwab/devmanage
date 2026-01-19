@@ -157,9 +157,9 @@ class packListUtils_uncached {
         }
         // Fetch the raw sheet data (2D array)
         const sheetData = await deps.call(Database.getData, 'PACK_LISTS', projectIdentifier, null);
-        if (!sheetData || sheetData.length < 4) return [];
-        // Extract headers (typically row 3)
-        const headerRow = sheetData[2] || [];
+        if (!sheetData || sheetData.length < 2) return [];
+        // Extract headers from row 1 (index 0)
+        const headerRow = sheetData[0] || [];
         const itemStartIndex = headerRow.findIndex(header => header === itemColumnsStart);
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
@@ -167,23 +167,27 @@ class packListUtils_uncached {
         const mainHeaders = headerRow.slice(0, itemStartIndex);
         const itemHeaders = headerRow.slice(itemStartIndex);
         
-        // Check for MetaData column in both main and item headers
-        const mainMetadataIndex = mainHeaders.indexOf('MetaData');
-        const itemMetadataIndex = itemHeaders.indexOf('MetaData');
+        // Check for EditHistory column in both main and item headers
+        const mainMetadataIndex = mainHeaders.indexOf('EditHistory');
+        const itemMetadataIndex = itemHeaders.indexOf('EditHistory');
         
-        // Filter out MetaData from headers (will be attached to objects as property)
-        const filteredMainHeaders = mainHeaders.filter(h => h !== 'MetaData');
-        const filteredItemHeaders = itemHeaders.filter(h => h !== 'MetaData');
+        // Filter out EditHistory from headers (will be attached to objects as property)
+        const filteredMainHeaders = mainHeaders.filter(h => h !== 'EditHistory');
+        const filteredItemHeaders = itemHeaders.filter(h => h !== 'EditHistory');
         
         const crates = [];
         let currentCrate = null;
-        // Process rows starting from row 4
-        for (let i = 3; i < sheetData.length; i++) {
+        // Process rows starting from row 2 (index 1)
+        for (let i = 1; i < sheetData.length; i++) {
             const rowValues = sheetData[i] || [];
             const crateInfoArr = rowValues.slice(0, itemStartIndex);
             const crateContentsArr = rowValues.slice(itemStartIndex);
             // If crate info row, start a new crate
-            if (crateInfoArr.some(cell => cell)) {
+            // Check non-EditHistory columns only (EditHistory exists in all rows after save)
+            const hasCrateInfo = crateInfoArr.some((cell, idx) => {
+                return cell && idx !== mainMetadataIndex;
+            });
+            if (hasCrateInfo) {
                 if (currentCrate) {
                     crates.push(currentCrate);
                 }
@@ -193,9 +197,9 @@ class packListUtils_uncached {
                     const originalIdx = mainHeaders.indexOf(label);
                     crateInfoObj[label] = originalIdx < crateInfoArr.length && crateInfoArr[originalIdx] !== undefined ? crateInfoArr[originalIdx] : '';
                 });
-                // Extract MetaData if column exists
+                // Extract EditHistory if column exists
                 if (mainMetadataIndex !== -1 && mainMetadataIndex < crateInfoArr.length) {
-                    crateInfoObj.MetaData = crateInfoArr[mainMetadataIndex] || '';
+                    crateInfoObj.EditHistory = crateInfoArr[mainMetadataIndex] || '';
                 }
                 currentCrate = {
                     ...crateInfoObj,
@@ -209,9 +213,9 @@ class packListUtils_uncached {
                     const originalIdx = itemHeaders.indexOf(label);
                     itemObj[label] = originalIdx < crateContentsArr.length && crateContentsArr[originalIdx] !== undefined ? crateContentsArr[originalIdx] : '';
                 });
-                // Extract MetaData if column exists
+                // Extract EditHistory if column exists
                 if (itemMetadataIndex !== -1 && itemMetadataIndex < crateContentsArr.length) {
-                    itemObj.MetaData = crateContentsArr[itemMetadataIndex] || '';
+                    itemObj.EditHistory = crateContentsArr[itemMetadataIndex] || '';
                 }
                 currentCrate.Items.push(itemObj);
             }
@@ -262,7 +266,7 @@ class packListUtils_uncached {
      * @param {string} tabName - The sheet/tab name.
      * @param {Array<Object>} crates - Array of crate objects, each with info and items arrays.
      * @param {Object} [headers] - { main: [...], items: [...] } (optional)
-     * @param {string} [username] - Username making the change (for metadata)
+     * @param {string} [username] - Username making the change (for edithistory)
      * @returns {Promise<boolean>} Success status
      */
     static async savePackList(tabName, mappedData, headers = null, username = null) {
@@ -270,20 +274,19 @@ class packListUtils_uncached {
 
         const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
         console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
-        const metadataRows = originalSheetData.slice(0, 2);
-        const headerRow = originalSheetData[2] || [];
+        const headerRow = originalSheetData[0] || [];
 
         const itemColumnsStart = headerRow.findIndex(h => h === 'Pack');
         let mainHeaders = headerRow.slice(0, itemColumnsStart);
         let itemHeaders = headerRow.slice(itemColumnsStart);
         
-        // Always ensure MetaData columns exist (add if not present)
-        // This enables metadata tracking for packlists
-        if (!mainHeaders.includes('MetaData')) {
-            mainHeaders = [...mainHeaders, 'MetaData'];
+        // Always ensure EditHistory columns exist (add if not present)
+        // This enables edithistory tracking for packlists
+        if (!mainHeaders.includes('EditHistory')) {
+            mainHeaders = [...mainHeaders, 'EditHistory'];
         }
-        if (!itemHeaders.includes('MetaData')) {
-            itemHeaders = [...itemHeaders, 'MetaData'];
+        if (!itemHeaders.includes('EditHistory')) {
+            itemHeaders = [...itemHeaders, 'EditHistory'];
         }
 
         // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
@@ -313,31 +316,51 @@ class packListUtils_uncached {
         }
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
-        // Rebuild header row with potentially updated headers (including MetaData)
-        const newHeaderRow = [...headers.main, ...headers.items];
-        const sheetData = [...metadataRows, newHeaderRow];
-        // Row 4+: crate/item data
+        // Create full mapping for all columns (enables automatic edithistory tracking)
+        // Combine main and item headers, ensuring EditHistory is mapped for history
+        const allHeaders = [...headers.main, ...headers.items];
+        const packlistMapping = {};
+        allHeaders.forEach(header => {
+            if (header === 'EditHistory') {
+                packlistMapping['edithistory'] = 'EditHistory'; // Map to lowercase for Database layer
+            } else {
+                packlistMapping[header] = header; // 1:1 mapping for all other columns
+            }
+        });
+        
+        // Flatten crates into row objects with ALL column properties
+        const rowObjects = [];
         cleanCrates.forEach(crate => {
-            // Crate info row
-            const crateInfoArr = headers.main.map(h => crate[h] !== undefined ? crate[h] : '');
-            const crateContentsArr = headers.items.map(h => '');
-            sheetData.push([...crateInfoArr, ...crateContentsArr]);
-            // Item rows
+            // Crate row: main columns filled, item columns empty
+            const crateRow = {};
+            headers.main.forEach(h => {
+                crateRow[h] = crate[h] !== undefined ? crate[h] : '';
+            });
+            headers.items.forEach(h => {
+                crateRow[h] = ''; // Item columns empty for crate rows
+            });
+            rowObjects.push(crateRow);
+            
+            // Item rows: main columns empty, item columns filled
             if (Array.isArray(crate.Items)) {
                 crate.Items.forEach(itemObj => {
-                    const itemInfoArr = headers.main.map(() => '');
-                    const itemContentsArr = headers.items.map(h => itemObj[h] !== undefined ? itemObj[h] : '');
-                    sheetData.push([...itemInfoArr, ...itemContentsArr]);
+                    const itemRow = {};
+                    headers.main.forEach(h => {
+                        itemRow[h] = ''; // Main columns empty for item rows
+                    });
+                    headers.items.forEach(h => {
+                        itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                    });
+                    rowObjects.push(itemRow);
                 });
             }
         });
-        // Save the sheet data (2D array), overwriting the whole tab
-        // Note: Packlists use custom metadata handling at the packlist-utils layer
-        // MetaData columns are managed manually (extracted on load, appended on save)
-        // We still skip the automatic Database-layer metadata tracking since it requires mapping objects
-        return await Database.setData('PACK_LISTS', tabName, sheetData, null, {
+        
+        // Save using object array with mapping - enables automatic edithistory tracking!
+        // Database layer will handle diff calculation and history appending
+        return await Database.setData('PACK_LISTS', tabName, rowObjects, packlistMapping, {
             username,
-            skipMetadata: true // Skip auto-tracking (we handle metadata manually in packlist-utils)
+            skipMetadata: false // Enable automatic history tracking
         });
     }
 
