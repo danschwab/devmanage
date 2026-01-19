@@ -207,7 +207,11 @@ class packListUtils_uncached {
                 };
             }
             // If item row, add to current crate's Items array
-            if (crateContentsArr.some(cell => cell) && currentCrate) {
+            // Check non-EditHistory columns only (EditHistory exists in all rows after save)
+            const hasItemContent = crateContentsArr.some((cell, idx) => {
+                return cell && idx !== itemMetadataIndex;
+            });
+            if (hasItemContent && currentCrate) {
                 const itemObj = {};
                 filteredItemHeaders.forEach((label, idx) => {
                     const originalIdx = itemHeaders.indexOf(label);

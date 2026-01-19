@@ -948,6 +948,10 @@ export const TableComponent = {
         enableGrouping: {
             type: Boolean,
             default: false
+        },
+        showSelectionBubble: {
+            type: Boolean,
+            default: false
         }
     },
     emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search', 'drop-onto'],
@@ -1054,7 +1058,91 @@ export const TableComponent = {
     },
     computed: {
         selectedRowCount() {
-            return tableRowSelectionState.getArraySelectionCount(this.data);
+            return tableRowSelectionState.getTotalSelectionCount();
+        },
+        shouldShowSelectionBubble() {
+            // Only show bubble if:
+            // 1. showSelectionBubble prop is enabled
+            // 2. There are selections globally
+            // 3. This table contains the first selected row
+            // 4. A drag is not currently happening
+            if (!this.showSelectionBubble || this.selectedRowCount === 0) {
+                return false;
+            }
+            
+            // Find the first selection globally
+            const firstSelection = tableRowSelectionState.selections.values().next().value;
+            if (!firstSelection) return false;
+            
+            // Check if a drag is currently happening
+            if (tableRowSelectionState.findingDropTargets) {
+                return false;
+            }
+
+            // Check if this table's data array matches the first selection's source array
+            return firstSelection.sourceArray === this.data;
+        },
+        hasConsecutiveSelection() {
+            // Check if selected rows in this table form a consecutive sequence
+            const selectedRows = this.getSelectedRows();
+            if (selectedRows.length === 0) return false;
+            if (selectedRows.length === 1) return true;
+            
+            // Sort indices
+            const indices = selectedRows.map(r => r.index).sort((a, b) => a - b);
+            
+            // Check for gaps in the sequence
+            for (let i = 1; i < indices.length; i++) {
+                if (indices[i] !== indices[i - 1] + 1) {
+                    return false; // Gap found
+                }
+            }
+            return true; // All consecutive
+        },
+        firstSelectedVisibleRowIndex() {
+            // Find the chronologically first selected row (from global selection state)
+            // that exists in this table's visible rows
+            if (tableRowSelectionState.selections.size === 0) {
+                return -1;
+            }
+            
+            // Get the chronologically first selection (Map maintains insertion order)
+            const firstSelection = tableRowSelectionState.selections.values().next().value;
+            if (!firstSelection || firstSelection.sourceArray !== this.data) {
+                return -1; // First selection is not in this table
+            }
+            
+            // Find this row in visibleRows
+            for (let i = 0; i < this.visibleRows.length; i++) {
+                const { idx } = this.visibleRows[i];
+                if (idx === firstSelection.rowIndex) {
+                    return i;
+                }
+            }
+            return -1;
+        },
+        selectionBubbleStyle() {
+            // Calculate position for the selection bubble based on the first selected row
+            if (this.selectedRowCount === 0 || this.firstSelectedVisibleRowIndex === -1) {
+                return { display: 'none' };
+            }
+            
+            // Find the actual row element in the DOM using data attribute
+            const table = this.$el?.querySelector('table');
+            if (!table) return { display: 'none' };
+            
+            const targetRow = table.querySelector(`tbody tr[data-visible-idx="${this.firstSelectedVisibleRowIndex}"]`);
+            
+            if (!targetRow) return { display: 'none' };
+            
+            // Get the row's position relative to the table container
+            const tableRect = table.getBoundingClientRect();
+            const rowRect = targetRow.getBoundingClientRect();
+            
+            return {
+                display: 'flex',
+                top: (rowRect.top - tableRect.top + rowRect.height / 2) + 'px'
+            };
         },
         activeSearchValue() {
             // Use parentSearchValue if provided, otherwise use local searchValue
@@ -1378,6 +1466,60 @@ export const TableComponent = {
 
         wouldSplitGroup(insertIndex) {
             return tableRowSelectionState.wouldSplitGroup(insertIndex, this.data);
+        },
+
+        getSelectedRows() {
+            return tableRowSelectionState.getSelectedRows(this.data);
+        },
+
+        getSelectedRowIndices() {
+            return tableRowSelectionState.getSelectedRowIndices(this.data);
+        },
+
+        handleAddRowAbove() {
+            const selectedRows = this.getSelectedRows();
+            if (selectedRows.length === 0 || !this.hasConsecutiveSelection) return;
+            
+            // Get all selected indices, sort them, and use the first one
+            const indices = selectedRows.map(r => r.index).sort((a, b) => a - b);
+            const firstIndex = indices[0];
+            
+            // Emit new-row event with position info
+            this.$emit('new-row', { position: 'above', targetIndex: firstIndex });
+            
+            // Clear selection state after adding row
+            tableRowSelectionState.clearAll();
+        },
+
+        handleAddRowBelow() {
+            const selectedRows = this.getSelectedRows();
+            if (selectedRows.length === 0 || !this.hasConsecutiveSelection) return;
+            
+            // Get all selected indices, sort them, and use the last one
+            const indices = selectedRows.map(r => r.index).sort((a, b) => a - b);
+            const lastIndex = indices[indices.length - 1];
+            
+            // Emit new-row event with position info
+            this.$emit('new-row', { position: 'below', targetIndex: lastIndex });
+            
+            // Clear selection state after adding row
+            tableRowSelectionState.clearAll();
+        },
+
+        handleDeleteSelected() {
+            // future: allow selected rows to be "undeleted"
+            // Mark all selected rows for deletion across all tables
+            if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                tableRowSelectionState.markSelectedForDeletion(true);
+                tableRowSelectionState.clearAll();
+            }
+        },
+
+        handleUnselectSelected() {
+            // Clear all selected rows across all tables
+            if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                tableRowSelectionState.clearAll();
+            }
         },
 
         handleSort(columnKey) {
@@ -2197,6 +2339,24 @@ export const TableComponent = {
             @mouseleave="handleTableMouseLeave"
             @mousemove="handleTableMouseMove"
         >
+            <!-- Selection Action Bubble (outside table) -->
+            <transition name="fade">
+                <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
+                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white">+</button>
+                    <button @click="handleDeleteSelected" class="button-symbol red">✖</button>
+                    <button v-if="selectedRowCount > 1" @click="handleUnselectSelected" class="button-symbol">☒</button>
+                    <button class="button-symbol blue">☰</button>
+                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white">+</button>
+                    <slot
+                        name="selection-actions"
+                        :selectedRows="getSelectedRows()"
+                        :selectedIndices="getSelectedRowIndices()"
+                    >
+                        <!-- Default content if no slot provided -->
+                    </slot>
+                </div>
+            </transition>
+            
             <!-- Error State -->
             <div key="error-state" v-if="error" class="content-header red">
                 <span>Error: {{ error }}</span>
@@ -2298,6 +2458,7 @@ export const TableComponent = {
                     <tbody>
                         <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
                             <tr 
+                                :data-visible-idx="visibleIdx"
                                 :class="{
                                     'dragging': isRowDragging(idx),
                                     'drag-over': false,

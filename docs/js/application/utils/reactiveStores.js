@@ -515,8 +515,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
             this.data.push(row);
         },
-        addNestedRow(parentIdx, key, row, fieldNames = null) {
+        addNestedRow(parentIdx, key, row, fieldNames = null, position = null) {
             // Add a row to a nested array (e.g., Items)
+            // position: { position: 'above'|'below', targetIndex: number } or null for append
             if (
                 Array.isArray(this.data) &&
                 this.data[parentIdx] &&
@@ -534,7 +535,17 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                         }
                     });
                 }
-                this.data[parentIdx][key].push(row);
+                
+                // Insert at specific position if provided
+                if (position && typeof position.targetIndex === 'number') {
+                    const insertIndex = position.position === 'above' 
+                        ? position.targetIndex 
+                        : position.targetIndex + 1;
+                    this.data[parentIdx][key].splice(insertIndex, 0, row);
+                } else {
+                    // Default: append to end
+                    this.data[parentIdx][key].push(row);
+                }
             }
         },
         // Clear specific analysis results by result key or target column

@@ -2,7 +2,7 @@
 export { Requests } from '../data_management/api.js';
 export { parseDate, parsedateFilterParameter, builddateFilterParameter, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
 export { CacheInvalidationBus, invalidateCache } from '../data_management/utils/caching.js';
-export { EditHistoryUtils } from '../data_management/utils/edithistory-utils.js';
+export { EditHistoryUtils } from '../data_management/utils/metadata-utils.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';

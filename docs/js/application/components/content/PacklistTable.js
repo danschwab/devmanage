@@ -244,12 +244,13 @@ export const PacklistTable = {
                 });
             }
         },
-        handleAddItem(crateIdx) {
+        handleAddItem(crateIdx, position = null) {
             // Immediately show inventory selector modal
-            this.showInventorySelector(crateIdx);
+            // position: { position: 'above'|'below', targetIndex: number } or null
+            this.showInventorySelector(crateIdx, position);
         },
         
-        addEmptyItem(crateIdx) {
+        addEmptyItem(crateIdx, position = null) {
             const itemHeaders = this.itemHeaders;
             const itemObj = {};
             itemHeaders.forEach(label => {
@@ -260,12 +261,13 @@ export const PacklistTable = {
                 this.packlistTableStore &&
                 typeof this.packlistTableStore.addNestedRow === 'function'
             ) {
-                this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj);
+                this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj, null, position);
             }
         },
         
-        showInventorySelector(crateIdx) {
+        showInventorySelector(crateIdx, position = null) {
             // Create inventory selector modal component
+            // position: { position: 'above'|'below', targetIndex: number } or null
             const InventorySelectorModal = {
                 components: { TableComponent, ItemImageComponent },
                 props: ['onAddEmpty', 'onItemSelected'],
@@ -420,14 +422,15 @@ export const PacklistTable = {
 
             // Show the inventory selector modal
             this.$modal.custom(InventorySelectorModal, {
-                onItemSelected: (item) => this.addItemFromInventory(crateIdx, item),
+                onItemSelected: (item) => this.addItemFromInventory(crateIdx, item, position),
                 modalClass: 'page-menu',
-                onAddEmpty: () => this.addEmptyItem(crateIdx)
+                onAddEmpty: () => this.addEmptyItem(crateIdx, position)
             }, 'Add Item');
         },
         
-        addItemFromInventory(crateIdx, inventoryItem) {
+        addItemFromInventory(crateIdx, inventoryItem, position = null) {
             // Create a new item row populated with inventory data
+            // position: { position: 'above'|'below', targetIndex: number } or null
             const itemHeaders = this.itemHeaders;
             const itemObj = {};
             
@@ -457,7 +460,7 @@ export const PacklistTable = {
                 this.packlistTableStore &&
                 typeof this.packlistTableStore.addNestedRow === 'function'
             ) {
-                this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj);
+                this.packlistTableStore.addNestedRow(crateIdx, 'Items', itemObj, null, position);
             }
         },
         async handleSave() {
@@ -782,8 +785,9 @@ export const PacklistTable = {
                                 :parent-search-value="$refs.mainTableComponent?.searchValue || ''"
                                 :showSearch="true"
                                 :hideRowsOnSearch="false"
+                                :showSelectionBubble="editMode"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; }"
-                                @new-row="() => { handleAddItem(rowIndex); }"
+                                @new-row="(positionData) => { handleAddItem(rowIndex, positionData); }"
                                 @inner-table-dirty="(isDirty) => { 
                                     if (typeof onInnerTableDirty === 'function') {
                                         onInnerTableDirty(isDirty, rowIndex, column ? mainColumns.findIndex(c => c.key === column.key) : 0);
