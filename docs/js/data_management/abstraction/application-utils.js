@@ -179,6 +179,162 @@ class applicationUtils_uncached {
         
         return parsedValue;
     }
+    
+    /**
+     * Lock a spreadsheet tab for a user
+     * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
+     * @param {string} tab - The tab name
+     * @param {string} user - The user email claiming the lock
+     * @returns {Promise<boolean>} Success status
+     */
+    static async lockSheet(spreadsheet, tab, user) {
+        const timestamp = new Date().toISOString();
+        
+        // Get existing locks
+        const existingLocks = await Database.getData('CACHE', 'Locks', {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        });
+        
+        // Check if already locked
+        const existingLock = existingLocks.find(lock => 
+            lock.Spreadsheet === spreadsheet && lock.Tab === tab
+        );
+        
+        if (existingLock) {
+            // Already locked by this or another user
+            if (existingLock.User === user) {
+                // Update timestamp for same user
+                const updatedLocks = existingLocks.map(lock => 
+                    (lock.Spreadsheet === spreadsheet && lock.Tab === tab) 
+                        ? { ...lock, Timestamp: timestamp }
+                        : lock
+                );
+                
+                return await Database.setData('CACHE', 'Locks', updatedLocks, {
+                    Spreadsheet: 'Spreadsheet',
+                    Tab: 'Tab',
+                    User: 'User',
+                    Timestamp: 'Timestamp'
+                }, { skipMetadata: true });
+            } else {
+                // Locked by another user
+                console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.User}`);
+                return false;
+            }
+        }
+        
+        // Add new lock
+        existingLocks.push({
+            Spreadsheet: spreadsheet,
+            Tab: tab,
+            User: user,
+            Timestamp: timestamp
+        });
+        
+        return await Database.setData('CACHE', 'Locks', existingLocks, {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        }, { skipMetadata: true });
+    }
+    
+    /**
+     * Unlock a spreadsheet tab
+     * @param {string} spreadsheet - The spreadsheet name
+     * @param {string} tab - The tab name
+     * @param {string} user - The user email releasing the lock
+     * @returns {Promise<boolean>} Success status
+     */
+    static async unlockSheet(spreadsheet, tab, user) {
+        // Get existing locks
+        const existingLocks = await Database.getData('CACHE', 'Locks', {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        });
+        
+        // Find the lock
+        const lockIndex = existingLocks.findIndex(lock => 
+            lock.Spreadsheet === spreadsheet && lock.Tab === tab
+        );
+        
+        if (lockIndex === -1) {
+            // No lock exists
+            return true;
+        }
+        
+        const existingLock = existingLocks[lockIndex];
+        
+        // Only the user who locked it can unlock it
+        if (existingLock.User !== user) {
+            console.warn(`Cannot unlock ${spreadsheet}/${tab} - locked by ${existingLock.User}, not ${user}`);
+            return false;
+        }
+        
+        // Remove the lock
+        existingLocks.splice(lockIndex, 1);
+        
+        return await Database.setData('CACHE', 'Locks', existingLocks, {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        }, { skipMetadata: true });
+    }
+    
+    /**
+     * Get lock details for a spreadsheet tab
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} spreadsheet - The spreadsheet name
+     * @param {string} tab - The tab name
+     * @returns {Promise<Object|null>} Lock details or null if not locked
+     */
+    static async getSheetLock(deps, spreadsheet, tab) {
+        console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}"`);
+        const locks = await deps.call(Database.getData, 'CACHE', 'Locks', {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        });
+        console.log(`[ApplicationUtils.getSheetLock] Found ${locks.length} total locks:`, locks);
+        
+        const matchedLock = locks.find(lock => 
+            lock.Spreadsheet === spreadsheet && lock.Tab === tab
+        ) || null;
+        
+        console.log(`[ApplicationUtils.getSheetLock] Matched lock for "${spreadsheet}/${tab}":`, matchedLock);
+        return matchedLock;
+    }
+    
+    /**
+     * Release all locks for a user
+     * @param {string} user - The user email
+     * @returns {Promise<boolean>} Success status
+     */
+    static async releaseAllUserLocks(user) {
+        const locks = await Database.getData('CACHE', 'Locks', {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        });
+        
+        // Remove all locks for this user
+        const remainingLocks = locks.filter(lock => lock.User !== user);
+        
+        return await Database.setData('CACHE', 'Locks', remainingLocks, {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        }, { skipMetadata: true });
+    }
 }
 
-export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData', 'initializeDefaultSavedSearches']);
+export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet']);

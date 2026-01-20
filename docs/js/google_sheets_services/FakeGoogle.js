@@ -718,6 +718,10 @@ export class FakeGoogleSheetsService {
             'UserData_test_example_com': [
                 ['ID', 'Value'],
                 ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
+            ],
+            'Locks': [
+                ['Spreadsheet', 'Tab', 'User', 'Timestamp'],
+                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z']
             ]
         }
     };
@@ -750,7 +754,8 @@ export class FakeGoogleSheetsService {
             { title: 'Shows', sheetId: 2 }
         ],
         'CACHE': [
-            { title: 'UserData_test_example_com', sheetId: 0 }
+            { title: 'UserData_test_example_com', sheetId: 0 },
+            { title: 'Locks', sheetId: 1 }
         ]
     };
 

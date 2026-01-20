@@ -301,6 +301,102 @@ class Requests_uncached {
     }
     
     /**
+     * Lock a spreadsheet tab for a user
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls ApplicationUtils directly to trigger cache invalidation
+     * 
+     * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
+     * @param {string} tab - The tab name
+     * @param {string} user - The user email claiming the lock
+     * @returns {Promise<boolean>} Success status
+     */
+    static async lockSheet(spreadsheet, tab, user) {
+        return await ApplicationUtils.lockSheet(spreadsheet, tab, user);
+    }
+    
+    /**
+     * Unlock a spreadsheet tab
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls ApplicationUtils directly to trigger cache invalidation
+     * 
+     * @param {string} spreadsheet - The spreadsheet name
+     * @param {string} tab - The tab name
+     * @param {string} user - The user email releasing the lock
+     * @returns {Promise<boolean>} Success status
+     */
+    static async unlockSheet(spreadsheet, tab, user) {
+        return await ApplicationUtils.unlockSheet(spreadsheet, tab, user);
+    }
+    
+    /**
+     * Get lock details for a spreadsheet tab
+     * 
+     * QUERY METHOD - Excluded from caching to ensure real-time lock status
+     * Does NOT accept deps parameter or use deps.call()
+     * 
+     * @param {string} spreadsheet - The spreadsheet name
+     * @param {string} tab - The tab name
+     * @returns {Promise<Object|null>} Lock details or null if not locked
+     */
+    static async getSheetLock(spreadsheet, tab) {
+        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
+        return await ApplicationUtils.getSheetLock(spreadsheet, tab);
+    }
+    
+    /**
+     * Get lock status for a packlist (specialized for analysis pipeline)
+     * 
+     * QUERY METHOD - Excluded from caching to ensure real-time lock status
+     * Does NOT accept deps parameter or use deps.call()
+     * 
+     * This is a convenience wrapper for getSheetLock that's designed for use
+     * in analysis configurations where only the tab name is provided.
+     * 
+     * @param {string} tabName - The packlist tab name
+     * @returns {Promise<Object|null>} Lock details or null if not locked
+     */
+    static async getPacklistLock(tabName) {
+        console.log(`[Requests.getPacklistLock] Checking lock for packlist: "${tabName}"`);
+        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
+        // The wrapped version's signature is: getSheetLock(spreadsheet, tab)
+        const result = await ApplicationUtils.getSheetLock('PACK_LISTS', tabName);
+        console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
+        return result;
+    }
+    
+    /**
+     * Get all locks for a user
+     * 
+     * QUERY METHOD - Excluded from caching to ensure real-time lock status
+     * Does NOT accept deps parameter or use deps.call()
+     * 
+     * @param {string} user - The user email
+     * @returns {Promise<Array>} Array of lock objects
+     */
+    static async getUserLocks(user) {
+        // ApplicationUtils.getUserLocks is wrapped, so we don't pass deps parameter
+        return await ApplicationUtils.getUserLocks(user);
+    }
+    
+    /**
+     * Release all locks for a user
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * Calls ApplicationUtils directly to trigger cache invalidation
+     * 
+     * @param {string} user - The user email
+     * @returns {Promise<boolean>} Success status
+     */
+    static async releaseAllUserLocks(user) {
+        return await ApplicationUtils.releaseAllUserLocks(user);
+    }
+    
+    /**
      * Get mapped inventory tab data (with default mapping and optional filters).
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
@@ -732,8 +828,14 @@ class Requests_uncached {
  * - saveInventoryTabData: Triggers cache invalidation via InventoryUtils.saveInventoryTabData()
  * - savePackList: Triggers cache invalidation via PackListUtils.savePackList()
  * - storeUserData: Triggers cache invalidation via ApplicationUtils.storeUserData()
+ * - lockSheet: Triggers cache invalidation via ApplicationUtils.lockSheet()
+ * - unlockSheet: Triggers cache invalidation via ApplicationUtils.unlockSheet()
+ * 
+ * QUERY METHODS EXCLUDED from caching for real-time data:
+ * - getSheetLock: Lock details must always be current
+ * - getPacklistLock: Packlist lock details must always be current
  * 
  * These methods are passed through without modification, preserving their original
  * signatures (no deps parameter) and allowing them to trigger invalidation independently.
  */
-export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData'], ['computeIdentifier']);
+export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'getSheetLock', 'getPacklistLock'], ['computeIdentifier']);

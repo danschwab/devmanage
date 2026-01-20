@@ -1005,6 +1005,7 @@ export const TableComponent = {
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
+            collapsedGroups: new Set(), // Track which group IDs are collapsed
             hasUndoCaptured: false, // Track if first edit has been captured for undo
             lastEditTimestamp: null, // Track last edit time for 5-second idle detection
             clickState: {
@@ -1255,12 +1256,17 @@ export const TableComponent = {
 
             // Hide group members if flag is set
             if (this.hideGroupMembers) {
-                filteredData = filteredData.filter(({ row }) => {
+                filteredData = filteredData.filter(({ row, idx }) => {
                     if (!row.MetaData) return true;
                     try {
                         const metadata = JSON.parse(row.MetaData);
                         const grouping = metadata?.grouping;
-                        return !grouping || grouping.isGroupMaster;
+                        // Show if not in a group OR if it's a group master
+                        if (!grouping || grouping.isGroupMaster) return true;
+                        
+                        // This is a group child - check if its group is collapsed
+                        // If group is NOT collapsed, show the child
+                        return !this.collapsedGroups.has(grouping.groupId);
                     } catch (e) {
                         return true;
                     }
@@ -2353,6 +2359,41 @@ export const TableComponent = {
                 this.expandedRows.delete(rowIndex);
             } else {
                 this.expandedRows.add(rowIndex);
+            }
+        },
+        
+        toggleGroupCollapse(rowIndex) {
+            // Get the group ID from this row's metadata
+            const row = this.data[rowIndex];
+            if (!row || !row.MetaData) return;
+            
+            try {
+                const metadata = JSON.parse(row.MetaData);
+                const grouping = metadata?.grouping;
+                
+                // Only toggle if this is a group master
+                if (grouping && grouping.isGroupMaster) {
+                    if (this.collapsedGroups.has(grouping.groupId)) {
+                        this.collapsedGroups.delete(grouping.groupId);
+                    } else {
+                        this.collapsedGroups.add(grouping.groupId);
+                    }
+                }
+            } catch (e) {
+                console.error('Error toggling group collapse:', e);
+            }
+        },
+        
+        isGroupCollapsed(rowIndex) {
+            const row = this.data[rowIndex];
+            if (!row || !row.MetaData) return false;
+            
+            try {
+                const metadata = JSON.parse(row.MetaData);
+                const grouping = metadata?.grouping;
+                return grouping && grouping.isGroupMaster && this.collapsedGroups.has(grouping.groupId);
+            } catch (e) {
+                return false;
             }
         },
         

@@ -212,6 +212,15 @@ export const PacklistContent = {
         recreateStore() {
             // Configure analysis for packlist descriptions
             const analysisConfig = [
+                // Check lock status first - this determines card color
+                createAnalysisConfig(
+                    Requests.getPacklistLock,
+                    'lockInfo',
+                    'Checking lock status...',
+                    ['title'], // Extract tab name from 'title' column
+                    [], // No additional params needed
+                    'lockInfo' // Store lock info in 'lockInfo' column
+                ),
                 createAnalysisConfig(
                     Requests.getPacklistDescription,
                     'description',
@@ -239,6 +248,7 @@ export const PacklistContent = {
             );
         },
         formatPacklistCard(tab) {
+            console.log(`[PacklistContent.formatPacklistCard] Formatting card for "${tab.title}", lockInfo:`, tab.lockInfo);
             // Find any reactive stores for this packlist (regardless of analysis config)
             const matchingStores = findMatchingStores(
                 Requests.getPackList,
@@ -250,9 +260,24 @@ export const PacklistContent = {
                 ? matchingStores.some(match => match.isModified)
                 : this.autoSavedPacklists.has(tab.title);
             
-            // Determine card styling based on store state
-            const cardClass = hasUnsavedChanges ? 'red' : 'gray';
-            const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
+            // Check if the packlist is locked
+            const isLocked = tab.lockInfo && tab.lockInfo !== null;
+            console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - isLocked: ${isLocked}, hasUnsavedChanges: ${hasUnsavedChanges}`);
+            
+            // Determine card styling based on lock state and unsaved changes
+            // Priority: locked (white) > unsaved changes (red) > normal (gray)
+            const cardClass = isLocked ? 'white' : (hasUnsavedChanges ? 'red' : 'gray');
+            console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
+            
+            // Build content footer
+            let contentFooter = undefined;
+            if (isLocked) {
+                const lockOwner = tab.lockInfo.User || 'Unknown';
+                const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
+                contentFooter = `Locked for edit by: ${username}`;
+            } else if (hasUnsavedChanges) {
+                contentFooter = 'Unsaved changes';
+            }
             
             // Build content with ship date first, then description
             let content = '';
