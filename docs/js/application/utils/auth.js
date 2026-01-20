@@ -39,6 +39,11 @@ async function getModalManager() {
 let authPromptPending = null;
 
 /**
+ * Test mode email override (for development/testing only)
+ */
+let testModeEmail = null;
+
+/**
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
 export class Auth {
@@ -50,7 +55,7 @@ export class Auth {
             // Check if user is already authenticated
             const isAuth = await GoogleSheetsAuth.checkAuth();
             if (isAuth) {
-                const email = await GoogleSheetsAuth.getUserEmail();
+                let email = testModeEmail || await GoogleSheetsAuth.getUserEmail();
                 authState.user = { email, name: email?.split('@')[0] || 'User' };
                 authState.isAuthenticated = true;
             }
@@ -70,7 +75,7 @@ export class Auth {
         try {
             await GoogleSheetsAuth.authenticate();
             
-            const email = await GoogleSheetsAuth.getUserEmail();
+            let email = testModeEmail || await GoogleSheetsAuth.getUserEmail();
             if (!email || email.length === 0) {
                 throw new Error('Failed to retrieve user email');
             }
@@ -218,5 +223,59 @@ export class Auth {
     static get state() {
         return authState;
     }
+
+    /**
+     * Set a test mode email override (for development/testing only)
+     * This will make the application think the user is the specified email
+     * without affecting actual authentication
+     * @param {string|null} email - Email to use, or null to disable test mode
+     */
+    static setTestModeEmail(email) {
+        if (email === null || email === undefined) {
+            console.log('[Auth] Test mode disabled, using real user email');
+            testModeEmail = null;
+        } else {
+            console.log(`[Auth] Test mode enabled, user email set to: ${email}`);
+            testModeEmail = email;
+        }
+        
+        // Update current auth state if user is already authenticated
+        if (authState.isAuthenticated && authState.user) {
+            const effectiveEmail = testModeEmail || authState.user.email;
+            authState.user = {
+                email: effectiveEmail,
+                name: effectiveEmail?.split('@')[0] || 'User'
+            };
+            console.log('[Auth] User state updated with test email');
+        }
+    }
+
+    /**
+     * Get the current test mode email (if any)
+     */
+    static getTestModeEmail() {
+        return testModeEmail;
+    }
 }
 
+/**
+ * Expose console function for easy testing
+ * Usage: switchUser('test@example.com') or switchUser(null) to reset
+ */
+window.switchUser = function(email) {
+    if (email === null || email === undefined || email === '') {
+        Auth.setTestModeEmail(null);
+        console.log('✅ Test mode disabled. Using real authenticated user.');
+    } else {
+        Auth.setTestModeEmail(email);
+        console.log(`✅ Now testing as: ${email}`);
+        console.log('💡 Note: This only affects the email returned by the app, not actual authentication.');
+    }
+    
+    // Log current user state
+    if (Auth.state.isAuthenticated && Auth.state.user) {
+        console.log(`Current user state: ${Auth.state.user.email}`);
+    } else {
+        console.log('No user currently authenticated.');
+    }
+};
