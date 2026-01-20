@@ -3,22 +3,32 @@ import { html } from '../../index.js';
 // Simple alert component
 const AlertComponent = {
     props: ['message'],
+    computed: {
+        formattedMessage() {
+            return this.message ? this.message.replace(/\n/g, '<br>') : '';
+        }
+    },
     mounted() {
         setTimeout(() => this.$emit('close-modal'), 3000);
     },
-    template: html`<div style="text-align: center; padding: 1rem;"><div v-html="message"></div></div>`
+    template: html`<div style="text-align: center; padding: 1rem;"><div v-html="formattedMessage"></div></div>`
 };
 
 // Simple confirm component
 const ConfirmComponent = {
     props: ['message', 'onConfirm', 'onCancel', 'confirmText', 'cancelText'],
+    computed: {
+        formattedMessage() {
+            return this.message ? this.message.replace(/\n/g, '<br>') : '';
+        }
+    },
     methods: {
         confirm() { this.onConfirm?.(); this.$emit('close-modal'); },
         cancel() { this.onCancel?.(); this.$emit('close-modal'); }
     },
     template: html`
         <div style="text-align: center; padding: 1rem;">
-            <div v-html="message"></div>
+            <div v-html="formattedMessage"></div>
             <div style="margin-top: 1rem;" class="button-bar">
                 <button @click="confirm">{{ confirmText || 'Ok' }}</button>
                 <button @click="cancel">{{ cancelText || 'Cancel' }}</button>
@@ -40,13 +50,18 @@ const ImageComponent = {
 // Error component with icon and no auto-dismiss
 const ErrorComponent = {
     props: ['message'],
+    computed: {
+        formattedMessage() {
+            return this.message ? this.message.replace(/\n/g, '<br>') : '';
+        }
+    },
     template: html`
         <div style="text-align: center; padding: 1rem;">
             <img src="images/error.png" alt="Error" style="width: 64px; height: 64px; margin-bottom: 1rem;" />
-            <div v-html="message" style="color: var(--color-red); font-weight: 500;"></div>
+            <div v-html="formattedMessage" style="color: var(--color-red); font-weight: 500;"></div>
         </div>
     `
-};
+}
 
 export const ModalComponent = {
     props: {

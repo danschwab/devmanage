@@ -1,4 +1,4 @@
-import { Database, ProductionUtils, wrapMethods, searchFilter } from '../index.js';
+import { Database, ProductionUtils, wrapMethods, searchFilter, ApplicationUtils, invalidateCache } from '../index.js';
 
 /**
  * Utility functions for inventory operations
@@ -128,7 +128,9 @@ class inventoryUtils_uncached {
         return tabData;
     }
 
-    static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null) {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null, options = {}) {
+        const { force = false, reason = '', autoLock = false } = options;
+        
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
@@ -138,34 +140,45 @@ class inventoryUtils_uncached {
             if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found and could not be resolved from INDEX.`);
             resolvedTabName = foundTab;
         }
+        
+        // Lock management is now handled by components via watchers on global locks store
+        // Components acquire locks on edit mode entry and release on save completion
 
-        if (filters) {
-            // Fetch existing data from the tab
-            const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+        let saveResult;
+        try {
+            if (filters) {
+                // Fetch existing data from the tab
+                const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
 
-            // Prepare batch updates
-            const updates = mappedData.filter(item => {
-                const existingItem = existingData.find(row => row.itemNumber === item.itemNumber);
-                return existingItem && JSON.stringify(existingItem) !== JSON.stringify(item);
-            });
+                // Prepare batch updates
+                const updates = mappedData.filter(item => {
+                    const existingItem = existingData.find(row => row.itemNumber === item.itemNumber);
+                    return existingItem && JSON.stringify(existingItem) !== JSON.stringify(item);
+                });
 
-            // Send updates one by one with username
-            for (const update of updates) {
-                await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username });
+                // Send updates one by one with username
+                for (const update of updates) {
+                    await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username });
+                }
+
+                saveResult = true;
+            } else {
+                if (mappedData && typeof mappedData === 'object' && mappedData.__v_isReactive) {
+                    mappedData = Array.from(mappedData);
+                }
+
+                // Save JS objects using mapping with edithistory options
+                saveResult = await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
+                    username,
+                    identifierKey: 'itemNumber'
+                });
             }
-
-            return true;
+        } finally {
+            // Lock management is handled by components
+            // No lock release needed here
         }
 
-        if (mappedData && typeof mappedData === 'object' && mappedData.__v_isReactive) {
-            mappedData = Array.from(mappedData);
-        }
-
-        // Save JS objects using mapping with edithistory options
-        return await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
-            username,
-            identifierKey: 'itemNumber'
-        });
+        return saveResult;
     }
 
 

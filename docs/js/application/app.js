@@ -7,6 +7,7 @@ import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
 import { undoRegistry } from './utils/undoRegistry.js';
+import { Requests, getReactiveStore } from './index.js';
 
 const { createApp } = Vue;
 
@@ -35,7 +36,8 @@ const App = {
             navigationItems: NavigationRegistry.primaryNavigation,
             currentPath: 'dashboard',
             modals: [],
-            currentYear: new Date().getFullYear()
+            currentYear: new Date().getFullYear(),
+            globalLocksStore: null // Global reactive store for ALL locks
         };
     },
     computed: {
@@ -121,6 +123,14 @@ const App = {
             // Initialize dashboard registry if authenticated
             NavigationRegistry.initializeDashboard();
             
+            // Initialize global locks store
+            this.globalLocksStore = getReactiveStore(
+                Requests.getAllLocks,
+                null,
+                []
+            );
+            console.log('[App] Initialized global locks store');
+            
             // Apply current URL state if user is already authenticated
             const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
             if (currentUrl && currentUrl !== 'dashboard') {
@@ -135,6 +145,16 @@ const App = {
         this.$watch('isAuthenticated', async (newVal) => {
             if (newVal) {
                 NavigationRegistry.initializeDashboard();
+                
+                // Initialize global locks store on login
+                if (!this.globalLocksStore) {
+                    this.globalLocksStore = getReactiveStore(
+                        Requests.getAllLocks,
+                        null,
+                        []
+                    );
+                    console.log('[App] Initialized global locks store on login');
+                }
                 
                 // Apply current URL when user logs in
                 const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();

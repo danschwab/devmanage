@@ -333,6 +333,22 @@ class Requests_uncached {
     }
     
     /**
+     * Force unlock a spreadsheet tab (admin override)
+     * This bypasses user validation and backs up any autosaved data before removing it
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     * 
+     * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
+     * @param {string} tab - The tab name (e.g., 'FURNITURE', 'ATSC 2025 NAB')
+     * @param {string} reason - Optional reason for force unlock (for logging/audit)
+     * @returns {Promise<Object>} Result object { success, backupCount, deletedCount, lockOwner, message }
+     */
+    static async forceUnlockSheet(spreadsheet, tab, reason = '') {
+        return await ApplicationUtils.forceUnlockSheet(spreadsheet, tab, reason);
+    }
+    
+    /**
      * Get lock details for a spreadsheet tab
      * 
      * QUERY METHOD - Excluded from caching to ensure real-time lock status
@@ -350,20 +366,19 @@ class Requests_uncached {
     /**
      * Get lock status for a packlist (specialized for analysis pipeline)
      * 
-     * QUERY METHOD - Excluded from caching to ensure real-time lock status
-     * Does NOT accept deps parameter or use deps.call()
+     * QUERY METHOD - Cached with short TTL (10 seconds)
+     * Accepts deps parameter and uses deps.call()
      * 
      * This is a convenience wrapper for getSheetLock that's designed for use
      * in analysis configurations where only the tab name is provided.
      * 
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The packlist tab name
      * @returns {Promise<Object|null>} Lock details or null if not locked
      */
-    static async getPacklistLock(tabName) {
+    static async getPacklistLock(deps, tabName) {
         console.log(`[Requests.getPacklistLock] Checking lock for packlist: "${tabName}"`);
-        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
-        // The wrapped version's signature is: getSheetLock(spreadsheet, tab)
-        const result = await ApplicationUtils.getSheetLock('PACK_LISTS', tabName);
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName);
         console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
         return result;
     }
@@ -371,50 +386,21 @@ class Requests_uncached {
     /**
      * Get lock status for an inventory category (specialized for analysis pipeline)
      * 
-     * QUERY METHOD - Excluded from caching to ensure real-time lock status
-     * Does NOT accept deps parameter or use deps.call()
+     * QUERY METHOD - Cached with short TTL (10 seconds)
+     * Accepts deps parameter and uses deps.call()
      * 
      * This is a convenience wrapper for getSheetLock that's designed for use
      * in analysis configurations where only the tab name is provided.
      * 
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The inventory category tab name
      * @returns {Promise<Object|null>} Lock details or null if not locked
      */
-    static async getInventoryLock(tabName) {
+    static async getInventoryLock(deps, tabName) {
         console.log(`[Requests.getInventoryLock] Checking lock for inventory category: "${tabName}"`);
-        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
-        // The wrapped version's signature is: getSheetLock(spreadsheet, tab)
-        const result = await ApplicationUtils.getSheetLock('INVENTORY', tabName);
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName);
         console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
         return result;
-    }
-    
-    /**
-     * Get all locks for a user
-     * 
-     * QUERY METHOD - Excluded from caching to ensure real-time lock status
-     * Does NOT accept deps parameter or use deps.call()
-     * 
-     * @param {string} user - The user email
-     * @returns {Promise<Array>} Array of lock objects
-     */
-    static async getUserLocks(user) {
-        // ApplicationUtils.getUserLocks is wrapped, so we don't pass deps parameter
-        return await ApplicationUtils.getUserLocks(user);
-    }
-    
-    /**
-     * Release all locks for a user
-     * 
-     * MUTATION METHOD - Excluded from caching
-     * Does NOT accept deps parameter or use deps.call()
-     * Calls ApplicationUtils directly to trigger cache invalidation
-     * 
-     * @param {string} user - The user email
-     * @returns {Promise<boolean>} Success status
-     */
-    static async releaseAllUserLocks(user) {
-        return await ApplicationUtils.releaseAllUserLocks(user);
     }
     
     /**
@@ -475,11 +461,12 @@ class Requests_uncached {
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
      * @param {Object} [filters] - Optional filter parameters
-     * @returns {Promise<boolean>}
+     * @param {Object} [options] - Save options: { force: boolean, reason: string }
+     * @returns {Promise<boolean|Object>} Success status or result object if force used
      */
-    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters) {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, options = {}) {
         const username = authState.user?.email || null;
-        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username);
+        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username, options);
     }
     
     /**
@@ -491,13 +478,14 @@ class Requests_uncached {
      * 
      * @param {Array<Object>} crates - Array of crate objects (with keys/values, Items array)
      * @param {string} projectIdentifier - The project identifier (tab name)
-     * @returns {Promise<boolean>} Success status
+     * @param {Object} [options] - Save options: { force: boolean, reason: string }
+     * @returns {Promise<boolean|Object>} Success status or result object if force used
      */
-    static async savePackList(crates, projectIdentifier) {
-        console.log("API.savePackList called for project:", projectIdentifier);
+    static async savePackList(crates, projectIdentifier, options = {}) {
+        console.log("API.savePackList called for project:", projectIdentifier, "options:", options);
         const username = authState.user?.email || null;
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
-        return await PackListUtils.savePackList(projectIdentifier, crates, null, username);
+        return await PackListUtils.savePackList(projectIdentifier, crates, null, username, options);
     }
 
     /**
@@ -851,13 +839,20 @@ class Requests_uncached {
  * - storeUserData: Triggers cache invalidation via ApplicationUtils.storeUserData()
  * - lockSheet: Triggers cache invalidation via ApplicationUtils.lockSheet()
  * - unlockSheet: Triggers cache invalidation via ApplicationUtils.unlockSheet()
+ * - forceUnlockSheet: Triggers cache invalidation via ApplicationUtils.forceUnlockSheet()
  * 
- * QUERY METHODS EXCLUDED from caching for real-time data:
- * - getSheetLock: Lock details must always be current
- * - getPacklistLock: Packlist lock details must always be current
- * - getInventoryLock: Inventory lock details must always be current
+ * QUERY METHODS WITH SHORT-LIVED CACHE (10 seconds):
+ * - getSheetLock: Lock details cached briefly to reduce queries
+ * - getPacklistLock: Packlist lock details cached briefly
+ * - getInventoryLock: Inventory lock details cached briefly
  * 
- * These methods are passed through without modification, preserving their original
+ * These mutation methods are passed through without modification, preserving their original
  * signatures (no deps parameter) and allowing them to trigger invalidation independently.
  */
-export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'getSheetLock', 'getPacklistLock', 'getInventoryLock'], ['computeIdentifier']);
+export const Requests = wrapMethods(
+    Requests_uncached, 
+    'api', 
+    ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'forceUnlockSheet'], // Mutation methods
+    ['computeIdentifier'], // Infinite cache methods
+    { 'getSheetLock': 10000, 'getPacklistLock': 10000, 'getInventoryLock': 10000 } // Custom cache durations (10 seconds for lock checks)
+);

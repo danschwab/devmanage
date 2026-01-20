@@ -6,52 +6,98 @@ import { ShowInventoryReport } from './ShowInventoryReport.js';
 export const InventoryMenuComponent = {
     props: {
         containerPath: String,
-        containerType: String, 
+        containerType: String,
         currentView: String,
-        title: String
+        title: String,
+        currentCategory: String // Current category name
     },
     inject: ['$modal'],
+    data() {
+        return {
+            globalLocksStore: null
+        };
+    },
     computed: {
+        myLock() {
+            // Get this category's lock from the global locks store
+            const locks = this.globalLocksStore?.data;
+            if (!locks || !this.currentCategory) return null;
+            return locks.find(lock => 
+                lock.Spreadsheet === 'INVENTORY' && 
+                lock.Tab === this.currentCategory.toUpperCase()
+            ) || null;
+        },
+        lockInfo() {
+            return this.myLock;
+        },
+        isLoadingLockInfo() {
+            return this.globalLocksStore?.isLoading || false;
+        },
+        lockOwnerUsername() {
+            if (!this.lockInfo || !this.lockInfo.User) return null;
+            const email = this.lockInfo.User;
+            return email.includes('@') ? email.split('@')[0] : email;
+        },
         menuItems() {
+            const items = [];
+            
+            // Add lock removal option if lock exists with user info and fully loaded
+            if (!this.isLoadingLockInfo && this.lockInfo && this.lockInfo.User) {
+                items.push({ 
+                    label: `Remove lock: ${this.lockOwnerUsername}`, 
+                    action: 'removeLock',
+                    class: 'warning'
+                });
+            }
+            
             switch (this.currentView) {
                 case 'inventory':
-                    return [
+                    items.push(
                         { label: 'Refresh Inventory', action: 'refreshInventory' },
                         { label: 'Add New Item', action: 'addInventoryItem' },
                         { label: 'Export All Items', action: 'exportInventory' },
                         { label: 'Inventory Settings', action: 'inventorySettings' }
-                    ];
+                    );
+                    return items;
                 case 'categories':
-                    return [
+                    items.push(
                         { label: 'Add New Category', action: 'addNewCategory' },
                         { label: 'Manage Category Order', action: 'manageCategoryOrder' },
                         { label: 'Export Category Report', action: 'exportCategoryReport' },
                         { label: 'Category Settings', action: 'categorySettings' }
-                    ];
+                    );
+                    return items;
                 case 'search':
-                    return [
+                    items.push(
                         { label: 'Save Search Criteria', action: 'saveSearchCriteria' },
                         { label: 'Load Saved Search', action: 'loadSavedSearch' },
                         { label: 'Export Search Results', action: 'exportSearchResults' },
                         { label: 'Clear Search History', action: 'clearSearchHistory' }
-                    ];
+                    );
+                    return items;
                 case 'reports':
-                    return [
+                    items.push(
                         { label: 'Schedule Automatic Reports', action: 'scheduleReport' },
                         { label: 'Custom Report Builder', action: 'customReportBuilder' },
                         { label: 'Email Reports', action: 'emailReports' },
                         { label: 'Report Settings', action: 'reportSettings' }
-                    ];
+                    );
+                    return items;
                 default:
-                    return [
+                    items.push(
                         { label: 'Refresh', action: 'refreshInventory' },
                         { label: 'Help', action: 'inventoryHelp' }
-                    ];
+                    );
+                    return items;
             }
         }
     },
+    mounted() {
+        // Initialize global locks store (same instance across all components)
+        this.globalLocksStore = getReactiveStore(Requests.getAllLocks, null, []);
+    },
     methods: {
-        handleAction(action) {
+        async handleAction(action) {
             switch (action) {
                 case 'refreshInventory':
                     this.$modal.alert('Refreshing inventory...', 'Info');
@@ -106,12 +152,47 @@ export const InventoryMenuComponent = {
                 case 'reportSettings':
                     this.$modal.alert('Report settings functionality coming soon!', 'Info');
                     break;
+                case 'removeLock':
+                    await this.handleRemoveLock();
+                    break;
                 case 'inventoryHelp':
                     this.$modal.alert('Inventory help functionality coming soon!', 'Info');
                     break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
+        },
+        async handleRemoveLock() {
+            if (!this.lockInfo) {
+                this.$modal.alert('No lock to remove.', 'Info');
+                return;
+            }
+            
+            const username = this.lockOwnerUsername;
+            const tabName = this.lockInfo.Tab; // Use the actual tab name from lock info
+            
+            this.$modal.confirm(
+                `Are you sure you want to invalidate edits by: ${username}?\n\nWe will attempt to backup their autosaved data.`,
+                async () => {
+                    try {
+                        const result = await Requests.forceUnlockSheet('INVENTORY', tabName, 'User requested via hamburger menu');
+                        
+                        if (result.success) {
+                            this.$modal.alert(
+                                `Lock removed.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
+                                'Success'
+                            );
+                        } else {
+                            this.$modal.alert(`Failed to remove lock: ${result.message}`, 'Error');
+                        }
+                    } catch (error) {
+                        console.error('[InventoryMenu] Error removing lock:', error);
+                        this.$modal.alert(`Error removing lock: ${error.message}`, 'Error');
+                    }
+                },
+                () => {},
+                'Confirm Force Unlock'
+            );
         }
     },
     template: html`
@@ -151,6 +232,15 @@ export const InventoryContent = {
         // Centralized clean path without parameters
         cleanContainerPath() {
             return this.containerPath.split('?')[0];
+        },
+        currentCategoryName() {
+            // Extract category name from path like inventory/categories/{categoryName}
+            const pathSegments = this.cleanContainerPath.split('/').filter(segment => segment.length > 0);
+            // pathSegments[0] = 'inventory', pathSegments[1] = 'categories', pathSegments[2] = category name
+            if (pathSegments[1] === 'categories' && pathSegments[2]) {
+                return pathSegments[2];
+            }
+            return null;
         },
         // Direct navigation options for inventory
         inventoryNavigation() {
@@ -221,6 +311,21 @@ export const InventoryContent = {
         }
     },
     watch: {
+        currentCategoryName: {
+            handler(newCategory) {
+                // Create a new lock store when the current category changes
+                if (newCategory) {
+                    this.categoryLockStore = getReactiveStore(
+                        Requests.getSheetLock,
+                        null,
+                        ['INVENTORY', newCategory.toUpperCase()]
+                    );
+                } else {
+                    this.categoryLockStore = null;
+                }
+            },
+            immediate: true
+        },
         // Watch for when categories data is loaded and check for auto-saved data
         'categoriesStore.data': {
             handler(newData) {
@@ -316,7 +421,9 @@ export const InventoryContent = {
         // Register hamburger menu for inventory
         hamburgerMenuRegistry.registerMenu('inventory', {
             components: [InventoryMenuComponent, DashboardToggleComponent],
-            props: {}
+            props: {
+                currentCategory: () => this.currentCategoryName
+            }
         });
     },
     template: html `

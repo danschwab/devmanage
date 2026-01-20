@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, ApplicationUtils, invalidateCache } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -273,12 +273,17 @@ class packListUtils_uncached {
      * @param {string} [username] - Username making the change (for edithistory)
      * @returns {Promise<boolean>} Success status
      */
-    static async savePackList(tabName, mappedData, headers = null, username = null) {
-        console.log('[PackListUtils.savePackList] crates input:', mappedData);
+    static async savePackList(tabName, mappedData, headers = null, username = null, options = {}) {
+        console.log('[PackListUtils.savePackList] crates input:', mappedData, 'options:', options);
+        
+        // Lock management is now handled by components via watchers on global locks store
+        // Components acquire locks on edit mode entry and release on save completion
 
-        const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
-        console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
-        const headerRow = originalSheetData[0] || [];
+        let saveResult;
+        try {
+            const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
+            console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
+            const headerRow = originalSheetData[0] || [];
 
         const itemColumnsStart = headerRow.findIndex(h => h === 'Pack');
         let mainHeaders = headerRow.slice(0, itemColumnsStart);
@@ -365,10 +370,16 @@ class packListUtils_uncached {
         
         // Save using object array with mapping - enables automatic edithistory tracking!
         // Database layer will handle diff calculation and history appending
-        return await Database.setData('PACK_LISTS', tabName, rowObjects, packlistMapping, {
+        saveResult = await Database.setData('PACK_LISTS', tabName, rowObjects, packlistMapping, {
             username,
             skipMetadata: false // Enable automatic history tracking
         });
+        } finally {
+            // Lock management is handled by components
+            // No lock release needed here
+        }
+        
+        return saveResult;
     }
 
 

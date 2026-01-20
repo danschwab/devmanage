@@ -277,7 +277,7 @@ class CacheManager {
      * @param {Array<string>} [infiniteCacheMethods] - Array of method names that should have infinite cache (no expiration)
      * @returns {Object} - Wrapped class with caching and dependency tracking
      */
-    static wrapMethods(targetClass, namespace, mutationKeys = [], infiniteCacheMethods = []) {
+    static wrapMethods(targetClass, namespace, mutationKeys = [], infiniteCacheMethods = [], customCacheDurations = {}) {
         const wrappedClass = {};
         wrappedClass._namespace = namespace;
         
@@ -320,8 +320,19 @@ class CacheManager {
                         // Execute method with dependency decorator as first parameter
                         const result = await targetClass[methodName](deps, ...args);
                         
-                        // Use infinite cache (null expiration) for specified methods
-                        const expirationMs = infiniteCacheMethods.includes(methodName) ? null : undefined;
+                        // Determine expiration time:
+                        // 1. Custom duration if specified for this method
+                        // 2. Infinite cache (null) if in infiniteCacheMethods
+                        // 3. Default duration otherwise (undefined = use DEFAULT_CACHE_EXPIRATION_MS)
+                        let expirationMs;
+                        if (customCacheDurations[methodName] !== undefined) {
+                            expirationMs = customCacheDurations[methodName];
+                        } else if (infiniteCacheMethods.includes(methodName)) {
+                            expirationMs = null;
+                        } else {
+                            expirationMs = undefined;
+                        }
+                        
                         CacheManager.set(cacheKey, result, expirationMs);
                         
                         return result;

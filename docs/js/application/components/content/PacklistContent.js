@@ -7,22 +7,64 @@ export const PacklistMenuComponent = {
         containerType: String,
         currentView: String,
         title: String,
-        refreshCallback: Function
+        refreshCallback: Function,
+        currentPacklist: String // Current packlist name
     },
     inject: ['$modal'],
+    data() {
+        return {
+            globalLocksStore: null
+        };
+    },
     computed: {
+        myLock() {
+            // Get this packlist's lock from the global locks store
+            const locks = this.globalLocksStore?.data;
+            if (!locks || !this.currentPacklist) return null;
+            return locks.find(lock => 
+                lock.Spreadsheet === 'PACK_LISTS' && 
+                lock.Tab === this.currentPacklist
+            ) || null;
+        },
+        lockInfo() {
+            return this.myLock;
+        },
+        isLoadingLockInfo() {
+            return this.globalLocksStore?.isLoading || false;
+        },
+        lockOwnerUsername() {
+            if (!this.lockInfo || !this.lockInfo.User) return null;
+            const email = this.lockInfo.User;
+            return email.includes('@') ? email.split('@')[0] : email;
+        },
         menuItems() {
+            const items = [];
+            
+            // Add lock removal option if lock exists with user info and fully loaded
+            if (!this.isLoadingLockInfo && this.lockInfo && this.lockInfo.User) {
+                items.push({ 
+                    label: `Remove lock: ${this.lockOwnerUsername}`, 
+                    action: 'removeLock',
+                    class: 'warning'
+                });
+            }
+            
             switch (this.currentView) {
                 default:
-                    return [
+                    items.push(
                         { label: 'Refresh', action: 'refresh' },
                         { label: 'Help', action: 'help' }
-                    ];
+                    );
+                    return items;
             }
         }
     },
+    mounted() {
+        // Initialize global locks store (same instance across all components)
+        this.globalLocksStore = getReactiveStore(Requests.getAllLocks, null, []);
+    },
     methods: {
-        handleAction(action) {
+        async handleAction(action) {
             switch (action) {
                 case 'refresh':
                     if (this.refreshCallback) {
@@ -31,12 +73,51 @@ export const PacklistMenuComponent = {
                         this.$modal.alert('Refreshing packlist data...', 'Info');
                     }
                     break;
+                case 'removeLock':
+                    await this.handleRemoveLock();
+                    break;
                 case 'help':
                     this.$modal.alert('Packlist help functionality coming soon!', 'Info');
                     break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
+        },
+        async handleRemoveLock() {
+            if (!this.lockInfo) {
+                this.$modal.alert('No lock to remove.', 'Info');
+                return;
+            }
+            
+            const username = this.lockOwnerUsername;
+            const tabName = this.lockInfo.Tab; // Use the actual tab name from lock info
+            
+            this.$modal.confirm(
+                `Are you sure you want to force unlock this pack list?\n\nLocked by: ${username}\n\nThis will backup any autosaved data with an OVERRIDDEN prefix.`,
+                async () => {
+                    try {
+                        const result = await Requests.forceUnlockSheet('PACK_LISTS', tabName, 'User requested via hamburger menu');
+                        
+                        if (result.success) {
+                            this.$modal.alert(
+                                `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
+                                'Success'
+                            );
+                            // Refresh if callback available
+                            if (this.refreshCallback) {
+                                this.refreshCallback();
+                            }
+                        } else {
+                            this.$modal.alert(`Failed to remove lock: ${result.message}`, 'Error');
+                        }
+                    } catch (error) {
+                        console.error('[PacklistMenu] Error removing lock:', error);
+                        this.$modal.alert(`Error removing lock: ${error.message}`, 'Error');
+                    }
+                },
+                () => {},
+                'Confirm Force Unlock'
+            );
         }
     },
     template: html`
@@ -163,7 +244,8 @@ export const PacklistContent = {
         hamburgerMenuRegistry.registerMenu('packlist', {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
-                refreshCallback: this.handleRefresh
+                refreshCallback: this.handleRefresh,
+                currentPacklist: () => this.currentPacklist
             }
         });
     },

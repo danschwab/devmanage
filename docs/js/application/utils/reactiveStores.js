@@ -432,7 +432,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.isReloadingMainData = false;
             }
         },
-        async save(message = 'Saving data...') {
+        async save(message = 'Saving data...', options = {}) {
             if (typeof saveCall !== 'function') {
                 this.setError('No save API call provided');
                 return;
@@ -443,9 +443,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Remove all objects marked for deletion and analysis target columns before saving
                 const cleanData = removeAppData(this.data, this.analysisConfig);
                 // Use priority queue for save operations (highest priority)
+                // Pass options as the last parameter to save functions that support it
                 const result = await PriorityQueue.enqueue(
                     saveCall,
-                    [cleanData, ...apiArgs],
+                    [...(cleanData ? [cleanData] : []), ...apiArgs, options],
                     priorities.save,
                     { label: message, type: 'save', store: 'reactive' }
                 );

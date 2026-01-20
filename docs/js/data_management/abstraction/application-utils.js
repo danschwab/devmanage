@@ -1,4 +1,4 @@
-import { Database, wrapMethods } from '../index.js';
+import { Database, wrapMethods, invalidateCache } from '../index.js';
 
 /**
  * Utility functions for application-specific operations
@@ -234,12 +234,23 @@ class applicationUtils_uncached {
             Timestamp: timestamp
         });
         
-        return await Database.setData('CACHE', 'Locks', existingLocks, {
+        const result = await Database.setData('CACHE', 'Locks', existingLocks, {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
             User: 'User',
             Timestamp: 'Timestamp'
         }, { skipMetadata: true });
+        
+        // Invalidate lock caches to ensure UI updates
+        if (result) {
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+                { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
+                { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
+            ]);
+        }
+        
+        return result;
     }
     
     /**
@@ -279,12 +290,47 @@ class applicationUtils_uncached {
         // Remove the lock
         existingLocks.splice(lockIndex, 1);
         
-        return await Database.setData('CACHE', 'Locks', existingLocks, {
+        const result = await Database.setData('CACHE', 'Locks', existingLocks, {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
             User: 'User',
             Timestamp: 'Timestamp'
         }, { skipMetadata: true });
+        
+        // Invalidate lock caches to ensure UI updates
+        if (result) {
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+                { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
+                { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
+            ]);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Get all active locks across all spreadsheets
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Array<Object>>} Array of lock objects with Spreadsheet, Tab, User, Timestamp
+     */
+    static async getAllLocks(deps) {
+        try {
+            const locks = await deps.call(Database.getData, 'CACHE', 'Locks', {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            });
+            // Return empty array if no locks exist
+            if (!locks || locks.length === 0) {
+                return [];
+            }
+            return locks;
+        } catch (error) {
+            console.error('[ApplicationUtils.getAllLocks] Error fetching locks:', error);
+            return [];
+        }
     }
     
     /**
@@ -313,6 +359,151 @@ class applicationUtils_uncached {
     }
     
     /**
+     * Force unlock a spreadsheet tab (admin override)
+     * This bypasses user validation and backs up any autosaved data before removing it
+     * 
+     * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
+     * @param {string} tab - The tab name (e.g., 'FURNITURE', 'ATSC 2025 NAB')
+     * @param {string} reason - Optional reason for force unlock (for logging/audit)
+     * @returns {Promise<Object>} Result object { success, backupCount, deletedCount, lockOwner, message }
+     */
+    static async forceUnlockSheet(spreadsheet, tab, reason = '') {
+        console.log(`[ApplicationUtils.forceUnlockSheet] Force unlocking ${spreadsheet}/${tab}. Reason: ${reason}`);
+        
+        // Get lock info first to identify the owner
+        const locks = await Database.getData('CACHE', 'Locks', {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        });
+        
+        const lockInfo = locks.find(lock => 
+            lock.Spreadsheet === spreadsheet && lock.Tab === tab
+        );
+        
+        if (!lockInfo) {
+            return {
+                success: false,
+                backupCount: 0,
+                deletedCount: 0,
+                lockOwner: null,
+                message: 'No lock found to remove'
+            };
+        }
+        
+        const lockOwner = lockInfo.User;
+        console.log(`[ApplicationUtils.forceUnlockSheet] Found lock owned by: ${lockOwner}`);
+        
+        // Get the owner's username from email
+        const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `UserData_${sanitizedUsername}`;
+        
+        let backupCount = 0;
+        let deletedCount = 0;
+        
+        // Check if user data tab exists
+        const allTabs = await Database.getTabs('CACHE');
+        const userTab = allTabs.find(t => t.title === tabName);
+        
+        if (userTab) {
+            // Get all autosave entries for this user
+            const allUserData = await Database.getData('CACHE', tabName, {
+                Store: 'Store',
+                Data: 'Data',
+                Timestamp: 'Timestamp'
+            });
+            
+            console.log(`[ApplicationUtils.forceUnlockSheet] Found ${allUserData.length} total autosave entries for user ${username}`);
+            
+            // Find matching autosave entries for this tab
+            // Store keys are generated like: '["getInventoryTabData",["FURNITURE",null,null]]'
+            // We need to match the tab name in the store key
+            const tabStoreKey = JSON.stringify(tab);
+            const matchingEntries = allUserData.filter(entry => {
+                return entry.Store && entry.Store.includes(tabStoreKey);
+            });
+            
+            console.log(`[ApplicationUtils.forceUnlockSheet] Found ${matchingEntries.length} autosave entries for tab ${tab}`);
+            
+            if (matchingEntries.length > 0) {
+                // Create backup entries and mark originals for deletion
+                const timestamp = Date.now();
+                const modifiedUserData = [...allUserData];
+                
+                for (const entry of matchingEntries) {
+                    // Create backup entry with OVERRIDDEN prefix
+                    const backupEntry = {
+                        Store: `OVERRIDDEN_${timestamp}?${entry.Store}`,
+                        Data: entry.Data,
+                        Timestamp: entry.Timestamp
+                    };
+                    modifiedUserData.push(backupEntry);
+                    backupCount++;
+                    
+                    // Remove original entry
+                    const originalIndex = modifiedUserData.findIndex(e => 
+                        e.Store === entry.Store && e.Timestamp === entry.Timestamp
+                    );
+                    if (originalIndex !== -1) {
+                        modifiedUserData.splice(originalIndex, 1);
+                        deletedCount++;
+                    }
+                }
+                
+                // Save modified user data
+                await Database.setData('CACHE', tabName, modifiedUserData, {
+                    Store: 'Store',
+                    Data: 'Data',
+                    Timestamp: 'Timestamp'
+                }, { skipMetadata: true });
+                
+                console.log(`[ApplicationUtils.forceUnlockSheet] Backed up ${backupCount} entries, deleted ${deletedCount} entries`);
+            }
+        } else {
+            console.log(`[ApplicationUtils.forceUnlockSheet] No user data tab found for ${username} - no autosave entries to backup`);
+        }
+        
+        // Remove the lock (without user validation)
+        const remainingLocks = locks.filter(lock => 
+            !(lock.Spreadsheet === spreadsheet && lock.Tab === tab)
+        );
+        
+        // If no locks remain, save with headers only (2D array format)
+        if (remainingLocks.length === 0) {
+            await Database.setData('CACHE', 'Locks', [
+                ['Spreadsheet', 'Tab', 'User', 'Timestamp']
+            ], null, { skipMetadata: true });
+        } else {
+            // Save remaining locks as array of objects
+            await Database.setData('CACHE', 'Locks', remainingLocks, {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            }, { skipMetadata: true });
+        }
+        
+        // Invalidate lock caches to ensure UI updates
+        invalidateCache([
+            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+            { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
+            { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
+        ]);
+        
+        console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
+        
+        return {
+            success: true,
+            backupCount,
+            deletedCount,
+            lockOwner,
+            message: `Successfully force unlocked ${spreadsheet}/${tab}`
+        };
+    }
+    
+    /**
      * Release all locks for a user
      * @param {string} user - The user email
      * @returns {Promise<boolean>} Success status
@@ -337,4 +528,10 @@ class applicationUtils_uncached {
     }
 }
 
-export const ApplicationUtils = wrapMethods(applicationUtils_uncached, 'app_utils', ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet']);
+export const ApplicationUtils = wrapMethods(
+    applicationUtils_uncached, 
+    'app_utils', 
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet'], // Mutation methods
+    [], // Infinite cache methods
+    { 'getSheetLock': 10000 } // Custom cache durations (10 seconds for lock checks)
+);
