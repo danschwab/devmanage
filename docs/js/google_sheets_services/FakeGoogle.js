@@ -721,7 +721,8 @@ export class FakeGoogleSheetsService {
             ],
             'Locks': [
                 ['Spreadsheet', 'Tab', 'User', 'Timestamp'],
-                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z']
+                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z'],
+                ['INVENTORY', 'CABINETS', 'locked.user@example.com', '2026-01-19T10:30:00.000Z']
             ]
         }
     };

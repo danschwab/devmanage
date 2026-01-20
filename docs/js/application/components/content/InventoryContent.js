@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, generateStoreKey, authState } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 
@@ -180,9 +180,22 @@ export const InventoryContent = {
                         ? matchingStores.some(match => match.isModified)
                         : this.autoSavedCategories.has(cat.title);
                     
-                    // Determine card styling based on store state
-                    const cardClass = hasUnsavedChanges ? 'button red' : 'button purple';
-                    const contentFooter = hasUnsavedChanges ? 'Unsaved changes' : undefined;
+                    // Check if the category is locked
+                    const isLocked = cat.lockInfo && cat.lockInfo !== null;
+                    
+                    // Determine card styling based on lock state and unsaved changes
+                    // Priority: locked (white) > unsaved changes (red) > normal (purple)
+                    const cardClass = isLocked ? 'button white' : (hasUnsavedChanges ? 'button red' : 'button purple');
+                    
+                    // Build content footer
+                    let contentFooter = undefined;
+                    if (isLocked) {
+                        const lockOwner = cat.lockInfo.User || 'Unknown';
+                        const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
+                        contentFooter = `Locked for edit by: ${username}`;
+                    } else if (hasUnsavedChanges) {
+                        contentFooter = 'Unsaved changes';
+                    }
                     
                     return {
                         id: cat.sheetId,
@@ -255,12 +268,23 @@ export const InventoryContent = {
         }
     },
     async mounted() {
-        // Initialize categories store
+        // Initialize categories store with lock analysis
+        const analysisConfig = [
+            createAnalysisConfig(
+                Requests.getInventoryLock,
+                'lockInfo',
+                'Checking lock status...',
+                ['title'], // Extract tab name from 'title' column
+                [],
+                'lockInfo' // Store lock info in 'lockInfo' column
+            )
+        ];
+        
         this.categoriesStore = getReactiveStore(
             Requests.getAvailableTabs,
             null, // No save function
             ['INVENTORY'], // Arguments
-            null // No analysis config
+            analysisConfig
         );
         
         // Note: checkAutoSavedCategories will be called by the watcher when data loads

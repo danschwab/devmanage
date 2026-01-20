@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState } from '../../index.js';
 
 
 
@@ -80,48 +80,54 @@ export const InventoryTableComponent = {
         }
     },
     data() {
-        // Dynamically set columns' editable property based on editMode
-        const columns = [
-            { 
-                key: 'image', 
-                label: 'IMG',
-                width: 1,
-                sortable: false
-            },
-            { 
-                key: 'itemNumber', 
-                label: 'ITEM#',
-                width: 120,
-                sortable: true
-            },
-            { 
-                key: 'quantity', 
-                label: 'QTY',
-                format: 'number',
-                editable: this.editMode,
-                autoColor: true,
-                width: 120,
-                sortable: true
-            },
-            { 
-                key: 'description', 
-                label: 'Description (visible in pack lists)',
-                editable: this.editMode,
-                sortable: true
-            },
-            { 
-                key: 'notes', 
-                label: 'Notes (internal only)',
-                editable: this.editMode,
-                sortable: false
-            }
-        ];
         return {
-            columns,
             inventoryTableStore: null,
+            isLocked: false, // Track lock state (owned by this component)
+            lockingInProgress: false, // Prevent concurrent lock operations
+            lockedByOther: false, // Track if locked by another user
+            lockOwner: null, // Track who owns the lock
+            lockCheckComplete: false // Track if initial lock check is done
         };
     },
     computed: {
+        columns() {
+            // Dynamically set columns' editable property based on allowEdit
+            return [
+                { 
+                    key: 'image', 
+                    label: 'IMG',
+                    width: 1,
+                    sortable: false
+                },
+                { 
+                    key: 'itemNumber', 
+                    label: 'ITEM#',
+                    width: 120,
+                    sortable: true
+                },
+                { 
+                    key: 'quantity', 
+                    label: 'QTY',
+                    format: 'number',
+                    editable: this.allowEdit,
+                    autoColor: true,
+                    width: 120,
+                    sortable: true
+                },
+                { 
+                    key: 'description', 
+                    label: 'Description (visible in pack lists)',
+                    editable: this.allowEdit,
+                    sortable: true
+                },
+                { 
+                    key: 'notes', 
+                    label: 'Notes (internal only)',
+                    editable: this.allowEdit,
+                    sortable: false
+                }
+            ];
+        },
         tableData() {
             return this.inventoryTableStore ? this.inventoryTableStore.data : [];
         },
@@ -139,6 +145,13 @@ export const InventoryTableComponent = {
         },
         isLoading() {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
+        },
+        isDirty() {
+            return this.inventoryTableStore?.isModified || false;
+        },
+        allowEdit() {
+            // Allow editing only if editMode is true AND not locked by another user
+            return this.editMode && !this.lockedByOther;
         }
     },
     async mounted() {
@@ -163,8 +176,88 @@ export const InventoryTableComponent = {
             [this.tabTitle, undefined, undefined], // No filters needed - search is handled in UI
             analysisConfig
         );
+        
+        // Check lock status when component mounts
+        await this.checkLockStatus();
+    },
+    watch: {
+        isDirty(newValue) {
+            // Handle locking based on dirty state
+            this.handleLockState(newValue);
+        }
     },
     methods: {
+        async checkLockStatus() {
+            const user = authState.user?.email;
+            console.log(`[InventoryTable.checkLockStatus] Checking lock for user: "${user}", tabTitle: "${this.tabTitle}"`);
+            if (!user || !this.tabTitle) {
+                console.log('[InventoryTable.checkLockStatus] Missing user or tabTitle, skipping check');
+                return;
+            }
+            
+            try {
+                const lockInfo = await Requests.getSheetLock('INVENTORY', this.tabTitle);
+                console.log(`[InventoryTable.checkLockStatus] Lock info for "${this.tabTitle}":`, lockInfo);
+                if (lockInfo) {
+                    this.lockedByOther = lockInfo.User !== user;
+                    this.lockOwner = lockInfo.User;
+                    
+                    console.log(`[InventoryTable.checkLockStatus] Lock owner: "${lockInfo.User}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
+                    if (this.lockedByOther) {
+                        console.log(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                    }
+                } else {
+                    console.log(`[InventoryTable.checkLockStatus] No lock found for "${this.tabTitle}"`);
+                    this.lockedByOther = false;
+                    this.lockOwner = null;
+                }
+            } catch (error) {
+                console.error('[InventoryTable] Failed to check lock status:', error);
+            } finally {
+                this.lockCheckComplete = true;
+            }
+        },
+        
+        async handleLockState(isDirty) {
+            if (this.lockingInProgress) return;
+            
+            const user = authState.user?.email;
+            if (!user || !this.tabTitle) return;
+            
+            this.lockingInProgress = true;
+            
+            try {
+                if (isDirty && !this.isLocked) {
+                    const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
+                    if (lockAcquired) {
+                        this.isLocked = true;
+                        this.lockedByOther = false;
+                        this.lockOwner = user;
+                        console.log(`[InventoryTable] Locked INVENTORY/${this.tabTitle} for ${user}`);
+                    } else {
+                        const lockInfo = await Requests.getSheetLock('INVENTORY', this.tabTitle);
+                        if (lockInfo && lockInfo.User !== user) {
+                            this.lockedByOther = true;
+                            this.lockOwner = lockInfo.User;
+                            console.warn(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                        }
+                    }
+                } else if (!isDirty && this.isLocked) {
+                    const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
+                    if (unlocked) {
+                        this.isLocked = false;
+                        this.lockedByOther = false;
+                        this.lockOwner = null;
+                        console.log(`[InventoryTable] Unlocked INVENTORY/${this.tabTitle} for ${user}`);
+                    }
+                }
+            } catch (error) {
+                console.error('[InventoryTable] Lock operation failed:', error);
+            } finally {
+                this.lockingInProgress = false;
+            }
+        },
+        
         async handleRefresh() {
             // Reload inventory data (cache will be automatically invalidated)
             invalidateCache([
@@ -186,6 +279,10 @@ export const InventoryTableComponent = {
     },
     template: html `
         <slot>
+            <div v-if="lockedByOther" class="card white">
+                Locked for edit by: {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
+            </div>
+
             <TableComponent
                 ref="tableComponent"
                 theme="purple"

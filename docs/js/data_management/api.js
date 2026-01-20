@@ -369,6 +369,27 @@ class Requests_uncached {
     }
     
     /**
+     * Get lock status for an inventory category (specialized for analysis pipeline)
+     * 
+     * QUERY METHOD - Excluded from caching to ensure real-time lock status
+     * Does NOT accept deps parameter or use deps.call()
+     * 
+     * This is a convenience wrapper for getSheetLock that's designed for use
+     * in analysis configurations where only the tab name is provided.
+     * 
+     * @param {string} tabName - The inventory category tab name
+     * @returns {Promise<Object|null>} Lock details or null if not locked
+     */
+    static async getInventoryLock(tabName) {
+        console.log(`[Requests.getInventoryLock] Checking lock for inventory category: "${tabName}"`);
+        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
+        // The wrapped version's signature is: getSheetLock(spreadsheet, tab)
+        const result = await ApplicationUtils.getSheetLock('INVENTORY', tabName);
+        console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
+        return result;
+    }
+    
+    /**
      * Get all locks for a user
      * 
      * QUERY METHOD - Excluded from caching to ensure real-time lock status
@@ -834,8 +855,9 @@ class Requests_uncached {
  * QUERY METHODS EXCLUDED from caching for real-time data:
  * - getSheetLock: Lock details must always be current
  * - getPacklistLock: Packlist lock details must always be current
+ * - getInventoryLock: Inventory lock details must always be current
  * 
  * These methods are passed through without modification, preserving their original
  * signatures (no deps parameter) and allowing them to trigger invalidation independently.
  */
-export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'getSheetLock', 'getPacklistLock'], ['computeIdentifier']);
+export const Requests = wrapMethods(Requests_uncached, 'api', ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'getSheetLock', 'getPacklistLock', 'getInventoryLock'], ['computeIdentifier']);
