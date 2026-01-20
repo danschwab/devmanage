@@ -1,5 +1,15 @@
 import { Database, wrapMethods } from '../index.js';
 
+// Dynamically import GoogleSheetsAuth based on environment
+import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
+let GoogleSheetsAuth, GoogleSheetsService;
+if (isLocalhost()) {
+    ({ GoogleSheetsAuth, GoogleSheetsService } = await import('../../google_sheets_services/FakeGoogle.js'));
+} else {
+    ({ GoogleSheetsAuth } = await import('../../google_sheets_services/GoogleSheetsAuth.js'));
+    ({ GoogleSheetsService } = await import('../../google_sheets_services/GoogleSheetsData.js'));
+}
+
 /**
  * Utility functions for application-specific operations
  */
@@ -181,110 +191,142 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Lock a spreadsheet tab for a user
+     * Lock a spreadsheet tab for a user (with write semaphore protection)
      * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
      * @param {string} tab - The tab name
      * @param {string} user - The user email claiming the lock
      * @returns {Promise<boolean>} Success status
      */
     static async lockSheet(spreadsheet, tab, user) {
-        const timestamp = new Date().toISOString();
+        let writeLockToken = null;
         
-        // Get existing locks
-        const existingLocks = await Database.getData('CACHE', 'Locks', {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        });
-        
-        // Check if already locked
-        const existingLock = existingLocks.find(lock => 
-            lock.Spreadsheet === spreadsheet && lock.Tab === tab
-        );
-        
-        if (existingLock) {
-            // Already locked by this or another user
-            if (existingLock.User === user) {
-                // Update timestamp for same user
-                const updatedLocks = existingLocks.map(lock => 
-                    (lock.Spreadsheet === spreadsheet && lock.Tab === tab) 
-                        ? { ...lock, Timestamp: timestamp }
-                        : lock
-                );
-                
-                return await Database.setData('CACHE', 'Locks', updatedLocks, {
-                    Spreadsheet: 'Spreadsheet',
-                    Tab: 'Tab',
-                    User: 'User',
-                    Timestamp: 'Timestamp'
-                }, { skipMetadata: true });
-            } else {
-                // Locked by another user
-                console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.User}`);
-                return false;
+        try {
+            // Acquire exclusive write access
+            writeLockToken = await this._acquireWriteLock();
+            
+            const timestamp = new Date().toISOString();
+            
+            // Now we have exclusive access - safe to read-modify-write
+            const existingLocks = await Database.getData('CACHE', 'Locks', {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            });
+            
+            // Check if already locked
+            const existingLock = existingLocks.find(lock => 
+                lock.Spreadsheet === spreadsheet && lock.Tab === tab
+            );
+            
+            if (existingLock) {
+                // Already locked by this or another user
+                if (existingLock.User === user) {
+                    // Update timestamp for same user
+                    const updatedLocks = existingLocks.map(lock => 
+                        (lock.Spreadsheet === spreadsheet && lock.Tab === tab) 
+                            ? { ...lock, Timestamp: timestamp }
+                            : lock
+                    );
+                    
+                    await Database.setData('CACHE', 'Locks', updatedLocks, {
+                        Spreadsheet: 'Spreadsheet',
+                        Tab: 'Tab',
+                        User: 'User',
+                        Timestamp: 'Timestamp'
+                    }, { skipMetadata: true });
+                    
+                    return true;
+                } else {
+                    // Locked by another user
+                    console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.User}`);
+                    return false;
+                }
+            }
+            
+            // Add new lock
+            existingLocks.push({
+                Spreadsheet: spreadsheet,
+                Tab: tab,
+                User: user,
+                Timestamp: timestamp
+            });
+            
+            await Database.setData('CACHE', 'Locks', existingLocks, {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            }, { skipMetadata: true });
+            
+            return true;
+            
+        } finally {
+            // Always release the write lock
+            if (writeLockToken) {
+                await this._releaseWriteLock(writeLockToken);
             }
         }
-        
-        // Add new lock
-        existingLocks.push({
-            Spreadsheet: spreadsheet,
-            Tab: tab,
-            User: user,
-            Timestamp: timestamp
-        });
-        
-        return await Database.setData('CACHE', 'Locks', existingLocks, {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        }, { skipMetadata: true });
     }
     
     /**
-     * Unlock a spreadsheet tab
+     * Unlock a spreadsheet tab (with write semaphore protection)
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @param {string} user - The user email releasing the lock
      * @returns {Promise<boolean>} Success status
      */
     static async unlockSheet(spreadsheet, tab, user) {
-        // Get existing locks
-        const existingLocks = await Database.getData('CACHE', 'Locks', {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        });
+        let writeLockToken = null;
         
-        // Find the lock
-        const lockIndex = existingLocks.findIndex(lock => 
-            lock.Spreadsheet === spreadsheet && lock.Tab === tab
-        );
-        
-        if (lockIndex === -1) {
-            // No lock exists
+        try {
+            // Acquire exclusive write access
+            writeLockToken = await this._acquireWriteLock();
+            
+            // Now we have exclusive access - safe to read-modify-write
+            const existingLocks = await Database.getData('CACHE', 'Locks', {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            });
+            
+            // Find the lock
+            const lockIndex = existingLocks.findIndex(lock => 
+                lock.Spreadsheet === spreadsheet && lock.Tab === tab
+            );
+            
+            if (lockIndex === -1) {
+                // No lock exists
+                return true;
+            }
+            
+            const existingLock = existingLocks[lockIndex];
+            
+            // Only the user who locked it can unlock it
+            if (existingLock.User !== user) {
+                console.warn(`Cannot unlock ${spreadsheet}/${tab} - locked by ${existingLock.User}, not ${user}`);
+                return false;
+            }
+            
+            // Remove the lock
+            existingLocks.splice(lockIndex, 1);
+            
+            await Database.setData('CACHE', 'Locks', existingLocks, {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            }, { skipMetadata: true });
+            
             return true;
+            
+        } finally {
+            // Always release the write lock
+            if (writeLockToken) {
+                await this._releaseWriteLock(writeLockToken);
+            }
         }
-        
-        const existingLock = existingLocks[lockIndex];
-        
-        // Only the user who locked it can unlock it
-        if (existingLock.User !== user) {
-            console.warn(`Cannot unlock ${spreadsheet}/${tab} - locked by ${existingLock.User}, not ${user}`);
-            return false;
-        }
-        
-        // Remove the lock
-        existingLocks.splice(lockIndex, 1);
-        
-        return await Database.setData('CACHE', 'Locks', existingLocks, {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        }, { skipMetadata: true });
     }
     
     /**
@@ -320,7 +362,7 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Force unlock a spreadsheet tab (admin override)
+     * Force unlock a spreadsheet tab (admin override, with write semaphore protection)
      * This bypasses user validation and backs up any autosaved data before removing it
      * 
      * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
@@ -331,8 +373,15 @@ class applicationUtils_uncached {
     static async forceUnlockSheet(spreadsheet, tab, reason = '') {
         console.log(`[ApplicationUtils.forceUnlockSheet] Force unlocking ${spreadsheet}/${tab}. Reason: ${reason}`);
         
-        // Get lock info first to identify the owner
-        const locks = await Database.getData('CACHE', 'Locks', {
+        let writeLockToken = null;
+        
+        try {
+            // Acquire exclusive write access
+            writeLockToken = await this._acquireWriteLock();
+            
+            // Now we have exclusive access - safe to read-modify-write
+            // Get lock info first to identify the owner
+            const locks = await Database.getData('CACHE', 'Locks', {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
             User: 'User',
@@ -455,30 +504,138 @@ class applicationUtils_uncached {
             lockOwner,
             message: `Successfully force unlocked ${spreadsheet}/${tab}`
         };
+        
+        } catch (error) {
+            console.error('[ApplicationUtils.forceUnlockSheet] Error during force unlock:', error);
+            throw error;
+        } finally {
+            // Always release the write lock
+            if (writeLockToken) {
+                await this._releaseWriteLock(writeLockToken);
+            }
+        }
     }
     
     /**
-     * Release all locks for a user
+     * Release all locks for a user (with write semaphore protection)
      * @param {string} user - The user email
      * @returns {Promise<boolean>} Success status
      */
     static async releaseAllUserLocks(user) {
-        const locks = await Database.getData('CACHE', 'Locks', {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        });
+        let writeLockToken = null;
         
-        // Remove all locks for this user
-        const remainingLocks = locks.filter(lock => lock.User !== user);
+        try {
+            // Acquire exclusive write access
+            writeLockToken = await this._acquireWriteLock();
+            
+            // Now we have exclusive access - safe to read-modify-write
+            const locks = await Database.getData('CACHE', 'Locks', {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            });
+            
+            // Remove all locks for this user
+            const remainingLocks = locks.filter(lock => lock.User !== user);
+            
+            await Database.setData('CACHE', 'Locks', remainingLocks, {
+                Spreadsheet: 'Spreadsheet',
+                Tab: 'Tab',
+                User: 'User',
+                Timestamp: 'Timestamp'
+            }, { skipMetadata: true });
+            
+            return true;
+            
+        } finally {
+            // Always release the write lock
+            if (writeLockToken) {
+                await this._releaseWriteLock(writeLockToken);
+            }
+        }
+    }
+    
+    /**
+     * Acquire exclusive write access to the Locks table using cell A1 as semaphore
+     * Cell A1 structure: empty/"0" = unlocked, timestamp = locked
+     * Max wait time: 10 seconds with 100ms polling
+     * @private
+     * @returns {Promise<string>} Token (timestamp) for releasing the lock
+     */
+    static async _acquireWriteLock() {
+        const maxAttempts = 100; // 10 seconds max wait (100ms * 100)
+        const pollInterval = 100; // 100ms between attempts
+        const myToken = Date.now().toString();
         
-        return await Database.setData('CACHE', 'Locks', remainingLocks, {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        }, { skipMetadata: true });
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                // Read current semaphore value from A1
+                const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+                const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
+                
+                // Check if unlocked (empty or "0")
+                if (!currentValue || currentValue === '0' || currentValue === '') {
+                    // Try to claim the lock by writing our token
+                    await GoogleSheetsService.setSheetData('CACHE', 'Locks', [[myToken]], null);
+                    
+                    // Verify we got the lock (handle race condition)
+                    await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for write propagation
+                    const verifyData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+                    const verifyValue = (verifyData && verifyData[0] && verifyData[0][0]) ? verifyData[0][0] : '';
+                    
+                    if (verifyValue === myToken) {
+                        console.log(`[_acquireWriteLock] Acquired lock with token: ${myToken}`);
+                        return myToken;
+                    }
+                    // Someone else got it, try again
+                } else {
+                    // Check if lock is stale (older than 30 seconds)
+                    const lockTime = parseInt(currentValue);
+                    const now = Date.now();
+                    if (!isNaN(lockTime) && (now - lockTime) > 30000) {
+                        console.warn(`[_acquireWriteLock] Detected stale lock from ${new Date(lockTime).toISOString()}, breaking it`);
+                        // Force release stale lock
+                        await GoogleSheetsService.setSheetData('CACHE', 'Locks', [['0']], null);
+                        continue; // Try again immediately
+                    }
+                }
+                
+                // Wait before next attempt
+                await new Promise(resolve => setTimeout(resolve, pollInterval));
+                
+            } catch (error) {
+                console.error('[_acquireWriteLock] Error during lock acquisition:', error);
+                throw error;
+            }
+        }
+        
+        throw new Error('[_acquireWriteLock] Failed to acquire write lock after 10 seconds - lock may be held by another process');
+    }
+    
+    /**
+     * Release exclusive write access to the Locks table
+     * @private
+     * @param {string} token - The token returned from _acquireWriteLock
+     * @returns {Promise<void>}
+     */
+    static async _releaseWriteLock(token) {
+        try {
+            // Verify we still own the lock before releasing
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+            const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
+            
+            if (currentValue === token) {
+                // Clear the semaphore
+                await GoogleSheetsService.setSheetData('CACHE', 'Locks', [['0']], null);
+                console.log(`[_releaseWriteLock] Released lock with token: ${token}`);
+            } else {
+                console.warn(`[_releaseWriteLock] Lock token mismatch - current: ${currentValue}, expected: ${token}`);
+            }
+        } catch (error) {
+            console.error('[_releaseWriteLock] Error releasing lock:', error);
+            // Don't throw - always try to release
+        }
     }
 }
 

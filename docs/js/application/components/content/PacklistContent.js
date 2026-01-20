@@ -193,6 +193,11 @@ export const PacklistContent = {
             
             const tabs = this.packlistsStore.data || [];
             
+            // Add explicit dependency on analysis state to trigger reactivity
+            // when analysis completes (including lock info analysis)
+            const isAnalyzing = this.packlistsStore.isAnalyzing;
+            const analysisProgress = this.packlistsStore.analysisProgress;
+            
             // Format tabs for CardsComponent
             return tabs.map(tab => this.formatPacklistCard(tab));
         },

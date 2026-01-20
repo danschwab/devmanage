@@ -262,6 +262,12 @@ export const InventoryContent = {
         categoryList() {
             // Return loaded categories from store with formatted title
             const categories = this.categoriesStore?.data || [];
+            
+            // Add explicit dependency on analysis state to trigger reactivity
+            // when analysis completes (including lock info analysis)
+            const isAnalyzing = this.categoriesStore?.isAnalyzing;
+            const analysisProgress = this.categoriesStore?.analysisProgress;
+            
             return categories
                 .filter(cat => cat.title !== 'INDEX')
                 .map(cat => {

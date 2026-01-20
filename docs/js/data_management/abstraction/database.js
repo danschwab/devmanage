@@ -34,7 +34,7 @@ class database_uncached {
         
         // If mapping provided, transform to JS objects
         if (mapping) {
-            const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping);
+            const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping, tabName);
             console.log('[Database] Transformed data:', transformedData);
             return transformedData;
         }
@@ -215,7 +215,7 @@ class database_uncached {
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
         const transformedData = mapping
-            ? GoogleSheetsService.transformSheetData(existingData, mapping)
+            ? GoogleSheetsService.transformSheetData(existingData, mapping, tabName)
             : GoogleSheetsService.sheetArrayToObjects(existingData);
 
         const rowIndex = transformedData.findIndex(row => {

@@ -77,11 +77,16 @@ export class FakeGoogleSheetsAuth {
 export class FakeGoogleSheetsService {
     /**
      * Transform raw sheet data to JS objects using mapping
+     * Special handling for Locks table - skip row 0 (semaphore cell)
      */
-    static transformSheetData(rawData, mapping) {
+    static transformSheetData(rawData, mapping, sheetName = null) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
-        const headers = rawData[0];
-        const rows = rawData.slice(1);
+        
+        // Special handling for Locks table - row 0 is semaphore, row 1 is headers
+        const startRow = (sheetName === 'Locks') ? 1 : 0;
+        
+        const headers = rawData[startRow];
+        const rows = rawData.slice(startRow + 1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
             const idx = headers.findIndex(h => h.trim() === headerName);
@@ -720,8 +725,9 @@ export class FakeGoogleSheetsService {
                 ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ],
             'Locks': [
-                ['Spreadsheet', 'Tab', 'User', 'Timestamp'],
-                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z'],
+                ['0'], // Row 0: Semaphore cell (A1) - "0" means unlocked
+                ['Spreadsheet', 'Tab', 'User', 'Timestamp'], // Row 1: Headers
+                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z'], // Row 2+: Lock data
                 ['INVENTORY', 'CABINETS', 'locked.user@example.com', '2026-01-19T10:30:00.000Z']
             ]
         }
@@ -761,7 +767,7 @@ export class FakeGoogleSheetsService {
     };
 
     static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         //console.log('FakeGoogleSheetsService: Simulating exponential backoff...');
         await this.delay(Math.random() * 100 + 50); // Random delay between 50-150ms
         try {
@@ -773,7 +779,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async getSheetData(tableId, range) {
-        await this.delay(500 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -782,8 +788,8 @@ export class FakeGoogleSheetsService {
         //console.log(`FakeGoogleSheetsService: Getting data for ${tableId}, range: ${range}`);
         await this.delay(100);
 
-        // Parse range to extract sheet name
-        const [sheetName] = range.split('!');
+        // Parse range to extract sheet name and cell range
+        const [sheetName, cellRange] = range.split('!');
         const sheetData = this.mockData[tableId] && this.mockData[tableId][sheetName];
         
         if (!sheetData) {
@@ -791,12 +797,28 @@ export class FakeGoogleSheetsService {
             return [[]];
         }
 
+        // Handle specific cell range requests (e.g., "A1:A1" for semaphore)
+        if (cellRange) {
+            const cellMatch = cellRange.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+            if (cellMatch) {
+                const [, startCol, startRow, endCol, endRow] = cellMatch;
+                const colIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
+                const rowIndex = parseInt(startRow) - 1;
+                
+                // Return specific cell data
+                if (sheetData[rowIndex] && sheetData[rowIndex][colIndex] !== undefined) {
+                    return [[sheetData[rowIndex][colIndex]]];
+                }
+                return [['']]; // Empty cell
+            }
+        }
+
         // Return a copy to avoid mutation
         return JSON.parse(JSON.stringify(sheetData));
     }
 
     static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -806,6 +828,40 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
+            // Handle range-specific updates (e.g., "Locks!A1:A1" for semaphore)
+            const rangeMatch = tabName.match(/^([^!]+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+            if (rangeMatch) {
+                const [, sheetName, startCol, startRow, endCol, endRow] = rangeMatch;
+                const colIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
+                const rowIndex = parseInt(startRow) - 1;
+                
+                // Initialize sheet if it doesn't exist
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                if (!this.mockData[tableId][sheetName]) {
+                    // Initialize Locks sheet with headers
+                    this.mockData[tableId][sheetName] = [
+                        ['', '', '', ''], // Row 0 for semaphore (A1 will be used)
+                        ['Spreadsheet', 'Tab', 'User', 'Timestamp']
+                    ];
+                }
+                
+                // Ensure row exists
+                while (this.mockData[tableId][sheetName].length <= rowIndex) {
+                    this.mockData[tableId][sheetName].push([]);
+                }
+                
+                // Ensure column exists in row
+                while (this.mockData[tableId][sheetName][rowIndex].length <= colIndex) {
+                    this.mockData[tableId][sheetName][rowIndex].push('');
+                }
+                
+                // Update the specific cell
+                if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+                    this.mockData[tableId][sheetName][rowIndex][colIndex] = updates[0][0];
+                }
+                return true;
+            }
+            
             // If removeRowsBelow is specified, delete all rows below that row before saving
             if (typeof removeRowsBelow === 'number') {
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
@@ -898,7 +954,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async getSheetTabs(tableId) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -912,7 +968,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async hideTabs(tableId, tabs) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -929,7 +985,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async showTabs(tableId, tabs) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -946,7 +1002,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async copySheetTab(tableId, sourceTab, newTabName) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -992,7 +1048,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async createBlankTab(tableId, newTabName) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
 
         const spreadsheetId = this.SPREADSHEET_IDS[tableId];
@@ -1028,7 +1084,7 @@ export class FakeGoogleSheetsService {
     }
 
     static async querySheetData(tableId, query) {
-        await this.delay(1000 + Math.random() * 1000); // Add random delay > 1s
+        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
         await FakeGoogleSheetsAuth.checkAuth();
         
         //console.log(`FakeGoogleSheetsService: Executing query on ${tableId}: ${query}`);
