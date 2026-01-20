@@ -374,11 +374,12 @@ class Requests_uncached {
      * 
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The packlist tab name
-     * @returns {Promise<Object|null>} Lock details or null if not locked
+     * @param {string} [currentUser] - Optional current user email to filter out their own locks
+     * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
-    static async getPacklistLock(deps, tabName) {
-        console.log(`[Requests.getPacklistLock] Checking lock for packlist: "${tabName}"`);
-        const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName);
+    static async getPacklistLock(deps, tabName, currentUser = null) {
+        console.log(`[Requests.getPacklistLock] Checking lock for packlist: "${tabName}", currentUser: "${currentUser}"`);
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName, currentUser);
         console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
         return result;
     }
@@ -394,11 +395,12 @@ class Requests_uncached {
      * 
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The inventory category tab name
-     * @returns {Promise<Object|null>} Lock details or null if not locked
+     * @param {string} [currentUser] - Optional current user email to filter out their own locks
+     * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
-    static async getInventoryLock(deps, tabName) {
-        console.log(`[Requests.getInventoryLock] Checking lock for inventory category: "${tabName}"`);
-        const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName);
+    static async getInventoryLock(deps, tabName, currentUser = null) {
+        console.log(`[Requests.getInventoryLock] Checking lock for inventory category: "${tabName}", currentUser: "${currentUser}"`);
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName, currentUser);
         console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
         return result;
     }
@@ -461,12 +463,11 @@ class Requests_uncached {
      * @param {string} tabOrItemName - Tab name or item name to resolve tab
      * @param {Object} [mapping] - Optional mapping object
      * @param {Object} [filters] - Optional filter parameters
-     * @param {Object} [options] - Save options: { force: boolean, reason: string }
-     * @returns {Promise<boolean|Object>} Success status or result object if force used
+     * @returns {Promise<boolean>}
      */
-    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, options = {}) {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters) {
         const username = authState.user?.email || null;
-        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username, options);
+        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username);
     }
     
     /**
@@ -478,14 +479,13 @@ class Requests_uncached {
      * 
      * @param {Array<Object>} crates - Array of crate objects (with keys/values, Items array)
      * @param {string} projectIdentifier - The project identifier (tab name)
-     * @param {Object} [options] - Save options: { force: boolean, reason: string }
-     * @returns {Promise<boolean|Object>} Success status or result object if force used
+     * @returns {Promise<boolean>} Success status
      */
-    static async savePackList(crates, projectIdentifier, options = {}) {
-        console.log("API.savePackList called for project:", projectIdentifier, "options:", options);
+    static async savePackList(crates, projectIdentifier) {
+        console.log("API.savePackList called for project:", projectIdentifier);
         const username = authState.user?.email || null;
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
-        return await PackListUtils.savePackList(projectIdentifier, crates, null, username, options);
+        return await PackListUtils.savePackList(projectIdentifier, crates, null, username);
     }
 
     /**

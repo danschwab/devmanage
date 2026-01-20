@@ -60,7 +60,7 @@ export const InventoryTableComponent = {
         TableComponent,
         ItemImageComponent
     },
-    inject: ['appContext', 'globalLocksStore'],
+    inject: ['appContext'],
     props: {
         containerPath: {
             type: String,
@@ -82,8 +82,11 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
+            isLocked: false, // Track lock state (owned by this component)
+            lockingInProgress: false, // Prevent concurrent lock operations
             lockedByOther: false, // Track if locked by another user
-            lockOwner: null // Track who owns the lock
+            lockOwner: null, // Track who owns the lock
+            lockCheckComplete: false // Track if initial lock check is done
         };
     },
     computed: {
@@ -146,20 +149,9 @@ export const InventoryTableComponent = {
         isDirty() {
             return this.inventoryTableStore?.isModified || false;
         },
-        myLock() {
-            // Get this tab's lock from the global locks store
-            const locks = this.globalLocksStore?.data;
-            if (!locks || !this.tabTitle) return null;
-            return locks.find(lock => 
-                lock.Spreadsheet === 'INVENTORY' && 
-                lock.Tab === this.tabTitle
-            ) || null;
-        },
         allowEdit() {
             // Allow editing only if editMode is true AND not locked by another user
-            const user = authState.user?.email;
-            const isLockedByOther = this.myLock && this.myLock.User !== user;
-            return this.editMode && !isLockedByOther;
+            return this.editMode && !this.lockedByOther;
         }
     },
     async mounted() {
@@ -185,75 +177,90 @@ export const InventoryTableComponent = {
             analysisConfig
         );
         
-        // Watch global locks store for this tab's lock status
-        this.$watch(() => this.myLock, (lockInfo) => {
+        // Check lock status when component mounts
+        await this.checkLockStatus();
+    },
+    watch: {
+        isDirty(newValue) {
+            // Handle locking based on dirty state
+            this.handleLockState(newValue);
+        }
+    },
+    methods: {
+        async checkLockStatus() {
             const user = authState.user?.email;
-            if (lockInfo && lockInfo.User) {
-                this.lockedByOther = lockInfo.User !== user;
-                this.lockOwner = lockInfo.User;
-                console.log(`[InventoryTable] Lock status: lockedByOther=${this.lockedByOther}, owner=${lockInfo.User}`);
-            } else {
-                this.lockedByOther = false;
-                this.lockOwner = null;
+            console.log(`[InventoryTable.checkLockStatus] Checking lock for user: "${user}", tabTitle: "${this.tabTitle}"`);
+            if (!user || !this.tabTitle) {
+                console.log('[InventoryTable.checkLockStatus] Missing user or tabTitle, skipping check');
+                return;
             }
-        }, { immediate: true });
+            
+            try {
+                const lockInfo = await Requests.getInventoryLock(this.tabTitle);
+                console.log(`[InventoryTable.checkLockStatus] Lock info for "${this.tabTitle}":`, lockInfo);
+                if (lockInfo) {
+                    this.lockedByOther = lockInfo.User !== user;
+                    this.lockOwner = lockInfo.User;
+                    
+                    console.log(`[InventoryTable.checkLockStatus] Lock owner: "${lockInfo.User}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
+                    if (this.lockedByOther) {
+                        console.log(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                    }
+                } else {
+                    console.log(`[InventoryTable.checkLockStatus] No lock found for "${this.tabTitle}"`);
+                    this.lockedByOther = false;
+                    this.lockOwner = null;
+                }
+            } catch (error) {
+                console.error('[InventoryTable] Failed to check lock status:', error);
+            } finally {
+                this.lockCheckComplete = true;
+            }
+        },
         
-        // Watch editMode to acquire/release locks
-        this.$watch(() => this.editMode, async (isEditMode) => {
+        async handleLockState(isDirty) {
+            if (this.lockingInProgress) return;
+            
             const user = authState.user?.email;
             if (!user || !this.tabTitle) return;
             
-            if (isEditMode && !this.lockedByOther) {
-                // Entering edit mode - acquire lock immediately
-                console.log(`[InventoryTable] Acquiring lock for ${this.tabTitle}`);
-                try {
-                    await Requests.lockSheet('INVENTORY', this.tabTitle, user);
-                    // Invalidate locks cache to refresh global store
-                    invalidateCache([
-                        { namespace: 'app_utils', methodName: 'getAllLocks', args: [] },
-                        { namespace: 'api', methodName: 'getAllLocks', args: [] }
-                    ]);
-                } catch (error) {
-                    console.error(`[InventoryTable] Failed to acquire lock:`, error);
+            this.lockingInProgress = true;
+            
+            try {
+                if (isDirty && !this.isLocked) {
+                    const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
+                    if (lockAcquired) {
+                        this.isLocked = true;
+                        this.lockedByOther = false;
+                        this.lockOwner = user;
+                        console.log(`[InventoryTable] Locked INVENTORY/${this.tabTitle} for ${user}`);
+                    } else {
+                        const lockInfo = await Requests.getInventoryLock(this.tabTitle);
+                        if (lockInfo && lockInfo.User !== user) {
+                            this.lockedByOther = true;
+                            this.lockOwner = lockInfo.User;
+                            console.warn(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                            
+                            // Refresh page to show newly identified lock information
+                            await this.handleRefresh();
+                        }
+                    }
+                } else if (!isDirty && this.isLocked) {
+                    const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
+                    if (unlocked) {
+                        this.isLocked = false;
+                        this.lockedByOther = false;
+                        this.lockOwner = null;
+                        console.log(`[InventoryTable] Unlocked INVENTORY/${this.tabTitle} for ${user}`);
+                    }
                 }
-            } else if (!isEditMode && this.myLock && this.myLock.User === user) {
-                // Exiting edit mode - release lock
-                console.log(`[InventoryTable] Releasing lock for ${this.tabTitle}`);
-                try {
-                    await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
-                    // Invalidate locks cache to refresh global store
-                    invalidateCache([
-                        { namespace: 'app_utils', methodName: 'getAllLocks', args: [] },
-                        { namespace: 'api', methodName: 'getAllLocks', args: [] }
-                    ]);
-                } catch (error) {
-                    console.error(`[InventoryTable] Failed to release lock:`, error);
-                }
+            } catch (error) {
+                console.error('[InventoryTable] Lock operation failed:', error);
+            } finally {
+                this.lockingInProgress = false;
             }
-        }, { immediate: true });
+        },
         
-        // Watch isDirty to release lock after successful save
-        let previousDirty = false;
-        this.$watch(() => this.isDirty, async (isDirty) => {
-            const user = authState.user?.email;
-            // If data was dirty and is now clean (save completed), release lock
-            if (previousDirty && !isDirty && this.myLock && this.myLock.User === user) {
-                console.log(`[InventoryTable] Data saved, releasing lock for ${this.tabTitle}`);
-                try {
-                    await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
-                    // Invalidate locks cache to refresh global store
-                    invalidateCache([
-                        { namespace: 'app_utils', methodName: 'getAllLocks', args: [] },
-                        { namespace: 'api', methodName: 'getAllLocks', args: [] }
-                    ]);
-                } catch (error) {
-                    console.error(`[InventoryTable] Failed to release lock after save:`, error);
-                }
-            }
-            previousDirty = isDirty;
-        });
-    },
-    methods: {
         async handleRefresh() {
             // Reload inventory data (cache will be automatically invalidated)
             invalidateCache([

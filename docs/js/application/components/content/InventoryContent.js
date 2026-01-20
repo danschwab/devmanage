@@ -1,4 +1,4 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, invalidateCache } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 
@@ -6,33 +6,23 @@ import { ShowInventoryReport } from './ShowInventoryReport.js';
 export const InventoryMenuComponent = {
     props: {
         containerPath: String,
-        containerType: String,
+        containerType: String, 
         currentView: String,
         title: String,
-        currentCategory: String // Current category name
+        refreshCallback: Function,
+        getLockInfo: Function
     },
     inject: ['$modal'],
     data() {
         return {
-            globalLocksStore: null
+            lockInfo: null,
+            isLoadingLockInfo: true
         };
     },
+    async mounted() {
+        await this.fetchLockInfo();
+    },
     computed: {
-        myLock() {
-            // Get this category's lock from the global locks store
-            const locks = this.globalLocksStore?.data;
-            if (!locks || !this.currentCategory) return null;
-            return locks.find(lock => 
-                lock.Spreadsheet === 'INVENTORY' && 
-                lock.Tab === this.currentCategory.toUpperCase()
-            ) || null;
-        },
-        lockInfo() {
-            return this.myLock;
-        },
-        isLoadingLockInfo() {
-            return this.globalLocksStore?.isLoading || false;
-        },
         lockOwnerUsername() {
             if (!this.lockInfo || !this.lockInfo.User) return null;
             const email = this.lockInfo.User;
@@ -41,8 +31,8 @@ export const InventoryMenuComponent = {
         menuItems() {
             const items = [];
             
-            // Add lock removal option if lock exists with user info and fully loaded
-            if (!this.isLoadingLockInfo && this.lockInfo && this.lockInfo.User) {
+            // Add lock removal option if lock exists and fully loaded
+            if (!this.isLoadingLockInfo && this.lockInfo) {
                 items.push({ 
                     label: `Remove lock: ${this.lockOwnerUsername}`, 
                     action: 'removeLock',
@@ -92,15 +82,28 @@ export const InventoryMenuComponent = {
             }
         }
     },
-    mounted() {
-        // Initialize global locks store (same instance across all components)
-        this.globalLocksStore = getReactiveStore(Requests.getAllLocks, null, []);
-    },
     methods: {
+        async fetchLockInfo() {
+            this.isLoadingLockInfo = true;
+            try {
+                if (this.getLockInfo) {
+                    this.lockInfo = await this.getLockInfo();
+                    console.log('[InventoryMenu] Fetched lock info:', this.lockInfo);
+                }
+            } catch (error) {
+                console.error('[InventoryMenu] Error fetching lock info:', error);
+            } finally {
+                this.isLoadingLockInfo = false;
+            }
+        },
         async handleAction(action) {
             switch (action) {
                 case 'refreshInventory':
-                    this.$modal.alert('Refreshing inventory...', 'Info');
+                    if (this.refreshCallback) {
+                        this.refreshCallback();
+                    } else {
+                        this.$modal.alert('Refreshing inventory...', 'Info');
+                    }
                     break;
                 case 'addInventoryItem':
                     this.$modal.confirm(
@@ -172,16 +175,30 @@ export const InventoryMenuComponent = {
             const tabName = this.lockInfo.Tab; // Use the actual tab name from lock info
             
             this.$modal.confirm(
-                `Are you sure you want to invalidate edits by: ${username}?\n\nWe will attempt to backup their autosaved data.`,
+                `Are you sure you want to force unlock ${tabName}?\n${username} may have unsaved changes.`,
                 async () => {
                     try {
                         const result = await Requests.forceUnlockSheet('INVENTORY', tabName, 'User requested via hamburger menu');
                         
                         if (result.success) {
+                            // Invalidate lock cache to ensure fresh lock status
+                            invalidateCache([
+                                { namespace: 'app_utils', methodName: 'getSheetLock', args: ['INVENTORY', tabName] },
+                                { namespace: 'api', methodName: 'getInventoryLock', args: [tabName] }
+                            ]);
+                            
                             this.$modal.alert(
-                                `Lock removed.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
+                                `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
                                 'Success'
                             );
+                            
+                            // Refresh lock info in the menu
+                            await this.fetchLockInfo();
+                            
+                            // Refresh page data and lock state via callback
+                            if (this.refreshCallback) {
+                                await this.refreshCallback();
+                            }
                         } else {
                             this.$modal.alert(`Failed to remove lock: ${result.message}`, 'Error');
                         }
@@ -191,7 +208,8 @@ export const InventoryMenuComponent = {
                     }
                 },
                 () => {},
-                'Confirm Force Unlock'
+                'Confirm Force Unlock',
+                'Force Unlock'
             );
         }
     },
@@ -232,15 +250,6 @@ export const InventoryContent = {
         // Centralized clean path without parameters
         cleanContainerPath() {
             return this.containerPath.split('?')[0];
-        },
-        currentCategoryName() {
-            // Extract category name from path like inventory/categories/{categoryName}
-            const pathSegments = this.cleanContainerPath.split('/').filter(segment => segment.length > 0);
-            // pathSegments[0] = 'inventory', pathSegments[1] = 'categories', pathSegments[2] = category name
-            if (pathSegments[1] === 'categories' && pathSegments[2]) {
-                return pathSegments[2];
-            }
-            return null;
         },
         // Direct navigation options for inventory
         inventoryNavigation() {
@@ -311,21 +320,6 @@ export const InventoryContent = {
         }
     },
     watch: {
-        currentCategoryName: {
-            handler(newCategory) {
-                // Create a new lock store when the current category changes
-                if (newCategory) {
-                    this.categoryLockStore = getReactiveStore(
-                        Requests.getSheetLock,
-                        null,
-                        ['INVENTORY', newCategory.toUpperCase()]
-                    );
-                } else {
-                    this.categoryLockStore = null;
-                }
-            },
-            immediate: true
-        },
         // Watch for when categories data is loaded and check for auto-saved data
         'categoriesStore.data': {
             handler(newData) {
@@ -370,6 +364,18 @@ export const InventoryContent = {
         },
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
+        },
+        async handleRefresh() {
+            console.log('InventoryContent: Refresh requested');
+            // Invalidate the categories store cache to force reload with fresh lock status
+            invalidateCache([
+                { namespace: 'database', methodName: 'getTabs', args: ['INVENTORY'] }
+            ], true);
+            
+            // If viewing an inventory table, refresh its lock status
+            if (this.$refs.inventoryTable) {
+                await this.$refs.inventoryTable.checkLockStatus();
+            }
         }
     },
     async mounted() {
@@ -380,7 +386,7 @@ export const InventoryContent = {
                 'lockInfo',
                 'Checking lock status...',
                 ['title'], // Extract tab name from 'title' column
-                [],
+                [authState.user?.email], // Pass current user to filter out their own locks
                 'lockInfo' // Store lock info in 'lockInfo' column
             )
         ];
@@ -422,7 +428,26 @@ export const InventoryContent = {
         hamburgerMenuRegistry.registerMenu('inventory', {
             components: [InventoryMenuComponent, DashboardToggleComponent],
             props: {
-                currentCategory: () => this.currentCategoryName
+                refreshCallback: this.handleRefresh,
+                getLockInfo: async () => {
+                    // Get lock info from the current category if we're viewing one
+                    const categoryName = this.currentCategoryName;
+                    console.log('[InventoryContent] getLockInfo called:', { 
+                        categoryName,
+                        cleanPath: this.cleanContainerPath,
+                        hasStore: !!this.categoriesStore,
+                        storeData: this.categoriesStore?.data?.length
+                    });
+                    
+                    if (!categoryName) return null;
+                    
+                    // Always fetch directly from API to ensure fresh lock status
+                    // (bypasses store which may have stale analysis data)
+                    console.log('[InventoryContent] Fetching lock info directly for:', categoryName);
+                    const lockInfo = await Requests.getInventoryLock(categoryName.toUpperCase());
+                    console.log('[InventoryContent] Lock info from API:', lockInfo);
+                    return lockInfo;
+                }
             }
         });
     },
@@ -457,6 +482,7 @@ export const InventoryContent = {
             
             <!-- Specific Category View -->
             <inventory-table
+                ref="inventoryTable"
                 v-else-if="containerPath.startsWith('inventory/categories/') && currentCategoryName"
                 :container-path="containerPath"
                 :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"

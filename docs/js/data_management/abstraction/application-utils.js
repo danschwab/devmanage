@@ -1,4 +1,4 @@
-import { Database, wrapMethods, invalidateCache } from '../index.js';
+import { Database, wrapMethods } from '../index.js';
 
 /**
  * Utility functions for application-specific operations
@@ -234,23 +234,12 @@ class applicationUtils_uncached {
             Timestamp: timestamp
         });
         
-        const result = await Database.setData('CACHE', 'Locks', existingLocks, {
+        return await Database.setData('CACHE', 'Locks', existingLocks, {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
             User: 'User',
             Timestamp: 'Timestamp'
         }, { skipMetadata: true });
-        
-        // Invalidate lock caches to ensure UI updates
-        if (result) {
-            invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
-                { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
-            ]);
-        }
-        
-        return result;
     }
     
     /**
@@ -290,47 +279,12 @@ class applicationUtils_uncached {
         // Remove the lock
         existingLocks.splice(lockIndex, 1);
         
-        const result = await Database.setData('CACHE', 'Locks', existingLocks, {
+        return await Database.setData('CACHE', 'Locks', existingLocks, {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
             User: 'User',
             Timestamp: 'Timestamp'
         }, { skipMetadata: true });
-        
-        // Invalidate lock caches to ensure UI updates
-        if (result) {
-            invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
-                { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
-            ]);
-        }
-        
-        return result;
-    }
-    
-    /**
-     * Get all active locks across all spreadsheets
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @returns {Promise<Array<Object>>} Array of lock objects with Spreadsheet, Tab, User, Timestamp
-     */
-    static async getAllLocks(deps) {
-        try {
-            const locks = await deps.call(Database.getData, 'CACHE', 'Locks', {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            });
-            // Return empty array if no locks exist
-            if (!locks || locks.length === 0) {
-                return [];
-            }
-            return locks;
-        } catch (error) {
-            console.error('[ApplicationUtils.getAllLocks] Error fetching locks:', error);
-            return [];
-        }
     }
     
     /**
@@ -338,10 +292,11 @@ class applicationUtils_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
-     * @returns {Promise<Object|null>} Lock details or null if not locked
+     * @param {string} [currentUser] - Optional current user email to filter out their own locks
+     * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
-    static async getSheetLock(deps, spreadsheet, tab) {
-        console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}"`);
+    static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
+        console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}", currentUser: "${currentUser}"`);
         const locks = await deps.call(Database.getData, 'CACHE', 'Locks', {
             Spreadsheet: 'Spreadsheet',
             Tab: 'Tab',
@@ -353,6 +308,12 @@ class applicationUtils_uncached {
         const matchedLock = locks.find(lock => 
             lock.Spreadsheet === spreadsheet && lock.Tab === tab
         ) || null;
+        
+        // Filter out if locked by current user
+        if (matchedLock && currentUser && matchedLock.User === currentUser) {
+            console.log(`[ApplicationUtils.getSheetLock] Lock owned by current user (${currentUser}), returning null`);
+            return null;
+        }
         
         console.log(`[ApplicationUtils.getSheetLock] Matched lock for "${spreadsheet}/${tab}":`, matchedLock);
         return matchedLock;
@@ -484,13 +445,6 @@ class applicationUtils_uncached {
                 Timestamp: 'Timestamp'
             }, { skipMetadata: true });
         }
-        
-        // Invalidate lock caches to ensure UI updates
-        invalidateCache([
-            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-            { namespace: 'api', methodName: 'getPacklistLock', args: [tab] },
-            { namespace: 'api', methodName: 'getInventoryLock', args: [tab] }
-        ]);
         
         console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
         

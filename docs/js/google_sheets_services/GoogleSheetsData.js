@@ -82,9 +82,11 @@ export class GoogleSheetsService {
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.setSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
+        
         // Convert JS objects to sheet format
         let values;
         if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
+            // Already in 2D array format (e.g., [['Header1', 'Header2']])
             values = updates;
         } else if (Array.isArray(updates) && updates.length > 0) {
             // If mapping is provided, use reverse transform to get proper sheet format
@@ -94,6 +96,10 @@ export class GoogleSheetsService {
                 const headers = Object.keys(updates[0]);
                 values = [headers, ...updates.map(obj => headers.map(h => obj[h] ?? ''))];
             }
+        } else if (Array.isArray(updates) && updates.length === 0 && mapping) {
+            // Empty array with mapping provided - create headers-only sheet
+            const headers = mapping._orderedHeaders || Object.values(mapping).filter(v => v !== mapping._orderedHeaders);
+            values = [headers];
         } else {
             throw new Error('[GoogleSheetsData.setSheetData] VALIDATION_ERROR: No valid updates provided');
         }

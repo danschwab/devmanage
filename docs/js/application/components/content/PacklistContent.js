@@ -8,30 +8,19 @@ export const PacklistMenuComponent = {
         currentView: String,
         title: String,
         refreshCallback: Function,
-        currentPacklist: String // Current packlist name
+        getLockInfo: Function
     },
     inject: ['$modal'],
     data() {
         return {
-            globalLocksStore: null
+            lockInfo: null,
+            isLoadingLockInfo: true
         };
     },
+    async mounted() {
+        await this.fetchLockInfo();
+    },
     computed: {
-        myLock() {
-            // Get this packlist's lock from the global locks store
-            const locks = this.globalLocksStore?.data;
-            if (!locks || !this.currentPacklist) return null;
-            return locks.find(lock => 
-                lock.Spreadsheet === 'PACK_LISTS' && 
-                lock.Tab === this.currentPacklist
-            ) || null;
-        },
-        lockInfo() {
-            return this.myLock;
-        },
-        isLoadingLockInfo() {
-            return this.globalLocksStore?.isLoading || false;
-        },
         lockOwnerUsername() {
             if (!this.lockInfo || !this.lockInfo.User) return null;
             const email = this.lockInfo.User;
@@ -40,8 +29,8 @@ export const PacklistMenuComponent = {
         menuItems() {
             const items = [];
             
-            // Add lock removal option if lock exists with user info and fully loaded
-            if (!this.isLoadingLockInfo && this.lockInfo && this.lockInfo.User) {
+            // Add lock removal option if lock exists and fully loaded
+            if (!this.isLoadingLockInfo && this.lockInfo) {
                 items.push({ 
                     label: `Remove lock: ${this.lockOwnerUsername}`, 
                     action: 'removeLock',
@@ -59,11 +48,20 @@ export const PacklistMenuComponent = {
             }
         }
     },
-    mounted() {
-        // Initialize global locks store (same instance across all components)
-        this.globalLocksStore = getReactiveStore(Requests.getAllLocks, null, []);
-    },
     methods: {
+        async fetchLockInfo() {
+            this.isLoadingLockInfo = true;
+            try {
+                if (this.getLockInfo) {
+                    this.lockInfo = await this.getLockInfo();
+                    console.log('[PacklistMenu] Fetched lock info:', this.lockInfo);
+                }
+            } catch (error) {
+                console.error('[PacklistMenu] Error fetching lock info:', error);
+            } finally {
+                this.isLoadingLockInfo = false;
+            }
+        },
         async handleAction(action) {
             switch (action) {
                 case 'refresh':
@@ -93,19 +91,29 @@ export const PacklistMenuComponent = {
             const tabName = this.lockInfo.Tab; // Use the actual tab name from lock info
             
             this.$modal.confirm(
-                `Are you sure you want to force unlock this pack list?\n\nLocked by: ${username}\n\nThis will backup any autosaved data with an OVERRIDDEN prefix.`,
+                `Are you sure you want to force unlock ${tabName}?\n${username} may have unsaved changes.`,
                 async () => {
                     try {
                         const result = await Requests.forceUnlockSheet('PACK_LISTS', tabName, 'User requested via hamburger menu');
                         
                         if (result.success) {
+                            // Invalidate lock cache to ensure fresh lock status
+                            invalidateCache([
+                                { namespace: 'app_utils', methodName: 'getSheetLock', args: ['PACK_LISTS', tabName] },
+                                { namespace: 'api', methodName: 'getPacklistLock', args: [tabName] }
+                            ]);
+                            
                             this.$modal.alert(
                                 `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
                                 'Success'
                             );
-                            // Refresh if callback available
+                            
+                            // Refresh lock info in the menu
+                            await this.fetchLockInfo();
+                            
+                            // Refresh page data and lock state via callback
                             if (this.refreshCallback) {
-                                this.refreshCallback();
+                                await this.refreshCallback();
                             }
                         } else {
                             this.$modal.alert(`Failed to remove lock: ${result.message}`, 'Error');
@@ -116,7 +124,8 @@ export const PacklistMenuComponent = {
                     }
                 },
                 () => {},
-                'Confirm Force Unlock'
+                'Confirm Force Unlock',
+                'Force Unlock'
             );
         }
     },
@@ -245,7 +254,24 @@ export const PacklistContent = {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
-                currentPacklist: () => this.currentPacklist
+                getLockInfo: async () => {
+                    // Get lock info from the current packlist if we're viewing one
+                    const packlistName = this.currentPacklist;
+                    console.log('[PacklistContent] getLockInfo called:', { 
+                        packlistName, 
+                        hasStore: !!this.packlistsStore,
+                        storeData: this.packlistsStore?.data?.length
+                    });
+                    
+                    if (!packlistName) return null;
+                    
+                    // Always fetch directly from API to ensure fresh lock status
+                    // (bypasses store which may have stale analysis data)
+                    console.log('[PacklistContent] Fetching lock info directly for:', packlistName);
+                    const lockInfo = await Requests.getPacklistLock(packlistName);
+                    console.log('[PacklistContent] Lock info from API:', lockInfo);
+                    return lockInfo;
+                }
             }
         });
     },
@@ -300,7 +326,7 @@ export const PacklistContent = {
                     'lockInfo',
                     'Checking lock status...',
                     ['title'], // Extract tab name from 'title' column
-                    [], // No additional params needed
+                    [authState.user?.email], // Pass current user to filter out their own locks
                     'lockInfo' // Store lock info in 'lockInfo' column
                 ),
                 createAnalysisConfig(
@@ -438,6 +464,11 @@ export const PacklistContent = {
                 { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'ProductionSchedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
             ], true);
+            
+            // If viewing a packlist table, refresh its lock status
+            if (this.$refs.packlistTable) {
+                await this.$refs.packlistTable.checkLockStatus();
+            }
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
@@ -481,6 +512,7 @@ export const PacklistContent = {
             
             <!-- Individual Packlist View (Read-only or Edit mode) -->
             <packlist-table 
+                ref="packlistTable"
                 v-else-if="!isDetailsView"
                 :tab-name="currentPacklist"
                 :container-path="containerPath"

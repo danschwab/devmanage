@@ -827,16 +827,21 @@ export class FakeGoogleSheetsService {
                     return true;
                 }
             }
+            
+            // Handle empty array with mapping - create headers-only sheet
+            if (Array.isArray(updates) && updates.length === 0 && arguments.length >= 4 && typeof arguments[3] === 'object' && arguments[3] !== null) {
+                const mapping = arguments[3];
+                const headers = mapping._orderedHeaders || Object.values(mapping).filter(v => v !== mapping._orderedHeaders);
+                if (!this.mockData[tableId]) this.mockData[tableId] = {};
+                this.mockData[tableId][tabName] = [headers];
+                return true;
+            }
 
             // Handle range-based updates (like "A1:B1" with values array)
             if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
                 //console.log(`FakeGoogleSheetsService: Range update with ${updates.length} rows`);
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
-                if (!this.mockData[tableId][tabName]) this.mockData[tableId][tabName] = [];
-                const sheetData = this.mockData[tableId][tabName];
-                updates.forEach((rowData, rowIndex) => {
-                    sheetData[rowIndex] = [...rowData];
-                });
+                this.mockData[tableId][tabName] = updates; // Replace entire sheet with new data
                 return true;
             }
 

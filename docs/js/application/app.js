@@ -131,6 +131,11 @@ const App = {
             );
             console.log('[App] Initialized global locks store');
             
+            // Watch for locks data changes
+            this.$watch(() => this.globalLocksStore?.data, (locks) => {
+                console.log('[App] Global locks data:', locks);
+            }, { immediate: true, deep: true });
+            
             // Apply current URL state if user is already authenticated
             const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
             if (currentUrl && currentUrl !== 'dashboard') {
@@ -154,6 +159,11 @@ const App = {
                         []
                     );
                     console.log('[App] Initialized global locks store on login');
+                    
+                    // Watch for locks data changes
+                    this.$watch(() => this.globalLocksStore?.data, (locks) => {
+                        console.log('[App] Global locks data:', locks);
+                    }, { immediate: true, deep: true });
                 }
                 
                 // Apply current URL when user logs in
