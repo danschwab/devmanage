@@ -991,6 +991,35 @@ tr.in-group:not(:has(+ .in-group)) > td:not(.row-drag-handle) {
     /*border-bottom: 4px double var(--color-border);*/
 }
 
+/* Group Toggle Button */
+.group-toggle {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 16px;
+    line-height: 16px;
+    font-weight: bold;
+    z-index: 10;
+    pointer-events: none;
+}
+
+tr.is-group:hover .group-toggle {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.group-toggle:hover {
+    background-color: var(--color-border-hover);
+    border-color: var(--color-border-hover);
+}
+
+.table-cell-container {
+    position: relative;
+}
+
 /* Table Details Styling */
 
 .details-cell {

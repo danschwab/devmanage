@@ -265,7 +265,7 @@ export const PacklistTable = {
             }
             
             try {
-                const lockInfo = await Requests.getPacklistLock(this.tabName);
+                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
                 console.log(`[PacklistTable.checkLockStatus] Lock info for "${this.tabName}":`, lockInfo);
                 if (lockInfo) {
                     this.lockedByOther = lockInfo.User !== user;
@@ -307,15 +307,12 @@ export const PacklistTable = {
                         console.log(`[PacklistTable] Locked PACK_LISTS/${this.tabName} for ${user}`);
                     } else {
                         // Failed to acquire lock - check who has it
-                        const lockInfo = await Requests.getPacklistLock(this.tabName);
+                        const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
                         if (lockInfo && lockInfo.User !== user) {
                             this.lockedByOther = true;
                             this.lockOwner = lockInfo.User;
                             console.warn(`[PacklistTable] Sheet locked by ${lockInfo.User}`);
                             this.error = `This pack list is being edited by ${lockInfo.User}`;
-                            
-                            // Refresh page to show newly identified lock information
-                            await this.handleRefresh();
                         }
                     }
                 } else if (!isDirty && this.isLocked) {
@@ -808,7 +805,7 @@ export const PacklistTable = {
             </div>
             
             <div v-if="!editMode && lockedByOther" class="card white">
-                Locked for edit by: {{ lockOwner && lockOwner.includes('@') ? lockOwner.split('@')[0] : (lockOwner || 'Unknown') }}
+                Locked for edit by: {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
             </div>
 
 
@@ -871,6 +868,9 @@ export const PacklistTable = {
                             </button>
 
                             <button v-if="!editMode" @click="handlePrint" :disabled="isLoading || isAnalyzing" class="white">Print</button>
+                            <span v-if="!editMode && lockedByOther" style="margin-left: 1rem; color: var(--color-text-secondary);">
+                                Locked by {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
+                            </span>
                         </div>
                     </template>
                     <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">

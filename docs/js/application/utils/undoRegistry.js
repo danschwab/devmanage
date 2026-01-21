@@ -53,12 +53,13 @@ export const undoRegistry = Vue.reactive({
         } = options;
         
         // Normalize arrays to always be an array of data arrays
-        // Check if arrays is already an array of arrays (has _tableId property) or a single data array
+        // Check if arrays is a single data array or an array of data arrays
         let arrayList;
         if (Array.isArray(arrays)) {
             // Check if this is an array of data arrays or a single data array
-            // A data array will have _tableId property or first element will be a plain object (row)
-            const isArrayOfArrays = arrays.length > 0 && arrays[0] && typeof arrays[0] === 'object' && arrays[0]._tableId !== undefined;
+            // A data array will have _tableId property on the array itself
+            // If first element is also an array, it's an array of arrays
+            const isArrayOfArrays = (arrays.length > 0 && Array.isArray(arrays[0]));
             arrayList = isArrayOfArrays ? arrays : [arrays];
         } else {
             arrayList = [arrays];

@@ -229,12 +229,12 @@ class applicationUtils_uncached {
                             : lock
                     );
                     
-                    await Database.setData('CACHE', 'Locks', updatedLocks, {
+                    await this._saveLocksData(updatedLocks, {
                         Spreadsheet: 'Spreadsheet',
                         Tab: 'Tab',
                         User: 'User',
                         Timestamp: 'Timestamp'
-                    }, { skipMetadata: true });
+                    }, writeLockToken);
                     
                     return true;
                 } else {
@@ -252,12 +252,12 @@ class applicationUtils_uncached {
                 Timestamp: timestamp
             });
             
-            await Database.setData('CACHE', 'Locks', existingLocks, {
+            await this._saveLocksData(existingLocks, {
                 Spreadsheet: 'Spreadsheet',
                 Tab: 'Tab',
                 User: 'User',
                 Timestamp: 'Timestamp'
-            }, { skipMetadata: true });
+            }, writeLockToken);
             
             return true;
             
@@ -312,12 +312,12 @@ class applicationUtils_uncached {
             // Remove the lock
             existingLocks.splice(lockIndex, 1);
             
-            await Database.setData('CACHE', 'Locks', existingLocks, {
+            await this._saveLocksData(existingLocks, {
                 Spreadsheet: 'Spreadsheet',
                 Tab: 'Tab',
                 User: 'User',
                 Timestamp: 'Timestamp'
-            }, { skipMetadata: true });
+            }, writeLockToken);
             
             return true;
             
@@ -480,20 +480,13 @@ class applicationUtils_uncached {
             !(lock.Spreadsheet === spreadsheet && lock.Tab === tab)
         );
         
-        // If no locks remain, save with headers only (2D array format)
-        if (remainingLocks.length === 0) {
-            await Database.setData('CACHE', 'Locks', [
-                ['Spreadsheet', 'Tab', 'User', 'Timestamp']
-            ], null, { skipMetadata: true });
-        } else {
-            // Save remaining locks as array of objects
-            await Database.setData('CACHE', 'Locks', remainingLocks, {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            }, { skipMetadata: true });
-        }
+        // Save remaining locks with semaphore
+        await this._saveLocksData(remainingLocks, {
+            Spreadsheet: 'Spreadsheet',
+            Tab: 'Tab',
+            User: 'User',
+            Timestamp: 'Timestamp'
+        }, writeLockToken);
         
         console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
         
@@ -539,12 +532,12 @@ class applicationUtils_uncached {
             // Remove all locks for this user
             const remainingLocks = locks.filter(lock => lock.User !== user);
             
-            await Database.setData('CACHE', 'Locks', remainingLocks, {
+            await this._saveLocksData(remainingLocks, {
                 Spreadsheet: 'Spreadsheet',
                 Tab: 'Tab',
                 User: 'User',
                 Timestamp: 'Timestamp'
-            }, { skipMetadata: true });
+            }, writeLockToken);
             
             return true;
             
@@ -637,12 +630,43 @@ class applicationUtils_uncached {
             // Don't throw - always try to release
         }
     }
+    
+    /**
+     * Save locks data to the Locks sheet, preserving the semaphore cell
+     * @private
+     * @param {Array<Object>} locks - Array of lock objects
+     * @param {Object} mapping - Mapping object for lock fields
+     * @param {string} currentSemaphore - Current semaphore value to preserve
+     * @returns {Promise<boolean>}
+     */
+    static async _saveLocksData(locks, mapping, currentSemaphore = '0') {
+        // Convert locks to 2D array format
+        let sheetData;
+        if (locks.length === 0) {
+            // No locks - semaphore and headers only
+            sheetData = [
+                [currentSemaphore], // Preserve current semaphore value
+                ['Spreadsheet', 'Tab', 'User', 'Timestamp'] // Headers
+            ];
+        } else {
+            // Use GoogleSheetsService to convert objects to sheet format
+            const dataRows = GoogleSheetsService.reverseTransformSheetData(mapping, locks);
+            // Prepend semaphore cell
+            sheetData = [
+                [currentSemaphore], // Preserve current semaphore value
+                ...dataRows // Headers + data rows
+            ];
+        }
+        
+        // Save as raw 2D array (no mapping since we already converted)
+        return await Database.setData('CACHE', 'Locks', sheetData, null, { skipMetadata: true });
+    }
 }
 
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet'], // Mutation methods
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_saveLocksData'], // Mutation methods (including private helpers)
     [], // Infinite cache methods
     { 'getSheetLock': 10000 } // Custom cache durations (10 seconds for lock checks)
 );

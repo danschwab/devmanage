@@ -1493,6 +1493,11 @@ export const TableComponent = {
         },
         
         handleRefresh() {
+            // Capture state before discarding changes (when allowSaveEvent is true)
+            if (this.allowSaveEvent && this.currentRouteKey) {
+                undoRegistry.capture(this.data, this.currentRouteKey, { type: 'discard' });
+            }
+            
             this.$emit('refresh');
             // Clear hidden columns on refresh
             this.hiddenColumns = [];
