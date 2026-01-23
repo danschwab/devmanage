@@ -207,12 +207,7 @@ class applicationUtils_uncached {
             const timestamp = new Date().toISOString();
             
             // Now we have exclusive access - safe to read-modify-write
-            const existingLocks = await Database.getData('CACHE', 'Locks', {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            });
+            const existingLocks = await this._getLocksData();
             
             // Check if already locked
             const existingLock = existingLocks.find(lock => 
@@ -229,12 +224,7 @@ class applicationUtils_uncached {
                             : lock
                     );
                     
-                    await this._saveLocksData(updatedLocks, {
-                        Spreadsheet: 'Spreadsheet',
-                        Tab: 'Tab',
-                        User: 'User',
-                        Timestamp: 'Timestamp'
-                    }, writeLockToken);
+                    await this._saveLocksData(updatedLocks, writeLockToken);
                     
                     return true;
                 } else {
@@ -252,12 +242,7 @@ class applicationUtils_uncached {
                 Timestamp: timestamp
             });
             
-            await this._saveLocksData(existingLocks, {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            }, writeLockToken);
+            await this._saveLocksData(existingLocks, writeLockToken);
             
             return true;
             
@@ -284,12 +269,7 @@ class applicationUtils_uncached {
             writeLockToken = await this._acquireWriteLock();
             
             // Now we have exclusive access - safe to read-modify-write
-            const existingLocks = await Database.getData('CACHE', 'Locks', {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            });
+            const existingLocks = await this._getLocksData();
             
             // Find the lock
             const lockIndex = existingLocks.findIndex(lock => 
@@ -312,12 +292,7 @@ class applicationUtils_uncached {
             // Remove the lock
             existingLocks.splice(lockIndex, 1);
             
-            await this._saveLocksData(existingLocks, {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            }, writeLockToken);
+            await this._saveLocksData(existingLocks, writeLockToken);
             
             return true;
             
@@ -339,12 +314,8 @@ class applicationUtils_uncached {
      */
     static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
         console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}", currentUser: "${currentUser}"`);
-        const locks = await deps.call(Database.getData, 'CACHE', 'Locks', {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        });
+        // Use direct sheet access to bypass cache for lock status checks
+        const locks = await this._getLocksData();
         console.log(`[ApplicationUtils.getSheetLock] Found ${locks.length} total locks:`, locks);
         
         const matchedLock = locks.find(lock => 
@@ -381,12 +352,7 @@ class applicationUtils_uncached {
             
             // Now we have exclusive access - safe to read-modify-write
             // Get lock info first to identify the owner
-            const locks = await Database.getData('CACHE', 'Locks', {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        });
+            const locks = await this._getLocksData();
         
         const lockInfo = locks.find(lock => 
             lock.Spreadsheet === spreadsheet && lock.Tab === tab
@@ -481,12 +447,7 @@ class applicationUtils_uncached {
         );
         
         // Save remaining locks with semaphore
-        await this._saveLocksData(remainingLocks, {
-            Spreadsheet: 'Spreadsheet',
-            Tab: 'Tab',
-            User: 'User',
-            Timestamp: 'Timestamp'
-        }, writeLockToken);
+        await this._saveLocksData(remainingLocks, writeLockToken);
         
         console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
         
@@ -522,22 +483,12 @@ class applicationUtils_uncached {
             writeLockToken = await this._acquireWriteLock();
             
             // Now we have exclusive access - safe to read-modify-write
-            const locks = await Database.getData('CACHE', 'Locks', {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            });
+            const locks = await this._getLocksData();
             
             // Remove all locks for this user
             const remainingLocks = locks.filter(lock => lock.User !== user);
             
-            await this._saveLocksData(remainingLocks, {
-                Spreadsheet: 'Spreadsheet',
-                Tab: 'Tab',
-                User: 'User',
-                Timestamp: 'Timestamp'
-            }, writeLockToken);
+            await this._saveLocksData(remainingLocks, writeLockToken);
             
             return true;
             
@@ -569,8 +520,8 @@ class applicationUtils_uncached {
                 
                 // Check if unlocked (empty or "0")
                 if (!currentValue || currentValue === '0' || currentValue === '') {
-                    // Try to claim the lock by writing our token
-                    await GoogleSheetsService.setSheetData('CACHE', 'Locks', [[myToken]], null);
+                    // Try to claim the lock by writing our token to A1 only
+                    await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [[myToken]], null);
                     
                     // Verify we got the lock (handle race condition)
                     await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for write propagation
@@ -588,8 +539,8 @@ class applicationUtils_uncached {
                     const now = Date.now();
                     if (!isNaN(lockTime) && (now - lockTime) > 30000) {
                         console.warn(`[_acquireWriteLock] Detected stale lock from ${new Date(lockTime).toISOString()}, breaking it`);
-                        // Force release stale lock
-                        await GoogleSheetsService.setSheetData('CACHE', 'Locks', [['0']], null);
+                        // Force release stale lock - write to A1 only
+                        await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [['0']], null);
                         continue; // Try again immediately
                     }
                 }
@@ -619,8 +570,8 @@ class applicationUtils_uncached {
             const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
             
             if (currentValue === token) {
-                // Clear the semaphore
-                await GoogleSheetsService.setSheetData('CACHE', 'Locks', [['0']], null);
+                // Clear the semaphore - write to A1 only
+                await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [['0']], null);
                 console.log(`[_releaseWriteLock] Released lock with token: ${token}`);
             } else {
                 console.warn(`[_releaseWriteLock] Lock token mismatch - current: ${currentValue}, expected: ${token}`);
@@ -632,41 +583,100 @@ class applicationUtils_uncached {
     }
     
     /**
+     * Get locks data directly from sheet without caching
+     * @private
+     * @returns {Promise<Array<Object>>} Array of lock objects
+     */
+    static async _getLocksData() {
+        try {
+            // Read directly from GoogleSheetsService to bypass cache
+            // Range starts at A2 to skip semaphore cell in A1
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A2:D');
+            
+            console.log('[_getLocksData] Raw data from Locks!A2:D:', rawData);
+            
+            if (!rawData || rawData.length === 0) {
+                console.log('[_getLocksData] No data found, returning empty array');
+                return [];
+            }
+            
+            // First row should be headers
+            const headers = rawData[0];
+            if (!headers || headers.length === 0) {
+                console.warn('[_getLocksData] No headers found, returning empty array');
+                return [];
+            }
+            
+            // Transform remaining rows to objects
+            const locks = [];
+            for (let i = 1; i < rawData.length; i++) {
+                const row = rawData[i];
+                // Check if row has any data at all (not just checking first column)
+                const hasData = row && row.some(cell => cell !== null && cell !== undefined && cell !== '');
+                if (hasData) {
+                    locks.push({
+                        Spreadsheet: row[0] || '',
+                        Tab: row[1] || '',
+                        User: row[2] || '',
+                        Timestamp: row[3] || ''
+                    });
+                }
+            }
+            
+            console.log(`[_getLocksData] Found ${locks.length} locks:`, locks);
+            return locks;
+        } catch (error) {
+            console.error('[_getLocksData] Error reading locks:', error);
+            return [];
+        }
+    }
+
+    /**
      * Save locks data to the Locks sheet, preserving the semaphore cell
      * @private
      * @param {Array<Object>} locks - Array of lock objects
-     * @param {Object} mapping - Mapping object for lock fields
      * @param {string} currentSemaphore - Current semaphore value to preserve
      * @returns {Promise<boolean>}
      */
-    static async _saveLocksData(locks, mapping, currentSemaphore = '0') {
-        // Convert locks to 2D array format
-        let sheetData;
-        if (locks.length === 0) {
-            // No locks - semaphore and headers only
-            sheetData = [
-                [currentSemaphore], // Preserve current semaphore value
-                ['Spreadsheet', 'Tab', 'User', 'Timestamp'] // Headers
+    static async _saveLocksData(locks, currentSemaphore = '0') {
+        try {
+            console.log(`[_saveLocksData] Saving ${locks.length} locks with semaphore: ${currentSemaphore}`);
+            console.log('[_saveLocksData] Lock data:', locks);
+            
+            // Build 2D array: semaphore, headers, then data rows
+            const headers = ['Spreadsheet', 'Tab', 'User', 'Timestamp'];
+            const dataRows = locks.map(lock => [
+                lock.Spreadsheet || '',
+                lock.Tab || '',
+                lock.User || '',
+                lock.Timestamp || ''
+            ]);
+            
+            const sheetData = [
+                [currentSemaphore], // A1: Semaphore cell
+                headers,             // A2:D2: Headers
+                ...dataRows          // A3+: Lock data
             ];
-        } else {
-            // Use GoogleSheetsService to convert objects to sheet format
-            const dataRows = GoogleSheetsService.reverseTransformSheetData(mapping, locks);
-            // Prepend semaphore cell
-            sheetData = [
-                [currentSemaphore], // Preserve current semaphore value
-                ...dataRows // Headers + data rows
-            ];
+            
+            console.log(`[_saveLocksData] Writing ${sheetData.length} rows (including semaphore + headers)`);
+            
+            // Write directly to GoogleSheetsService to ensure immediate write
+            // Use range A1:D to overwrite entire sheet (semaphore + all lock data)
+            await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
+            
+            console.log('[_saveLocksData] Successfully saved locks');
+            return true;
+        } catch (error) {
+            console.error('[_saveLocksData] Error saving locks:', error);
+            return false;
         }
-        
-        // Save as raw 2D array (no mapping since we already converted)
-        return await Database.setData('CACHE', 'Locks', sheetData, null, { skipMetadata: true });
     }
 }
 
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_saveLocksData'], // Mutation methods (including private helpers)
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_getLocksData', '_saveLocksData'], // Mutation methods (including private helpers)
     [], // Infinite cache methods
     { 'getSheetLock': 10000 } // Custom cache durations (10 seconds for lock checks)
 );

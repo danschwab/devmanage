@@ -306,7 +306,8 @@ export const InventoryContent = {
                         id: cat.sheetId,
                         title: categoryTitle,
                         cardClass: cardClass,
-                        contentFooter: contentFooter
+                        contentFooter: contentFooter,
+                        AppData: cat.AppData // Pass through AppData for analyzing state
                     };
                 });
         },

@@ -196,13 +196,18 @@ export const CardsComponent = {
         handleRefresh() {
             console.log('CardsComponent: Refresh requested');
             this.$emit('refresh');
+        },
+        isCardAnalyzing(cardIndex) {
+            // Check if this card is currently being analyzed
+            const card = this.visibleCards[cardIndex];
+            return card && card.AppData && card.AppData._analyzing === true;
         }
     },
     template: html`
         <div class="cards-component content">
             
             <!-- Initial Loading State (no items yet) -->
-            <div v-if="!showHeader && isLoading" class="loading-message">
+            <div v-if="!showHeader && isLoading && !(shouldShowCards && visibleCards.length > 0)" class="loading-message">
                 <img src="images/loading.gif" alt="Loading..."/>
                 <p>{{ loadingMessage }}</p>
             </div>
@@ -250,9 +255,9 @@ export const CardsComponent = {
             <!-- Cards Grid (shows during analysis with progressive updates) -->
             <div v-if="shouldShowCards" class="cards-grid">
                 <div
-                    v-for="item in visibleCards"
+                    v-for="(item, idx) in visibleCards"
                     :key="item.id || item.title"
-                    :class="['card', 'clickable', item.cardClass || defaultCardClass]"
+                    :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx) }, item.cardClass || defaultCardClass]"
                     @click="handleCardClick(item)"
                     @keydown="handleKeyDown($event, item)"
                     :title="item.title"

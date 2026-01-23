@@ -116,20 +116,20 @@ inventory updates
 
 Architecture Improvements
 
-- [ ] log out needs to skip database operations if the token is already expired
-- [ ] improve error handling and user notifications for failed auth and failed permissions
 - [x] dashboard configuration
 - [x] user preferences storage
-- [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
-      consider always checking the edithistory last-edited date before saving to prevent overwriting simultaneous changes?
 - [x] ReactiveStore periodically save data to spreadsheet, and check + load data from spreadsheet to prevent data loss on accidental tab close or crash. Notify user "recovered unsaved changes..."
 - [x] extra spreadsheet EditHistory column
-- [ ] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [x] save history: dateTime, userName, fields edited & old values
+- [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
+- [ ] log out needs to skip database operations if the token is already expired
+- [ ] improve error handling and user notifications for failed auth and failed permissions
+- [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
+- [ ] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
 - [ ] allow autocaching of analytics data
-- [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
+      consider always checking the edithistory last-edited date before saving to prevent overwriting simultaneous changes?
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
 
@@ -138,14 +138,14 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Create new pack list in Google Sheets
 - [x] Input items into Google Sheets
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
-- [ ] allow pack list export from project manager
+- [x] make sure panel and hardware part numbers come in correctly
+- [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
 - [ ] !!! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
+- [ ] allow pack list export from project manager
 - [ ] change the packlist export to export all items correctly
 - [ ] fix CABINET item numbers in inventor
 - [ ] fix FURNITURE item numbers in inventor
 - [ ] fix HANGING SIGN item numbers in inventor
-- [x] make sure panel and hardware part numbers come in correctly
-- [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
 - [ ] verify panel and hardware and other possible edge-cases
 - [ ] Improve and test this system
       Categorize all booth parts according to Pack List Rules (preferences)
@@ -162,11 +162,11 @@ Pack Lists in Web
 - [x] allow saving edits to google sheet
 - [x] allow packlist main page to be refreshed (cards-grid refresh button)
 - [x] new items from inventory with easy navigation
-- [ ] add category filtering to packlist-details table
 - [x] allow packlist text search and filtering
 - [x] Allow packlist item categorization and hiding, ex: select a whole set of hardware and categorize as "BeMatrix Hardware", then move that set to hidden row as a list.
 - [x] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
-- [ ] allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
+- [ ] !!! allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
+- [ ] add category filtering to packlist-details table
 - [ ] !!! automations interface, packlist rules
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?
@@ -179,10 +179,11 @@ show management system
 
 - [x] link shows to pack lists
 - [x] advanced search and preset system
+- [x] default schedule ship date as analytics step
+- [ ] !!! add "views" system to show different columns and layouts for different purposes
 - [ ] interface to allow "overlap" vs "show date" options for advanced search
 - [ ] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
 - [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
-- [x] default schedule ship date as analytics step
       create and edit shows
       express checklist columns as checkboxes
       allow user to access show searches as pages and pin to dashboard
