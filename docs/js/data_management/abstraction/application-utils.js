@@ -1,4 +1,4 @@
-import { Database, wrapMethods } from '../index.js';
+import { Database, wrapMethods, invalidateCache } from '../index.js';
 
 // Dynamically import GoogleSheetsAuth based on environment
 import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
@@ -244,6 +244,12 @@ class applicationUtils_uncached {
             
             await this._saveLocksData(existingLocks, writeLockToken);
             
+            // Invalidate getSheetLock cache so UI components see the new lock
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
+            ]);
+            
             return true;
             
         } finally {
@@ -293,6 +299,12 @@ class applicationUtils_uncached {
             existingLocks.splice(lockIndex, 1);
             
             await this._saveLocksData(existingLocks, writeLockToken);
+            
+            // Invalidate getSheetLock cache so UI components see the lock is gone
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
+            ]);
             
             return true;
             
@@ -449,6 +461,12 @@ class applicationUtils_uncached {
         // Save remaining locks with semaphore
         await this._saveLocksData(remainingLocks, writeLockToken);
         
+        // Invalidate getSheetLock cache so UI components see the lock is gone
+        invalidateCache([
+            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
+        ]);
+        
         console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
         
         return {
@@ -503,20 +521,24 @@ class applicationUtils_uncached {
     /**
      * Acquire exclusive write access to the Locks table using cell A1 as semaphore
      * Cell A1 structure: empty/"0" = unlocked, timestamp = locked
-     * Max wait time: 10 seconds with 100ms polling
+     * Uses exponential backoff: starts at 100ms, doubles each attempt up to 2000ms max
+     * Max wait time: ~15 seconds with exponential backoff
      * @private
      * @returns {Promise<string>} Token (timestamp) for releasing the lock
      */
     static async _acquireWriteLock() {
-        const maxAttempts = 100; // 10 seconds max wait (100ms * 100)
-        const pollInterval = 100; // 100ms between attempts
+        const maxAttempts = 20; // Reduced from 40, but with exponential backoff gives ~15 sec total
+        const initialDelay = 100; // Start with 100ms
+        const maxDelay = 2000; // Cap at 2 seconds
         const myToken = Date.now().toString();
+        let currentDelay = initialDelay;
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
-                // Read current semaphore value from A1
-                const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+                // Read entire sheet (A1:D) to get semaphore AND cache lock data
+                const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
                 const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
+
                 
                 // Check if unlocked (empty or "0")
                 if (!currentValue || currentValue === '0' || currentValue === '') {
@@ -525,11 +547,11 @@ class applicationUtils_uncached {
                     
                     // Verify we got the lock (handle race condition)
                     await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for write propagation
-                    const verifyData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+                    const verifyData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
                     const verifyValue = (verifyData && verifyData[0] && verifyData[0][0]) ? verifyData[0][0] : '';
                     
                     if (verifyValue === myToken) {
-                        console.log(`[_acquireWriteLock] Acquired lock with token: ${myToken}`);
+                        console.log(`[_acquireWriteLock] Acquired lock with token: ${myToken} after ${attempt} attempts`);
                         return myToken;
                     }
                     // Someone else got it, try again
@@ -541,12 +563,15 @@ class applicationUtils_uncached {
                         console.warn(`[_acquireWriteLock] Detected stale lock from ${new Date(lockTime).toISOString()}, breaking it`);
                         // Force release stale lock - write to A1 only
                         await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [['0']], null);
-                        continue; // Try again immediately
+                        continue; // Try again immediately without waiting
                     }
                 }
                 
-                // Wait before next attempt
-                await new Promise(resolve => setTimeout(resolve, pollInterval));
+                // Exponential backoff: wait before next attempt
+                await new Promise(resolve => setTimeout(resolve, currentDelay));
+                
+                // Double the delay for next attempt, but cap at maxDelay
+                currentDelay = Math.min(currentDelay * 2, maxDelay);
                 
             } catch (error) {
                 console.error('[_acquireWriteLock] Error during lock acquisition:', error);
@@ -554,7 +579,7 @@ class applicationUtils_uncached {
             }
         }
         
-        throw new Error('[_acquireWriteLock] Failed to acquire write lock after 10 seconds - lock may be held by another process');
+        throw new Error('[_acquireWriteLock] Failed to acquire write lock after maximum attempts - lock may be held by another process');
     }
     
     /**
@@ -565,8 +590,8 @@ class applicationUtils_uncached {
      */
     static async _releaseWriteLock(token) {
         try {
-            // Verify we still own the lock before releasing
-            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:A1');
+            // Verify we still own the lock before releasing - read A1:D to get full context
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
             const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
             
             if (currentValue === token) {
@@ -603,13 +628,14 @@ class applicationUtils_uncached {
     }
 
     /**
-     * Get locks data directly from sheet without caching
+     * Get locks data using the existing cache system (5 second TTL)
      * @private
+     * @param {Object} deps - Dependency decorator for tracking calls (injected by wrapMethods)
      * @returns {Promise<Array<Object>>} Array of lock objects
      */
-    static async _getLocksData() {
+    static async _getLocksData(deps) {
         try {
-            // Read directly from GoogleSheetsService to bypass cache
+            // Read directly from GoogleSheetsService
             // Range starts at A2 to skip semaphore cell in A1
             const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A2:D');
             
@@ -696,6 +722,9 @@ class applicationUtils_uncached {
             // Use range A1:D to overwrite entire sheet (semaphore + all lock data)
             await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
             
+            // Invalidate the _getLocksData cache so next read gets fresh data
+            invalidateCache([{ namespace: 'app_utils', methodName: '_getLocksData', args: [] }]);
+            
             console.log('[_saveLocksData] Successfully saved locks');
             return true;
         } catch (error) {
@@ -708,7 +737,7 @@ class applicationUtils_uncached {
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_getLocksData', '_saveLocksData', '_initializeLocksSheet'], // Mutation methods (including private helpers)
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_saveLocksData', '_initializeLocksSheet'], // Mutation methods (including private helpers, but NOT _getLocksData)
     [], // Infinite cache methods
-    { 'getSheetLock': 10000 } // Custom cache durations (10 seconds for lock checks)
+    { 'getSheetLock': 10000, '_getLocksData': 5000 } // Custom cache durations (10 seconds for lock checks, 5 seconds for lock data)
 );

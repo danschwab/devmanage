@@ -16,7 +16,8 @@ export const InventoryMenuComponent = {
     data() {
         return {
             lockInfo: null,
-            isLoadingLockInfo: true
+            isLoadingLockInfo: true,
+            isRemovingLock: false
         };
     },
     async mounted() {
@@ -34,9 +35,10 @@ export const InventoryMenuComponent = {
             // Add lock removal option if lock exists and fully loaded
             if (!this.isLoadingLockInfo && this.lockInfo) {
                 items.push({ 
-                    label: `Remove lock: ${this.lockOwnerUsername}`, 
+                    label: this.isRemovingLock ? 'Removing lock...' : `Remove lock: ${this.lockOwnerUsername}`, 
                     action: 'removeLock',
-                    class: 'warning'
+                    class: this.isRemovingLock ? 'analyzing' : 'warning',
+                    disabled: this.isRemovingLock
                 });
             }
             
@@ -177,6 +179,7 @@ export const InventoryMenuComponent = {
             this.$modal.confirm(
                 `Are you sure you want to force unlock ${tabName}?\n${username} may have unsaved changes.`,
                 async () => {
+                    this.isRemovingLock = true;
                     try {
                         const result = await Requests.forceUnlockSheet('INVENTORY', tabName, 'User requested via hamburger menu');
                         
@@ -205,6 +208,8 @@ export const InventoryMenuComponent = {
                     } catch (error) {
                         console.error('[InventoryMenu] Error removing lock:', error);
                         this.$modal.alert(`Error removing lock: ${error.message}`, 'Error');
+                    } finally {
+                        this.isRemovingLock = false;
                     }
                 },
                 () => {},
@@ -217,7 +222,9 @@ export const InventoryMenuComponent = {
         <ul>
             <li v-for="item in menuItems" :key="item.action">
                 <button 
-                    @click="handleAction(item.action)">
+                    @click="handleAction(item.action)"
+                    :disabled="item.disabled"
+                    :class="item.class">
                     {{ item.label }}
                 </button>
             </li>

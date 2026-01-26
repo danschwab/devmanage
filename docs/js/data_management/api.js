@@ -352,14 +352,16 @@ class Requests_uncached {
      * Get lock details for a spreadsheet tab
      * 
      * QUERY METHOD - Excluded from caching to ensure real-time lock status
-     * Does NOT accept deps parameter or use deps.call()
+     * Accepts deps parameter but doesn't use deps.call() since ApplicationUtils.getSheetLock is already wrapped
      * 
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @returns {Promise<Object|null>} Lock details or null if not locked
      */
-    static async getSheetLock(spreadsheet, tab) {
-        // ApplicationUtils.getSheetLock is wrapped, so we don't pass deps parameter
+    static async getSheetLock(deps, spreadsheet, tab) {
+        // ApplicationUtils.getSheetLock is wrapped, so just call it directly
+        // The dependency tracking will happen automatically
         return await ApplicationUtils.getSheetLock(spreadsheet, tab);
     }
     

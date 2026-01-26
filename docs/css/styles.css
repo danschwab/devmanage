@@ -946,7 +946,9 @@ tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:firs
 
 /* Analyzing Row Styling */
 tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
-.card.analyzing::after {
+.card.analyzing::after,
+input.analyzing::after,
+button.analyzing::after {
     content: "";
     background: linear-gradient(90deg,
                 transparent,
