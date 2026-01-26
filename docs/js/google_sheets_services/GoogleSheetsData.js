@@ -3,11 +3,63 @@ import { SheetSql } from './sheetSql.js';
 
 export class GoogleSheetsService {
 
+    // Rate limit testing flag
+    static _simulateRateLimit = false;
+    
+    /**
+     * Throws a simulated 429 rate limit error matching the real Google Sheets API response
+     * @private
+     */
+    static _throwRateLimitError() {
+        const error = new Error("Quota exceeded for quota metric 'Read requests' and limit 'Read requests per minute per user' of service 'sheets.googleapis.com' for consumer 'project_number:381868581846'.");
+        error.status = 429;
+        error.result = {
+            error: {
+                code: 429,
+                message: "Quota exceeded for quota metric 'Read requests' and limit 'Read requests per minute per user' of service 'sheets.googleapis.com' for consumer 'project_number:381868581846'.",
+                status: "RESOURCE_EXHAUSTED",
+                details: [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        reason: "RATE_LIMIT_EXCEEDED",
+                        domain: "googleapis.com",
+                        metadata: {
+                            quota_limit_value: "60",
+                            service: "sheets.googleapis.com",
+                            quota_unit: "1/min/{project}/{user}",
+                            quota_limit: "ReadRequestsPerMinutePerUser",
+                            consumer: "projects/381868581846",
+                            quota_metric: "sheets.googleapis.com/read_requests",
+                            quota_location: "global"
+                        }
+                    },
+                    {
+                        "@type": "type.googleapis.com/google.rpc.Help",
+                        links: [
+                            {
+                                description: "Request a higher quota limit.",
+                                url: "https://cloud.google.com/docs/quotas/help/request_increase"
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        throw error;
+    }
+
     // Exponential backoff helper for Google Sheets API calls
     static async withExponentialBackoff(fn, maxRetries = 5, initialDelay = 500) {
         let attempt = 0;
         let delay = initialDelay;
         let lastError = null;
+        
+        // Check if rate limit simulation is enabled
+        if (GoogleSheetsService._simulateRateLimit) {
+            console.warn('[GoogleSheetsService] 🚨 SIMULATING RATE LIMIT ERROR (429)');
+            this._throwRateLimitError();
+        }
+        
         while (true) {
             try {
                 return await fn();

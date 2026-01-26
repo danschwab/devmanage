@@ -411,3 +411,55 @@ const App = {
 // Initialize the app
 const app = createApp(App);
 app.mount('body');
+
+// Expose rate limit testing utility to console
+// Import GoogleSheetsService dynamically to access the rate limit flag
+import('../google_sheets_services/GoogleSheetsData.js').then(module => {
+    const GoogleSheetsService = module.GoogleSheetsService;
+    
+    /**
+     * Toggle rate limit simulation for testing
+     * @param {boolean} [enabled] - If provided, sets the state. If omitted, toggles current state.
+     * @returns {boolean} - Current state after toggle
+     * 
+     * Usage:
+     *   window.toggleRateLimitTest()      // Toggle on/off
+     *   window.toggleRateLimitTest(true)  // Force enable
+     *   window.toggleRateLimitTest(false) // Force disable
+     */
+    window.toggleRateLimitTest = function(enabled) {
+        if (enabled === undefined) {
+            GoogleSheetsService._simulateRateLimit = !GoogleSheetsService._simulateRateLimit;
+        } else {
+            GoogleSheetsService._simulateRateLimit = !!enabled;
+        }
+        
+        const state = GoogleSheetsService._simulateRateLimit;
+        console.log(
+            `%c🚨 Rate Limit Simulation: ${state ? 'ENABLED' : 'DISABLED'}`,
+            `font-size: 14px; font-weight: bold; color: ${state ? '#ff4444' : '#44ff44'}`
+        );
+        
+        if (state) {
+            console.warn(
+                '%cAll Google Sheets API calls will now throw 429 errors!\n' +
+                'To disable: toggleRateLimitTest(false)',
+                'font-size: 12px; color: #ff8800'
+            );
+        }
+        
+        return state;
+    };
+    
+    console.log(
+        '%c💡 Rate Limit Testing Available',
+        'font-size: 12px; color: #4488ff; font-weight: bold'
+    );
+    console.log(
+        'Use window.toggleRateLimitTest() to simulate 429 rate limit errors\n' +
+        'Usage:\n' +
+        '  toggleRateLimitTest()       - Toggle on/off\n' +
+        '  toggleRateLimitTest(true)   - Enable simulation\n' +
+        '  toggleRateLimitTest(false)  - Disable simulation'
+    );
+});

@@ -856,5 +856,5 @@ export const Requests = wrapMethods(
     'api', 
     ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'forceUnlockSheet'], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
-    { 'getSheetLock': 10000, 'getPacklistLock': 10000, 'getInventoryLock': 10000 } // Custom cache durations (10 seconds for lock checks)
+    { 'getSheetLock': 2000, 'getPacklistLock': 2000, 'getInventoryLock': 2000 } // Custom cache durations (2 seconds for lock checks)
 );

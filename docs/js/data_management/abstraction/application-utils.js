@@ -522,12 +522,12 @@ class applicationUtils_uncached {
      * Acquire exclusive write access to the Locks table using cell A1 as semaphore
      * Cell A1 structure: empty/"0" = unlocked, timestamp = locked
      * Uses exponential backoff: starts at 100ms, doubles each attempt up to 2000ms max
-     * Max wait time: ~15 seconds with exponential backoff
+     * Max wait time: ~60 seconds with exponential backoff
      * @private
      * @returns {Promise<string>} Token (timestamp) for releasing the lock
      */
     static async _acquireWriteLock() {
-        const maxAttempts = 20; // Reduced from 40, but with exponential backoff gives ~15 sec total
+        const maxAttempts = 36; // With exponential backoff gives ~60 seconds total
         const initialDelay = 100; // Start with 100ms
         const maxDelay = 2000; // Cap at 2 seconds
         const myToken = Date.now().toString();
@@ -739,5 +739,5 @@ export const ApplicationUtils = wrapMethods(
     'app_utils', 
     ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_saveLocksData', '_initializeLocksSheet'], // Mutation methods (including private helpers, but NOT _getLocksData)
     [], // Infinite cache methods
-    { 'getSheetLock': 10000, '_getLocksData': 5000 } // Custom cache durations (10 seconds for lock checks, 5 seconds for lock data)
+    { 'getSheetLock': 2000, '_getLocksData': 2000 } // Custom cache durations (2 seconds for lock checks and lock data)
 );

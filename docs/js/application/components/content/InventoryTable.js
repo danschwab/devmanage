@@ -256,6 +256,18 @@ export const InventoryTableComponent = {
                 }
             } catch (error) {
                 console.error('[InventoryTable] Lock operation failed:', error);
+                // Show error to user if lock acquisition timeout or other critical failure
+                if (error.message && error.message.includes('Failed to acquire write lock')) {
+                    this.$modal.alert(
+                        `Unable to acquire lock for ${this.tabTitle}. The system is experiencing high concurrency. Please try again in a moment.`,
+                        'Error'
+                    );
+                } else {
+                    this.$modal.alert(
+                        `Lock operation failed: ${error.message}`,
+                        'Error'
+                    );
+                }
             } finally {
                 this.lockingInProgress = false;
             }
