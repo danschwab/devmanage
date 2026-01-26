@@ -583,6 +583,26 @@ class applicationUtils_uncached {
     }
     
     /**
+     * Initialize the Locks sheet with proper structure if it doesn't exist
+     * @private
+     * @returns {Promise<void>}
+     */
+    static async _initializeLocksSheet() {
+        try {
+            console.log('[_initializeLocksSheet] Initializing Locks sheet structure');
+            const sheetData = [
+                ['0'],                                              // A1: Semaphore cell
+                ['Spreadsheet', 'Tab', 'User', 'Timestamp']       // A2: Headers
+            ];
+            await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
+            console.log('[_initializeLocksSheet] Locks sheet initialized successfully');
+        } catch (error) {
+            console.error('[_initializeLocksSheet] Failed to initialize Locks sheet:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get locks data directly from sheet without caching
      * @private
      * @returns {Promise<Array<Object>>} Array of lock objects
@@ -627,6 +647,18 @@ class applicationUtils_uncached {
             return locks;
         } catch (error) {
             console.error('[_getLocksData] Error reading locks:', error);
+            
+            // If this is a 400 error (Bad Request), the sheet likely doesn't exist
+            if (error.status === 400 || error.message?.includes('Unable to parse range')) {
+                console.warn('[_getLocksData] Locks sheet appears to be missing or corrupted, initializing...');
+                try {
+                    await this._initializeLocksSheet();
+                    return []; // Return empty array after initialization
+                } catch (initError) {
+                    console.error('[_getLocksData] Failed to initialize Locks sheet:', initError);
+                }
+            }
+            
             return [];
         }
     }
@@ -676,7 +708,7 @@ class applicationUtils_uncached {
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_getLocksData', '_saveLocksData'], // Mutation methods (including private helpers)
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_getLocksData', '_saveLocksData', '_initializeLocksSheet'], // Mutation methods (including private helpers)
     [], // Infinite cache methods
     { 'getSheetLock': 10000 } // Custom cache durations (10 seconds for lock checks)
 );
