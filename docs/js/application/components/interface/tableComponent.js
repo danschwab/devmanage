@@ -1191,7 +1191,7 @@ export const TableComponent = {
         },
         hideSet() {
             // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
-            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', /*'MetaData',*/ ...(this.hiddenColumns || [])]);
+            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', 'MetaData', ...(this.hiddenColumns || [])]);
         },
         mainTableColumns() {
             // find columns marked with a colspan property and eliminate the extra columns following them
