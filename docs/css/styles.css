@@ -808,6 +808,9 @@ table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button {
     border: none;
     outline: none;
 }
+table:has(.dragging):not(:has(table .dragging))>tfoot>tr>.new-row-button:hover {
+    background-color: var(--color-red);
+}
 table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::before {
     content: "×";
     display: block;

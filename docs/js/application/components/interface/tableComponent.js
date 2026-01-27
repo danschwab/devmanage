@@ -310,9 +310,6 @@ export const tableRowSelectionState = Vue.reactive({
                         }
                         delete metadata.grouping;
                         item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
-                        // Mark as dirty for save state
-                        if (!item.AppData) item.AppData = {};
-                        item.AppData['MetaDataDirty'] = true;
                         console.log(`Removed orphaned group master at index ${i} (no children found)`);
                     }
                 }
@@ -379,9 +376,6 @@ export const tableRowSelectionState = Vue.reactive({
                 masterItemIndex: targetIndex
             };
             targetItem.MetaData = JSON.stringify(metadata);
-            // Mark as dirty to trigger save state
-            if (!targetItem.AppData) targetItem.AppData = {};
-            targetItem.AppData['MetaDataDirty'] = true;
             console.log('Set target as group master:', groupId, 'index:', targetIndex);
         }
         
@@ -417,9 +411,6 @@ export const tableRowSelectionState = Vue.reactive({
                 masterItemIndex: newTargetIndex // Use the new index after reordering
             };
             droppedItem.MetaData = JSON.stringify(metadata);
-            // Mark as dirty to trigger save state
-            if (!droppedItem.AppData) droppedItem.AppData = {};
-            droppedItem.AppData['MetaDataDirty'] = true;
             console.log('Grouped item with master:', groupId);
         });
         
@@ -532,10 +523,6 @@ export const tableRowSelectionState = Vue.reactive({
                 // Save back to MetaData
                 row.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null;
                 
-                // Mark MetaData as dirty
-                if (!row.AppData) row.AppData = {};
-                row.AppData['MetaDataDirty'] = true;
-                
                 deletedCount++;
             }
         }
@@ -570,18 +557,12 @@ export const tableRowSelectionState = Vue.reactive({
         if (this.findingDropTargets) {
             this.currentDropTarget = dropTarget;
             this.dragTargetArray = tableData;
-            // Handle deletion marking based on drop target
-            this.markSelectedForDeletion((this.dragSourceArray === tableData && dropTarget.type === 'footer'));
         }
     },
     
     // Clear drop target registration
     clearDropTargetRegistration(tableData) {
         if (this.dragTargetArray === tableData) {
-            // Before clearing, remove any deletion markings since we're no longer over a footer
-            if (this.currentDropTarget && this.currentDropTarget.type === 'footer') {
-                this.markSelectedForDeletion(false);
-            }
             this.currentDropTarget = null;
         }
     },
@@ -718,9 +699,6 @@ export const tableRowSelectionState = Vue.reactive({
                             }
                             delete metadata.grouping;
                             item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
-                            // Mark as dirty to trigger save state
-                            if (!item.AppData) item.AppData = {};
-                            item.AppData['MetaDataDirty'] = true;
                             console.log(`Removed grouping from row ${rowIndex} (between drop, master not selected)`);
                         }
                     }
@@ -745,6 +723,8 @@ export const tableRowSelectionState = Vue.reactive({
         } else if (dropTarget.type === 'footer') {
             // For footer drops, insert after the last element (at the end of the array)
             insertPosition = this.dragTargetArray.length;
+            // Mark selected rows for deletion after footer drop completes
+            this.markSelectedForDeletion(true);
         } else if (dropTarget.type === 'between') {
             insertPosition = dropTarget.targetIndex;
         } else {
@@ -838,12 +818,6 @@ export const tableRowSelectionState = Vue.reactive({
     },
     
     stopDrag(preserveDeletionMarkings = false) {
-        // Clean up any temporary deletion markings before stopping drag
-        // unless explicitly preserving them (e.g., successful footer drop)
-        if (!preserveDeletionMarkings) {
-            this.markSelectedForDeletion(false);
-        }
-        
         this.findingDropTargets = false;
         this.dragSourceArray = null;
         this.dragTargetArray = null;
@@ -1217,7 +1191,7 @@ export const TableComponent = {
         },
         hideSet() {
             // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
-            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', 'MetaData', ...(this.hiddenColumns || [])]);
+            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', /*'MetaData',*/ ...(this.hiddenColumns || [])]);
         },
         mainTableColumns() {
             // find columns marked with a colspan property and eliminate the extra columns following them
@@ -1865,6 +1839,22 @@ export const TableComponent = {
                         }
                     }
                 });
+                
+                // Always check MetaData and EditHistory columns for changes, even though they're hidden
+                // Use a special column index (-1) to track these hidden column changes
+                ['MetaData'].forEach(hiddenKey => {
+                    if (row && row.hasOwnProperty(hiddenKey)) {
+                        const currentValue = row[hiddenKey];
+                        const originalValue = originalRow ? originalRow[hiddenKey] : null;
+                        // Compare values (handle both string and object comparisons)
+                        const isDifferent = currentValue !== originalValue;
+                        if (isDifferent) {
+                            if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
+                            // Use -1 as a sentinel column index for hidden metadata columns
+                            this.dirtyCells[rowIndex][-1] = true;
+                        }
+                    }
+                });
             });
             this.checkDirtyCells();
         },
@@ -1891,37 +1881,6 @@ export const TableComponent = {
                 Object.keys(this.nestedTableDirtyCells[row]).length > 0
             );
             this.allowSaveEvent = hasDirtyCell || hasNestedDirty;
-            // Also, if any row is marked for deletion or has dirty edithistory/group data, allow save event
-            if (!this.allowSaveEvent && Array.isArray(this.data)) {
-                // Helper to check if row has deletion flag in MetaData
-                const hasDeleteFlag = (r) => {
-                    if (!r || !r.MetaData) return false;
-                    try {
-                        const metadata = typeof r.MetaData === 'string' ? JSON.parse(r.MetaData) : r.MetaData;
-                        return metadata?.deletion?.marked === true;
-                    } catch (e) {
-                        return false;
-                    }
-                };
-                
-                this.allowSaveEvent = this.data.some(row => {
-                    if (!row) return false;
-                    // Check main row
-                    if (hasDeleteFlag(row) || (row.AppData && (row.AppData['MetadataDirty'] || row.AppData['MetaDataDirty']))) {
-                        return true;
-                    }
-                    // Also check nested arrays (e.g., Items within crates)
-                    for (const key of Object.keys(row)) {
-                        if (Array.isArray(row[key])) {
-                            const hasNestedFlag = row[key].some(nestedRow => 
-                                hasDeleteFlag(nestedRow) || (nestedRow && nestedRow.AppData && (nestedRow.AppData['MetadataDirty'] || nestedRow.AppData['MetaDataDirty']))
-                            );
-                            if (hasNestedFlag) return true;
-                        }
-                    }
-                    return false;
-                });
-            }
         },
         handleSave() {
             this.$emit('on-save');

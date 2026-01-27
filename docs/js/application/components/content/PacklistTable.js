@@ -770,9 +770,6 @@ export const PacklistTable = {
                     }
                 );
                 targetItem.EditHistory = newTargetMetadata;
-                // Mark edithistory as dirty to trigger save state
-                if (!targetItem.AppData) targetItem.AppData = {};
-                targetItem.AppData['MetadataDirty'] = true;
                 console.log('Set target as group master:', groupId, 'index:', targetIndex);
             }
             
@@ -788,9 +785,6 @@ export const PacklistTable = {
                     }
                 );
                 droppedItem.EditHistory = newMetadata;
-                // Mark edithistory as dirty to trigger save state
-                if (!droppedItem.AppData) droppedItem.AppData = {};
-                droppedItem.AppData['MetadataDirty'] = true;
                 console.log('Grouped item with master:', groupId, 'item:', droppedItem.Description);
             });
             

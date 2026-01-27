@@ -333,24 +333,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             if (this.analysisConfig) {
                 clearAnalysisResults(processedData, this.analysisConfig);
             }
-            // Clear MetadataDirty flags after data refresh
-            if (Array.isArray(processedData)) {
-                processedData.forEach(item => {
-                    if (item && item.AppData && item.AppData['MetadataDirty']) {
-                        delete item.AppData['MetadataDirty'];
-                    }
-                    // Also clear in nested arrays
-                    Object.keys(item).forEach(key => {
-                        if (Array.isArray(item[key])) {
-                            item[key].forEach(nestedItem => {
-                                if (nestedItem && nestedItem.AppData && nestedItem.AppData['MetadataDirty']) {
-                                    delete nestedItem.AppData['MetadataDirty'];
-                                }
-                            });
-                        }
-                    });
-                });
-            }
             // Mutate existing array in place to preserve references (critical for undo system)
             this.data.splice(0, this.data.length, ...processedData);
             // Clear auto-save hash when data changes
@@ -491,10 +473,6 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 
                 // Save back to MetaData
                 row.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null;
-                
-                // Mark MetaData as dirty
-                if (!row.AppData) row.AppData = {};
-                row.AppData['MetaDataDirty'] = true;
                 
                 // If marking for deletion and row is empty, remove immediately
                 if (value) {
