@@ -125,6 +125,8 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<Array<string>>>}
      */
     static async getSheetData(tableId, range) {
+        console.warn(`[GoogleSheets READ] 📖 ${tableId} → ${range}`);
+        
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.getSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
