@@ -23,17 +23,6 @@ class applicationUtils_uncached {
         }
     ];
     
-    // Semaphore window state for batching operations
-    static _semaphoreWindow = {
-        token: null,          // Current semaphore token
-        expiresAt: null,      // Window end timestamp
-        locksData: null,      // Cached locks array
-        pendingWrite: null,   // Queued write data
-        cooldownUntil: null,  // Cooldown end timestamp
-        flushTimer: null      // Auto-flush setTimeout handle
-    };
-    
-    
     /**
      * Store user data in a user-specific tab within the CACHE sheet
      * @param {Object} deps - Dependency decorator for tracking calls
@@ -201,7 +190,7 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Lock a spreadsheet tab for a user (with batched semaphore protection)
+     * Lock a spreadsheet tab for a user (single cell write)
      * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
      * @param {string} tab - The tab name
      * @param {string} user - The user email claiming the lock
@@ -209,52 +198,64 @@ class applicationUtils_uncached {
      */
     static async lockSheet(spreadsheet, tab, user) {
         try {
+            console.log(`[lockSheet] START: ${spreadsheet}/${tab} for ${user}`);
             const timestamp = new Date().toISOString();
+            const lockKey = `${spreadsheet}:${tab}`;
             
-            // Get locks data using batched read (reuses semaphore window)
-            const existingLocks = await applicationUtils_uncached._getLocksDataBatched();
+            // Get current locks data
+            console.log(`[lockSheet] Getting locks data...`);
+            const locksGrid = await ApplicationUtils.getLocksData();
+            console.log(`[lockSheet] Got locks data:`, locksGrid);
             
-            // Check if already locked
-            const existingLock = existingLocks.find(lock => 
-                lock.Spreadsheet === spreadsheet && lock.Tab === tab
+            // Check if already locked by another user
+            const existingLock = locksGrid.locks.find(lock => 
+                lock.spreadsheet === spreadsheet && lock.tab === tab && lock.user !== user && lock.timestamp
             );
             
             if (existingLock) {
-                // Already locked by this or another user
-                if (existingLock.User === user) {
-                    // Update timestamp for same user
-                    const updatedLocks = existingLocks.map(lock => 
-                        (lock.Spreadsheet === spreadsheet && lock.Tab === tab) 
-                            ? { ...lock, Timestamp: timestamp }
-                            : lock
-                    );
-                    
-                    await applicationUtils_uncached._saveLocksDataBatched(updatedLocks, applicationUtils_uncached._semaphoreWindow.token);
-                    
-                    return true;
-                } else {
-                    // Locked by another user
-                    console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.User}`);
-                    return false;
-                }
+                console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.user}`);
+                return false;
             }
             
-            // Add new lock
-            existingLocks.push({
-                Spreadsheet: spreadsheet,
-                Tab: tab,
-                User: user,
-                Timestamp: timestamp
-            });
+            // Find or create user row
+            let userRowIndex = locksGrid.users.indexOf(user);
+            console.log(`[lockSheet] userRowIndex = ${userRowIndex}, users =`, locksGrid.users);
+            if (userRowIndex === -1) {
+                // Add new user to the grid
+                userRowIndex = locksGrid.users.length;
+                locksGrid.users.push(user);
+                console.log(`[lockSheet] Adding new user at row ${userRowIndex + 2}`);
+                await this._writeUserRow(user, userRowIndex + 2); // +2 for header row
+                console.log(`[lockSheet] User row written successfully`);
+            }
             
-            await applicationUtils_uncached._saveLocksDataBatched(existingLocks, applicationUtils_uncached._semaphoreWindow.token);
+            // Find or create lock key column
+            let lockColIndex = locksGrid.lockKeys.indexOf(lockKey);
+            console.log(`[lockSheet] lockColIndex = ${lockColIndex}, lockKeys =`, locksGrid.lockKeys);
+            if (lockColIndex === -1) {
+                // Add new lock key column
+                lockColIndex = locksGrid.lockKeys.length;
+                locksGrid.lockKeys.push(lockKey);
+                console.log(`[lockSheet] Adding new lock key at col ${lockColIndex + 2}`);
+                await this._writeLockKeyHeader(lockKey, lockColIndex + 2); // +2 for "Users" column (B=2)
+                console.log(`[lockSheet] Lock key header written successfully`);
+            }
+            
+            // Write timestamp to the specific cell (single cell write)
+            const cellRow = userRowIndex + 2; // +2 for header row (1-indexed)
+            const cellCol = lockColIndex + 2; // +2 for Users column (1-indexed)
+            console.log(`[lockSheet] Writing timestamp to R${cellRow}C${cellCol}`);
+            await this._writeLockCell(cellRow, cellCol, timestamp);
+            console.log(`[lockSheet] Timestamp written successfully`);
             
             // Invalidate getSheetLock cache so UI components see the new lock
             invalidateCache([
                 { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
+                { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
             
+            console.log(`[lockSheet] Locked ${lockKey} for ${user} at cell R${cellRow}C${cellCol}`);
             return true;
             
         } catch (error) {
@@ -264,7 +265,7 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Unlock a spreadsheet tab (with batched semaphore protection)
+     * Unlock a spreadsheet tab (single cell write)
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @param {string} user - The user email releasing the lock
@@ -272,41 +273,61 @@ class applicationUtils_uncached {
      */
     static async unlockSheet(spreadsheet, tab, user) {
         try {
-            // Get locks data using batched read (reuses semaphore window)
-            const existingLocks = await applicationUtils_uncached._getLocksDataBatched();
+            console.log(`[unlockSheet] START: ${spreadsheet}/${tab} for ${user}`);
+            const lockKey = `${spreadsheet}:${tab}`;
             
-            // Find the lock
-            const lockIndex = existingLocks.findIndex(lock => 
-                lock.Spreadsheet === spreadsheet && lock.Tab === tab
-            );
+            // Get current locks data
+            console.log(`[unlockSheet] Getting locks data...`);
+            const locksGrid = await ApplicationUtils.getLocksData();
+            console.log(`[unlockSheet] Got locks data:`, locksGrid);
             
-            if (lockIndex === -1) {
-                // No lock exists
+            // Find user row
+            const userRowIndex = locksGrid.users.indexOf(user);
+            console.log(`[unlockSheet] userRowIndex = ${userRowIndex}`);
+            if (userRowIndex === -1) {
+                // User not in grid, no lock to remove
+                console.log(`[unlockSheet] User not in grid, returning true`);
                 return true;
             }
             
-            const existingLock = existingLocks[lockIndex];
-            
-            // Only the user who locked it can unlock it
-            if (existingLock.User !== user) {
-                console.warn(`Cannot unlock ${spreadsheet}/${tab} - locked by ${existingLock.User}, not ${user}`);
-                return false;
+            // Find lock key column
+            const lockColIndex = locksGrid.lockKeys.indexOf(lockKey);
+            console.log(`[unlockSheet] lockColIndex = ${lockColIndex}`);
+            if (lockColIndex === -1) {
+                // Lock key not in grid, no lock to remove
+                console.log(`[unlockSheet] Lock key not in grid, returning true`);
+                return true;
             }
             
-            // Remove the lock
-            existingLocks.splice(lockIndex, 1);
+            // Check if this user owns the lock
+            const lock = locksGrid.locks.find(lock => 
+                lock.spreadsheet === spreadsheet && lock.tab === tab && lock.user === user
+            );
+            console.log(`[unlockSheet] Found lock:`, lock);
             
-            await applicationUtils_uncached._saveLocksDataBatched(existingLocks, applicationUtils_uncached._semaphoreWindow.token);
+            if (!lock || !lock.timestamp) {
+                // No lock exists for this user
+                console.log(`[unlockSheet] No lock exists for this user, returning true`);
+                return true;
+            }
+            
+            // Write "0" to the specific cell to unlock (single cell write)
+            const cellRow = userRowIndex + 2; // +2 for header row
+            const cellCol = lockColIndex + 2; // +2 for Users column
+            console.log(`[unlockSheet] Writing "0" to R${cellRow}C${cellCol}`);
+            await this._writeLockCell(cellRow, cellCol, '0');
+            console.log(`[unlockSheet] Unlock written successfully`);
             
             // Invalidate getSheetLock cache so UI components see the lock is gone
+            // Must invalidate all possible argument combinations since cache includes optional currentUser
             invalidateCache([
                 { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, user] },
+                { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
             
-            // Note: We don't invalidate database cache here - data hasn't changed, only lock status
-            // Database cache will be refreshed on next data access if needed
-            
+            console.log(`[unlockSheet] Unlocked ${lockKey} for ${user} at cell R${cellRow}C${cellCol}`);
             return true;
             
         } catch (error) {
@@ -317,34 +338,41 @@ class applicationUtils_uncached {
     
     /**
      * Get lock details for a spreadsheet tab
-     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} deps - Dependency decorator for tracking calls (injected by wrapMethods)
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @param {string} [currentUser] - Optional current user email to filter out their own locks
-     * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
+     * @returns {Promise<Object|null>} Lock details or null if not locked
      */
     static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
-        console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}", currentUser: "${currentUser}"`);
-        // Use batched read to reduce concurrent API calls (shares semaphore window with lock/unlock operations)
-        const locks = await applicationUtils_uncached._getLocksDataBatched();
-        console.log(`[ApplicationUtils.getSheetLock] Found ${locks.length} total locks:`, locks);
+        const locksGrid = await deps.call(ApplicationUtils.getLocksData);
+        console.log(`[ApplicationUtils.getSheetLock] Found ${locksGrid.locks.length} total locks`);
         
-        const matchedLock = locks.find(lock => 
-            lock.Spreadsheet === spreadsheet && lock.Tab === tab
+        // Find locks for this spreadsheet/tab with valid timestamps (not "0" or empty)
+        const matchedLock = locksGrid.locks.find(lock => 
+            lock.spreadsheet === spreadsheet && 
+            lock.tab === tab && 
+            lock.timestamp && 
+            lock.timestamp !== '0'
         ) || null;
         
         // Filter out if locked by current user
-        if (matchedLock && currentUser && matchedLock.User === currentUser) {
+        if (matchedLock && currentUser && matchedLock.user === currentUser) {
             console.log(`[ApplicationUtils.getSheetLock] Lock owned by current user (${currentUser}), returning null`);
             return null;
         }
         
-        console.log(`[ApplicationUtils.getSheetLock] Matched lock for "${spreadsheet}/${tab}":`, matchedLock);
-        return matchedLock;
+        // Return lock details if found
+        if (matchedLock) {
+            console.log(`[ApplicationUtils.getSheetLock] Lock found for ${spreadsheet}/${tab}:`, matchedLock);
+            return matchedLock;
+        }
+        
+        console.log(`[ApplicationUtils.getSheetLock] No lock found for ${spreadsheet}/${tab}`);
+        return null;
     }
-    
     /**
-     * Force unlock a spreadsheet tab (admin override, with write semaphore protection)
+     * Force unlock a spreadsheet tab (admin override)
      * This bypasses user validation and backs up any autosaved data before removing it
      * 
      * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
@@ -356,125 +384,141 @@ class applicationUtils_uncached {
         console.log(`[ApplicationUtils.forceUnlockSheet] Force unlocking ${spreadsheet}/${tab}. Reason: ${reason}`);
         
         try {
-            // Get lock info first to identify the owner (using batched read)
-            const locks = await applicationUtils_uncached._getLocksDataBatched();
-        
-        const lockInfo = locks.find(lock => 
-            lock.Spreadsheet === spreadsheet && lock.Tab === tab
-        );
-        
-        if (!lockInfo) {
-            return {
-                success: false,
-                backupCount: 0,
-                deletedCount: 0,
-                lockOwner: null,
-                message: 'No lock found to remove'
-            };
-        }
-        
-        const lockOwner = lockInfo.User;
-        console.log(`[ApplicationUtils.forceUnlockSheet] Found lock owned by: ${lockOwner}`);
-        
-        // Get the owner's username from email
-        const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
-        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const tabName = `UserData_${sanitizedUsername}`;
-        
-        let backupCount = 0;
-        let deletedCount = 0;
-        
-        // Check if user data tab exists
-        const allTabs = await Database.getTabs('CACHE');
-        const userTab = allTabs.find(t => t.title === tabName);
-        
-        if (userTab) {
-            // Get all autosave entries for this user
-            const allUserData = await Database.getData('CACHE', tabName, {
-                Store: 'Store',
-                Data: 'Data',
-                Timestamp: 'Timestamp'
-            });
+            const lockKey = `${spreadsheet}:${tab}`;
             
-            console.log(`[ApplicationUtils.forceUnlockSheet] Found ${allUserData.length} total autosave entries for user ${username}`);
+            // Get lock info first to identify the owner
+            const locksGrid = await ApplicationUtils.getLocksData();
             
-            // Find matching autosave entries for this tab
-            // Store keys are generated like: '["getInventoryTabData",["FURNITURE",null,null]]'
-            // We need to match the tab name in the store key
-            const tabStoreKey = JSON.stringify(tab);
-            const matchingEntries = allUserData.filter(entry => {
-                return entry.Store && entry.Store.includes(tabStoreKey);
-            });
+            const lockInfo = locksGrid.locks.find(lock => 
+                lock.spreadsheet === spreadsheet && 
+                lock.tab === tab && 
+                lock.timestamp && 
+                lock.timestamp !== '0'
+            );
             
-            console.log(`[ApplicationUtils.forceUnlockSheet] Found ${matchingEntries.length} autosave entries for tab ${tab}`);
+            if (!lockInfo) {
+                return {
+                    success: false,
+                    backupCount: 0,
+                    deletedCount: 0,
+                    lockOwner: null,
+                    message: 'No lock found to remove'
+                };
+            }
             
-            if (matchingEntries.length > 0) {
-                // Create backup entries and mark originals for deletion
-                const timestamp = Date.now();
-                const modifiedUserData = [...allUserData];
-                
-                for (const entry of matchingEntries) {
-                    // Create backup entry with OVERRIDDEN prefix
-                    const backupEntry = {
-                        Store: `OVERRIDDEN_${timestamp}?${entry.Store}`,
-                        Data: entry.Data,
-                        Timestamp: entry.Timestamp
-                    };
-                    modifiedUserData.push(backupEntry);
-                    backupCount++;
-                    
-                    // Remove original entry
-                    const originalIndex = modifiedUserData.findIndex(e => 
-                        e.Store === entry.Store && e.Timestamp === entry.Timestamp
-                    );
-                    if (originalIndex !== -1) {
-                        modifiedUserData.splice(originalIndex, 1);
-                        deletedCount++;
-                    }
-                }
-                
-                // Save modified user data
-                await Database.setData('CACHE', tabName, modifiedUserData, {
+            const lockOwner = lockInfo.user;
+            console.log(`[ApplicationUtils.forceUnlockSheet] Found lock owned by: ${lockOwner}`);
+            
+            // Get the owner's username from email
+            const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
+            const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const tabName = `UserData_${sanitizedUsername}`;
+            
+            let backupCount = 0;
+            let deletedCount = 0;
+            
+            // Check if user data tab exists
+            const allTabs = await Database.getTabs('CACHE');
+            const userTab = allTabs.find(t => t.title === tabName);
+            
+            if (userTab) {
+                // Get all autosave entries for this user
+                const allUserData = await Database.getData('CACHE', tabName, {
                     Store: 'Store',
                     Data: 'Data',
                     Timestamp: 'Timestamp'
-                }, { skipMetadata: true });
+                });
                 
-                console.log(`[ApplicationUtils.forceUnlockSheet] Backed up ${backupCount} entries, deleted ${deletedCount} entries`);
+                console.log(`[ApplicationUtils.forceUnlockSheet] Found ${allUserData.length} total autosave entries for user ${username}`);
+                
+                // Find matching autosave entries for this tab
+                // Store keys are generated like: '["getInventoryTabData",["FURNITURE",null,null]]'
+                // We need to match the tab name in the store key
+                const tabStoreKey = JSON.stringify(tab);
+                const matchingEntries = allUserData.filter(entry => {
+                    return entry.Store && entry.Store.includes(tabStoreKey);
+                });
+                
+                console.log(`[ApplicationUtils.forceUnlockSheet] Found ${matchingEntries.length} autosave entries for tab ${tab}`);
+                
+                if (matchingEntries.length > 0) {
+                    // Create backup entries and mark originals for deletion
+                    const timestamp = Date.now();
+                    const modifiedUserData = [...allUserData];
+                    
+                    for (const entry of matchingEntries) {
+                        // Create backup entry with OVERRIDDEN prefix
+                        const backupEntry = {
+                            Store: `OVERRIDDEN_${timestamp}?${entry.Store}`,
+                            Data: entry.Data,
+                            Timestamp: entry.Timestamp
+                        };
+                        modifiedUserData.push(backupEntry);
+                        backupCount++;
+                        
+                        // Remove original entry
+                        const originalIndex = modifiedUserData.findIndex(e => 
+                            e.Store === entry.Store && e.Timestamp === entry.Timestamp
+                        );
+                        if (originalIndex !== -1) {
+                            modifiedUserData.splice(originalIndex, 1);
+                            deletedCount++;
+                        }
+                    }
+                    
+                    // Save modified user data
+                    await Database.setData('CACHE', tabName, modifiedUserData, {
+                        Store: 'Store',
+                        Data: 'Data',
+                        Timestamp: 'Timestamp'
+                    }, { skipMetadata: true });
+                    
+                    console.log(`[ApplicationUtils.forceUnlockSheet] Backed up ${backupCount} entries, deleted ${deletedCount} entries`);
+                }
+            } else {
+                console.log(`[ApplicationUtils.forceUnlockSheet] No user data tab found for ${username} - no autosave entries to backup`);
             }
-        } else {
-            console.log(`[ApplicationUtils.forceUnlockSheet] No user data tab found for ${username} - no autosave entries to backup`);
-        }
-        
-        // Remove the lock (without user validation)
-        const remainingLocks = locks.filter(lock => 
-            !(lock.Spreadsheet === spreadsheet && lock.Tab === tab)
-        );
-        
-        // Save remaining locks using batched write
-        await applicationUtils_uncached._saveLocksDataBatched(remainingLocks, applicationUtils_uncached._semaphoreWindow.token);
-        
-        // Invalidate getSheetLock cache so UI components see the lock is gone
-        invalidateCache([
-            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-            { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
-        ]);
-        
-        // Invalidate database cache for this tab to refresh application data
-        invalidateCache([
-            { namespace: 'database', methodName: 'getData', args: [spreadsheet, tab] }
-        ], true);
-        
-        console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
-        
-        return {
-            success: true,
-            backupCount,
-            deletedCount,
-            lockOwner,
-            message: `Successfully force unlocked ${spreadsheet}/${tab}`
-        };
-        
+            
+            // Remove the lock (without user validation) - single cell write
+            const userRowIndex = locksGrid.users.indexOf(lockOwner);
+            const lockColIndex = locksGrid.lockKeys.indexOf(lockKey);
+            console.log(`[forceUnlockSheet] userRowIndex = ${userRowIndex}, lockColIndex = ${lockColIndex}`);
+            
+            if (userRowIndex !== -1 && lockColIndex !== -1) {
+                const cellRow = userRowIndex + 2; // +2 for header row
+                const cellCol = lockColIndex + 2; // +2 for Users column
+                console.log(`[forceUnlockSheet] Writing "0" to R${cellRow}C${cellCol}`);
+                await this._writeLockCell(cellRow, cellCol, '0');
+                console.log(`[forceUnlockSheet] Cleared lock at R${cellRow}C${cellCol}`);
+            } else {
+                console.log(`[forceUnlockSheet] Could not find user or lock key in grid, skipping cell write`);
+            }
+            
+            // Invalidate getSheetLock cache so UI components see the lock is gone
+            // Must invalidate all possible argument combinations since cache includes optional currentUser
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
+                // Can't know all possible currentUser values, but the most common case is null
+                // Components will re-fetch with their specific user after refresh
+                { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
+            ]);
+            
+            // Invalidate database cache for this tab to refresh application data
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: [spreadsheet, tab] }
+            ], true);
+            
+            console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
+            
+            return {
+                success: true,
+                backupCount,
+                deletedCount,
+                lockOwner,
+                message: `Successfully force unlocked ${spreadsheet}/${tab}`
+            };
+            
         } catch (error) {
             console.error('[ApplicationUtils.forceUnlockSheet] Error during force unlock:', error);
             throw error;
@@ -482,20 +526,40 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Release all locks for a user (with batched semaphore protection)
+     * Release all locks for a user (clears entire row)
      * @param {string} user - The user email
      * @returns {Promise<boolean>} Success status
      */
     static async releaseAllUserLocks(user) {
         try {
-            // Get locks data using batched read
-            const locks = await applicationUtils_uncached._getLocksDataBatched();
+            const locksGrid = await ApplicationUtils.getLocksData();
             
-            // Remove all locks for this user
-            const remainingLocks = locks.filter(lock => lock.User !== user);
+            // Find user row
+            const userRowIndex = locksGrid.users.indexOf(user);
+            if (userRowIndex === -1) {
+                // User not in grid, no locks to remove
+                return true;
+            }
             
-            await applicationUtils_uncached._saveLocksDataBatched(remainingLocks, applicationUtils_uncached._semaphoreWindow.token);
+            // Clear all locks for this user (write "0" to all cells in their row)
+            const cellRow = userRowIndex + 2; // +2 for header row
+            const locksForUser = locksGrid.locks.filter(lock => lock.user === user && lock.timestamp && lock.timestamp !== '0');
             
+            for (const lock of locksForUser) {
+                const lockKey = `${lock.spreadsheet}:${lock.tab}`;
+                const lockColIndex = locksGrid.lockKeys.indexOf(lockKey);
+                if (lockColIndex !== -1) {
+                    const cellCol = lockColIndex + 2; // +2 for Users column
+                    await this._writeLockCell(cellRow, cellCol, '0');
+                }
+            }
+            
+            // Invalidate cache
+            invalidateCache([
+                { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
+            ]);
+            
+            console.log(`[releaseAllUserLocks] Released all locks for ${user}`);
             return true;
             
         } catch (error) {
@@ -504,97 +568,67 @@ class applicationUtils_uncached {
         }
     }
     
-    /**
-     * Acquire exclusive write access to the Locks table using cell A1 as semaphore
-     * Cell A1 structure: empty/"0" = unlocked, timestamp = locked
-     * Uses exponential backoff: starts at 100ms, doubles each attempt up to 2000ms max
-     * Max wait time: ~60 seconds with exponential backoff
-     * @private
-     * @returns {Promise<string>} Token (timestamp) for releasing the lock
-     */
-    static async _acquireWriteLock() {
-        const maxAttempts = 36; // With exponential backoff gives ~60 seconds total
-        const initialDelay = 100; // Start with 100ms
-        const maxDelay = 2000; // Cap at 2 seconds
-        const myToken = Date.now().toString();
-        let currentDelay = initialDelay;
-        
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            try {
-                // Read entire sheet (A1:D) to get semaphore AND cache lock data
-                const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
-                const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
-
-                
-                // Check if unlocked (empty or "0")
-                if (!currentValue || currentValue === '0' || currentValue === '') {
-                    // Try to claim the lock by writing our token to A1 only
-                    await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [[myToken]], null);
-                    
-                    // Verify we got the lock (handle race condition)
-                    await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for write propagation
-                    const verifyData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
-                    const verifyValue = (verifyData && verifyData[0] && verifyData[0][0]) ? verifyData[0][0] : '';
-                    
-                    if (verifyValue === myToken) {
-                        console.log(`[_acquireWriteLock] Acquired lock with token: ${myToken} after ${attempt} attempts`);
-                        return myToken;
-                    }
-                    // Someone else got it, try again
-                } else {
-                    // Check if lock is stale (older than 30 seconds)
-                    const lockTime = parseInt(currentValue);
-                    const now = Date.now();
-                    if (!isNaN(lockTime) && (now - lockTime) > 30000) {
-                        console.warn(`[_acquireWriteLock] Detected stale lock from ${new Date(lockTime).toISOString()}, breaking it`);
-                        // Force release stale lock - write to A1 only
-                        await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [['0']], null);
-                        continue; // Try again immediately without waiting
-                    }
-                }
-                
-                // Exponential backoff: wait before next attempt
-                await new Promise(resolve => setTimeout(resolve, currentDelay));
-                
-                // Double the delay for next attempt, but cap at maxDelay
-                currentDelay = Math.min(currentDelay * 2, maxDelay);
-                
-            } catch (error) {
-                console.error('[_acquireWriteLock] Error during lock acquisition:', error);
-                throw error;
-            }
-        }
-        
-        throw new Error('[_acquireWriteLock] Failed to acquire write lock after maximum attempts - lock may be held by another process');
-    }
     
     /**
-     * Release exclusive write access to the Locks table
+     * Write a single user to the Users column (column A)
      * @private
-     * @param {string} token - The token returned from _acquireWriteLock
+     * @param {string} user - User email
+     * @param {number} row - Row number (1-indexed)
      * @returns {Promise<void>}
      */
-    static async _releaseWriteLock(token) {
-        try {
-            // Verify we still own the lock before releasing - read A1:D to get full context
-            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A1:D');
-            const currentValue = (rawData && rawData[0] && rawData[0][0]) ? rawData[0][0] : '';
-            
-            if (currentValue === token) {
-                // Clear the semaphore - write to A1 only
-                await GoogleSheetsService.setSheetData('CACHE', 'Locks!A1:A1', [['0']], null);
-                console.log(`[_releaseWriteLock] Released lock with token: ${token}`);
-            } else {
-                console.warn(`[_releaseWriteLock] Lock token mismatch - current: ${currentValue}, expected: ${token}`);
-            }
-        } catch (error) {
-            console.error('[_releaseWriteLock] Error releasing lock:', error);
-            // Don't throw - always try to release
-        }
+    static async _writeUserRow(user, row) {
+        const range = `Locks!A${row}:A${row}`;
+        await GoogleSheetsService.setSheetData('CACHE', range, [[user]], null);
+        console.log(`[_writeUserRow] Added user ${user} at ${range}`);
     }
     
     /**
-     * Initialize the Locks sheet with proper structure if it doesn't exist
+     * Write a single lock key header to column header
+     * @private
+     * @param {string} lockKey - Lock key (e.g., "PACK_LISTS:LOCKHEED MARTIN 2026 SNA")
+     * @param {number} col - Column number (1-indexed, B=2, C=3, etc.)
+     * @returns {Promise<void>}
+     */
+    static async _writeLockKeyHeader(lockKey, col) {
+        const colLetter = this._numberToColumnLetter(col);
+        const range = `Locks!${colLetter}1:${colLetter}1`;
+        await GoogleSheetsService.setSheetData('CACHE', range, [[lockKey]], null);
+        console.log(`[_writeLockKeyHeader] Added lock key ${lockKey} at ${range}`);
+    }
+    
+    /**
+     * Write a single lock cell value (timestamp or "0")
+     * @private
+     * @param {number} row - Row number (1-indexed)
+     * @param {number} col - Column number (1-indexed)
+     * @param {string} value - Timestamp or "0"
+     * @returns {Promise<void>}
+     */
+    static async _writeLockCell(row, col, value) {
+        const colLetter = this._numberToColumnLetter(col);
+        const range = `Locks!${colLetter}${row}:${colLetter}${row}`;
+        await GoogleSheetsService.setSheetData('CACHE', range, [[value]], null);
+        console.log(`[_writeLockCell] Set ${range} to ${value}`);
+    }
+    
+    /**
+     * Convert column number to letter (1=A, 2=B, 26=Z, 27=AA, etc.)
+     * @private
+     * @param {number} num - Column number (1-indexed)
+     * @returns {string} Column letter(s)
+     */
+    static _numberToColumnLetter(num) {
+        let letter = '';
+        while (num > 0) {
+            const remainder = (num - 1) % 26;
+            letter = String.fromCharCode(65 + remainder) + letter;
+            num = Math.floor((num - 1) / 26);
+        }
+        return letter;
+    }
+    
+    /**
+     * Initialize the Locks sheet with proper 2D grid structure
      * @private
      * @returns {Promise<void>}
      */
@@ -602,8 +636,7 @@ class applicationUtils_uncached {
         try {
             console.log('[_initializeLocksSheet] Initializing Locks sheet structure');
             const sheetData = [
-                ['0'],                                              // A1: Semaphore cell
-                ['Spreadsheet', 'Tab', 'User', 'Timestamp']       // A2: Headers
+                ['Users'] // A1: "Users" header, columns B+ will be added dynamically
             ];
             await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
             console.log('[_initializeLocksSheet] Locks sheet initialized successfully');
@@ -614,250 +647,77 @@ class applicationUtils_uncached {
     }
 
     /**
-     * Get locks data with batching - reuses semaphore window if active
-     * @private
-     * @returns {Promise<Array<Object>>} Array of lock objects
-     */
-    static async _getLocksDataBatched() {
-        const now = Date.now();
-        const win = applicationUtils_uncached._semaphoreWindow;
-        
-        // Return cached if window active
-        if (win.token && win.expiresAt > now && win.locksData) {
-            console.log('[_getLocksDataBatched] Returning cached data from active window');
-            return [...win.locksData]; // Return copy
-        }
-        
-        // Wait for cooldown if active
-        if (win.cooldownUntil && win.cooldownUntil > now) {
-            const waitTime = win.cooldownUntil - now;
-            console.log(`[_getLocksDataBatched] Waiting ${waitTime}ms for cooldown`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-        
-        // Start new window
-        console.log('[_getLocksDataBatched] Starting new semaphore window');
-        const token = await applicationUtils_uncached._acquireWriteLock();
-        
-        // Read locks data directly (don't use cached _getLocksData)
-        const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A2:D');
-        const locks = [];
-        
-        if (rawData && rawData.length > 1) {
-            // Skip header row (index 0), process data rows
-            for (let i = 1; i < rawData.length; i++) {
-                const row = rawData[i];
-                const hasData = row && row.some(cell => cell !== null && cell !== undefined && cell !== '');
-                if (hasData) {
-                    locks.push({
-                        Spreadsheet: row[0] || '',
-                        Tab: row[1] || '',
-                        User: row[2] || '',
-                        Timestamp: row[3] || ''
-                    });
-                }
-            }
-        }
-        
-        console.log(`[_getLocksDataBatched] Loaded ${locks.length} locks for new window`);
-        
-        win.token = token;
-        win.expiresAt = now + 1000;
-        win.locksData = locks; // Always an array
-        win.pendingWrite = null;
-        
-        // Auto-flush after 1 second
-        win.flushTimer = setTimeout(() => {
-            applicationUtils_uncached._flushSemaphoreWindow();
-        }, 1000);
-        
-        return [...locks]; // Always return an array
-    }
-    
-    /**
-     * Save locks data with batching - queues write instead of immediate execution
-     * @private
-     * @param {Array<Object>} locks - Array of lock objects
-     * @param {string} semaphore - Semaphore value to preserve
-     * @returns {Promise<boolean>}
-     */
-    static async _saveLocksDataBatched(locks, semaphore = '0') {
-        // Ensure locks is always an array
-        if (!Array.isArray(locks)) {
-            console.error('[_saveLocksDataBatched] locks parameter is not an array:', locks);
-            locks = [];
-        }
-        
-        console.log(`[_saveLocksDataBatched] Queueing write for ${locks.length} locks`);
-        const win = applicationUtils_uncached._semaphoreWindow;
-        
-        // Build sheet data
-        const headers = ['Spreadsheet', 'Tab', 'User', 'Timestamp'];
-        const dataRows = locks.map(lock => [
-            lock.Spreadsheet || '', 
-            lock.Tab || '', 
-            lock.User || '', 
-            lock.Timestamp || ''
-        ]);
-        
-        // Queue write (latest write wins)
-        win.pendingWrite = {
-            data: [[semaphore], headers, ...dataRows],
-            semaphore: semaphore
-        };
-        
-        // Update cached data
-        win.locksData = [...locks];
-        
-        return true;
-    }
-    
-    /**
-     * Flush semaphore window - execute pending write and release semaphore
-     * @private
-     * @returns {Promise<void>}
-     */
-    static async _flushSemaphoreWindow() {
-        const win = applicationUtils_uncached._semaphoreWindow;
-        if (!win.token) return;
-        
-        console.log('[_flushSemaphoreWindow] Flushing window');
-        const token = win.token;
-        
-        try {
-            // Write if pending
-            if (win.pendingWrite) {
-                await GoogleSheetsService.setSheetData('CACHE', 'Locks', 
-                    win.pendingWrite.data, null);
-                invalidateCache([{ namespace: 'app_utils', methodName: '_getLocksData', args: [] }]);
-                console.log('[_flushSemaphoreWindow] Pending write executed');
-            }
-            
-            // Release semaphore
-            await applicationUtils_uncached._releaseWriteLock(token);
-            
-            // Start cooldown
-            win.cooldownUntil = Date.now() + 1000;
-            console.log('[_flushSemaphoreWindow] Cooldown started (1000ms)');
-            
-        } catch (error) {
-            console.error('[_flushSemaphoreWindow] Error during flush:', error);
-        } finally {
-            // Clear window state
-            win.token = null;
-            win.expiresAt = null;
-            win.locksData = null;
-            win.pendingWrite = null;
-            if (win.flushTimer) {
-                clearTimeout(win.flushTimer);
-                win.flushTimer = null;
-            }
-        }
-    }
-    
-    /**
-     * Get locks data using the existing cache system (5 second TTL)
-     * @private
+     * Get locks data in 2D grid format with 20-second cache
      * @param {Object} deps - Dependency decorator for tracking calls (injected by wrapMethods)
-     * @returns {Promise<Array<Object>>} Array of lock objects
+     * @returns {Promise<Object>} Object with { users: [], lockKeys: [], locks: [] }
      */
-    static async _getLocksData(deps) {
+    static async getLocksData(deps) {
         try {
-            // Read directly from GoogleSheetsService
-            // Range starts at A2 to skip semaphore cell in A1
-            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A2:D');
+            // Read entire Locks sheet
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks');
             
-            console.log('[_getLocksData] Raw data from Locks!A2:D:', rawData);
+            console.log('[getLocksData] Raw data from Locks sheet:', rawData);
             
             if (!rawData || rawData.length === 0) {
-                console.log('[_getLocksData] No data found, returning empty array');
-                return [];
+                console.log('[getLocksData] No data found, returning empty grid');
+                return { users: [], lockKeys: [], locks: [] };
             }
             
-            // First row should be headers
-            const headers = rawData[0];
-            if (!headers || headers.length === 0) {
-                console.warn('[_getLocksData] No headers found, returning empty array');
-                return [];
-            }
-            
-            // Transform remaining rows to objects
+            // First row contains headers: ["Users", "SPREADSHEET:TAB", "SPREADSHEET:TAB", ...]
+            const headers = rawData[0] || [];
+            const users = [];
+            const lockKeys = headers.slice(1); // Skip "Users" column
             const locks = [];
+            
+            // Process user rows (starting from row 2, index 1)
             for (let i = 1; i < rawData.length; i++) {
                 const row = rawData[i];
-                // Check if row has any data at all (not just checking first column)
-                const hasData = row && row.some(cell => cell !== null && cell !== undefined && cell !== '');
-                if (hasData) {
+                if (!row || row.length === 0) continue;
+                
+                const userEmail = row[0];
+                if (!userEmail || userEmail.trim() === '') continue;
+                
+                users.push(userEmail);
+                
+                // Process each lock column for this user
+                for (let j = 1; j < row.length; j++) {
+                    const timestamp = row[j];
+                    const lockKey = lockKeys[j - 1]; // -1 because lockKeys is sliced
+                    
+                    if (!lockKey) continue;
+                    
+                    // Parse lockKey format: "SPREADSHEET:TAB"
+                    const [spreadsheet, ...tabParts] = lockKey.split(':');
+                    const tab = tabParts.join(':'); // Handle tabs with colons in name
+                    
+                    // Store lock info (even if timestamp is "0" or empty)
                     locks.push({
-                        Spreadsheet: row[0] || '',
-                        Tab: row[1] || '',
-                        User: row[2] || '',
-                        Timestamp: row[3] || ''
+                        user: userEmail,
+                        spreadsheet: spreadsheet,
+                        tab: tab,
+                        timestamp: timestamp || null
                     });
                 }
             }
             
-            console.log(`[_getLocksData] Found ${locks.length} locks:`, locks);
-            return locks;
+            console.log(`[getLocksData] Found ${users.length} users, ${lockKeys.length} lock keys, ${locks.length} lock entries`);
+            return { users, lockKeys, locks };
+            
         } catch (error) {
-            console.error('[_getLocksData] Error reading locks:', error);
+            console.error('[getLocksData] Error reading locks:', error);
             
             // If this is a 400 error (Bad Request), the sheet likely doesn't exist
             if (error.status === 400 || error.message?.includes('Unable to parse range')) {
-                console.warn('[_getLocksData] Locks sheet appears to be missing or corrupted, initializing...');
+                console.warn('[getLocksData] Locks sheet appears to be missing or corrupted, initializing...');
                 try {
                     await this._initializeLocksSheet();
-                    return []; // Return empty array after initialization
+                    return { users: [], lockKeys: [], locks: [] };
                 } catch (initError) {
-                    console.error('[_getLocksData] Failed to initialize Locks sheet:', initError);
+                    console.error('[getLocksData] Failed to initialize Locks sheet:', initError);
                 }
             }
             
-            return [];
-        }
-    }
-
-    /**
-     * Save locks data to the Locks sheet, preserving the semaphore cell
-     * @private
-     * @param {Array<Object>} locks - Array of lock objects
-     * @param {string} currentSemaphore - Current semaphore value to preserve
-     * @returns {Promise<boolean>}
-     */
-    static async _saveLocksData(locks, currentSemaphore = '0') {
-        try {
-            console.log(`[_saveLocksData] Saving ${locks.length} locks with semaphore: ${currentSemaphore}`);
-            console.log('[_saveLocksData] Lock data:', locks);
-            
-            // Build 2D array: semaphore, headers, then data rows
-            const headers = ['Spreadsheet', 'Tab', 'User', 'Timestamp'];
-            const dataRows = locks.map(lock => [
-                lock.Spreadsheet || '',
-                lock.Tab || '',
-                lock.User || '',
-                lock.Timestamp || ''
-            ]);
-            
-            const sheetData = [
-                [currentSemaphore], // A1: Semaphore cell
-                headers,             // A2:D2: Headers
-                ...dataRows          // A3+: Lock data
-            ];
-            
-            console.log(`[_saveLocksData] Writing ${sheetData.length} rows (including semaphore + headers)`);
-            
-            // Write directly to GoogleSheetsService to ensure immediate write
-            // Use range A1:D to overwrite entire sheet (semaphore + all lock data)
-            await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
-            
-            // Invalidate the _getLocksData cache so next read gets fresh data
-            invalidateCache([{ namespace: 'app_utils', methodName: '_getLocksData', args: [] }]);
-            
-            console.log('[_saveLocksData] Successfully saved locks');
-            return true;
-        } catch (error) {
-            console.error('[_saveLocksData] Error saving locks:', error);
-            return false;
+            return { users: [], lockKeys: [], locks: [] };
         }
     }
 }
@@ -865,7 +725,7 @@ class applicationUtils_uncached {
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', '_acquireWriteLock', '_releaseWriteLock', '_saveLocksData', '_initializeLocksSheet'], // Mutation methods (including private helpers, but NOT _getLocksData)
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserRow', '_writeLockKeyHeader', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet'], // Mutation methods
     [], // Infinite cache methods
-    { 'getSheetLock': 2000, '_getLocksData': 2000 } // Custom cache durations (2 seconds for lock checks and lock data)
+    { 'getSheetLock': 20000, 'getLocksData': 10000 } // Custom cache durations (20 seconds for getSheetLock, 10 seconds for getLocksData)
 );

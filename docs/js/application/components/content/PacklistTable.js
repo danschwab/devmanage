@@ -265,15 +265,15 @@ export const PacklistTable = {
             }
             
             try {
-                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
+                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
                 console.log(`[PacklistTable.checkLockStatus] Lock info for "${this.tabName}":`, lockInfo);
                 if (lockInfo) {
-                    this.lockedByOther = lockInfo.User !== user;
-                    this.lockOwner = lockInfo.User;
+                    this.lockedByOther = lockInfo.user !== user;
+                    this.lockOwner = lockInfo.user;
                     
-                    console.log(`[PacklistTable.checkLockStatus] Lock owner: "${lockInfo.User}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
+                    console.log(`[PacklistTable.checkLockStatus] Lock owner: "${lockInfo.user}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
                     if (this.lockedByOther) {
-                        console.log(`[PacklistTable] Sheet locked by ${lockInfo.User}`);
+                        console.log(`[PacklistTable] Sheet locked by ${lockInfo.user}`);
                     }
                 } else {
                     console.log(`[PacklistTable.checkLockStatus] No lock found for "${this.tabName}"`);
@@ -307,17 +307,19 @@ export const PacklistTable = {
                         console.log(`[PacklistTable] Locked PACK_LISTS/${this.tabName} for ${user}`);
                     } else {
                         // Failed to acquire lock - check who has it
-                        const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
-                        if (lockInfo && lockInfo.User !== user) {
+                        const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                        if (lockInfo && lockInfo.user !== user) {
                             this.lockedByOther = true;
-                            this.lockOwner = lockInfo.User;
-                            console.warn(`[PacklistTable] Sheet locked by ${lockInfo.User}`);
-                            this.error = `This pack list is being edited by ${lockInfo.User}`;
+                            this.lockOwner = lockInfo.user;
+                            console.warn(`[PacklistTable] Sheet locked by ${lockInfo.user}`);
+                            this.error = `This pack list is being edited by ${lockInfo.user}`;
                         }
                     }
                 } else if (!isDirty && this.isLocked) {
                     // Table became clean, release lock
+                    console.log(`[PacklistTable.handleLockState] About to call unlockSheet for ${this.tabName}`);
                     const unlocked = await Requests.unlockSheet('PACK_LISTS', this.tabName, user);
+                    console.log(`[PacklistTable.handleLockState] unlockSheet returned:`, unlocked);
                     if (unlocked) {
                         this.isLocked = false;
                         this.lockedByOther = false;

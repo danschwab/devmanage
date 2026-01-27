@@ -77,16 +77,12 @@ export class FakeGoogleSheetsAuth {
 export class FakeGoogleSheetsService {
     /**
      * Transform raw sheet data to JS objects using mapping
-     * Special handling for Locks table - skip row 0 (semaphore cell)
      */
     static transformSheetData(rawData, mapping, sheetName = null) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
         
-        // Special handling for Locks table - row 0 is semaphore, row 1 is headers
-        const startRow = (sheetName === 'Locks') ? 1 : 0;
-        
-        const headers = rawData[startRow];
-        const rows = rawData.slice(startRow + 1);
+        const headers = rawData[0];
+        const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
             const idx = headers.findIndex(h => h.trim() === headerName);
@@ -725,10 +721,9 @@ export class FakeGoogleSheetsService {
                 ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ],
             'Locks': [
-                ['0'], // Row 0: Semaphore cell (A1) - "0" means unlocked
-                ['Spreadsheet', 'Tab', 'User', 'Timestamp'], // Row 1: Headers
-                ['PACK_LISTS', 'ATSC 2025 NAB', 'locked.user@example.com', '2026-01-19T10:30:00.000Z'], // Row 2+: Lock data
-                ['INVENTORY', 'CABINETS', 'locked.user@example.com', '2026-01-19T10:30:00.000Z']
+                ['Users', 'PACK_LISTS:ATSC 2025 NAB', 'INVENTORY:CABINETS'], // Row 0: Headers with lock keys
+                ['locked.user@example.com', '2026-01-19T10:30:00.000Z', '2026-01-19T10:30:00.000Z'], // Row 1+: User rows with timestamps
+                ['another.user@example.com', '0', '0'] // Row 2: Another user with no locks
             ]
         }
     };
@@ -792,12 +787,14 @@ export class FakeGoogleSheetsService {
         const [sheetName, cellRange] = range.split('!');
         const sheetData = this.mockData[tableId] && this.mockData[tableId][sheetName];
         
+        console.log(`[FakeGoogle.getSheetData] Reading mockData['${tableId}']['${sheetName}']:`, JSON.stringify(sheetData));
+        
         if (!sheetData) {
             console.warn(`FakeGoogleSheetsService: No mock data found for ${tableId}/${sheetName}`);
             return [[]];
         }
 
-        // Handle specific cell range requests (e.g., "A1:A1" for semaphore)
+        // Handle specific cell range requests (e.g., "B2:B2" for lock cells)
         if (cellRange) {
             const cellMatch = cellRange.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
             if (cellMatch) {
@@ -828,7 +825,7 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
-            // Handle range-specific updates (e.g., "Locks!A1:A1" for semaphore)
+            // Handle range-specific updates (e.g., "Locks!B2" for single lock cells)
             const rangeMatch = tabName.match(/^([^!]+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
             if (rangeMatch) {
                 const [, sheetName, startCol, startRow, endCol, endRow] = rangeMatch;
@@ -838,10 +835,9 @@ export class FakeGoogleSheetsService {
                 // Initialize sheet if it doesn't exist
                 if (!this.mockData[tableId]) this.mockData[tableId] = {};
                 if (!this.mockData[tableId][sheetName]) {
-                    // Initialize Locks sheet with headers
+                    // Initialize with empty structure (will be populated dynamically)
                     this.mockData[tableId][sheetName] = [
-                        ['', '', '', ''], // Row 0 for semaphore (A1 will be used)
-                        ['Spreadsheet', 'Tab', 'User', 'Timestamp']
+                        ['Users'] // Row 0: Headers row (lock keys added dynamically)
                     ];
                 }
                 
@@ -858,6 +854,8 @@ export class FakeGoogleSheetsService {
                 // Update the specific cell
                 if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
                     this.mockData[tableId][sheetName][rowIndex][colIndex] = updates[0][0];
+                    console.log(`[FakeGoogle.setSheetData] Updated mockData['${tableId}']['${sheetName}'][${rowIndex}][${colIndex}] = ${updates[0][0]}`);
+                    console.log(`[FakeGoogle.setSheetData] Full Locks grid now:`, JSON.stringify(this.mockData[tableId][sheetName]));
                 }
                 return true;
             }

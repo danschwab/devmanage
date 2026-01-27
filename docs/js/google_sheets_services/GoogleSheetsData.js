@@ -227,20 +227,16 @@ export class GoogleSheetsService {
     }
     /**
      * Transform raw sheet data to JS objects using mapping
-     * Special handling for Locks table - skip row 0 (semaphore cell)
      */
     static transformSheetData(rawData, mapping, sheetName = null) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
         
-        // Special handling for Locks table - row 0 is semaphore, row 1 is headers
-        const startRow = (sheetName === 'Locks') ? 1 : 0;
-        
-        const headers = Array.isArray(rawData[startRow]) ? rawData[startRow] : [];
+        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
         if (headers.length === 0) {
             console.error('GoogleSheetsService.transformSheetData: headers is not an array or empty', headers, rawData);
             return [];
         }
-        const rows = rawData.slice(startRow + 1);
+        const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
             const idx = headers.findIndex(h => typeof h === 'string' && h.trim() === headerName);

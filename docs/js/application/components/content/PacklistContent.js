@@ -23,8 +23,8 @@ export const PacklistMenuComponent = {
     },
     computed: {
         lockOwnerUsername() {
-            if (!this.lockInfo || !this.lockInfo.User) return null;
-            const email = this.lockInfo.User;
+            if (!this.lockInfo || !this.lockInfo.user) return null;
+            const email = this.lockInfo.user;
             return email.includes('@') ? email.split('@')[0] : email;
         },
         menuItems() {
@@ -90,21 +90,20 @@ export const PacklistMenuComponent = {
             }
             
             const username = this.lockOwnerUsername;
-            const tabName = this.lockInfo.Tab; // Use the actual tab name from lock info
+            const tabName = this.lockInfo.tab; // Use the actual tab name from lock info
             
             this.$modal.confirm(
                 `Are you sure you want to force unlock ${tabName}?\n${username} may have unsaved changes.`,
                 async () => {
                     this.isRemovingLock = true;
                     try {
+                        console.log(`[PacklistContent.removeLock] About to call forceUnlockSheet for ${tabName}`);
                         const result = await Requests.forceUnlockSheet('PACK_LISTS', tabName, 'User requested via hamburger menu');
+                        console.log(`[PacklistContent.removeLock] forceUnlockSheet returned:`, result);
                         
                         if (result.success) {
-                            // Invalidate lock cache to ensure fresh lock status
-                            invalidateCache([
-                                { namespace: 'app_utils', methodName: 'getSheetLock', args: ['PACK_LISTS', tabName] },
-                                { namespace: 'api', methodName: 'getPacklistLock', args: [tabName] }
-                            ]);
+                            // Cache is automatically invalidated by the mutation method
+                            // Just refresh the UI to fetch fresh data
                             
                             this.$modal.alert(
                                 `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
@@ -392,7 +391,7 @@ export const PacklistContent = {
             // Build content footer
             let contentFooter = undefined;
             if (isLocked) {
-                const lockOwner = tab.lockInfo.User || 'Unknown';
+                const lockOwner = tab.lockInfo.user || 'Unknown';
                 const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
                 contentFooter = `Locked for edit by: ${username}`;
             } else if (hasUnsavedChanges) {

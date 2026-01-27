@@ -196,15 +196,15 @@ export const InventoryTableComponent = {
             }
             
             try {
-                const lockInfo = await Requests.getInventoryLock(this.tabTitle);
+                const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
                 console.log(`[InventoryTable.checkLockStatus] Lock info for "${this.tabTitle}":`, lockInfo);
                 if (lockInfo) {
-                    this.lockedByOther = lockInfo.User !== user;
-                    this.lockOwner = lockInfo.User;
+                    this.lockedByOther = lockInfo.user !== user;
+                    this.lockOwner = lockInfo.user;
                     
-                    console.log(`[InventoryTable.checkLockStatus] Lock owner: "${lockInfo.User}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
+                    console.log(`[InventoryTable.checkLockStatus] Lock owner: "${lockInfo.user}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
                     if (this.lockedByOther) {
-                        console.log(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                        console.log(`[InventoryTable] Category locked by ${lockInfo.user}`);
                     }
                 } else {
                     console.log(`[InventoryTable.checkLockStatus] No lock found for "${this.tabTitle}"`);
@@ -235,18 +235,20 @@ export const InventoryTableComponent = {
                         this.lockOwner = user;
                         console.log(`[InventoryTable] Locked INVENTORY/${this.tabTitle} for ${user}`);
                     } else {
-                        const lockInfo = await Requests.getInventoryLock(this.tabTitle);
-                        if (lockInfo && lockInfo.User !== user) {
+                        const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
+                        if (lockInfo && lockInfo.user !== user) {
                             this.lockedByOther = true;
-                            this.lockOwner = lockInfo.User;
-                            console.warn(`[InventoryTable] Category locked by ${lockInfo.User}`);
+                            this.lockOwner = lockInfo.user;
+                            console.warn(`[InventoryTable] Category locked by ${lockInfo.user}`);
                             
                             // Refresh page to show newly identified lock information
                             await this.handleRefresh();
                         }
                     }
                 } else if (!isDirty && this.isLocked) {
+                    console.log(`[InventoryTable.handleLockState] About to call unlockSheet for ${this.tabTitle}`);
                     const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
+                    console.log(`[InventoryTable.handleLockState] unlockSheet returned:`, unlocked);
                     if (unlocked) {
                         this.isLocked = false;
                         this.lockedByOther = false;
