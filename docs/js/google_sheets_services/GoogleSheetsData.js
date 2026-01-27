@@ -53,6 +53,7 @@ export class GoogleSheetsService {
         let attempt = 0;
         let delay = initialDelay;
         let lastError = null;
+        let consecutiveRateLimits = 0;
         
         // Check if rate limit simulation is enabled
         if (GoogleSheetsService._simulateRateLimit) {
@@ -77,6 +78,7 @@ export class GoogleSheetsService {
                         throw reauthErr;
                     }
                 }
+                
                 // Check for rate limit or quota errors
                 const isRateLimit = err && (
                     (err.status && (err.status === 429 || err.status === 403)) ||
@@ -87,7 +89,27 @@ export class GoogleSheetsService {
                         err.result.error.message?.toLowerCase().includes('quota')
                     ))
                 );
+                
+                if (isRateLimit) {
+                    consecutiveRateLimits++;
+                    // For rate limits, use much longer delays and more retries
+                    // Google Sheets quota resets after 1 minute, so we need to wait
+                    const rateLimitMaxRetries = 15; // Allow up to 15 retries for rate limits
+                    const rateLimitDelay = Math.min(5000 * Math.pow(1.5, consecutiveRateLimits), 30000); // 5s, 7.5s, 11.25s... max 30s
+                    
+                    if (consecutiveRateLimits >= rateLimitMaxRetries) {
+                        console.error('[GoogleSheetsService] Rate limit exceeded after maximum retries');
+                        throw err;
+                    }
+                    
+                    console.warn(`[GoogleSheetsService] Rate limit hit (attempt ${consecutiveRateLimits}/${rateLimitMaxRetries}), waiting ${rateLimitDelay}ms before retry...`);
+                    await new Promise(res => setTimeout(res, rateLimitDelay));
+                    continue; // Retry without incrementing main attempt counter
+                }
+                
+                // For non-rate-limit errors, use standard exponential backoff
                 if (attempt >= maxRetries) throw err;
+                
                 await new Promise(res => setTimeout(res, delay));
                 delay *= 2;
                 attempt++;

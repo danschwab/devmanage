@@ -60,7 +60,7 @@ export const InventoryTableComponent = {
         TableComponent,
         ItemImageComponent
     },
-    inject: ['appContext'],
+    inject: ['appContext', '$modal'],
     props: {
         containerPath: {
             type: String,
