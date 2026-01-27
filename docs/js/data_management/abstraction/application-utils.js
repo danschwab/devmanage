@@ -306,6 +306,11 @@ class applicationUtils_uncached {
                 { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
             ]);
             
+            // Invalidate database cache for this tab to refresh application data
+            invalidateCache([
+                { namespace: 'database', methodName: 'getData', args: [spreadsheet, tab] }
+            ], true);
+            
             return true;
             
         } finally {
@@ -466,6 +471,11 @@ class applicationUtils_uncached {
             { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
             { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
         ]);
+        
+        // Invalidate database cache for this tab to refresh application data
+        invalidateCache([
+            { namespace: 'database', methodName: 'getData', args: [spreadsheet, tab] }
+        ], true);
         
         console.log(`[ApplicationUtils.forceUnlockSheet] Lock removed successfully`);
         
