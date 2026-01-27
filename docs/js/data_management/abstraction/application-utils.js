@@ -325,8 +325,8 @@ class applicationUtils_uncached {
      */
     static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
         console.log(`[ApplicationUtils.getSheetLock] Checking lock for spreadsheet: "${spreadsheet}", tab: "${tab}", currentUser: "${currentUser}"`);
-        // Use direct sheet access to bypass cache for lock status checks
-        const locks = await this._getLocksData();
+        // Use batched read to reduce concurrent API calls (shares semaphore window with lock/unlock operations)
+        const locks = await applicationUtils_uncached._getLocksDataBatched();
         console.log(`[ApplicationUtils.getSheetLock] Found ${locks.length} total locks:`, locks);
         
         const matchedLock = locks.find(lock => 

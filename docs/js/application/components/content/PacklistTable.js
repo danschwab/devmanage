@@ -892,9 +892,9 @@ export const PacklistTable = {
                             </button>
 
                             <button v-if="!editMode" @click="handlePrint" :disabled="isLoading || isAnalyzing" class="white">Print</button>
-                            <span v-if="!editMode && lockedByOther" style="margin-left: 1rem; color: var(--color-text-secondary);">
+                            <!--this was moved span v-if="!editMode && lockedByOther" style="margin-left: 1rem; color: var(--color-text-secondary);">
                                 Locked by {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
-                            </span>
+                            </span-->
                         </div>
                     </template>
                     <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">

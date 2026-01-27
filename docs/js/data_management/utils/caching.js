@@ -305,46 +305,56 @@ class CacheManager {
                     return cached;
                 }
                 
-                // Atomic check-and-set: if pending call exists, await it; otherwise create and store new promise
+                // Check if there's already a pending call - if so, wait for it
                 let promise = CacheManager.pendingCalls.get(cacheKey);
                 if (promise) {
                     return await promise;
                 }
                 
-                // Create new promise and store it immediately (atomic operation)
-                promise = (async () => {
-                    try {
-                        // Create dependency decorator for this function call
-                        const deps = CacheManager.createDependencyDecorator(cacheKey);
-                        
-                        // Execute method with dependency decorator as first parameter
-                        const result = await targetClass[methodName](deps, ...args);
-                        
-                        // Determine expiration time:
-                        // 1. Custom duration if specified for this method
-                        // 2. Infinite cache (null) if in infiniteCacheMethods
-                        // 3. Default duration otherwise (undefined = use DEFAULT_CACHE_EXPIRATION_MS)
-                        let expirationMs;
-                        if (customCacheDurations[methodName] !== undefined) {
-                            expirationMs = customCacheDurations[methodName];
-                        } else if (infiniteCacheMethods.includes(methodName)) {
-                            expirationMs = null;
-                        } else {
-                            expirationMs = undefined;
-                        }
-                        
-                        CacheManager.set(cacheKey, result, expirationMs);
-                        
-                        return result;
-                    } finally {
-                        // Always clean up the pending call when done
-                        CacheManager.pendingCalls.delete(cacheKey);
-                    }
-                })();
+                // Create promise resolver/rejecter that we can store synchronously
+                let promiseResolve, promiseReject;
+                const pendingPromise = new Promise((resolve, reject) => {
+                    promiseResolve = resolve;
+                    promiseReject = reject;
+                });
                 
-                // Store the promise immediately and return it
-                CacheManager.pendingCalls.set(cacheKey, promise);
-                return await promise;
+                // Store the promise IMMEDIATELY before any async work starts (atomic)
+                CacheManager.pendingCalls.set(cacheKey, pendingPromise);
+                
+                // Now execute the actual async work
+                try {
+                    // Create dependency decorator for this function call
+                    const deps = CacheManager.createDependencyDecorator(cacheKey);
+                    
+                    // Execute method with dependency decorator as first parameter
+                    const result = await targetClass[methodName](deps, ...args);
+                    
+                    // Determine expiration time:
+                    // 1. Custom duration if specified for this method
+                    // 2. Infinite cache (null) if in infiniteCacheMethods
+                    // 3. Default duration otherwise (undefined = use DEFAULT_CACHE_EXPIRATION_MS)
+                    let expirationMs;
+                    if (customCacheDurations[methodName] !== undefined) {
+                        expirationMs = customCacheDurations[methodName];
+                    } else if (infiniteCacheMethods.includes(methodName)) {
+                        expirationMs = null;
+                    } else {
+                        expirationMs = undefined;
+                    }
+                    
+                    CacheManager.set(cacheKey, result, expirationMs);
+                    
+                    // Resolve the promise for all waiters
+                    promiseResolve(result);
+                    return result;
+                } catch (error) {
+                    // Reject the promise for all waiters
+                    promiseReject(error);
+                    throw error;
+                } finally {
+                    // Always clean up the pending call when done
+                    CacheManager.pendingCalls.delete(cacheKey);
+                }
             };
             
             // Store the method name on the wrapped function for extractMethodName to retrieve

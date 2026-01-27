@@ -124,8 +124,8 @@ Architecture Improvements
 - [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - [ ] log out needs to skip database operations if the token is already expired
 - [ ] improve error handling and user notifications for failed auth and failed permissions
-- [ ] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
-- [ ] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
+- [x] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
+- [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
 - [ ] allow autocaching of analytics data
