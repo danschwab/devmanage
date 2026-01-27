@@ -23,6 +23,16 @@ class applicationUtils_uncached {
         }
     ];
     
+    // Semaphore window state for batching operations
+    static _semaphoreWindow = {
+        token: null,          // Current semaphore token
+        expiresAt: null,      // Window end timestamp
+        locksData: null,      // Cached locks array
+        pendingWrite: null,   // Queued write data
+        cooldownUntil: null,  // Cooldown end timestamp
+        flushTimer: null      // Auto-flush setTimeout handle
+    };
+    
     
     /**
      * Store user data in a user-specific tab within the CACHE sheet
@@ -191,23 +201,18 @@ class applicationUtils_uncached {
     }
     
     /**
-     * Lock a spreadsheet tab for a user (with write semaphore protection)
+     * Lock a spreadsheet tab for a user (with batched semaphore protection)
      * @param {string} spreadsheet - The spreadsheet name (e.g., 'INVENTORY', 'PACK_LISTS')
      * @param {string} tab - The tab name
      * @param {string} user - The user email claiming the lock
      * @returns {Promise<boolean>} Success status
      */
     static async lockSheet(spreadsheet, tab, user) {
-        let writeLockToken = null;
-        
         try {
-            // Acquire exclusive write access
-            writeLockToken = await this._acquireWriteLock();
-            
             const timestamp = new Date().toISOString();
             
-            // Now we have exclusive access - safe to read-modify-write
-            const existingLocks = await this._getLocksData();
+            // Get locks data using batched read (reuses semaphore window)
+            const existingLocks = await applicationUtils_uncached._getLocksDataBatched();
             
             // Check if already locked
             const existingLock = existingLocks.find(lock => 
@@ -224,7 +229,7 @@ class applicationUtils_uncached {
                             : lock
                     );
                     
-                    await this._saveLocksData(updatedLocks, writeLockToken);
+                    await applicationUtils_uncached._saveLocksDataBatched(updatedLocks, applicationUtils_uncached._semaphoreWindow.token);
                     
                     return true;
                 } else {
@@ -242,7 +247,7 @@ class applicationUtils_uncached {
                 Timestamp: timestamp
             });
             
-            await this._saveLocksData(existingLocks, writeLockToken);
+            await applicationUtils_uncached._saveLocksDataBatched(existingLocks, applicationUtils_uncached._semaphoreWindow.token);
             
             // Invalidate getSheetLock cache so UI components see the new lock
             invalidateCache([
@@ -252,30 +257,23 @@ class applicationUtils_uncached {
             
             return true;
             
-        } finally {
-            // Always release the write lock
-            if (writeLockToken) {
-                await this._releaseWriteLock(writeLockToken);
-            }
+        } catch (error) {
+            console.error('[lockSheet] Error:', error);
+            throw error;
         }
     }
     
     /**
-     * Unlock a spreadsheet tab (with write semaphore protection)
+     * Unlock a spreadsheet tab (with batched semaphore protection)
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @param {string} user - The user email releasing the lock
      * @returns {Promise<boolean>} Success status
      */
     static async unlockSheet(spreadsheet, tab, user) {
-        let writeLockToken = null;
-        
         try {
-            // Acquire exclusive write access
-            writeLockToken = await this._acquireWriteLock();
-            
-            // Now we have exclusive access - safe to read-modify-write
-            const existingLocks = await this._getLocksData();
+            // Get locks data using batched read (reuses semaphore window)
+            const existingLocks = await applicationUtils_uncached._getLocksDataBatched();
             
             // Find the lock
             const lockIndex = existingLocks.findIndex(lock => 
@@ -298,7 +296,7 @@ class applicationUtils_uncached {
             // Remove the lock
             existingLocks.splice(lockIndex, 1);
             
-            await this._saveLocksData(existingLocks, writeLockToken);
+            await applicationUtils_uncached._saveLocksDataBatched(existingLocks, applicationUtils_uncached._semaphoreWindow.token);
             
             // Invalidate getSheetLock cache so UI components see the lock is gone
             invalidateCache([
@@ -306,18 +304,14 @@ class applicationUtils_uncached {
                 { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] }
             ]);
             
-            // Invalidate database cache for this tab to refresh application data
-            invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: [spreadsheet, tab] }
-            ], true);
+            // Note: We don't invalidate database cache here - data hasn't changed, only lock status
+            // Database cache will be refreshed on next data access if needed
             
             return true;
             
-        } finally {
-            // Always release the write lock
-            if (writeLockToken) {
-                await this._releaseWriteLock(writeLockToken);
-            }
+        } catch (error) {
+            console.error('[unlockSheet] Error:', error);
+            throw error;
         }
     }
     
@@ -361,15 +355,9 @@ class applicationUtils_uncached {
     static async forceUnlockSheet(spreadsheet, tab, reason = '') {
         console.log(`[ApplicationUtils.forceUnlockSheet] Force unlocking ${spreadsheet}/${tab}. Reason: ${reason}`);
         
-        let writeLockToken = null;
-        
         try {
-            // Acquire exclusive write access
-            writeLockToken = await this._acquireWriteLock();
-            
-            // Now we have exclusive access - safe to read-modify-write
-            // Get lock info first to identify the owner
-            const locks = await this._getLocksData();
+            // Get lock info first to identify the owner (using batched read)
+            const locks = await applicationUtils_uncached._getLocksDataBatched();
         
         const lockInfo = locks.find(lock => 
             lock.Spreadsheet === spreadsheet && lock.Tab === tab
@@ -463,8 +451,8 @@ class applicationUtils_uncached {
             !(lock.Spreadsheet === spreadsheet && lock.Tab === tab)
         );
         
-        // Save remaining locks with semaphore
-        await this._saveLocksData(remainingLocks, writeLockToken);
+        // Save remaining locks using batched write
+        await applicationUtils_uncached._saveLocksDataBatched(remainingLocks, applicationUtils_uncached._semaphoreWindow.token);
         
         // Invalidate getSheetLock cache so UI components see the lock is gone
         invalidateCache([
@@ -490,41 +478,29 @@ class applicationUtils_uncached {
         } catch (error) {
             console.error('[ApplicationUtils.forceUnlockSheet] Error during force unlock:', error);
             throw error;
-        } finally {
-            // Always release the write lock
-            if (writeLockToken) {
-                await this._releaseWriteLock(writeLockToken);
-            }
         }
     }
     
     /**
-     * Release all locks for a user (with write semaphore protection)
+     * Release all locks for a user (with batched semaphore protection)
      * @param {string} user - The user email
      * @returns {Promise<boolean>} Success status
      */
     static async releaseAllUserLocks(user) {
-        let writeLockToken = null;
-        
         try {
-            // Acquire exclusive write access
-            writeLockToken = await this._acquireWriteLock();
-            
-            // Now we have exclusive access - safe to read-modify-write
-            const locks = await this._getLocksData();
+            // Get locks data using batched read
+            const locks = await applicationUtils_uncached._getLocksDataBatched();
             
             // Remove all locks for this user
             const remainingLocks = locks.filter(lock => lock.User !== user);
             
-            await this._saveLocksData(remainingLocks, writeLockToken);
+            await applicationUtils_uncached._saveLocksDataBatched(remainingLocks, applicationUtils_uncached._semaphoreWindow.token);
             
             return true;
             
-        } finally {
-            // Always release the write lock
-            if (writeLockToken) {
-                await this._releaseWriteLock(writeLockToken);
-            }
+        } catch (error) {
+            console.error('[releaseAllUserLocks] Error:', error);
+            throw error;
         }
     }
     
@@ -637,6 +613,148 @@ class applicationUtils_uncached {
         }
     }
 
+    /**
+     * Get locks data with batching - reuses semaphore window if active
+     * @private
+     * @returns {Promise<Array<Object>>} Array of lock objects
+     */
+    static async _getLocksDataBatched() {
+        const now = Date.now();
+        const win = applicationUtils_uncached._semaphoreWindow;
+        
+        // Return cached if window active
+        if (win.token && win.expiresAt > now && win.locksData) {
+            console.log('[_getLocksDataBatched] Returning cached data from active window');
+            return [...win.locksData]; // Return copy
+        }
+        
+        // Wait for cooldown if active
+        if (win.cooldownUntil && win.cooldownUntil > now) {
+            const waitTime = win.cooldownUntil - now;
+            console.log(`[_getLocksDataBatched] Waiting ${waitTime}ms for cooldown`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        // Start new window
+        console.log('[_getLocksDataBatched] Starting new semaphore window');
+        const token = await applicationUtils_uncached._acquireWriteLock();
+        
+        // Read locks data directly (don't use cached _getLocksData)
+        const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks!A2:D');
+        const locks = [];
+        
+        if (rawData && rawData.length > 1) {
+            // Skip header row (index 0), process data rows
+            for (let i = 1; i < rawData.length; i++) {
+                const row = rawData[i];
+                const hasData = row && row.some(cell => cell !== null && cell !== undefined && cell !== '');
+                if (hasData) {
+                    locks.push({
+                        Spreadsheet: row[0] || '',
+                        Tab: row[1] || '',
+                        User: row[2] || '',
+                        Timestamp: row[3] || ''
+                    });
+                }
+            }
+        }
+        
+        console.log(`[_getLocksDataBatched] Loaded ${locks.length} locks for new window`);
+        
+        win.token = token;
+        win.expiresAt = now + 1000;
+        win.locksData = locks; // Always an array
+        win.pendingWrite = null;
+        
+        // Auto-flush after 1 second
+        win.flushTimer = setTimeout(() => {
+            applicationUtils_uncached._flushSemaphoreWindow();
+        }, 1000);
+        
+        return [...locks]; // Always return an array
+    }
+    
+    /**
+     * Save locks data with batching - queues write instead of immediate execution
+     * @private
+     * @param {Array<Object>} locks - Array of lock objects
+     * @param {string} semaphore - Semaphore value to preserve
+     * @returns {Promise<boolean>}
+     */
+    static async _saveLocksDataBatched(locks, semaphore = '0') {
+        // Ensure locks is always an array
+        if (!Array.isArray(locks)) {
+            console.error('[_saveLocksDataBatched] locks parameter is not an array:', locks);
+            locks = [];
+        }
+        
+        console.log(`[_saveLocksDataBatched] Queueing write for ${locks.length} locks`);
+        const win = applicationUtils_uncached._semaphoreWindow;
+        
+        // Build sheet data
+        const headers = ['Spreadsheet', 'Tab', 'User', 'Timestamp'];
+        const dataRows = locks.map(lock => [
+            lock.Spreadsheet || '', 
+            lock.Tab || '', 
+            lock.User || '', 
+            lock.Timestamp || ''
+        ]);
+        
+        // Queue write (latest write wins)
+        win.pendingWrite = {
+            data: [[semaphore], headers, ...dataRows],
+            semaphore: semaphore
+        };
+        
+        // Update cached data
+        win.locksData = [...locks];
+        
+        return true;
+    }
+    
+    /**
+     * Flush semaphore window - execute pending write and release semaphore
+     * @private
+     * @returns {Promise<void>}
+     */
+    static async _flushSemaphoreWindow() {
+        const win = applicationUtils_uncached._semaphoreWindow;
+        if (!win.token) return;
+        
+        console.log('[_flushSemaphoreWindow] Flushing window');
+        const token = win.token;
+        
+        try {
+            // Write if pending
+            if (win.pendingWrite) {
+                await GoogleSheetsService.setSheetData('CACHE', 'Locks', 
+                    win.pendingWrite.data, null);
+                invalidateCache([{ namespace: 'app_utils', methodName: '_getLocksData', args: [] }]);
+                console.log('[_flushSemaphoreWindow] Pending write executed');
+            }
+            
+            // Release semaphore
+            await applicationUtils_uncached._releaseWriteLock(token);
+            
+            // Start cooldown
+            win.cooldownUntil = Date.now() + 1000;
+            console.log('[_flushSemaphoreWindow] Cooldown started (1000ms)');
+            
+        } catch (error) {
+            console.error('[_flushSemaphoreWindow] Error during flush:', error);
+        } finally {
+            // Clear window state
+            win.token = null;
+            win.expiresAt = null;
+            win.locksData = null;
+            win.pendingWrite = null;
+            if (win.flushTimer) {
+                clearTimeout(win.flushTimer);
+                win.flushTimer = null;
+            }
+        }
+    }
+    
     /**
      * Get locks data using the existing cache system (5 second TTL)
      * @private

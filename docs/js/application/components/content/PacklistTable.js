@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Use getReactiveStore for packlist table data
@@ -353,6 +353,12 @@ export const PacklistTable = {
             }
         },
         handleAddCrate() {
+            // Capture state for undo before adding crate
+            const routeKey = this.appContext?.currentPath?.split('?')[0];
+            if (routeKey) {
+                undoRegistry.capture(this.packlistTableStore.data, routeKey, { type: 'add-row' });
+            }
+            
             const headers = this.mainHeaders.filter(h => h !== 'Items');
             const infoObj = {};
             headers.forEach(label => {
@@ -374,6 +380,12 @@ export const PacklistTable = {
         },
         
         addEmptyItem(crateIdx, position = null) {
+            // Capture state for undo before adding item
+            const routeKey = this.appContext?.currentPath?.split('?')[0];
+            if (routeKey) {
+                undoRegistry.capture(this.packlistTableStore.data, routeKey, { type: 'add-nested-row' });
+            }
+            
             const itemHeaders = this.itemHeaders;
             const itemObj = {};
             itemHeaders.forEach(label => {
@@ -552,6 +564,12 @@ export const PacklistTable = {
         },
         
         addItemFromInventory(crateIdx, inventoryItem, position = null) {
+            // Capture state for undo before adding item from inventory
+            const routeKey = this.appContext?.currentPath?.split('?')[0];
+            if (routeKey) {
+                undoRegistry.capture(this.packlistTableStore.data, routeKey, { type: 'add-nested-row' });
+            }
+            
             // Create a new item row populated with inventory data
             // position: { position: 'above'|'below', targetIndex: number } or null
             const itemHeaders = this.itemHeaders;

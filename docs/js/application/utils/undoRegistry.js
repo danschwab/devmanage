@@ -133,19 +133,44 @@ export const undoRegistry = Vue.reactive({
     _createSnapshotWithoutAppData(array) {
         return array.map(row => {
             if (!row) return row;
-            const rowCopy = { ...row };
-            delete rowCopy.AppData; // Remove AppData from snapshot
+            // Deep clone to avoid shared references for nested arrays/objects
+            const rowCopy = this._deepCloneWithoutAppData(row);
             return rowCopy;
         });
     },
     
+    // Deep clone a row, excluding AppData at all levels
+    _deepCloneWithoutAppData(obj) {
+        if (obj === null || typeof obj !== 'object') {
+            return obj;
+        }
+        
+        if (Array.isArray(obj)) {
+            return obj.map(item => this._deepCloneWithoutAppData(item));
+        }
+        
+        const cloned = {};
+        for (const key in obj) {
+            if (key === 'AppData') {
+                continue; // Skip AppData at any level
+            }
+            cloned[key] = this._deepCloneWithoutAppData(obj[key]);
+        }
+        return cloned;
+    },
+    
     // Restore a snapshot while preserving current AppData
     _restoreSnapshotPreservingAppData(targetArray, snapshot) {
+        const beforeLength = targetArray.length;
+        
         // Save current AppData for each row
         const currentAppData = targetArray.map(row => row?.AppData);
         
         // Clear and restore from snapshot
         targetArray.splice(0, targetArray.length, ...snapshot);
+        
+        const afterLength = targetArray.length;
+        console.log(`[Undo] Array restored: ${beforeLength} → ${afterLength} rows`);
         
         // Restore AppData for rows that existed before and still exist
         for (let i = 0; i < Math.min(currentAppData.length, targetArray.length); i++) {

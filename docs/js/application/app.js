@@ -6,7 +6,7 @@ import { Auth, authState } from './index.js';
 import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
-import { undoRegistry } from './utils/undoRegistry.js';
+import { undoRegistry } from './index.js';
 import { Requests, getReactiveStore } from './index.js';
 
 const { createApp } = Vue;

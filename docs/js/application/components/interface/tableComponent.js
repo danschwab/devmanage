@@ -1,6 +1,4 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
-
-import { undoRegistry } from '../../utils/undoRegistry.js';
+import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry } from '../../index.js';
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
