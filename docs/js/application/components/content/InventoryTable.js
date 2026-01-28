@@ -213,24 +213,22 @@ export const InventoryTableComponent = {
                 const lockOwner = match[1];
                 console.log(`[InventoryTable] Detected lock error during save - locked by ${lockOwner}`);
                 
-                // Update lock state
+                // Update lock state (lockedByOther watcher will handle mode changes if needed)
                 this.lockedByOther = true;
                 this.lockOwner = lockOwner;
                 this.isLocked = false; // We don't own the lock
                 
-                // Exit edit mode immediately
-                if (this.editMode) {
-                    console.log(`[InventoryTable] Exiting edit mode due to lock conflict`);
-                    const viewPath = NavigationRegistry.buildPathWithCurrentParams(
-                        this.containerPath,
-                        this.appContext?.currentPath,
-                        { edit: false }
-                    );
-                    NavigationRegistry.navigateTo(viewPath, false);
-                }
-                
                 // Show alert to user
                 this.$modal.alert(`Cannot save: this inventory tab is locked by ${lockOwner}`, 'Locked');
+            }
+        },
+        
+        // Watch for lock status changes
+        // Note: InventoryTable doesn't have explicit edit mode navigation like PacklistTable,
+        // but allowEdit computed property will prevent further edits when lockedByOther=true
+        lockedByOther(newValue) {
+            if (newValue) {
+                console.log(`[InventoryTable] Lock detected - editing disabled (locked by ${this.lockOwner})`);
             }
         }
     },
@@ -384,48 +382,42 @@ export const InventoryTableComponent = {
                 { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
             ], true);
         },
-        async handleCellEdit(rowIdx, colIdx, value) {
-            // CRITICAL: Check lock status on every edit (cached for 20s to avoid rate limits)
+        
+        async checkAndAcquireLock() {
             const user = authState.user?.email;
-            if (user && this.tabTitle) {
-                try {
-                    const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
-                    if (lockInfo) {
-                        // Category is locked by another user - block the edit
-                        console.warn(`[InventoryTable] Edit blocked - category locked by ${lockInfo.user}`);
-                        
-                        // Update lock state immediately to disable editing
-                        this.lockedByOther = true;
-                        this.lockOwner = lockInfo.user;
-                        
-                        this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
-                        return;
-                    }
-                    
-                    // No conflicting lock - acquire lock if we don't already have one
-                    if (!this.isLocked) {
-                        console.log(`[InventoryTable] Acquiring lock on first edit...`);
-                        const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
-                        if (lockAcquired) {
-                            this.isLocked = true;
-                            this.lockedByOther = false;
-                            this.lockOwner = user;
-                            console.log(`[InventoryTable] Lock acquired successfully`);
-                        } else {
-                            // Failed to acquire lock - check again why
-                            const recheckLock = await Requests.getInventoryLock(this.tabTitle, user);
-                            if (recheckLock) {
-                                console.warn(`[InventoryTable] Lock acquisition failed - now locked by ${recheckLock.user}`);
-                                this.lockedByOther = true;
-                                this.lockOwner = recheckLock.user;
-                                this.$modal.alert(`Cannot edit: this category is locked by ${recheckLock.user}`, 'Locked');
-                                return;
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('[InventoryTable] Error checking lock on edit:', error);
+            if (!user || !this.tabTitle) return { success: false, reason: 'no-user' };
+            
+            // Check for conflicts (no user filter - see all locks)
+            const lockInfo = await Requests.getInventoryLock(this.tabTitle);
+            if (lockInfo && lockInfo.user !== user) {
+                this.lockedByOther = true;
+                this.lockOwner = lockInfo.user;
+                return { success: false, reason: 'locked', owner: lockInfo.user };
+            }
+            
+            // Acquire if needed
+            if (!this.isLocked) {
+                const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
+                if (lockAcquired) {
+                    this.isLocked = true;
+                    this.lockedByOther = false;
+                    this.lockOwner = user;
+                    return { success: true, reason: 'acquired' };
                 }
+                return { success: false, reason: 'acquisition-failed' };
+            }
+            
+            return { success: true, reason: 'already-locked' };
+        },
+        
+        async handleCellEdit(rowIdx, colIdx, value) {
+            // Check lock and acquire if needed (cached for 20s to avoid rate limits)
+            const lockResult = await this.checkAndAcquireLock();
+            if (!lockResult.success) {
+                if (lockResult.reason === 'locked') {
+                    this.$modal.alert(`Cannot edit: this category is locked by ${lockResult.owner}`, 'Locked');
+                }
+                return;
             }
             
             const colKey = this.columns[colIdx]?.key;
