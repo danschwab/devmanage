@@ -199,6 +199,38 @@ export const InventoryTableComponent = {
             } else {
                 console.log(`[InventoryTable.isDirty watcher] NOT calling handleLockState - locked by ${this.lockOwner}`);
             }
+        },
+        
+        // Watch for save errors to detect lock conflicts
+        'inventoryTableStore.error'(newError) {
+            if (!newError) return;
+            
+            // Check if this is a lock error
+            const lockErrorPattern = /locked by (.+)$/i;
+            const match = newError.match(lockErrorPattern);
+            
+            if (match) {
+                const lockOwner = match[1];
+                console.log(`[InventoryTable] Detected lock error during save - locked by ${lockOwner}`);
+                
+                // Update lock state
+                this.lockedByOther = true;
+                this.lockOwner = lockOwner;
+                this.isLocked = false; // We don't own the lock
+                
+                // Exit edit mode immediately
+                if (this.editMode) {
+                    console.log(`[InventoryTable] Exiting edit mode due to lock conflict`);
+                    const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                        'inventoryTable',
+                        { mode: 'view' }
+                    );
+                    NavigationRegistry.navigateTo(viewPath, false);
+                }
+                
+                // Show alert to user
+                this.$modal.alert(`Cannot save: this inventory tab is locked by ${lockOwner}`, 'Locked');
+            }
         }
     },
     methods: {
@@ -210,8 +242,26 @@ export const InventoryTableComponent = {
                 return;
             }
             
+            // CRITICAL: Wait for store to finish initial load before checking for stale locks
+            // This ensures isDirty is accurate when we check it
+            if (this.inventoryTableStore && this.inventoryTableStore.isLoading) {
+                console.log('[InventoryTable.checkLockStatus] Waiting for store to finish loading...');
+                // Wait for loading to complete by watching isLoading
+                await new Promise(resolve => {
+                    const unwatch = this.$watch('inventoryTableStore.isLoading', (newValue) => {
+                        if (!newValue) {
+                            unwatch();
+                            resolve();
+                        }
+                    });
+                });
+                console.log('[InventoryTable.checkLockStatus] Store loading complete, isDirty:', this.isDirty);
+            }
+            
             try {
-                const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
+                // Don't pass currentUser parameter - we need to see ALL locks including our own
+                // to detect stale locks held by current user
+                const lockInfo = await Requests.getInventoryLock(this.tabTitle);
                 console.log(`[InventoryTable.checkLockStatus] Lock info for "${this.tabTitle}":`, lockInfo);
                 if (lockInfo) {
                     this.lockedByOther = lockInfo.user !== user;
@@ -220,6 +270,23 @@ export const InventoryTableComponent = {
                     console.log(`[InventoryTable.checkLockStatus] Lock owner: "${lockInfo.user}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
                     if (this.lockedByOther) {
                         console.log(`[InventoryTable] Category locked by ${lockInfo.user}`);
+                    } else {
+                        // Lock is held by current user - check for stale lock
+                        // Stale lock = lock held by me but data is not dirty
+                        this.isLocked = true;
+                        console.log(`[InventoryTable.checkLockStatus] Lock held by current user, checking if stale. isDirty=${this.isDirty}`);
+                        if (!this.isDirty) {
+                            console.log(`[InventoryTable] Detected stale lock - removing lock held by ${user}`);
+                            const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
+                            if (unlocked) {
+                                this.isLocked = false;
+                                console.log(`[InventoryTable] Stale lock removed successfully`);
+                            } else {
+                                console.warn(`[InventoryTable] Failed to remove stale lock`);
+                            }
+                        } else {
+                            console.log(`[InventoryTable] Lock is NOT stale - data is dirty, keeping lock`);
+                        }
                     }
                 } else {
                     console.log(`[InventoryTable.checkLockStatus] No lock found for "${this.tabTitle}"`);

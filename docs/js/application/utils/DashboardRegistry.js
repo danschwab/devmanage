@@ -272,9 +272,9 @@ export const DashboardRegistry = {
             // Save current data to user storage
             const dataToSave = JSON.parse(JSON.stringify(this.store.data));
             await Requests.storeUserData(
+                dataToSave,
                 authState.user.email, 
-                'dashboard_containers', 
-                dataToSave
+                'dashboard_containers'
             );
             
             // Update originalData to match current data (split-data pattern)

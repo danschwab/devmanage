@@ -14,7 +14,6 @@ export const PacklistTable = {
         return {
             packlistTableStore: null,
             isPrinting: false,
-            error: null,
             databaseItemHeaders: null,
             hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty'],
             NavigationRegistry, // Make available in template
@@ -100,6 +99,9 @@ export const PacklistTable = {
         itemHeadersStart() {
             return this.itemHeaders.filter(k => !this.hiddenColumns.includes(k))[0];
         },
+        error() {
+            return this.packlistTableStore ? this.packlistTableStore.error : null;
+        },
         isLoading() {
             return this.packlistTableStore ? this.packlistTableStore.isLoading : false;
         },
@@ -160,6 +162,38 @@ export const PacklistTable = {
                 this.handleLockState(newValue);
             } else {
                 console.log(`[PacklistTable.isDirty watcher] NOT calling handleLockState - locked by ${this.lockOwner}`);
+            }
+        },
+        
+        // Watch for save errors to detect lock conflicts
+        'packlistTableStore.error'(newError) {
+            if (!newError) return;
+            
+            // Check if this is a lock error
+            const lockErrorPattern = /locked by (.+)$/i;
+            const match = newError.match(lockErrorPattern);
+            
+            if (match) {
+                const lockOwner = match[1];
+                console.log(`[PacklistTable] Detected lock error during save - locked by ${lockOwner}`);
+                
+                // Update lock state
+                this.lockedByOther = true;
+                this.lockOwner = lockOwner;
+                this.isLocked = false; // We don't own the lock
+                
+                // Exit edit mode immediately
+                if (this.editMode) {
+                    console.log(`[PacklistTable] Exiting edit mode due to lock conflict`);
+                    const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                        'packlistTable',
+                        { tabName: this.tabName, mode: 'view' }
+                    );
+                    NavigationRegistry.navigateTo(viewPath, false);
+                }
+                
+                // Show alert to user
+                this.$modal.alert(`Cannot save: this pack list is locked by ${lockOwner}`, 'Locked');
             }
         }
     },
@@ -257,7 +291,6 @@ export const PacklistTable = {
                 [this.tabName],
                 analysisConfig // Add analysis configuration
             );
-            this.error = this.packlistTableStore.error;
             
             // Load database headers
             this.loadItemHeaders();
@@ -286,8 +319,26 @@ export const PacklistTable = {
                 return;
             }
             
+            // CRITICAL: Wait for store to finish initial load before checking for stale locks
+            // This ensures isDirty is accurate when we check it
+            if (this.packlistTableStore && this.packlistTableStore.isLoading) {
+                console.log('[PacklistTable.checkLockStatus] Waiting for store to finish loading...');
+                // Wait for loading to complete by watching isLoading
+                await new Promise(resolve => {
+                    const unwatch = this.$watch('packlistTableStore.isLoading', (newValue) => {
+                        if (!newValue) {
+                            unwatch();
+                            resolve();
+                        }
+                    });
+                });
+                console.log('[PacklistTable.checkLockStatus] Store loading complete, isDirty:', this.isDirty);
+            }
+            
             try {
-                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                // Don't pass currentUser parameter - we need to see ALL locks including our own
+                // to detect stale locks held by current user
+                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
                 console.log(`[PacklistTable.checkLockStatus] Lock info for "${this.tabName}":`, lockInfo);
                 if (lockInfo) {
                     this.lockedByOther = lockInfo.user !== user;
@@ -296,6 +347,23 @@ export const PacklistTable = {
                     console.log(`[PacklistTable.checkLockStatus] Lock owner: "${lockInfo.user}", current user: "${user}", lockedByOther: ${this.lockedByOther}`);
                     if (this.lockedByOther) {
                         console.log(`[PacklistTable] Sheet locked by ${lockInfo.user}`);
+                    } else {
+                        // Lock is held by current user - check for stale lock
+                        // Stale lock = lock held by me but data is not dirty
+                        this.isLocked = true;
+                        console.log(`[PacklistTable.checkLockStatus] Lock held by current user, checking if stale. isDirty=${this.isDirty}`);
+                        if (!this.isDirty) {
+                            console.log(`[PacklistTable] Detected stale lock - removing lock held by ${user}`);
+                            const unlocked = await Requests.unlockSheet('PACK_LISTS', this.tabName, user);
+                            if (unlocked) {
+                                this.isLocked = false;
+                                console.log(`[PacklistTable] Stale lock removed successfully`);
+                            } else {
+                                console.warn(`[PacklistTable] Failed to remove stale lock`);
+                            }
+                        } else {
+                            console.log(`[PacklistTable] Lock is NOT stale - data is dirty, keeping lock`);
+                        }
                     }
                 } else {
                     console.log(`[PacklistTable.checkLockStatus] No lock found for "${this.tabName}"`);
@@ -363,7 +431,7 @@ export const PacklistTable = {
                             this.lockedByOther = true;
                             this.lockOwner = lockInfo.user;
                             console.warn(`[PacklistTable] Sheet locked by ${lockInfo.user}`);
-                            this.error = `This pack list is being edited by ${lockInfo.user}`;
+                            // Error will be displayed via the store's error property
                         }
                     }
                 } else if (!isDirty && this.isLocked) {

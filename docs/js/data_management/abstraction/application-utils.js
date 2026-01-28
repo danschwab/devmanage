@@ -48,6 +48,14 @@ class applicationUtils_uncached {
         const allTabs = await Database.getTabs('CACHE');
         let tab = allTabs.find(t => t.title === tabName);
         if (!tab) {
+            // Don't create tab if data is null or empty (empty array/object)
+            if (data === null || 
+                (Array.isArray(data) && data.length === 0) || 
+                (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0)) {
+                console.log('Skipping tab creation for empty data, ID:', id);
+                return;
+            }
+            
             await Database.createTab('CACHE', null, tabName); // create blank tab, no template
             // Initialize the tab with headers and a single data row as a 2D array
             return await Database.setData(
