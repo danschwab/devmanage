@@ -721,9 +721,9 @@ export class FakeGoogleSheetsService {
                 ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ],
             'Locks': [
-                ['Users', 'PACK_LISTS:ATSC 2025 NAB', 'INVENTORY:CABINETS'], // Row 0: Headers with lock keys
-                ['locked.user@example.com', '2026-01-19T10:30:00.000Z', '2026-01-19T10:30:00.000Z'], // Row 1+: User rows with timestamps
-                ['another.user@example.com', '0', '0'] // Row 2: Another user with no locks
+                ['Lock Key', 'locked.user@example.com', 'another.user@example.com'], // Row 0: Headers with users
+                ['PACK_LISTS:ATSC 2025 NAB', '2026-01-19T10:30:00.000Z', '0'], // Row 1+: Lock key rows with timestamps
+                ['INVENTORY:CABINETS', '2026-01-19T10:30:00.000Z', '0'] // Row 2: Another lock key
             ]
         }
     };
