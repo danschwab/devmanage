@@ -304,6 +304,7 @@ export const InventoryTableComponent = {
                 try {
                     const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
                     if (lockInfo) {
+                        // Category is locked by another user - block the edit
                         console.warn(`[InventoryTable] Edit blocked - category locked by ${lockInfo.user}`);
                         
                         // Update lock state immediately to disable editing
@@ -312,6 +313,28 @@ export const InventoryTableComponent = {
                         
                         this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
                         return;
+                    }
+                    
+                    // No conflicting lock - acquire lock if we don't already have one
+                    if (!this.isLocked) {
+                        console.log(`[InventoryTable] Acquiring lock on first edit...`);
+                        const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
+                        if (lockAcquired) {
+                            this.isLocked = true;
+                            this.lockedByOther = false;
+                            this.lockOwner = user;
+                            console.log(`[InventoryTable] Lock acquired successfully`);
+                        } else {
+                            // Failed to acquire lock - check again why
+                            const recheckLock = await Requests.getInventoryLock(this.tabTitle, user);
+                            if (recheckLock) {
+                                console.warn(`[InventoryTable] Lock acquisition failed - now locked by ${recheckLock.user}`);
+                                this.lockedByOther = true;
+                                this.lockOwner = recheckLock.user;
+                                this.$modal.alert(`Cannot edit: this category is locked by ${recheckLock.user}`, 'Locked');
+                                return;
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error('[InventoryTable] Error checking lock on edit:', error);

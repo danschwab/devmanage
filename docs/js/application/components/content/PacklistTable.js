@@ -301,6 +301,20 @@ export const PacklistTable = {
                 console.error('[PacklistTable] Failed to check lock status:', error);
             } finally {
                 this.lockCheckComplete = true;
+                
+                // After lock check completes, check if we need to enter edit mode for unsaved changes
+                // This handles the case where isDirty was already true when component mounted
+                this.$nextTick(() => {
+                    if (this.isDirty && !this.editMode && this.tabName && !this.lockedByOther) {
+                        console.log(`[PacklistTable] Lock check complete - entering edit mode for unsaved changes`);
+                        const editPath = NavigationRegistry.buildPathWithCurrentParams(
+                            `packlist/${this.tabName}`,
+                            this.appContext?.currentPath,
+                            { edit: true }
+                        );
+                        this.$emit('navigate-to-path', editPath);
+                    }
+                });
             }
         },
         
@@ -376,6 +390,7 @@ export const PacklistTable = {
                 try {
                     const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
                     if (lockInfo) {
+                        // Sheet is locked by another user - block the edit
                         console.warn(`[PacklistTable] Edit blocked - sheet locked by ${lockInfo.user}`);
                         
                         // Update lock state immediately
@@ -394,6 +409,35 @@ export const PacklistTable = {
                         
                         this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo.user}`, 'Locked');
                         return;
+                    }
+                    
+                    // No conflicting lock - acquire lock if we don't already have one
+                    if (!this.isLocked) {
+                        console.log(`[PacklistTable] Acquiring lock on first edit...`);
+                        const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
+                        if (lockAcquired) {
+                            this.isLocked = true;
+                            this.lockedByOther = false;
+                            this.lockOwner = user;
+                            console.log(`[PacklistTable] Lock acquired successfully`);
+                        } else {
+                            // Failed to acquire lock - check again why
+                            const recheckLock = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                            if (recheckLock) {
+                                console.warn(`[PacklistTable] Lock acquisition failed - now locked by ${recheckLock.user}`);
+                                this.lockedByOther = true;
+                                this.lockOwner = recheckLock.user;
+                                this.$modal.alert(`Cannot edit: this pack list is locked by ${recheckLock.user}`, 'Locked');
+                                return;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('[PacklistTable] Error checking lock on edit:', error);
+                }
+            }
+            
+            if (type === 'main') {
                     }
                 } catch (error) {
                     console.error('[PacklistTable] Error checking lock on edit:', error);
