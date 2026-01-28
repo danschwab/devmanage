@@ -186,8 +186,9 @@ export const PacklistTable = {
                 if (this.editMode) {
                     console.log(`[PacklistTable] Exiting edit mode due to lock conflict`);
                     const viewPath = NavigationRegistry.buildPathWithCurrentParams(
-                        'packlistTable',
-                        { tabName: this.tabName, mode: 'view' }
+                        `packlist/${this.tabName}`,
+                        this.appContext?.currentPath,
+                        { edit: false }
                     );
                     NavigationRegistry.navigateTo(viewPath, false);
                 }

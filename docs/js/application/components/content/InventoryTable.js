@@ -222,8 +222,9 @@ export const InventoryTableComponent = {
                 if (this.editMode) {
                     console.log(`[InventoryTable] Exiting edit mode due to lock conflict`);
                     const viewPath = NavigationRegistry.buildPathWithCurrentParams(
-                        'inventoryTable',
-                        { mode: 'view' }
+                        this.containerPath,
+                        this.appContext?.currentPath,
+                        { edit: false }
                     );
                     NavigationRegistry.navigateTo(viewPath, false);
                 }
