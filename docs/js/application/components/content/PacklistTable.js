@@ -377,9 +377,22 @@ export const PacklistTable = {
                     const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
                     if (lockInfo) {
                         console.warn(`[PacklistTable] Edit blocked - sheet locked by ${lockInfo.user}`);
+                        
+                        // Update lock state immediately
+                        this.lockedByOther = true;
+                        this.lockOwner = lockInfo.user;
+                        
+                        // Navigate out of edit mode
+                        if (this.editMode) {
+                            const currentParams = NavigationRegistry.getParametersForContainer(
+                                `packlist/${this.tabName}`,
+                                this.appContext?.currentPath
+                            );
+                            const { edit, ...paramsWithoutEdit } = currentParams;
+                            this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
+                        }
+                        
                         this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo.user}`, 'Locked');
-                        // Refresh lock state
-                        await this.checkLockStatus();
                         return;
                     }
                 } catch (error) {

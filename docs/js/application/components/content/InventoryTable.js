@@ -305,9 +305,12 @@ export const InventoryTableComponent = {
                     const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
                     if (lockInfo) {
                         console.warn(`[InventoryTable] Edit blocked - category locked by ${lockInfo.user}`);
+                        
+                        // Update lock state immediately to disable editing
+                        this.lockedByOther = true;
+                        this.lockOwner = lockInfo.user;
+                        
                         this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
-                        // Refresh lock state
-                        await this.checkLockStatus();
                         return;
                     }
                 } catch (error) {
