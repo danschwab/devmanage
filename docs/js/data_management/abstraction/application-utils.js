@@ -321,9 +321,7 @@ class applicationUtils_uncached {
             // Invalidate getSheetLock cache so UI components see the lock is gone
             // Must invalidate all possible argument combinations since cache includes optional currentUser
             invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, user] },
+                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab], prefixMatch: true },
                 { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
             
@@ -663,10 +661,10 @@ class applicationUtils_uncached {
                 return { users: [], lockKeys: [], locks: [] };
             }
             
-            // First row contains headers: ["Lock Key", "user1@example.com", "user2@example.com", ...]
+            // First row contains headers: ["Database", "user1@example.com", "user2@example.com", ...]
             const headers = rawData[0] || [];
             const lockKeys = [];
-            const users = headers.slice(1); // Skip "Lock Key" column
+            const users = headers.slice(1); // Skip "Database" column
             const locks = [];
             
             // Process lock key rows (starting from row 2, index 1)

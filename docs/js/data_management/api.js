@@ -385,9 +385,8 @@ class Requests_uncached {
      * @param {string} [currentUser] - Optional current user email to filter out their own locks
      * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
-    static async getPacklistLock(tabName, currentUser = null) {
-        console.log(`[Requests.getPacklistLock] Checking lock for packlist: "${tabName}", currentUser: "${currentUser}"`);
-        const result = await ApplicationUtils.getSheetLock('PACK_LISTS', tabName, currentUser);
+    static async getPacklistLock(deps, tabName, currentUser = null) {
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName, currentUser);
         console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
         return result;
     }
@@ -405,9 +404,8 @@ class Requests_uncached {
      * @param {string} [currentUser] - Optional current user email to filter out their own locks
      * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
-    static async getInventoryLock(tabName, currentUser = null) {
-        console.log(`[Requests.getInventoryLock] Checking lock for inventory category: "${tabName}", currentUser: "${currentUser}"`);
-        const result = await ApplicationUtils.getSheetLock('INVENTORY', tabName, currentUser);
+    static async getInventoryLock(deps, tabName, currentUser = null) {
+        const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName, currentUser);
         console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
         return result;
     }
@@ -850,8 +848,6 @@ class Requests_uncached {
  * 
  * PASS-THROUGH LOCK QUERY METHODS (not wrapped, delegate to ApplicationUtils):
  * - getSheetLock: Delegates to ApplicationUtils.getSheetLock (cached at abstraction layer)
- * - getPacklistLock: Delegates to ApplicationUtils.getSheetLock (cached at abstraction layer)
- * - getInventoryLock: Delegates to ApplicationUtils.getSheetLock (cached at abstraction layer)
  * 
  * These mutation methods are passed through without modification, preserving their original
  * signatures (no deps parameter) and allowing them to trigger invalidation independently.
@@ -859,7 +855,7 @@ class Requests_uncached {
 export const Requests = wrapMethods(
     Requests_uncached, 
     'api', 
-    ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock', 'getPacklistLock', 'getInventoryLock'], // Mutation methods and pass-through methods
+    ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock'], // Mutation methods and pass-through methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
 );
