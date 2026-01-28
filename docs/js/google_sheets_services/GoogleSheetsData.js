@@ -197,12 +197,9 @@ export class GoogleSheetsService {
             if (error.status === 400 && error.result?.error?.message?.includes('exceeds grid limits')) {
                 console.warn(`[setSheetData] Range exceeds grid limits, expanding sheet and retrying...`);
                 
-                // Calculate required dimensions from the values array
-                const requiredRows = values.length;
-                const requiredCols = Math.max(...values.map(row => row.length));
-                
-                // Expand the sheet
-                await this._ensureSheetSize(spreadsheetId, range, requiredRows, requiredCols);
+                // Let _ensureSheetSize parse the range to determine absolute position
+                // Don't pass explicit row/col counts - let it extract from the range spec
+                await this._ensureSheetSize(spreadsheetId, range, null, null);
                 
                 // Retry the write operation
                 await GoogleSheetsService.withExponentialBackoff(() =>
