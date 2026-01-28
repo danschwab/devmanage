@@ -182,6 +182,13 @@ export const InventoryTableComponent = {
     },
     watch: {
         isDirty(newValue) {
+            // CRITICAL: Don't handle dirty state until lock check is complete
+            // This prevents race condition where isDirty fires before we know lock status
+            if (!this.lockCheckComplete) {
+                console.log(`[InventoryTable] Skipping isDirty handling - lock check not complete yet`);
+                return;
+            }
+            
             // CRITICAL: Only handle lock state if not locked by another user
             // This prevents infinite loop when there are unsaved changes but sheet is locked
             if (!this.lockedByOther) {

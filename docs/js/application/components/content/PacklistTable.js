@@ -127,6 +127,13 @@ export const PacklistTable = {
     watch: {
         // Auto-switch to edit mode when data becomes dirty in view mode
         isDirty(newValue) {
+            // CRITICAL: Don't handle dirty state until lock check is complete
+            // This prevents race condition where isDirty fires before we know lock status
+            if (!this.lockCheckComplete) {
+                console.log(`[PacklistTable] Skipping isDirty handling - lock check not complete yet`);
+                return;
+            }
+            
             // CRITICAL: Check lock status FIRST before attempting edit mode
             // Lock check must precede unsaved-edits check to prevent infinite loop
             if (newValue && !this.editMode && this.tabName) {
