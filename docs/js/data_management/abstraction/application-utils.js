@@ -208,8 +208,13 @@ class applicationUtils_uncached {
             console.log(`[lockSheet] Got locks data:`, locksGrid);
             
             // Check if already locked by another user
+            // Must filter out "0" timestamps (released locks) and empty strings
             const existingLock = locksGrid.locks.find(lock => 
-                lock.spreadsheet === spreadsheet && lock.tab === tab && lock.user !== user && lock.timestamp
+                lock.spreadsheet === spreadsheet && 
+                lock.tab === tab && 
+                lock.user !== user && 
+                lock.timestamp && 
+                lock.timestamp !== '0'
             );
             
             if (existingLock) {
