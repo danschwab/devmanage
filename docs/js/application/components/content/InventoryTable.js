@@ -297,7 +297,24 @@ export const InventoryTableComponent = {
                 { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
             ], true);
         },
-        handleCellEdit(rowIdx, colIdx, value) {
+        async handleCellEdit(rowIdx, colIdx, value) {
+            // CRITICAL: Check lock status on every edit (cached for 20s to avoid rate limits)
+            const user = authState.user?.email;
+            if (user && this.tabTitle) {
+                try {
+                    const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
+                    if (lockInfo) {
+                        console.warn(`[InventoryTable] Edit blocked - category locked by ${lockInfo.user}`);
+                        this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
+                        // Refresh lock state
+                        await this.checkLockStatus();
+                        return;
+                    }
+                } catch (error) {
+                    console.error('[InventoryTable] Error checking lock on edit:', error);
+                }
+            }
+            
             const colKey = this.columns[colIdx]?.key;
             if (colKey && this.inventoryTableStore) {
                 this.inventoryTableStore.data[rowIdx][colKey] = value;

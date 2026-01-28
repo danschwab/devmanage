@@ -141,6 +141,14 @@ class inventoryUtils_uncached {
             resolvedTabName = foundTab;
         }
         
+        // CRITICAL: Check lock status before saving to prevent conflicts
+        const lockInfo = await ApplicationUtils.getSheetLock('INVENTORY', resolvedTabName, username);
+        if (lockInfo) {
+            const errorMsg = `Cannot save: inventory category is locked by ${lockInfo.user}`;
+            console.error(`[InventoryUtils.saveInventoryTabData] ${errorMsg}`);
+            throw new Error(errorMsg);
+        }
+        
         // Lock management is now handled by components via watchers on global locks store
         // Components acquire locks on edit mode entry and release on save completion
 

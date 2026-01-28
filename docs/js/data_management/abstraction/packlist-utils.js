@@ -276,6 +276,14 @@ class packListUtils_uncached {
     static async savePackList(tabName, mappedData, headers = null, username = null, options = {}) {
         console.log('[PackListUtils.savePackList] crates input:', mappedData, 'options:', options);
         
+        // CRITICAL: Check lock status before saving to prevent conflicts
+        const lockInfo = await ApplicationUtils.getSheetLock('PACK_LISTS', tabName, username);
+        if (lockInfo) {
+            const errorMsg = `Cannot save: pack list is locked by ${lockInfo.user}`;
+            console.error(`[PackListUtils.savePackList] ${errorMsg}`);
+            throw new Error(errorMsg);
+        }
+        
         // Lock management is now handled by components via watchers on global locks store
         // Components acquire locks on edit mode entry and release on save completion
 

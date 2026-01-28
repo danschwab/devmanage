@@ -369,7 +369,24 @@ export const PacklistTable = {
             }
         },
         
-        handleCellEdit(rowIdx, colIdx, value, type = 'main') {
+        async handleCellEdit(rowIdx, colIdx, value, type = 'main') {
+            // CRITICAL: Check lock status on every edit (cached for 20s to avoid rate limits)
+            const user = authState.user?.email;
+            if (user && this.tabName) {
+                try {
+                    const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                    if (lockInfo) {
+                        console.warn(`[PacklistTable] Edit blocked - sheet locked by ${lockInfo.user}`);
+                        this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo.user}`, 'Locked');
+                        // Refresh lock state
+                        await this.checkLockStatus();
+                        return;
+                    }
+                } catch (error) {
+                    console.error('[PacklistTable] Error checking lock on edit:', error);
+                }
+            }
+            
             if (type === 'main') {
                 const colKey = this.mainColumns[colIdx]?.key;
                 if (colKey && this.mainTableData[rowIdx]) {
