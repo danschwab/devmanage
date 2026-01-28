@@ -438,13 +438,6 @@ export const PacklistTable = {
             }
             
             if (type === 'main') {
-                    }
-                } catch (error) {
-                    console.error('[PacklistTable] Error checking lock on edit:', error);
-                }
-            }
-            
-            if (type === 'main') {
                 const colKey = this.mainColumns[colIdx]?.key;
                 if (colKey && this.mainTableData[rowIdx]) {
                     this.mainTableData[rowIdx][colKey] = value;
