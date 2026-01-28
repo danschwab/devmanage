@@ -126,7 +126,9 @@ export const PacklistTable = {
     },
     watch: {
         // Auto-switch to edit mode when data becomes dirty in view mode
-        isDirty(newValue) {
+        isDirty(newValue, oldValue) {
+            console.log(`[PacklistTable.isDirty watcher] isDirty changed from ${oldValue} to ${newValue}, lockCheckComplete=${this.lockCheckComplete}, isLocked=${this.isLocked}, lockedByOther=${this.lockedByOther}`);
+            
             // CRITICAL: Don't handle dirty state until lock check is complete
             // This prevents race condition where isDirty fires before we know lock status
             if (!this.lockCheckComplete) {
@@ -153,8 +155,11 @@ export const PacklistTable = {
             }
             
             // Handle locking based on dirty state (only if not locked by another user)
+            console.log(`[PacklistTable.isDirty watcher] Calling handleLockState with isDirty=${newValue}, lockedByOther=${this.lockedByOther}`);
             if (!this.lockedByOther) {
                 this.handleLockState(newValue);
+            } else {
+                console.log(`[PacklistTable.isDirty watcher] NOT calling handleLockState - locked by ${this.lockOwner}`);
             }
         }
     },
@@ -319,8 +324,13 @@ export const PacklistTable = {
         },
         
         async handleLockState(isDirty) {
+            console.log(`[PacklistTable.handleLockState] CALLED with isDirty=${isDirty}, isLocked=${this.isLocked}, lockingInProgress=${this.lockingInProgress}, lockedByOther=${this.lockedByOther}`);
+            
             // Prevent concurrent lock operations
-            if (this.lockingInProgress) return;
+            if (this.lockingInProgress) {
+                console.log(`[PacklistTable.handleLockState] RETURNING - lockingInProgress`);
+                return;
+            }
             
             // CRITICAL: Never attempt lock operations if locked by another user
             if (this.lockedByOther) {
@@ -329,12 +339,16 @@ export const PacklistTable = {
             }
             
             const user = authState.user?.email;
-            if (!user || !this.tabName) return;
+            if (!user || !this.tabName) {
+                console.log(`[PacklistTable.handleLockState] RETURNING - no user (${user}) or tabName (${this.tabName})`);
+                return;
+            }
             
             this.lockingInProgress = true;
             
             try {
                 if (isDirty && !this.isLocked) {
+                    console.log(`[PacklistTable.handleLockState] Branch: isDirty && !isLocked - attempting to acquire lock`);
                     // Table became dirty, acquire lock
                     const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
                     if (lockAcquired) {
@@ -353,6 +367,7 @@ export const PacklistTable = {
                         }
                     }
                 } else if (!isDirty && this.isLocked) {
+                    console.log(`[PacklistTable.handleLockState] Branch: !isDirty && isLocked - attempting to release lock`);
                     // Table became clean, release lock
                     console.log(`[PacklistTable.handleLockState] About to call unlockSheet for ${this.tabName}`);
                     const unlocked = await Requests.unlockSheet('PACK_LISTS', this.tabName, user);
@@ -362,7 +377,11 @@ export const PacklistTable = {
                         this.lockedByOther = false;
                         this.lockOwner = null;
                         console.log(`[PacklistTable] Unlocked PACK_LISTS/${this.tabName} for ${user}`);
+                    } else {
+                        console.warn(`[PacklistTable] unlockSheet returned false - lock NOT released`);
                     }
+                } else {
+                    console.log(`[PacklistTable.handleLockState] No action taken - isDirty=${isDirty}, isLocked=${this.isLocked}`);
                 }
             } catch (error) {
                 console.error('[PacklistTable] Lock operation failed:', error);

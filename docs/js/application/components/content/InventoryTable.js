@@ -181,7 +181,9 @@ export const InventoryTableComponent = {
         await this.checkLockStatus();
     },
     watch: {
-        isDirty(newValue) {
+        isDirty(newValue, oldValue) {
+            console.log(`[InventoryTable.isDirty watcher] isDirty changed from ${oldValue} to ${newValue}, lockCheckComplete=${this.lockCheckComplete}, isLocked=${this.isLocked}, lockedByOther=${this.lockedByOther}`);
+            
             // CRITICAL: Don't handle dirty state until lock check is complete
             // This prevents race condition where isDirty fires before we know lock status
             if (!this.lockCheckComplete) {
@@ -191,8 +193,11 @@ export const InventoryTableComponent = {
             
             // CRITICAL: Only handle lock state if not locked by another user
             // This prevents infinite loop when there are unsaved changes but sheet is locked
+            console.log(`[InventoryTable.isDirty watcher] Calling handleLockState with isDirty=${newValue}, lockedByOther=${this.lockedByOther}`);
             if (!this.lockedByOther) {
                 this.handleLockState(newValue);
+            } else {
+                console.log(`[InventoryTable.isDirty watcher] NOT calling handleLockState - locked by ${this.lockOwner}`);
             }
         }
     },
@@ -229,7 +234,12 @@ export const InventoryTableComponent = {
         },
         
         async handleLockState(isDirty) {
-            if (this.lockingInProgress) return;
+            console.log(`[InventoryTable.handleLockState] CALLED with isDirty=${isDirty}, isLocked=${this.isLocked}, lockingInProgress=${this.lockingInProgress}, lockedByOther=${this.lockedByOther}`);
+            
+            if (this.lockingInProgress) {
+                console.log(`[InventoryTable.handleLockState] RETURNING - lockingInProgress`);
+                return;
+            }
             
             // CRITICAL: Never attempt lock operations if locked by another user
             if (this.lockedByOther) {
@@ -238,12 +248,16 @@ export const InventoryTableComponent = {
             }
             
             const user = authState.user?.email;
-            if (!user || !this.tabTitle) return;
+            if (!user || !this.tabTitle) {
+                console.log(`[InventoryTable.handleLockState] RETURNING - no user (${user}) or tabTitle (${this.tabTitle})`);
+                return;
+            }
             
             this.lockingInProgress = true;
             
             try {
                 if (isDirty && !this.isLocked) {
+                    console.log(`[InventoryTable.handleLockState] Branch: isDirty && !isLocked - attempting to acquire lock`);
                     const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
                     if (lockAcquired) {
                         this.isLocked = true;
@@ -262,6 +276,7 @@ export const InventoryTableComponent = {
                         }
                     }
                 } else if (!isDirty && this.isLocked) {
+                    console.log(`[InventoryTable.handleLockState] Branch: !isDirty && isLocked - attempting to release lock`);
                     console.log(`[InventoryTable.handleLockState] About to call unlockSheet for ${this.tabTitle}`);
                     const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
                     console.log(`[InventoryTable.handleLockState] unlockSheet returned:`, unlocked);
@@ -270,7 +285,11 @@ export const InventoryTableComponent = {
                         this.lockedByOther = false;
                         this.lockOwner = null;
                         console.log(`[InventoryTable] Unlocked INVENTORY/${this.tabTitle} for ${user}`);
+                    } else {
+                        console.warn(`[InventoryTable] unlockSheet returned false - lock NOT released`);
                     }
+                } else {
+                    console.log(`[InventoryTable.handleLockState] No action taken - isDirty=${isDirty}, isLocked=${this.isLocked}`);
                 }
             } catch (error) {
                 console.error('[InventoryTable] Lock operation failed:', error);
