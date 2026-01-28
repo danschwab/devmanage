@@ -182,8 +182,11 @@ export const InventoryTableComponent = {
     },
     watch: {
         isDirty(newValue) {
-            // Handle locking based on dirty state
-            this.handleLockState(newValue);
+            // CRITICAL: Only handle lock state if not locked by another user
+            // This prevents infinite loop when there are unsaved changes but sheet is locked
+            if (!this.lockedByOther) {
+                this.handleLockState(newValue);
+            }
         }
     },
     methods: {
@@ -220,6 +223,12 @@ export const InventoryTableComponent = {
         
         async handleLockState(isDirty) {
             if (this.lockingInProgress) return;
+            
+            // CRITICAL: Never attempt lock operations if locked by another user
+            if (this.lockedByOther) {
+                console.log(`[InventoryTable] Skipping lock operation - category locked by ${this.lockOwner}`);
+                return;
+            }
             
             const user = authState.user?.email;
             if (!user || !this.tabTitle) return;

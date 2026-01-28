@@ -65,6 +65,11 @@ export class GoogleSheetsService {
             try {
                 return await fn();
             } catch (err) {
+                // Immediately throw grid limit errors - these need to be caught by expansion logic, not retried
+                if (err && err.status === 400 && err.result?.error?.message?.includes('exceeds grid limits')) {
+                    throw err;
+                }
+                
                 // If 401 Unauthorized, try to re-authenticate once and retry
                 if (
                     (err && (err.status === 401 || (err.result && err.result.error && err.result.error.code === 401)))

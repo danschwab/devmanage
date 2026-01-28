@@ -127,7 +127,15 @@ export const PacklistTable = {
     watch: {
         // Auto-switch to edit mode when data becomes dirty in view mode
         isDirty(newValue) {
+            // CRITICAL: Check lock status FIRST before attempting edit mode
+            // Lock check must precede unsaved-edits check to prevent infinite loop
             if (newValue && !this.editMode && this.tabName) {
+                // Don't enter edit mode if locked by another user
+                if (this.lockedByOther) {
+                    console.log(`[PacklistTable] Skipping edit mode - sheet locked by ${this.lockOwner}`);
+                    return;
+                }
+                
                 // Navigate to edit mode when data becomes dirty, preserving existing params
                 const editPath = NavigationRegistry.buildPathWithCurrentParams(
                     `packlist/${this.tabName}`,
@@ -137,8 +145,10 @@ export const PacklistTable = {
                 this.$emit('navigate-to-path', editPath);
             }
             
-            // Handle locking based on dirty state
-            this.handleLockState(newValue);
+            // Handle locking based on dirty state (only if not locked by another user)
+            if (!this.lockedByOther) {
+                this.handleLockState(newValue);
+            }
         }
     },
     async mounted() {
@@ -290,6 +300,12 @@ export const PacklistTable = {
         async handleLockState(isDirty) {
             // Prevent concurrent lock operations
             if (this.lockingInProgress) return;
+            
+            // CRITICAL: Never attempt lock operations if locked by another user
+            if (this.lockedByOther) {
+                console.log(`[PacklistTable] Skipping lock operation - sheet locked by ${this.lockOwner}`);
+                return;
+            }
             
             const user = authState.user?.email;
             if (!user || !this.tabName) return;

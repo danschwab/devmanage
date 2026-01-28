@@ -137,7 +137,13 @@ export class ModalManager {
     }
 
     error(message, title = 'Error') {
-        return this._create(title, ErrorComponent, { message });
+        return this._create(title, ConfirmComponent, { 
+            message, 
+            modalClass: 'red',
+            onConfirm: () => {},
+            confirmText: 'OK',
+            cancelText: null
+        });
     }
 
     custom(components, props = {}, title = '') {
