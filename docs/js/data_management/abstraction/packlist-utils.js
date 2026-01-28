@@ -358,15 +358,20 @@ class packListUtils_uncached {
         packlistMapping._orderedHeaders = allHeaders;
         
         // Flatten crates into row objects with ALL column properties
+        // IMPORTANT: Use lowercase 'edithistory' as property name to match Database layer expectations
         const rowObjects = [];
         cleanCrates.forEach(crate => {
             // Crate row: main columns filled, item columns empty
             const crateRow = {};
             headers.main.forEach(h => {
-                crateRow[h] = crate[h] !== undefined ? crate[h] : '';
+                if (h === 'EditHistory') {
+                    // Use lowercase 'edithistory' as property key (matches mapping and _addMetadataToRows)
+                    crateRow['edithistory'] = crate[h] !== undefined ? crate[h] : '';
+                } else {
+                    crateRow[h] = crate[h] !== undefined ? crate[h] : '';
+                }
             });
             headers.items.forEach(h => {
-                // For EditHistory, keep it empty in crate rows (will use main column EditHistory)
                 crateRow[h] = ''; // Item columns empty for crate rows
             });
             rowObjects.push(crateRow);
@@ -379,7 +384,8 @@ class packListUtils_uncached {
                         // For item rows, main columns are empty EXCEPT EditHistory
                         // which contains the edit history for this item row
                         if (h === 'EditHistory') {
-                            itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                            // Use lowercase 'edithistory' as property key (matches mapping and _addMetadataToRows)
+                            itemRow['edithistory'] = itemObj[h] !== undefined ? itemObj[h] : '';
                         } else {
                             itemRow[h] = '';
                         }
