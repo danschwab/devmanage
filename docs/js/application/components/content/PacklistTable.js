@@ -177,31 +177,43 @@ export const PacklistTable = {
                 const lockOwner = match[1];
                 console.log(`[PacklistTable] Detected lock error during save - locked by ${lockOwner}`);
                 
-                // Update lock state (lockedByOther watcher will handle navigation)
+                // Update lock state
                 this.lockedByOther = true;
                 this.lockOwner = lockOwner;
                 this.isLocked = false; // We don't own the lock
                 
+                // Exit edit mode immediately
+                if (this.editMode) {
+                    console.log(`[PacklistTable] Exiting edit mode due to lock conflict`);
+                    const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                        'packlistTable',
+                        { tabName: this.tabName, mode: 'view' }
+                    );
+                    NavigationRegistry.navigateTo(viewPath, false);
+                }
+                
                 // Show alert to user
                 this.$modal.alert(`Cannot save: this pack list is locked by ${lockOwner}`, 'Locked');
-            }
-        },
-        
-        // Watch for lock status changes to automatically exit edit mode
-        lockedByOther(newValue) {
-            if (newValue && this.editMode) {
-                console.log(`[PacklistTable] Lock detected - exiting edit mode (locked by ${this.lockOwner})`);
-                this.exitEditMode();
             }
         }
     },
     async mounted() {
-        // Check lock status immediately on mount (don't wait for store)
-        this.checkLockStatus();
-        
         // Initialize store if tabName is available
         if (this.tabName) {
             this.initializeStore();
+            // Check lock status when component mounts
+            await this.checkLockStatus();
+            
+            // If in edit mode but locked by another user, navigate to view mode
+            if (this.editMode && this.lockedByOther) {
+                console.log(`[PacklistTable] Exiting edit mode - sheet locked by ${this.lockOwner}`);
+                const currentParams = NavigationRegistry.getParametersForContainer(
+                    `packlist/${this.tabName}`,
+                    this.appContext?.currentPath
+                );
+                const { edit, ...paramsWithoutEdit } = currentParams;
+                this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
+            }
         }
 
         // Watch for tabName changes to handle direct URL navigation
@@ -209,6 +221,17 @@ export const PacklistTable = {
             if (newTabName && !this.packlistTableStore) {
                 this.initializeStore();
                 await this.checkLockStatus();
+                
+                // If in edit mode but locked by another user, navigate to view mode
+                if (this.editMode && this.lockedByOther) {
+                    console.log(`[PacklistTable] Exiting edit mode - sheet locked by ${this.lockOwner}`);
+                    const currentParams = NavigationRegistry.getParametersForContainer(
+                        `packlist/${newTabName}`,
+                        this.appContext?.currentPath
+                    );
+                    const { edit, ...paramsWithoutEdit } = currentParams;
+                    this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${newTabName}`, paramsWithoutEdit));
+                }
             }
         }, { immediate: true });
     },
@@ -285,45 +308,6 @@ export const PacklistTable = {
             invalidateCache([
                 { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
             ], true);
-        },
-        
-        exitEditMode() {
-            if (!this.tabName) return;
-            const currentParams = NavigationRegistry.getParametersForContainer(
-                `packlist/${this.tabName}`,
-                this.appContext?.currentPath
-            );
-            const { edit, ...paramsWithoutEdit } = currentParams;
-            this.$emit('navigate-to-path', 
-                NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit)
-            );
-        },
-        
-        async checkAndAcquireLock() {
-            const user = authState.user?.email;
-            if (!user || !this.tabName) return { success: false, reason: 'no-user' };
-            
-            // Check for conflicts (no user filter - see all locks)
-            const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
-            if (lockInfo && lockInfo.user !== user) {
-                this.lockedByOther = true;
-                this.lockOwner = lockInfo.user;
-                return { success: false, reason: 'locked', owner: lockInfo.user };
-            }
-            
-            // Acquire if needed
-            if (!this.isLocked) {
-                const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
-                if (lockAcquired) {
-                    this.isLocked = true;
-                    this.lockedByOther = false;
-                    this.lockOwner = user;
-                    return { success: true, reason: 'acquired' };
-                }
-                return { success: false, reason: 'acquisition-failed' };
-            }
-            
-            return { success: true, reason: 'already-locked' };
         },
         
         async checkLockStatus() {
@@ -487,13 +471,57 @@ export const PacklistTable = {
         },
         
         async handleCellEdit(rowIdx, colIdx, value, type = 'main') {
-            // Check lock and acquire if needed (cached for 20s to avoid rate limits)
-            const lockResult = await this.checkAndAcquireLock();
-            if (!lockResult.success) {
-                if (lockResult.reason === 'locked') {
-                    this.$modal.alert(`Cannot edit: this pack list is locked by ${lockResult.owner}`, 'Locked');
+            // CRITICAL: Check lock status on every edit (cached for 20s to avoid rate limits)
+            const user = authState.user?.email;
+            if (user && this.tabName) {
+                try {
+                    const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                    if (lockInfo) {
+                        // Sheet is locked by another user - block the edit
+                        console.warn(`[PacklistTable] Edit blocked - sheet locked by ${lockInfo.user}`);
+                        
+                        // Update lock state immediately
+                        this.lockedByOther = true;
+                        this.lockOwner = lockInfo.user;
+                        
+                        // Navigate out of edit mode
+                        if (this.editMode) {
+                            const currentParams = NavigationRegistry.getParametersForContainer(
+                                `packlist/${this.tabName}`,
+                                this.appContext?.currentPath
+                            );
+                            const { edit, ...paramsWithoutEdit } = currentParams;
+                            this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
+                        }
+                        
+                        this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo.user}`, 'Locked');
+                        return;
+                    }
+                    
+                    // No conflicting lock - acquire lock if we don't already have one
+                    if (!this.isLocked) {
+                        console.log(`[PacklistTable] Acquiring lock on first edit...`);
+                        const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
+                        if (lockAcquired) {
+                            this.isLocked = true;
+                            this.lockedByOther = false;
+                            this.lockOwner = user;
+                            console.log(`[PacklistTable] Lock acquired successfully`);
+                        } else {
+                            // Failed to acquire lock - check again why
+                            const recheckLock = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
+                            if (recheckLock) {
+                                console.warn(`[PacklistTable] Lock acquisition failed - now locked by ${recheckLock.user}`);
+                                this.lockedByOther = true;
+                                this.lockOwner = recheckLock.user;
+                                this.$modal.alert(`Cannot edit: this pack list is locked by ${recheckLock.user}`, 'Locked');
+                                return;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('[PacklistTable] Error checking lock on edit:', error);
                 }
-                return;
             }
             
             if (type === 'main') {

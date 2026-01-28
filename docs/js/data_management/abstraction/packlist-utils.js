@@ -167,7 +167,8 @@ class packListUtils_uncached {
         const mainHeaders = headerRow.slice(0, itemStartIndex);
         const itemHeaders = headerRow.slice(itemStartIndex);
         
-        // Check for EditHistory column in both main and item headers
+        // Check for EditHistory column in main headers (new format: single column)
+        // Also check item headers for backwards compatibility (old format: two columns)
         const mainMetadataIndex = mainHeaders.indexOf('EditHistory');
         const itemMetadataIndex = itemHeaders.indexOf('EditHistory');
         
@@ -217,9 +218,13 @@ class packListUtils_uncached {
                     const originalIdx = itemHeaders.indexOf(label);
                     itemObj[label] = originalIdx < crateContentsArr.length && crateContentsArr[originalIdx] !== undefined ? crateContentsArr[originalIdx] : '';
                 });
-                // Extract EditHistory if column exists
-                if (itemMetadataIndex !== -1 && itemMetadataIndex < crateContentsArr.length) {
-                    itemObj.EditHistory = crateContentsArr[itemMetadataIndex] || '';
+                // Extract EditHistory - prefer item column (old format) if exists, otherwise use main column (new format)
+                if (itemMetadataIndex !== -1 && itemMetadataIndex < crateContentsArr.length && crateContentsArr[itemMetadataIndex]) {
+                    // Old format: EditHistory in item section
+                    itemObj.EditHistory = crateContentsArr[itemMetadataIndex];
+                } else if (mainMetadataIndex !== -1 && mainMetadataIndex < crateInfoArr.length) {
+                    // New format: EditHistory in main section
+                    itemObj.EditHistory = crateInfoArr[mainMetadataIndex] || '';
                 }
                 currentCrate.Items.push(itemObj);
             }
@@ -297,16 +302,16 @@ class packListUtils_uncached {
         let mainHeaders = headerRow.slice(0, itemColumnsStart);
         let itemHeaders = headerRow.slice(itemColumnsStart);
         
-        // Always ensure EditHistory columns exist (add if not present)
-        // This enables edithistory tracking for packlists
-        if (!mainHeaders.includes('EditHistory')) {
-            mainHeaders = [...mainHeaders, 'EditHistory'];
-        }
-        if (!itemHeaders.includes('EditHistory')) {
-            itemHeaders = [...itemHeaders, 'EditHistory'];
-        }
+        // Remove any existing EditHistory from both sections to prevent duplication
+        mainHeaders = mainHeaders.filter(h => h !== 'EditHistory');
+        itemHeaders = itemHeaders.filter(h => h !== 'EditHistory');
+        
+        // Add a SINGLE EditHistory column at the end of the main section
+        // This enables edithistory tracking for all changes (both crate and item fields)
+        mainHeaders = [...mainHeaders, 'EditHistory'];
 
         // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
+        // Special handling for EditHistory: preserve from both crate and item objects
         const cleanCrates = Array.isArray(mappedData) ? mappedData.map(crate => {
             const cleanCrate = {};
             mainHeaders.forEach(h => {
@@ -318,6 +323,10 @@ class packListUtils_uncached {
                     itemHeaders.forEach(h => {
                         cleanItem[h] = itemObj[h] !== undefined ? itemObj[h] : '';
                     });
+                    // Preserve EditHistory from item object (will be written to main column in item rows)
+                    if (itemObj.EditHistory !== undefined) {
+                        cleanItem.EditHistory = itemObj.EditHistory;
+                    }
                     return cleanItem;
                 })
                 : [];
@@ -334,7 +343,7 @@ class packListUtils_uncached {
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
         // Create full mapping for all columns (enables automatic edithistory tracking)
-        // Combine main and item headers, ensuring EditHistory is mapped for history
+        // Use a single EditHistory column for tracking all changes (both crate and item fields)
         const allHeaders = [...headers.main, ...headers.items];
         const packlistMapping = {};
         allHeaders.forEach(header => {
@@ -357,16 +366,23 @@ class packListUtils_uncached {
                 crateRow[h] = crate[h] !== undefined ? crate[h] : '';
             });
             headers.items.forEach(h => {
+                // For EditHistory, keep it empty in crate rows (will use main column EditHistory)
                 crateRow[h] = ''; // Item columns empty for crate rows
             });
             rowObjects.push(crateRow);
             
-            // Item rows: main columns empty, item columns filled
+            // Item rows: main columns empty except EditHistory, item columns filled
             if (Array.isArray(crate.Items)) {
                 crate.Items.forEach(itemObj => {
                     const itemRow = {};
                     headers.main.forEach(h => {
-                        itemRow[h] = ''; // Main columns empty for item rows
+                        // For item rows, main columns are empty EXCEPT EditHistory
+                        // which contains the edit history for this item row
+                        if (h === 'EditHistory') {
+                            itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                        } else {
+                            itemRow[h] = '';
+                        }
                     });
                     headers.items.forEach(h => {
                         itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
