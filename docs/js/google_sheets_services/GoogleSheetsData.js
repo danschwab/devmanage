@@ -181,15 +181,43 @@ export class GoogleSheetsService {
         }
         // Setup range
         const range = `${tabName}`;
-        // Write new data
-        await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range,
-                valueInputOption: 'USER_ENTERED',
-                resource: { values }
-            })
-        );
+        
+        // Write new data with automatic grid expansion on error
+        try {
+            await GoogleSheetsService.withExponentialBackoff(() =>
+                gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values }
+                })
+            );
+        } catch (error) {
+            // Check if error is due to exceeding grid limits
+            if (error.status === 400 && error.result?.error?.message?.includes('exceeds grid limits')) {
+                console.warn(`[setSheetData] Range exceeds grid limits, expanding sheet and retrying...`);
+                
+                // Calculate required dimensions from the values array
+                const requiredRows = values.length;
+                const requiredCols = Math.max(...values.map(row => row.length));
+                
+                // Expand the sheet
+                await this._ensureSheetSize(spreadsheetId, range, requiredRows, requiredCols);
+                
+                // Retry the write operation
+                await GoogleSheetsService.withExponentialBackoff(() =>
+                    gapi.client.sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values }
+                    })
+                );
+            } else {
+                // Re-throw other errors
+                throw error;
+            }
+        }
         // Truncate any rows below the new data
         // Get current sheet row count
         const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -273,37 +301,84 @@ export class GoogleSheetsService {
     }
     
     /**
-     * Helper method to ensure a sheet has enough rows
+     * Helper method to ensure a sheet has enough rows and columns for a given range
      * @private
+     * @param {string} spreadsheetId
+     * @param {string} tabName - The tab name (can include range like "Locks!D1:D1")
+     * @param {number} [requiredRows] - Optional explicit row count requirement
+     * @param {number} [requiredCols] - Optional explicit column count requirement
      */
-    static async _ensureSheetSize(spreadsheetId, tabName, requiredRows) {
+    static async _ensureSheetSize(spreadsheetId, tabName, requiredRows = null, requiredCols = null) {
         if (typeof gapi === 'undefined' || !gapi.client?.sheets?.spreadsheets?.get) return;
+        
+        // Extract sheet name from range if provided (e.g., "Locks!D1:D1" -> "Locks")
+        const sheetName = tabName.includes('!') ? tabName.split('!')[0] : tabName;
+        const rangeSpec = tabName.includes('!') ? tabName.split('!')[1] : null;
+        
+        // Parse range to determine required rows/cols if not explicitly provided
+        if (rangeSpec && (requiredRows === null || requiredCols === null)) {
+            const match = rangeSpec.match(/([A-Z]+)(\d+)/);
+            if (match) {
+                const col = match[1];
+                const row = parseInt(match[2]);
+                
+                // Convert column letter to number (A=1, B=2, Z=26, AA=27, etc.)
+                let colNum = 0;
+                for (let i = 0; i < col.length; i++) {
+                    colNum = colNum * 26 + (col.charCodeAt(i) - 64);
+                }
+                
+                if (requiredRows === null) requiredRows = row;
+                if (requiredCols === null) requiredCols = colNum;
+            }
+        }
         
         const sheetInfo = await GoogleSheetsService.withExponentialBackoff(() =>
             gapi.client.sheets.spreadsheets.get({
                 spreadsheetId,
-                ranges: [tabName],
+                ranges: [sheetName],
                 includeGridData: false
             })
         );
         
-        const sheet = sheetInfo.result.sheets.find(s => s.properties.title === tabName);
+        const sheet = sheetInfo.result.sheets.find(s => s.properties.title === sheetName);
         if (!sheet) return;
         
-        const sheetRowCount = sheet.properties.gridProperties.rowCount;
-        if (requiredRows > sheetRowCount) {
+        const currentRows = sheet.properties.gridProperties.rowCount;
+        const currentCols = sheet.properties.gridProperties.columnCount;
+        
+        const requests = [];
+        
+        // Expand rows if needed
+        if (requiredRows && requiredRows > currentRows) {
+            console.log(`[_ensureSheetSize] Expanding rows from ${currentRows} to ${requiredRows}`);
+            requests.push({
+                appendDimension: {
+                    sheetId: sheet.properties.sheetId,
+                    dimension: 'ROWS',
+                    length: requiredRows - currentRows
+                }
+            });
+        }
+        
+        // Expand columns if needed
+        if (requiredCols && requiredCols > currentCols) {
+            console.log(`[_ensureSheetSize] Expanding columns from ${currentCols} to ${requiredCols}`);
+            requests.push({
+                appendDimension: {
+                    sheetId: sheet.properties.sheetId,
+                    dimension: 'COLUMNS',
+                    length: requiredCols - currentCols
+                }
+            });
+        }
+        
+        // Execute batch update if any requests were added
+        if (requests.length > 0) {
             await GoogleSheetsService.withExponentialBackoff(() =>
                 gapi.client.sheets.spreadsheets.batchUpdate({
                     spreadsheetId,
-                    resource: {
-                        requests: [{
-                            appendDimension: {
-                                sheetId: sheet.properties.sheetId,
-                                dimension: 'ROWS',
-                                length: requiredRows - sheetRowCount
-                            }
-                        }]
-                    }
+                    resource: { requests }
                 })
             );
         }
