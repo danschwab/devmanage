@@ -118,11 +118,11 @@ export const PacklistMenuComponent = {
                                 await this.refreshCallback();
                             }
                         } else {
-                            this.$modal.alert(`Failed to remove lock: ${result.message}`, 'Error');
+                            this.$modal.error(`Failed to remove lock: ${result.message}`, 'Error');
                         }
                     } catch (error) {
                         console.error('[PacklistMenu] Error removing lock:', error);
-                        this.$modal.alert(`Error removing lock: ${error.message}`, 'Error');
+                        this.$modal.error(`Error removing lock: ${error.message}`, 'Error');
                     } finally {
                         this.isRemovingLock = false;
                     }

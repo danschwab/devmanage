@@ -31,7 +31,7 @@ const ConfirmComponent = {
             <div v-html="formattedMessage"></div>
             <div style="margin-top: 1rem;" class="button-bar">
                 <button @click="confirm">{{ confirmText || 'Ok' }}</button>
-                <button @click="cancel">{{ cancelText || 'Cancel' }}</button>
+                <button v-if="cancelText !== null" @click="cancel">{{ cancelText || 'Cancel' }}</button>
             </div>
         </div>
     `

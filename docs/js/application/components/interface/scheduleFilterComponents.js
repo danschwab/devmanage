@@ -522,7 +522,7 @@ export const ScheduleAdvancedFilter = {
             }
             
             if (!authState.isAuthenticated || !authState.user?.email) {
-                this.$modal.alert('You must be logged in to update searches.', 'Error');
+                this.$modal.error('You must be logged in to update searches.', 'Error');
                 return;
             }
             
@@ -570,7 +570,7 @@ export const ScheduleAdvancedFilter = {
             }
             
             if (!authState.isAuthenticated || !authState.user?.email) {
-                this.$modal.alert('You must be logged in to delete filters.', 'Error');
+                this.$modal.error('You must be logged in to delete filters.', 'Error');
                 return;
             }
             
@@ -631,7 +631,7 @@ export const ScheduleAdvancedFilter = {
                         }
                         
                         if (!authState.isAuthenticated || !authState.user?.email) {
-                            this.$modal.alert('You must be logged in to save filters.', 'Error');
+                            this.$modal.error('You must be logged in to save filters.', 'Error');
                             return;
                         }
                         
