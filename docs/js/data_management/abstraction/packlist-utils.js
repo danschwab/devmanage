@@ -167,14 +167,14 @@ class packListUtils_uncached {
         const mainHeaders = headerRow.slice(0, itemStartIndex);
         const itemHeaders = headerRow.slice(itemStartIndex);
         
-        // Check for EditHistory column in main headers (new format: single column)
-        // Also check item headers for backwards compatibility (old format: two columns)
-        const mainMetadataIndex = mainHeaders.indexOf('EditHistory');
-        const itemMetadataIndex = itemHeaders.indexOf('EditHistory');
+        // Find metadata columns - they should be at the end of the header row
+        // Support both old format (MetaData/EditHistory in item section) and new format (at the end)
+        const metadataIndex = headerRow.indexOf('MetaData');
+        const editHistoryIndex = headerRow.indexOf('EditHistory');
         
-        // Filter out EditHistory from headers (will be attached to objects as property)
-        const filteredMainHeaders = mainHeaders.filter(h => h !== 'EditHistory');
-        const filteredItemHeaders = itemHeaders.filter(h => h !== 'EditHistory');
+        // Filter out MetaData and EditHistory from headers (will be attached to objects as properties)
+        const filteredMainHeaders = mainHeaders.filter(h => h !== 'MetaData' && h !== 'EditHistory');
+        const filteredItemHeaders = itemHeaders.filter(h => h !== 'MetaData' && h !== 'EditHistory');
         
         const crates = [];
         let currentCrate = null;
@@ -183,49 +183,56 @@ class packListUtils_uncached {
             const rowValues = sheetData[i] || [];
             const crateInfoArr = rowValues.slice(0, itemStartIndex);
             const crateContentsArr = rowValues.slice(itemStartIndex);
-            // If crate info row, start a new crate
-            // Check non-EditHistory columns only (EditHistory exists in all rows after save)
+            
+            // Check if this is a crate row (has data in main columns, excluding metadata)
             const hasCrateInfo = crateInfoArr.some((cell, idx) => {
-                return cell && idx !== mainMetadataIndex;
+                return cell && cell.toString().trim() !== '';
             });
+            
             if (hasCrateInfo) {
                 if (currentCrate) {
                     crates.push(currentCrate);
                 }
-                // Map crate info to object with header keys (always include all headers)
+                // Map crate info to object with header keys
                 const crateInfoObj = {};
                 filteredMainHeaders.forEach((label, idx) => {
                     const originalIdx = mainHeaders.indexOf(label);
                     crateInfoObj[label] = originalIdx < crateInfoArr.length && crateInfoArr[originalIdx] !== undefined ? crateInfoArr[originalIdx] : '';
                 });
-                // Extract EditHistory if column exists
-                if (mainMetadataIndex !== -1 && mainMetadataIndex < crateInfoArr.length) {
-                    crateInfoObj.EditHistory = crateInfoArr[mainMetadataIndex] || '';
+                
+                // Extract metadata from unified end columns
+                if (metadataIndex !== -1 && metadataIndex < rowValues.length) {
+                    crateInfoObj.MetaData = rowValues[metadataIndex] || '';
                 }
+                if (editHistoryIndex !== -1 && editHistoryIndex < rowValues.length) {
+                    crateInfoObj.EditHistory = rowValues[editHistoryIndex] || '';
+                }
+                
                 currentCrate = {
                     ...crateInfoObj,
                     Items: []
                 };
             }
-            // If item row, add to current crate's Items array
-            // Check non-EditHistory columns only (EditHistory exists in all rows after save)
+            // Check if this is an item row (has data in item columns, excluding metadata)
             const hasItemContent = crateContentsArr.some((cell, idx) => {
-                return cell && idx !== itemMetadataIndex;
+                return cell && cell.toString().trim() !== '';
             });
+            
             if (hasItemContent && currentCrate) {
                 const itemObj = {};
                 filteredItemHeaders.forEach((label, idx) => {
                     const originalIdx = itemHeaders.indexOf(label);
                     itemObj[label] = originalIdx < crateContentsArr.length && crateContentsArr[originalIdx] !== undefined ? crateContentsArr[originalIdx] : '';
                 });
-                // Extract EditHistory - prefer item column (old format) if exists, otherwise use main column (new format)
-                if (itemMetadataIndex !== -1 && itemMetadataIndex < crateContentsArr.length && crateContentsArr[itemMetadataIndex]) {
-                    // Old format: EditHistory in item section
-                    itemObj.EditHistory = crateContentsArr[itemMetadataIndex];
-                } else if (mainMetadataIndex !== -1 && mainMetadataIndex < crateInfoArr.length) {
-                    // New format: EditHistory in main section
-                    itemObj.EditHistory = crateInfoArr[mainMetadataIndex] || '';
+                
+                // Extract metadata from unified end columns
+                if (metadataIndex !== -1 && metadataIndex < rowValues.length) {
+                    itemObj.MetaData = rowValues[metadataIndex] || '';
                 }
+                if (editHistoryIndex !== -1 && editHistoryIndex < rowValues.length) {
+                    itemObj.EditHistory = rowValues[editHistoryIndex] || '';
+                }
+                
                 currentCrate.Items.push(itemObj);
             }
         }
@@ -302,31 +309,40 @@ class packListUtils_uncached {
         let mainHeaders = headerRow.slice(0, itemColumnsStart);
         let itemHeaders = headerRow.slice(itemColumnsStart);
         
-        // Remove any existing EditHistory from both sections to prevent duplication
-        mainHeaders = mainHeaders.filter(h => h !== 'EditHistory');
-        itemHeaders = itemHeaders.filter(h => h !== 'EditHistory');
+        // Remove MetaData and EditHistory from both sections - they go at the end
+        mainHeaders = mainHeaders.filter(h => h !== 'MetaData' && h !== 'EditHistory');
+        itemHeaders = itemHeaders.filter(h => h !== 'MetaData' && h !== 'EditHistory');
         
-        // Add a SINGLE EditHistory column at the end of the main section
-        // This enables edithistory tracking for all changes (both crate and item fields)
-        mainHeaders = [...mainHeaders, 'EditHistory'];
+        // Unified metadata columns at the END of all columns (after main + item)
+        // This way both crate rows and item rows use the same column positions for metadata
+        const metadataHeaders = ['MetaData', 'EditHistory'];
 
-        // Clean crates: only keep properties in mainHeaders, and for Items only keep itemHeaders
-        // Special handling for EditHistory: preserve from both crate and item objects
+        // Clean crates: only keep properties in mainHeaders/itemHeaders, plus metadata
+        // Metadata (MetaData, EditHistory) is preserved separately for both crate and item objects
         const cleanCrates = Array.isArray(mappedData) ? mappedData.map(crate => {
             const cleanCrate = {};
             mainHeaders.forEach(h => {
                 cleanCrate[h] = crate[h] !== undefined ? crate[h] : '';
             });
+            // Preserve metadata from crate object
+            metadataHeaders.forEach(h => {
+                if (crate[h] !== undefined) {
+                    cleanCrate[h] = crate[h];
+                }
+            });
+            
             cleanCrate.Items = Array.isArray(crate.Items)
                 ? crate.Items.map(itemObj => {
                     const cleanItem = {};
                     itemHeaders.forEach(h => {
                         cleanItem[h] = itemObj[h] !== undefined ? itemObj[h] : '';
                     });
-                    // Preserve EditHistory from item object (will be written to main column in item rows)
-                    if (itemObj.EditHistory !== undefined) {
-                        cleanItem.EditHistory = itemObj.EditHistory;
-                    }
+                    // Preserve metadata from item object
+                    metadataHeaders.forEach(h => {
+                        if (itemObj[h] !== undefined) {
+                            cleanItem[h] = itemObj[h];
+                        }
+                    });
                     return cleanItem;
                 })
                 : [];
@@ -337,18 +353,21 @@ class packListUtils_uncached {
         if (!headers) {
             headers = {
                 main: mainHeaders,
-                items: itemHeaders
+                items: itemHeaders,
+                metadata: metadataHeaders
             };
         }
         if (!headers) throw new Error('Cannot determine headers for saving packlist');
 
         // Create full mapping for all columns (enables automatic edithistory tracking)
-        // Use a single EditHistory column for tracking all changes (both crate and item fields)
-        const allHeaders = [...headers.main, ...headers.items];
+        // Order: main columns + item columns + metadata columns (MetaData, EditHistory)
+        const allHeaders = [...headers.main, ...headers.items, ...headers.metadata];
         const packlistMapping = {};
         allHeaders.forEach(header => {
             if (header === 'EditHistory') {
                 packlistMapping['edithistory'] = 'EditHistory'; // Map to lowercase for Database layer
+            } else if (header === 'MetaData') {
+                packlistMapping['metadata'] = 'MetaData'; // Map to lowercase for consistency
             } else {
                 packlistMapping[header] = header; // 1:1 mapping for all other columns
             }
@@ -358,40 +377,44 @@ class packListUtils_uncached {
         packlistMapping._orderedHeaders = allHeaders;
         
         // Flatten crates into row objects with ALL column properties
-        // IMPORTANT: Use lowercase 'edithistory' as property name to match Database layer expectations
+        // IMPORTANT: Use lowercase property names for metadata to match Database layer expectations
         const rowObjects = [];
         cleanCrates.forEach(crate => {
-            // Crate row: main columns filled, item columns empty
+            // Crate row: main columns filled, item columns empty, metadata at end
             const crateRow = {};
             headers.main.forEach(h => {
-                if (h === 'EditHistory') {
-                    // Use lowercase 'edithistory' as property key (matches mapping and _addMetadataToRows)
-                    crateRow['edithistory'] = crate[h] !== undefined ? crate[h] : '';
-                } else {
-                    crateRow[h] = crate[h] !== undefined ? crate[h] : '';
-                }
+                crateRow[h] = crate[h] !== undefined ? crate[h] : '';
             });
             headers.items.forEach(h => {
                 crateRow[h] = ''; // Item columns empty for crate rows
             });
+            // Add metadata columns at the end for this crate row
+            headers.metadata.forEach(h => {
+                if (h === 'EditHistory') {
+                    crateRow['edithistory'] = crate[h] !== undefined ? crate[h] : '';
+                } else if (h === 'MetaData') {
+                    crateRow['metadata'] = crate[h] !== undefined ? crate[h] : '';
+                }
+            });
             rowObjects.push(crateRow);
             
-            // Item rows: main columns empty except EditHistory, item columns filled
+            // Item rows: main columns empty, item columns filled, metadata at end
             if (Array.isArray(crate.Items)) {
                 crate.Items.forEach(itemObj => {
                     const itemRow = {};
                     headers.main.forEach(h => {
-                        // For item rows, main columns are empty EXCEPT EditHistory
-                        // which contains the edit history for this item row
-                        if (h === 'EditHistory') {
-                            // Use lowercase 'edithistory' as property key (matches mapping and _addMetadataToRows)
-                            itemRow['edithistory'] = itemObj[h] !== undefined ? itemObj[h] : '';
-                        } else {
-                            itemRow[h] = '';
-                        }
+                        itemRow[h] = ''; // Main columns empty for item rows
                     });
                     headers.items.forEach(h => {
                         itemRow[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                    });
+                    // Add metadata columns at the end for this item row
+                    headers.metadata.forEach(h => {
+                        if (h === 'EditHistory') {
+                            itemRow['edithistory'] = itemObj[h] !== undefined ? itemObj[h] : '';
+                        } else if (h === 'MetaData') {
+                            itemRow['metadata'] = itemObj[h] !== undefined ? itemObj[h] : '';
+                        }
                     });
                     rowObjects.push(itemRow);
                 });
