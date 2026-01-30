@@ -64,13 +64,14 @@ For design and project queue:
 
 **problems**
 
+- [ ] some group dragging breaks the group
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
-- [ ] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
-- [ ] make navigation modal not allow exit
+- [?] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
+- [x] make navigation auth modal logout on cancel
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
@@ -79,7 +80,7 @@ For design and project queue:
 - [x] container path update in packlistTable accidentally redirects the dashboard to the path as well. Fix this by making the edit endpoint not be a path location, but be a table mode instead.
 - [x] error causing early dashboard changes to be overwritten by an empty dashboard
 - [x] error causing card component to lose analytics details on reload after cache clear???
-- [t] ensure log out/in does not break things: the pin button currently breaks on reauth (was test data missing email on reauth...)
+- [x] ensure log out/in does not break things: the pin button currently breaks on reauth (was test data missing email on reauth...)
 - [x] error causing logout to not clean up all data and cause errors on reauth (username set to "User" instead of actual username)
 - [x] New or empty packlists have the wrong headers: fix hardcoded templating and row showing errors
 - [x] scrolling issue when navigating
@@ -122,7 +123,7 @@ Architecture Improvements
 - [x] extra spreadsheet EditHistory column
 - [x] save history: dateTime, userName, fields edited & old values
 - [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
-- [ ] log out needs to skip database operations if the token is already expired
+- [x] log out needs to skip database operations if the token is already expired
 - [ ] improve error handling and user notifications for failed auth and failed permissions
 - [x] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
 - [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
@@ -230,6 +231,3 @@ allow modals to receive the arrow keys and enter button
 create backup of packlists before saving packlist to ensure no data loss
 find missing show or client index info and allow user to add it
 user preferences (allow delay save)
-
-- view table details in modal or as dropdown default
-- default settings for primary page views
