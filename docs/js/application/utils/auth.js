@@ -239,10 +239,13 @@ export class Auth {
                 return new Promise((resolve) => {
                     const defaultMessage = `Your session has expired. Would you like to log in again to continue?`;
                     
-                    manager.confirm(
+                    let modalDismissed = false;
+                    
+                    const modal = manager.confirm(
                         message || defaultMessage,
                         async () => {
                             // User clicked "Log in"
+                            modalDismissed = true;
                             try {
                                 console.log(`[Auth] Attempting re-authentication for ${context}...`);
                                 const success = await Auth.login();
@@ -265,6 +268,7 @@ export class Auth {
                         },
                         () => {
                             // User clicked "Cancel" - trigger logout
+                            modalDismissed = true;
                             console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
                             authPromptShowing = false;
                             Auth.logout();
@@ -274,6 +278,20 @@ export class Auth {
                         'Log In',
                         'Cancel'
                     );
+                    
+                    // Watch for modal dismissal (X button or overlay click)
+                    const checkModalDismissed = setInterval(() => {
+                        if (!manager.modals.find(m => m.id === modal.id)) {
+                            clearInterval(checkModalDismissed);
+                            if (!modalDismissed) {
+                                // Modal was closed without clicking a button - trigger logout
+                                console.log(`[Auth] Auth modal dismissed without action, logging out`);
+                                authPromptShowing = false;
+                                Auth.logout();
+                                resolve(false);
+                            }
+                        }
+                    }, 100);
                 }).finally(() => {
                     // Ensure flag is always cleared, even if promise chain breaks
                     authPromptShowing = false;

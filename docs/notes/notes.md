@@ -71,7 +71,7 @@ For design and project queue:
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
 - [?] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
-- [x] make navigation auth modal logout on cancel
+- [ ] make navigation auth modal logout on cancel
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
