@@ -47,6 +47,7 @@ class PriorityQueueManager {
         // Processing state
         this.isProcessing = false;
         this.processingIntervalId = null;
+        this.isDisabled = false; // Permanently disabled during logout
         
         console.log(`[PriorityQueue] Initialized with ${this.cpuCount} CPU cores, max concurrent: ${this.maxConcurrent}`);
     }
@@ -60,6 +61,11 @@ class PriorityQueueManager {
      * @returns {Promise} - Resolves with function result or rejects with error
      */
     enqueue(apiFunction, args = [], priority = 5, metadata = {}) {
+        // If queue is disabled (during logout), silently reject
+        if (this.isDisabled) {
+            return Promise.resolve(null); // Return resolved promise with null instead of rejecting
+        }
+        
         // Validate priority
         priority = Math.max(0, Math.min(9, priority));
 
@@ -140,6 +146,26 @@ class PriorityQueueManager {
             this.processingIntervalId = null;
         }
         console.log('[PriorityQueue] Stopped queue processor');
+    }
+    
+    /**
+     * Disable the queue (for logout)
+     * Prevents new tasks from being enqueued
+     */
+    disable() {
+        this.isDisabled = true;
+        this.stopProcessing();
+        this.clearAll();
+        console.log('[PriorityQueue] Queue disabled');
+    }
+    
+    /**
+     * Re-enable the queue (for login)
+     * Allows tasks to be enqueued again
+     */
+    enable() {
+        this.isDisabled = false;
+        console.log('[PriorityQueue] Queue enabled');
     }
     
     /**

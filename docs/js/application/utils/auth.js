@@ -83,6 +83,10 @@ export class Auth {
             authState.user = { email, name: email?.split('@')[0] || 'User' };
             authState.isAuthenticated = true;
             
+            // Re-enable priority queue if it was disabled during logout
+            const { PriorityQueue } = await import('./priorityQueue.js');
+            PriorityQueue.enable();
+            
             return true;
         } catch (error) {
             console.error('Login failed:', error);
@@ -151,6 +155,10 @@ export class Auth {
             
             // Proceed with unconditional cleanup
             DashboardRegistry.cleanup();
+            
+            // Disable priority queue to prevent restart from cache invalidations
+            const { PriorityQueue } = await import('./priorityQueue.js');
+            PriorityQueue.disable();
             
             // Clear all reactive stores without attempting to save (already tried above)
             await clearAllReactiveStores({ skipSave: true });
