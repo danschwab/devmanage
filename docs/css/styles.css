@@ -227,8 +227,6 @@ div#app-content > div.empty-message {
 .container.dashboard-card .content {
     flex: 1;
     overflow: auto;
-    display: flex;
-    flex-direction: column;
 }
 
 .container.dashboard-card .container-header {
@@ -268,6 +266,7 @@ div#app-content > div.empty-message {
     flex-direction: column;
     gap: var(--padding-sm);
 }
+
 .content-header {
     display: flex;
     flex-wrap: wrap;
@@ -583,8 +582,7 @@ button.card {
     background-color: var(--color-gray-bg-hover);
     color: var(--color-text-inverted);
 }
-.modal-content {
-    margin: var(--padding-sm);
+.modal .content {
     max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
     overflow: auto;
 }
@@ -594,6 +592,12 @@ button.card {
 .page-menu {
     width: var(--page-width-small);
     height: calc(100vh - var(--padding-md) * 2);
+}
+.reading-menu {
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-sm);
+    padding: var(--padding-md);
 }
 
 

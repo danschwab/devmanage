@@ -36,7 +36,7 @@ async function getModalManager() {
 }
 
 // Track if auth prompt is already showing to prevent multiple modals
-let authPromptPending = null;
+let authPromptShowing = false;
 
 /**
  * Test mode email override (for development/testing only)
@@ -92,43 +92,101 @@ export class Auth {
             return false;
         } finally {
             authState.isLoading = false;
-            authPromptPending = null;
         }
     }
 
     static async logout() {
+        console.log('[Auth] Logout initiated');
         authState.isLoading = true;
         authState.error = null;
+        authPromptShowing = false; // Clear any auth prompts immediately
 
         try {
-            // Clean up dashboard registry (save any pending changes and reset)
-            await DashboardRegistry.saveNow();
+            // Try to save data if token is still valid, but don't block logout if it fails
+            const tokenValid = GoogleSheetsAuth.isAuthenticated();
+            
+            if (tokenValid) {
+                console.log('[Auth] Token still valid, attempting to save data before logout...');
+                const manager = await getModalManager();
+                
+                let saveCompleted = false;
+                let savingModal = null;
+                
+                // Set up a timer to show modal only if save takes longer than 3 seconds
+                const modalTimer = setTimeout(() => {
+                    if (!saveCompleted) {
+                        savingModal = manager.confirm(
+                            'Backing up your unsaved changes...',
+                            null, // No confirm button
+                            () => {
+                                // User clicked cancel - continue with logout
+                                console.log('[Auth] User canceled save during logout');
+                            },
+                            'Saving Changes',
+                            null, // No confirm button
+                            'Cancel and logout'
+                        );
+                    }
+                }, 3000);
+                
+                try {
+                    // Attempt to save
+                    await this._saveDataBeforeLogout();
+                    saveCompleted = true;
+                    console.log('[Auth] Data saved successfully before logout');
+                } catch (saveError) {
+                    console.warn('[Auth] Save failed during logout, continuing anyway:', saveError);
+                }
+                
+                // Clear the timer if save completed quickly
+                clearTimeout(modalTimer);
+                
+                // Remove the modal if it was shown
+                if (savingModal) {
+                    manager.removeModal(savingModal.id);
+                }
+            } else {
+                console.log('[Auth] Token expired, skipping save during logout');
+            }
+            
+            // Proceed with unconditional cleanup
             DashboardRegistry.cleanup();
-
-            // Clear all reactive stores with proper cleanup sequence:
-            // 1. Stop priority queue
-            // 2. Auto-save all dirty stores
-            // 3. Clear store registry
-            await clearAllReactiveStores();
-
+            
+            // Clear all reactive stores without attempting to save (already tried above)
+            await clearAllReactiveStores({ skipSave: true });
+            
             await GoogleSheetsAuth.logout();
             
-            // Flush everything in the reactive store
+            // Clear auth state
             authState.isAuthenticated = false;
             authState.user = null;
             authState.error = null;
             authState.isInitialized = false;
-            // Remove any other keys if added in the future
-            Object.keys(authState).forEach(key => {
-                if (key !== 'isLoading') authState[key] = null;
-            });
+            
+            console.log('[Auth] Logout completed successfully');
         } catch (error) {
-            console.error('Logout failed:', error);
-            authState.error = error.message;
+            console.error('[Auth] Logout error (non-fatal):', error);
+            // Don't set authState.error - we're logging out anyway
+            // Ensure auth state is cleared even if cleanup failed
+            authState.isAuthenticated = false;
+            authState.user = null;
+            authState.isInitialized = false;
         } finally {
             authState.isLoading = false;
-            authPromptPending = null;
         }
+    }
+
+    /**
+     * Internal method to save data before logout
+     * This method NEVER checks auth to avoid circular dependencies
+     */
+    static async _saveDataBeforeLogout() {
+        // Save dashboard
+        await DashboardRegistry.saveNow();
+        
+        // Import and call save function with skipAuthCheck flag
+        const { saveDirtyStoresToUserData } = await import('./reactiveStores.js');
+        await saveDirtyStoresToUserData({ skipAuthCheck: true });
     }
 
     static async checkAuth() {
@@ -158,19 +216,20 @@ export class Auth {
             const isAuthenticated = await this.checkAuth();
             
             if (!isAuthenticated && showModal) {
-                // If auth prompt is already pending, return that promise instead of showing another modal
-                if (authPromptPending) {
-                    console.log(`[Auth] Auth prompt already showing for another ${context}, reusing existing prompt`);
-                    return authPromptPending;
+                // If auth prompt is already showing, just return false immediately
+                if (authPromptShowing) {
+                    console.log(`[Auth] Auth prompt already showing, returning false`);
+                    return false;
                 }
                 
                 console.warn(`[Auth] Authentication check failed for ${context}`);
                 
+                authPromptShowing = true;
                 const manager = await getModalManager();
                 
-                // Create and store the pending promise to prevent duplicate modals
-                authPromptPending = new Promise((resolve) => {
-                    const defaultMessage = `Your session has expired. Would you like to maintain your current session? This will re-authenticate and continue your ${context}.`;
+                // Create promise that will be resolved by user action
+                return new Promise((resolve) => {
+                    const defaultMessage = `Your session has expired. Would you like to log in again to continue?`;
                     
                     manager.confirm(
                         message || defaultMessage,
@@ -178,50 +237,58 @@ export class Auth {
                             // User clicked "Log in"
                             try {
                                 console.log(`[Auth] Attempting re-authentication for ${context}...`);
-                                await Auth.login();
+                                const success = await Auth.login();
                                 
-                                if (authState.isAuthenticated) {
+                                if (success) {
                                     console.log(`[Auth] Re-authentication successful for ${context}`);
-                                    authPromptPending = null; // Clear pending state
                                     resolve(true);
                                 } else {
                                     console.error(`[Auth] Re-authentication failed for ${context}`);
                                     manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
-                                    authPromptPending = null; // Clear pending state
                                     resolve(false);
                                 }
                             } catch (error) {
                                 console.error(`[Auth] Re-authentication error for ${context}:`, error);
                                 manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
-                                authPromptPending = null; // Clear pending state
                                 resolve(false);
+                            } finally {
+                                authPromptShowing = false;
                             }
                         },
                         () => {
-                            // User cancelled
-                            console.log(`[Auth] User declined re-authentication for ${context}`);
+                            // User clicked "Cancel" - trigger logout
+                            console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
+                            authPromptShowing = false;
                             Auth.logout();
-                            authPromptPending = null; // Clear pending state
                             resolve(false);
                         },
                         'Session Expired',
                         'Log In',
                         'Cancel'
                     );
+                }).finally(() => {
+                    // Ensure flag is always cleared, even if promise chain breaks
+                    authPromptShowing = false;
                 });
-                
-                return authPromptPending;
             }
             
             return isAuthenticated;
         } catch (error) {
             console.error(`[Auth] Auth check error for ${context}:`, error);
+            authPromptShowing = false;
             return false;
         }
     }
 
     static get state() {
         return authState;
+    }
+
+    /**
+     * Check if auth prompt is currently showing
+     */
+    static get authPromptShowing() {
+        return authPromptShowing;
     }
 
     /**

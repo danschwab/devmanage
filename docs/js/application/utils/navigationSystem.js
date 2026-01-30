@@ -387,15 +387,23 @@ export const NavigationRegistry = {
         // Check if we're navigating to the same base path (just parameter change)
         const isSameBasePath = pathInfo.path === currentPathInfo.path;
         
-        // Check authentication before allowing navigation
-        const isAuthenticated = await Auth.checkAuthWithPrompt({
-            context: 'navigation',
-            message: 'Your session has expired. Would you like to re-authenticate to continue navigating?'
-        });
+        // Check authentication - if not authenticated, just show prompt but don't block
+        // Let data operations trigger reauth when they fail
+        const isAuthenticated = await Auth.checkAuth();
         
         if (!isAuthenticated) {
-            console.log('[NavigationRegistry] Navigation blocked - authentication failed');
-            return { action: 'navigation_blocked', reason: 'authentication_failed' };
+            console.log('[NavigationRegistry] Not authenticated, showing login prompt');
+            
+            // Show auth prompt (non-blocking - user can login when ready)
+            Auth.checkAuthWithPrompt({
+                context: 'navigation',
+                message: 'Please log in to view content.'
+            });
+            
+            // Still update path so user sees the auth prompt in context
+            appContext.currentPath = pathInfo.fullPath;
+            
+            return { action: 'navigation_blocked', reason: 'not_authenticated' };
         }
         
         console.log('[NavigationRegistry] Navigation to:', pathInfo.fullPath, isSameBasePath ? '(parameter change)' : '(new location)');

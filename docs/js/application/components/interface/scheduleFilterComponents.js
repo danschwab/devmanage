@@ -747,232 +747,228 @@ export const ScheduleAdvancedFilter = {
         }
     },
     template: html`
-        <div class="advanced-search-container">
-            <div class="content search-form-section">
-                <!-- Date Range Filters -->
-                <div class="cards-grid two">
-                    <!-- Date Range Card -->
-                    <div 
-                        :class="getDatePickerCardClasses('dateRange')"
-                        @click="dateFilterMode = 'dateRange'"
-                    >
-                        <div class="content-header">
-                            <h5>Filter By Date Range</h5>
-                            <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
-                                Active filter
-                            </small>
-                        </div>
-                        <div :class="dateFilterMode === 'dateRange' ? 'content' : 'content hide-when-narrow'">
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span>Start Date:</span>
-                                <div class="button-bar">
-                                    <select 
-                                        v-model="startDatePreset"
-                                        @change="setStartDatePreset(startDatePreset)"
-                                        @focus="dateFilterMode = 'dateRange'"
-                                    >
-                                        <option value="">Manual Entry</option>
-                                        <option value="today">Today</option>
-                                        <option value="monthAgo">A Month Ago</option>
-                                        <option value="yearAgo">A Year Ago</option>
-                                    </select>
-                                    <input 
-                                        type="date" 
-                                        v-model="startDate" 
-                                        placeholder="YYYY-MM-DD"
-                                        @focus="dateFilterMode = 'dateRange'; startDatePreset = ''"
-                                        :disabled="!!startDatePreset"
-                                        style="flex: 1;"
-                                    />
-                                </div>
-                            </label>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span>End Date:</span>
-                                <div class="button-bar">
-                                    <select 
-                                        v-model="endDatePreset"
-                                        @change="setEndDatePreset(endDatePreset)"
-                                        @focus="dateFilterMode = 'dateRange'"
-                                    >
-                                        <option value="">Manual Entry</option>
-                                        <option value="today">Today</option>
-                                        <option value="inMonth">In a Month</option>
-                                        <option value="inYear">In a Year</option>
-                                    </select>
-                                    <input 
-                                        type="date" 
-                                        v-model="endDate"
-                                        placeholder="YYYY-MM-DD"
-                                        @focus="dateFilterMode = 'dateRange'; endDatePreset = ''"
-                                        :disabled="!!endDatePreset"
-                                        style="flex: 1;"
-                                    />
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Overlap Show Card -->
-                    <div 
-                        :class="getDatePickerCardClasses('overlap')"
-                        @click="dateFilterMode = 'overlap'"
-                    >
-                        <div class="content-header">
-                            <h5>Filter By Show Overlap</h5>
-                            <small v-if="isLoadingShows" style="display: block; color: var(--color-text-light);">
-                                Loading shows...
-                            </small>
-                            <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
-                                Active filter
-                            </small>
-                        </div>
-                        <LoadingBarComponent
-                            key="date-range"
-                            :is-loading="isLoadingShows"
-                        />
-                        <div :class="dateFilterMode === 'overlap' ? 'content' : 'content hide-when-narrow'">
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span>Filter Shows by Year:</span>
-                                <select 
-                                    v-model="overlapShowYearFilter" 
-                                    @focus="dateFilterMode = 'overlap'"
-                                    @change="overlapShowIdentifier = ''"
-                                >
-                                    <option value="upcoming">Upcoming Shows</option>
-                                    <option 
-                                        v-for="year in availableYears" 
-                                        :key="year" 
-                                        :value="year"
-                                    >
-                                        {{ year }}
-                                    </option>
-                                </select>
-                            </label>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                <span>Overlaps with Show: ({{ filteredShows.length }} available)</span>
-                                <select 
-                                    v-model="overlapShowIdentifier" 
-                                    :disabled="isLoadingShows || filteredShows.length === 0"
-                                    @focus="dateFilterMode = 'overlap'"
-                                >
-                                    <option value="">
-                                        {{ isLoadingShows ? 'Loading...' : (filteredShows.length === 0 ? 'No shows available' : 'Select a show...') }}
-                                    </option>
-                                    <option 
-                                        v-for="show in filteredShows" 
-                                        :key="show.identifier" 
-                                        :value="show.identifier"
-                                    >
-                                        {{ show.display }}
-                                    </option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
+        <!-- Date Range Filters -->
+        <div class="cards-grid two">
+            <!-- Date Range Card -->
+            <div 
+                :class="getDatePickerCardClasses('dateRange')"
+                @click="dateFilterMode = 'dateRange'"
+            >
+                <div class="content-header">
+                    <h5>Filter By Date Range</h5>
+                    <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
+                        Active filter
+                    </small>
                 </div>
-
-                <!-- Text Search Filters -->
-                <div v-if="isLoadingColumns" class="card white">
-                    Loading columns...
-                </div>
-                
-                <slot v-else>
-                    <div 
-                        v-for="filter in textFilters" 
-                        :key="filter.id"
-                        :class="'card' + (filter.value ? ' green' : ' white') + (isApplyingFilters ? ' analyzing' : '')"
-                        style="display: flex; flex-wrap: wrap; gap: var(--padding-sm); align-items: center;"
-                    >
-                        <span>Column Filter:</span>
-                        <select 
-                            v-model="filter.column"
-                        >
-                            <option value="">Select column...</option>
-                            <option 
-                                v-for="col in availableColumns" 
-                                :key="col" 
-                                :value="col"
+                <div :class="dateFilterMode === 'dateRange' ? 'content' : 'content hide-when-narrow'">
+                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span>Start Date:</span>
+                        <div class="button-bar">
+                            <select 
+                                v-model="startDatePreset"
+                                @change="setStartDatePreset(startDatePreset)"
+                                @focus="dateFilterMode = 'dateRange'"
                             >
-                                {{ col }}
-                            </option>
-                        </select>
+                                <option value="">Manual Entry</option>
+                                <option value="today">Today</option>
+                                <option value="monthAgo">A Month Ago</option>
+                                <option value="yearAgo">A Year Ago</option>
+                            </select>
+                            <input 
+                                type="date" 
+                                v-model="startDate" 
+                                placeholder="YYYY-MM-DD"
+                                @focus="dateFilterMode = 'dateRange'; startDatePreset = ''"
+                                :disabled="!!startDatePreset"
+                                style="flex: 1;"
+                            />
+                        </div>
+                    </label>
                     
-                        <span :class="{ 'hide-when-narrow': !filter.column }">Search Text:</span>
-                        <input 
-                            type="text" 
-                            v-model="filter.value" 
-                            :placeholder="filter.column ? 'Search in ' + filter.column : 'Select a column first'"
-                            :disabled="!filter.column"
-                            :class="{ 'hide-when-narrow': !filter.column }"
-                            style="flex: 1;"
-                        />
-                        
-                        <button 
-                            @click="removeTextFilter(filter.id)"
-                            class="button-symbol red"
-                            :disabled="textFilters.length === 1"
-                            :title="textFilters.length === 1 ? 'At least one filter required' : 'Remove this filter'"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    
-                    <button 
-                        v-if="textFilters.length > 0 && textFilters.every(filter => filter.column && filter.value)"
-                        @click="addTextFilter" 
-                        class="card white"
-                        :disabled="isLoadingColumns"
-                    >
-                        Add Another Text Filter
-                    </button>
-                </slot>
-
-                <!-- Action Buttons -->
-                <div class="button-bar">
-                    <!-- Saved Search Dropdown -->
-                    <select 
-                        v-model="selectedSavedSearchIndex"
-                        @change="handleScheduleFilterSelection"
-                        style="flex: auto;"
-                    >
-                        <option :value="null">{{ selectedSavedSearchIndex === null ? 'New Filter' : 'Unsaved Filter' }}</option>
-                        <option 
-                            v-for="(search, index) in savedSearches" 
-                            :key="index" 
-                            :value="index"
-                        >
-                            {{ search.name }}
-                        </option>
-                    </select>
-                    
-                    <!-- Conditional buttons based on whether a saved search is selected -->
-                    <button 
-                        v-if="selectedSavedSearchIndex === null"
-                        @click="saveSearch" 
-                    >
-                        Save This Filter
-                    </button>
-                    <button 
-                        v-else
-                        @click="updateSavedSearch" 
-                    >
-                        Update Saved Filter
-                    </button>
-                    <button 
-                        :disabled="selectedSavedSearchIndex == null"
-                        @click="deleteSavedSearch"
-                    >
-                        Delete Saved Filter
-                    </button>
-                    
-                </div>
-                <div class="button-bar">
-                    <button @click="saveFiltersToURL" class="green">Apply Filters</button>
-                    <button @click="clearAllFilters" class="white">Clear Filters</button>
+                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span>End Date:</span>
+                        <div class="button-bar">
+                            <select 
+                                v-model="endDatePreset"
+                                @change="setEndDatePreset(endDatePreset)"
+                                @focus="dateFilterMode = 'dateRange'"
+                            >
+                                <option value="">Manual Entry</option>
+                                <option value="today">Today</option>
+                                <option value="inMonth">In a Month</option>
+                                <option value="inYear">In a Year</option>
+                            </select>
+                            <input 
+                                type="date" 
+                                v-model="endDate"
+                                placeholder="YYYY-MM-DD"
+                                @focus="dateFilterMode = 'dateRange'; endDatePreset = ''"
+                                :disabled="!!endDatePreset"
+                                style="flex: 1;"
+                            />
+                        </div>
+                    </label>
                 </div>
             </div>
+            
+            <!-- Overlap Show Card -->
+            <div 
+                :class="getDatePickerCardClasses('overlap')"
+                @click="dateFilterMode = 'overlap'"
+            >
+                <div class="content-header">
+                    <h5>Filter By Show Overlap</h5>
+                    <small v-if="isLoadingShows" style="display: block; color: var(--color-text-light);">
+                        Loading shows...
+                    </small>
+                    <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
+                        Active filter
+                    </small>
+                </div>
+                <LoadingBarComponent
+                    key="date-range"
+                    :is-loading="isLoadingShows"
+                />
+                <div :class="dateFilterMode === 'overlap' ? 'content' : 'content hide-when-narrow'">
+                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span>Filter Shows by Year:</span>
+                        <select 
+                            v-model="overlapShowYearFilter" 
+                            @focus="dateFilterMode = 'overlap'"
+                            @change="overlapShowIdentifier = ''"
+                        >
+                            <option value="upcoming">Upcoming Shows</option>
+                            <option 
+                                v-for="year in availableYears" 
+                                :key="year" 
+                                :value="year"
+                            >
+                                {{ year }}
+                            </option>
+                        </select>
+                    </label>
+                    
+                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span>Overlaps with Show: ({{ filteredShows.length }} available)</span>
+                        <select 
+                            v-model="overlapShowIdentifier" 
+                            :disabled="isLoadingShows || filteredShows.length === 0"
+                            @focus="dateFilterMode = 'overlap'"
+                        >
+                            <option value="">
+                                {{ isLoadingShows ? 'Loading...' : (filteredShows.length === 0 ? 'No shows available' : 'Select a show...') }}
+                            </option>
+                            <option 
+                                v-for="show in filteredShows" 
+                                :key="show.identifier" 
+                                :value="show.identifier"
+                            >
+                                {{ show.display }}
+                            </option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text Search Filters -->
+        <div v-if="isLoadingColumns" class="card white">
+            Loading columns...
+        </div>
+        
+        <slot v-else>
+            <div 
+                v-for="filter in textFilters" 
+                :key="filter.id"
+                :class="'card' + (filter.value ? ' green' : ' white') + (isApplyingFilters ? ' analyzing' : '')"
+                style="display: flex; flex-wrap: wrap; gap: var(--padding-sm); align-items: center;"
+            >
+                <span>Column Filter:</span>
+                <select 
+                    v-model="filter.column"
+                >
+                    <option value="">Select column...</option>
+                    <option 
+                        v-for="col in availableColumns" 
+                        :key="col" 
+                        :value="col"
+                    >
+                        {{ col }}
+                    </option>
+                </select>
+            
+                <span :class="{ 'hide-when-narrow': !filter.column }">Search Text:</span>
+                <input 
+                    type="text" 
+                    v-model="filter.value" 
+                    :placeholder="filter.column ? 'Search in ' + filter.column : 'Select a column first'"
+                    :disabled="!filter.column"
+                    :class="{ 'hide-when-narrow': !filter.column }"
+                    style="flex: 1;"
+                />
+                
+                <button 
+                    @click="removeTextFilter(filter.id)"
+                    class="button-symbol red"
+                    :disabled="textFilters.length === 1"
+                    :title="textFilters.length === 1 ? 'At least one filter required' : 'Remove this filter'"
+                >
+                    ✕
+                </button>
+            </div>
+            
+            <button 
+                v-if="textFilters.length > 0 && textFilters.every(filter => filter.column && filter.value)"
+                @click="addTextFilter" 
+                class="card white"
+                :disabled="isLoadingColumns"
+            >
+                Add Another Text Filter
+            </button>
+        </slot>
+
+        <!-- Action Buttons -->
+        <div class="button-bar">
+            <!-- Saved Search Dropdown -->
+            <select 
+                v-model="selectedSavedSearchIndex"
+                @change="handleScheduleFilterSelection"
+                style="flex: auto;"
+            >
+                <option :value="null">{{ selectedSavedSearchIndex === null ? 'New Filter' : 'Unsaved Filter' }}</option>
+                <option 
+                    v-for="(search, index) in savedSearches" 
+                    :key="index" 
+                    :value="index"
+                >
+                    {{ search.name }}
+                </option>
+            </select>
+            
+            <!-- Conditional buttons based on whether a saved search is selected -->
+            <button 
+                v-if="selectedSavedSearchIndex === null"
+                @click="saveSearch" 
+            >
+                Save This Filter
+            </button>
+            <button 
+                v-else
+                @click="updateSavedSearch" 
+            >
+                Update Saved Filter
+            </button>
+            <button 
+                :disabled="selectedSavedSearchIndex == null"
+                @click="deleteSavedSearch"
+            >
+                Delete Saved Filter
+            </button>
+            
+        </div>
+        <div class="button-bar">
+            <button @click="saveFiltersToURL" class="green">Apply Filters</button>
+            <button @click="clearAllFilters" class="white">Clear Filters</button>
         </div>
     `
 };
@@ -1039,13 +1035,6 @@ export const ScheduleFilterSelect = {
             },
             deep: true
         },
-        availableOptions() {
-            // Perform initial sync when options are first available
-            if (!this.hasPerformedInitialSync && this.availableOptions.length > 0) {
-                this.hasPerformedInitialSync = true;
-                this.syncWithURL();
-            }
-        },
         // Watch for URL parameter changes
         'appContext.currentPath': {
             handler(newPath, oldPath) {
@@ -1073,14 +1062,25 @@ export const ScheduleFilterSelect = {
     },
     async mounted() {
         this.savedSearchesStore = initializeSavedSearchesStore();
+        
+        // If store exists, wait for it to finish loading before building options
+        if (this.savedSearchesStore && this.savedSearchesStore.isLoading) {
+            await new Promise(resolve => {
+                const unwatch = this.$watch('savedSearchesStore.isLoading', (newValue) => {
+                    if (!newValue) {
+                        unwatch();
+                        resolve();
+                    }
+                });
+            });
+        }
+        
+        // Now build options with fully loaded saved searches
         await this.buildOptions();
         
-        // If store is null (not authenticated) or already loaded, sync immediately
-        if (!this.savedSearchesStore || !this.savedSearchesStore.isLoading) {
-            this.hasPerformedInitialSync = true;
-            this.syncWithURL();
-        }
-        // Otherwise, the availableOptions watcher will call syncWithURL when options are built
+        // Perform initial sync after reactive data is fully initialized
+        this.hasPerformedInitialSync = true;
+        this.syncWithURL();
     },
     methods: {
         async buildOptions() {

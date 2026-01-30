@@ -1100,6 +1100,16 @@ export const TableComponent = {
             // Check if selected rows in this table form a consecutive sequence
             const selectedRows = this.getSelectedRows();
             if (selectedRows.length === 0) return false;
+            
+            // Check if ALL selections globally are from this table's data array
+            // If any selection is from a different array, return false
+            for (const selection of tableRowSelectionState.selections.values()) {
+                if (selection.sourceArray !== this.data) {
+                    return false; // Selection exists in a different array
+                }
+            }
+            
+            // If only one row selected in this table, it's consecutive
             if (selectedRows.length === 1) return true;
             
             // Sort indices
@@ -2000,10 +2010,8 @@ export const TableComponent = {
                 
                 // Short click logic (only if no movement occurred)
                 if (!this.clickState.hasMoved && !this.clickState.isMultiSelecting) {
-                    if (tableRowSelectionState.getTotalSelectionCount() > 0 && tableRowSelectionState.dragId === this.dragId) {
-                        // Toggle selection state of clicked row
-                        tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
-                    }
+                    // Toggle selection state of clicked row
+                    tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
                 }
             } else if (tableRowSelectionState.getTotalSelectionCount() > 0 && !this.clickState.isMultiSelecting) {
                 // If click is not on a drag handle, clear selection
@@ -2432,11 +2440,11 @@ export const TableComponent = {
             <!-- Selection Action Bubble (outside table) -->
             <transition name="fade">
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
-                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white">+</button>
-                    <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']">✖</button>
-                    <button v-if="selectedRowCount > 1" @click="handleUnselectSelected" class="button-symbol">☒</button>
-                    <button class="button-symbol blue">☰</button>
-                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white">+</button>
+                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
+                    <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">✖</button>
+                    <button v-if="selectedRowCount > 1" @click="handleUnselectSelected" class="button-symbol" title="Unselect">⊟</button>
+                    <button class="button-symbol blue" title="More Options">☰</button>
+                    <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white" title="Add Row Below">+</button>
                     <slot
                         name="selection-actions"
                         :selectedRows="getSelectedRows()"

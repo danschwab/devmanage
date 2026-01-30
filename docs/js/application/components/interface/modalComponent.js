@@ -2,16 +2,21 @@ import { html } from '../../index.js';
 
 // Simple alert component
 const AlertComponent = {
-    props: ['message'],
+    props: {
+        message: String,
+        autoClose: { type: Boolean, default: true }
+    },
     computed: {
         formattedMessage() {
             return this.message ? this.message.replace(/\n/g, '<br>') : '';
         }
     },
     mounted() {
-        setTimeout(() => this.$emit('close-modal'), 3000);
+        if (this.autoClose) {
+            setTimeout(() => this.$emit('close-modal'), 3000);
+        }
     },
-    template: html`<div style="text-align: center; padding: 1rem;"><div v-html="formattedMessage"></div></div>`
+    template: html`<div class="reading-menu" v-html="formattedMessage"></div>`
 };
 
 // Simple confirm component
@@ -27,11 +32,11 @@ const ConfirmComponent = {
         cancel() { this.onCancel?.(); this.$emit('close-modal'); }
     },
     template: html`
-        <div style="text-align: center; padding: 1rem;">
-            <div v-html="formattedMessage"></div>
+        <div>
+            <div class="reading-menu" v-html="formattedMessage"></div>
             <div style="margin-top: 1rem;" class="button-bar">
-                <button @click="confirm">{{ confirmText || 'Ok' }}</button>
-                <button v-if="cancelText !== null" @click="cancel">{{ cancelText || 'Cancel' }}</button>
+                <button v-if="onConfirm" @click="confirm">{{ confirmText || 'Ok' }}</button>
+                <button v-if="onCancel" @click="cancel">{{ cancelText || 'Cancel' }}</button>
             </div>
         </div>
     `
@@ -41,7 +46,7 @@ const ConfirmComponent = {
 const ImageComponent = {
     props: ['imageUrl'],
     template: html`
-        <div style="text-align: center; padding: 1rem;">
+        <div class="reading-menu">
             <img :src="imageUrl" alt="Image" style="max-width: 90vw; max-height: 80vh; object-fit: contain;" />
         </div>
     `
@@ -56,9 +61,9 @@ const ErrorComponent = {
         }
     },
     template: html`
-        <div style="text-align: center; padding: 1rem;">
+        <div class="red">
             <img src="images/error.png" alt="Error" style="width: 64px; height: 64px; margin-bottom: 1rem;" />
-            <div v-html="formattedMessage" style="color: var(--color-red); font-weight: 500;"></div>
+            <div class="reading-menu" v-html="formattedMessage"></div>
         </div>
     `
 }
@@ -82,7 +87,7 @@ export const ModalComponent = {
                     <h3>{{ title }}</h3>
                     <button class="close-button" @click="closeModal">✖</button>
                 </div>
-                <div class="modal-content">
+                <div class="content">
                     <component v-for="(comp, idx) in components" :is="comp" :key="idx" 
                                v-bind="componentProps" @close-modal="closeModal"></component>
                 </div>
@@ -124,8 +129,8 @@ export class ModalManager {
     }
 
     // Core methods that are actually used
-    alert(message, title = 'Alert') {
-        return this._create(title, AlertComponent, { message });
+    alert(message, title = 'Alert', autoClose = true) {
+        return this._create(title, AlertComponent, { message, autoClose });
     }
 
     confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null) {
@@ -137,13 +142,7 @@ export class ModalManager {
     }
 
     error(message, title = 'Error') {
-        return this._create(title, ConfirmComponent, { 
-            message, 
-            modalClass: 'red',
-            onConfirm: () => {},
-            confirmText: 'OK',
-            cancelText: null
-        });
+        return this._create(title, ErrorComponent, { message });
     }
 
     custom(components, props = {}, title = '') {

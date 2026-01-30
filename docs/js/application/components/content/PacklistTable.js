@@ -704,7 +704,7 @@ export const PacklistTable = {
                     >
                         <template #header-area>
                             <div class="button-bar">
-                                <button @click="addEmpty" class="white">Empty Row</button>
+                                <button @click="addEmpty">Empty Row</button>
                                 <select 
                                     id="category-select"
                                     v-model="selectedCategory"
@@ -849,51 +849,38 @@ export const PacklistTable = {
             const matchPercentage = alert.score ? Math.round(alert.score * 100) : 0;
             const inventoryDescription = alert.inventoryDescription || 'N/A';
             
-            const modalContent = `
-                <div style="text-align: left;">
-                    <em>Click "Update Description" to replace the packlist description with the inventory description.</em>
-
-                    <p style="margin-top:1rem;">Current Description:</p>
-                    <div class="card orange">
-                        ${alert.packlistDescription || item.Description || 'N/A'}
-                    </div>
-                    
-                    <p style="margin-top:1rem;">Inventory Description:</p>
-                    <div class="card purple">
-                        ${inventoryDescription}
-                    </div>
-                    
-                    <p style="margin-top: 1rem; font-size: 0.9em; color: var(--color-text-secondary);">
-                        
-                    </p>
-                </div>
-            `;
+            const modalContent = `<div><p>Current Description:</p><div class="card orange">${alert.packlistDescription || item.Description || 'N/A'}</div></div><div><p>Inventory Description:</p><div class="card purple">${inventoryDescription}</div></div>`;
             
-            // Show confirm modal with custom action button
-            this.$modal.confirm(
-                modalContent,
-                () => {
-                    // On confirm: Update the description field with the formatted inventory description
-                    const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
-                    
-                    // Update the item's Description field
-                    item.Description = newDescription;
-                    
-                    // Show success message (save will be enabled automatically via isModified)
-                    //this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
+            // Only show confirm modal with edit options if in edit mode
+            if (this.editMode) {
+                this.$modal.confirm(
+                    modalContent,
+                    () => {
+                        // On confirm: Update the description field with the formatted inventory description
+                        const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
+                        
+                        // Update the item's Description field
+                        item.Description = newDescription;
+                        
+                        // Show success message (save will be enabled automatically via isModified)
+                        //this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
 
-                    //clear the alert from AppData
-                    if (item.AppData) {
-                        delete item.AppData['descriptionAlert'];
-                    }
-                },
-                () => {
-                    // On cancel: do nothing
-                },
-                `Description Mismatch ${itemNumber}`, // Title
-                'Update Description', // Custom confirm button text
-                'Cancel' // Custom cancel button text
-            );
+                        //clear the alert from AppData
+                        if (item.AppData) {
+                            delete item.AppData['descriptionAlert'];
+                        }
+                    },
+                    () => {
+                        // On cancel: do nothing
+                    },
+                    `Description Mismatch ${itemNumber}`, // Title
+                    'Update Description', // Custom confirm button text
+                    'Cancel' // Custom cancel button text
+                );
+            } else {
+                // In view mode, just show an alert with the information (no auto-close)
+                this.$modal.alert(modalContent, `Description Mismatch ${itemNumber}`, false);
+            }
         },
 
         /**

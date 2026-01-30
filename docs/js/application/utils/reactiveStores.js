@@ -1012,27 +1012,41 @@ function calculateStoreDiff(originalData, currentData, analysisConfig = null) {
 /**
  * Save dirty stores to user data
  * Each store is saved as a separate user data entry with the storeKey as ID and diff as Value
+ * @param {Object} options - Configuration options
+ * @param {boolean} options.skipAuthCheck - If true, skip auth check (used during logout)
  */
-async function saveDirtyStoresToUserData() {
-    if (Auth.authPromptPending) {
-        console.log('[ReactiveStore AutoSave] Auth prompt pending, skipping auto-save');
-        return;
-    }
+export async function saveDirtyStoresToUserData(options = {}) {
+    const { skipAuthCheck = false } = options;
     
-    // Check authentication before attempting to save (with prompt if expired)
-    const isAuthenticated = await Auth.checkAuthWithPrompt({
-        context: 'auto-save',
-        message: 'Your session has expired.'
-    });
-    
-    if (!isAuthenticated) {
-        console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
-        return;
-    }
-    
-    if (!authState.user?.email) {
-        console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
-        return;
+    // If called during logout, skip auth checks entirely
+    if (skipAuthCheck) {
+        console.log('[ReactiveStore AutoSave] Skipping auth check (logout in progress)');
+        if (!authState.user?.email) {
+            console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+            return;
+        }
+    } else {
+        // Normal auto-save flow - check if auth prompt is showing
+        if (Auth.authPromptShowing) {
+            console.log('[ReactiveStore AutoSave] Auth prompt showing, skipping auto-save');
+            return;
+        }
+        
+        // Check authentication before attempting to save (with prompt if expired)
+        const isAuthenticated = await Auth.checkAuthWithPrompt({
+            context: 'auto-save',
+            message: 'Your session has expired.'
+        });
+        
+        if (!isAuthenticated) {
+            console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
+            return;
+        }
+        
+        if (!authState.user?.email) {
+            console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+            return;
+        }
     }
     
     try {
@@ -1444,8 +1458,12 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
 /**
  * Clear all reactive stores from the registry
  * Useful for logout or when switching users
+ * @param {Object} options - Configuration options
+ * @param {boolean} options.skipSave - If true, skip auto-save during cleanup (used during logout)
  */
-export async function clearAllReactiveStores() {
+export async function clearAllReactiveStores(options = {}) {
+    const { skipSave = false } = options;
+    
     console.log('[ReactiveStore] Starting cleanup of all stores');
     
     // Get count before clearing
@@ -1456,16 +1474,20 @@ export async function clearAllReactiveStores() {
     PriorityQueue.stopProcessing();
     PriorityQueue.clearAll();
     
-    // Step 2: Stop the autosave timer and run autosaving on all stores
-    console.log('[ReactiveStore] Step 2: Stopping auto-save timer and saving dirty stores');
+    // Step 2: Stop the autosave timer
+    console.log('[ReactiveStore] Step 2: Stopping auto-save timer');
     stopAutoSaveTimer();
     
-    // Run auto-save directly (bypassing Priority Queue since it's stopped)
-    // This ensures all unsaved changes are preserved before clearing stores
-    await saveDirtyStoresToUserData();
+    // Step 3: Optionally save dirty stores (skip during logout since we save separately)
+    if (!skipSave) {
+        console.log('[ReactiveStore] Step 3: Saving dirty stores');
+        await saveDirtyStoresToUserData({ skipAuthCheck: true });
+    } else {
+        console.log('[ReactiveStore] Step 3: Skipping save (skipSave=true)');
+    }
     
-    // Step 3: Remove all reactive stores from registry
-    console.log('[ReactiveStore] Step 3: Clearing all stores from registry');
+    // Step 4: Remove all reactive stores from registry
+    console.log('[ReactiveStore] Step 4: Clearing all stores from registry');
     Object.keys(reactiveStoreRegistry).forEach(key => {
         delete reactiveStoreRegistry[key];
     });
