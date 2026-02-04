@@ -1068,6 +1068,14 @@ export const TableComponent = {
                 this.updateAllEditableCells();
                 this.compareAllCellsDirty();
             });
+        },
+        columns: {
+            handler() {
+                this.$nextTick(() => {
+                    this.updateAllEditableCells();
+                });
+            },
+            deep: true
         }
     },
     computed: {

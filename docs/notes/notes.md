@@ -70,8 +70,8 @@ For design and project queue:
 - [ ] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
-- [?] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
-- [ ] make navigation auth modal logout on cancel
+- [t] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
+- [t] make navigation auth modal logout on cancel
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
@@ -178,12 +178,16 @@ Pack Lists in Web
 
 show management system
 
+- [ ] we may need a workzone integration
 - [x] link shows to pack lists
 - [x] advanced search and preset system
 - [x] default schedule ship date as analytics step
-- [ ] !!! add "views" system to show different columns and layouts for different purposes
-- [ ] interface to allow "overlap" vs "show date" options for advanced search
+- [ ] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
+- [ ] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type), and boolean flags (future)
+- [ ] text-match needs to have a dropdown to determine type of match (includes, excludes, etc.)
+- [ ] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
 - [ ] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
+- [ ] !!! add "views" system to show different columns and layouts for different purposes
 - [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
       create and edit shows
       express checklist columns as checkboxes
