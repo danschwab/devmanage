@@ -2597,7 +2597,7 @@ export const TableComponent = {
                                             :row="row"
                                             :column="column">
                                             <span class="original-value" v-if="dirtyCells[idx] && dirtyCells[idx][colIndex]">
-                                                {{ formatCellValue(originalData[idx][column.key], column) }} →
+                                                {{ formatCellValue(originalData[idx]?.[column.key], column) }} →
                                             </span>
                                             <input
                                                 type="number"

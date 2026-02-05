@@ -1,6 +1,199 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry } from '../../index.js';
 
 
+// Simple modal component for entering new item number
+const NewItemNumberPrompt = {
+    props: ['initialItemNumber', 'existingItems', 'onConfirm'],
+    data() {
+        return {
+            itemNumber: this.initialItemNumber,
+            error: null,
+            suggestion: null,
+            isNewPrefix: false
+        };
+    },
+    computed: {
+        helperText() {
+            if (this.error) {
+                return null; // Error takes precedence
+            }            if (this.isNewPrefix && this.itemNumber) {
+                return `"${this.itemNumber}" is a new prefix`;
+            }            if (this.suggestion) {
+                return `Suggestion: ${this.suggestion}`;
+            }
+            return 'Creating a new item';
+        },
+        ghostText() {
+            // Show the remainder of the suggestion that hasn't been typed yet
+            if (!this.suggestion || !this.itemNumber) {
+                return '';
+            }
+            
+            if (this.suggestion.startsWith(this.itemNumber)) {
+                return this.suggestion.substring(this.itemNumber.length);
+            }
+            
+            return '';
+        }
+    },
+    methods: {
+        validate() {
+            if (!this.itemNumber) {
+                this.error = 'Item number is required';
+                this.suggestion = null;
+                return false;
+            }
+            
+            const duplicate = this.existingItems.find(
+                item => item.itemNumber === this.itemNumber
+            );
+            
+            if (duplicate) {
+                this.error = 'Item number already exists';
+                this.suggestion = null;
+                return false;
+            }
+            
+            this.error = null;
+            return true;
+        },
+        updateSuggestion() {
+            // Detect if user is typing a prefix that matches existing items
+            if (!this.itemNumber || this.itemNumber.length < 2) {
+                this.isNewPrefix = false;
+                return;
+            }
+            
+            // Find items that start with the current input
+            const matchingItems = this.existingItems
+                .map(item => item.itemNumber)
+                .filter(num => num && num.startsWith(this.itemNumber));
+            
+            if (matchingItems.length > 0) {
+                // Try to extract pattern and suggest next number
+                const pattern = this.detectPatternFromPrefix(this.itemNumber, matchingItems);
+                if (pattern) {
+                    this.suggestion = this.incrementPattern(pattern);
+                    this.isNewPrefix = false;
+                } else {
+                    this.suggestion = null;
+                    this.isNewPrefix = false;
+                }
+            } else {
+                // No matching items - this is a new prefix
+                this.suggestion = null;
+                this.isNewPrefix = true
+                this.suggestion = null;
+            }
+        },
+        detectPatternFromPrefix(prefix, matchingItems) {
+            // Try to detect the full prefix pattern from matching items
+            // even if user has only typed a partial prefix
+            const patterns = {};
+            
+            matchingItems.forEach(item => {
+                // Try to extract the full prefix including separators
+                // Match patterns like "PROP-123", "PROPS001", "LT-05", etc.
+                const match = item.match(/^([A-Za-z\-_]+)(\d+)$/);
+                if (match) {
+                    const fullPrefix = match[1];
+                    const number = parseInt(match[2], 10);
+                    const padding = match[2].length;
+                    
+                    // Only consider this pattern if the full prefix starts with user's input
+                    if (fullPrefix.startsWith(prefix)) {
+                        if (!patterns[fullPrefix]) {
+                            patterns[fullPrefix] = {
+                                numbers: [],
+                                padding: padding
+                            };
+                        }
+                        patterns[fullPrefix].numbers.push(number);
+                    }
+                }
+            });
+            
+            // Find the most common prefix pattern
+            let bestPrefix = null;
+            let maxNumber = 0;
+            let maxCount = 0;
+            let bestPadding = 3;
+            
+            for (const [fullPrefix, data] of Object.entries(patterns)) {
+                if (data.numbers.length > maxCount) {
+                    maxCount = data.numbers.length;
+                    bestPrefix = fullPrefix;
+                    maxNumber = Math.max(...data.numbers);
+                    bestPadding = data.padding;
+                } else if (data.numbers.length === maxCount) {
+                    // If tied, prefer shorter prefix (more specific)
+                    if (!bestPrefix || fullPrefix.length < bestPrefix.length) {
+                        bestPrefix = fullPrefix;
+                        maxNumber = Math.max(...data.numbers);
+                        bestPadding = data.padding;
+                    }
+                }
+            }
+            
+            if (bestPrefix) {
+                return {
+                    prefix: bestPrefix,
+                    nextNumber: maxNumber + 1,
+                    padding: bestPadding
+                };
+            }
+            
+            return null;
+        },
+        incrementPattern(pattern) {
+            const { prefix, nextNumber, padding } = pattern;
+            return `${prefix}${String(nextNumber).padStart(padding, '0')}`;
+        },
+        handleKeydown(event) {
+            // Accept suggestion on Tab key
+            if (event.key === 'Tab' && this.suggestion) {
+                event.preventDefault();
+                this.itemNumber = this.suggestion;
+            }
+        },
+        handleSubmit() {
+            if (this.validate()) {
+                this.onConfirm(this.itemNumber);
+                this.$emit('close-modal');
+            }
+        }
+    },
+    watch: {
+        itemNumber() {
+            this.validate();
+            this.updateSuggestion();
+        }
+    },
+    template: html`
+        <div class="content">
+            <div class="form-group">
+                <div class="autocomplete-wrapper">
+                    <input 
+                        id="item-number-input"
+                        type="text"
+                        v-model="itemNumber"
+                        @keyup.enter="handleSubmit"
+                        @keydown="handleKeydown"
+                        :class="{ error: error }"
+                        autofocus
+                    />
+                    <div class="ghost-text" v-if="ghostText">{{ itemNumber }}<span class="ghost">{{ ghostText }}</span></div>
+                </div>
+                <span v-if="error" class="error-message">{{ error }}</span>
+                <span v-else-if="helperText" class="helper-text">{{ helperText }}</span>
+            </div>
+            <div class="button-bar">
+                <button @click="handleSubmit" :disabled="!!error" class="purple">Add Item</button>
+                <button @click="$emit('close-modal')">Cancel</button>
+            </div>
+        </div>
+    `
+};
 
 
 // Image component for displaying item thumbnails
@@ -341,6 +534,132 @@ export const InventoryTableComponent = {
                 this.inventoryTableStore.data[rowIdx][colKey] = value;
             }
         },
+        async handleNewRow(positionData) {
+            // positionData: { position: 'above'|'below', targetIndex: number }
+            
+            // Generate next item number
+            const nextItemNumber = await this.generateNextItemNumber();
+            
+            // Show prompt modal
+            this.$modal.custom(NewItemNumberPrompt, {
+                initialItemNumber: nextItemNumber,
+                existingItems: this.inventoryTableStore?.data || [],
+                onConfirm: (itemNumber) => {
+                    this.addNewRow(itemNumber, positionData);
+                },
+                modalClass: ''
+            }, 'New Item Number');
+        },
+        
+        async generateNextItemNumber() {
+            const items = this.inventoryTableStore?.data || [];
+            
+            if (items.length === 0) {
+                return `${this.tabTitle}-001`;
+            }
+            
+            const itemNumbers = items.map(item => item.itemNumber).filter(Boolean);
+            
+            // Try to detect pattern
+            const pattern = this.detectNumberingPattern(itemNumbers);
+            
+            if (pattern) {
+                return this.incrementPattern(pattern);
+            }
+            
+            // Fallback: category prefix + next number
+            return `${this.tabTitle}-${String(items.length + 1).padStart(3, '0')}`;
+        },
+        
+        detectNumberingPattern(itemNumbers) {
+            // Look for common patterns like "PREFIX-###" or "PREFIX###"
+            const patterns = {};
+            
+            itemNumbers.forEach(num => {
+                // Match patterns like "ABC-123", "ABC123", etc.
+                const match = num.match(/^([A-Za-z\-_]+)(\d+)$/);
+                if (match) {
+                    const prefix = match[1];
+                    const number = parseInt(match[2], 10);
+                    
+                    if (!patterns[prefix]) {
+                        patterns[prefix] = [];
+                    }
+                    patterns[prefix].push(number);
+                }
+            });
+            
+            // Find the most common prefix and its max number
+            let bestPrefix = null;
+            let maxNumber = 0;
+            let maxCount = 0;
+            
+            for (const [prefix, numbers] of Object.entries(patterns)) {
+                if (numbers.length > maxCount) {
+                    maxCount = numbers.length;
+                    bestPrefix = prefix;
+                    maxNumber = Math.max(...numbers);
+                }
+            }
+            
+            if (bestPrefix) {
+                return {
+                    prefix: bestPrefix,
+                    nextNumber: maxNumber + 1,
+                    padding: 3 // Default to 3-digit padding
+                };
+            }
+            
+            return null;
+        },
+        
+        incrementPattern(pattern) {
+            const { prefix, nextNumber, padding } = pattern;
+            return `${prefix}${String(nextNumber).padStart(padding, '0')}`;
+        },
+        
+        addNewRow(itemNumber, positionData) {
+            // Capture state for undo
+            const routeKey = this.appContext?.currentPath?.split('?')[0];
+            if (routeKey) {
+                undoRegistry.capture(this.inventoryTableStore.data, routeKey, { type: 'add-row' });
+            }
+            
+            // Create new item object
+            const newItem = {
+                itemNumber: itemNumber,
+                quantity: 0,
+                description: '',
+                notes: ''
+            };
+            
+            const data = this.inventoryTableStore.data;
+            
+            if (positionData) {
+                // Insert at specific position
+                const insertIndex = positionData.position === 'above' 
+                    ? positionData.targetIndex 
+                    : positionData.targetIndex + 1;
+                
+                data.splice(insertIndex, 0, newItem);
+            } else {
+                // Add to end
+                data.push(newItem);
+            }
+            
+            // Navigate with searchTerm to highlight the new item
+            const newPath = NavigationRegistry.buildPath(
+                this.containerPath,
+                { searchTerm: itemNumber }
+            );
+            
+            if (this.appContext?.navigateToPath) {
+                this.appContext.navigateToPath(newPath);
+            }
+            
+            // Store is now dirty, save button will appear
+        },
+        
         async handleSave() {
             // Only use the store's save method if this is called from the on-save event
             if (this.inventoryTableStore) {
@@ -368,13 +687,20 @@ export const InventoryTableComponent = {
                 :sync-search-with-url="true"
                 :container-path="containerPath"
                 :navigate-to-path="appContext.navigateToPath"
+                :newRow="allowEdit"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
                 class="inventory-table-component mark-dirty"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
+                @new-row="handleNewRow"
                 @on-save="handleSave"
             >
+                <template #header-area>
+                    <div class="button-bar">
+                        <button v-if="allowEdit" @click="handleNewRow(null)" class="purple">New Item</button>
+                    </div>
+                </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <ItemImageComponent 
                         v-if="column.key === 'image'"

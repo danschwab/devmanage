@@ -108,11 +108,9 @@ export const InventoryMenuComponent = {
                     }
                     break;
                 case 'addInventoryItem':
-                    this.$modal.confirm(
-                        'Do you want to add a new inventory item?',
-                        () => this.$modal.alert('Item added!', 'Success'),
-                        () => this.$modal.alert('Add cancelled.', 'Info'),
-                        'Add Item'
+                    this.$modal.alert(
+                        'To add a new item:\n\n1. Select any row in the table\n2. Click the + button to add a row above or below\n3. Enter the new item number\n4. Fill in the details and save',
+                        'Add New Item'
                     );
                     break;
                 case 'exportInventory':
@@ -261,8 +259,7 @@ export const InventoryContent = {
         inventoryNavigation() {
             return [
                 { id: 'categories', label: 'Categories', path: 'inventory/categories' },
-                { id: 'reports', label: 'Reports', path: 'inventory/reports' },
-                { id: 'new', label: 'New Item', path: 'inventory/new' }
+                { id: 'reports', label: 'Reports', path: 'inventory/reports' }
             ];
         },
         categoryList() {
@@ -428,11 +425,6 @@ export const InventoryContent = {
                     dashboardTitle: 'Inventory Reports',
                     icon: 'assessment',
                     children: {}
-                },
-                new: {
-                    displayName: 'New Item',
-                    dashboardTitle: 'Add New Item',
-                    icon: 'add'
                 }
             }
         });
@@ -508,15 +500,6 @@ export const InventoryContent = {
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />
-
-            <!-- New Item View -->
-            <div v-else-if="cleanContainerPath === 'inventory/new'" class="content">
-                <h3>Add New Item</h3>
-                <p>Add a new item to the inventory.</p>
-                <div style="margin: 1rem 0;">
-                    <button @click="$modal.alert('Add new item functionality coming soon!', 'Info')">Create New Item</button>
-                </div>
-            </div>
         </slot>
     `
 };
