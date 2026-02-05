@@ -178,6 +178,29 @@ export const CardsComponent = {
             }
         },
         
+        /**
+         * Handle search input blur - only update URL if not clearing
+         */
+        handleSearchBlur() {
+            if (!this.syncSearchWithUrl || this._clearingSearch) return;
+            this.updateSearchInURL(this.searchValue);
+        },
+        
+        /**
+         * Clear the search field and update URL parameter
+         */
+        clearSearch() {
+            this._clearingSearch = true;
+            this.searchValue = '';
+            if (this.syncSearchWithUrl) {
+                this.updateSearchInURL('');
+            }
+            // Reset flag after a brief delay
+            setTimeout(() => {
+                this._clearingSearch = false;
+            }, 100);
+        },
+        
         handleCardClick(item) {
             // Call item-specific onClick handler if provided, otherwise use component-level handler
             if (item.onClick && typeof item.onClick === 'function') {
@@ -226,14 +249,24 @@ export const CardsComponent = {
                 <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
                 
                 <div v-if="showRefresh || showSearch" class="button-bar">
-                    <input
-                        v-if="showSearch"
-                        type="text"
-                        v-model="searchValue"
-                        @blur="syncSearchWithUrl && updateSearchInURL(searchValue)"
-                        placeholder="Find..."
-                        class="search-input"
-                    />
+                    <div v-if="showSearch" class="input-container">
+                        <input
+                            type="text"
+                            v-model="searchValue"
+                            @blur="handleSearchBlur"
+                            @keydown.esc="clearSearch"
+                            placeholder="Find..."
+                            class="search-input"
+                        />
+                        <button
+                            v-if="searchValue"
+                            @mousedown="clearSearch"
+                            class="column-button"
+                            title="Clear search"
+                        >
+                            ✕
+                        </button>
+                    </div>
                     <button 
                         v-if="showRefresh" 
                         @click="handleRefresh" 

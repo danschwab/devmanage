@@ -461,15 +461,15 @@ button.card {
     gap: 2px;
 }
 
-.button-bar :first-child:not(:last-child) {
+.button-bar > :first-child:not(:last-child), .button-bar > :first-child:not(:last-child) > input {
     border-radius: var(--radius-md) 0 0 var(--radius-md);
     /*border-right: 2px solid var(--background-color);*/
 }
-.button-bar :not(:first-child):not(:last-child) {
+.button-bar > :not(:first-child):not(:last-child), .button-bar > :not(:first-child):not(:last-child) > input {
     border-radius: 0;
     /*border-right: 2px solid var(--background-color);*/
 }
-.button-bar :last-child:not(:first-child) {
+.button-bar > :last-child:not(:first-child), .button-bar > :last-child:not(:first-child) > input {
     border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 .button-symbol {
@@ -747,15 +747,20 @@ td:has(img) {
 .column-button:not(:first-of-type) {
     right: 22px;
 }
+.input-container {
+    position: relative;
+}
+.input-container .column-button {
+    margin-right: .3em;
+}
 
-thead:hover .column-button {
+thead:hover .column-button, .input-container:hover .column-button {
     opacity: .5;
 }
-thead:hover .column-button:hover, .column-button.active, thead:hover .column-button.active {
+thead:hover .column-button:hover, .column-button.active, thead:hover .column-button.active, .input-container .column-button:hover {
     background-color: var(--color-gray-bg-hover);
     opacity: 1;
 }
-
 
 table:not(.editing) tr td:has(.table-wrapper) {
     padding: 0;

@@ -1482,6 +1482,29 @@ export const TableComponent = {
             }
         },
         
+        /**
+         * Handle search input blur - only update URL if not clearing
+         */
+        handleSearchBlur() {
+            if (!this.syncSearchWithUrl || this._clearingSearch) return;
+            this.updateSearchInURL(this.searchValue);
+        },
+        
+        /**
+         * Clear the search field and update URL parameter
+         */
+        clearSearch() {
+            this._clearingSearch = true;
+            this.searchValue = '';
+            if (this.syncSearchWithUrl) {
+                this.updateSearchInURL('');
+            }
+            // Reset flag after a brief delay
+            setTimeout(() => {
+                this._clearingSearch = false;
+            }, 100);
+        },
+        
         handleRefresh() {
             // Capture state before discarding changes (when allowSaveEvent is true)
             if (this.allowSaveEvent && this.currentRouteKey) {
@@ -2475,14 +2498,24 @@ export const TableComponent = {
                 ></slot>
                 <p v-if="isAnalyzing">{{ loadingMessage }}</p>
                 <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
-                    <input
-                        v-if="showSearch"
-                        type="text"
-                        v-model="searchValue"
-                        @blur="syncSearchWithUrl && updateSearchInURL(searchValue)"
-                        placeholder="Find..."
-                        class="search-input"
-                    />
+                    <div v-if="showSearch" class="input-container">
+                        <input
+                            type="text"
+                            v-model="searchValue"
+                            @blur="handleSearchBlur"
+                            @keydown.esc="clearSearch"
+                            placeholder="Find..."
+                            class="search-input"
+                        />
+                        <button
+                            v-if="searchValue"
+                            @mousedown="clearSearch"
+                            class="column-button"
+                            title="Clear search"
+                        >
+                            ✕
+                        </button>
+                    </div>
                     <button
                         v-if="showSaveButton || allowSaveEvent"
                         @click="handleSave"

@@ -52,7 +52,7 @@ For design and project queue:
 - [ ] remove hamburger buttons that do nothing
 - [x] packlist print titleblock??
 - [x] add context variables to live site github
-- [?] refresh buttons should clear caches
+- [x] refresh buttons should clear caches
 - [ ] fix packlist table header alignment
 - [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [ ] tableComponent finder needs: a clear all button, and a hide rows toggle
@@ -104,7 +104,7 @@ inventory updates
 - [x] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
 - [x] allow editing of item quantities
 - [x] allow editing of item descriptions
-- [ ] allow adding new items
+- [x] allow adding new items
 - [x] add existing item thumbnails
 - [ ] track crate information to further streamline pack list generation
 - [x] make thumbnails be a cached analytics step
