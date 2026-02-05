@@ -64,14 +64,15 @@ For design and project queue:
 
 **problems**
 
+- [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] some group dragging breaks the group
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
-- [ ] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
+- [x] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
-- [t] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
-- [t] make navigation auth modal logout on cancel
+- [x] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
+- [x] make navigation auth modal logout on cancel
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
@@ -86,16 +87,16 @@ For design and project queue:
 - [x] scrolling issue when navigating
 - [t] error causing imperfect or corrupted analytics information on data refresh after auth
 - [x] github deployment needs to be rerun every time due to config.js build issues? (need to set up deployment via actions in github settings)
-- [?] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
+- [x] waiting too long before reauthentication breaks requests and components get locked up in loading state with incorrect or empty reactiveStore data
 
 **Application tasks**
 
-dropbox integration
+dropbox or workzone integrations
 
 - [ ] dropbox service account and auth sync
 - [ ] identify and show versions/dates of output files
 - [ ] allow opening link to dropbox pdfs
-- [ ] migrate thumbnails to dropbox and allow uploading new thumbnails to dropbox
+- [ ] migrate thumbnails to dropbox and allow uploading new thumbnails to dropbox???
 
 inventory updates
 
@@ -168,6 +169,7 @@ Pack Lists in Web
 - [x] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] !!! allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
 - [ ] add category filtering to packlist-details table
+- [ ] cut and paste between packlist functionality
 - [ ] !!! automations interface, packlist rules
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?

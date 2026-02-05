@@ -258,7 +258,7 @@ button.white, input[type="button"].white, input[type="submit"].white, .button.wh
 }
 button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray, thead.gray > tr > th {
     background-color: var(--color-gray);
-    color: var(--color-text);
+    color: var(--color-text-inverted);
     border: 1px solid var(--color-border);
 }
 button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple, thead.purple > tr > th {

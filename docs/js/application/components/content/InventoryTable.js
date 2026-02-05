@@ -19,7 +19,7 @@ const NewItemNumberPrompt = {
             }            if (this.isNewPrefix && this.itemNumber) {
                 return `"${this.itemNumber}" is a new prefix`;
             }            if (this.suggestion) {
-                return `Suggestion: ${this.suggestion}`;
+                return `Next available: ${this.suggestion}`;
             }
             return 'Creating a new item';
         },
@@ -493,9 +493,24 @@ export const InventoryTableComponent = {
         },
         
         async handleRefresh() {
-            invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
-            ], true);
+            this.$modal.confirm(
+                'This removes undo history and clears unsaved changes.',
+                () => {
+                    // Clear undo/redo history for this route
+                    const routeKey = this.$route?.path;
+                    if (routeKey) {
+                        undoRegistry.clearRouteHistory(routeKey);
+                    }
+                    
+                    invalidateCache([
+                        { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
+                    ], true);
+                },
+                null,
+                'Refresh Data',
+                'Refresh Data',
+                'Cancel'
+            );
         },
         
         setLockState(isLocked, owner = null) {
@@ -548,7 +563,7 @@ export const InventoryTableComponent = {
                     this.addNewRow(itemNumber, positionData);
                 },
                 modalClass: ''
-            }, 'New Item Number');
+            }, 'New Item');
         },
         
         async generateNextItemNumber() {

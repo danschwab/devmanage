@@ -342,5 +342,30 @@ export const undoRegistry = Vue.reactive({
                 tableId: arr._tableId,
                 routes: Array.from(routes)
             }));
+    },
+    
+    // Clear undo/redo history for a specific route
+    // Used when data is refreshed from the server to prevent stale undo states
+    clearRouteHistory(routeKey) {
+        if (!routeKey) {
+            console.warn('[Undo] Cannot clear history - no routeKey provided');
+            return false;
+        }
+        
+        const stacks = this.undoStacksByRoute.get(routeKey);
+        if (!stacks) {
+            console.log(`[Undo] No history to clear for route: ${routeKey}`);
+            return false;
+        }
+        
+        const undoCount = stacks.undoStack.length;
+        const redoCount = stacks.redoStack.length;
+        
+        // Clear both stacks
+        stacks.undoStack.splice(0);
+        stacks.redoStack.splice(0);
+        
+        console.log(`[Undo] Cleared history for route '${routeKey}' (${undoCount} undo, ${redoCount} redo)`);
+        return true;
     }
 });

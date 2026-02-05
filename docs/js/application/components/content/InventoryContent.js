@@ -189,7 +189,8 @@ export const InventoryMenuComponent = {
     
                             this.$modal.alert(
                                 `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
-                                'Success'
+                                'Success',
+                                false
                             );
                             
                             // Refresh lock info in the menu
