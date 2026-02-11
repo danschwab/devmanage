@@ -22,7 +22,7 @@ export { LoadingBarComponent } from './components/interface/loadingBarComponent.
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
-export { ScheduleFilterSelect } from './components/interface/scheduleFilterComponents.js';
+export { ScheduleFilterSelect, InventoryCategoryFilter } from './components/interface/scheduleFilterComponents.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';

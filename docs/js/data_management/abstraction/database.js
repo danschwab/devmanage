@@ -85,7 +85,7 @@ class database_uncached {
     static async getItemImageUrl(deps, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
         // Defensive: handle null, undefined, or non-string values
         if (!itemNumber || itemNumber === null || itemNumber === undefined) {
-            console.warn('[Database.getItemImageUrl] No itemNumber provided, returning empty string');
+            //console.warn('[Database.getItemImageUrl] No itemNumber provided, returning empty string');
             return '';
         }
         
@@ -93,11 +93,11 @@ class database_uncached {
         const itemNumberStr = String(itemNumber).trim();
         
         if (!itemNumberStr) {
-            console.warn('[Database.getItemImageUrl] Empty itemNumber after trim, returning empty string');
+            //console.warn('[Database.getItemImageUrl] Empty itemNumber after trim, returning empty string');
             return '';
         }
         
-        console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
+        //console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
                 
         // Try different file extensions
         const extensions = ['jpg', 'jpeg', 'png'];
@@ -107,7 +107,7 @@ class database_uncached {
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
             if (file && file.directImageUrl) {
-                console.log(`[Database.getItemImageUrl] Found image for ${itemNumberStr}: ${file.directImageUrl}`);
+                //console.log(`[Database.getItemImageUrl] Found image for ${itemNumberStr}: ${file.directImageUrl}`);
                 return file.directImageUrl;
             }
         }

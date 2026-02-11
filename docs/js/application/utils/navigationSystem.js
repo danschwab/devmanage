@@ -277,16 +277,48 @@ export const NavigationRegistry = {
     buildPathWithCurrentParams(containerPath, currentPath, newParams = {}) {
         const cleanPath = containerPath.split('?')[0];
         const currentParams = this.getParametersForContainer(containerPath, currentPath);
+        
+        console.log('[NavigationRegistry] buildPathWithCurrentParams:', {
+            cleanPath,
+            currentParams,
+            newParams
+        });
+        
         const mergedParams = { ...currentParams, ...newParams };
         
         // Remove parameters with undefined, null, or empty string values
+        const keysToRemove = [];
         Object.keys(mergedParams).forEach(key => {
             if (mergedParams[key] === undefined || mergedParams[key] === null || mergedParams[key] === '') {
+                keysToRemove.push(key);
                 delete mergedParams[key];
             }
         });
         
-        return this.buildPath(cleanPath, mergedParams);
+        if (keysToRemove.length > 0) {
+            console.log('[NavigationRegistry] Removed parameters:', keysToRemove);
+        }
+        
+        const finalPath = this.buildPath(cleanPath, mergedParams);
+        console.log('[NavigationRegistry] Built final path:', finalPath);
+        
+        // If we removed parameters, update caches immediately to prevent stale cached params from being reapplied
+        if (keysToRemove.length > 0) {
+            // Update route's lastParameters cache (for non-dashboard navigation)
+            const route = this.getRoute(cleanPath);
+            if (route) {
+                route.lastParameters = Object.keys(mergedParams).length > 0 ? { ...mergedParams } : {};
+                console.log('[NavigationRegistry] Updated route cache after removing params:', route.lastParameters);
+            }
+            
+            // Update dashboard registry cache (for dashboard navigation)
+            if (this.dashboardRegistry) {
+                this.dashboardRegistry.updatePath(cleanPath, finalPath);
+                console.log('[NavigationRegistry] Updated dashboard cache after removing params');
+            }
+        }
+        
+        return finalPath;
     },
 
     /**

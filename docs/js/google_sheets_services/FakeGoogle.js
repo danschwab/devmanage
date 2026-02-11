@@ -787,7 +787,7 @@ export class FakeGoogleSheetsService {
         const [sheetName, cellRange] = range.split('!');
         const sheetData = this.mockData[tableId] && this.mockData[tableId][sheetName];
         
-        console.log(`[FakeGoogle.getSheetData] Reading mockData['${tableId}']['${sheetName}']:`, JSON.stringify(sheetData));
+        //console.log(`[FakeGoogle.getSheetData] Reading mockData['${tableId}']['${sheetName}']:`, JSON.stringify(sheetData));
         
         if (!sheetData) {
             console.warn(`FakeGoogleSheetsService: No mock data found for ${tableId}/${sheetName}`);
@@ -854,8 +854,8 @@ export class FakeGoogleSheetsService {
                 // Update the specific cell
                 if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
                     this.mockData[tableId][sheetName][rowIndex][colIndex] = updates[0][0];
-                    console.log(`[FakeGoogle.setSheetData] Updated mockData['${tableId}']['${sheetName}'][${rowIndex}][${colIndex}] = ${updates[0][0]}`);
-                    console.log(`[FakeGoogle.setSheetData] Full Locks grid now:`, JSON.stringify(this.mockData[tableId][sheetName]));
+                    //console.log(`[FakeGoogle.setSheetData] Updated mockData['${tableId}']['${sheetName}'][${rowIndex}][${colIndex}] = ${updates[0][0]}`);
+                    //console.log(`[FakeGoogle.setSheetData] Full Locks grid now:`, JSON.stringify(this.mockData[tableId][sheetName]));
                 }
                 return true;
             }

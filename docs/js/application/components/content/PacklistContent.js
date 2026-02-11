@@ -8,7 +8,8 @@ export const PacklistMenuComponent = {
         currentView: String,
         title: String,
         refreshCallback: Function,
-        getLockInfo: Function
+        getLockInfo: Function,
+        clearAllAlertsCallback: Function
     },
     inject: ['$modal'],
     data() {
@@ -44,7 +45,8 @@ export const PacklistMenuComponent = {
                 default:
                     items.push(
                         { label: 'Refresh', action: 'refresh' },
-                        { label: 'Help', action: 'help' }
+                        { label: 'Clear All Alerts', action: 'clearAllAlerts' }
+                        // { label: 'Help', action: 'help' } // Placeholder - not yet implemented
                     );
                     return items;
             }
@@ -76,9 +78,15 @@ export const PacklistMenuComponent = {
                 case 'removeLock':
                     await this.handleRemoveLock();
                     break;
-                case 'help':
-                    this.$modal.alert('Packlist help functionality coming soon!', 'Info');
+                case 'clearAllAlerts':
+                    if (this.clearAllAlertsCallback) {
+                        this.clearAllAlertsCallback();
+                    }
+                    this.$emit('close-modal');
                     break;
+                // case 'help': // Placeholder - not yet implemented
+                //     this.$modal.alert('Packlist help functionality coming soon!', 'Info');
+                //     break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
@@ -265,6 +273,11 @@ export const PacklistContent = {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
+                clearAllAlertsCallback: () => {
+                    if (this.$refs.packlistTable) {
+                        this.$refs.packlistTable.clearAllAlerts();
+                    }
+                },
                 getLockInfo: async () => {
                     // Get lock info from the current packlist if we're viewing one
                     const packlistName = this.currentPacklist;

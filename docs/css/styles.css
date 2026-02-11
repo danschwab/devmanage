@@ -284,7 +284,7 @@ div#app-content > div.empty-message {
 .content-header:has(.button-bar:only-child) {
     justify-content: right;
 } 
-.content-header:first-of-type:not(:only-child):not(:has(+ .cards-grid)) {
+.content-header:first-of-type:not(:only-of-type):not(:has(+ .cards-grid)) {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: none;
 }
@@ -303,11 +303,11 @@ div#app-content > div.empty-message {
     width: 100%;
     box-sizing: border-box;
 }
-.content-footer:last-of-type:not(:only-child) {
+.content-footer:last-of-type:not(:only-of-type) {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     border-top: none;
 }
-.content-footer:only-child, .content-header:only-child {
+.content-footer:only-of-type, .content-header:only-of-type {
     border-radius: var(--radius-lg);
 }
 
@@ -512,16 +512,28 @@ button.card {
     pointer-events: none;
     z-index: 5000;
 }
+#modal-space::after, #modal-space:has(.modal-overlay:only-child.fade-leave-active)::after {
+    z-index: 5001;
+    content: "";
+    position: absolute;
+    background: var(--color-modal-bg-gradient);
+    opacity: 0;
+    inset: 0;
+    transition: opacity 0.4s ease;
+}
+#modal-space:has(.modal-overlay)::after {
+    /* this pattern ensures that there is only ever one modal gradient overlay that fades in and out with the first modal */
+    opacity: 1;
+}
 
 .modal-overlay {
     position: fixed; /* Stay in place */
-    z-index: 1000; /* Sit on top */
+    z-index: 5002; /* Sit on top */
     left: 0;
     top: 0;
     width: 100%; /* Full width */
     height: 100%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
-    background: var(--color-modal-bg-gradient);
     overflow: auto;
     pointer-events: auto;
     /* Ensure transitions work properly */
@@ -530,6 +542,10 @@ button.card {
     align-items: center;
     justify-content: center;
 }
+.modal-overlay:has(+ .modal-overlay) {
+    z-index: 5000;
+}
+
 .modal {
     background-color: var(--background-color);
     /*margin: 15% auto 0 auto; /* 15% from the top and centered */

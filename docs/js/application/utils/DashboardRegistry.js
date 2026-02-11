@@ -120,18 +120,30 @@ export const DashboardRegistry = {
      * This allows dashboard containers to preserve parameter state
      */
     async updatePath(cleanPath, newPathWithParams) {
+        console.log('[DashboardRegistry] updatePath called:', { cleanPath, newPathWithParams });
+        
         const index = this.store.data.findIndex(container => {
             const containerPath = typeof container === 'string' ? container : container.path;
             return containerPath.split('?')[0] === cleanPath;
         });
         
         if (index > -1) {
+            const oldPath = typeof this.store.data[index] === 'string' 
+                ? this.store.data[index] 
+                : this.store.data[index].path;
+            
+            console.log('[DashboardRegistry] Updating path from:', oldPath, 'to:', newPathWithParams);
+            
             if (typeof this.store.data[index] === 'string') {
                 this.store.data[index] = newPathWithParams;
             } else {
                 this.store.data[index].path = newPathWithParams;
             }
             await this.save();
+            
+            console.log('[DashboardRegistry] Path updated successfully');
+        } else {
+            console.warn('[DashboardRegistry] Container not found for path:', cleanPath);
         }
     },
 

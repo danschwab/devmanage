@@ -329,9 +329,9 @@ class Requests_uncached {
      * @returns {Promise<boolean>} Success status
      */
     static async unlockSheet(spreadsheet, tab, user) {
-        console.log(`[api.unlockSheet] Called with spreadsheet=${spreadsheet}, tab=${tab}, user=${user}`);
+        //console.log(`[api.unlockSheet] Called with spreadsheet=${spreadsheet}, tab=${tab}, user=${user}`);
         const result = await ApplicationUtils.unlockSheet(spreadsheet, tab, user);
-        console.log(`[api.unlockSheet] ApplicationUtils.unlockSheet returned:`, result);
+        //console.log(`[api.unlockSheet] ApplicationUtils.unlockSheet returned:`, result);
         return result;
     }
     
@@ -348,11 +348,11 @@ class Requests_uncached {
      * @returns {Promise<Object>} Result object { success, backupCount, deletedCount, lockOwner, message }
      */
     static async forceUnlockSheet(spreadsheet, tab, reason = '') {
-        console.log(`[api.forceUnlockSheet] Called with spreadsheet=${spreadsheet}, tab=${tab}, reason=${reason}`);
-        console.log(`[api.forceUnlockSheet] ApplicationUtils type:`, typeof ApplicationUtils);
-        console.log(`[api.forceUnlockSheet] ApplicationUtils.forceUnlockSheet type:`, typeof ApplicationUtils.forceUnlockSheet);
+        //console.log(`[api.forceUnlockSheet] Called with spreadsheet=${spreadsheet}, tab=${tab}, reason=${reason}`);
+        //console.log(`[api.forceUnlockSheet] ApplicationUtils type:`, typeof ApplicationUtils);
+        //console.log(`[api.forceUnlockSheet] ApplicationUtils.forceUnlockSheet type:`, typeof ApplicationUtils.forceUnlockSheet);
         const result = await ApplicationUtils.forceUnlockSheet(spreadsheet, tab, reason);
-        console.log(`[api.forceUnlockSheet] ApplicationUtils.forceUnlockSheet returned:`, result);
+        //console.log(`[api.forceUnlockSheet] ApplicationUtils.forceUnlockSheet returned:`, result);
         return result;
     }
     
@@ -387,7 +387,7 @@ class Requests_uncached {
      */
     static async getPacklistLock(deps, tabName, currentUser = null) {
         const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName, currentUser);
-        console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
+        //console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
         return result;
     }
     
@@ -406,7 +406,7 @@ class Requests_uncached {
      */
     static async getInventoryLock(deps, tabName, currentUser = null) {
         const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName, currentUser);
-        console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
+        //console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
         return result;
     }
     

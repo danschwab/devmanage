@@ -259,7 +259,7 @@ class PriorityQueueManager {
             this.stats.byPriority[entry.priority].completed++;
             
             const duration = Date.now() - startTime;
-            console.log(`[PriorityQueue] Completed priority ${entry.priority} call in ${duration}ms (${entry.metadata.label || entry.id})`);
+            //console.log(`[PriorityQueue] Completed priority ${entry.priority} call in ${duration}ms (${entry.metadata.label || entry.id})`);
             
         } catch (error) {
             // Reject the main promise

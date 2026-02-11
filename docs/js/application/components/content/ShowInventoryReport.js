@@ -1,11 +1,11 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, parsedateFilterParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, parsedateFilterParameter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying inventory report across multiple shows
  * Shows: Item ID, Inventory Qty, quantities for each show, Remaining
  */
 export const ShowInventoryReport = {
-    components: { TableComponent, ItemImageComponent, ScheduleFilterSelect },
+    components: { TableComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -14,8 +14,7 @@ export const ShowInventoryReport = {
     data() {
         return {
             reportStore: null,
-            inventoryCategoriesStore: null,
-            itemCategoryFilter: undefined, // Optional filter for item categories
+            itemCategoryFilter: null, // Optional filter for item categories (string or null)
             showIdentifiers: [], // List of show IDs from search
             error: null,
             isLoadingShows: false, // Loading state for fetching shows before store creation
@@ -132,32 +131,28 @@ export const ShowInventoryReport = {
             return this.reportStore?.loadingMessage || 'Loading...';
         },
         
-        initialItemCategoryFilter() {
+        emptyMessage() {
+            // Check if a search has been performed by looking at URL parameters
             const params = NavigationRegistry.getParametersForContainer(
                 this.containerPath || 'inventory/reports/show-inventory',
                 this.appContext?.currentPath
             );
-            const filterParam = params?.itemCategoryFilter || null;
-            if (filterParam) {
-                return [filterParam];
+            const hasSearchParams = params && (params.dateFilter || params.textFilters || params.view);
+            
+            // If we have search params but no shows and not loading, it means no shows were found
+            if (hasSearchParams && this.showIdentifiers.length === 0 && !this.isLoadingShows) {
+                return 'No shows found for the selected search criteria';
             }
-            return undefined;
+            
+            // If we have shows selected but no items in the data, it means the category has no items
+            if (this.showIdentifiers.length > 0 && this.tableData.length === 0 && !this.isLoading && !this.isAnalyzing) {
+                return 'No items were found in this category.';
+            }
+            
+            return 'Select a schedule filter to load shows and generate report';
         }
     },
     watch: {
-        // watch for isLoading state of inventoryCategoriesStore to apply url filter
-        'inventoryCategoriesStore.isLoading': {
-            handler(isLoading, wasLoading) {
-                // When loading completes (isLoading goes from true to false)
-                if (wasLoading && !isLoading && this.inventoryCategoriesStore.data && this.inventoryCategoriesStore.data.length > 0) {
-                    this.$nextTick(() => {
-                        // ensure the select box changes
-                        this.itemCategoryFilter = this.initialItemCategoryFilter;
-                        this.initializeReportStore();
-                    });
-                }
-            }
-        }
     },
     methods: {
         async loadShowsFromSearch(searchData) {
@@ -254,16 +249,17 @@ export const ShowInventoryReport = {
                 }
                 
                 console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
+                console.log('[ShowInventoryReport] Current itemCategoryFilter at this point:', this.itemCategoryFilter);
                 
                 // Clear the loading state now that we have identifiers
                 this.isLoadingShows = false;
                 
                 // Initialize report store with these shows
                 if (this.showIdentifiers.length > 0) {
+                    console.log('[ShowInventoryReport] Calling initializeReportStore from loadShowsFromSearch');
                     this.initializeReportStore();
-                } else {
-                    this.error = 'No shows found for the selected search criteria';
                 }
+                // If no shows found, the computed emptyMessage will handle displaying appropriate message
             } catch (err) {
                 console.error('[ShowInventoryReport] Error loading shows:', err);
                 this.error = 'Failed to load shows: ' + err.message;
@@ -273,7 +269,15 @@ export const ShowInventoryReport = {
         },
 
         initializeReportStore() {
-            if (this.showIdentifiers.length === 0) return;
+            console.log('[ShowInventoryReport] initializeReportStore called', {
+                showIdentifiersCount: this.showIdentifiers.length,
+                itemCategoryFilter: this.itemCategoryFilter
+            });
+            
+            if (this.showIdentifiers.length === 0) {
+                console.log('[ShowInventoryReport] Skipping store initialization - no show identifiers yet');
+                return;
+            }
             
             // Build analysis config (only for tab name and inventory quantity)
             const analysisConfig = [
@@ -324,7 +328,7 @@ export const ShowInventoryReport = {
             this.reportStore = getReactiveStore(
                 Requests.getMultipleShowsItemsSummary,
                 null,
-                [this.showIdentifiers, this.itemCategoryFilter],
+                [this.showIdentifiers, this.itemCategoryFilter ? [this.itemCategoryFilter] : undefined],
                 analysisConfig,
                 true // Auto-load
             );
@@ -354,6 +358,7 @@ export const ShowInventoryReport = {
 
         async handleSearchSelected(searchData) {
             // Called when ScheduleFilterSelect emits search-selected event
+            console.log('[ShowInventoryReport] handleSearchSelected called with:', searchData);
             await this.loadShowsFromSearch(searchData);
         },
 
@@ -366,42 +371,34 @@ export const ShowInventoryReport = {
             ], true);
         },
 
-        updateCategoryFilterInUrl(newFilter) {
-            // Get current parameters
-            const currentParams = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-inventory',
-                this.appContext?.currentPath
-            );
-
-            // Build new parameters with updated category filter
-            const newParams = {
-                ...currentParams,
-                itemCategoryFilter: newFilter && newFilter.length > 0 ? newFilter[0] : undefined
-            };
-
-            // Remove undefined values
-            if (newParams.itemCategoryFilter === undefined) {
-                delete newParams.itemCategoryFilter;
-            }
-
-            // Build and navigate to new path
-            const newPath = NavigationRegistry.buildPath(
-                this.containerPath || 'inventory/reports/show-inventory',
-                newParams
-            );
-            this.navigateToPath(newPath);
+        handleCategorySelected(categoryName) {
+            console.log('[ShowInventoryReport] handleCategorySelected called with:', categoryName);
+            console.log('[ShowInventoryReport] Current state:', {
+                showIdentifiers: this.showIdentifiers,
+                itemCategoryFilter: this.itemCategoryFilter,
+                hasReportStore: !!this.reportStore
+            });
+            
+            // Update filter and reinitialize store
+            this.itemCategoryFilter = categoryName;
+            console.log('[ShowInventoryReport] Calling initializeReportStore()');
+            this.initializeReportStore();
         }
     },
     mounted() {
+        console.log('[ShowInventoryReport] Component mounted', {
+            containerPath: this.containerPath,
+            currentPath: this.appContext?.currentPath
+        });
         
-        this.inventoryCategoriesStore = getReactiveStore(
-            Requests.getAvailableTabs,
-            null, // No save function
-            ['INVENTORY'], // Arguments
-            null // No analysis config
+        // Get URL parameters to check what should be initialized
+        const params = NavigationRegistry.getParametersForContainer(
+            this.containerPath || 'inventory/reports/show-inventory',
+            this.appContext?.currentPath
         );
         
-        this.itemCategoryFilter = this.initialItemCategoryFilter;
+        console.log('[ShowInventoryReport] Initial URL parameters:', params);
+        console.log('[ShowInventoryReport] Waiting for child components (ScheduleFilterSelect and InventoryCategoryFilter) to sync with URL and emit events...');
     },
     template: html`
         <div :class="(tableColumns && tableColumns.length > 10) ? 'wide-table' : ''">
@@ -424,7 +421,7 @@ export const ShowInventoryReport = {
                 :is-analyzing="isAnalyzing"
                 :loading-message="loadingMessage"
                 :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
-                empty-message="Select a saved search to load shows and generate report"
+                :empty-message="emptyMessage"
                 @refresh="handleRefresh"
             >
                 <template #header-area>
@@ -435,24 +432,11 @@ export const ShowInventoryReport = {
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
-                        <span v-if="showIdentifiers.length > 0 || isLoading" class="card gray">
-                            {{ showIdentifiers.length }} show{{ showIdentifiers.length !== 1 ? 's' : '' }} {{isLoading ? 'loading...' : 'loaded'}}
-                        </span>
-                        <select 
-                            :value="itemCategoryFilter ? itemCategoryFilter[0] : ''" 
-                            :disabled="inventoryCategoriesStore && inventoryCategoriesStore.isLoading"
-                            @change="itemCategoryFilter = $event.target.value ? [$event.target.value] : undefined; updateCategoryFilterInUrl(itemCategoryFilter); initializeReportStore();"
-                            >
-                            <option v-for="category in inventoryCategoriesStore?.data || []" 
-                                    v-show= "category.title != 'INDEX'"
-                                    :key="category.title"
-                                    :value="category.title">
-                                {{ category.title }}
-                            </option>
-                            <option value="">
-                                All Items
-                            </option>
-                        </select>
+                        <InventoryCategoryFilter
+                            :container-path="containerPath || 'inventory/reports/show-inventory'"
+                            :navigate-to-path="navigateToPath"
+                            @category-selected="handleCategorySelected"
+                        />
                     </div>
                 </template>
 

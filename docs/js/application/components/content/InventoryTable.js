@@ -80,10 +80,31 @@ const NewItemNumberPrompt = {
                     this.isNewPrefix = false;
                 }
             } else {
-                // No matching items - this is a new prefix
-                this.suggestion = null;
-                this.isNewPrefix = true
-                this.suggestion = null;
+                // No direct matches - check if user typed a complete item following an existing pattern
+                // Extract the prefix part from user's input (e.g., "CHAIR-" from "CHAIR-005")
+                const prefixMatch = this.itemNumber.match(/^([A-Za-z\-_]+)(\d+)$/);
+                
+                if (prefixMatch) {
+                    const extractedPrefix = prefixMatch[1];
+                    // Check if any items start with this extracted prefix
+                    const prefixItems = this.existingItems
+                        .map(item => item.itemNumber)
+                        .filter(num => num && num.startsWith(extractedPrefix));
+                    
+                    if (prefixItems.length > 0) {
+                        // This prefix exists, so not a new prefix - just show default text
+                        this.suggestion = null;
+                        this.isNewPrefix = false;
+                    } else {
+                        // Truly a new prefix
+                        this.suggestion = null;
+                        this.isNewPrefix = true;
+                    }
+                } else {
+                    // User is typing a prefix (e.g., "BLAH-")
+                    this.suggestion = null;
+                    this.isNewPrefix = true;
+                }
             }
         },
         detectPatternFromPrefix(prefix, matchingItems) {
@@ -699,6 +720,7 @@ export const InventoryTableComponent = {
                 :error="error"
                 :showRefresh="true"
                 :showSearch="true"
+                :showNewRowButton="allowEdit"
                 :sync-search-with-url="true"
                 :container-path="containerPath"
                 :navigate-to-path="appContext.navigateToPath"
@@ -712,9 +734,6 @@ export const InventoryTableComponent = {
                 @on-save="handleSave"
             >
                 <template #header-area>
-                    <div class="button-bar">
-                        <button v-if="allowEdit" @click="handleNewRow(null)" class="purple">New Item</button>
-                    </div>
                 </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <ItemImageComponent 

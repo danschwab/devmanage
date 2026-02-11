@@ -889,6 +889,10 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        showNewRowButton: {
+            type: Boolean,
+            default: false
+        },
         showFooter: {
             type: Boolean,
             default: true
@@ -2492,12 +2496,10 @@ export const TableComponent = {
             </div>
 
             <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
-                <!--h3 v-if="title">{{ title }}</h3-->
                 <slot 
                     name="header-area"
                 ></slot>
-                <p v-if="isAnalyzing">{{ loadingMessage }}</p>
-                <div v-if="showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showSaveButton || showRefresh || showSearch}">
+                <div v-if="showNewRowButton || showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
                     <div v-if="showSearch" class="input-container">
                         <input
                             type="text"
@@ -2516,6 +2518,14 @@ export const TableComponent = {
                             ✕
                         </button>
                     </div>
+                    <button
+                        v-if="showNewRowButton"
+                        @click="$emit('new-row')"
+                        :disabled="isLoading"
+                        :class="theme"
+                    >
+                        New Item
+                    </button>
                     <button
                         v-if="showSaveButton || allowSaveEvent"
                         @click="handleSave"
@@ -2811,8 +2821,11 @@ export const TableComponent = {
                 <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                 <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
             </div>
-            <div key="empty-state" v-else-if="showFooter" :class="['content-footer', theme]">
-                <p>{{ isLoading || isAnalyzing ? loadingMessage : emptyMessage }}</p>
+            <div key="loading-state" v-else-if="showFooter && (isLoading || isAnalyzing)" :class="['content-footer', theme, 'loading-message']">
+                <p>{{ loadingMessage }}</p>
+            </div>
+            <div key="empty-state" v-else-if="showFooter && (!data || data.length === 0)" :class="['content-footer', theme, 'empty-message']">
+                <p>{{ emptyMessage }}</p>
             </div>
         </div>
     `

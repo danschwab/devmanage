@@ -54,7 +54,7 @@ export const PacklistTable = {
                     return {
                         key: label,
                         label,
-                        width: ['Description','Packing/shop notes'].includes(label) ? 300 : 30,
+                        width: ['Description','Packing/shop notes'].includes(label) ? 200 : 40,
                         colspan: this.itemHeaders.length,
                         font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
                     };
@@ -64,7 +64,7 @@ export const PacklistTable = {
                         label,
                         editable: isEditable,
                         details: null,
-                        width: ['Description', 'Packing/shop notes'].includes(label) ? 300 : 30,
+                        width: ['Description', 'Packing/shop notes'].includes(label) ? 200 : 40,
                         font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
                     };
                 };
@@ -716,6 +716,33 @@ export const PacklistTable = {
         },
 
         /**
+         * Clear all alerts from all items in the table
+         */
+        clearAllAlerts() {
+            if (!this.mainTableData || this.mainTableData.length === 0) {
+                return;
+            }
+
+            // Iterate through all crates
+            this.mainTableData.forEach(crate => {
+                if (crate.Items && Array.isArray(crate.Items)) {
+                    // Iterate through all items in the crate
+                    crate.Items.forEach(item => {
+                        if (item.AppData) {
+                            // Only delete alert keys (objects with message property, not ending in _error)
+                            Object.keys(item.AppData).forEach(key => {
+                                const value = item.AppData[key];
+                                if (value && typeof value === 'object' && value.message && !key.endsWith('_error')) {
+                                    delete item.AppData[key];
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        },
+
+        /**
          * Handle click on an alert card
          * @param {Object} item - The item row containing the alert
          * @param {string} alertKey - The AppData key for this alert
@@ -889,7 +916,7 @@ export const PacklistTable = {
                 <p>Error: {{ error }}</p>
             </div>
             
-            <div v-if="!editMode && lockedByOther" class="card white">
+            <div v-if="!editMode && lockedByOther && !isPrinting" class="card white">
                 Locked for edit by: {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
             </div>
 
@@ -984,7 +1011,7 @@ export const PacklistTable = {
                                     key: label, 
                                     label, 
                                     editable: editMode && ['Description','Packing/shop notes'].includes(label),
-                                    width: ['Description','Packing/shop notes'].includes(label) ? undefined : 30,
+                                    width: ['Description','Packing/shop notes'].includes(label) ? 200 : 40,
                                     font: ['Description','Packing/shop notes'].includes(label) ? '' : 'narrow'
                                 }))"
                                 :hide-columns="hiddenColumns"

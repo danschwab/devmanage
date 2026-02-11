@@ -162,6 +162,7 @@ export const PacklistItemsSummary = {
     template: html`
         <div class="packlist-items-summary">
             <div class="content">
+                <button @click="navigateBackToPacklist">View Packlist</button>
                 <div class="details-grid">
                     <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
                         <label>{{ key }}:</label>
@@ -176,6 +177,7 @@ export const PacklistItemsSummary = {
                 :columns="tableColumns"
                 :hide-columns="['tabName']"
                 :show-search="true"
+                :showRefresh="false"
                 :sync-search-with-url="true"
                 :container-path="containerPath || 'packlist/' + projectIdentifier + '/details'"
                 :navigate-to-path="appContext.navigateToPath"
@@ -216,7 +218,7 @@ export const PacklistItemsSummary = {
                         <slot v-else class="overlapping-shows-buttons">
                             <button v-for="packlistId in row.overlappingShows" 
                                     :key="packlistId"
-                                    @click="appContext.navigateToPath('packlist/' + packlistId)"
+                                    @click="appContext.navigateToPath('packlist/' + packlistId + '/details')"
                                     class="card white">
                                 {{ packlistId }}
                             </button>

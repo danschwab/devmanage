@@ -228,25 +228,10 @@ export const CardsComponent = {
     },
     template: html`
         <div class="cards-component content">
-            
-            <!-- Initial Loading State (no items yet) -->
-            <div v-if="!showHeader && isLoading && !(shouldShowCards && visibleCards.length > 0)" class="loading-message">
-                <img src="images/loading.gif" alt="Loading..."/>
-                <p>{{ loadingMessage }}</p>
-            </div>
-            
-            <!-- Empty State -->
-            <div v-else-if="!showHeader && shouldShowEmpty" class="empty-message">
-                <p>{{ emptyMessage }}</p>
-            </div>
-            
             <div key="content-header" v-if="showHeader" class="content-header">
-                <!--h3 v-if="title">{{ title }}</h3-->
                 <slot 
                     name="header-area" 
                 ></slot>
-                <p v-if="isLoading || isAnalyzing">{{ loadingMessage }}</p>
-                <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
                 
                 <div v-if="showRefresh || showSearch" class="button-bar">
                     <div v-if="showSearch" class="input-container">
@@ -307,6 +292,14 @@ export const CardsComponent = {
                     </div>
                 </div>
             </div>
+
+            
+            <!-- Initial Loading State (no items yet) -->
+            <div v-if="isLoading || isAnalyzing" class="loading-message">
+                <img v-if="!showHeader && !shouldShowCards" src="images/loading.gif" alt="Loading..."/>
+                <p>{{ loadingMessage || 'Loading...' }}</p>
+            </div>
+            <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
         </div>
     `
 };

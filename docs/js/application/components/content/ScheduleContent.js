@@ -14,11 +14,12 @@ export const ScheduleMenuComponent = {
         menuItems() {
             const items = [];
             
-            items.push(
-                { label: 'Calendar View', action: 'showCalendarView', disabled: true },
-                { label: 'Chart View', action: 'showChartView', disabled: true },
-                { label: 'Set Current As Default', action: 'setAsDefault', disabled: true }
-            );
+            // Placeholder items - not yet implemented
+            // items.push(
+            //     { label: 'Calendar View', action: 'showCalendarView', disabled: true },
+            //     { label: 'Chart View', action: 'showChartView', disabled: true },
+            //     { label: 'Set Current As Default', action: 'setAsDefault', disabled: true }
+            // );
             
             return items;
         }

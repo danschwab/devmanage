@@ -935,7 +935,7 @@ export const ScheduleAdvancedFilter = {
                 @change="handleScheduleFilterSelection"
                 style="flex: auto;"
             >
-                <option :value="null">{{ selectedSavedSearchIndex === null ? 'New Filter' : 'Unsaved Filter' }}</option>
+                <option :value="null">{{ selectedSavedSearchIndex === null ? 'Unsaved Filter' : 'New Filter' }}</option>
                 <option 
                     v-for="(search, index) in savedSearches" 
                     :key="index" 
@@ -1137,7 +1137,13 @@ export const ScheduleFilterSelect = {
             
             if (!value) {
                 this.$emit('search-selected', null);
-                this.updateURL({});
+                // Clear all schedule filter parameters by setting them to undefined
+                this.updateURL({ 
+                    dateFilter: undefined, 
+                    textFilters: undefined, 
+                    byShowDate: undefined, 
+                    view: undefined 
+                });
                 return;
             }
             
@@ -1179,16 +1185,21 @@ export const ScheduleFilterSelect = {
             const cleanPath = this.containerPath.split('?')[0];
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
+            // Merge with current parameters to preserve other URL params
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                cleanPath,
+                this.appContext?.currentPath,
+                params
+            );
+            
             if (isOnDashboard) {
                 // Update dashboard registry with new path including params
-                const newPath = NavigationRegistry.buildPath(cleanPath, params);
                 NavigationRegistry.dashboardRegistry.updatePath(
                     cleanPath,
                     newPath
                 );
             } else if (this.navigateToPath) {
-                const path = NavigationRegistry.buildPath(cleanPath, params);
-                this.navigateToPath(path);
+                this.navigateToPath(newPath);
             }
         },
         
@@ -1312,6 +1323,7 @@ export const ScheduleFilterSelect = {
             :value="selectedValue"
             @change="handleChange"
             :disabled="isLoading"
+            :title="isLoading ? 'Loading schedule filters...' : 'Select a schedule filter'"
         >
             <option value="" v-if="isLoading">Loading...</option>
             <option value="" v-else-if="availableOptions.length === 0">No options available</option>
@@ -1329,9 +1341,217 @@ export const ScheduleFilterSelect = {
         <button 
             v-if="showAdvancedButton" 
             class="button-symbol"
+            title="Open advanced search options"
             @click="openAdvancedSearchModal"
         >
             ☰
         </button>
+    `
+};
+
+/**
+ * Reusable component for inventory category filtering
+ * Handles category selection with URL parameter synchronization
+ */
+export const InventoryCategoryFilter = {
+    inject: ['appContext'],
+    props: {
+        containerPath: {
+            type: String,
+            required: true
+        },
+        navigateToPath: {
+            type: Function,
+            default: null
+        }
+    },
+    data() {
+        return {
+            categoriesStore: null,
+            selectedCategory: '',
+            hasPerformedInitialSync: false
+        };
+    },
+    computed: {
+        categories() {
+            return this.categoriesStore?.data || [];
+        },
+        
+        isLoading() {
+            return this.categoriesStore?.isLoading || false;
+        },
+        
+        // Filter out INDEX category
+        visibleCategories() {
+            return this.categories.filter(cat => cat.title !== 'INDEX');
+        }
+    },
+    watch: {
+        // Watch for URL parameter changes
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
+                // Skip initial load (handled by mounted)
+                if (!oldPath) return;
+                
+                // Get params for both paths
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath,
+                    oldPath
+                );
+                
+                // Skip if params haven't actually changed
+                if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+                
+                console.log('[InventoryCategoryFilter] URL parameters changed, syncing dropdown');
+                this.syncWithURL();
+            },
+            deep: true
+        },
+        
+        // Watch for categories data loading completion
+        'categoriesStore.isLoading': {
+            handler(isLoading, wasLoading) {
+                // When loading completes, perform initial sync if needed
+                if (wasLoading && !isLoading && this.categories.length > 0 && !this.hasPerformedInitialSync) {
+                    this.hasPerformedInitialSync = true;
+                    this.syncWithURL();
+                }
+            }
+        }
+    },
+    async mounted() {
+        console.log('[InventoryCategoryFilter] Mounting component', {
+            containerPath: this.containerPath,
+            currentPath: this.appContext?.currentPath
+        });
+        
+        // Initialize categories store
+        this.categoriesStore = getReactiveStore(
+            Requests.getAvailableTabs,
+            null, // No save function
+            ['INVENTORY'], // Arguments
+            null // No analysis config
+        );
+        
+        console.log('[InventoryCategoryFilter] Categories store initialized, isLoading:', this.categoriesStore.isLoading);
+        
+        // Wait for initial load to complete
+        if (this.categoriesStore.isLoading) {
+            console.log('[InventoryCategoryFilter] Waiting for categories to load...');
+            await new Promise(resolve => {
+                const unwatch = this.$watch('categoriesStore.isLoading', (newValue) => {
+                    if (!newValue) {
+                        console.log('[InventoryCategoryFilter] Categories loaded, count:', this.categories.length);
+                        unwatch();
+                        resolve();
+                    }
+                });
+            });
+        }
+        
+        // Perform initial sync after data is loaded
+        console.log('[InventoryCategoryFilter] Performing initial sync with URL');
+        this.hasPerformedInitialSync = true;
+        this.syncWithURL();
+    },
+    methods: {
+        handleChange(event) {
+            const value = event.target.value;
+            console.log('[InventoryCategoryFilter] User changed category selection:', value);
+            this.selectedCategory = value;
+            
+            // Emit event with category name or null for "All Items"
+            const categoryName = value || null;
+            
+            console.log('[InventoryCategoryFilter] Emitting category-selected and updating URL with:', categoryName);
+            this.$emit('category-selected', categoryName);
+            this.updateURL(categoryName);
+        },
+        
+        updateURL(categoryName) {
+            console.log('[InventoryCategoryFilter] updateURL called with:', categoryName);
+            const cleanPath = this.containerPath.split('?')[0];
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            
+            console.log('[InventoryCategoryFilter] Update context:', {
+                cleanPath,
+                isOnDashboard,
+                currentPath: this.appContext?.currentPath
+            });
+            
+            // Build new path with itemCategoryFilter parameter
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                cleanPath,
+                this.appContext?.currentPath,
+                {
+                    itemCategoryFilter: categoryName || undefined // undefined removes the parameter
+                }
+            );
+            
+            console.log('[InventoryCategoryFilter] Built new path:', newPath);
+            
+            if (isOnDashboard) {
+                // Update dashboard registry with new path
+                console.log('[InventoryCategoryFilter] Updating dashboard registry');
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    cleanPath,
+                    newPath
+                );
+            } else if (this.navigateToPath) {
+                console.log('[InventoryCategoryFilter] Calling navigateToPath with:', newPath);
+                this.navigateToPath(newPath);
+            } else {
+                console.log('[InventoryCategoryFilter] No navigation method available');
+            }
+        },
+        
+        syncWithURL() {
+            console.log('[InventoryCategoryFilter] syncWithURL called');
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext?.currentPath
+            );
+            
+            console.log('[InventoryCategoryFilter] URL parameters:', params);
+            
+            // Get itemCategoryFilter from URL params
+            const categoryFromUrl = params?.itemCategoryFilter || '';
+            
+            console.log('[InventoryCategoryFilter] Category from URL:', categoryFromUrl, 'hasPerformedInitialSync:', this.hasPerformedInitialSync);
+            
+            // Update selected category
+            this.selectedCategory = categoryFromUrl;
+            
+            // Emit the category if component is being used
+            if (this.hasPerformedInitialSync) {
+                console.log('[InventoryCategoryFilter] Emitting category-selected event:', categoryFromUrl || null);
+                this.$emit('category-selected', categoryFromUrl || null);
+            } else {
+                console.log('[InventoryCategoryFilter] Skipping event emit - not initialized yet');
+            }
+        }
+    },
+    template: html`
+        <select 
+            :value="selectedCategory"
+            :title="isLoading ? 'Loading inventory filters...' : 'Select an inventory filter'"
+            @change="handleChange"
+            :disabled="isLoading"
+        >
+            <option value="">
+                {{ isLoading ? 'Loading...' : 'All Items' }}
+            </option>
+            <option 
+                v-for="category in visibleCategories" 
+                :key="category.title"
+                :value="category.title"
+            >
+                {{ category.title }}
+            </option>
+        </select>
     `
 };
