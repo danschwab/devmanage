@@ -361,11 +361,18 @@ export const InventoryTableComponent = {
             return this.inventoryTableStore ? this.inventoryTableStore.isLoading : false;
         },
         isDirty() {
-            return this.inventoryTableStore?.isModified || false;
+            const result = this.inventoryTableStore?.isModified || false;
+            console.log('[InventoryTable] isDirty computed:', result, '| store exists:', !!this.inventoryTableStore, '| isModified:', this.inventoryTableStore?.isModified);
+            return result;
         },
         allowEdit() {
             // Allow editing only if editMode is true AND not locked by another user AND lock check is complete
             return this.editMode && !this.lockedByOther && this.lockCheckComplete;
+        },
+        allowSave() {
+            const result = this.isDirty && !this.lockedByOther && this.lockCheckComplete;
+            console.log('[InventoryTable] allowSave computed:', result, '| isDirty:', this.isDirty, '| lockedByOther:', this.lockedByOther, '| lockCheckComplete:', this.lockCheckComplete);
+            return result;
         }
     },
     async mounted() {
@@ -395,7 +402,8 @@ export const InventoryTableComponent = {
         await this.checkLockStatus();
     },
     watch: {
-        isDirty(newValue) {
+        isDirty(newValue, oldValue) {
+            console.log('[InventoryTable] isDirty watcher fired:', oldValue, '->', newValue, '| lockCheckComplete:', this.lockCheckComplete, '| lockedByOther:', this.lockedByOther);
             if (!this.lockCheckComplete || this.lockedByOther) return;
             this.handleLockState(newValue);
         },
@@ -467,6 +475,7 @@ export const InventoryTableComponent = {
         },
         
         async handleLockState(isDirty) {
+            console.log('[InventoryTable] handleLockState called with isDirty:', isDirty, '| isLocked:', this.isLocked, '| lockingInProgress:', this.lockingInProgress, '| lockedByOther:', this.lockedByOther);
             if (this.lockingInProgress || this.lockedByOther) return;
             
             const user = authState.user?.email;
@@ -701,6 +710,12 @@ export const InventoryTableComponent = {
             if (this.inventoryTableStore) {
                 console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
                 await this.inventoryTableStore.save('Saving inventory...');            }
+        },
+
+        handleCategoriesClick() {
+            if (this.appContext?.navigateToPath) {
+                this.appContext.navigateToPath('inventory/categories');
+            }
         }
     },
     template: html `
@@ -725,6 +740,7 @@ export const InventoryTableComponent = {
                 :container-path="containerPath"
                 :navigate-to-path="appContext.navigateToPath"
                 :newRow="allowEdit"
+                :external-dirty-state="isDirty"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
                 class="inventory-table-component mark-dirty"
@@ -734,6 +750,7 @@ export const InventoryTableComponent = {
                 @on-save="handleSave"
             >
                 <template #header-area>
+                    <button @click="handleCategoriesClick" class="purple">Categories</button>
                 </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <ItemImageComponent 

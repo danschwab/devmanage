@@ -9,7 +9,7 @@ export { html } from './utils/template-helpers.js';
 export { Auth, authState } from './utils/auth.js';
 export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey } from './utils/reactiveStores.js';
 export { Priority } from './utils/priorityQueue.js';
-export { undoRegistry } from './utils/undoRegistry.js';
+export { undoRegistry, setTableRowSelectionState } from './utils/undoRegistry.js';
 
 // Navigation components
 export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';

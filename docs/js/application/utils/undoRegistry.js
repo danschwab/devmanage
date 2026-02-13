@@ -1,6 +1,13 @@
 // Global undo/redo registry for table operations
 // Route-scoped undo stacks that maintain separate histories per navigation path
 
+// Store reference to tableRowSelectionState (will be set by tableComponent on load)
+let tableRowSelectionState = null;
+
+export function setTableRowSelectionState(selectionState) {
+    tableRowSelectionState = selectionState;
+}
+
 export const undoRegistry = Vue.reactive({
     // Route-scoped undo/redo stacks
     undoStacksByRoute: new Map(), // routeKey -> { undoStack: [], redoStack: [], arrayRefs: Set }
@@ -11,9 +18,13 @@ export const undoRegistry = Vue.reactive({
     // Configuration
     maxUndoSteps: 50, // Maximum undo steps per route
     maxRouteStacks: 10, // Maximum number of routes to track (LRU eviction)
+    selectionCooldown: 1000, // 1 second cooldown for selection state changes
     
     // Track current edit capture to prevent duplicate captures
     _currentEditCapture: null, // { routeKey, tableId, rowIndex, colIndex }
+    
+    // Track current selection capture for cooldown
+    _currentSelectionCapture: null, // { routeKey, timestamp, arrayRefs: Set }
     
     // Get or create route stacks with LRU eviction
     _getRouteStacks(routeKey) {
@@ -40,6 +51,7 @@ export const undoRegistry = Vue.reactive({
     setActiveRoute(routeKey) {
         this.currentRouteKey = routeKey;
         this._currentEditCapture = null; // Clear edit capture when route changes
+        this._currentSelectionCapture = null; // Clear selection capture cooldown when route changes
         console.log(`[Undo] Active route set to: ${routeKey}`);
     },
     
@@ -49,7 +61,8 @@ export const undoRegistry = Vue.reactive({
         const {
             type = 'operation',
             cellInfo = null,
-            preventDuplicates = false
+            preventDuplicates = false,
+            selectionState = null // Optional: pass tableRowSelectionState to capture selections
         } = options;
         
         // Normalize arrays to always be an array of data arrays
@@ -83,7 +96,70 @@ export const undoRegistry = Vue.reactive({
             }
         }
         
+        // Selection cooldown handling for selection-toggle operations
+        if (type === 'selection-toggle' && selectionState) {
+            const now = Date.now();
+            
+            // Check if we're within cooldown period
+            if (this._currentSelectionCapture &&
+                this._currentSelectionCapture.routeKey === routeKey &&
+                (now - this._currentSelectionCapture.timestamp) < this.selectionCooldown) {
+                
+                // Check if any of the arrays are new (not in current capture)
+                const newArrays = arrayList.filter(arr => !this._currentSelectionCapture.arrayRefs.has(arr));
+                
+                if (newArrays.length === 0) {
+                    // All arrays already captured, reset cooldown timer
+                    this._currentSelectionCapture.timestamp = now;
+                    console.log(`[Undo] Selection in tracked array - cooldown reset (${this.selectionCooldown}ms)`);
+                    return;
+                } else {
+                    // New arrays detected - add them to the existing capture
+                    console.log(`[Undo] Adding ${newArrays.length} new array(s) to existing selection capture`);
+                    
+                    const stacks = this._getRouteStacks(routeKey);
+                    const existingSnapshot = stacks.undoStack[stacks.undoStack.length - 1];
+                    
+                    // Capture selection state for new arrays only
+                    const newArraySelections = this._captureSelectionState(selectionState, newArrays);
+                    
+                    // Add new array snapshots to existing snapshot
+                    newArrays.forEach(arr => {
+                        existingSnapshot.arrays.push({
+                            tableId: arr._tableId || 'unknown',
+                            arrayRef: arr,
+                            snapshot: this._createSnapshotWithoutAppData(arr)
+                        });
+                    });
+                    
+                    // Merge new selections into existing selections
+                    if (newArraySelections && existingSnapshot.selections) {
+                        existingSnapshot.selections.selections.push(...newArraySelections.selections);
+                        existingSnapshot.selections.affectedArrays.push(...newArrays);
+                    } else if (newArraySelections) {
+                        existingSnapshot.selections = newArraySelections;
+                    }
+                    
+                    // Add new arrays to current capture tracking and reset cooldown timer
+                    newArrays.forEach(arr => {
+                        this._currentSelectionCapture.arrayRefs.add(arr);
+                        stacks.arrayRefs.add(arr);
+                    });
+                    this._currentSelectionCapture.timestamp = now;
+                    
+                    console.log(`[Undo] Updated selection capture - now tracking ${this._currentSelectionCapture.arrayRefs.size} array(s), cooldown reset`);
+                    return;
+                }
+            }
+        }
+        
         const stacks = this._getRouteStacks(routeKey);
+        
+        // Capture selection state if provided
+        let capturedSelections = null;
+        if (selectionState) {
+            capturedSelections = this._captureSelectionState(selectionState, arrayList);
+        }
         
         // Create snapshots of all involved arrays (excluding AppData)
         const arraySnapshots = arrayList.map(arr => ({
@@ -97,7 +173,8 @@ export const undoRegistry = Vue.reactive({
             timestamp: Date.now(),
             routeKey,
             cellInfo,
-            arrays: arraySnapshots
+            arrays: arraySnapshots,
+            selections: capturedSelections // Store selection state
         };
         
         // Add to undo stack
@@ -120,13 +197,175 @@ export const undoRegistry = Vue.reactive({
             this._currentEditCapture = { routeKey, tableId, rowIndex: cellInfo.rowIndex, colIndex: cellInfo.colIndex };
         }
         
+        // Mark selection as captured if this was a selection-toggle operation
+        if (type === 'selection-toggle' && selectionState) {
+            this._currentSelectionCapture = {
+                routeKey,
+                timestamp: Date.now(),
+                arrayRefs: new Set(arrayList)
+            };
+            console.log(`[Undo] Started selection cooldown (${this.selectionCooldown}ms) for ${arrayList.length} array(s)`);
+        } else if (type !== 'selection-toggle') {
+            // Clear selection cooldown for non-selection operations
+            this._currentSelectionCapture = null;
+        }
+        
+        const selectionDesc = capturedSelections ? ` with ${capturedSelections.selections.length} selection(s)` : '';
         const opDesc = cellInfo ? `cell edit [${cellInfo.rowIndex}, ${cellInfo.colIndex}]` : `${type} with ${arrayList.length} array(s)`;
-        console.log(`[Undo] Captured ${opDesc} for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
+        console.log(`[Undo] Captured ${opDesc}${selectionDesc} for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
     },
     
     // Clear current edit capture (called on blur or route change)
     clearCurrentEditCapture() {
         this._currentEditCapture = null;
+    },
+    
+    // Clear current selection capture cooldown
+    clearCurrentSelectionCapture() {
+        this._currentSelectionCapture = null;
+    },
+    
+    // Capture current selection state
+    _captureSelectionState(selectionState, arrayList) {
+        if (!selectionState) {
+            return null;
+        }
+        
+        if (selectionState.selections.size === 0) {
+            console.log('[Undo] Capturing empty selection state');
+            // Return empty state (not null) so undo can restore to "no selections"
+            return {
+                selections: [],
+                dragId: selectionState.dragId,
+                affectedArrays: arrayList // Store which arrays this capture is for
+            };
+        }
+        
+        console.log(`[Undo] Capturing ${selectionState.selections.size} selection(s)`);
+        
+        // Store references to selected row objects and their source arrays
+        // This allows us to find them after array mutations
+        const capturedSelections = [];
+        
+        for (const [selectionKey, selection] of selectionState.selections) {
+            const { rowIndex, sourceArray, dragId } = selection;
+            const rowObject = sourceArray[rowIndex];
+            console.log(`[Undo]   - Capturing row ${rowIndex} from array (length: ${sourceArray.length})`);
+            
+            // Only capture selections for arrays involved in this operation
+            if (rowObject && arrayList.includes(sourceArray)) {
+                // Store multiple ways to identify the row since object references break on snapshot restore
+                const identifiers = {
+                    Show: rowObject.Show,
+                    Item: rowObject.Item,
+                    Crate: rowObject.Crate,
+                    Description: rowObject.Description,
+                    Quantity: rowObject.Quantity
+                };
+                
+                capturedSelections.push({
+                    rowObject: rowObject, // Store row object reference (may break)
+                    rowIndex: rowIndex, // Store original index as fallback
+                    identifiers: identifiers, // Store key properties to match by content
+                    sourceArray: sourceArray, // Store array reference
+                    dragId: dragId
+                });
+            }
+        }
+        
+        console.log(`[Undo] Captured ${capturedSelections.length} selection(s) total`);
+        
+        return {
+            selections: capturedSelections,
+            dragId: selectionState.dragId,
+            affectedArrays: arrayList // Store which arrays this capture is for
+        };
+    },
+    
+    // Restore selection state
+    _restoreSelectionState(capturedSelections, selectionState) {
+        if (!capturedSelections || !selectionState) {
+            console.log('[Undo] No selection state to restore (null or undefined)');
+            return;
+        }
+        
+        const selectionCount = capturedSelections.selections.length;
+        if (selectionCount === 0) {
+            console.log(`[Undo] Restoring empty selection state (clearing selections from affected arrays)`);
+        } else {
+            console.log(`[Undo] Restoring ${selectionCount} selection(s)`);
+        }
+        
+        // Only clear selections from the arrays involved in this operation
+        // This preserves selections from other tables
+        const affectedArrays = capturedSelections.affectedArrays || [];
+        let previousCount = 0;
+        affectedArrays.forEach(array => {
+            const countBefore = selectionState.getArraySelectionCount(array);
+            previousCount += countBefore;
+            selectionState.clearArray(array);
+        });
+        console.log(`[Undo]   - Cleared ${previousCount} previous selection(s) from ${affectedArrays.length} affected array(s)`);
+        
+        // Restore selections by finding where the rows are now
+        let restoredCount = 0;
+        capturedSelections.selections.forEach(({ rowObject, rowIndex, identifiers, sourceArray, dragId }) => {
+            let currentIndex = -1;
+            
+            // Strategy 1: Try to find by object reference (works if references preserved)
+            currentIndex = sourceArray.indexOf(rowObject);
+            
+            // Strategy 2: If object reference fails, try original index (works if array unchanged)
+            if (currentIndex === -1 && rowIndex < sourceArray.length) {
+                // Verify this is actually the same row by checking identifiers
+                const rowAtIndex = sourceArray[rowIndex];
+                let matches = true;
+                for (const [key, value] of Object.entries(identifiers)) {
+                    if (value !== undefined && rowAtIndex[key] !== value) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    currentIndex = rowIndex;
+                    console.log(`[Undo]   - Found row at original index ${rowIndex} (verified by identifiers)`);
+                }
+            }
+            
+            // Strategy 3: If still not found, search by identifiers
+            if (currentIndex === -1) {
+                for (let i = 0; i < sourceArray.length; i++) {
+                    const row = sourceArray[i];
+                    let matches = true;
+                    for (const [key, value] of Object.entries(identifiers)) {
+                        if (value !== undefined && row[key] !== value) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) {
+                        currentIndex = i;
+                        console.log(`[Undo]   - Found row at index ${i} by matching identifiers`);
+                        break;
+                    }
+                }
+            }
+            
+            if (currentIndex !== -1) {
+                selectionState.addRow(currentIndex, sourceArray, dragId);
+                console.log(`[Undo]   - Restored selection at index ${currentIndex} in array (length: ${sourceArray.length})`);
+                restoredCount++;
+            } else {
+                console.log(`[Undo]   - Could not find row in array (length: ${sourceArray.length}), identifiers:`, identifiers);
+            }
+        });
+        
+        // Restore dragId
+        if (capturedSelections.dragId) {
+            selectionState.dragId = capturedSelections.dragId;
+        }
+        
+        console.log(`[Undo] Successfully restored ${restoredCount} of ${capturedSelections.selections.length} selection(s)`);
     },
     
     // Create a snapshot of an array without AppData (to avoid interfering with analytics)
@@ -202,6 +441,13 @@ export const undoRegistry = Vue.reactive({
         // Pop state from undo stack
         const state = stacks.undoStack.pop();
         
+        // Capture current selection state BEFORE restoring arrays (if we have tableRowSelectionState)
+        let currentSelections = null;
+        if (typeof tableRowSelectionState !== 'undefined') {
+            const arrayList = state.arrays.map(a => a.arrayRef);
+            currentSelections = this._captureSelectionState(tableRowSelectionState, arrayList);
+        }
+        
         // Save current state to redo stack before restoring (excluding AppData)
         const redoState = {
             type: state.type,
@@ -212,7 +458,8 @@ export const undoRegistry = Vue.reactive({
                 tableId: arrSnapshot.tableId,
                 arrayRef: arrSnapshot.arrayRef,
                 snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
-            }))
+            })),
+            selections: currentSelections // Use captured current selections
         };
         stacks.redoStack.push(redoState);
         
@@ -225,8 +472,17 @@ export const undoRegistry = Vue.reactive({
             this._restoreSnapshotPreservingAppData(targetArray, snapshot);
         });
         
+        // Restore selection state (must happen after arrays are restored)
+        console.log(`[Undo] About to restore selection state for undo operation`);
+        if (state.selections && typeof tableRowSelectionState !== 'undefined') {
+            this._restoreSelectionState(state.selections, tableRowSelectionState);
+        } else {
+            console.log(`[Undo] No selection state in undo snapshot`);
+        }
+        
         // Clear current edit capture so subsequent edits can create new snapshots
         this._currentEditCapture = null;
+        this._currentSelectionCapture = null;
         
         console.log(`[Undo] Undid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
         return true;
@@ -254,6 +510,13 @@ export const undoRegistry = Vue.reactive({
         // Pop state from redo stack
         const state = stacks.redoStack.pop();
         
+        // Capture current selection state BEFORE restoring arrays (if we have tableRowSelectionState)
+        let currentSelections = null;
+        if (typeof tableRowSelectionState !== 'undefined') {
+            const arrayList = state.arrays.map(a => a.arrayRef);
+            currentSelections = this._captureSelectionState(tableRowSelectionState, arrayList);
+        }
+        
         // Save current state to undo stack before restoring (excluding AppData)
         const undoState = {
             type: state.type,
@@ -264,7 +527,8 @@ export const undoRegistry = Vue.reactive({
                 tableId: arrSnapshot.tableId,
                 arrayRef: arrSnapshot.arrayRef,
                 snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
-            }))
+            })),
+            selections: currentSelections // Use captured current selections
         };
         stacks.undoStack.push(undoState);
         
@@ -277,8 +541,17 @@ export const undoRegistry = Vue.reactive({
             this._restoreSnapshotPreservingAppData(targetArray, snapshot);
         });
         
+        // Restore selection state (must happen after arrays are restored)
+        console.log(`[Undo] About to restore selection state for redo operation`);
+        if (state.selections && typeof tableRowSelectionState !== 'undefined') {
+            this._restoreSelectionState(state.selections, tableRowSelectionState);
+        } else {
+            console.log(`[Undo] No selection state in redo snapshot`);
+        }
+        
         // Clear current edit capture so subsequent edits can create new snapshots
         this._currentEditCapture = null;
+        this._currentSelectionCapture = null;
         
         console.log(`[Undo] Redid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
         return true;

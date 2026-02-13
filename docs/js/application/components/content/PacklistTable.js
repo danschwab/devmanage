@@ -1,6 +1,122 @@
 import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
+// Packlist Table Hamburger Menu Component
+const PacklistTableMenuComponent = {
+    props: {
+        clearAllAlertsCallback: Function,
+        refreshCallback: Function
+    },
+    inject: ['$modal'],
+    computed: {
+        menuItems() {
+            return [
+                { label: 'Refresh', action: 'refresh' },
+                { label: 'Clear All Alerts', action: 'clearAllAlerts' }
+            ];
+        }
+    },
+    methods: {
+        handleAction(action) {
+            switch (action) {
+                case 'refresh':
+                    if (this.refreshCallback) {
+                        this.refreshCallback();
+                    }
+                    this.$emit('close-modal');
+                    break;
+                case 'clearAllAlerts':
+                    if (this.clearAllAlertsCallback) {
+                        this.clearAllAlertsCallback();
+                    }
+                    this.$emit('close-modal');
+                    break;
+                default:
+                    this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
+            }
+        }
+    },
+    template: html`
+        <ul>
+            <li v-for="item in menuItems" :key="item.action">
+                <button 
+                    @click="handleAction(item.action)"
+                    :disabled="item.disabled"
+                    :class="item.class">
+                    {{ item.label }}
+                </button>
+            </li>
+        </ul>
+    `
+};
+
+// Row Options Menu Component for selected rows
+const RowOptionsMenuComponent = {
+    props: {
+        selectedRows: { type: Array, required: true },
+        clearRowAlertsCallback: Function,
+        highlightRowsCallback: Function
+    },
+    inject: ['$modal'],
+    computed: {
+        anyHighlighted() {
+            return this.selectedRows.some(({ row }) => {
+                if (!row || !row.MetaData) return false;
+                try {
+                    const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                    return metadata?.highlight?.class === 'yellow';
+                } catch (e) {
+                    return false;
+                }
+            });
+        },
+        menuItems() {
+            const highlightLabel = this.anyHighlighted ? 'Unhighlight row(s)' : 'Highlight row(s)';
+            const highlightDesc = this.anyHighlighted 
+                ? `Remove highlight from ${this.selectedRows.length} row(s)` 
+                : `Highlight ${this.selectedRows.length} row(s) in yellow`;
+            
+            return [
+                { label: 'Hide Alerts', action: 'hideAlerts', description: `Clear alerts from ${this.selectedRows.length} row(s)` },
+                { label: highlightLabel, action: 'toggleHighlight', description: highlightDesc }
+            ];
+        }
+    },
+    methods: {
+        handleAction(action) {
+            switch (action) {
+                case 'hideAlerts':
+                    if (this.clearRowAlertsCallback) {
+                        this.clearRowAlertsCallback(this.selectedRows);
+                    }
+                    this.$emit('close-modal');
+                    break;
+                case 'toggleHighlight':
+                    if (this.highlightRowsCallback) {
+                        this.highlightRowsCallback(this.selectedRows, this.anyHighlighted);
+                    }
+                    this.$emit('close-modal');
+                    break;
+                default:
+                    this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
+            }
+        }
+    },
+    template: html`
+        <ul>
+            <li v-for="item in menuItems" :key="item.action">
+                <button 
+                    @click="handleAction(item.action)"
+                    :disabled="item.disabled"
+                    :class="item.class"
+                    :title="item.description">
+                    {{ item.label }}
+                </button>
+            </li>
+        </ul>
+    `
+};
+
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
     components: { TableComponent },
@@ -124,6 +240,15 @@ export const PacklistTable = {
             );
             // Handle both boolean true and string "true" from URL parameters
             return params?.edit === true || params?.edit === 'true';
+        },
+        hamburgerMenuComponent() {
+            return {
+                components: PacklistTableMenuComponent,
+                props: {
+                    clearAllAlertsCallback: () => this.clearAllAlerts(),
+                    refreshCallback: () => this.handleRefresh()
+                }
+            };
         }
     },
     watch: {
@@ -268,9 +393,24 @@ export const PacklistTable = {
             }
         },
         async handleRefresh() {
-            invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
-            ], true);
+            this.$modal.confirm(
+                'This removes undo history and clears unsaved changes.',
+                () => {
+                    // Clear undo/redo history for this route
+                    const routeKey = this.$route?.path;
+                    if (routeKey) {
+                        undoRegistry.clearRouteHistory(routeKey);
+                    }
+                    
+                    invalidateCache([
+                        { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
+                    ], true);
+                },
+                null,
+                'Refresh Data',
+                'Refresh Data',
+                'Cancel'
+            );
         },
         
         setLockState(isLocked, owner = null) {
@@ -901,6 +1041,70 @@ export const PacklistTable = {
             );
             
             console.log('Grouping complete. Remember to save to persist changes.');
+        },
+
+        handleRowOptions(selectedRows) {
+            // Show modal with custom options for selected rows
+            this.$modal.custom(RowOptionsMenuComponent, {
+                selectedRows: selectedRows,
+                clearRowAlertsCallback: this.clearRowAlerts.bind(this),
+                highlightRowsCallback: this.highlightRows.bind(this),
+                modalClass: 'hamburger-menu'
+            }, `Options for ${selectedRows.length} Row(s)`);
+        },
+
+        highlightRows(selectedRows, shouldRemove = false) {
+            // Toggle highlight class in MetaData for selected rows
+            selectedRows.forEach(({ row }) => {
+                if (row) {
+                    // Parse MetaData (handle both string and object formats)
+                    let metadata = {};
+                    if (row.MetaData) {
+                        try {
+                            metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                        } catch (e) {
+                            metadata = {};
+                        }
+                    }
+                    
+                    if (shouldRemove) {
+                        // Remove highlight
+                        if (metadata.highlight) {
+                            delete metadata.highlight.class;
+                            // Clean up empty highlight object
+                            if (Object.keys(metadata.highlight).length === 0) {
+                                delete metadata.highlight;
+                            }
+                        }
+                    } else {
+                        // Add or update highlight class
+                        if (!metadata.highlight) {
+                            metadata.highlight = {};
+                        }
+                        metadata.highlight.class = 'yellow';
+                    }
+                    
+                    // Store back as JSON string
+                    row.MetaData = JSON.stringify(metadata);
+                }
+            });
+        },
+
+        clearRowAlerts(selectedRows) {
+            // Clear alerts from AppData for selected rows
+            let clearedCount = 0;
+            
+            selectedRows.forEach(({ row }) => {
+                // AppData is stored as an object, not a JSON string
+                if (row && row.AppData && typeof row.AppData === 'object') {
+                    // Clear specific alert types
+                    if (row.AppData.descriptionAlert || row.AppData.inventoryAlert) {
+                        delete row.AppData.descriptionAlert;
+                        delete row.AppData.inventoryAlert;
+                        clearedCount++;
+                    }
+                }
+            });
         }
     },
     template: html`
@@ -928,7 +1132,7 @@ export const PacklistTable = {
                     :originalData="originalData"
                     :columns="mainColumns"
                     :title="tabName"
-                    :showRefresh="true"
+                    :showRefresh="false"
                     :showSearch="true"
                     :sync-search-with-url="true"
                     :container-path="containerPath || 'packlist/' + tabName"
@@ -943,10 +1147,12 @@ export const PacklistTable = {
                     :loading-progress="packlistTableStore && packlistTableStore.isAnalyzing ? packlistTableStore.analysisProgress : -1"
                     :loading-message="loadingMessage"
                     :drag-id="'packlist-crates'"
+                    :hamburgerMenuComponent="hamburgerMenuComponent"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
                     @new-row="handleAddCrate"
                     @on-save="handleSave"
+                    
                 >
                     <template #header-area>
                         <!-- Navigation Controls -->
@@ -1038,6 +1244,7 @@ export const PacklistTable = {
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
                                 @drop-onto="handleDropOntoGrouping"
+                                @row-options="handleRowOptions"
                                 class="table-fixed"
                             >
                                 <!-- Default slot for cell content -->

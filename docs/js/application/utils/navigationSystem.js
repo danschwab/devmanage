@@ -470,4 +470,40 @@ export const NavigationRegistry = {
         };
     },
 
+    /**
+     * Update URL parameters without triggering full navigation
+     * This is used for filter changes that should update the URL but not reload content
+     * @param {string} basePath - The base path (without parameters)
+     * @param {string} currentFullPath - The current full path (for dashboard detection)
+     * @param {Object} newParams - The new parameters to apply
+     */
+    updatePathParametersSilently(basePath, currentFullPath, newParams) {
+        const cleanPath = basePath.split('?')[0];
+        const isOnDashboard = currentFullPath?.split('?')[0].split('/')[0] === 'dashboard';
+        
+        // Build new path with parameters
+        const newPath = this.buildPathWithCurrentParams(cleanPath, currentFullPath, newParams);
+        
+        console.log('[NavigationRegistry] Silently updating parameters:', { cleanPath, newPath, isOnDashboard });
+        
+        // Update URL without pushState ( using replaceState to avoid history pollution)
+        if (this.urlRouter) {
+            this.urlRouter.updateURL(newPath, false); // false = use replaceState
+        }
+        
+        // Cache parameters for this route
+        const route = this.getRoute(cleanPath);
+        if (route && newParams && Object.keys(newParams).length > 0) {
+            route.lastParameters = { ...(route.lastParameters || {}), ...newParams };
+            console.log('[NavigationRegistry] Cached parameters for', cleanPath, ':', route.lastParameters);
+        }
+        
+        // For dashboard, also update the stored container path
+        if (isOnDashboard) {
+            this.dashboardRegistry.updatePath(cleanPath, newPath);
+        }
+        
+        return newPath;
+    },
+
 };

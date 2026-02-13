@@ -8,8 +8,7 @@ export const PacklistMenuComponent = {
         currentView: String,
         title: String,
         refreshCallback: Function,
-        getLockInfo: Function,
-        clearAllAlertsCallback: Function
+        getLockInfo: Function
     },
     inject: ['$modal'],
     data() {
@@ -44,8 +43,7 @@ export const PacklistMenuComponent = {
             switch (this.currentView) {
                 default:
                     items.push(
-                        { label: 'Refresh', action: 'refresh' },
-                        { label: 'Clear All Alerts', action: 'clearAllAlerts' }
+                        { label: 'Refresh', action: 'refresh' }
                         // { label: 'Help', action: 'help' } // Placeholder - not yet implemented
                     );
                     return items;
@@ -77,12 +75,6 @@ export const PacklistMenuComponent = {
                     break;
                 case 'removeLock':
                     await this.handleRemoveLock();
-                    break;
-                case 'clearAllAlerts':
-                    if (this.clearAllAlertsCallback) {
-                        this.clearAllAlertsCallback();
-                    }
-                    this.$emit('close-modal');
                     break;
                 // case 'help': // Placeholder - not yet implemented
                 //     this.$modal.alert('Packlist help functionality coming soon!', 'Info');
@@ -273,11 +265,6 @@ export const PacklistContent = {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
-                clearAllAlertsCallback: () => {
-                    if (this.$refs.packlistTable) {
-                        this.$refs.packlistTable.clearAllAlerts();
-                    }
-                },
                 getLockInfo: async () => {
                     // Get lock info from the current packlist if we're viewing one
                     const packlistName = this.currentPacklist;

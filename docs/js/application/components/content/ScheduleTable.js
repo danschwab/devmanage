@@ -364,7 +364,7 @@ export const ScheduleTableComponent = {
             
             if (packlistInfo.exists) {
                 return [{
-                    message: 'View Packlist',
+                    message: 'Back to View',
                     disabled: false,
                     action: () => this.handlePacklistClick(packlistInfo)
                 }];

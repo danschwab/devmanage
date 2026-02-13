@@ -1,11 +1,11 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, InventoryCategoryFilter, Priority, invalidateCache } from '../../index.js';
 
 /**
  * Component for displaying item quantities summary with progressive analysis
  * Shows: Item ID, Quantity, Available, Remaining, Overlapping Shows
  */
 export const PacklistItemsSummary = {
-    components: { TableComponent, ItemImageComponent },
+    components: { TableComponent, ItemImageComponent, InventoryCategoryFilter },
     props: {
         projectIdentifier: { type: String, required: true },
         containerPath: { type: String, default: '' },
@@ -20,6 +20,7 @@ export const PacklistItemsSummary = {
             itemsSummaryStore: null,
             showDetails: null, // Production schedule show details
             error: null,
+            selectedCategoryFilter: null, // Filter by inventory category
             NavigationRegistry // Make NavigationRegistry available in template
         };
     },
@@ -50,7 +51,14 @@ export const PacklistItemsSummary = {
             return this.itemsSummaryStore ? this.itemsSummaryStore.isLoading : false;
         },
         tableData() {
-            return this.itemsSummaryStore ? this.itemsSummaryStore.data : [];
+            const data = this.itemsSummaryStore ? this.itemsSummaryStore.data : [];
+            
+            // Apply category filter if selected
+            if (this.selectedCategoryFilter) {
+                return data.filter(item => item.tabName === this.selectedCategoryFilter);
+            }
+            
+            return data;
         }
     },
     watch: {
@@ -133,6 +141,10 @@ export const PacklistItemsSummary = {
             ], true);
         },
 
+        handleCategorySelected(categoryName) {
+            this.selectedCategoryFilter = categoryName;
+        },
+
         navigateBackToPacklist() {
             if (!this.projectIdentifier || !this.appContext?.navigateToPath) return;
             
@@ -162,7 +174,7 @@ export const PacklistItemsSummary = {
     template: html`
         <div class="packlist-items-summary">
             <div class="content">
-                <button @click="navigateBackToPacklist">View Packlist</button>
+                <button @click="navigateBackToPacklist">Back to View</button>
                 <div class="details-grid">
                     <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
                         <label>{{ key }}:</label>
@@ -192,7 +204,11 @@ export const PacklistItemsSummary = {
                 @refresh="handleRefresh"
             >
                 <template #header-area>
-                    
+                    <InventoryCategoryFilter
+                        :container-path="containerPath || ('packlist/' + projectIdentifier + '/details')"
+                        :navigate-to-path="appContext.navigateToPath"
+                        @category-selected="handleCategorySelected"
+                    />
                 </template>
                 <template #default="{ row, column }">
                     <slot v-if="column.key === 'image'">

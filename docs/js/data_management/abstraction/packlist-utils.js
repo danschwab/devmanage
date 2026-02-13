@@ -184,6 +184,14 @@ class packListUtils_uncached {
             const crateInfoArr = rowValues.slice(0, itemStartIndex);
             const crateContentsArr = rowValues.slice(itemStartIndex);
             
+            // Calculate the actual end index for item columns (excluding metadata columns)
+            // MetaData and EditHistory are at the end, so we need to exclude them from content checks
+            let itemEndIndex = crateContentsArr.length;
+            if (metadataIndex !== -1) {
+                // Adjust to exclude metadata columns from the item content check
+                itemEndIndex = Math.min(itemEndIndex, metadataIndex - itemStartIndex);
+            }
+            
             // Check if this is a crate row (has data in main columns, excluding metadata)
             const hasCrateInfo = crateInfoArr.some((cell, idx) => {
                 return cell && cell.toString().trim() !== '';
@@ -214,7 +222,8 @@ class packListUtils_uncached {
                 };
             }
             // Check if this is an item row (has data in item columns, excluding metadata)
-            const hasItemContent = crateContentsArr.some((cell, idx) => {
+            // Only check up to itemEndIndex to exclude metadata columns
+            const hasItemContent = crateContentsArr.slice(0, itemEndIndex).some((cell, idx) => {
                 return cell && cell.toString().trim() !== '';
             });
             

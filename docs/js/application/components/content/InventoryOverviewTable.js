@@ -128,6 +128,9 @@ export const InventoryOverviewTableComponent = {
             const categoryName = tabName.toLowerCase();
             this.$emit('navigate-to-path', `inventory/categories/${categoryName}`);
         },
+        handleCategoriesClick() {
+            this.$emit('navigate-to-path', 'inventory/categories');
+        },
         formatCategoryLabel(tabName) {
             if (!tabName) return '';
             const lower = tabName.toLowerCase();
@@ -146,7 +149,7 @@ export const InventoryOverviewTableComponent = {
                 :isLoading="isLoading"
                 :isAnalyzing="isAnalyzing"
                 :error="error"
-                :showRefresh="true"
+                :showRefresh="false"
                 :showSearch="true"
                 :showHeader="true"
                 :showFooter="true"
@@ -157,6 +160,9 @@ export const InventoryOverviewTableComponent = {
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"
             >
+                <template #header-area>
+                    <button @click="handleCategoriesClick" class="purple">Categories</button>
+                </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <button 
                         v-if="column.key === 'tab'"

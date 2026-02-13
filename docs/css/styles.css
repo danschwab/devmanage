@@ -370,7 +370,7 @@ div#app-content > div.empty-message {
     box-sizing: border-box;
     border: 1px solid var(--color-border);
     padding: var(--padding-sm);
-    width: 100%;
+    /*width: 100%;*/
     border-radius: var(--radius-lg);
     align-content: center;
     overflow: hidden;
@@ -402,7 +402,7 @@ div#app-content > div.empty-message {
     padding: var(--padding-sm);
 }
 
-td .card, .button-bar .card {
+td .card, .button-bar .card, .content-footer .card, .content-header .card {
     font-size: 11pt;
     padding: 2px;
     border-radius: var(--radius-md);
@@ -483,6 +483,10 @@ button.card {
     flex-basis: 28px;
     flex-grow: 0;
     flex-shrink: 0;
+}
+
+.button-bar button {
+    flex-grow: 1;
 }
 
 .button-bar .button-symbol {
@@ -666,7 +670,7 @@ table.sticky-header {
     border-collapse: collapse;
 }
 
-.table-wrapper:has(tbody:empty)::after {
+/*table-wrapper:has(tbody:empty)::after {
     content: "No content";
     display: block;
     right: 0;
@@ -678,7 +682,7 @@ table.sticky-header {
     border: 1px solid var(--color-border);
     box-sizing: border-box;
     border-top: 0;
-}
+}*/
 
 thead {
     z-index: 10;
@@ -1159,6 +1163,9 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     background-color: var(--color-yellow-bg-transparent) !important;
     color: var(--color-text) !important;
 }
+.row-drag-handle:has(~ td > .search-match) {
+    background-color: var(--color-yellow-bg) !important;
+}
 
 .search-match:focus {
     background-color: var(--color-yellow-bg-transparent) !important;
@@ -1440,21 +1447,38 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         grid-column: span 1;
     }
 
+
+    .cards-grid {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cards-grid .card {
+        width: 100%;
+    }
+
+    .button-bar {
+        width: 100%;
+    }
+
+    .hide-when-narrow {
+        display: none !important;
+    }
+
+    button,
+    input[type="submit"],
+    input[type="button"],
+    input[type="text"],
+    select,
+    .input-container {
+        width: 100%;
+        flex-grow: 1;
+    }
+
 }
 
 
 @container container-component (width < 600px) {
-    .tabs.dropdown-mode .tab-button,
-    .tabs.dropdown-mode .tab-button.active,
-    .tabs.dropdown-mode.menu-open .tab-button,
-    .tabs.dropdown-mode.menu-open .new-tab-button{
-        width: calc(100% - 1rem); /* Adjust width for smaller screens */
-        max-width: 400px;
-    }
-
-    .tabs.dropdown-mode .new-tab-button{
-        display: none;
-    }
 
     .cards-grid {
         display: flex;
@@ -1470,6 +1494,11 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
     .hide-when-narrow {
         display: none !important;
+    }
+
+    button, input[type="submit"], input[type="button"], input[type="text"], select, .input-container {
+        width: 100%;
+        flex-grow: 1;
     }
 }
 

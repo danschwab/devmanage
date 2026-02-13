@@ -1,9 +1,12 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry } from '../../index.js';
+import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState } from '../../index.js';
 
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
     // Selection map with unique keys to handle multiple tables
     selections: new Map(), // Map of selectionKey -> { rowIndex: number, sourceArray: arrayRef, dragId: dragId }
+    
+    // Version counter to trigger reactivity when selections change
+    _version: 0,
     
     // Configuration options
     allowMultiSourceDrag: true, // Allow dragging selections from different data sources
@@ -17,6 +20,12 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Undo/redo support - track current route for undo captures
     currentRouteKey: null,
+    
+    // Multiselect timing - track when multiselect last finished to prevent immediate deselection
+    lastMultiSelectEndTime: null,
+    
+    // Drag timing - track when drag last finished to prevent immediate deselection
+    lastDragEndTime: null,
     
     // Set active route for undo tracking
     setActiveRoute(routeKey) {
@@ -93,7 +102,8 @@ export const tableRowSelectionState = Vue.reactive({
 
     // Add a row to global selection
     addRow(rowIndex, sourceArray, dragId = null) {
-        if (dragId && dragId !== this.dragId) {
+        // Only clear if switching between different drag groups (both must have values and be different)
+        if (dragId && this.dragId && dragId !== this.dragId) {
             this.clearAll();
         }
 
@@ -103,7 +113,10 @@ export const tableRowSelectionState = Vue.reactive({
             sourceArray: sourceArray,
             dragId: dragId
         });
-        this.dragId = dragId;
+        // Update global dragId if one is provided
+        if (dragId) {
+            this.dragId = dragId;
+        }
         
         // Auto-select all children if this is a group master
         const children = this._getGroupChildren(rowIndex, sourceArray);
@@ -115,6 +128,9 @@ export const tableRowSelectionState = Vue.reactive({
                 dragId: dragId
             });
         });
+        
+        // Increment version to trigger reactivity
+        this._version++;
     },
     
     // Remove a row from global selection
@@ -126,7 +142,7 @@ export const tableRowSelectionState = Vue.reactive({
             const masterIndex = grouping.masterItemIndex;
             if (this.hasRow(sourceArray, masterIndex)) {
                 // Master is selected, don't allow child to be unselected independently
-                console.log(`Cannot unselect row ${rowIndex} - its group master is selected`);
+                //console.log(`Cannot unselect row ${rowIndex} - its group master is selected`);
                 return;
             }
         }
@@ -140,6 +156,9 @@ export const tableRowSelectionState = Vue.reactive({
             const childKey = this._getSelectionKey(childIndex, sourceArray);
             this.selections.delete(childKey);
         });
+        
+        // Increment version to trigger reactivity
+        this._version++;
     },
     
     // Toggle row selection
@@ -160,6 +179,7 @@ export const tableRowSelectionState = Vue.reactive({
     // Clear all selections
     clearAll() {
         this.selections.clear();
+        this._version++;
     },
     
     // Clear selections from a specific array
@@ -169,6 +189,7 @@ export const tableRowSelectionState = Vue.reactive({
                 this.selections.delete(selectionKey);
             }
         }
+        this._version++;
     },
     
     // Get selection count for a specific array
@@ -308,7 +329,7 @@ export const tableRowSelectionState = Vue.reactive({
                         }
                         delete metadata.grouping;
                         item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
-                        console.log(`Removed orphaned group master at index ${i} (no children found)`);
+                        //console.log(`Removed orphaned group master at index ${i} (no children found)`);
                     }
                 }
             }
@@ -318,7 +339,7 @@ export const tableRowSelectionState = Vue.reactive({
     // Group selected items under a target row (similar to markSelectedForDeletion)
     groupSelectedItemsUnder(targetIndex, targetArray) {
         if (this.selections.size === 0) {
-            console.log('No selections to group');
+            //console.log('No selections to group');
             return null;
         }
         
@@ -349,7 +370,7 @@ export const tableRowSelectionState = Vue.reactive({
         const droppedItems = allSelectedRows.map(r => r.data);
         
         if (droppedItems.length === 0) {
-            console.log('No selected items found');
+            //console.log('No selected items found');
             return null;
         }
         
@@ -374,7 +395,7 @@ export const tableRowSelectionState = Vue.reactive({
                 masterItemIndex: targetIndex
             };
             targetItem.MetaData = JSON.stringify(metadata);
-            console.log('Set target as group master:', groupId, 'index:', targetIndex);
+            //console.log('Set target as group master:', groupId, 'index:', targetIndex);
         }
         
         // Remove dropped items from their source arrays (in reverse order to maintain indices)
@@ -409,10 +430,10 @@ export const tableRowSelectionState = Vue.reactive({
                 masterItemIndex: newTargetIndex // Use the new index after reordering
             };
             droppedItem.MetaData = JSON.stringify(metadata);
-            console.log('Grouped item with master:', groupId);
+            //console.log('Grouped item with master:', groupId);
         });
         
-        console.log(`Grouped ${droppedItems.length} items under target with groupId: ${groupId}`);
+        //console.log(`Grouped ${droppedItems.length} items under target with groupId: ${groupId}`);
         
         // Return grouping info for potential UI feedback
         return {
@@ -482,7 +503,7 @@ export const tableRowSelectionState = Vue.reactive({
     markSelectedForDeletion(Value = true) {
         // Mark all selected rows for deletion (used by Delete key)
         if (this.selections.size === 0) {
-            console.log('No selections to mark for deletion');
+            //console.log('No selections to mark for deletion');
             return;
         }
         
@@ -525,7 +546,7 @@ export const tableRowSelectionState = Vue.reactive({
             }
         }
         
-        console.log(`Marked ${deletedCount} selected rows for deletion = ${Value}`);
+        //console.log(`Marked ${deletedCount} selected rows for deletion = ${Value}`);
     },
     
     // Drag management methods
@@ -581,9 +602,9 @@ export const tableRowSelectionState = Vue.reactive({
     },
     
     completeDrag(dropTarget) {
-        console.log('completeDrag called with:', dropTarget, 'findingDropTargets:', this.findingDropTargets, 'selections:', this.selections.size, 'dragTargetArray:', this.dragTargetArray);
+        //console.log('completeDrag called with:', dropTarget, 'findingDropTargets:', this.findingDropTargets, 'selections:', this.selections.size, 'dragTargetArray:', this.dragTargetArray);
         if (!this.findingDropTargets || this.selections.size === 0 || !this.dragTargetArray) {
-            console.log('completeDrag early exit - conditions not met');
+            //console.log('completeDrag early exit - conditions not met');
             this.stopDrag();
             return false;
         }
@@ -601,31 +622,51 @@ export const tableRowSelectionState = Vue.reactive({
                 arraysToCapture.add(selection.sourceArray);
             }
             
-            undoRegistry.capture(Array.from(arraysToCapture), this.currentRouteKey, { type: 'drag' });
+            undoRegistry.capture(Array.from(arraysToCapture), this.currentRouteKey, { 
+                type: 'drag',
+                selectionState: tableRowSelectionState // Capture selection state with drag
+            });
         }
         
         // Handle "onto" drop type - call groupSelectedItemsUnder directly
         if (dropTarget.type === 'onto') {
-            console.log('DROP ONTO detected! Calling groupSelectedItemsUnder...');
+            //console.log('DROP ONTO detected! Calling groupSelectedItemsUnder...');
             const result = this.groupSelectedItemsUnder(
                 dropTarget.targetIndex,
                 this.dragTargetArray
             );
             
             if (result) {
-                console.log(`Grouped ${result.droppedItems.length} items under target with groupId: ${result.groupId}`);
+                //console.log(`Grouped ${result.droppedItems.length} items under target with groupId: ${result.groupId}`);
+                
+                // Re-select the grouped items at their new positions
+                this.clearAll(); // Clear old selections first
+                
+                // Grouped items are inserted right after the master (targetIndex + 1)
+                const startIndex = result.targetIndex + 1;
+                result.droppedItems.forEach((item, offset) => {
+                    const newIndex = this.dragTargetArray.indexOf(item);
+                    if (newIndex !== -1) {
+                        this.addRow(newIndex, this.dragTargetArray, this.dragId);
+                    }
+                });
+                
+                //console.log(`Re-selected ${result.droppedItems.length} grouped items`);
             } else {
                 console.warn('Grouping failed or no items to group');
+                this.clearAll();
             }
             
+            // Set timestamp to prevent outside click from clearing selection
+            this.lastDragEndTime = Date.now();
+            
             this.stopDrag();
-            this.clearAll();
             return true;
         }
         
         // Check if "between" drop would split a group - if so, treat as "onto" drop on group master
         if (dropTarget.type === 'between' && this.wouldSplitGroup(dropTarget.targetIndex, this.dragTargetArray)) {
-            console.log('DROP BETWEEN would split group! Converting to DROP ONTO group master...');
+            //console.log('DROP BETWEEN would split group! Converting to DROP ONTO group master...');
             
             // Find the group master for the group that would be split
             const rowBefore = dropTarget.targetIndex > 0 ? this.dragTargetArray[dropTarget.targetIndex - 1] : null;
@@ -650,17 +691,32 @@ export const tableRowSelectionState = Vue.reactive({
                 }
                 
                 if (masterIndex !== -1) {
-                    console.log(`Found group master at index ${masterIndex} for groupId ${groupId}`);
+                    //console.log(`Found group master at index ${masterIndex} for groupId ${groupId}`);
                     const result = this.groupSelectedItemsUnder(masterIndex, this.dragTargetArray);
                     
                     if (result) {
-                        console.log(`Grouped ${result.droppedItems.length} items under group master with groupId: ${result.groupId}`);
+                        //console.log(`Grouped ${result.droppedItems.length} items under group master with groupId: ${result.groupId}`);
+                        
+                        // Re-select the grouped items at their new positions
+                        this.clearAll(); // Clear old selections first
+                        
+                        result.droppedItems.forEach((item) => {
+                            const newIndex = this.dragTargetArray.indexOf(item);
+                            if (newIndex !== -1) {
+                                this.addRow(newIndex, this.dragTargetArray, this.dragId);
+                            }
+                        });
+                        
+                        //console.log(`Re-selected ${result.droppedItems.length} grouped items`);
                     } else {
                         console.warn('Grouping failed');
+                        this.clearAll();
                     }
                     
+                    // Set timestamp to prevent outside click from clearing selection
+                    this.lastDragEndTime = Date.now();
+                    
                     this.stopDrag();
-                    this.clearAll();
                     return true;
                 } else {
                     console.warn('Could not find group master for groupId:', groupId);
@@ -671,7 +727,7 @@ export const tableRowSelectionState = Vue.reactive({
         
         // Check if "between" drop does NOT split a group - remove grouping from non-master rows
         if (dropTarget.type === 'between' && !this.wouldSplitGroup(dropTarget.targetIndex, this.dragTargetArray)) {
-            console.log('DROP BETWEEN does not split group - removing grouping from non-master rows...');
+            //console.log('DROP BETWEEN does not split group - removing grouping from non-master rows...');
             
             // Remove grouping from all dragged rows that are NOT group masters
             for (const selection of this.selections.values()) {
@@ -697,7 +753,7 @@ export const tableRowSelectionState = Vue.reactive({
                             }
                             delete metadata.grouping;
                             item.MetaData = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '';
-                            console.log(`Removed grouping from row ${rowIndex} (between drop, master not selected)`);
+                            //console.log(`Removed grouping from row ${rowIndex} (between drop, master not selected)`);
                         }
                     }
                 }
@@ -708,14 +764,14 @@ export const tableRowSelectionState = Vue.reactive({
         const selectionsBySource = this.getSelectionSummary();
         
         if (selectionsBySource.size === 0) {
-            console.log('No selections found');
+            //console.log('No selections found');
             this.stopDrag();
             return false;
         }
         
         // Calculate insertion position
         let insertPosition;
-        console.log('dropTarget.type:', dropTarget.type);
+        //console.log('dropTarget.type:', dropTarget.type);
         if (dropTarget.type === 'header') {
             insertPosition = 0;
         } else if (dropTarget.type === 'footer') {
@@ -726,7 +782,7 @@ export const tableRowSelectionState = Vue.reactive({
         } else if (dropTarget.type === 'between') {
             insertPosition = dropTarget.targetIndex;
         } else {
-            console.log('Invalid dropTarget.type:', dropTarget.type);
+            //console.log('Invalid dropTarget.type:', dropTarget.type);
             this.stopDrag();
             return false;
         }
@@ -734,10 +790,11 @@ export const tableRowSelectionState = Vue.reactive({
         // Perform atomic move operation to prevent reactivity issues
         try {
             let totalRowsInserted = 0;
+            const movedRows = []; // Track all moved row objects to re-select them after move
             
             // Process each source array
             for (const [sourceArray, sourceInfo] of selectionsBySource) {
-                console.log(`Processing source with ${sourceInfo.count} rows from ${sourceInfo.dragId || 'unknown'}`);
+                //console.log(`Processing source with ${sourceInfo.count} rows from ${sourceInfo.dragId || 'unknown'}`);
                 
                 // Sort row indices in ascending order to preserve original order
                 const sortedIndicesAsc = sourceInfo.rowIndices.sort((a, b) => a - b);
@@ -746,6 +803,9 @@ export const tableRowSelectionState = Vue.reactive({
                 
                 // Extract row data BEFORE removal using ascending order to preserve original sequence
                 const rowsData = sortedIndicesAsc.map(index => sourceArray[index]).filter(row => row !== undefined);
+                
+                // Track these rows for re-selection after move
+                movedRows.push(...rowsData);
                 
                 // Clear AppData from all moved rows (drag operations reset analytics state)
                 rowsData.forEach(row => {
@@ -756,7 +816,7 @@ export const tableRowSelectionState = Vue.reactive({
                 
                 if (sourceArray === this.dragTargetArray) {
                     // Same array: reorder rows
-                    console.log('Same array reorder - insertPosition:', insertPosition + totalRowsInserted);
+                    //console.log('Same array reorder - insertPosition:', insertPosition + totalRowsInserted);
                     
                     let adjustedInsertPosition = insertPosition + totalRowsInserted;
                     
@@ -779,7 +839,7 @@ export const tableRowSelectionState = Vue.reactive({
                     //totalRowsInserted += rowsData.length;
                 } else {
                     // Different arrays: move rows to target
-                    console.log('Different arrays move - from:', sourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition + totalRowsInserted);
+                    //console.log('Different arrays move - from:', sourceArray.length, 'to:', this.dragTargetArray.length, 'insertPosition:', insertPosition + totalRowsInserted);
                     
                     // Remove from source array (in reverse order to maintain indices)
                     sortedIndicesDesc.forEach(index => {
@@ -795,11 +855,24 @@ export const tableRowSelectionState = Vue.reactive({
                     }
                     
                     totalRowsInserted += rowsData.length;
-                    console.log('After move - from:', sourceArray.length, 'to:', this.dragTargetArray.length);
+                    //console.log('After move - from:', sourceArray.length, 'to:', this.dragTargetArray.length);
                 }
             }
             
-            console.log(`Total rows moved: ${totalRowsInserted}`);
+            //console.log(`Total rows moved: ${totalRowsInserted}`);
+            
+            // Update selections to reflect new positions after move
+            this.clearAll(); // Clear old selections first
+            
+            // Re-select moved rows at their new positions in the target array
+            movedRows.forEach(movedRow => {
+                const newIndex = this.dragTargetArray.indexOf(movedRow);
+                if (newIndex !== -1) {
+                    this.addRow(newIndex, this.dragTargetArray, this.dragId);
+                }
+            });
+            
+            //console.log(`Re-selected ${movedRows.length} moved rows at their new positions`);
         } catch (error) {
             console.error('Error during drag operation:', error);
             this.stopDrag();
@@ -809,9 +882,11 @@ export const tableRowSelectionState = Vue.reactive({
         // Clean up any group masters that no longer have children
         this._cleanupOrphanedGroupMasters(this.dragTargetArray);
         
-        // Clear selection and drag state
+        // Set timestamp to prevent outside click from clearing selection
+        this.lastDragEndTime = Date.now();
+        
+        // Clear drag state (but keep selections intact now)
         this.stopDrag(true);
-        this.clearAll();
         return true;
     },
     
@@ -828,10 +903,13 @@ export const tableRowSelectionState = Vue.reactive({
     }
 });
 
+// Register selection state with undo system
+setTableRowSelectionState(tableRowSelectionState);
+
 export const TableComponent = {
     name: 'TableComponent',
     components: { LoadingBarComponent },
-    inject: ['appContext'],
+    inject: ['appContext', '$modal'],
     props: {
         key: {
             type: String,
@@ -1084,6 +1162,8 @@ export const TableComponent = {
     },
     computed: {
         selectedRowCount() {
+            // Access _version to create reactive dependency
+            tableRowSelectionState._version;
             return tableRowSelectionState.getTotalSelectionCount();
         },
         shouldShowSelectionBubble() {
@@ -1092,7 +1172,8 @@ export const TableComponent = {
             // 2. There are selections globally
             // 3. This table contains the first selected row
             // 4. A drag is not currently happening
-            if (!this.showSelectionBubble || this.selectedRowCount === 0) {
+            // 5. The table has editable columns (edit mode is enabled)
+            if (!this.showSelectionBubble || this.selectedRowCount === 0 || !this.hasEditableColumns) {
                 return false;
             }
             
@@ -1325,6 +1406,18 @@ export const TableComponent = {
             }
 
             return filteredData;
+        },
+        
+        canUndo() {
+            if (!undoRegistry.currentRouteKey) return false;
+            const stacks = undoRegistry.undoStacksByRoute.get(undoRegistry.currentRouteKey);
+            return stacks && stacks.undoStack.length > 0;
+        },
+        
+        canRedo() {
+            if (!undoRegistry.currentRouteKey) return false;
+            const stacks = undoRegistry.undoStacksByRoute.get(undoRegistry.currentRouteKey);
+            return stacks && stacks.redoStack.length > 0;
         }
     },
     mounted() {
@@ -1457,33 +1550,19 @@ export const TableComponent = {
          * Update searchTerm parameter in URL when syncSearchWithUrl is enabled
          */
         updateSearchInURL(searchValue) {
-            if (!this.syncSearchWithUrl || !this.containerPath || !this.navigateToPath) {
+            if (!this.syncSearchWithUrl || !this.containerPath) {
                 return;
             }
             
-            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
-            
-            // Set searchTerm or undefined to remove it
-            const params = {
-                searchTerm: (searchValue && searchValue.trim()) ? searchValue : undefined
-            };
-            
-            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+            // Use silent parameter update to avoid triggering full navigation
+            // This updates the URL and caches parameters without reloading content
+            NavigationRegistry.updatePathParametersSilently(
                 this.containerPath.split('?')[0],
                 this.appContext?.currentPath,
-                params
+                {
+                    searchTerm: (searchValue && searchValue.trim()) ? searchValue : undefined
+                }
             );
-            
-            if (isOnDashboard) {
-                // Update dashboard registry
-                NavigationRegistry.dashboardRegistry.updatePath(
-                    this.containerPath.split('?')[0],
-                    newPath
-                );
-            } else {
-                // Regular navigation
-                this.navigateToPath(newPath);
-            }
         },
         
         /**
@@ -1511,8 +1590,8 @@ export const TableComponent = {
         
         handleRefresh() {
             // Capture state before discarding changes (when allowSaveEvent is true)
-            if (this.allowSaveEvent && this.currentRouteKey) {
-                undoRegistry.capture(this.data, this.currentRouteKey, { type: 'discard' });
+            if (this.allowSaveEvent && undoRegistry.currentRouteKey) {
+                undoRegistry.capture(this.data, undoRegistry.currentRouteKey, { type: 'discard' });
             }
             
             this.$emit('refresh');
@@ -1524,6 +1603,8 @@ export const TableComponent = {
 
         // Selection helper methods
         isRowSelected(rowIndex) {
+            // Access _version to create reactive dependency
+            tableRowSelectionState._version;
             return tableRowSelectionState.hasRow(this.data, rowIndex);
         },
 
@@ -1555,6 +1636,16 @@ export const TableComponent = {
                 return metadata?.deletion?.marked === true;
             } catch (e) {
                 return false;
+            }
+        },
+
+        getRowMetadataClass(row) {
+            if (!row || !row.MetaData) return '';
+            try {
+                const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                return metadata?.highlight?.class || '';
+            } catch (e) {
+                return '';
             }
         },
 
@@ -1610,10 +1701,11 @@ export const TableComponent = {
             }
         },
 
-        handleUnselectSelected() {
-            // Clear all selected rows across all tables
+        handleMoreOptions() {
+            // Emit event with selected rows data to parent for custom menu options
             if (tableRowSelectionState.getTotalSelectionCount() > 0) {
-                tableRowSelectionState.clearAll();
+                const selectedRows = tableRowSelectionState.getAllSelectedRows();
+                this.$emit('row-options', selectedRows);
             }
         },
 
@@ -1936,12 +2028,31 @@ export const TableComponent = {
             this.$emit('row-move');
         },
         handleHamburgerMenu() {
-            // Emit event to parent to show hamburger menu
-            this.$emit('show-hamburger-menu', {
-                menuComponent: this.hamburgerMenuComponent,
-                tableId: this.title || 'table'
-            });
+            // Show the hamburger menu modal directly
+            if (this.hamburgerMenuComponent) {
+                this.$modal.custom(
+                    this.hamburgerMenuComponent.components,
+                    { 
+                        ...this.hamburgerMenuComponent.props,
+                        modalClass: 'hamburger-menu'
+                    },
+                    this.title || 'Menu'
+                );
+            }
         },
+        
+        handleUndo() {
+            if (this.canUndo) {
+                undoRegistry.undo();
+            }
+        },
+        
+        handleRedo() {
+            if (this.canRedo) {
+                undoRegistry.redo();
+            }
+        },
+        
         handleDragHandleMouseDown(rowIndex, event) {
             // Only respond to left mouse button
             if (event.button !== 0) return;
@@ -1959,6 +2070,15 @@ export const TableComponent = {
             // Set up long click timer (800ms)
             this.clickState.longClickTimer = setTimeout(() => {
                 if (this.clickState.isMouseDown && !this.clickState.hasMoved) {
+                    // Capture selection state before multiselection starts
+                    const routeKey = this.appContext?.currentPath?.split('?')[0];
+                    if (routeKey) {
+                        undoRegistry.capture(this.data, routeKey, { 
+                            type: 'multi-selection',
+                            selectionState: tableRowSelectionState
+                        });
+                    }
+                    
                     // Long click: add row to selection and enable multi-selection mode
                     tableRowSelectionState.addRow(rowIndex, this.data, this.dragId);
                     this.clickState.isMultiSelecting = true;
@@ -1995,6 +2115,15 @@ export const TableComponent = {
                 if (!this.clickState.isMultiSelecting) {
                     // If dragged row is not in selection, replace entire selection with this row
                     if (!tableRowSelectionState.hasRow(this.data, this.clickState.startRowIndex)) {
+                        // Capture selection state before clearing for immediate drag
+                        const routeKey = this.appContext?.currentPath?.split('?')[0];
+                        if (routeKey) {
+                            undoRegistry.capture(this.data, routeKey, { 
+                                type: 'drag-start-selection',
+                                selectionState: tableRowSelectionState
+                            });
+                        }
+                        
                         tableRowSelectionState.clearAll();
                         tableRowSelectionState.addRow(this.clickState.startRowIndex, this.data, this.dragId);
                     }
@@ -2035,6 +2164,14 @@ export const TableComponent = {
             const targetHandle = event.target.closest('.row-drag-handle');
             const startHandle = document.elementFromPoint(this.clickState.startX, this.clickState.startY);
             
+            // Special case: if we were multi-selecting, preserve the selection and exit
+            if (this.clickState.isMultiSelecting) {
+                // Set global timestamp to prevent handleOutsideClick from clearing selection
+                tableRowSelectionState.lastMultiSelectEndTime = Date.now();
+                this.resetClickState();
+                return;
+            }
+
             // Only process click logic if mouse up is on the same handle (or close enough)
             if (targetHandle && startHandle && targetHandle === startHandle) {
                 // Clear long click timer
@@ -2045,14 +2182,17 @@ export const TableComponent = {
                 
                 // Short click logic (only if no movement occurred)
                 if (!this.clickState.hasMoved && !this.clickState.isMultiSelecting) {
+                    // Capture selection state before toggle
+                    const routeKey = this.appContext?.currentPath?.split('?')[0];
+                    if (routeKey) {
+                        undoRegistry.capture(this.data, routeKey, { 
+                            type: 'selection-toggle',
+                            selectionState: tableRowSelectionState
+                        });
+                    }
+                    
                     // Toggle selection state of clicked row
                     tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
-                }
-            } else if (tableRowSelectionState.getTotalSelectionCount() > 0 && !this.clickState.isMultiSelecting) {
-                // If click is not on a drag handle, clear selection
-                if (!targetHandle) {
-                    console.log('Click outside drag handle - clearing selection');
-                    tableRowSelectionState.clearAll();
                 }
             }
             
@@ -2198,7 +2338,7 @@ export const TableComponent = {
                                         type: 'onto',
                                         targetIndex: targetIndex
                                     };
-                                    console.log('Drop ONTO target found:', newDropTarget, 'visual index:', i, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                                    //console.log('Drop ONTO target found:', newDropTarget, 'visual index:', i, 'mouseY:', mouseY, 'rowRect:', rowRect);
                                     break;
                                 }
                                 // If any condition fails, fall through to between logic below
@@ -2238,7 +2378,7 @@ export const TableComponent = {
                             type: 'between',
                             targetIndex: targetIndex
                         };
-                        console.log('Drop target found:', newDropTarget, 'visual index:', i, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                        //console.log('Drop target found:', newDropTarget, 'visual index:', i, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
                         break;
                     }
                 }
@@ -2409,6 +2549,61 @@ export const TableComponent = {
         handleOutsideClick(event) {
             const clickedElement = event.target;
             
+            // Handle clearing selections when clicking outside selected rows
+            if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                // Don't clear if multiselect or drag just finished (within 100ms) - check global state
+                const timeSinceMultiSelect = tableRowSelectionState.lastMultiSelectEndTime 
+                    ? Date.now() - tableRowSelectionState.lastMultiSelectEndTime 
+                    : Infinity;
+                const timeSinceDrag = tableRowSelectionState.lastDragEndTime 
+                    ? Date.now() - tableRowSelectionState.lastDragEndTime 
+                    : Infinity;
+                    
+                if (timeSinceMultiSelect < 100 || timeSinceDrag < 100) {
+                    return; // Skip clearing - multiselect or drag just finished
+                }
+                
+                // Check if click was inside any table row at all
+                const clickedRow = clickedElement.closest('tr');
+                const clickedTable = clickedElement.closest('table');
+                
+                // If not clicking inside any table, don't clear selections (keep selections for UI elements)
+                if (!clickedTable && !clickedRow) {
+                    return;
+                }
+                
+                // Check if click was on a drag handle
+                const clickedDragHandle = clickedElement.closest('.row-drag-handle');
+                
+                // Check if click was inside any selected row
+                const clickedSelectedRow = clickedElement.closest('tr.selected');
+                
+                // Check if click was on the selection bubble
+                const clickedSelectionBubble = clickedElement.closest('.selection-action-bubble');
+                
+                // Only clear selections if clicking inside a table on an unselected row (not drag handle, not selection bubble)
+                if (!clickedDragHandle && !clickedSelectedRow && !clickedSelectionBubble && (clickedTable || clickedRow)) {
+                    // Capture state before clearing for undo
+                    if (tableRowSelectionState.currentRouteKey) {
+                        // Get all unique arrays involved in selections
+                        const selectedRows = tableRowSelectionState.getAllSelectedRows();
+                        const uniqueArrays = [...new Set(selectedRows.map(r => r.sourceArray))];
+                        
+                        // Capture with selection state
+                        undoRegistry.capture(
+                            uniqueArrays,
+                            tableRowSelectionState.currentRouteKey,
+                            {
+                                type: 'selection-toggle',
+                                selectionState: tableRowSelectionState
+                            }
+                        );
+                    }
+                    
+                    tableRowSelectionState.clearAll();
+                }
+            }
+            
             // Handle closing expanded details (existing functionality)
             if (this.expandedRows.size === 0) return;
             
@@ -2435,6 +2630,21 @@ export const TableComponent = {
                 
                 // Clear all selections
                 if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    // Capture state before clearing for undo
+                    if (undoRegistry.currentRouteKey) {
+                        const selectedRows = tableRowSelectionState.getAllSelectedRows();
+                        const uniqueArrays = [...new Set(selectedRows.map(r => r.sourceArray))];
+                        
+                        undoRegistry.capture(
+                            uniqueArrays,
+                            undoRegistry.currentRouteKey,
+                            {
+                                type: 'selection-toggle',
+                                selectionState: tableRowSelectionState
+                            }
+                        );
+                    }
+                    
                     tableRowSelectionState.clearAll();
                     handled = true;
                 }
@@ -2447,6 +2657,20 @@ export const TableComponent = {
             // Handle Delete key - mark selected rows for deletion
             if (event.key === 'Delete' || event.key === 'Backspace') {
                 if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                    // Capture state before clearing for undo
+                    if (undoRegistry.currentRouteKey) {
+                        const selectedRows = tableRowSelectionState.getAllSelectedRows();
+                        const uniqueArrays = [...new Set(selectedRows.map(r => r.sourceArray))];
+                        
+                        undoRegistry.capture(
+                            uniqueArrays,
+                            undoRegistry.currentRouteKey,
+                            {
+                                type: 'selection-toggle',
+                                selectionState: tableRowSelectionState
+                            }
+                        );
+                    }
 
                     tableRowSelectionState.markSelectedForDeletion(true);
                     tableRowSelectionState.clearAll();
@@ -2477,8 +2701,7 @@ export const TableComponent = {
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
                     <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">✖</button>
-                    <button v-if="selectedRowCount > 1" @click="handleUnselectSelected" class="button-symbol" title="Unselect">⊟</button>
-                    <button class="button-symbol blue" title="More Options">☰</button>
+                    <button @click="handleMoreOptions" class="button-symbol blue" title="More Options">☰</button>
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white" title="Add Row Below">+</button>
                     <slot
                         name="selection-actions"
@@ -2541,6 +2764,24 @@ export const TableComponent = {
                         :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
                     >
                         {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                    </button>
+                    <button
+                        v-if="hasEditableColumns"
+                        @click="handleUndo"
+                        :disabled="!canUndo"
+                        class="button-symbol white"
+                        title="Undo"
+                    >
+                        ⮢
+                    </button>
+                    <button
+                        v-if="hasEditableColumns"
+                        @click="handleRedo"
+                        :disabled="!canRedo"
+                        class="button-symbol white"
+                        title="Redo"
+                    >
+                        ⮣
                     </button>
                     <button
                         v-if="hamburgerMenuComponent"
@@ -2608,18 +2849,21 @@ export const TableComponent = {
                         <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
                             <tr 
                                 :data-visible-idx="visibleIdx"
-                                :class="{
-                                    'dragging': isRowDragging(idx),
-                                    'drag-over': false,
-                                    'selected': isRowSelected(idx),
-                                    'analyzing': isRowAnalyzing(idx),
-                                    'marked-for-deletion': isRowMarkedForDeletion(row),
-                                    'in-group': isRowInGroup(idx),
-                                    'is-group': isRowGroupMaster(idx),
-                                    'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
-                                    'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1,
-                                    'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx
-                                }"
+                                :class="[
+                                    {
+                                        'dragging': isRowDragging(idx),
+                                        'drag-over': false,
+                                        'selected': hasEditableColumns && isRowSelected(idx),
+                                        'analyzing': isRowAnalyzing(idx),
+                                        'marked-for-deletion': isRowMarkedForDeletion(row),
+                                        'in-group': isRowInGroup(idx),
+                                        'is-group': isRowGroupMaster(idx),
+                                        'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
+                                        'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1,
+                                        'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx
+                                    },
+                                    getRowMetadataClass(row)
+                                ]"
                             >
                                 <td v-if="draggable"
                                     class="row-drag-handle"
@@ -2814,19 +3058,24 @@ export const TableComponent = {
             </div-->
 
             <!-- Data Summary -->
-            <div key="unsaved-changes" v-if="showFooter && allowSaveEvent" class="content-footer red">
-                <p>There are unsaved changes in this table.</p>
-            </div>
-            <div key="data-summary" v-else-if="showFooter && data && data.length > 0 && !isLoading" :class="['content-footer', theme]">
-                <p v-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+            <div key="data-summary" v-if="showFooter" :class="['content-footer', theme ]">
+                <p v-if="isLoading || isAnalyzing" class="loading-message">{{ loadingMessage }}</p>
+                <p v-else-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                <p v-else-if="!data || data.length === 0" class="empty-message">{{ emptyMessage }}</p>
                 <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                
+                <button
+                    v-if="activeSearchValue"
+                    @click="clearSearch"
+                    class="card"
+                    title="Clear filter"
+                >
+                    ✕ Clear filter
+                </button>
+                
+                
             </div>
-            <div key="loading-state" v-else-if="showFooter && (isLoading || isAnalyzing)" :class="['content-footer', theme, 'loading-message']">
-                <p>{{ loadingMessage }}</p>
-            </div>
-            <div key="empty-state" v-else-if="showFooter && (!data || data.length === 0)" :class="['content-footer', theme, 'empty-message']">
-                <p>{{ emptyMessage }}</p>
-            </div>
+            <div class="content-footer red"  v-if="showFooter && allowSaveEvent"><p>There are unsaved changes in this table.</p></div>
         </div>
     `
 };
