@@ -1,5 +1,6 @@
 import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, parsedateFilterParameter, invalidateCache } from '../../index.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
+import { ScheduleTableComponent } from './ScheduleTable.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -8,9 +9,11 @@ export const PacklistMenuComponent = {
         currentView: String,
         title: String,
         refreshCallback: Function,
-        getLockInfo: Function
+        getLockInfo: Function,
+        navigateToPath: Function
     },
     inject: ['$modal'],
+    emits: ['close-modal'],
     data() {
         return {
             lockInfo: null,
@@ -43,6 +46,7 @@ export const PacklistMenuComponent = {
             switch (this.currentView) {
                 default:
                     items.push(
+                        { label: 'Create New Packlist', action: 'createNewPacklist' },
                         { label: 'Refresh', action: 'refresh' }
                         // { label: 'Help', action: 'help' } // Placeholder - not yet implemented
                     );
@@ -66,6 +70,9 @@ export const PacklistMenuComponent = {
         },
         async handleAction(action) {
             switch (action) {
+                case 'createNewPacklist':
+                    this.openCreatePacklistModal();
+                    break;
                 case 'refresh':
                     if (this.refreshCallback) {
                         this.refreshCallback();
@@ -130,6 +137,142 @@ export const PacklistMenuComponent = {
                 () => {},
                 'Confirm Force Unlock',
                 'Force Unlock'
+            );
+        },
+        openCreatePacklistModal() {
+            // Close the hamburger menu modal first
+            this.$emit('close-modal');
+            
+            const parentNavigateToPath = this.navigateToPath;
+            
+            const CreatePacklistModalContent = {
+                components: {
+                    'schedule-table': ScheduleTableComponent,
+                    'ScheduleFilterSelect': ScheduleFilterSelect
+                },
+                props: {
+                    navigateToPath: Function
+                },
+                emits: ['close-modal'],
+                data() {
+                    return {
+                        filter: null
+                    };
+                },
+                computed: {
+                    // Split filter into dateFilter and searchParams for table
+                    dateFilter() {
+                        if (!this.filter) return null;
+                        const { searchParams, ...dateFilter } = this.filter;
+                        return Object.keys(dateFilter).length > 0 ? dateFilter : null;
+                    },
+                    tableSearchParams() {
+                        return this.filter?.searchParams || null;
+                    }
+                },
+                methods: {
+                    handleSearchSelected(searchData) {
+                        // Handle empty/null search - clear the filter
+                        if (!searchData) {
+                            this.filter = null;
+                            return;
+                        }
+                        
+                        if (searchData.type === 'year') {
+                            // Handle year selection
+                            this.filter = { 
+                                startDate: searchData.startDate, 
+                                endDate: searchData.endDate,
+                                year: searchData.year
+                            };
+                        } else {
+                            // Handle saved search or URL params
+                            this.applySavedSearch(searchData);
+                        }
+                    },
+                    
+                    applySavedSearch(searchData) {
+                        const filter = {
+                            searchParams: {}
+                        };
+                        
+                        // Parse dateFilter from saved search
+                        if (searchData.dateFilter) {
+                            const dateFilter = parsedateFilterParameter(searchData.dateFilter);
+                            
+                            // Check if this is an overlap search (has overlapShowIdentifier)
+                            if (dateFilter.overlapShowIdentifier) {
+                                // Convert overlapShowIdentifier to identifier for API
+                                filter.identifier = dateFilter.overlapShowIdentifier;
+                            } else {
+                                // Regular date filter
+                                Object.assign(filter, dateFilter);
+                            }
+                        }
+                        
+                        // Add byShowDate flag if present
+                        if (searchData.byShowDate) {
+                            filter.byShowDate = true;
+                        }
+                        
+                        // Apply text filters
+                        if (searchData.textFilters && searchData.textFilters.length > 0) {
+                            searchData.textFilters.forEach(textFilter => {
+                                if (textFilter.column && textFilter.value) {
+                                    filter.searchParams[textFilter.column] = textFilter.value;
+                                }
+                            });
+                        }
+                        
+                        this.filter = filter;
+                    },
+                    
+                    handleNavigateToPath(path) {
+                        // Close modal first
+                        this.$emit('close-modal');
+                        // Then navigate
+                        if (this.navigateToPath) {
+                            this.navigateToPath(path);
+                        }
+                    },
+                    
+                    handlePacklistCreated() {
+                        // Close modal after packlist is created
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <div>
+                        <p style="margin-bottom: 1rem;">
+                            Search for a show and click "Create Packlist" to create a new pack list.
+                        </p>
+                        <schedule-table
+                            :filter="dateFilter"
+                            :search-params="tableSearchParams"
+                            :hide-rows-on-search="true"
+                            @navigate-to-path="handleNavigateToPath"
+                            @packlist-created="handlePacklistCreated"
+                        >
+                            <template #header-area>
+                                <div class="button-bar">
+                                    <ScheduleFilterSelect
+                                        :include-years="true"
+                                        :start-year="2023"
+                                        :show-advanced-button="false"
+                                        default-search="Upcoming"
+                                        @search-selected="handleSearchSelected"
+                                    />
+                                </div>
+                            </template>
+                        </schedule-table>
+                    </div>
+                `
+            };
+            
+            this.$modal.custom(
+                CreatePacklistModalContent,
+                { modalClass: 'large-modal', navigateToPath: parentNavigateToPath },
+                'Create New Packlist'
             );
         }
     },
@@ -265,6 +408,7 @@ export const PacklistContent = {
             components: [PacklistMenuComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
+                navigateToPath: this.navigateToPath,
                 getLockInfo: async () => {
                     // Get lock info from the current packlist if we're viewing one
                     const packlistName = this.currentPacklist;

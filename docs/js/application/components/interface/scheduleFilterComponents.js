@@ -834,6 +834,7 @@ export const ScheduleAdvancedFilter = {
                         <span>Filter Shows by Year:</span>
                         <select 
                             v-model="overlapShowYearFilter" 
+                            style="width: 100%;"
                             @focus="dateFilterMode = 'overlap'"
                             @change="overlapShowIdentifier = ''"
                         >
@@ -852,6 +853,7 @@ export const ScheduleAdvancedFilter = {
                         <span>Overlaps with Show: ({{ filteredShows.length }} available)</span>
                         <select 
                             v-model="overlapShowIdentifier" 
+                            style="width: 100%;"
                             :disabled="isLoadingShows || filteredShows.length === 0"
                             @focus="dateFilterMode = 'overlap'"
                         >
@@ -982,7 +984,7 @@ export const ScheduleFilterSelect = {
     props: {
         containerPath: {
             type: String,
-            required: true
+            default: null
         },
         includeYears: {
             type: Boolean,
@@ -1038,6 +1040,8 @@ export const ScheduleFilterSelect = {
         // Watch for URL parameter changes
         'appContext.currentPath': {
             handler(newPath, oldPath) {
+                // Skip if no containerPath (standalone mode in modal)
+                if (!this.containerPath) return;
                 // Skip initial load (handled by mounted)
                 if (!oldPath) return;
                 
@@ -1078,9 +1082,14 @@ export const ScheduleFilterSelect = {
         // Now build options with fully loaded saved searches
         await this.buildOptions();
         
-        // Perform initial sync after reactive data is fully initialized
+        // Perform initial sync after reactive data is fully initialized (only if containerPath exists)
         this.hasPerformedInitialSync = true;
-        this.syncWithURL();
+        if (this.containerPath) {
+            this.syncWithURL();
+        } else if (this.defaultSearch) {
+            // In standalone mode, apply default search if provided
+            this.applyDefaultSearch();
+        }
     },
     methods: {
         async buildOptions() {
@@ -1168,6 +1177,7 @@ export const ScheduleFilterSelect = {
                 };
                 this.$emit('search-selected', searchData);
                 this.updateURL({
+                    view: undefined, // Clear show-all view parameter
                     dateFilter: `${year}-01-01,${year}-12-31`,
                     byShowDate: true
                 });
@@ -1182,6 +1192,9 @@ export const ScheduleFilterSelect = {
         },
         
         updateURL(params) {
+            // Skip URL updates if no containerPath (standalone mode in modal)
+            if (!this.containerPath) return;
+            
             const cleanPath = this.containerPath.split('?')[0];
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
@@ -1206,7 +1219,9 @@ export const ScheduleFilterSelect = {
         updateURLFromSearch(searchData) {
             if (!searchData) return;
             
-            const params = {};
+            const params = {
+                view: undefined // Clear show-all view parameter
+            };
             if (searchData.dateFilter) params.dateFilter = searchData.dateFilter;
             if (searchData.textFilters?.length) params.textFilters = searchData.textFilters;
             if (searchData.byShowDate !== undefined) params.byShowDate = searchData.byShowDate;
@@ -1233,6 +1248,12 @@ export const ScheduleFilterSelect = {
         },
         
         syncWithURL() {
+            // Skip URL sync if no containerPath (standalone mode in modal)
+            if (!this.containerPath) {
+                this.defaultSearch && this.applyDefaultSearch();
+                return;
+            }
+            
             const params = NavigationRegistry.getParametersForContainer(
                 this.containerPath,
                 this.appContext?.currentPath

@@ -49,11 +49,11 @@ For design and project queue:
       make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
-- [ ] remove hamburger buttons that do nothing
+- [x] remove hamburger buttons that do nothing
 - [x] packlist print titleblock??
 - [x] add context variables to live site github
 - [x] refresh buttons should clear caches
-- [ ] fix packlist table header alignment
+- [x] fix packlist table header alignment
 - [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [ ] tableComponent finder needs: a clear all button, and a hide rows toggle
 - [ ] make table headers accessible when scrolling
@@ -74,7 +74,7 @@ For design and project queue:
 - [x] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
 - [x] make navigation auth modal logout on cancel
 - [ ] fix thumbnails again: make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
-- [ ] error causing unsyncing of packlist saves, especially when data or rows are deleted
+- [?] error causing unsyncing of packlist saves, especially when data or rows are deleted
 - [x] clicking primary nav in desktop view should always nav to base page instead of doing so only every other click
 - [x] buttons dont work on reports
 - [x] changing url doesnt immidiately update saved search
@@ -169,7 +169,7 @@ Pack Lists in Web
 - [x] Allow categorized item finding, viewing (in row details), checking (integrate into analysis steps), and check/update (via inventor).
 - [ ] !!! allow new packlists from template, allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
 - [ ] add category filtering to packlist-details table
-- [ ] cut and paste between packlist functionality
+- [ ] !!! cut and paste between packlist functionality
 - [ ] !!! automations interface, packlist rules
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?

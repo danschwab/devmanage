@@ -537,8 +537,7 @@ button.card {
     top: 0;
     width: 100%; /* Full width */
     height: 100%; /* Full height */
-    overflow: auto; /* Enable scroll if needed */
-    overflow: auto;
+    overflow: hidden; /* Enable scroll if needed */
     pointer-events: auto;
     /* Ensure transitions work properly */
     opacity: 1;
@@ -603,7 +602,7 @@ button.card {
     color: var(--color-text-inverted);
 }
 .modal .content {
-    max-height: calc(100vh - var(--padding-lg) * 2 - var(--padding-md) * 2);
+    max-height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
     overflow: auto;
 }
 

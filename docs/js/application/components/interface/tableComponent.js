@@ -1351,14 +1351,21 @@ export const TableComponent = {
             // Apply search filter if activeSearchValue is provided and hideRowsOnSearch is enabled
             if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearch) {
                 const searchTerm = this.activeSearchValue.toLowerCase().trim();
+                // Split search term into multiple words for partial matching
+                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+                
                 filteredData = filteredData.filter(({ row }) => {
                     if (!row) return false;
                     // Only search visible columns (exclude hidden columns)
                     const visibleColumns = this.columns.filter(column => !this.hideSet.has(column.key));
-                    return visibleColumns.some(column => {
-                        const value = row[column.key];
-                        return String(value).toLowerCase().includes(searchTerm);
-                    });
+                    
+                    // All search words must match somewhere in the row (AND logic)
+                    return searchWords.every(word => 
+                        visibleColumns.some(column => {
+                            const value = row[column.key];
+                            return String(value).toLowerCase().includes(word);
+                        })
+                    );
                 });
             }
 
