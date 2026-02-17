@@ -911,38 +911,61 @@ export const PacklistTable = {
             const matchPercentage = alert.score ? Math.round(alert.score * 100) : 0;
             const inventoryDescription = alert.inventoryDescription || 'N/A';
             
-            const modalContent = `<div><p>Current Description:</p><div class="card orange">${alert.packlistDescription || item.Description || 'N/A'}</div></div><div><p>Inventory Description:</p><div class="card purple">${inventoryDescription}</div></div>`;
-            
-            // Only show confirm modal with edit options if in edit mode
-            if (this.editMode) {
-                this.$modal.confirm(
-                    modalContent,
-                    () => {
-                        // On confirm: Update the description field with the formatted inventory description
-                        const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
-                        
-                        // Update the item's Description field
-                        item.Description = newDescription;
-                        
-                        // Show success message (save will be enabled automatically via isModified)
-                        //this.$modal.alert('Description updated! Remember to save your changes.', 'Success');
-
-                        //clear the alert from AppData
-                        if (item.AppData) {
-                            delete item.AppData['descriptionAlert'];
+            const DescriptionMismatchComponent = {
+                props: ['item', 'alert', 'editMode', 'onUpdate'],
+                computed: {
+                    packlistDescription() {
+                        return this.alert.packlistDescription || this.item.Description || 'N/A';
+                    },
+                    inventoryDescription() {
+                        return this.alert.inventoryDescription || 'N/A';
+                    }
+                },
+                methods: {
+                    updateDescription() {
+                        if (this.onUpdate) {
+                            this.onUpdate();
                         }
+                        this.$emit('close-modal');
                     },
-                    () => {
-                        // On cancel: do nothing
-                    },
-                    `Description Mismatch ${itemNumber}`, // Title
-                    'Update Description', // Custom confirm button text
-                    'Cancel' // Custom cancel button text
-                );
-            } else {
-                // In view mode, just show an alert with the information (no auto-close)
-                this.$modal.alert(modalContent, `Description Mismatch ${itemNumber}`, false);
-            }
+                    cancel() {
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <slot>
+                        <div>
+                            <p>Current Description:</p>
+                            <div class="card orange">{{ packlistDescription }}</div>
+                        </div>
+                        <div>
+                            <p>Inventory Description:</p>
+                            <div class="card purple">{{ inventoryDescription }}</div>
+                        </div>
+                        <div v-if="editMode" class="button-bar">
+                            <button @click="updateDescription">Update Description</button>
+                            <button @click="cancel" class="gray">Cancel</button>
+                        </div>
+                    </slot>
+                `
+            };
+            
+            this.$modal.custom(DescriptionMismatchComponent, {
+                item: item,
+                alert: alert,
+                editMode: this.editMode,
+                onUpdate: () => {
+                    // Update the description field with the formatted inventory description
+                    const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
+                    item.Description = newDescription;
+                    
+                    // Clear the alert from AppData
+                    if (item.AppData) {
+                        delete item.AppData['descriptionAlert'];
+                    }
+                },
+                modalClass: 'reading-menu'
+            }, `${itemNumber}`);
         },
 
         /**
@@ -1108,7 +1131,7 @@ export const PacklistTable = {
         }
     },
     template: html`
-        <div class="packlist-table">
+        <slot>
             <!-- Print-only Header -->
             <div class="print-header">
                 <img src="images/logo.png" alt="Top Shelf Exhibits Logo" class="print-logo" />
@@ -1132,6 +1155,7 @@ export const PacklistTable = {
                     :originalData="originalData"
                     :columns="mainColumns"
                     :title="tabName"
+                    :theme="'packlist-table'"
                     :showRefresh="false"
                     :showSearch="true"
                     :sync-search-with-url="true"
@@ -1275,7 +1299,7 @@ export const PacklistTable = {
                     </template>
                 </TableComponent>
             </div>
-        </div>
+        </slot>
     `
 };
 

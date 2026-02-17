@@ -883,7 +883,7 @@ export const ScheduleAdvancedFilter = {
                 v-for="filter in textFilters" 
                 :key="filter.id"
                 :class="'card' + (filter.value ? ' green' : ' white') + (isApplyingFilters ? ' analyzing' : '')"
-                style="display: flex; flex-wrap: wrap; gap: var(--padding-sm); align-items: center;"
+                style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;"
             >
                 <span>Column Filter:</span>
                 <select 

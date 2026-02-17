@@ -172,15 +172,13 @@ export const PacklistItemsSummary = {
         }
     },
     template: html`
-        <div class="packlist-items-summary">
-            <div class="content">
-                <button @click="navigateBackToPacklist">Back to View</button>
-                <div class="details-grid">
-                    <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
-                        <label>{{ key }}:</label>
-                        <span v-if="showDetails">{{ showDetails[key] || '—' }}</span>
-                        <span v-else>...</span>
-                    </div>
+        <slot class="packlist-items-summary">
+            <button @click="navigateBackToPacklist">Back to View</button>
+            <div class="details-grid">
+                <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
+                    <label>{{ key }}:</label>
+                    <span v-if="showDetails">{{ showDetails[key] || '—' }}</span>
+                    <span v-else>...</span>
                 </div>
             </div>
             
@@ -254,6 +252,6 @@ export const PacklistItemsSummary = {
                     </div>
                 </template>
             </TableComponent>
-        </div>
+        </slot>
         `
 };

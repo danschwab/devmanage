@@ -227,7 +227,7 @@ export const CardsComponent = {
         }
     },
     template: html`
-        <div class="cards-component content">
+        <slot>
             <div key="content-header" v-if="showHeader" class="content-header">
                 <slot 
                     name="header-area" 
@@ -300,6 +300,6 @@ export const CardsComponent = {
                 <p>{{ loadingMessage || 'Loading...' }}</p>
             </div>
             <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
-        </div>
+        </slot>
     `
 };

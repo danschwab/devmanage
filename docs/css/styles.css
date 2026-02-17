@@ -189,20 +189,13 @@ div#app-content > div.empty-message {
 .container-header {
     display: flex;
     flex-wrap: wrap-reverse;
-    gap: calc(var(--padding-sm) / 2);
+    gap: calc(var(--padding-md) / 2);
     z-index: 1000;
     justify-content: end;
     align-items: center;
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     border-bottom: 1px solid var(--color-border);
     box-shadow: 0 12px 14px -18px var(--color-shadow);
-}
-.container-content {
-    flex: 1;
-    padding: 2px;
-    /*var(--padding-md);*/
-    /*overflow: auto;*/
-    box-sizing: border-box;
 }
 
 .container.dashboard-card {
@@ -232,7 +225,7 @@ div#app-content > div.empty-message {
 .container.dashboard-card .container-header {
     flex-shrink: 0;
     border-bottom: 1px solid var(--color-border);
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
 }
 
 .container.dashboard-card .container-header h2 {
@@ -246,7 +239,7 @@ div#app-content > div.empty-message {
     display: flex;
     justify-content: center;
     align-items: center;
-    inset: 2px;
+    inset: var(--padding-sm);
     border-radius: var(--radius-lg);
     background: var(--color-modal-bg-gradient);
 }
@@ -261,19 +254,20 @@ div#app-content > div.empty-message {
 
 
 .content {
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     display: flex;
     flex-direction: column;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
+    box-sizing: border-box;
 }
 
 .content-header {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px;
+    gap: var(--padding-sm);
     justify-content: space-between;
     align-items: center;
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     background-color: var(--color-gray-bg);
     border: 1px solid var(--color-border);
     width: 100%;
@@ -294,10 +288,10 @@ div#app-content > div.empty-message {
 .content-footer {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
     justify-content: right;/*space-between;*/
     align-items: center;
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     background-color: var(--color-gray-bg);
     border: 1px solid var(--color-border);
     width: 100%;
@@ -353,7 +347,7 @@ div#app-content > div.empty-message {
 /* Dashboard card breadcrumb hover functionality */
 .breadcrumb-card-container {
     position: relative;
-    padding-right: var(--padding-sm)
+    padding-right: var(--padding-md)
 }
 
 .breadcrumb-hover-overlay {
@@ -369,7 +363,7 @@ div#app-content > div.empty-message {
     display: block;
     box-sizing: border-box;
     border: 1px solid var(--color-border);
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     /*width: 100%;*/
     border-radius: var(--radius-lg);
     align-content: center;
@@ -399,12 +393,12 @@ div#app-content > div.empty-message {
 
 
 .card>.content {
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
 }
 
 td .card, .button-bar .card, .content-footer .card, .content-header .card {
     font-size: 11pt;
-    padding: 2px;
+    padding: var(--padding-sm);
     border-radius: var(--radius-md);
 }
 
@@ -428,7 +422,7 @@ button.card {
     grid-template-columns: repeat(3, 1fr);
     grid-auto-rows: 1fr;
     align-items: center;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
 }
 .cards-grid.two {
     grid-template-columns: repeat(2, 1fr);
@@ -454,11 +448,11 @@ button.card {
 /* Button Containers */
 .button-group {
     display: flex;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
 }
 .button-bar {
     display: flex;
-    gap: 2px;
+    gap: var(--padding-sm);
 }
 
 .button-bar > :first-child:not(:last-child), .button-bar > :first-child:not(:last-child) > input {
@@ -566,7 +560,7 @@ button.card {
     flex-direction: row;
     border-bottom: 1px solid var(--color-border);
     justify-content: space-between;
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
 
     box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
@@ -608,21 +602,21 @@ button.card {
 
 /* Hamburger Menu & Other Specific Modal Styles */
 
-.page-menu {
-    width: var(--page-width-small);
-    height: calc(100vh - var(--padding-md) * 2);
+.page-menu .content {
+    min-width: var(--page-width-small);
+    height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
 }
-.reading-menu {
+.reading-menu .content {
     display: flex;
     flex-direction: column;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
     padding: var(--padding-md);
 }
 
 
 .hamburger-menu button, .hamburger-menu .button-bar {
     margin: 0;
-    margin-top: 2px;
+    margin-top: var(--padding-sm);
     max-width:100%;
     width: 100%;
 }
@@ -738,7 +732,7 @@ td:has(.table-wrapper) {
     padding: 8px;
 }
 td:has(button) {
-    padding: 2px;
+    padding: var(--padding-sm);
 }
 td:has(img) {
     padding: 0;
@@ -929,7 +923,7 @@ tr.dragging, tr.selected, tfoot tr.draggable {
     transform: translateX(-100%) translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--padding-sm);
     z-index: 100;
     pointer-events: auto;
 }
@@ -1066,9 +1060,9 @@ tr.is-group:hover .group-toggle {
 }
 
 .details-content {
-    padding: var(--padding-sm);
+    padding: var(--padding-md);
     background-color: var(--background-color);
-    margin: 0 0 var(--padding-sm) 0;
+    margin: 0 0 var(--padding-md) 0;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     border: 1px solid var(--color-border);
     border-top: none;
@@ -1079,7 +1073,7 @@ tr.is-group:hover .group-toggle {
 .details-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
 }
 
 .detail-item {
@@ -1087,7 +1081,7 @@ tr.is-group:hover .group-toggle {
     flex-direction: row;
     align-items: center;
     background-color: var(--color-gray-bg);
-    padding: 2px;
+    padding: var(--padding-sm);
     gap: 0.5rem;
 }
 
@@ -1128,7 +1122,7 @@ tr.is-group:hover .group-toggle {
 .table-cell-container:has(button:only-child) {
     display: flex;
     justify-content: space-between;
-    gap: var(--padding-sm);
+    gap: var(--padding-md);
     align-items: center;
 }
 .original-value {
@@ -1214,7 +1208,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 .loading-bar-track {
-    height: 2px;
+    height: var(--padding-sm);
     background: var(--color-border);
     overflow: hidden;
     position: absolute;
@@ -1225,7 +1219,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 .loading-bar-fill {
-    height: 2px;
+    height: var(--padding-sm);
     background-color: var(--color-primary);
     border-radius: var(--radius-sm);
     transition: width 0.3s ease;
@@ -1341,10 +1335,10 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     padding: 0;
 }
 .packlist-crates td .table-edit-textarea {
-    padding: 2px;
+    padding: var(--padding-sm);
     box-sizing: border-box;
-    margin: 2px;
-    width: calc(100% - 4px);
+    margin: var(--padding-sm);
+    width: calc(100% - 2 * var(--padding-sm));
 }
 
 
@@ -1377,7 +1371,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     
     nav img {
         height: 46px;
-        margin: 2px;
+        margin: var(--padding-sm);
     }
     nav #navbar {
         flex-direction: column;
@@ -1404,10 +1398,10 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     }
     nav #navbar button {
         margin-top: var(--padding-lg);
-        margin-bottom: var(--padding-sm);
+        margin-bottom: var(--padding-md);
     }
     nav #navbar button:only-child {
-        margin-top: var(--padding-sm);
+        margin-top: var(--padding-md);
     }
 
     nav:not(.open) #navbar a:not(.active), 
@@ -1454,6 +1448,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 
     .cards-grid .card {
         width: 100%;
+        height: auto;
     }
 
     .button-bar {
@@ -1485,6 +1480,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     }
     .cards-grid .card {
         width:100%;
+        height: auto;
     }
 
     .button-bar {
@@ -1593,7 +1589,6 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     div#app-content, 
     .container,
     .container-header,
-    .container-content,
     .content {  
         position: relative !important;
         width: 100% !important;

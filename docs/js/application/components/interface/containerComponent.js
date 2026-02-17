@@ -167,7 +167,7 @@ export const ContainerComponent = {
                 </div>
             </div>
             
-            <div class="container-content">
+            <div class="content">
                 <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
                     <img src="images/loading.gif" alt="..."/>
                     <p>Loading data...</p>

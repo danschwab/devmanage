@@ -399,6 +399,8 @@ const App = {
                         :is-visible="modal.isVisible"
                         :components="modal.components"
                         :modal-class="modal.modalClass"
+                        :message="modal.message"
+                        :content-class="modal.contentClass"
                         :component-props="modal.componentProps"
                         @close-modal="modalManager.removeModal(modal.id)"
                     ></app-modal>

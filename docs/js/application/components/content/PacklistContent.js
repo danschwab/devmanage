@@ -271,7 +271,7 @@ export const PacklistMenuComponent = {
             
             this.$modal.custom(
                 CreatePacklistModalContent,
-                { modalClass: 'large-modal', navigateToPath: parentNavigateToPath },
+                { modalClass: 'page-menu', navigateToPath: parentNavigateToPath },
                 'Create New Packlist'
             );
         }
