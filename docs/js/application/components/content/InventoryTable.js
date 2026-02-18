@@ -475,7 +475,7 @@ export const InventoryTableComponent = {
         },
         
         async handleLockState(isDirty) {
-            console.log('[InventoryTable] handleLockState called with isDirty:', isDirty, '| isLocked:', this.isLocked, '| lockingInProgress:', this.lockingInProgress, '| lockedByOther:', this.lockedByOther);
+            //console.log('[InventoryTable] handleLockState called with isDirty:', isDirty, '| isLocked:', this.isLocked, '| lockingInProgress:', this.lockingInProgress, '| lockedByOther:', this.lockedByOther);
             if (this.lockingInProgress || this.lockedByOther) return;
             
             const user = authState.user?.email;

@@ -140,8 +140,7 @@ export class ModalManager {
     error(message, title = 'Error') {
         return this._create(title, ErrorIconComponent, { 
             message, 
-            contentClass: 'red',
-            modalClass: 'reading-menu' 
+            modalClass: 'reading-menu red' 
         });
     }
 

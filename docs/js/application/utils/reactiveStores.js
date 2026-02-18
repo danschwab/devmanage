@@ -1395,7 +1395,6 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
             const cachedArgs = eventData.argsString;
             
             if (cachedArgs === storeArgs) {
-                console.log(`[ReactiveStore] Cache invalidation received for ${mainMethodName} with matching args, reloading data`);
                 store.handleInvalidation();
             }
         });

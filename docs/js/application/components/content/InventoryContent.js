@@ -60,7 +60,7 @@ export const InventoryMenuComponent = {
             try {
                 if (this.getLockInfo) {
                     this.lockInfo = await this.getLockInfo();
-                    console.log('[InventoryMenu] Fetched lock info:', this.lockInfo);
+                    //console.log('[InventoryMenu] Fetched lock info:', this.lockInfo);
                 }
             } catch (error) {
                 console.error('[InventoryMenu] Error fetching lock info:', error);
@@ -372,7 +372,7 @@ export const InventoryContent = {
                 getLockInfo: async () => {
                     // Get lock info from the current category if we're viewing one
                     const categoryName = this.currentCategoryName;
-                    console.log('[InventoryContent] getLockInfo called:', { 
+                    //console.log('[InventoryContent] getLockInfo called:', { 
                         categoryName,
                         cleanPath: this.cleanContainerPath,
                         hasStore: !!this.categoriesStore,
@@ -383,9 +383,9 @@ export const InventoryContent = {
                     
                     // Always fetch directly from API to ensure fresh lock status
                     // (bypasses store which may have stale analysis data)
-                    console.log('[InventoryContent] Fetching lock info directly for:', categoryName);
+                    //console.log('[InventoryContent] Fetching lock info directly for:', categoryName);
                     const lockInfo = await Requests.getInventoryLock(categoryName.toUpperCase());
-                    console.log('[InventoryContent] Lock info from API:', lockInfo);
+                    //console.log('[InventoryContent] Lock info from API:', lockInfo);
                     return lockInfo;
                 },
                 tabTitle: this.currentCategoryName

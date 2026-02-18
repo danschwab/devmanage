@@ -645,12 +645,12 @@ class applicationUtils_uncached {
      */
     static async _initializeLocksSheet() {
         try {
-            console.log('[_initializeLocksSheet] Initializing Locks sheet structure');
+            //console.log('[_initializeLocksSheet] Initializing Locks sheet structure');
             const sheetData = [
                 ['Lock Key'] // A1: "Lock Key" header, columns B+ will be added dynamically
             ];
             await GoogleSheetsService.setSheetData('CACHE', 'Locks', sheetData, null);
-            console.log('[_initializeLocksSheet] Locks sheet initialized successfully');
+            //console.log('[_initializeLocksSheet] Locks sheet initialized successfully');
         } catch (error) {
             console.error('[_initializeLocksSheet] Failed to initialize Locks sheet:', error);
             throw error;
@@ -667,7 +667,7 @@ class applicationUtils_uncached {
             // Read entire Locks sheet
             const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Locks');
             
-            console.log('[getLocksData] Raw data from Locks sheet:', rawData);
+            //console.log('[getLocksData] Raw data from Locks sheet:', rawData);
             
             if (!rawData || rawData.length === 0) {
                 console.log('[getLocksData] No data found, returning empty grid');

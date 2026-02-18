@@ -78,7 +78,7 @@ export const PacklistMenuComponent = {
             try {
                 if (this.getLockInfo) {
                     this.lockInfo = await this.getLockInfo();
-                    console.log('[PacklistMenu] Fetched lock info:', this.lockInfo);
+                    //console.log('[PacklistMenu] Fetched lock info:', this.lockInfo);
                 }
             } catch (error) {
                 console.error('[PacklistMenu] Error fetching lock info:', error);
@@ -340,11 +340,6 @@ export const PacklistMenuComponent = {
                             // Create the tab from template
                             await Requests.createNewTab('PACK_LISTS', this.templateName, name);
                             
-                            // Invalidate cache to refresh tabs list
-                            invalidateCache([
-                                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
-                            ], true);
-                            
                             // Close modal
                             this.$emit('close-modal');
                             
@@ -604,7 +599,7 @@ export const PacklistContent = {
                 getLockInfo: async () => {
                     // Get lock info from the current packlist if we're viewing one
                     const packlistName = this.currentPacklist;
-                    console.log('[PacklistContent] getLockInfo called:', { 
+                    //console.log('[PacklistContent] getLockInfo called:', { 
                         packlistName, 
                         hasStore: !!this.packlistsStore,
                         storeData: this.packlistsStore?.data?.length
@@ -614,9 +609,9 @@ export const PacklistContent = {
                     
                     // Always fetch directly from API to ensure fresh lock status
                     // (bypasses store which may have stale analysis data)
-                    console.log('[PacklistContent] Fetching lock info directly for:', packlistName);
+                    //console.log('[PacklistContent] Fetching lock info directly for:', packlistName);
                     const lockInfo = await Requests.getPacklistLock(packlistName);
-                    console.log('[PacklistContent] Lock info from API:', lockInfo);
+                    //console.log('[PacklistContent] Lock info from API:', lockInfo);
                     return lockInfo;
                 }
             }

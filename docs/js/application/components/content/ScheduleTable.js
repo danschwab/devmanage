@@ -356,11 +356,6 @@ export const ScheduleTableComponent = {
                             // Create the tab from template
                             await Requests.createNewTab('PACK_LISTS', this.templateName, identifier);
                             
-                            // Invalidate cache to refresh tabs list
-                            invalidateCache([
-                                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
-                            ], true);
-                            
                             // Success message
                             this.$modal.alert(`Packlist "${identifier}" created successfully!`, 'Success');
                             
