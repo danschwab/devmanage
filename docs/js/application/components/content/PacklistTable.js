@@ -158,11 +158,11 @@ export const PacklistTable = {
         mainColumns() {
             return this.mainHeaders.map((label, idx) => {
                 if (label === 'Piece #') {
-                    return { key: label, label, editable: false, isIndex: true, width: 10};
+                    return { key: label, label, editable: false, isIndex: true, width: 10, font: 'narrow'};
                 }
                 // Only make columns editable if editMode is true
                 const isEditable = this.editMode && ['Type','L','W','H','Weight'].includes(label);
-                
+
                 // When not in edit mode, move Type, L, W, H, Weight to details
                 //const isDetailsColumn = !this.editMode && ['Type','L','W','H','Weight'].includes(label);
 
@@ -172,7 +172,7 @@ export const PacklistTable = {
                         label,
                         width: ['Description','Packing/shop notes'].includes(label) ? 200 : 40,
                         colspan: this.itemHeaders.length,
-                        font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
+                        font: ['Pack','Check','Weight'].includes(label) ? 'narrow' : undefined
                     };
                 } else {
                     return {
@@ -181,7 +181,7 @@ export const PacklistTable = {
                         editable: isEditable,
                         details: null,
                         width: ['Description', 'Packing/shop notes'].includes(label) ? 200 : 40,
-                        font: ['Pack','Check'].includes(label) ? 'narrow' : undefined
+                        font: ['Pack','Check','Weight'].includes(label) ? 'narrow' : undefined
                     };
                 };
             });

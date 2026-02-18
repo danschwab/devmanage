@@ -248,7 +248,10 @@ class Requests_uncached {
      * @returns {Promise<Array<Object>>} Array of packlist tab objects
      */
     static async getPacklists(deps, filter = null) {
-        return await deps.call(PackListUtils.getPacklists, filter);
+        console.log('[Requests.getPacklists] Called with filter:', filter);
+        const result = await deps.call(PackListUtils.getPacklists, filter);
+        console.log('[Requests.getPacklists] Returning', result.length, 'packlists');
+        return result;
     }
     
     /**

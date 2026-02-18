@@ -2810,7 +2810,7 @@ export const TableComponent = {
             />
             
             <!-- Data Table (always render if draggable, even when empty) -->
-            <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" class="table-wrapper">
+            <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" :class="'table-wrapper' + (theme ? ' ' + theme : '')">
                 <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
                     <colgroup>
                         <col v-if="draggable" :style="{ width: '20px' }" />

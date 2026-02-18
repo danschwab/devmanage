@@ -219,7 +219,7 @@ div#app-content > div.empty-message {
 
 .container.dashboard-card .content {
     flex: 1;
-    overflow: auto;
+    /*overflow: auto;*/
 }
 
 .container.dashboard-card .container-header {
@@ -609,8 +609,8 @@ button.card {
 .reading-menu .content {
     display: flex;
     flex-direction: column;
-    gap: var(--padding-md);
-    padding: var(--padding-md);
+    gap: var(--padding-lg);
+    padding: var(--padding-lg);
 }
 
 

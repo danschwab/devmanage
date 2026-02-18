@@ -16,6 +16,10 @@ export const ScheduleTableComponent = {
         hideRowsOnSearch: {
             type: Boolean,
             default: true
+        },
+        templateName: {
+            type: String,
+            default: 'TEMPLATE'
         }
     },
     inject: ['$modal'],
@@ -340,12 +344,17 @@ export const ScheduleTableComponent = {
                 const year = scheduleRow.Year || '';
                 const startDate = scheduleRow['S. Start'] || 'TBD';
                 
+                const isDuplicate = this.templateName !== 'TEMPLATE';
+                const confirmMessage = isDuplicate 
+                    ? `Duplicate "${this.templateName}" and attach to:\n\nClient: ${client}\nShow: ${show}\nYear: ${year}\nStart Date: ${startDate}\n\nNew packlist will be named: ${identifier}`
+                    : `Create new empty packlist for:\n\nClient: ${client}\nShow: ${show}\nYear: ${year}\nStart Date: ${startDate}`;
+                
                 this.$modal.confirm(
-                    `Create new empty packlist for:\n\nClient: ${client}\nShow: ${show}\nYear: ${year}\nStart Date: ${startDate}`,
+                    confirmMessage,
                     async () => {
                         try {
                             // Create the tab from template
-                            await Requests.createNewTab('PACK_LISTS', 'TEMPLATE', identifier);
+                            await Requests.createNewTab('PACK_LISTS', this.templateName, identifier);
                             
                             // Invalidate cache to refresh tabs list
                             invalidateCache([

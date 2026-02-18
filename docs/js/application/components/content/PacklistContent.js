@@ -30,6 +30,18 @@ export const PacklistMenuComponent = {
             const email = this.lockInfo.user;
             return email.includes('@') ? email.split('@')[0] : email;
         },
+        currentPacklistName() {
+            // Extract packlist name from containerPath
+            // Format: packlist/{name} or packlist/{name}/details or packlist/{name}/edit
+            if (!this.containerPath) return null;
+            const cleanPath = this.containerPath.split('?')[0];
+            const segments = cleanPath.split('/').filter(segment => segment.length > 0);
+            // segments[0] = 'packlist', segments[1] = packlist name
+            return segments[1] || null;
+        },
+        isViewingSpecificPacklist() {
+            return !!this.currentPacklistName;
+        },
         menuItems() {
             const items = [];
             
@@ -45,8 +57,14 @@ export const PacklistMenuComponent = {
             
             switch (this.currentView) {
                 default:
+                    // Show duplicate option only when viewing a specific packlist
+                    if (this.isViewingSpecificPacklist) {
+                        items.push({ label: 'Duplicate This Packlist', action: 'duplicatePacklist' });
+                    }
+                    
                     items.push(
-                        { label: 'Create New Packlist', action: 'createNewPacklist' },
+                        { label: 'Create Show Packlist', action: 'createNewPacklist' },
+                        { label: 'Create Custom Packlist', action: 'createCustomPacklist' },
                         { label: 'Refresh', action: 'refresh' }
                         // { label: 'Help', action: 'help' } // Placeholder - not yet implemented
                     );
@@ -72,6 +90,12 @@ export const PacklistMenuComponent = {
             switch (action) {
                 case 'createNewPacklist':
                     this.openCreatePacklistModal();
+                    break;
+                case 'createCustomPacklist':
+                    this.openCreateCustomPacklistModal();
+                    break;
+                case 'duplicatePacklist':
+                    this.openDuplicatePacklistModal();
                     break;
                 case 'refresh':
                     if (this.refreshCallback) {
@@ -139,7 +163,7 @@ export const PacklistMenuComponent = {
                 'Force Unlock'
             );
         },
-        openCreatePacklistModal() {
+        openCreatePacklistModal(templateName = 'TEMPLATE') {
             // Close the hamburger menu modal first
             this.$emit('close-modal');
             
@@ -151,7 +175,11 @@ export const PacklistMenuComponent = {
                     'ScheduleFilterSelect': ScheduleFilterSelect
                 },
                 props: {
-                    navigateToPath: Function
+                    navigateToPath: Function,
+                    templateName: {
+                        type: String,
+                        default: 'TEMPLATE'
+                    }
                 },
                 emits: ['close-modal'],
                 data() {
@@ -250,6 +278,7 @@ export const PacklistMenuComponent = {
                             :filter="dateFilter"
                             :search-params="tableSearchParams"
                             :hide-rows-on-search="true"
+                            :template-name="templateName"
                             @navigate-to-path="handleNavigateToPath"
                             @packlist-created="handlePacklistCreated"
                         >
@@ -271,8 +300,171 @@ export const PacklistMenuComponent = {
             
             this.$modal.custom(
                 CreatePacklistModalContent,
-                { modalClass: 'page-menu', navigateToPath: parentNavigateToPath },
-                'Create New Packlist'
+                { modalClass: 'page-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
+                templateName === 'TEMPLATE' ? 'Create Show Packlist' : 'Duplicate Packlist Attached to Show'
+            );
+        },
+        openCreateCustomPacklistModal(templateName = 'TEMPLATE') {
+            // Close the hamburger menu modal first
+            this.$emit('close-modal');
+            
+            const parentNavigateToPath = this.navigateToPath;
+            
+            const CustomPacklistModalContent = {
+                inject: ['$modal'],
+                props: {
+                    navigateToPath: Function,
+                    templateName: {
+                        type: String,
+                        default: 'TEMPLATE'
+                    }
+                },
+                emits: ['close-modal'],
+                data() {
+                    return {
+                        packlistName: '',
+                        isCreating: false
+                    };
+                },
+                methods: {
+                    async handleCreate() {
+                        const name = this.packlistName.trim();
+                        
+                        if (!name) {
+                            this.$modal.alert('Please enter a packlist name.', 'Validation Error');
+                            return;
+                        }
+                        
+                        this.isCreating = true;
+                        try {
+                            // Create the tab from template
+                            await Requests.createNewTab('PACK_LISTS', this.templateName, name);
+                            
+                            // Invalidate cache to refresh tabs list
+                            invalidateCache([
+                                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
+                            ], true);
+                            
+                            // Close modal
+                            this.$emit('close-modal');
+                            
+                            // Navigate to the new packlist
+                            if (this.navigateToPath) {
+                                this.navigateToPath(`packlist/${name}`);
+                            }
+                        } catch (error) {
+                            console.error('Error creating custom packlist:', error);
+                            this.$modal.error(`Failed to create packlist: ${error.message}`, 'Error');
+                        } finally {
+                            this.isCreating = false;
+                        }
+                    },
+                    handleCancel() {
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <slot>
+                        <div v-if="templateName === 'TEMPLATE'" class="card yellow">
+                            <p><strong>Note:</strong> To attach a new packlist to a show, cancel and use "Create Show Packlist". <br> <em>This packlist will not be visible when packlists are filtered by the production schedule.</em></p>
+                        </div>
+                        <div v-else class="card">
+                            <p><strong>Duplicating:</strong> {{ templateName }}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label for="packlistNameInput" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">
+                                {{ templateName === 'TEMPLATE' ? 'Packlist Name:' : 'New Packlist Name:' }}
+                            </label>
+                            <input 
+                                id="packlistNameInput"
+                                v-model="packlistName" 
+                                type="text" 
+                                placeholder="Enter packlist name" 
+                                style="width: 100%; padding: 0.5rem; font-size: 1rem;"
+                                :disabled="isCreating"
+                                @keyup.enter="handleCreate"
+                            />
+                        </div>
+                        <div class="button-bar">
+                            <button @click="handleCreate" :disabled="isCreating || !packlistName.trim()">
+                                {{ isCreating ? 'Creating...' : 'Create' }}
+                            </button>
+                            <button @click="handleCancel" class="gray" :disabled="isCreating">
+                                Cancel
+                            </button>
+                        </div>
+                    </slot>
+                `
+            };
+            
+            this.$modal.custom(
+                CustomPacklistModalContent,
+                { modalClass: 'reading-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
+                templateName === 'TEMPLATE' ? 'Create Custom Packlist' : 'Duplicate As Custom Packlist'
+            );
+        },
+        openDuplicatePacklistModal() {
+            // Close the hamburger menu modal first
+            this.$emit('close-modal');
+            
+            const currentPacklist = this.currentPacklistName;
+            if (!currentPacklist) {
+                this.$modal.alert('No packlist selected to duplicate.', 'Error');
+                return;
+            }
+            
+            const DuplicateChoiceModalContent = {
+                inject: ['$modal'],
+                props: {
+                    currentPacklist: String,
+                    openShowPacklistModal: Function,
+                    openCustomPacklistModal: Function
+                },
+                emits: ['close-modal'],
+                methods: {
+                    handleDuplicateAttachedToShow() {
+                        this.$emit('close-modal');
+                        if (this.openShowPacklistModal) {
+                            this.openShowPacklistModal(this.currentPacklist);
+                        }
+                    },
+                    handleDuplicateAsCustom() {
+                        this.$emit('close-modal');
+                        if (this.openCustomPacklistModal) {
+                            this.openCustomPacklistModal(this.currentPacklist);
+                        }
+                    },
+                    handleCancel() {
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <div>
+                        <p style="margin-bottom: 1.5rem;">Choose how to duplicate "{{ currentPacklist }}":</p>
+                        <div class="button-bar" style="flex-direction: column; gap: 0.5rem;">
+                            <button @click="handleDuplicateAttachedToShow" style="width: 100%;">
+                                Duplicate Attached to Show
+                            </button>
+                            <button @click="handleDuplicateAsCustom" style="width: 100%;">
+                                Duplicate As Custom
+                            </button>
+                            <button @click="handleCancel" class="gray" style="width: 100%;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                `
+            };
+            
+            this.$modal.custom(
+                DuplicateChoiceModalContent,
+                { 
+                    modalClass: 'reading-menu',
+                    currentPacklist: currentPacklist,
+                    openShowPacklistModal: this.openCreatePacklistModal.bind(this),
+                    openCustomPacklistModal: this.openCreateCustomPacklistModal.bind(this)
+                },
+                'Duplicate Packlist'
             );
         }
     },
