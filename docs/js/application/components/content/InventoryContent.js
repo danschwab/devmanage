@@ -373,11 +373,11 @@ export const InventoryContent = {
                     // Get lock info from the current category if we're viewing one
                     const categoryName = this.currentCategoryName;
                     //console.log('[InventoryContent] getLockInfo called:', { 
-                        categoryName,
-                        cleanPath: this.cleanContainerPath,
-                        hasStore: !!this.categoriesStore,
-                        storeData: this.categoriesStore?.data?.length
-                    });
+                    //    categoryName,
+                    //    cleanPath: this.cleanContainerPath,
+                    //    hasStore: !!this.categoriesStore,
+                    //    storeData: this.categoriesStore?.data?.length
+                    //});
                     
                     if (!categoryName) return null;
                     

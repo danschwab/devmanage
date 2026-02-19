@@ -67,6 +67,18 @@ export const CardsComponent = {
         hideCardsOnSearch: {
             type: Boolean,
             default: true
+        },
+        showPinButtons: {
+            type: Boolean,
+            default: false
+        },
+        pinnedItems: {
+            type: Set,
+            default: () => new Set()
+        },
+        showPinnedOnly: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
@@ -224,6 +236,14 @@ export const CardsComponent = {
             // Check if this card is currently being analyzed
             const card = this.visibleCards[cardIndex];
             return card && card.AppData && card.AppData._analyzing === true;
+        },
+        handlePinClick(event, item) {
+            // Prevent card click event from firing
+            event.stopPropagation();
+            this.$emit('toggle-pin', item.title || item.id);
+        },
+        isPinned(item) {
+            return this.pinnedItems.has(item.title || item.id);
         }
     },
     template: html`
@@ -249,7 +269,7 @@ export const CardsComponent = {
                             class="column-button"
                             title="Clear search"
                         >
-                            ✕
+                            ×
                         </button>
                     </div>
                     <button 
@@ -283,6 +303,15 @@ export const CardsComponent = {
                 >
                     <div class="content-header">
                         <h3>{{ item.title }}</h3>
+                        <slot v-if="showPinButtons">
+                            <button
+                                @click="handlePinClick($event, item)"
+                                :class="['column-button', { 'active': isPinned(item) }]"
+                                :title="isPinned(item) ? 'Unpin' : 'Pin'"
+                            >
+                                <span class="material-symbols-outlined">{{ isPinned(item) ? 'keep_off' : 'keep' }}</span>
+                            </button>
+                        </slot>
                     </div>
                     <div class="content" v-if="item.content">
                         <div v-html="item.content"></div>

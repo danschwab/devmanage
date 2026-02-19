@@ -497,7 +497,8 @@ export const PacklistContent = {
         return {
             packlistsStore: null, // Reactive store for packlists
             autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
-            filter: null // Filter for schedule overlaps (date range or identifier)
+            filter: null, // Filter for schedule overlaps (date range or identifier)
+            pinnedPacklists: new Set() // Track which packlists are pinned
         };
     },
     computed: {
@@ -521,7 +522,11 @@ export const PacklistContent = {
         },
         // Determine if we're viewing a specific packlist
         isViewingPacklist() {
-            return !!this.currentPacklist && this.currentPacklist !== 'packlist';
+            return !!this.currentPacklist && this.currentPacklist !== 'packlist' && this.currentPacklist !== 'pins';
+        },
+        // Check if we're viewing pinned cards based on URL
+        showPinnedOnly() {
+            return this.pathSegments[1] === 'pins';
         },
         // Computed properties for cards grid
         availablePacklists() {
@@ -534,8 +539,13 @@ export const PacklistContent = {
             const isAnalyzing = this.packlistsStore.isAnalyzing;
             const analysisProgress = this.packlistsStore.analysisProgress;
             
+            // Filter for pinned cards if showPinnedOnly is true
+            const filteredTabs = this.showPinnedOnly
+                ? tabs.filter(tab => this.pinnedPacklists.has(tab.title))
+                : tabs;
+            
             // Format tabs for CardsComponent
-            return tabs.map(tab => this.formatPacklistCard(tab));
+            return filteredTabs.map(tab => this.formatPacklistCard(tab));
         },
         isLoading() {
             return this.packlistsStore ? (this.packlistsStore.isLoading || this.packlistsStore.isAnalyzing) : false;
@@ -568,9 +578,22 @@ export const PacklistContent = {
                     this.checkAutoSavedPacklists();
                 }
             }
+        },
+        // Watch for showPinnedOnly changes to apply "Show All" filter
+        showPinnedOnly: {
+            handler(isPinnedView) {
+                if (isPinnedView) {
+                    // Apply "Show All" filter when viewing pinned cards
+                    this.filter = { type: 'show-all' };
+                    this.recreateStore();
+                }
+            },
+            immediate: true
         }
     },
-    mounted() {
+    async mounted() {
+        // Load pinned packlists from user data
+        await this.loadPinnedPacklists();
 
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {
@@ -599,19 +622,19 @@ export const PacklistContent = {
                 getLockInfo: async () => {
                     // Get lock info from the current packlist if we're viewing one
                     const packlistName = this.currentPacklist;
-                    //console.log('[PacklistContent] getLockInfo called:', { 
-                        packlistName, 
-                        hasStore: !!this.packlistsStore,
-                        storeData: this.packlistsStore?.data?.length
-                    });
+                    // console.log('[PacklistContent] getLockInfo called:', { 
+                    //     packlistName, 
+                    //     hasStore: !!this.packlistsStore,
+                    //     storeData: this.packlistsStore?.data?.length
+                    // });
                     
                     if (!packlistName) return null;
                     
                     // Always fetch directly from API to ensure fresh lock status
                     // (bypasses store which may have stale analysis data)
-                    //console.log('[PacklistContent] Fetching lock info directly for:', packlistName);
+                    // console.log('[PacklistContent] Fetching lock info directly for:', packlistName);
                     const lockInfo = await Requests.getPacklistLock(packlistName);
-                    //console.log('[PacklistContent] Lock info from API:', lockInfo);
+                    // console.log('[PacklistContent] Lock info from API:', lockInfo);
                     return lockInfo;
                 }
             }
@@ -814,6 +837,46 @@ export const PacklistContent = {
         },
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
+        },
+        async loadPinnedPacklists() {
+            if (!authState.isAuthenticated || !authState.user?.email) return;
+            
+            try {
+                const pinnedData = await Requests.getUserData(authState.user.email, 'pinned_packlists');
+                if (pinnedData && Array.isArray(pinnedData)) {
+                    this.pinnedPacklists = new Set(pinnedData);
+                    console.log('[PacklistContent] Loaded pinned packlists:', Array.from(this.pinnedPacklists));
+                }
+            } catch (error) {
+                console.error('[PacklistContent] Error loading pinned packlists:', error);
+            }
+        },
+        async savePinnedPacklists() {
+            if (!authState.isAuthenticated || !authState.user?.email) return;
+            
+            try {
+                const pinnedArray = Array.from(this.pinnedPacklists);
+                await Requests.storeUserData(pinnedArray, authState.user.email, 'pinned_packlists');
+                console.log('[PacklistContent] Saved pinned packlists:', pinnedArray);
+            } catch (error) {
+                console.error('[PacklistContent] Error saving pinned packlists:', error);
+            }
+        },
+        async togglePin(packlistName) {
+            if (this.pinnedPacklists.has(packlistName)) {
+                this.pinnedPacklists.delete(packlistName);
+            } else {
+                this.pinnedPacklists.add(packlistName);
+            }
+            await this.savePinnedPacklists();
+        },
+        togglePinnedView() {
+            // Navigate between packlist and packlist/pins
+            if (this.showPinnedOnly) {
+                this.navigateToPath('packlist');
+            } else {
+                this.navigateToPath('packlist/pins');
+            }
         }
     },
     template: html `
@@ -832,12 +895,17 @@ export const PacklistContent = {
                 :is-analyzing="isAnalyzing"
                 :loading-progress="loadingProgress"
                 :loading-message="analysisMessage"
-                :empty-message="packlistsStore ? 'No packlists available' : ''"
+                :empty-message="packlistsStore ? (showPinnedOnly ? 'No pinned packlists' : 'No packlists available') : ''"
+                :show-pin-buttons="true"
+                :pinned-items="pinnedPacklists"
+                :show-pinned-only="showPinnedOnly"
                 @refresh="handleRefresh"
+                @toggle-pin="togglePin"
             >
                 <template #header-area>
                     <div class="button-bar">
                         <ScheduleFilterSelect
+                            v-if="!showPinnedOnly"
                             :domain="'production_schedule'"
                             :include-years="true"
                             :start-year="2023"
@@ -848,6 +916,10 @@ export const PacklistContent = {
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
+                        <button @click="togglePinnedView" :class="{ 'active': showPinnedOnly }">
+                            {{ showPinnedOnly ? 'All Packlists' : 'Pins' }}
+                            <span v-if="!showPinnedOnly" class="material-symbols-outlined">keep</span>
+                        </button>
                     </div>
                 </template>
             </cards-grid>

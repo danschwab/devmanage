@@ -382,6 +382,7 @@ div#app-content > div.empty-message {
     box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
 
+
 .card .content-footer {
     border-radius: 0;
     background: transparent;
@@ -477,6 +478,9 @@ button.card {
     flex-basis: 28px;
     flex-grow: 0;
     flex-shrink: 0;
+
+    display: grid;
+    place-items: center;
 }
 
 .button-bar button {
@@ -486,10 +490,8 @@ button.card {
 .button-bar .button-symbol {
     height: auto;
 }
-
 .material-icons-outlined, .material-symbols-outlined {
-    font-size: 14pt;
-    line-height: 27px !important;
+    font-size: 12pt;
 }
 
 
@@ -767,12 +769,17 @@ td:has(img) {
     margin-right: .3em;
 }
 
-thead:hover .column-button, .input-container:hover .column-button {
-    opacity: .5;
+.content-header > .column-button {
+    right: var(--padding-md);
+    top: var(--padding-md);
 }
-thead:hover .column-button:hover, .column-button.active, thead:hover .column-button.active, .input-container .column-button:hover {
+
+thead:hover .column-button:not(.active), .input-container:hover .column-button:not(.active), div:hover>.content-header>.column-button:not(.active) {
+    opacity: .7;
+}
+.column-button.active, .column-button:hover {
     background-color: var(--color-gray-bg-hover);
-    opacity: 1;
+    opacity: 1 !important;
 }
 
 table:not(.editing) tr td:has(.table-wrapper) {
@@ -1043,11 +1050,6 @@ tr.is-group:hover .group-toggle {
 
 .details-cell {
     width: 0px;
-}
-.details-toggle {
-    min-width: 0;
-    font-size: 20px;
-    line-height: 10px;
 }
 
 .details-row-container {

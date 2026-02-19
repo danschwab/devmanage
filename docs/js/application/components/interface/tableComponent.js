@@ -2707,7 +2707,7 @@ export const TableComponent = {
             <transition name="fade">
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
-                    <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">✖</button>
+                    <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">×</button>
                     <button @click="handleMoreOptions" class="button-symbol blue" title="More Options">☰</button>
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white" title="Add Row Below">+</button>
                     <slot
@@ -2745,7 +2745,7 @@ export const TableComponent = {
                             class="column-button"
                             title="Clear search"
                         >
-                            ✕
+                            ×
                         </button>
                     </div>
                     <button
@@ -2845,11 +2845,11 @@ export const TableComponent = {
                                         class="column-button"
                                         title="Hide this column"
                                     >
-                                        ✕
+                                        ×
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;">&#9432;</th>
+                            <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;" title="Details">&#9432;</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2942,7 +2942,7 @@ export const TableComponent = {
                                         @click="toggleRowDetails(idx)"
                                         :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
-                                        {{ isRowExpanded(idx) ? '×' : '&#9432;' }}
+                                        {{ isRowExpanded(idx) ? '×' : '›' }}
                                     </button>
                                 </td>
                             </tr>
@@ -3049,7 +3049,7 @@ export const TableComponent = {
                                     class="column-button"
                                     title="Hide this column"
                                 >
-                                    ✕
+                                    ×
                                 </button>
                             </div>
                         </th>
@@ -3077,7 +3077,7 @@ export const TableComponent = {
                     class="card"
                     title="Clear filter"
                 >
-                    ✕ Clear filter
+                    × Clear filter
                 </button>
                 
                 
