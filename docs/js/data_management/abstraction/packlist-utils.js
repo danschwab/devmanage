@@ -501,7 +501,12 @@ class packListUtils_uncached {
             //console.log('4. Checking for overlapping shows...');
             let overlappingIds;
             try {
-                overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, { identifier: projectIdentifier });
+                overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, {
+                    dateFilters: [
+                        { column: 'Return', value: projectIdentifier, type: 'after' },
+                        { column: 'Ship', value: projectIdentifier, type: 'before' }
+                    ]
+                });
             } catch (err) {
                 console.error('Error getting overlapping shows:', err);
                 throw new Error('Failed to get overlapping shows');
@@ -643,7 +648,12 @@ class packListUtils_uncached {
      */
     static async getItemOverlappingShows(deps, currentProjectId, itemId) {
         // Get all overlapping projects for this project
-        const overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, { identifier: currentProjectId });
+        const overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, {
+            dateFilters: [
+                { column: 'Return', value: currentProjectId, type: 'after' },
+                { column: 'Ship', value: currentProjectId, type: 'before' }
+            ]
+        });
         
         const conflictingShows = [];
         

@@ -221,7 +221,12 @@ class inventoryUtils_uncached {
             });
 
             // Get overlapping shows
-            let overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, { identifier: projectIdentifier });
+            let overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, {
+                dateFilters: [
+                    { column: 'Return', value: projectIdentifier, type: 'after' },
+                    { column: 'Ship', value: projectIdentifier, type: 'before' }
+                ]
+            });
             
             // Process overlapping shows
             for (const overlapRow of overlappingIds) {

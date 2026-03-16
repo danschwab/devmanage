@@ -48,7 +48,7 @@ For design and project queue:
 
 - [ ] clickable and highlightable (can copy contents) table cells instead of cell buttons
 - [ ] unify the styling of cards and buttons
-- [ ] make table headers accessible when scrolling
+- [ ] make table headers accessible when scrolling, on hover over the sticky header?
 - [ ] reports column headers percentage based and dynamically abbreviate
 - [ ] basic schedule table needs to have return and show date columns visible
 - [ ] basic schedule table needs to allow wide table
@@ -64,6 +64,8 @@ For design and project queue:
 
 **problems**
 
+- [x] packlist inventory overlap alerts showing wrong info. Probably due to reformatted abstraction code.
+- [ ] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
 - [ ] make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 - [ ] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
@@ -73,9 +75,9 @@ For design and project queue:
 - [ ] if there are duplicate shows on the production schedule, they are duplicated in reports
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
-- [x] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [ ] fix duplication of bematrix VELCRO PANELS
 - [ ] fix 45 degree curved panels
+- [x] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [x] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
 - [x] make navigation auth modal logout on cancel
 - [?] error causing unsyncing of packlist saves, especially when data or rows are deleted
@@ -95,12 +97,13 @@ For design and project queue:
 
 **Application tasks**
 
-dropbox or workzone integrations
+dropbox / workzone / sql integrations
 
 - [ ] dropbox service account and auth sync
 - [ ] identify and show versions/dates of output files
 - [ ] allow opening link to dropbox pdfs
-- [ ] migrate thumbnails to dropbox and allow uploading new thumbnails to dropbox???
+- [ ] microsoft server or google workspace integration?
+- [ ] migrate thumbnails to shared folder in microsoft server? and allow uploading new thumbnails to dropbox???
 
 inventory updates
 
@@ -110,8 +113,8 @@ inventory updates
 - [x] allow editing of item descriptions
 - [x] allow adding new items
 - [x] add existing item thumbnails
-- [ ] track crate information to further streamline pack list generation
 - [x] make thumbnails be a cached analytics step
+- [ ] track crate information to further streamline pack list generation
 - [ ] add all FURNITURE
 - [ ] update LIGHTBOXES
 - [ ] add all LIGHTING
@@ -129,12 +132,12 @@ Architecture Improvements
 - [x] save history: dateTime, userName, fields edited & old values
 - [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - [x] log out needs to skip database operations if the token is already expired
-- [ ] improve error handling and user notifications for failed auth and failed permissions
 - [x] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
 - [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
+- [ ] improve error handling and user notifications for failed auth and failed permissions
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] Provide tools to revert changes from history
-- [ ] allow autocaching of analytics data
+- [ ] allow auto-caching of analytics data
       consider always checking the edithistory last-edited date before saving to prevent overwriting simultaneous changes?
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
@@ -146,15 +149,15 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - [x] make sure panel and hardware part numbers come in correctly
 - [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
+- [ ] !!! Add "Keywords" iProperty field to all inventoried parts in Inventor
+- [ ] !!! Use Keywords field to determine transformation necessary
+- [ ] !!! Add support to automatically group items
 - [ ] !!! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
 - [ ] allow pack list export from project manager
-- [ ] change the packlist export to export all items correctly
 - [ ] fix CABINET item numbers in inventor
 - [ ] fix FURNITURE item numbers in inventor
 - [ ] fix HANGING SIGN item numbers in inventor
 - [ ] verify panel and hardware and other possible edge-cases
-- [ ] Improve and test this system
-      Categorize all booth parts according to Pack List Rules (preferences)
 
 Pack Lists in Web
 
@@ -174,6 +177,8 @@ Pack Lists in Web
 - [x] Allow new packlists from template
 - [x] Allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
 - [x] add category filtering to packlist-details table
+- [ ] !!! allow group closing and hiding in actions bubbles and default to this
+- [ ] !!! enable actions bubbles for crates selections
 - [ ] !!! cut and paste between packlist functionality
 - [ ] !!! automations interface, packlist rules
 - [ ] allow user to configure automations
