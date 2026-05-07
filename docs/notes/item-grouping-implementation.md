@@ -1,4 +1,3 @@
-
 # Item Row Grouping Implementation (as of 2026)
 
 ## Overview
@@ -13,7 +12,7 @@ Each item row may have a `grouping` object in its metadata:
 {
   "grouping": {
     "groupId": "G1234567890", // Unique group identifier (string)
-    "isGroupMaster": true     // true for master row, false for child
+    "isGroupMaster": true // true for master row, false for child
   }
 }
 ```
@@ -24,26 +23,31 @@ Each item row may have a `grouping` object in its metadata:
 ## Grouping Logic (UI & Data)
 
 ### Creating a Group
+
 1. User selects multiple rows and chooses a master row (or drags onto a master row).
 2. If the target is not already a group master, it is updated to have `isGroupMaster: true` and a new or existing `groupId`.
 3. All selected rows (except the master) are removed from their original positions and inserted immediately after the master row.
 4. Each child row gets `grouping` metadata with the same `groupId` and `isGroupMaster: false`.
 
 ### Visibility and Expansion
+
 - Only the master row is always visible.
 - Child rows are only visible if their group is expanded (tracked in UI state, not in metadata).
 - If the group is collapsed, child rows are hidden.
 
 ### Selection Behavior
+
 - Selecting a group master auto-selects all its children.
 - Deselecting a master deselects all children.
 - Children cannot be independently deselected if their master is selected.
 
 ### Ungrouping
+
 - Dragging or moving a child row outside its group (without the master) removes its `grouping` metadata.
 - If a group master has no children, its `grouping` metadata is removed.
 
 ### Data Persistence
+
 - Grouping info is stored in the `MetaData` (or `EditHistory`) JSON for each item.
 - When saving/exporting, ensure the grouping object is included for all grouped items.
 
@@ -60,7 +64,7 @@ Each item row may have a `grouping` object in its metadata:
 Suppose you have 5 items, and items 1, 3, and 4 are grouped under item 1:
 
 | Index | Description | grouping.groupId | grouping.isGroupMaster |
-|-------|-------------|------------------|------------------------|
+| ----- | ----------- | ---------------- | ---------------------- |
 | 0     | Master      | G123             | true                   |
 | 1     | Child A     | G123             | false                  |
 | 2     | Child B     | G123             | false                  |

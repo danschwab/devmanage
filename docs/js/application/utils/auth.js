@@ -358,7 +358,7 @@ export class Auth {
         const missing = GoogleSheetsAuth.getMissingScopes();
         if (missing.length === 0) return null;
         const names = missing.map(s => s.split('/').pop()).join(', ');
-        return `Missing required permissions: ${names}. Some features may not work correctly.`;
+        return `Missing required permissions: ${names}. Some features may not work correctly. </br> Log out and back in making sure to grant all requested permissions.`;
     }
 }
 
