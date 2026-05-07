@@ -109,15 +109,19 @@ export class Auth {
         authPromptShowing = false; // Clear any auth prompts immediately
 
         try {
-            // Try to save data if token is still valid, but don't block logout if it fails
+            // Try to save data if token is valid and all permissions are granted
             const tokenValid = GoogleSheetsAuth.isAuthenticated();
             
-            if (tokenValid) {
+            if (tokenValid && !authState.permissionsWarning) {
                 console.log('[Auth] Token still valid, attempting to save data before logout...');
                 const manager = await getModalManager();
                 
                 let saveCompleted = false;
                 let savingModal = null;
+                let abortSave;
+                const abortSavePromise = new Promise((_, reject) => {
+                    abortSave = () => reject(new Error('Save canceled by user'));
+                });
                 
                 // Set up a timer to show modal only if save takes longer than 3 seconds
                 const modalTimer = setTimeout(() => {
@@ -126,8 +130,9 @@ export class Auth {
                             'Backing up your unsaved changes...',
                             null, // No confirm button
                             () => {
-                                // User clicked cancel - continue with logout
+                                // User clicked cancel - abort the save and continue with logout
                                 console.log('[Auth] User canceled save during logout');
+                                abortSave();
                             },
                             'Saving Changes',
                             null, // No confirm button
@@ -137,8 +142,8 @@ export class Auth {
                 }, 3000);
                 
                 try {
-                    // Attempt to save
-                    await this._saveDataBeforeLogout();
+                    // Race the save against the user's cancel action
+                    await Promise.race([this._saveDataBeforeLogout(), abortSavePromise]);
                     saveCompleted = true;
                     console.log('[Auth] Data saved successfully before logout');
                 } catch (saveError) {
@@ -152,6 +157,8 @@ export class Auth {
                 if (savingModal) {
                     manager.removeModal(savingModal.id);
                 }
+            } else if (authState.permissionsWarning) {
+                console.log('[Auth] Missing permissions, skipping save during logout');
             } else {
                 console.log('[Auth] Token expired, skipping save during logout');
             }
@@ -358,7 +365,7 @@ export class Auth {
         const missing = GoogleSheetsAuth.getMissingScopes();
         if (missing.length === 0) return null;
         const names = missing.map(s => s.split('/').pop()).join(', ');
-        return `Missing required permissions: ${names}. Some features may not work correctly. </br> Log out and back in making sure to grant all requested permissions.`;
+        return `Missing required permissions: ${names}. Some features may not work correctly. Log out and back in making sure to grant all requested permissions.`;
     }
 }
 

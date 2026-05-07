@@ -70,6 +70,14 @@ export class GoogleSheetsService {
                     throw err;
                 }
                 
+                // Immediately throw auth/permission errors - retrying won't help
+                const isAuthError = err && (
+                    err.result?.error?.status === 'PERMISSION_DENIED' ||
+                    err.result?.error?.message?.toLowerCase().includes('insufficient authentication') ||
+                    err.result?.error?.message?.toLowerCase().includes('insufficient auth')
+                );
+                if (isAuthError) throw err;
+
                 // If 401 Unauthorized, try to re-authenticate once and retry
                 if (
                     (err && (err.status === 401 || (err.result && err.result.error && err.result.error.code === 401)))
@@ -84,12 +92,11 @@ export class GoogleSheetsService {
                     }
                 }
                 
-                // Check for rate limit or quota errors
+                // Check for rate limit or quota errors (429, or 403 quota exhausted only)
                 const isRateLimit = err && (
-                    (err.status && (err.status === 429 || err.status === 403)) ||
+                    err.status === 429 ||
                     (err.result && err.result.error && (
                         err.result.error.status === 'RESOURCE_EXHAUSTED' ||
-                        err.result.error.status === 'PERMISSION_DENIED' ||
                         err.result.error.message?.toLowerCase().includes('rate limit') ||
                         err.result.error.message?.toLowerCase().includes('quota')
                     ))
