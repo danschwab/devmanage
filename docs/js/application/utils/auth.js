@@ -24,6 +24,7 @@ export const authState = Vue.reactive({
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { clearAllReactiveStores } from './reactiveStores.js';
+import { clearCache } from '../../data_management/utils/caching.js';
 
 // Import modalManager for re-authentication prompts
 let modalManager;
@@ -172,6 +173,7 @@ export class Auth {
             
             // Clear all reactive stores without attempting to save (already tried above)
             await clearAllReactiveStores({ skipSave: true });
+            clearCache();
             
             await GoogleSheetsAuth.logout();
             

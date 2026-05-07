@@ -375,4 +375,8 @@ class CacheManager {
 
 export const wrapMethods = CacheManager.wrapMethods;
 export const invalidateCache = CacheManager.invalidateCache;
+export function clearCache() {
+    CacheManager.cache.clear();
+    CacheManager.pendingCalls.clear();
+}
 export { CacheInvalidationBus };
