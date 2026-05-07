@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, findMatchingStores, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, findMatchingStores, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -15,6 +15,7 @@ export const ShowInventoryReport = {
     data() {
         return {
             reportStore: null,
+            referenceDate: null, // ISO date derived from the active schedule filter
             itemCategoryFilter: null, // Optional filter for item categories (string or null)
             showIdentifiers: [], // List of show IDs from search
             error: null,
@@ -179,6 +180,22 @@ export const ShowInventoryReport = {
             if (searchData.dateFilters && searchData.dateFilters.length > 0) {
                 filter.dateFilters = searchData.dateFilters;
             }
+
+            // Derive a referenceDate from the Ship filter (start of the range)
+            const shipFilter = searchData.dateFilters?.find(f => f.column === 'Ship');
+            if (shipFilter) {
+                if (typeof shipFilter.value === 'number') {
+                    const d = new Date();
+                    d.setDate(d.getDate() + shipFilter.value);
+                    this.referenceDate = toISODateString(d);
+                } else if (typeof shipFilter.value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(shipFilter.value)) {
+                    this.referenceDate = shipFilter.value;
+                } else {
+                    this.referenceDate = todayISOString();
+                }
+            } else {
+                this.referenceDate = todayISOString();
+            }
             
             // Apply text filters
             if (searchData.textFilters && searchData.textFilters.length > 0) {
@@ -287,13 +304,13 @@ export const ShowInventoryReport = {
                     false,
                     Priority.USER_ACTION // Used for navigation buttons
                 ),
-                // Get inventory quantity
+                // Get inventory quantity as of the report's start date
                 createAnalysisConfig(
                     Requests.getItemInventoryQuantity,
                     'available',
                     'Getting inventory quantities...',
                     ['itemId'],
-                    [],
+                    [this.referenceDate],
                     'available'
                 ),
                 // Get item image URL
@@ -307,13 +324,13 @@ export const ShowInventoryReport = {
                     false,
                     Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 ),
-                // get item description
+                // get item description as of the report's start date
                 createAnalysisConfig(
                     Requests.getItemDescription,
                     'description',
                     'Loading item descriptions...',
                     ['itemId'],
-                    [],
+                    [this.referenceDate],
                     'description', // Store in description column
                     false,
                     Priority.BACKGROUND // Descriptions are visual enhancements, lowest priority

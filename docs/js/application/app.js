@@ -59,6 +59,9 @@ const App = {
         authError() {
             return authState.error;
         },
+        permissionsWarning() {
+            return authState.permissionsWarning;
+        },
         dashboardLoading() {
             return NavigationRegistry.dashboardRegistry.isLoading;
         },
@@ -307,7 +310,11 @@ const App = {
 
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
 
-                <div v-if="authError" class="empty-message" style="color: var(--color-text);">
+                <div v-if="permissionsWarning" class="card red auth-error-banner">
+                    <strong>Permissions Warning: </strong>{{ permissionsWarning }}
+                </div>
+
+                <div v-if="authError && !isAuthenticated" class="empty-message" style="color: var(--color-text);">
                     <div class="card red"><strong>Error: </strong>{{ authError }} </div>
                 </div>
                 <div v-else-if="!isAuthenticated" class="empty-message">

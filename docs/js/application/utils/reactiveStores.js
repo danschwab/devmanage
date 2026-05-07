@@ -550,6 +550,22 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                         ? position.targetIndex 
                         : position.targetIndex + 1;
                     this.data[parentIdx][key].splice(insertIndex, 0, row);
+                    
+                    // If the row above the insertion point is in a group, add the new row to that group
+                    const items = this.data[parentIdx][key];
+                    const rowAbove = insertIndex > 0 ? items[insertIndex - 1] : null;
+                    if (rowAbove && rowAbove.MetaData) {
+                        try {
+                            const aboveMeta = JSON.parse(rowAbove.MetaData);
+                            const aboveGrouping = aboveMeta?.grouping;
+                            if (aboveGrouping) {
+                                let meta = {};
+                                try { meta = JSON.parse(row.MetaData || '{}'); } catch (e) { meta = {}; }
+                                meta.grouping = { groupId: aboveGrouping.groupId, isGroupMaster: false };
+                                row.MetaData = JSON.stringify(meta);
+                            }
+                        } catch (e) { /* malformed MetaData - skip grouping */ }
+                    }
                 } else {
                     // Default: append to end
                     this.data[parentIdx][key].push(row);

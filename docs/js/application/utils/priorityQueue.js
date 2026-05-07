@@ -333,14 +333,14 @@ export const PriorityQueue = new PriorityQueueManager();
 // Export priority constants for convenience
 export const Priority = {
     CRITICAL: 0,      // Immediate user actions (clicks, navigation)
-    SAVE: 9,          // Save operations (high priority)
-    LOAD: 8,          // Load operations (high priority)
-    USER_ACTION: 7,   // User-initiated actions
-    REFRESH: 6,       // Data refresh operations
+    SAVE: 1,          // Save operations (high priority)
+    LOAD: 2,          // Load operations (high priority)
+    USER_ACTION: 3,   // User-initiated actions
+    REFRESH: 4,       // Data refresh operations
     NORMAL: 5,        // Default priority
-    PREFETCH: 3,      // Background prefetching
-    ANALYSIS: 1,      // Analysis operations (low priority background work)
-    BACKGROUND: 0     // Lowest priority background tasks
+    PREFETCH: 7,      // Background prefetching
+    ANALYSIS: 8,      // Analysis operations (low priority background work)
+    BACKGROUND: 9     // Lowest priority background tasks
 };
 
 // Make PriorityQueue available globally for debugging

@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString } from '../../index.js';
 
 // Date preset offset constants
 const START_DATE_OFFSETS = { today: 0, monthAgo: -30, yearAgo: -365 };
@@ -82,6 +82,21 @@ function cleanFilters(filters) {
         const { AppData, ...cleanFilter } = filter;
         return cleanFilter;
     });
+}
+
+// Shared utility: Resolve a window start/end from a dateFilters array.
+// Looks for column 'Show Date' after/before entries and extracts their values as ISO strings.
+// Returns { startDate, endDate } — either may be null if not present or not resolvable.
+function resolveWindowDates(dateFilters) {
+    if (!dateFilters?.length) return { startDate: null, endDate: null };
+    const afterFilter  = dateFilters.find(f => f.type === 'after'  && f.column === 'Show Date');
+    const beforeFilter = dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
+    // Values can be ISO strings or numeric offsets; only include real date strings
+    const toDateStr = (v) => (v != null && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
+    return {
+        startDate: toDateStr(afterFilter?.value)  ?? null,
+        endDate:   toDateStr(beforeFilter?.value) ?? null
+    };
 }
 
 // Shared utility: Initialize saved searches store
@@ -454,7 +469,9 @@ export const ScheduleAdvancedFilter = {
                         targetPath.split('?')[0],
                         path
                     );
-                } else {
+                } else if (this.dateFilterMode !== 'overlap') {
+                    // For overlap mode, emitSearchSelected resolves dates first then updates URL,
+                    // so navigating here would trigger syncWithURL before dates are resolved.
                     this.navigateToPath(path);
                 }
             }
@@ -533,7 +550,7 @@ export const ScheduleAdvancedFilter = {
                 if (offset !== null) {
                     const date = new Date();
                     date.setDate(date.getDate() + offset);
-                    this.startDate = date.toISOString().slice(0, 10);
+                    this.startDate = toISODateString(date);
                 }
             }
             this.dateFilterMode = 'dateRange';
@@ -548,7 +565,7 @@ export const ScheduleAdvancedFilter = {
                 if (offset !== null) {
                     const date = new Date();
                     date.setDate(date.getDate() + offset);
-                    this.endDate = date.toISOString().slice(0, 10);
+                    this.endDate = toISODateString(date);
                 }
             }
             this.dateFilterMode = 'dateRange';
@@ -935,9 +952,11 @@ export const ScheduleAdvancedFilter = {
                 ScheduleAdvancedFilter: this
             }, 'Save Filter');
         },
-        emitSearchSelected() {
+        async emitSearchSelected() {
             // Build dateFilters array from UI state
             const dateFilters = [];
+            let startDate = null;
+            let endDate = null;
             
             if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
                 // For overlap mode, create two filters to find overlapping shows
@@ -951,6 +970,19 @@ export const ScheduleAdvancedFilter = {
                     value: this.overlapShowIdentifier,
                     type: 'before'
                 });
+                // Resolve the actual date window for non-schedule consumers
+                try {
+                    const [ship, ret] = await Promise.all([
+                        Requests.getProjectShipDate(this.overlapShowIdentifier),
+                        Requests.getProjectReturnDate(this.overlapShowIdentifier)
+                    ]);
+                    startDate = ship || null;
+                    endDate   = ret  || null;
+                    // Write the resolved dates into the URL so syncWithURL can recover them
+                    if (startDate && endDate) {
+                        this.updateURL({ dateFilters, startDate, endDate });
+                    }
+                } catch (_) {}
             } else if (this.dateFilterMode === 'dateRange') {
                 let startValue = null;
                 let endValue = null;
@@ -987,9 +1019,12 @@ export const ScheduleAdvancedFilter = {
             }
             
             // Build search data in the same format as ScheduleFilterSelect
+            const windowDates = resolveWindowDates(dateFilters);
             const searchData = {
                 dateFilters: dateFilters,
-                textFilters: getValidTextFilters(this.textFilters)
+                textFilters: getValidTextFilters(this.textFilters),
+                startDate: startDate ?? windowDates.startDate,
+                endDate:   endDate   ?? windowDates.endDate
             };
             
             // Call callback if in modal mode, otherwise emit to parent
@@ -1448,7 +1483,7 @@ export const ScheduleFilterSelect = {
         
         applyOption(option) {
             if (option.type === 'show-all') {
-                this.$emit('search-selected', { type: 'show-all' });
+                this.$emit('search-selected', { type: 'show-all', startDate: null, endDate: null });
                 this.updateURL({ view: 'all' });
             } else if (option.type === 'year') {
                 const year = parseInt(option.value);
@@ -1468,11 +1503,15 @@ export const ScheduleFilterSelect = {
                     dateFilters: searchData.dateFilters
                 });
             } else if (option.type === 'search') {
+                const cleanDateFilters = cleanFilters(option.searchData.dateFilters) || [];
+                const { startDate, endDate } = resolveWindowDates(cleanDateFilters);
                 const searchData = {
                     type: 'search',
                     name: option.searchData.name,
-                    dateFilters: cleanFilters(option.searchData.dateFilters) || [],
-                    textFilters: cleanFilters(option.searchData.textFilters) || []
+                    dateFilters: cleanDateFilters,
+                    textFilters: cleanFilters(option.searchData.textFilters) || [],
+                    startDate,
+                    endDate
                 };
                 this.$emit('search-selected', searchData);
                 this.updateURLFromSearch(option.searchData);
@@ -1600,22 +1639,29 @@ export const ScheduleFilterSelect = {
             if (matchedSearchIndex >= 0) {
                 this.selectedValue = `search-${matchedSearchIndex}`;
                 const matchedSearch = savedSearches[matchedSearchIndex];
+                const cleanDateFilters = cleanFilters(matchedSearch.dateFilters) || [];
+                const { startDate, endDate } = resolveWindowDates(cleanDateFilters);
                 this.$emit('search-selected', {
                     type: 'search',
                     name: matchedSearch.name,
-                    dateFilters: cleanFilters(matchedSearch.dateFilters) || [],
-                    textFilters: cleanFilters(matchedSearch.textFilters) || []
+                    dateFilters: cleanDateFilters,
+                    textFilters: cleanFilters(matchedSearch.textFilters) || [],
+                    startDate,
+                    endDate
                 });
                 return;
             }
             
             // URL params don't match any saved search - show as custom search
+            const { startDate: customStart, endDate: customEnd } = resolveWindowDates(filter.dateFilters);
             this.selectedValue = 'custom';
             this.$emit('search-selected', {
                 type: 'url',
                 name: 'Custom',
                 dateFilters: filter.dateFilters,
-                textFilters: filter.textFilters
+                textFilters: filter.textFilters,
+                startDate: customStart ?? params.startDate ?? null,
+                endDate:   customEnd   ?? params.endDate   ?? null
             });
         },
         

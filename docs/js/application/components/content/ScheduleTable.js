@@ -387,7 +387,7 @@ export const ScheduleTableComponent = {
                             await Requests.createNewTab('PACK_LISTS', this.templateName, identifier);
                             
                             // Success message
-                            this.$modal.alert(`Packlist "${identifier}" created successfully!`, 'Success');
+                            //this.$modal.alert(`Packlist "${identifier}" created successfully!`, 'Success');
                             
                             // Emit event for parent to handle (e.g., close modal)
                             this.$emit('packlist-created', identifier);

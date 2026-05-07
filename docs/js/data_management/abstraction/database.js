@@ -139,13 +139,15 @@ class database_uncached {
      * @param {string} [options.username] - Username making the change
      * @param {boolean} [options.skipMetadata] - Skip edithistory generation (for EditHistory table itself)
      * @param {string} [options.identifierKey] - Key to identify rows (for deletion tracking)
+     * @param {string} [options.source] - Source system for history entries ('web' | 'cad')
      * @returns {Promise<boolean>} - Success status
      */
     static async setData(tableId, tabName, updates, mapping = null, options = {}) {
         const {
             username = null,
             skipMetadata = false,
-            identifierKey = null
+            identifierKey = null,
+            source = 'web'
         } = options;
 
         let updatesWithMetadata = updates;
@@ -161,7 +163,8 @@ class database_uncached {
                     transformedOriginal,
                     updates,
                     username,
-                    mapping
+                    mapping,
+                    source
                 );
 
                 // Detect and archive deleted rows
@@ -207,10 +210,11 @@ class database_uncached {
      * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
      * @param {Object} [options] - Optional parameters for edithistory tracking
      * @param {string} [options.username] - Username making the change
+      * @param {string} [options.source] - Source system for history entries ('web' | 'cad')
      * @returns {Promise<boolean>} - Success status
      */
     static async updateRow(tableId, tabName, update, mapping = null, options = {}) {
-        const { username = null } = options;
+          const { username = null, source = 'web' } = options;
 
         const existingData = await GoogleSheetsService.getSheetData(tableId, tabName);
 
@@ -235,7 +239,7 @@ class database_uncached {
         if (mapping && mapping.edithistory && username) {
             const changes = EditHistoryUtils.calculateRowDiff(originalRow, update);
             if (changes.length > 0) {
-                const metaEntry = EditHistoryUtils.createEditHistoryEntry(username, changes);
+                const metaEntry = EditHistoryUtils.createEditHistoryEntry(username, changes, source);
                 const existingMetadata = originalRow.edithistory || originalRow.EditHistory || '';
                 const newMetadata = EditHistoryUtils.appendToEditHistory(existingMetadata, metaEntry);
                 updatedRow.edithistory = newMetadata;
@@ -316,7 +320,7 @@ export const Database = wrapMethods(
  * Add edithistory to rows that have changed
  * @private
  */
-async function _addMetadataToRows(originalRows, updatedRows, username, mapping) {
+async function _addMetadataToRows(originalRows, updatedRows, username, mapping, source = 'web') {
     if (!Array.isArray(updatedRows)) {
         return updatedRows;
     }
@@ -329,7 +333,7 @@ async function _addMetadataToRows(originalRows, updatedRows, username, mapping) 
 
         // If changes exist, append to edithistory
         if (changes.length > 0 && username) {
-            const metaEntry = EditHistoryUtils.createEditHistoryEntry(username, changes);
+            const metaEntry = EditHistoryUtils.createEditHistoryEntry(username, changes, source);
             const existingMetadata = updatedRow.edithistory || '';
             const newMetadata = EditHistoryUtils.appendToEditHistory(existingMetadata, metaEntry);
 

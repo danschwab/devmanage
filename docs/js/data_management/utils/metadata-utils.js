@@ -10,6 +10,7 @@
  *     {
  *       "u": "dan",
  *       "t": 17309064000,
+ *       "s": "web",
  *       "c": [
  *         { "n": "quantity", "o": "5" }
  *       ]
@@ -23,11 +24,10 @@
  * h = history
  * u = user (username before @)
  * t = timestamp (deciseconds since epoch - divide by 10 for seconds, multiply by 100 for milliseconds)
+ * s = source system ('web' | 'cad')
  * c = changes
  * n = column name
  * o = old value
- * a = cachedAnalytics
- * s = userSettings
  */
 
 export class EditHistoryUtils {
@@ -35,9 +35,10 @@ export class EditHistoryUtils {
      * Create a new edithistory entry for a row change
      * @param {string} username - User email making the change
      * @param {Array<{column: string, old: any, new: any}>} changes - List of changes
+     * @param {string} source - Source system for this change ('web' | 'cad')
      * @returns {Object} Metadata entry object
      */
-    static createEditHistoryEntry(username, changes) {
+    static createEditHistoryEntry(username, changes, source = 'web') {
         // Extract username before @ symbol
         const shortUser = username ? username.split('@')[0] : 'unknown';
         
@@ -50,6 +51,7 @@ export class EditHistoryUtils {
         return {
             u: shortUser,                           // u = user
             t: Math.floor(new Date().getTime() / 100),  // t = timestamp in deciseconds
+            s: source || 'web',                  // s = source system
             c: minimalChanges                       // c = changes
         };
     }
@@ -333,74 +335,137 @@ export class EditHistoryUtils {
         return history[0];
     }
 
+    // -------------------------------------------------------------------------
+    // Pending Change Schedule Helpers
+    // -------------------------------------------------------------------------
+
     /**
-     * Add or update cached analytics in edithistory
-     * @param {string|Object} existingEditHistory - Existing edithistory
-     * @param {string} analyticKey - Key for the cached analytic
-     * @param {any} analyticValue - Value to cache
-     * @returns {string} Updated edithistory as JSON string
+     * Create a pending change entry for the p array.
+     * t = effective date (deciseconds), d = creation timestamp (deciseconds).
+     * changes is [{ n, ne }] — ne may be an absolute value or a delta string like "+1".
+     * @param {string} username - User email
+     * @param {Array<{n: string, ne: string|number}>} changes - Changed fields
+     * @param {number} effectiveDateDeciseconds - Effective date in deciseconds
+     * @param {string} note - Description/note (max 25 chars)
+     * @returns {Object} Pending entry object
      */
-    static setCachedAnalytic(existingEditHistory, analyticKey, analyticValue) {
-        let edithistory = this.parseEditHistory(existingEditHistory) || { h: [] };
-
-        if (!edithistory.a) {
-            edithistory.a = {};
-        }
-
-        edithistory.a[analyticKey] = analyticValue;
-
-        return JSON.stringify(edithistory);
+    static createPendingEntry(username, changes, effectiveDateDeciseconds, note) {
+        const shortUser = username ? username.split('@')[0] : 'unknown';
+        return {
+            u: shortUser,
+            t: effectiveDateDeciseconds,
+            d: Math.floor(Date.now() / 100),
+            s: (note || '').slice(0, 25),
+            c: changes.map(ch => ({ n: ch.n, ne: ch.ne }))
+        };
     }
 
     /**
-     * Get cached analytic from edithistory
-     * @param {string|Object} edithistory - Metadata to parse
-     * @param {string} analyticKey - Key for the cached analytic
-     * @returns {any|null} Cached value or null if not found
+     * Append a pending entry to EditHistory.p.
+     * No cap on p array length — entries are removed when applied.
+     * @param {string|Object} edithistory - Existing EditHistory value
+     * @param {Object} entry - Pending entry to append
+     * @returns {string} Updated EditHistory as JSON string
      */
-    static getCachedAnalytic(edithistory, analyticKey) {
+    static appendToPendingChanges(edithistory, entry) {
+        let parsed = this.parseEditHistory(edithistory) || {};
+        if (!Array.isArray(parsed.h)) parsed.h = [];
+        if (!Array.isArray(parsed.p)) parsed.p = [];
+        parsed.p.push(entry);
+        return JSON.stringify(parsed);
+    }
+
+    /**
+     * Get all pending entries from EditHistory.p.
+     * @param {string|Object} edithistory - EditHistory value
+     * @returns {Array} Pending entries array (may be empty)
+     */
+    static getPendingEntries(edithistory) {
         const parsed = this.parseEditHistory(edithistory);
-        if (!parsed) return null;
-        
-        const analytics = parsed.a;
-        if (!analytics) return null;
-        
-        return analytics[analyticKey] || null;
+        return Array.isArray(parsed?.p) ? parsed.p : [];
     }
 
     /**
-     * Add or update user setting in edithistory
-     * @param {string|Object} existingEditHistory - Existing edithistory
-     * @param {string} settingKey - Key for the user setting
-     * @param {any} settingValue - Value to set
-     * @returns {string} Updated edithistory as JSON string
+     * Apply a delta or absolute ne value to a current field value.
+     * ne strings prefixed with '+' or '-' are treated as numeric deltas.
+     * @param {*} currentValue - Current field value on the row
+     * @param {string|number} ne - New-value descriptor from pending entry
+     * @returns {*} Resulting field value
      */
-    static setUserSetting(existingEditHistory, settingKey, settingValue) {
-        let edithistory = this.parseEditHistory(existingEditHistory) || { h: [] };
-
-        if (!edithistory.s) {
-            edithistory.s = {};
+    static applyNeValue(currentValue, ne) {
+        if (typeof ne === 'string' && /^[+\-]\d/.test(ne)) {
+            const current = parseFloat(currentValue) || 0;
+            return current + parseFloat(ne);
         }
-
-        edithistory.s[settingKey] = settingValue;
-
-        return JSON.stringify(edithistory);
+        return ne;
     }
 
     /**
-     * Get user setting from edithistory
-     * @param {string|Object} edithistory - Metadata to parse
-     * @param {string} settingKey - Key for the user setting
-     * @returns {any|null} Setting value or null if not found
+     * Pure helper — applies all pending changes due on or before referenceDateDeciseconds
+     * to a copy of the items array. Does not perform any I/O.
+     * Pending entries are sorted ascending by t before application.
+     * Applied entries move from p to h (ne dropped, o computed from pre-apply value).
+     * @param {Array<Object>} items - Inventory row objects (will be shallow-cloned)
+     * @param {number} referenceDateDeciseconds - Cutoff in deciseconds (date only, ignores time)
+     * @returns {{ updatedItems: Array<Object>, hasChanges: boolean }}
      */
-    static getUserSetting(edithistory, settingKey) {
-        const parsed = this.parseEditHistory(edithistory);
-        if (!parsed) return null;
-        
-        // Support both old 'userSettings' and new 's' format
-        const settings = parsed.s;
-        if (!settings) return null;
-        
-        return settings[settingKey] || null;
+    static applyPendingChangesToData(items, referenceDateDeciseconds) {
+        // Normalise to start-of-day deciseconds for date-only comparison
+        const refDate = new Date(referenceDateDeciseconds * 100);
+        refDate.setHours(0, 0, 0, 0);
+        const refCutoff = Math.floor(refDate.getTime() / 100);
+
+        let hasChanges = false;
+        const updatedItems = items.map(item => {
+            const parsed = this.parseEditHistory(item.edithistory || item.EditHistory);
+            if (!parsed) return item;
+
+            const pending = Array.isArray(parsed.p) ? parsed.p : [];
+            const due = pending.filter(entry => {
+                const entryDate = new Date(entry.t * 100);
+                entryDate.setHours(0, 0, 0, 0);
+                return Math.floor(entryDate.getTime() / 100) <= refCutoff;
+            });
+
+            if (due.length === 0) return item;
+
+            // Work on a shallow copy of the row
+            const updatedItem = { ...item };
+            due.sort((a, b) => a.t - b.t);
+
+            const newHistoryEntries = [];
+            for (const entry of due) {
+                const historyChanges = [];
+                for (const ch of entry.c) {
+                    const oldValue = updatedItem[ch.n];
+                    const newValue = this.applyNeValue(oldValue, ch.ne);
+                    updatedItem[ch.n] = newValue;
+                    historyChanges.push({ n: ch.n, o: oldValue });
+                }
+                // Build h entry — t becomes the change date in history
+                newHistoryEntries.unshift({
+                    u: entry.u,
+                    t: entry.t,
+                    d: entry.d,
+                    s: entry.s,
+                    c: historyChanges
+                });
+            }
+
+            // Remove applied entries from p, prepend to h (max 10)
+            const appliedIds = new Set(due.map(e => e));
+            const remainingPending = pending.filter(e => !appliedIds.has(e));
+            const existingHistory = Array.isArray(parsed.h) ? parsed.h : [];
+            const newHistory = [...newHistoryEntries, ...existingHistory].slice(0, 10);
+
+            const updatedEditHistory = JSON.stringify({ ...parsed, h: newHistory, p: remainingPending });
+            const ehKey = Object.prototype.hasOwnProperty.call(item, 'edithistory') ? 'edithistory' : 'EditHistory';
+            updatedItem[ehKey] = updatedEditHistory;
+
+            hasChanges = true;
+            return updatedItem;
+        });
+
+        return { updatedItems, hasChanges };
     }
 }

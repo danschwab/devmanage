@@ -17,7 +17,8 @@ export const authState = Vue.reactive({
     isLoading: false,
     user: null,
     error: null,
-    isInitialized: false
+    isInitialized: false,
+    permissionsWarning: null
 });
 
 // Import DashboardRegistry for cleanup on logout
@@ -58,6 +59,7 @@ export class Auth {
                 let email = testModeEmail || await GoogleSheetsAuth.getUserEmail();
                 authState.user = { email, name: email?.split('@')[0] || 'User' };
                 authState.isAuthenticated = true;
+                authState.permissionsWarning = Auth._buildPermissionsWarning();
             }
             authState.isInitialized = true;
         } catch (error) {
@@ -82,6 +84,7 @@ export class Auth {
 
             authState.user = { email, name: email?.split('@')[0] || 'User' };
             authState.isAuthenticated = true;
+            authState.permissionsWarning = Auth._buildPermissionsWarning();
             
             // Re-enable priority queue if it was disabled during logout
             const { PriorityQueue } = await import('./priorityQueue.js');
@@ -170,6 +173,7 @@ export class Auth {
             authState.user = null;
             authState.error = null;
             authState.isInitialized = false;
+            authState.permissionsWarning = null;
             
             console.log('[Auth] Logout completed successfully');
         } catch (error) {
@@ -348,6 +352,13 @@ export class Auth {
      */
     static getTestModeEmail() {
         return testModeEmail;
+    }
+
+    static _buildPermissionsWarning() {
+        const missing = GoogleSheetsAuth.getMissingScopes();
+        if (missing.length === 0) return null;
+        const names = missing.map(s => s.split('/').pop()).join(', ');
+        return `Missing required permissions: ${names}. Some features may not work correctly.`;
     }
 }
 

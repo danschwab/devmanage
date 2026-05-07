@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, ApplicationUtils, invalidateCache } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
 
 /**
  * Utility functions for pack list operations
@@ -83,7 +83,7 @@ class packListUtils_uncached {
 
         try {
             // Get all hardware items from the HARDWARE inventory tab
-            const hardwareData = await deps.call(InventoryUtils.getInventoryTabData, 'HARDWARE');
+            const hardwareData = await deps.call(InventoryUtils.getInventoryTabData, 'HARDWARE', undefined, undefined, todayISOString());
             
             if (!hardwareData || hardwareData.length === 0) {
                 return {
@@ -150,13 +150,14 @@ class packListUtils_uncached {
         const tabs = await Database.getTabs('PACK_LISTS'); // Not adding as a dependency to avoid unnecessary cache invalidation.
                                                            // This only works if null is returned on failure to avoid this function being cached.
 
-        const tabExists = tabs.some(tab => tab.title === projectIdentifier);
-        if (!tabExists) {
-            //console.warn(`Pack list tab "${projectIdentifier}" not found, skipping`);
+        const matchedTab = tabs.find(tab => tab.title.toLowerCase() === projectIdentifier.toLowerCase());
+        console.log('[getContent]', projectIdentifier, '| tabs:', tabs?.map(t => t.title), '| found:', !!matchedTab);
+        if (!matchedTab) {
             return null;
         }
+        const resolvedIdentifier = matchedTab.title;
         // Fetch the raw sheet data (2D array)
-        const sheetData = await deps.call(Database.getData, 'PACK_LISTS', projectIdentifier, null);
+        const sheetData = await deps.call(Database.getData, 'PACK_LISTS', resolvedIdentifier, null);
         if (!sheetData || sheetData.length < 2) return [];
         // Extract headers from row 1 (index 0)
         const headerRow = sheetData[0] || [];
@@ -221,11 +222,17 @@ class packListUtils_uncached {
                     Items: []
                 };
             }
-            // Check if this is an item row (has data in item columns, excluding metadata)
-            // Only check up to itemEndIndex to exclude metadata columns
-            const hasItemContent = crateContentsArr.slice(0, itemEndIndex).some((cell, idx) => {
+            // Check if this is an item row.
+            // Keep rows with item cell content OR with metadata/history content so metadata-only
+            // rows (such as blank group masters) are preserved through load/save cycles.
+            const hasItemCellContent = crateContentsArr.slice(0, itemEndIndex).some((cell, idx) => {
                 return cell && cell.toString().trim() !== '';
             });
+            const hasItemMetadata = (metadataIndex !== -1 && metadataIndex < rowValues.length && rowValues[metadataIndex] && rowValues[metadataIndex].toString().trim() !== '')
+                || (editHistoryIndex !== -1 && editHistoryIndex < rowValues.length && rowValues[editHistoryIndex] && rowValues[editHistoryIndex].toString().trim() !== '');
+            // Special case: if this row is a crate row, metadata belongs to the crate row and
+            // the inline item segment is considered empty/splittable noise.
+            const hasItemContent = !hasCrateInfo && (hasItemCellContent || hasItemMetadata);
             
             if (hasItemContent && currentCrate) {
                 const itemObj = {};
@@ -271,7 +278,10 @@ class packListUtils_uncached {
             if (Array.isArray(crate.Items)) {
                 for (const itemObj of crate.Items) {
                     // For each property in the item object, check for item codes
-                    for (const cell of Object.values(itemObj)) {
+                    // Skip metadata fields — EditHistory contains old description values that
+                    // would be picked up by the item-code regex and inflate quantities.
+                    for (const [key, cell] of Object.entries(itemObj)) {
+                        if (key === 'EditHistory' || key === 'MetaData') continue;
                         if (!cell) continue;
                         const extracted = await deps.call(PackListUtils.extractItemFromText, cell, itemCategoryFilter);
                         if (extracted.itemNumber) {
@@ -295,6 +305,7 @@ class packListUtils_uncached {
      * @returns {Promise<boolean>} Success status
      */
     static async savePackList(tabName, mappedData, headers = null, username = null, options = {}) {
+        const { source = 'web' } = options;
         console.log('[PackListUtils.savePackList] crates input:', mappedData, 'options:', options);
         
         // CRITICAL: Check lock status before saving to prevent conflicts
@@ -434,7 +445,8 @@ class packListUtils_uncached {
         // Database layer will handle diff calculation and history appending
         saveResult = await Database.setData('PACK_LISTS', tabName, rowObjects, packlistMapping, {
             username,
-            skipMetadata: false // Enable automatic history tracking
+            skipMetadata: false, // Enable automatic history tracking
+            source
         });
         } finally {
             // Lock management is handled by components
@@ -467,11 +479,15 @@ class packListUtils_uncached {
                 return {};
             }
 
-            // 2. Get inventory quantities
+            // Look up the show's ship date so inventory reflects the state at time of packing
+            const shipDate = await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
+            const referenceDate = shipDate || todayISOString();
+
+            // 2. Get inventory quantities as of ship date
             //console.log('2. Getting inventory quantities...');
             let inventoryInfo;
             try {
-                inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "quantity");
+                inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "quantity", referenceDate);
             } catch (err) {
                 console.error('Error getting inventory:', err);
                 throw new Error('Failed to get inventory information');
@@ -560,8 +576,8 @@ class packListUtils_uncached {
         }
 
         try {
-            // Get inventory description for this item
-            const inventoryDescription = await deps.call(InventoryUtils.getItemDescription, itemNumber);
+            // Get inventory description for this item (current state, for description matching)
+            const inventoryDescription = await deps.call(InventoryUtils.getItemDescription, itemNumber, todayISOString());
             
             if (!inventoryDescription) {
                 return {
@@ -627,8 +643,8 @@ class packListUtils_uncached {
      * @param {string} itemId - The item ID to look up
      * @returns {Promise<number|null>} Available inventory quantity, or null if item not found in inventory
      */
-    static async getItemInventoryQuantity(deps, itemId) {
-        const inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity']);
+    static async getItemInventoryQuantity(deps, itemId, referenceDate) {
+        const inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity'], referenceDate);
         const item = inventoryInfo.find(i => i.itemName === itemId);
         
         // Return null if item not found or quantity is null/undefined/empty
@@ -684,16 +700,17 @@ class packListUtils_uncached {
      * @param {string} itemId - Item ID to calculate remaining quantity for
      * @returns {Promise<number|null>} Remaining available quantity, or null if item not found in inventory
      */
-    static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
+    static async calculateRemainingQuantity(deps, currentProjectId, itemId, referenceDate) {
         if (!itemId || !currentProjectId) {
             return null;
         }
 
-        // Run inventory lookup and overlapping shows check in parallel
-        const [inventoryQuantity, overlappingShows, currentProjectItems] = await Promise.all([
-            deps.call(PackListUtils.getItemInventoryQuantity, itemId),
+        // Run inventory lookup, overlapping shows, current project items, and return date in parallel
+        const [inventoryQuantity, overlappingShows, currentProjectItems, returnDate] = await Promise.all([
+            deps.call(PackListUtils.getItemInventoryQuantity, itemId, referenceDate),
             deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId),
-            deps.call(PackListUtils.extractItems, currentProjectId)
+            deps.call(PackListUtils.extractItems, currentProjectId),
+            deps.call(ProductionUtils.getProjectReturnDate, currentProjectId)
         ]);
 
         // If item not found in inventory, return null
@@ -703,7 +720,7 @@ class packListUtils_uncached {
 
         const currentProjectUsage = currentProjectItems[itemId] || 0;
         let totalUsed = currentProjectUsage;
-        
+
         // Add quantities from overlapping shows (leveraging cache)
         for (const projectId of overlappingShows) {
             try {
@@ -713,8 +730,37 @@ class packListUtils_uncached {
                 // Ignore if project can't be loaded
             }
         }
-        
-        return inventoryQuantity - totalUsed;
+
+        // Start with remaining at ship date (referenceDate)
+        let minRemaining = inventoryQuantity - totalUsed;
+
+        // Check at each pending inventory change date within [ship, return] window.
+        // Inventory can only change at pending change breakpoints; between breakpoints it is constant.
+        // We evaluate at each breakpoint and return the minimum (worst-case) remaining.
+        if (referenceDate && returnDate && referenceDate < returnDate) {
+            const rawInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['edithistory'], null);
+            const rawEditHistory = rawInfo?.[0]?.edithistory || rawInfo?.[0]?.EditHistory || null;
+            if (rawEditHistory) {
+                const parsed = EditHistoryUtils.parseEditHistory(rawEditHistory);
+                const shipDeciseconds = Math.floor(parseDate(referenceDate).getTime() / 100);
+                const returnDeciseconds = Math.floor(parseDate(returnDate).getTime() / 100);
+                // Unique dates for pending changes strictly after ship and on or before return
+                const pendingDates = [...new Set(
+                    (parsed?.p || [])
+                        .filter(e => e.t > shipDeciseconds && e.t <= returnDeciseconds)
+                        .map(e => toISODateString(new Date(e.t * 100)))
+                        .filter(Boolean)
+                )];
+                for (const pendingDate of pendingDates) {
+                    const qtyAtDate = await deps.call(PackListUtils.getItemInventoryQuantity, itemId, pendingDate);
+                    if (qtyAtDate !== null) {
+                        minRemaining = Math.min(minRemaining, qtyAtDate - totalUsed);
+                    }
+                }
+            }
+        }
+
+        return minRemaining;
     }
 
     /**

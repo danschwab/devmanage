@@ -51,22 +51,23 @@ class CacheManager {
     static cache = new Map();
     static dependencies = new Map();
     static pendingCalls = new Map(); // Maps cache keys to pending promises to prevent duplicate concurrent calls
+    static CACHE_MISS = Symbol('CACHE_MISS');
     
     /**
      * Gets a value from cache with expiration check
      * @param {string} key - Cache key
-     * @returns {*|null} - Cached value or null if not found/expired
+     * @returns {*} - Cached value, or CacheManager.CACHE_MISS if not found/expired
      */
     static get(key) {
         const entry = CacheManager.cache.get(key);
         if (!entry) {
-            return null;
+            return CacheManager.CACHE_MISS;
         }
         
         // Check expiration
         if (entry.expire && entry.expire < Date.now()) {
             CacheManager.invalidate(key); // Invalidate the cache entry before deletion
-            return null;
+            return CacheManager.CACHE_MISS;
         }
         
         return entry.value;
@@ -79,9 +80,8 @@ class CacheManager {
      * @param {number} expirationMs - Expiration time in milliseconds (defaults to DEFAULT_CACHE_EXPIRATION_MS)
      */
     static set(key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS) {
-        // Skip caching empty results, null values, or booleans
+        // Skip caching undefined, empty results, or booleans
         if (
-            value === null ||
             value === undefined ||
             (Array.isArray(value) && value.length === 0) ||
             (typeof value === 'object' && value !== null && Object.keys(value).length === 0) ||
@@ -218,6 +218,7 @@ class CacheManager {
                 keysToInvalidate.push(key);
             }
         }
+        console.log('[cache] invalidateByPrefix:', prefix, '| matched:', keysToInvalidate);
         
         // Invalidate each matching key (this will also handle dependents)
         for (const key of keysToInvalidate) {
@@ -305,7 +306,7 @@ class CacheManager {
                 
                 // Check cache first
                 const cached = CacheManager.get(cacheKey);
-                if (cached !== null) {
+                if (cached !== CacheManager.CACHE_MISS) {
                     return cached;
                 }
                 

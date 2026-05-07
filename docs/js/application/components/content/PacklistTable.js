@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 
 // Packlist Table Hamburger Menu Component
@@ -241,6 +241,9 @@ export const PacklistTable = {
             // Handle both boolean true and string "true" from URL parameters
             return params?.edit === true || params?.edit === 'true';
         },
+        hideGroupMembersInViewMode() {
+            return !this.editMode;
+        },
         hamburgerMenuComponent() {
             return {
                 components: PacklistTableMenuComponent,
@@ -369,6 +372,17 @@ export const PacklistTable = {
                     [this.tabName], // Additional parameter: current project ID
                     null, // No targetColumn - results go to AppData
                     true // passFullItem = true to get entire item object (API expects full item)
+                ),
+
+                // Check edit history source flow and flag rows changed in CAD after prior web/app edits
+                createAnalysisConfig(
+                    Requests.checkCadSourceHistory,
+                    'cadSourceAlert',
+                    'Checking CAD source history...',
+                    ['EditHistory'],
+                    [],
+                    null,
+                    true
                 )
             ];
             
@@ -614,12 +628,16 @@ export const PacklistTable = {
             }
         },
         
-        showInventorySelector(crateIdx, position = null) {
+        async showInventorySelector(crateIdx, position = null) {
+            // Fetch the show's ship date so inventory quantities reflect state at time of packing
+            const shipDate = await Requests.getProjectShipDate(this.tabName);
+            const referenceDate = shipDate || todayISOString();
+
             // Create inventory selector modal component
             // position: { position: 'above'|'below', targetIndex: number } or null
             const InventorySelectorModal = {
                 components: { TableComponent, ItemImageComponent },
-                props: ['onAddEmpty', 'onItemSelected'],
+                props: ['onAddEmpty', 'onItemSelected', 'referenceDate'],
                 data() {
                     return {
                         inventoryStore: null,
@@ -698,7 +716,7 @@ export const PacklistTable = {
                             this.inventoryStore = getReactiveStore(
                                 Requests.getInventoryTabData,
                                 null, // No save function needed for read-only modal
-                                [this.selectedCategory, undefined, undefined],
+                                [this.selectedCategory, undefined, undefined, this.referenceDate],
                                 analysisConfig
                             );
                         } catch (error) {
@@ -780,7 +798,8 @@ export const PacklistTable = {
             this.$modal.custom(InventorySelectorModal, {
                 onItemSelected: (item) => this.addItemFromInventory(crateIdx, item, position),
                 modalClass: 'page-menu',
-                onAddEmpty: () => this.addEmptyItem(crateIdx, position)
+                onAddEmpty: () => this.addEmptyItem(crateIdx, position),
+                referenceDate
             }, 'Add Item');
         },
         
@@ -901,10 +920,99 @@ export const PacklistTable = {
                 this.showDescriptionMismatchModal(item, alert);
             } else if (alertKey === 'inventoryAlert' || ['item shortage', 'item warning', 'low-inventory'].includes(alert.type)) {
                 this.navigateToInventoryDetails(item);
+            } else if (alertKey === 'cadSourceAlert' || alert.type === 'cad-source-change') {
+                this.showCadSourceRestoreModal(item, alert);
             } else {
                 // Generic alert display
                 this.$modal.alert(alert.message, alert.type || 'Info');
             }
+        },
+
+        /**
+         * Apply a set of field changes to an item, capturing an undo snapshot first.
+         * Used by modal callbacks to ensure undo is always recorded.
+         * @param {Object} item - Reactive item object to mutate
+         * @param {Array<{n: string, o: *}>} changes - Field changes: n=field name, o=value to apply
+         * @param {string} alertKey - AppData key to clear after applying (e.g. 'cadSourceAlert')
+         */
+        applyItemChanges(item, changes, alertKey) {
+            const routeKey = this.$route?.path;
+            if (routeKey) {
+                undoRegistry.capture(this.packlistTableStore.data, routeKey, { type: 'restore' });
+            }
+            if (Array.isArray(changes)) {
+                changes.forEach(change => {
+                    if (change && change.n !== undefined) {
+                        item[change.n] = change.o;
+                    }
+                });
+            }
+            if (alertKey && item.AppData) {
+                delete item.AppData[alertKey];
+            }
+        },
+
+        /**
+         * Show modal with pre-CAD edit context and option to restore previous values.
+         * @param {Object} item - The item with CAD-source alert
+         * @param {Object} alert - CAD alert payload from analysis
+         */
+        showCadSourceRestoreModal(item, alert) {
+            const CadSourceRestoreComponent = {
+                props: ['alert', 'editMode', 'onRestore'],
+                computed: {
+                    previousSummary() {
+                        return this.alert?.previousWebSummary || 'unknown';
+                    },
+                    restoreChanges() {
+                        const changes = this.alert?.restoreChanges;
+                        if (!Array.isArray(changes) || changes.length === 0) return [];
+                        return changes;
+                    }
+                },
+                methods: {
+                    restore() {
+                        if (!this.editMode) {
+                            return;
+                        }
+                        if (this.onRestore) {
+                            this.onRestore();
+                        }
+                        this.$emit('close-modal');
+                    },
+                    close() {
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <slot>
+                        <div>
+                            <p>{{ alert.message }}</p>
+                            <p>Previously: {{ previousSummary }}</p>
+                            <div v-if="restoreChanges.length > 0">
+                                <p>Restoring to:</p>
+                                <p v-for="change in restoreChanges" :key="change.n">
+                                    <strong>{{ change.n }}:</strong> {{ change.o }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="button-bar">
+                            <button @click="restore" :disabled="!editMode" :title="!editMode ? 'Enable edit mode to restore values' : 'Restore values from before CAD changes'">Restore</button>
+                            <button @click="close" class="gray">Close</button>
+                        </div>
+                    </slot>
+                `
+            };
+
+            this.$modal.custom(CadSourceRestoreComponent, {
+                alert,
+                editMode: this.editMode,
+                onRestore: () => {
+                    if (!item || !Array.isArray(alert?.restoreChanges)) return;
+                    this.applyItemChanges(item, alert.restoreChanges, 'cadSourceAlert');
+                },
+                modalClass: 'reading-menu'
+            }, 'CAD Source Change');
         },
 
         /**
@@ -962,34 +1070,57 @@ export const PacklistTable = {
                 alert: alert,
                 editMode: this.editMode,
                 onUpdate: () => {
-                    // Update the description field with the formatted inventory description
                     const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
-                    item.Description = newDescription;
-                    
-                    // Clear the alert from AppData
-                    if (item.AppData) {
-                        delete item.AppData['descriptionAlert'];
-                    }
+                    this.applyItemChanges(item, [{ n: 'Description', o: newDescription }], 'descriptionAlert');
                 },
                 modalClass: 'reading-menu'
             }, `${itemNumber}`);
         },
 
         /**
-         * Navigate to inventory details page for an item
+         * Navigate to inventory item timeline page for an item
          * @param {Object} item - The item to view details for
          */
-        navigateToInventoryDetails(item) {
+        async navigateToInventoryDetails(item) {
             const itemNumber = item['Extracted Item'];
-            
+
             if (!itemNumber) {
                 console.warn('Cannot navigate to details: no item number found');
                 return;
             }
-            
-            // Navigate to the details endpoint with the item number as a search parameter
-            const targetPath = `packlist/${this.tabName}/details?searchTerm=${encodeURIComponent(itemNumber)}`;
-            this.$emit('navigate-to-path', targetPath);
+
+            // Resolve the inventory category tab for this item so we can build the correct path
+            let tabName = item.AppData?.tabName || item.tabName || null;
+            if (!tabName) {
+                try {
+                    tabName = await Requests.getTabNameForItem(itemNumber);
+                } catch (_) {}
+            }
+
+            // Resolve the show's date window to pre-filter the timeline
+            let dateFilters;
+            try {
+                const [shipDate, returnDate] = await Promise.all([
+                    Requests.getProjectShipDate(this.tabName),
+                    Requests.getProjectReturnDate(this.tabName)
+                ]);
+                if (shipDate && returnDate) {
+                    dateFilters = [
+                        { column: 'Show Date', value: shipDate,  type: 'after'  },
+                        { column: 'Show Date', value: returnDate, type: 'before' }
+                    ];
+                }
+            } catch (_) {}
+
+            const basePath = tabName
+                ? `inventory/categories/${tabName.toLowerCase()}/${itemNumber}`
+                : `packlist/${this.tabName}/details?searchTerm=${encodeURIComponent(itemNumber)}`;
+
+            const finalPath = (tabName && dateFilters)
+                ? NavigationRegistry.buildPath(basePath, { dateFilters })
+                : basePath;
+
+            this.$emit('navigate-to-path', finalPath);
         },
 
         async handlePrint() {
@@ -1014,65 +1145,6 @@ export const PacklistTable = {
                 this.isPrinting = false;
             }, 100);
         },
-        handleDropOntoItem(event) {
-            console.log('handleDropOntoItem called!', event);
-            // event contains: { targetIndex, targetRow, selectedRows, targetArray }
-            const targetItem = event.targetRow;
-            const targetIndex = event.targetIndex;
-            const droppedItems = event.selectedRows;
-            const targetArray = event.targetArray;
-            
-            if (!targetItem || !droppedItems || droppedItems.length === 0) {
-                console.warn('Invalid drop onto event data');
-                return;
-            }
-            
-            // Check if target is already a group master
-            const targetMetadata = EditHistoryUtils.parseEditHistory(targetItem.EditHistory);
-            const targetGrouping = targetMetadata?.s?.grouping;
-            
-            // Use existing groupId or generate new one
-            const groupId = targetGrouping?.groupId || `G${Date.now()}`;
-            
-            // Update target item to be group master (if not already)
-            if (!targetGrouping?.isGroupMaster) {
-                const newTargetMetadata = EditHistoryUtils.setUserSetting(
-                    targetItem.EditHistory || '',
-                    'grouping',
-                    {
-                        groupId: groupId,
-                        isGroupMaster: true,
-                        masterItemIndex: targetIndex
-                    }
-                );
-                targetItem.EditHistory = newTargetMetadata;
-                console.log('Set target as group master:', groupId, 'index:', targetIndex);
-            }
-            
-            // Update dropped items to be grouped with target
-            droppedItems.forEach(droppedItem => {
-                const newMetadata = EditHistoryUtils.setUserSetting(
-                    droppedItem.EditHistory || '',
-                    'grouping',
-                    {
-                        groupId: groupId,
-                        isGroupMaster: false,
-                        masterItemIndex: targetIndex
-                    }
-                );
-                droppedItem.EditHistory = newMetadata;
-                console.log('Grouped item with master:', groupId, 'item:', droppedItem.Description);
-            });
-            
-            // Alert user of successful grouping
-            this.$modal.alert(
-                `Successfully grouped <strong>${droppedItems.length}</strong> item(s) under:<br><strong>${targetItem.Description || 'master item'}</strong><br><br>Group ID: ${groupId}`,
-                'Items Grouped'
-            );
-            
-            console.log('Grouping complete. Remember to save to persist changes.');
-        },
-
         handleRowOptions(selectedRows) {
             // Show modal with custom options for selected rows
             this.$modal.custom(RowOptionsMenuComponent, {
@@ -1178,6 +1250,7 @@ export const PacklistTable = {
                     :loading-progress="packlistTableStore && packlistTableStore.isAnalyzing ? packlistTableStore.analysisProgress : -1"
                     :loading-message="loadingMessage"
                     :drag-id="'packlist-crates'"
+                    :hide-group-members="hideGroupMembersInViewMode"
                     :hamburgerMenuComponent="hamburgerMenuComponent"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
@@ -1256,8 +1329,7 @@ export const PacklistTable = {
                                 :draggable="editMode"
                                 :newRow="editMode"
                                 :allowDropOnto="editMode"
-                                :enableGrouping="editMode"
-                                :hide-group-members="!editMode"
+                                :hide-group-members="hideGroupMembersInViewMode"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
@@ -1274,7 +1346,6 @@ export const PacklistTable = {
                                     }
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
-                                @drop-onto="handleDropOntoGrouping"
                                 @row-options="handleRowOptions"
                                 class="table-fixed"
                             >

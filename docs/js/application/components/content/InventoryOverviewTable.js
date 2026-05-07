@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache, EditHistoryUtils, todayISOString } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -102,7 +102,7 @@ export const InventoryOverviewTableComponent = {
             this.inventoryStore = getReactiveStore(
                 Requests.getAllInventoryData,
                 null, // No save function (read-only)
-                [], // No arguments
+                [todayISOString()], // Apply pending changes as of today
                 analysisConfig
             );
             
@@ -127,6 +127,15 @@ export const InventoryOverviewTableComponent = {
             if (!tabName) return '';
             const lower = tabName.toLowerCase();
             return lower.charAt(0).toUpperCase() + lower.slice(1);
+        },
+
+        getPendingEntries(item) {
+            const eh = item?.edithistory || item?.EditHistory;
+            return EditHistoryUtils.getPendingEntries(eh);
+        },
+
+        formatPendingDate(deciseconds) {
+            return new Date(deciseconds * 100).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
     },
     template: html `
@@ -172,6 +181,30 @@ export const InventoryOverviewTableComponent = {
                         :itemNumber="row.itemNumber"
                         :imageUrl="row.AppData?.imageUrl"
                     />
+                </template>
+                <template #row-details="{ row }">
+                    <div v-if="getPendingEntries(row).length > 0" class="pending-changes-section">
+                        <div
+                            v-for="(entry, i) in getPendingEntries(row)"
+                            :key="i"
+                            class="pending-entry"
+                        >
+                            <span class="pending-meta">
+                                <strong>{{ formatPendingDate(entry.t) }}</strong>
+                                <span v-if="entry.s"> &mdash; {{ entry.s }}</span>
+                                <span class="pending-user"> ({{ entry.u }})</span>
+                            </span>
+                            <div class="pending-changes">
+                                <span
+                                    v-for="ch in entry.c"
+                                    :key="ch.n"
+                                    class="pending-change-chip"
+                                >
+                                    {{ ch.n }}: {{ row[ch.n] }} &rarr; {{ ch.ne }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </template>
             </TableComponent>
         </slot>

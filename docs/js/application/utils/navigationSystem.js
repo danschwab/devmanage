@@ -2,6 +2,7 @@ import { html } from '../index.js';
 import { authState, Auth } from '../index.js';
 import { URLRouter } from './urlRouter.js';
 import { DashboardRegistry } from './DashboardRegistry.js';
+import { parseSearchParameters } from '../../data_management/utils/helpers.js';
 
 export const NavigationRegistry = {
     /**
@@ -175,13 +176,44 @@ export const NavigationRegistry = {
                 } else {
                     // Fallback: old query string format for backwards compatibility
                     const searchParams = new URLSearchParams(paramPart);
+                    const flatParams = {};
                     for (const [key, value] of searchParams) {
                         // Try to parse boolean and number values
-                        if (value === 'true') parameters[key] = true;
-                        else if (value === 'false') parameters[key] = false;
-                        else if (!isNaN(value) && !isNaN(parseFloat(value))) parameters[key] = parseFloat(value);
-                        else parameters[key] = value;
+                        if (value === 'true') flatParams[key] = true;
+                        else if (value === 'false') flatParams[key] = false;
+                        else if (!isNaN(value) && !isNaN(parseFloat(value))) flatParams[key] = parseFloat(value);
+                        else flatParams[key] = value;
                     }
+                    
+                    // Convert old DCol/Col format to new dateFilters/textFilters arrays
+                    const converted = parseSearchParameters(flatParams);
+                    
+                    // Build new format parameters
+                    if (converted.dateFilters && converted.dateFilters.length > 0) {
+                        parameters.dateFilters = converted.dateFilters;
+                    }
+                    
+                    // Convert searchParams object format to textFilters array
+                    if (converted.searchParams && Object.keys(converted.searchParams).length > 0) {
+                        parameters.textFilters = Object.entries(converted.searchParams).map(([column, data]) => ({
+                            column,
+                            values: data.values,
+                            type: data.type
+                        }));
+                    }
+                    
+                    // Preserve any other non-filter params that weren't converted
+                    Object.keys(flatParams).forEach(key => {
+                        if (!key.startsWith('DCol') && !key.startsWith('DVal') && !key.startsWith('DType') &&
+                            !key.startsWith('Col') && !key.startsWith('Val') && !key.startsWith('Type')) {
+                            parameters[key] = flatParams[key];
+                        }
+                    });
+                    
+                    console.log('[NavigationRegistry] Converted legacy URL format:', {
+                        flatParams,
+                        converted: parameters
+                    });
                 }
             }
         }

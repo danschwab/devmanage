@@ -65,6 +65,27 @@ export function parseDate(val, forceLocal = true, defaultYear = null) {
     return null;
 }
 
+/**
+ * Converts a Date object to a YYYY-MM-DD date string using local calendar date.
+ * @param {Date} date
+ * @returns {string|null}
+ */
+export function toISODateString(date) {
+    if (!date || !(date instanceof Date) || isNaN(date)) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * Returns today's date as a YYYY-MM-DD string using the local calendar date.
+ * @returns {string}
+ */
+export function todayISOString() {
+    return toISODateString(new Date());
+}
+
 
 /**
  * Filters data based on search parameters.

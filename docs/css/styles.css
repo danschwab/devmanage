@@ -158,6 +158,14 @@ div#app-content > div.empty-message {
     grid-column: 1 / -1;
 }
 
+div#app-content > .auth-error-banner {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    grid-column: 1 / -1;
+    align-self: start;
+}
+
 
 
 
@@ -1007,6 +1015,10 @@ button.analyzing::after {
 tr.is-group:has(+ .in-group) {
     border-bottom: 1px solid var(--color-text);
 }
+/* tr.is-group > td {
+    border-bottom: 3px double var(--color-border);
+} */
+
 tr.in-group {
     background-color: var(--color-gray-bg);
     box-shadow: inset 0 12px 12px -12px var(--color-shadow);

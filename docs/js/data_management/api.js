@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -225,8 +225,8 @@ class Requests_uncached {
      * @param {string|string[]} fields - Field(s) to retrieve
      * @returns {Promise<Array<Object>>} Item information
      */
-    static async getInventoryInfo(deps, itemName, fields) {
-        return await deps.call(InventoryUtils.getItemInfo, itemName, fields);
+    static async getInventoryInfo(deps, itemName, fields, referenceDate) {
+        return await deps.call(InventoryUtils.getItemInfo, itemName, fields, referenceDate);
     }
     
     /**
@@ -421,8 +421,8 @@ class Requests_uncached {
      * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<Array<Object>>}
      */
-    static async getInventoryTabData(deps, tabOrItemName, mapping, filters) {
-        return await deps.call(InventoryUtils.getInventoryTabData, tabOrItemName, mapping, filters);
+    static async getInventoryTabData(deps, tabOrItemName, mapping, filters, referenceDate) {
+        return await deps.call(InventoryUtils.getInventoryTabData, tabOrItemName, mapping, filters, referenceDate);
     }
     
     /**
@@ -441,7 +441,7 @@ class Requests_uncached {
         // Load data from each tab
         for (const tab of inventoryTabs) {
             try {
-                const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title);
+                const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title, undefined, undefined, undefined);
                 
                 // Add tab information to each item
                 if (Array.isArray(tabData)) {
@@ -473,9 +473,15 @@ class Requests_uncached {
      * @param {Object} [filters] - Optional filter parameters
      * @returns {Promise<boolean>}
      */
-    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters) {
+    static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, referenceDate, options = {}) {
         const username = authState.user?.email || null;
-        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username);
+        const { scheduledDate, note, ...rest } = options;
+        return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username, {
+            source: 'web',
+            scheduledDate,
+            note,
+            ...rest
+        });
     }
     
     /**
@@ -493,7 +499,9 @@ class Requests_uncached {
         console.log("API.savePackList called for project:", projectIdentifier);
         const username = authState.user?.email || null;
         // Pass data directly to PackListUtils.savePackList; transformation is handled there
-        return await PackListUtils.savePackList(projectIdentifier, crates, null, username);
+        return await PackListUtils.savePackList(projectIdentifier, crates, null, username, {
+            source: 'web'
+        });
     }
 
     /**
@@ -527,6 +535,33 @@ class Requests_uncached {
      */
     static async getShowDetails(deps, identifier) {
         return await deps.call(ProductionUtils.getShowDetails, identifier);
+    }
+
+    /**
+     * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
+     * @param {Object} deps
+     * @param {string} projectIdentifier
+     * @returns {Promise<string|null>}
+     */
+    static async getProjectShipDate(deps, projectIdentifier) {
+        return await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
+    }
+
+    static async getProjectReturnDate(deps, projectIdentifier) {
+        return await deps.call(ProductionUtils.getProjectReturnDate, projectIdentifier);
+    }
+
+    /**
+     * Get a full item timeline for a date window.
+     * Rows: inventory changes, scheduled changes, show ship/return events.
+     * @param {Object} deps
+     * @param {string} itemId - Item identifier (e.g. "F-101")
+     * @param {string} startDate - ISO date string (YYYY-MM-DD), window start
+     * @param {string} endDate - ISO date string (YYYY-MM-DD), window end
+     * @returns {Promise<Array<{date, event, note, change, quantity}>>}
+     */
+    static async getItemTimeline(deps, itemId, startDate, endDate) {
+        return await deps.call(InventoryUtils.getItemTimeline, itemId, startDate, endDate);
     }
 
     /**
@@ -675,6 +710,105 @@ class Requests_uncached {
     }
 
     /**
+     * Check edit history source timeline and create an alert for CAD-overwritten rows.
+     * Condition: most recent edit source is CAD and a prior web/app edit exists.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} item - Item row object containing EditHistory
+     * @returns {Promise<Object|null>} Alert object for AppData or null
+     */
+    static async checkCadSourceHistory(deps, item) {
+        const rawHistory = item?.EditHistory || item?.edithistory;
+        if (!rawHistory) {
+            return null;
+        }
+
+        let parsedHistory;
+        if (typeof rawHistory === 'string') {
+            try {
+                parsedHistory = JSON.parse(rawHistory);
+            } catch (error) {
+                return null;
+            }
+        } else if (typeof rawHistory === 'object') {
+            parsedHistory = rawHistory;
+        } else {
+            return null;
+        }
+
+        const history = Array.isArray(parsedHistory?.h) ? parsedHistory.h : [];
+        if (history.length === 0) {
+            return null;
+        }
+
+        const normalizeSource = (entry) => {
+            const sourceValue = String(entry?.s || entry?.source || 'web').toLowerCase();
+            if (sourceValue === 'app') return 'web';
+            return sourceValue;
+        };
+
+        const mostRecent = history[0];
+        const mostRecentSource = normalizeSource(mostRecent);
+        if (mostRecentSource !== 'cad') {
+            return null;
+        }
+
+        const hasPriorWebOrAppEdit = history
+            .slice(1)
+            .some(entry => normalizeSource(entry) === 'web');
+
+        if (!hasPriorWebOrAppEdit) {
+            return null;
+        }
+
+        // CAD block is contiguous from newest entry while source is cad.
+        const leadingCadEntries = [];
+        for (const entry of history) {
+            if (normalizeSource(entry) === 'cad') {
+                leadingCadEntries.push(entry);
+            } else {
+                break;
+            }
+        }
+
+        // Find the most recent web/app edit before any cad changes.
+        const previousWebEntry = history
+            .slice(leadingCadEntries.length)
+            .find(entry => normalizeSource(entry) === 'web') || null;
+
+        const previousWebSummary = previousWebEntry
+            ? `${previousWebEntry.u || 'unknown'} at ${EditHistoryUtils.formatTimestampHuman(previousWebEntry.t)}`
+            : 'unknown';
+
+        // To restore pre-CAD state, apply old values from leading CAD entries newest->oldest.
+        const restoreChanges = [];
+        leadingCadEntries.forEach(entry => {
+            if (Array.isArray(entry?.c)) {
+                entry.c.forEach(change => {
+                    if (change && change.n !== undefined) {
+                        restoreChanges.push({ n: change.n, o: change.o });
+                    }
+                });
+            }
+        });
+
+        return {
+            type: 'cad-source-change',
+            color: 'yellow',
+            clickable: true,
+            message: `changed in cad by ${mostRecent?.u || 'unknown'}`,
+            cadUser: mostRecent?.u || 'unknown',
+            previousWebSummary,
+            previousWebEntry,
+            restoreChanges,
+            sourceTimeline: history.map(entry => ({
+                s: normalizeSource(entry),
+                u: entry?.u || 'unknown',
+                t: entry?.t || null
+            }))
+        };
+    }
+
+    /**
      * Get item quantities summary for a project (transformed to table format)
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
@@ -731,8 +865,8 @@ class Requests_uncached {
      * @param {string} itemId - The item ID to look up
      * @returns {Promise<number|null>} Available inventory quantity, or null if item not found in inventory
      */
-    static async getItemInventoryQuantity(deps, itemId) {
-        return await deps.call(PackListUtils.getItemInventoryQuantity, itemId);
+    static async getItemInventoryQuantity(deps, itemId, referenceDate) {
+        return await deps.call(PackListUtils.getItemInventoryQuantity, itemId, referenceDate);
     }
 
     /**
@@ -753,8 +887,8 @@ class Requests_uncached {
      * @param {string} itemId - Item ID to calculate remaining quantity for
      * @returns {Promise<number|null>} Remaining available quantity, or null if item not found in inventory
      */
-    static async calculateRemainingQuantity(deps, currentProjectId, itemId) {
-        return await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemId);
+    static async calculateRemainingQuantity(deps, currentProjectId, itemId, referenceDate) {
+        return await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemId, referenceDate);
     }
 
     /**
@@ -773,8 +907,12 @@ class Requests_uncached {
         }
         
         try {
+            // Resolve ship date so remaining quantity reflects inventory at time of packing
+            const shipDate = await deps.call(ProductionUtils.getProjectShipDate, currentProjectId);
+            const referenceDate = shipDate || todayISOString();
+
             // Get remaining quantity from business logic layer
-            const remaining = await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemNumber);
+            const remaining = await deps.call(PackListUtils.calculateRemainingQuantity, currentProjectId, itemNumber, referenceDate);
             
             // Check if item not found in inventory
             if (remaining === null) {
@@ -828,8 +966,59 @@ class Requests_uncached {
      * @param {string} itemId - The item identifier
      * @returns {Promise<string>} Full item description
      */
-    static async getItemDescription(deps, itemId) {
-        return await deps.call(InventoryUtils.getItemDescription, itemId);
+    static async getItemDescription(deps, itemId, referenceDate) {
+        return await deps.call(InventoryUtils.getItemDescription, itemId, referenceDate);
+    }
+
+    /**
+     * Get inventory rows that have a pending entry matching the given effective date.
+     * Used to populate the scheduled-change editor modal.
+     * @param {Object} deps
+     * @param {string} tabOrItemName
+     * @param {number} effectiveDateDeciseconds
+     * @param {Object} [mapping]
+     * @returns {Promise<Array<Object>>}
+     */
+    static async getInventoryRowsForPendingEntry(deps, tabOrItemName, effectiveDateDeciseconds, mapping) {
+        return await deps.call(InventoryUtils.getInventoryRowsForPendingEntry, tabOrItemName, effectiveDateDeciseconds, mapping);
+    }
+
+    /**
+     * Check and apply any pending inventory changes due today or earlier.
+     * Mutation — uncached. Saves the tab if any changes were applied.
+     * @param {string} tabOrItemName
+     * @returns {Promise<{ applied: boolean }>}
+     */
+    static async checkAndApplyPendingChanges(tabOrItemName) {
+        const username = authState.user?.email || null;
+        return await InventoryUtils.checkAndApplyPendingChanges(tabOrItemName, username);
+    }
+
+    /**
+     * Update a scheduled pending change entry (by effectiveDateDeciseconds) on matching rows.
+     * Mutation — uncached. Only the EditHistory column is written back.
+     * @param {string} tabOrItemName
+     * @param {Array<Object>} originalRows
+     * @param {Array<Object>} editedRows
+     * @param {number} effectiveDateDeciseconds
+     * @param {string} [note]
+     * @returns {Promise<boolean>}
+     */
+    static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note) {
+        const username = authState.user?.email || null;
+        return await InventoryUtils.savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note, username);
+    }
+
+    /**
+     * Delete a scheduled pending change entry by effectiveDateDeciseconds.
+     * Mutation — uncached.
+     * @param {string} tabOrItemName
+     * @param {number} effectiveDateDeciseconds
+     * @returns {Promise<boolean>}
+     */
+    static async deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds) {
+        const username = authState.user?.email || null;
+        return await InventoryUtils.deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds, username);
     }
 
 }
@@ -858,7 +1047,12 @@ class Requests_uncached {
 export const Requests = wrapMethods(
     Requests_uncached, 
     'api', 
-    ['saveData', 'createNewTab', 'showTabs', 'hideTabs', 'saveInventoryTabData', 'savePackList', 'storeUserData', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock'], // Mutation methods and pass-through methods
+    [
+        'saveData', 'createNewTab', 'showTabs', 'hideTabs',
+        'saveInventoryTabData', 'savePackList', 'storeUserData',
+        'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock',
+        'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry'
+    ], // Mutation methods and pass-through methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
 );

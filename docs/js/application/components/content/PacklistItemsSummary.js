@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, InventoryCategoryFilter, Priority, invalidateCache } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, InventoryCategoryFilter, Priority, invalidateCache, todayISOString } from '../../index.js';
 
 /**
  * Component for displaying item quantities summary with progressive analysis
@@ -73,8 +73,12 @@ export const PacklistItemsSummary = {
         }
     },
     methods: {
-        initializeStore() {
+        async initializeStore() {
             if (!this.projectIdentifier) return;
+
+            // Fetch ship date so inventory quantities reflect state at time of packing
+            const shipDate = await Requests.getProjectShipDate(this.projectIdentifier);
+            const referenceDate = shipDate || todayISOString();
 
             const analysisConfig = [
                 createAnalysisConfig(
@@ -92,7 +96,7 @@ export const PacklistItemsSummary = {
                     'available',
                     'Checking inventory quantities...',
                     ['itemId'],
-                    [],
+                    [referenceDate],
                     'available'
                 ),
                 createAnalysisConfig(
@@ -106,11 +110,11 @@ export const PacklistItemsSummary = {
                     Priority.USER_ACTION // Used for navigation buttons
                 ),
                 createAnalysisConfig(
-                    (itemId, currentProjectId) => Requests.calculateRemainingQuantity(currentProjectId, itemId),
+                    (itemId, currentProjectId, refDate) => Requests.calculateRemainingQuantity(currentProjectId, itemId, refDate),
                     'remaining',
                     'Calculating remaining quantities...',
                     ['itemId'],
-                    [this.projectIdentifier],
+                    [this.projectIdentifier, referenceDate],
                     'remaining'
                 ),
                 createAnalysisConfig(
@@ -195,7 +199,7 @@ export const PacklistItemsSummary = {
                 :readonly="true"
                 :is-loading="itemsSummaryStore ? itemsSummaryStore.isLoading : false"
                 :is-analyzing="itemsSummaryStore ? itemsSummaryStore.isAnalyzing : false"
-                :loading-message="itemsSummaryStore && itemsSummaryStore.isLoading ? itemsSummaryStore.analysisMessage.loadingMessage : itemsSummaryStore.analysisMessage"
+                :loading-message="itemsSummaryStore && itemsSummaryStore.isLoading ? itemsSummaryStore.analysisMessage.loadingMessage : (itemsSummaryStore ? itemsSummaryStore.analysisMessage : null)"
                 :loading-progress="itemsSummaryStore && itemsSummaryStore.isAnalyzing ? itemsSummaryStore.analysisProgress : -1"
                 empty-message="No item data available"
                 class="items-summary-table"

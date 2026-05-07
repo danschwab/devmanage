@@ -1,4 +1,4 @@
-import { Database, ProductionUtils, wrapMethods, searchFilter, ApplicationUtils, invalidateCache } from '../index.js';
+import { Database, ProductionUtils, PackListUtils, wrapMethods, parseDate, toISODateString, searchFilter, todayISOString, ApplicationUtils, invalidateCache, EditHistoryUtils } from '../index.js';
 
 /**
  * Utility functions for inventory operations
@@ -45,7 +45,7 @@ class inventoryUtils_uncached {
         return tab || null;
     }
 
-    static async getItemInfo(deps, itemName, fields) {
+    static async getItemInfo(deps, itemName, fields, referenceDate) {
         const itemNames = Array.isArray(itemName) ? itemName : [itemName];
         const infoFields = Array.isArray(fields) ? fields : [fields];
         const itemsByTab = {};
@@ -60,10 +60,15 @@ class inventoryUtils_uncached {
             if (!itemsByTab[tab]) itemsByTab[tab] = [];
             itemsByTab[tab].push(item);
         };
+        const refDeciseconds = referenceDate ? Math.floor(parseDate(referenceDate).getTime() / 100) : null;
         const results = [];
         for (const [tab, items] of Object.entries(itemsByTab)) {
             try {
                 let tabData = await deps.call(Database.getData, 'INVENTORY', tab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
+                if (refDeciseconds) {
+                    const { updatedItems } = EditHistoryUtils.applyPendingChangesToData(tabData, refDeciseconds);
+                    tabData = updatedItems;
+                }
                 items.forEach(item => {
                     const originalItem = item;
                     let foundObj = null;
@@ -102,7 +107,7 @@ class inventoryUtils_uncached {
         return results;
     }
 
-    static async getInventoryTabData(deps, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null) {
+    static async getInventoryTabData(deps, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, referenceDate) {
 
         // Get all tabs on the inventory sheet
         const allTabs = await deps.call(Database.getTabs, 'INVENTORY');
@@ -120,6 +125,14 @@ class inventoryUtils_uncached {
         // Get tab data as JS objects (mapping transforms 2D array to objects)
         let tabData = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
 
+        // If a referenceDate is provided, project the data to that date by applying
+        // any pending changes due on or before that date (in-memory, no save).
+        if (referenceDate) {
+            const refDeciseconds = Math.floor(parseDate(referenceDate).getTime() / 100);
+            const { updatedItems } = EditHistoryUtils.applyPendingChangesToData(tabData, refDeciseconds);
+            tabData = updatedItems;
+        }
+
         // Apply search filter if filters are provided (after transformation to objects)
         if (filters) {
             tabData = searchFilter(tabData, filters);
@@ -129,7 +142,7 @@ class inventoryUtils_uncached {
     }
 
     static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null, options = {}) {
-        const { force = false, reason = '', autoLock = false } = options;
+        const { force = false, reason = '', autoLock = false, source = 'web', scheduledDate = null, note = '' } = options;
         
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
@@ -152,6 +165,73 @@ class inventoryUtils_uncached {
         // Lock management is now handled by components via watchers on global locks store
         // Components acquire locks on edit mode entry and release on save completion
 
+        // If a future scheduledDate is provided, store changes as pending instead of applying
+        const todayISO = todayISOString();
+        const effectiveDate = scheduledDate || todayISO;
+        const isFuture = effectiveDate > todayISO;
+
+        if (isFuture) {
+            // Compute diff against existing data and create pending entries
+            const existingData = await Database.getData('INVENTORY', resolvedTabName, mapping);
+            const shortUser = username ? username.split('@')[0] : 'unknown';
+            const effectiveDeciseconds = Math.floor(parseDate(effectiveDate).getTime() / 100);
+
+            // For a new row (no match in existing data), build a bare version:
+            // item number is saved immediately with all content fields zeroed/empty,
+            // and any non-default content is added as a pending scheduled change.
+            const buildBareRow = (item) => {
+                const bare = {};
+                for (const key of Object.keys(item)) {
+                    if (['AppData', 'MetaData'].includes(key)) continue;
+                    if (key === 'itemNumber' || key === 'edithistory' || key === 'EditHistory') {
+                        bare[key] = item[key];
+                    } else {
+                        // Numeric fields → 0, string fields → ''
+                        const num = parseFloat(item[key]);
+                        bare[key] = (!isNaN(num) && String(item[key]).trim() !== '') ? 0 : '';
+                    }
+                }
+                return bare;
+            };
+
+            const updatedRows = (Array.isArray(mappedData) ? mappedData : Array.from(mappedData)).map(item => {
+                const existingItem = existingData.find(row => row.itemNumber === item.itemNumber);
+                // Use existing row as base, or a bare new row for new items
+                const baseItem = existingItem || buildBareRow(item);
+
+                const changes = [];
+                for (const key of Object.keys(item)) {
+                    if (['edithistory', 'EditHistory', 'AppData', 'MetaData'].includes(key)) continue;
+                    if (String(item[key]) !== String(baseItem[key] ?? '')) {
+                        const existingNum = parseFloat(baseItem[key]);
+                        const newNum = parseFloat(item[key]);
+                        const bothNumeric = !isNaN(existingNum) && !isNaN(newNum)
+                            && String(baseItem[key]).trim() !== ''
+                            && String(item[key]).trim() !== '';
+                        let ne = item[key];
+                        if (bothNumeric) {
+                            const delta = newNum - existingNum;
+                            ne = delta >= 0 ? `+${delta}` : `${delta}`;
+                        }
+                        changes.push({ n: key, ne });
+                    }
+                }
+
+                if (changes.length === 0) return baseItem;
+
+                const pendingEntry = EditHistoryUtils.createPendingEntry(shortUser, changes, effectiveDeciseconds, note);
+                const updatedEH = EditHistoryUtils.appendToPendingChanges(baseItem.edithistory || baseItem.EditHistory, pendingEntry);
+                return { ...baseItem, edithistory: updatedEH };
+            });
+
+            return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
+                username,
+                identifierKey: 'itemNumber',
+                source: note || 'scheduled',
+                skipMetadata: true
+            });
+        }
+
         let saveResult;
         try {
             if (filters) {
@@ -166,7 +246,7 @@ class inventoryUtils_uncached {
 
                 // Send updates one by one with username
                 for (const update of updates) {
-                    await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username });
+                    await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username, source });
                 }
 
                 saveResult = true;
@@ -176,9 +256,11 @@ class inventoryUtils_uncached {
                 }
 
                 // Save JS objects using mapping with edithistory options
+                // Use note as the source descriptor when provided
                 saveResult = await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
                     username,
-                    identifierKey: 'itemNumber'
+                    identifierKey: 'itemNumber',
+                    source: note || source
                 });
             }
         } finally {
@@ -199,6 +281,10 @@ class inventoryUtils_uncached {
     static async checkItemAvailability(deps, projectIdentifier) {
         
         try {
+            // Look up the show's ship date so inventory reflects the state at time of packing
+            const shipDate = await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
+            const referenceDate = shipDate || todayISOString();
+
             // 1. Get pack list items
             const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
             const itemIds = Object.keys(itemMap);
@@ -208,8 +294,8 @@ class inventoryUtils_uncached {
                 return {};
             }
 
-            // Get inventory quantities
-            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "QTY");
+            // Get inventory quantities as of ship date
+            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "QTY", referenceDate);
             
             // Filter valid items and build result
             const result = {};
@@ -260,11 +346,11 @@ class inventoryUtils_uncached {
      * @param {string} itemNumber - The item number to look up
      * @returns {Promise<string|null>} Item description or null if not found
      */
-    static async getItemDescription(deps, itemNumber) {
+    static async getItemDescription(deps, itemNumber, referenceDate) {
         if (!itemNumber) return null;
         
         try {
-            const itemInfo = await deps.call(InventoryUtils.getItemInfo, itemNumber, ['description']);
+            const itemInfo = await deps.call(InventoryUtils.getItemInfo, itemNumber, ['description'], referenceDate);
             return itemInfo?.[0]?.description || null;
         } catch (error) {
             console.error(`Failed to get description for item ${itemNumber}:`, error);
@@ -272,6 +358,394 @@ class inventoryUtils_uncached {
         }
     }
 
+
+
+    /**
+     * Returns inventory rows that have a pending entry matching the given
+     * effective date (deciseconds). Used to populate the change history editor.
+     * @param {Object} deps
+     * @param {string} tabOrItemName
+     * @param {number} effectiveDateDeciseconds
+     * @param {Object} [mapping]
+     * @returns {Promise<Array<Object>>}
+     */
+    static async getInventoryRowsForPendingEntry(deps, tabOrItemName, effectiveDateDeciseconds, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
+        const allTabs = await deps.call(Database.getTabs, 'INVENTORY');
+        const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
+        let resolvedTabName = tabOrItemName;
+        if (!tabExists) {
+            const foundTab = await deps.call(InventoryUtils.getTabNameForItem, tabOrItemName);
+            if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found.`);
+            resolvedTabName = foundTab;
+        }
+        const rows = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
+        return rows.filter(row => {
+            const pending = EditHistoryUtils.getPendingEntries(row.edithistory || row.EditHistory);
+            return pending.some(e => e.t === effectiveDateDeciseconds);
+        });
+    }
+
+    /**
+     * Check and apply any pending changes due today or earlier for a given tab.
+     * Mutation — uncached. Saves the tab once if any changes were applied.
+     * @param {string} tabOrItemName
+     * @param {string} [username]
+     * @param {Object} [mapping]
+     * @returns {Promise<{ applied: boolean }>}
+     */
+    static async checkAndApplyPendingChanges(tabOrItemName, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
+        console.log(`[InventoryUtils] Checking for pending changes to apply for "${tabOrItemName}"...`);
+        
+        const allTabs = await Database.getTabs('INVENTORY');
+        const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
+        let resolvedTabName = tabOrItemName;
+        if (!tabExists) {
+            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
+            if (!foundTab) return { applied: false };
+            resolvedTabName = foundTab;
+        }
+
+        const rows = await Database.getData('INVENTORY', resolvedTabName, mapping);
+        const todayDeciseconds = Math.floor(new Date().setHours(0, 0, 0, 0) / 100);
+        const { updatedItems, hasChanges } = EditHistoryUtils.applyPendingChangesToData(rows, todayDeciseconds);
+
+        if (!hasChanges) return { applied: false };
+
+        await Database.setData('INVENTORY', resolvedTabName, updatedItems, mapping, {
+            username,
+            identifierKey: 'itemNumber',
+            skipMetadata: true
+        });
+        return { applied: true };
+    }
+
+    /**
+     * Update the pending change entry matching effectiveDateDeciseconds on each
+     * of the provided rows. Only the EditHistory column is written back.
+     * Mutation — uncached.
+     * @param {string} tabOrItemName
+     * @param {Array<Object>} originalRows - Original rows before edits (current field values)
+     * @param {Array<Object>} editedRows - Rows as edited in the modal (future field values)
+     * @param {number} effectiveDateDeciseconds
+     * @param {string} [note] - Updated note (≤25 chars)
+     * @param {string} [username]
+     * @param {Object} [mapping]
+     * @returns {Promise<boolean>}
+     */
+    static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note = null, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
+        console.log(`[InventoryUtils] Saving pending change entry for "${tabOrItemName}"...`);
+        
+        const allTabs = await Database.getTabs('INVENTORY');
+        const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
+        let resolvedTabName = tabOrItemName;
+        if (!tabExists) {
+            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
+            if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found.`);
+            resolvedTabName = foundTab;
+        }
+
+        const updatedRows = originalRows.map(origRow => {
+            const editedRow = editedRows.find(r => r.itemNumber === origRow.itemNumber);
+            if (!editedRow) return origRow;
+
+            const ehKey = Object.prototype.hasOwnProperty.call(origRow, 'edithistory') ? 'edithistory' : 'EditHistory';
+            const parsed = EditHistoryUtils.parseEditHistory(origRow[ehKey]) || {};
+            if (!Array.isArray(parsed.p)) return origRow;
+
+            parsed.p = parsed.p.map(entry => {
+                if (entry.t !== effectiveDateDeciseconds) return entry;
+                // Rebuild c from diff between original and edited rows
+                const newChanges = entry.c.map(ch => {
+                    const editedVal = editedRow[ch.n];
+                    return { n: ch.n, ne: editedVal !== undefined ? editedVal : ch.ne };
+                });
+                return {
+                    ...entry,
+                    c: newChanges,
+                    s: note !== null ? String(note).slice(0, 25) : entry.s
+                };
+            });
+
+            return { ...origRow, [ehKey]: JSON.stringify(parsed) };
+        });
+
+        return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
+            username,
+            identifierKey: 'itemNumber',
+            skipMetadata: true
+        });
+    }
+
+    /**
+     * Build a full item timeline for a given item within a date window.
+     * Returns an array of events sorted chronologically:
+     *   - Inventory changes (from edithistory.h) with event "Inv. Change"
+     *   - Scheduled pending changes (from edithistory.p) with event "Scheduled"
+     *   - Show ship events (event "Ships", note = project identifier)
+     *   - Show return events (event "Returns", note = project identifier)
+     *
+     * Quantity column reflects the inventory state after each event.
+     *
+     * @param {Object} deps
+     * @param {string} itemId - Item identifier (e.g. "F-101")
+     * @param {string} startDate - ISO date string for window start (inclusive)
+     * @param {string} endDate - ISO date string for window end (inclusive)
+     * @returns {Promise<Array<{date: string, event: string, note: string, change: string, quantity: number|null}>>}
+     */
+    static async getItemTimeline(deps, itemId, startDate, endDate) {
+        if (!itemId) return [];
+
+        // Resolve tab and raw row
+        const tab = await deps.call(InventoryUtils.getTabNameForItem, itemId);
+        if (!tab) return [];
+
+        const tabData = await deps.call(Database.getData, 'INVENTORY', tab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
+
+        // Normalise item lookup (strip tab prefix if present)
+        let lookupId = itemId;
+        if (itemId.includes('-')) {
+            const suffix = itemId.split('-')[1];
+            const found = tabData.find(r => r.itemNumber === suffix) ? suffix : itemId;
+            lookupId = found;
+        }
+        const row = tabData.find(r => r.itemNumber === lookupId) || tabData.find(r => r.itemNumber === itemId);
+        if (!row) return [];
+
+        const currentQty = parseInt(row.quantity ?? row.QTY ?? 0, 10) || 0;
+        const parsed = EditHistoryUtils.parseEditHistory(row.edithistory || row.EditHistory) || {};
+        const history = Array.isArray(parsed.h) ? parsed.h : [];
+        const pending = Array.isArray(parsed.p) ? parsed.p : [];
+
+        const startParsed = startDate ? parseDate(startDate) : null;
+        const endParsed   = endDate   ? parseDate(endDate)   : null;
+        const startDs = startParsed ? Math.floor(startParsed.getTime() / 100) : null;
+        const endDs   = endParsed   ? Math.floor(new Date(endParsed.getTime()).setHours(23, 59, 59, 999) / 100) : null;
+
+        // All events carry internal _delta (relative) or _absoluteQty (anchor) for the forward pass.
+        const events = [];
+
+        // ── Phase 2: Inventory history entries ──
+        // Walk newest-first to compute per-entry deltas via backward replay from currentQty.
+        // The opening balance is derived here: when the replay first crosses startDate,
+        // runningQty has been rewound past all post-startDate changes — that is the qty at startDate.
+        let runningQty = currentQty;
+        let startQty = currentQty;
+        let openingBalanceSet = false;
+
+        for (const entry of history) {
+            const ds = entry.t;
+            const date = toISODateString(new Date(ds * 100));
+
+            // Capture opening balance the moment we cross the startDate boundary.
+            // At this point runningQty reflects currentQty with all newer changes rewound.
+            if (!openingBalanceSet && startDs !== null && ds <= startDs) {
+                startQty = runningQty;
+                openingBalanceSet = true;
+            }
+
+            let delta = 0;
+            const changeLabels = [];
+            if (Array.isArray(entry.c)) {
+                for (const ch of entry.c) {
+                    if (ch.n === 'quantity' || ch.n === 'QTY') {
+                        const oldVal = parseInt(ch.o, 10) || 0;
+                        delta = runningQty - oldVal;
+                        changeLabels.push(`quantity: ${delta >= 0 ? '+' + delta : delta}`);
+                    } else {
+                        changeLabels.push(ch.n);
+                    }
+                }
+            }
+
+            const inWindow = (!startDs || ds >= startDs) && (!endDs || ds <= endDs);
+            if (inWindow) {
+                events.push({
+                    date,
+                    event: 'Inv. Change',
+                    note: entry.u || '',
+                    change: changeLabels.join(', ') || entry.s || '',
+                    quantity: null,
+                    _delta: delta
+                });
+            }
+
+            // Rewind regardless of window (needed to correctly replay earlier entries)
+            if (Array.isArray(entry.c)) {
+                for (const ch of entry.c) {
+                    if (ch.n === 'quantity' || ch.n === 'QTY') {
+                        runningQty = parseInt(ch.o, 10) || 0;
+                    }
+                }
+            }
+        }
+
+        // If all history entries are after startDate (or there is no history),
+        // runningQty is fully rewound to before any recorded changes — correct opening balance.
+        if (!openingBalanceSet) {
+            startQty = runningQty;
+        }
+
+        // Opening balance row — used as the forward-pass anchor
+        if (startDate) {
+            events.push({ date: startDate, event: 'Balance', note: '', change: '', quantity: startQty, _done: true });
+        }
+
+        // ── Phase 3: Pending (scheduled) entries ──
+        for (const entry of pending) {
+            const ds = entry.t;
+            const date = toISODateString(new Date(ds * 100));
+            const inWindow = (!startDs || ds >= startDs) && (!endDs || ds <= endDs);
+            if (!inWindow) continue;
+
+            const changeLabels = [];
+            if (Array.isArray(entry.c)) {
+                for (const ch of entry.c) {
+                    const ne = ch.ne;
+                    const label = (typeof ne === 'string' && /^[+-]/.test(ne))
+                        ? `quantity: ${ne.startsWith('+') ? ne : (parseInt(ne, 10) >= 0 ? '+' + ne : ne)}`
+                        : `${ch.n}: ${ne}`;
+                    changeLabels.push(label);
+                }
+            }
+
+            // Use getItemInfo to get the projected quantity as an absolute anchor
+            const projectedInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity'], date);
+            const projectedQty = parseInt(projectedInfo?.[0]?.quantity ?? 0, 10) || null;
+
+            events.push({
+                date,
+                event: 'Scheduled',
+                note: entry.s || '',
+                change: changeLabels.join(', '),
+                quantity: null,
+                _absoluteQty: projectedQty
+            });
+        }
+
+        // ── Phase 4: Show ship / return events ──
+        if (startDate && endDate) {
+            try {
+                // Find shows whose window overlaps [startDate, endDate]:
+                //   show ships on/before endDate  AND  show returns on/after startDate
+                const overlapping = await deps.call(ProductionUtils.getOverlappingShows, {
+                    dateFilters: [
+                        { column: 'Ship',   value: endDate,   type: 'before' },
+                        { column: 'Return', value: startDate, type: 'after'  }
+                    ]
+                });
+
+                console.log('[timeline] overlapping shows:', overlapping?.map(r => r.Identifier || r.Show));
+
+                for (const showRow of overlapping) {
+                    const identifier = showRow.Identifier ||
+                        await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
+
+                    let packedQty = 0;
+                    try {
+                        const showItems = await deps.call(PackListUtils.extractItems, identifier);
+                        console.log('[timeline] extractItems for', identifier, '→', showItems);
+                        packedQty = showItems[itemId] || 0;
+                        if (!packedQty) continue;
+                    } catch (_) {
+                        continue;
+                    }
+
+                    const shipDate = await deps.call(ProductionUtils.getProjectShipDateFromRow, showRow);
+                    const returnDate = await deps.call(ProductionUtils.getProjectReturnDateFromRow, showRow);
+                    console.log('[timeline]', identifier, '| shipDate:', shipDate, '| returnDate:', returnDate, '| window:', startDate, '→', endDate);
+
+                    if (shipDate) {
+                        const shipDs = Math.floor(parseDate(shipDate).getTime() / 100);
+                        const shipInWindow = (!startDs || shipDs >= startDs) && (!endDs || shipDs <= endDs);
+                        console.log('[timeline] ship window check:', shipDate, '| inWindow:', shipInWindow, '| startDs:', startDs, 'shipDs:', shipDs, 'endDs:', endDs);
+                        if (shipInWindow) {
+                            events.push({ date: shipDate, event: 'Ships', note: identifier, change: `quantity: -${packedQty}`, quantity: null, _delta: -packedQty });
+                        }
+                    }
+                    if (returnDate) {
+                        const retDs = Math.floor(parseDate(returnDate).getTime() / 100);
+                        const retInWindow = (!startDs || retDs >= startDs) && (!endDs || retDs <= endDs);
+                        console.log('[timeline] return window check:', returnDate, '| inWindow:', retInWindow);
+                        if (retInWindow) {
+                            events.push({ date: returnDate, event: 'Returns', note: identifier, change: `quantity: +${packedQty}`, quantity: null, _delta: packedQty });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[timeline] error in show events phase:', err);
+            }
+        }
+
+        // ── Phase 5: Sort ──
+        const eventOrder = { 'Balance': -1, 'Returns': 0, 'Inv. Change': 1, 'Scheduled': 2, 'Ships': 3 };
+        events.sort((a, b) => {
+            if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+            return (eventOrder[a.event] ?? 9) - (eventOrder[b.event] ?? 9);
+        });
+
+        // ── Phase 6: Forward pass — accumulate running quantity ──
+        let fwdQty = startQty;
+        for (const event of events) {
+            if (event._done) {
+                // Balance row: already has qty; reset accumulator
+                fwdQty = event.quantity;
+            } else if (event._absoluteQty !== undefined && event._absoluteQty !== null) {
+                // Scheduled: projected qty is an absolute anchor
+                fwdQty = event._absoluteQty;
+                event.quantity = fwdQty;
+            } else {
+                fwdQty += (event._delta ?? 0);
+                event.quantity = fwdQty;
+            }
+            delete event._delta;
+            delete event._absoluteQty;
+            delete event._done;
+        }
+
+        return events;
+    }
+
+    /**
+     * Remove a pending change entry by effectiveDateDeciseconds from matching rows
+     * and save the updated EditHistory back. Mutation — uncached.
+     * @param {string} tabOrItemName
+     * @param {number} effectiveDateDeciseconds
+     * @param {string} [username]
+     * @param {Object} [mapping]
+     * @returns {Promise<boolean>}
+     */
+    static async deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
+        const allTabs = await Database.getTabs('INVENTORY');
+        const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
+        let resolvedTabName = tabOrItemName;
+        if (!tabExists) {
+            const foundTab = await InventoryUtils.getTabNameForItem(tabOrItemName);
+            if (!foundTab) throw new Error(`Inventory tab for "${tabOrItemName}" not found.`);
+            resolvedTabName = foundTab;
+        }
+
+        const rows = await Database.getData('INVENTORY', resolvedTabName, mapping);
+        const updatedRows = rows.map(row => {
+            const ehKey = Object.prototype.hasOwnProperty.call(row, 'edithistory') ? 'edithistory' : 'EditHistory';
+            const parsed = EditHistoryUtils.parseEditHistory(row[ehKey]);
+            if (!parsed || !Array.isArray(parsed.p)) return row;
+            const filtered = parsed.p.filter(e => e.t !== effectiveDateDeciseconds);
+            if (filtered.length === parsed.p.length) return row;
+            return { ...row, [ehKey]: JSON.stringify({ ...parsed, p: filtered }) };
+        });
+
+        return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
+            username,
+            identifierKey: 'itemNumber',
+            skipMetadata: true
+        });
+    }
+
 }
 
-export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils', ['saveInventoryTabData']);
+export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils', [
+    'saveInventoryTabData',
+    'checkAndApplyPendingChanges',
+    'savePendingChangeEntry',
+    'deletePendingChangeEntry'
+]);

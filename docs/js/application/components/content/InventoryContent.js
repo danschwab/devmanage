@@ -1,6 +1,7 @@
-import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, invalidateCache } from '../../index.js';
+import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, invalidateCache, todayISOString } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
+import { InventoryItemTimeline } from './InventoryItemTimeline.js';
 
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
@@ -174,7 +175,8 @@ export const InventoryContent = {
         'inventory-table': InventoryTableComponent,
         'inventory-overview-table': InventoryOverviewTableComponent,
         'cards-grid': CardsComponent,
-        'show-inventory-report': ShowInventoryReport
+        'show-inventory-report': ShowInventoryReport,
+        'inventory-item-timeline': InventoryItemTimeline
     },
     props: {
         containerPath: {
@@ -210,10 +212,11 @@ export const InventoryContent = {
                     const categoryTitle = cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : '';
                     
                     // Find any reactive stores for this inventory category (regardless of analysis config)
-                    // Note: Stores are created with [tabTitle, undefined, undefined] where tabTitle is uppercase
+                    // Note: Stores are created with [tabTitle, undefined, undefined, todayISO] where tabTitle is uppercase
+                    const todayISO = todayISOString();
                     const matchingStores = findMatchingStores(
                         Requests.getInventoryTabData,
-                        [cat.title, undefined, undefined]
+                        [cat.title, undefined, undefined, todayISO]
                     );
                     
                     // If a reactive store exists, use its state. Otherwise check userData for auto-save
@@ -278,6 +281,8 @@ export const InventoryContent = {
         async checkAutoSavedCategories() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.categoriesStore?.data) return;
             
+            const todayISO = todayISOString();
+
             try {
                 // Check each individual category for auto-saved data
                 for (const cat of this.categoriesStore.data) {
@@ -287,9 +292,9 @@ export const InventoryContent = {
                     const storeKeyPrefix = generateStoreKey(
                         Requests.getInventoryTabData,
                         Requests.saveInventoryTabData,
-                        [cat.title, undefined, undefined],
+                        [cat.title, undefined, undefined, todayISO],
                         null
-                    ).substring(0, generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [cat.title, undefined, undefined], null).lastIndexOf(':'));
+                    ).substring(0, generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [cat.title, undefined, undefined, todayISO], null).lastIndexOf(':'));
                     
                     // Check if this specific key exists (prefix match since analysis config might vary)
                     const hasAutoSave = await Requests.hasUserDataKey(
@@ -352,7 +357,13 @@ export const InventoryContent = {
                     displayName: 'Categories',
                     dashboardTitle: 'Inventory Categories',
                     icon: 'category',
-                    children: {}
+                    children: {
+                        timeline: {
+                            displayName: 'Item Timeline',
+                            icon: 'timeline',
+                            children: {}
+                        }
+                    }
                 },
                 reports: {
                     displayName: 'Reports',
@@ -412,6 +423,13 @@ export const InventoryContent = {
                 empty-message="No categories available"
             />
             
+            <!-- Item Timeline Subpage: inventory/categories/<cat>/<item#> -->
+            <inventory-item-timeline
+                v-else-if="containerPath.startsWith('inventory/categories/') && cleanContainerPath.split('/').length >= 4"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+            />
+
             <!-- Specific Category View -->
             <inventory-table
                 ref="inventoryTable"

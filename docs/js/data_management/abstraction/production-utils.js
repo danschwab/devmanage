@@ -1,4 +1,4 @@
-import { Database, parseDate, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
+import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -107,7 +107,7 @@ class productionUtils_uncached {
             
             // If it looks like a date string (YYYY-MM-DD), parse it
             if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                return new Date(value + 'T00:00:00');
+                return new Date(value + 'T12:00:00');  // noon — matches _calculateShipDate/_calculateReturnDate
             }
             
             // Otherwise, treat as identifier - find the show and get its date
@@ -303,6 +303,45 @@ class productionUtils_uncached {
         return null;
     }
 
+
+    /**
+     * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
+     * Returns null if the project cannot be found or has no resolvable ship date.
+     * @param {Object} deps
+     * @param {string} projectIdentifier
+     * @returns {Promise<string|null>}
+     */
+    static async getProjectShipDate(deps, projectIdentifier) {
+        const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
+        if (!row) return null;
+        const ship = _calculateShipDate(row);
+        if (!ship) return null;
+        return toISODateString(ship);
+    }
+
+    static async getProjectShipDateFromRow(deps, row) {
+        if (!row) return null;
+        const ship = _calculateShipDate(row);
+        if (!ship) return null;
+        return toISODateString(ship);
+    }
+
+    static async getProjectReturnDateFromRow(deps, row) {
+        if (!row) return null;
+        const ship = _calculateShipDate(row);
+        const ret = _calculateReturnDate(row, ship);
+        if (!ret) return null;
+        return toISODateString(ret);
+    }
+
+    static async getProjectReturnDate(deps, projectIdentifier) {
+        const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
+        if (!row) return null;
+        const ship = _calculateShipDate(row);
+        const ret = _calculateReturnDate(row, ship);
+        if (!ret) return null;
+        return toISODateString(ret);
+    }
 
     /**
      * Guess ship date based on other date fields in the row

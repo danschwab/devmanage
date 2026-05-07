@@ -1,6 +1,6 @@
 // API
 export { Requests } from '../data_management/api.js';
-export { parseDate, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
+export { parseDate, toISODateString, todayISOString, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
 export { CacheInvalidationBus, invalidateCache } from '../data_management/utils/caching.js';
 export { EditHistoryUtils } from '../data_management/utils/metadata-utils.js';
 
@@ -32,6 +32,7 @@ export { InventoryTableComponent, ItemImageComponent } from './components/conten
 export { PacklistTable } from './components/content/PacklistTable.js';
 export { PacklistContent, PacklistMenuComponent } from './components/content/PacklistContent.js';
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
+export { InventoryItemTimeline } from './components/content/InventoryItemTimeline.js';
 export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleAdvancedFilter } from './components/interface/scheduleFilterComponents.js';

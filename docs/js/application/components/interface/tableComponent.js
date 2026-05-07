@@ -27,6 +27,12 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Drag timing - track when drag last finished to prevent immediate deselection
     lastDragEndTime: null,
+
+    // Snapshot selections at drag start so drag gating stays stable during a drag session
+    dragSelectionSnapshot: null,
+
+    // Cache parsed row metadata by row reference and raw MetaData string
+    _metaParseCache: new WeakMap(),
     
     // Set active route for undo tracking
     setActiveRoute(routeKey) {
@@ -43,18 +49,38 @@ export const tableRowSelectionState = Vue.reactive({
         }
         return `${sourceArray._tableId}_${rowIndex}`;
     },
+
+    // Read and cache parsed metadata for a row
+    _getRowMetadata(row) {
+        if (!row || row.MetaData == null || row.MetaData === '') return null;
+
+        if (typeof row.MetaData === 'object') {
+            return row.MetaData;
+        }
+
+        const cached = this._metaParseCache.get(row);
+        if (cached && cached.raw === row.MetaData) {
+            return cached.parsed;
+        }
+
+        let parsed = null;
+        try {
+            parsed = JSON.parse(row.MetaData);
+        } catch (e) {
+            parsed = null;
+        }
+
+        this._metaParseCache.set(row, { raw: row.MetaData, parsed });
+        return parsed;
+    },
     
     // Helper to get all children indices of a group master
     _getGroupChildren(rowIndex, sourceArray) {
         const row = sourceArray[rowIndex];
-        if (!row || !row.MetaData) return [];
-        
-        let metadata;
-        try {
-            metadata = JSON.parse(row.MetaData);
-        } catch (e) {
-            return [];
-        }
+        if (!row) return [];
+
+        const metadata = this._getRowMetadata(row);
+        if (!metadata) return [];
         
         const grouping = metadata?.grouping;
         
@@ -69,14 +95,10 @@ export const tableRowSelectionState = Vue.reactive({
             if (i === rowIndex) continue; // Skip the master itself
             
             const childRow = sourceArray[i];
-            if (!childRow || !childRow.MetaData) continue;
-            
-            let childMetadata;
-            try {
-                childMetadata = JSON.parse(childRow.MetaData);
-            } catch (e) {
-                continue;
-            }
+            if (!childRow) continue;
+
+            const childMetadata = this._getRowMetadata(childRow);
+            if (!childMetadata) continue;
             
             const childGrouping = childMetadata?.grouping;
             
@@ -91,14 +113,21 @@ export const tableRowSelectionState = Vue.reactive({
     // Shared helper to get grouping edithistory from a row
     _getRowGrouping(rowIndex, sourceArray) {
         const row = sourceArray[rowIndex];
-        if (!row || !row.MetaData) return null;
-        
-        try {
-            const metadata = JSON.parse(row.MetaData);
-            return metadata?.grouping || null;
-        } catch (e) {
-            return null;
+        if (!row) return null;
+
+        const metadata = this._getRowMetadata(row);
+        return metadata?.grouping || null;
+    },
+
+    // Find the index of the group master for a given groupId by scanning the array
+    _findGroupMasterIndex(groupId, sourceArray) {
+        for (let i = 0; i < sourceArray.length; i++) {
+            const grouping = this._getRowGrouping(i, sourceArray);
+            if (grouping && grouping.groupId === groupId && grouping.isGroupMaster) {
+                return i;
+            }
         }
+        return -1;
     },
 
     // Add a row to global selection
@@ -140,8 +169,8 @@ export const tableRowSelectionState = Vue.reactive({
         const grouping = this._getRowGrouping(rowIndex, sourceArray);
         if (grouping && !grouping.isGroupMaster) {
             // This is a group child - check if its master is selected
-            const masterIndex = grouping.masterItemIndex;
-            if (this.hasRow(sourceArray, masterIndex)) {
+            const masterIndex = this._findGroupMasterIndex(grouping.groupId, sourceArray);
+            if (masterIndex !== -1 && this.hasRow(sourceArray, masterIndex)) {
                 // Master is selected, don't allow child to be unselected independently
                 //console.log(`Cannot unselect row ${rowIndex} - its group master is selected`);
                 return;
@@ -268,6 +297,21 @@ export const tableRowSelectionState = Vue.reactive({
         }
         return false;
     },
+
+    // Use drag-start snapshot when available so gating is scoped to the current drag session.
+    hasGroupMasterInDragSnapshot() {
+        if (Array.isArray(this.dragSelectionSnapshot) && this.dragSelectionSnapshot.length > 0) {
+            for (const selection of this.dragSelectionSnapshot) {
+                const grouping = this._getRowGrouping(selection.rowIndex, selection.sourceArray);
+                if (grouping && grouping.isGroupMaster === true) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return this.hasAnyGroupMaster();
+    },
     
     // Check if a specific row is in a group (is a child, not a master)
     isRowInGroup(rowIndex, sourceArray) {
@@ -392,8 +436,7 @@ export const tableRowSelectionState = Vue.reactive({
             }
             metadata.grouping = {
                 groupId: groupId,
-                isGroupMaster: true,
-                masterItemIndex: targetIndex
+                isGroupMaster: true
             };
             targetItem.MetaData = JSON.stringify(metadata);
             //console.log('Set target as group master:', groupId, 'index:', targetIndex);
@@ -416,7 +459,7 @@ export const tableRowSelectionState = Vue.reactive({
         const insertPosition = newTargetIndex + 1;
         targetArray.splice(insertPosition, 0, ...droppedItems);
         
-        // Update dropped items MetaData with correct masterItemIndex
+        // Update dropped items MetaData with grouping info
         droppedItems.forEach(droppedItem => {
             // Parse existing metadata and add/update grouping
             let metadata = {};
@@ -427,8 +470,7 @@ export const tableRowSelectionState = Vue.reactive({
             }
             metadata.grouping = {
                 groupId: groupId,
-                isGroupMaster: false,
-                masterItemIndex: newTargetIndex // Use the new index after reordering
+                isGroupMaster: false
             };
             droppedItem.MetaData = JSON.stringify(metadata);
             //console.log('Grouped item with master:', groupId);
@@ -559,6 +601,11 @@ export const tableRowSelectionState = Vue.reactive({
         const selectionSummary = this.getSelectionSummary();
         const dataSources = this.getSelectedDataSources();
         this.findingDropTargets = true;
+        this.dragSelectionSnapshot = Array.from(this.selections.values()).map(selection => ({
+            rowIndex: selection.rowIndex,
+            sourceArray: selection.sourceArray,
+            dragId: selection.dragId
+        }));
         
         // For compatibility, we'll use the first selection's info for dragSourceArray and dragId
         // but the actual drag logic will handle all sources
@@ -684,65 +731,16 @@ export const tableRowSelectionState = Vue.reactive({
             return true;
         }
         
-        // Check if "between" drop would split a group - if so, treat as "onto" drop on group master
+        // If dropping between rows of the same group, capture the groupId to assign after moving.
+        // The drop position is respected; group membership is updated after the move.
+        let splitGroupId = null;
         if (dropTarget.type === 'between' && this.wouldSplitGroup(dropTarget.targetIndex, this.dragTargetArray)) {
-            //console.log('DROP BETWEEN would split group! Converting to DROP ONTO group master...');
-            
-            // Find the group master for the group that would be split
             const rowBefore = dropTarget.targetIndex > 0 ? this.dragTargetArray[dropTarget.targetIndex - 1] : null;
             const rowAfter = dropTarget.targetIndex < this.dragTargetArray.length ? this.dragTargetArray[dropTarget.targetIndex] : null;
-            
-            // Get grouping info from adjacent rows
             const beforeGrouping = rowBefore ? this._getRowGrouping(dropTarget.targetIndex - 1, this.dragTargetArray) : null;
             const afterGrouping = rowAfter ? this._getRowGrouping(dropTarget.targetIndex, this.dragTargetArray) : null;
-            
-            // Use the groupId from either adjacent row (they should match if wouldSplitGroup returned true)
-            const groupId = beforeGrouping?.groupId || afterGrouping?.groupId;
-            
-            if (groupId) {
-                // Find the group master with this groupId
-                let masterIndex = -1;
-                for (let i = 0; i < this.dragTargetArray.length; i++) {
-                    const grouping = this._getRowGrouping(i, this.dragTargetArray);
-                    if (grouping && grouping.groupId === groupId && grouping.isGroupMaster) {
-                        masterIndex = i;
-                        break;
-                    }
-                }
-                
-                if (masterIndex !== -1) {
-                    //console.log(`Found group master at index ${masterIndex} for groupId ${groupId}`);
-                    const result = this.groupSelectedItemsUnder(masterIndex, this.dragTargetArray);
-                    
-                    if (result) {
-                        //console.log(`Grouped ${result.droppedItems.length} items under group master with groupId: ${result.groupId}`);
-                        
-                        // Re-select the grouped items at their new positions
-                        this.clearAll(); // Clear old selections first
-                        
-                        result.droppedItems.forEach((item) => {
-                            const newIndex = this.dragTargetArray.indexOf(item);
-                            if (newIndex !== -1) {
-                                this.addRow(newIndex, this.dragTargetArray, this.dragId);
-                            }
-                        });
-                        
-                        //console.log(`Re-selected ${result.droppedItems.length} grouped items`);
-                    } else {
-                        console.warn('Grouping failed');
-                        this.clearAll();
-                    }
-                    
-                    // Set timestamp to prevent outside click from clearing selection
-                    this.lastDragEndTime = Date.now();
-                    
-                    this.stopDrag();
-                    return true;
-                } else {
-                    console.warn('Could not find group master for groupId:', groupId);
-                    // Fall through to normal between logic
-                }
-            }
+            splitGroupId = beforeGrouping?.groupId || afterGrouping?.groupId || null;
+            // Fall through to normal move logic — drop position is preserved
         }
         
         // Check if "between" drop does NOT split a group - remove grouping from non-master rows
@@ -757,8 +755,8 @@ export const tableRowSelectionState = Vue.reactive({
                 // Only remove grouping if row is in a group but NOT a master
                 if (grouping && !grouping.isGroupMaster) {
                     // Check if the master of this child is also in the selection
-                    const masterIndex = grouping.masterItemIndex;
-                    const masterIsSelected = this.hasRow(sourceArray, masterIndex);
+                    const masterIndex = this._findGroupMasterIndex(grouping.groupId, sourceArray);
+                    const masterIsSelected = masterIndex !== -1 && this.hasRow(sourceArray, masterIndex);
                     
                     // Only ungroup if the master is NOT being dragged with the child
                     if (!masterIsSelected) {
@@ -893,6 +891,24 @@ export const tableRowSelectionState = Vue.reactive({
             });
             
             //console.log(`Re-selected ${movedRows.length} moved rows at their new positions`);
+            
+            // If dropped into a group, assign moved rows to that group as children
+            if (splitGroupId) {
+                movedRows.forEach(row => {
+                    let metadata = {};
+                    try { metadata = JSON.parse(row.MetaData || '{}'); } catch(e) { metadata = {}; }
+                    const grouping = metadata.grouping;
+                    // Don't reassign if this row is already the master of the target group
+                    if (grouping && grouping.isGroupMaster && grouping.groupId === splitGroupId) return;
+                    // Don't reassign a master of a different group (preserve its children's group)
+                    if (grouping && grouping.isGroupMaster && grouping.groupId !== splitGroupId) return;
+                    // Assign as child if not already in this group
+                    if (!grouping || grouping.groupId !== splitGroupId) {
+                        metadata.grouping = { groupId: splitGroupId, isGroupMaster: false };
+                        row.MetaData = JSON.stringify(metadata);
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error during drag operation:', error);
             this.stopDrag();
@@ -916,7 +932,8 @@ export const tableRowSelectionState = Vue.reactive({
         this.dragTargetArray = null;
         this.dragId = null;
         this.currentDropTarget = null;
-        // Keep onDropOntoCallback registered between drags (managed by component lifecycle)
+        this.dragSelectionSnapshot = null;
+        // Keep drag state registration managed by component lifecycle
         
         // Increment version to trigger reactivity for drag state change
         this._version++;
@@ -1057,6 +1074,14 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        forceDetails: {
+            type: Boolean,
+            default: false
+        },
+        rowDetailsVisible: {
+            type: Function,
+            default: null
+        },
         parentSearchValue: {
             type: String,
             default: ''
@@ -1065,16 +1090,12 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
-        enableGrouping: {
-            type: Boolean,
-            default: false
-        },
         showSelectionBubble: {
             type: Boolean,
             default: false
         }
     },
-    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search', 'drop-onto'],
+    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
     setup(props, { emit }) {
         // Initialize search composable
         const search = useSearch({
@@ -1205,24 +1226,25 @@ export const TableComponent = {
             // Only show bubble if:
             // 1. showSelectionBubble prop is enabled
             // 2. There are selections globally
-            // 3. This table contains the first selected row
+            // 3. This table owns the first global selection
+            // 4. This table contains at least one selected row that is currently visible
             // 4. A drag is not currently happening
             // 5. The table has editable columns (edit mode is enabled)
             if (!this.showSelectionBubble || this.selectedRowCount === 0 || !this.hasEditableColumns) {
                 return false;
             }
             
-            // Find the first selection globally
-            const firstSelection = tableRowSelectionState.selections.values().next().value;
-            if (!firstSelection) return false;
-            
             // Check if a drag is currently happening
             if (tableRowSelectionState.findingDropTargets) {
                 return false;
             }
 
-            // Check if this table's data array matches the first selection's source array
-            return firstSelection.sourceArray === this.data;
+            const firstSelection = tableRowSelectionState.selections.values().next().value;
+            if (!firstSelection || firstSelection.sourceArray !== this.data) {
+                return false;
+            }
+
+            return this.firstSelectedVisibleRowIndex !== -1;
         },
         hasConsecutiveSelection() {
             // Check if selected rows in this table form a consecutive sequence
@@ -1257,35 +1279,74 @@ export const TableComponent = {
             if (allSelectedRows.length === 0) return false;
             
             return allSelectedRows.every(({ row }) => {
-                if (!row || !row.MetaData) return false;
-                try {
-                    const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
-                    return metadata?.deletion?.marked === true;
-                } catch (e) {
-                    return false;
+                if (!row) return false;
+                const metadata = tableRowSelectionState._getRowMetadata(row);
+                return metadata?.deletion?.marked === true;
+            });
+        },
+        selectedGroupMasterIds() {
+            // Collect unique group IDs for selected rows that are group masters in this table
+            const groupIds = new Set();
+            const selectedRows = this.getSelectedRows();
+
+            selectedRows.forEach(({ data }) => {
+                if (!data) return;
+                const metadata = tableRowSelectionState._getRowMetadata(data);
+                const grouping = metadata?.grouping;
+                if (grouping?.isGroupMaster && grouping.groupId) {
+                    groupIds.add(grouping.groupId);
                 }
             });
+
+            return Array.from(groupIds);
+        },
+        hasSelectedGroupMasters() {
+            return this.selectedGroupMasterIds.length > 0;
+        },
+        anySelectedGroupCollapsed() {
+            return this.selectedGroupMasterIds.some(groupId => this.collapsedGroups.has(groupId));
+        },
+        canCreateGroupFromSelection() {
+            if (!this.newRow || this.firstSelectedVisibleRowIndex === -1) return false;
+
+            const allSelectedRows = tableRowSelectionState.getAllSelectedRows();
+            if (allSelectedRows.length === 0) return false;
+
+            // Only allow grouping when every selected row is currently ungrouped.
+            return allSelectedRows.every(({ row, index, sourceArray }) => {
+                if (!row || !sourceArray) return false;
+                return !tableRowSelectionState._getRowGrouping(index, sourceArray);
+            });
+        },
+        groupToggleSymbol() {
+            // If any selected group is collapsed, show expand-all action. Otherwise show collapse-all action.
+            return this.anySelectedGroupCollapsed ? 'expand' : 'compress';
+        },
+        groupToggleTitle() {
+            return this.anySelectedGroupCollapsed ? 'Show Selected Group(s)' : 'Hide Selected Group(s)';
         },
         firstSelectedVisibleRowIndex() {
             // Find the chronologically first selected row (from global selection state)
-            // that exists in this table's visible rows
-            if (tableRowSelectionState.selections.size === 0) {
+            // that belongs to this table and is currently visible.
+            tableRowSelectionState._version;
+            if (tableRowSelectionState.selections.size === 0 || this.visibleRows.length === 0) {
                 return -1;
             }
-            
-            // Get the chronologically first selection (Map maintains insertion order)
-            const firstSelection = tableRowSelectionState.selections.values().next().value;
-            if (!firstSelection || firstSelection.sourceArray !== this.data) {
-                return -1; // First selection is not in this table
-            }
-            
-            // Find this row in visibleRows
+
+            const visibleIndexByRowIndex = new Map();
             for (let i = 0; i < this.visibleRows.length; i++) {
-                const { idx } = this.visibleRows[i];
-                if (idx === firstSelection.rowIndex) {
-                    return i;
+                visibleIndexByRowIndex.set(this.visibleRows[i].idx, i);
+            }
+
+            for (const selection of tableRowSelectionState.selections.values()) {
+                if (selection.sourceArray !== this.data) continue;
+
+                const visibleIdx = visibleIndexByRowIndex.get(selection.rowIndex);
+                if (visibleIdx !== undefined) {
+                    return visibleIdx;
                 }
             }
+
             return -1;
         },
         selectionBubbleStyle() {
@@ -1364,22 +1425,17 @@ export const TableComponent = {
                 .map((row, idx) => ({ row, idx }))
                 .filter(({ row }) => row); // Only filter out null/undefined rows
 
-            // Hide group members if flag is set
-            if (this.hideGroupMembers) {
+            // Hide group children when explicitly enabled OR when any group is collapsed
+            if (this.hideGroupMembers || this.collapsedGroups.size > 0) {
                 filteredData = filteredData.filter(({ row, idx }) => {
-                    if (!row.MetaData) return true;
-                    try {
-                        const metadata = JSON.parse(row.MetaData);
-                        const grouping = metadata?.grouping;
-                        // Show if not in a group OR if it's a group master
-                        if (!grouping || grouping.isGroupMaster) return true;
-                        
-                        // This is a group child - check if its group is collapsed
-                        // If group is NOT collapsed, show the child
-                        return !this.collapsedGroups.has(grouping.groupId);
-                    } catch (e) {
-                        return true;
-                    }
+                    const metadata = tableRowSelectionState._getRowMetadata(row);
+                    const grouping = metadata?.grouping;
+                    // Show if not in a group OR if it's a group master
+                    if (!grouping || grouping.isGroupMaster) return true;
+
+                    // This is a group child - check if its group is collapsed
+                    // If group is NOT collapsed, show the child
+                    return !this.collapsedGroups.has(grouping.groupId);
                 });
             }
 
@@ -1624,23 +1680,15 @@ export const TableComponent = {
         },
 
         isRowMarkedForDeletion(row) {
-            if (!row || !row.MetaData) return false;
-            try {
-                const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
-                return metadata?.deletion?.marked === true;
-            } catch (e) {
-                return false;
-            }
+            if (!row) return false;
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            return metadata?.deletion?.marked === true;
         },
 
         getRowMetadataClass(row) {
-            if (!row || !row.MetaData) return '';
-            try {
-                const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
-                return metadata?.highlight?.class || '';
-            } catch (e) {
-                return '';
-            }
+            if (!row) return '';
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            return metadata?.highlight?.class || '';
         },
 
         wouldSplitGroup(insertIndex) {
@@ -1701,6 +1749,101 @@ export const TableComponent = {
                 const selectedRows = tableRowSelectionState.getAllSelectedRows();
                 this.$emit('row-options', selectedRows);
             }
+        },
+
+        handleToggleSelectedGroups() {
+            if (!this.hasSelectedGroupMasters) return;
+
+            // If any selected group is collapsed, expand selected groups; otherwise collapse them.
+            const shouldCollapse = !this.anySelectedGroupCollapsed;
+            this.selectedGroupMasterIds.forEach(groupId => {
+                if (shouldCollapse) {
+                    this.collapsedGroups.add(groupId);
+                } else {
+                    this.collapsedGroups.delete(groupId);
+                }
+            });
+
+            // Replace Set reference to ensure template updates consistently.
+            this.collapsedGroups = new Set(this.collapsedGroups);
+        },
+
+        createEmptyGroupMasterRow(targetIndex) {
+            const templateRow = this.data[targetIndex] || this.data[targetIndex - 1] || {};
+            const emptyRow = {};
+
+            // Preserve known row shape while forcing an empty payload row.
+            Object.keys(templateRow).forEach(key => {
+                if (key === 'MetaData') {
+                    emptyRow[key] = '';
+                } else if (key === 'AppData') {
+                    emptyRow[key] = undefined;
+                } else {
+                    emptyRow[key] = '';
+                }
+            });
+
+            // Ensure all declared columns exist on the row.
+            this.columns.forEach(column => {
+                if (!Object.prototype.hasOwnProperty.call(emptyRow, column.key)) {
+                    emptyRow[column.key] = '';
+                }
+            });
+
+            this.data.splice(targetIndex, 0, emptyRow);
+            return emptyRow;
+        },
+
+        handleCreateGroupFromSelection() {
+            if (!this.canCreateGroupFromSelection) return;
+
+            const anchorVisibleIndex = this.firstSelectedVisibleRowIndex;
+            const anchorEntry = this.visibleRows[anchorVisibleIndex];
+            if (!anchorEntry) return;
+
+            const targetIndex = anchorEntry.idx;
+            if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex > this.data.length) return;
+
+            const selectedRowsSnapshot = tableRowSelectionState.getAllSelectedRows()
+                .map(({ row, sourceArray, index }) => ({ row, sourceArray, index }))
+                .filter(({ row, sourceArray }) => !!row && !!sourceArray);
+
+            if (selectedRowsSnapshot.length === 0) return;
+
+            if (tableRowSelectionState.currentRouteKey) {
+                const arraysToCapture = new Set([this.data]);
+                selectedRowsSnapshot.forEach(({ sourceArray }) => arraysToCapture.add(sourceArray));
+                undoRegistry.capture(Array.from(arraysToCapture), tableRowSelectionState.currentRouteKey, {
+                    type: 'group-create-from-selection',
+                    selectionState: tableRowSelectionState
+                });
+            }
+
+            const masterRow = this.createEmptyGroupMasterRow(targetIndex);
+
+            // Row insertion shifts numeric indices; rebuild selection from object references.
+            tableRowSelectionState.clearAll();
+            selectedRowsSnapshot.forEach(({ row, sourceArray }) => {
+                const updatedIndex = sourceArray.indexOf(row);
+                if (updatedIndex !== -1) {
+                    tableRowSelectionState.addRow(updatedIndex, sourceArray, this.dragId);
+                }
+            });
+
+            const masterIndex = this.data.indexOf(masterRow);
+            if (masterIndex === -1) return;
+
+            const result = tableRowSelectionState.groupSelectedItemsUnder(masterIndex, this.data);
+            if (!result) return;
+
+            // Follow drag grouping behavior: keep selection on grouped children.
+            tableRowSelectionState.clearAll();
+            result.droppedItems.forEach(item => {
+                const childIndex = this.data.indexOf(item);
+                if (childIndex !== -1) {
+                    tableRowSelectionState.addRow(childIndex, this.data, this.dragId);
+                }
+            });
         },
 
         handleSort(columnKey) {
@@ -2054,10 +2197,6 @@ export const TableComponent = {
         },
         handleSave() {
             this.$emit('on-save');
-            // After save, reset dirty state
-            this.dirtyCells = {};
-            this.nestedTableDirtyCells = {}; // <-- clear nested dirty state on save
-            this.allowSaveEvent = false;
         },
         handleRowMove() {
             this.$emit('row-move');
@@ -2577,7 +2716,7 @@ export const TableComponent = {
                                 // 3. Target row is an empty placeholder (data array is empty or row has class 'empty-drop-target')
                                 // 4. Target row is currently selected
                                 // 5. Target row is marked for deletion
-                                const hasGroupMasterSelected = tableRowSelectionState.hasAnyGroupMaster();
+                                const hasGroupMasterSelected = tableRowSelectionState.hasGroupMasterInDragSnapshot();
                                 const isEmptyPlaceholder = !this.data || this.data.length === 0 || row.classList.contains('empty-drop-target');
                                 const isGroupChild = this.isRowInGroup(targetIndex);
                                 const isTargetSelected = tableRowSelectionState.hasRow(this.data, targetIndex);
@@ -2618,7 +2757,7 @@ export const TableComponent = {
                         }
                         
                         // Check if a group master is selected and this position would split a group
-                        const hasGroupMasterSelected = tableRowSelectionState.hasAnyGroupMaster();
+                        const hasGroupMasterSelected = tableRowSelectionState.hasGroupMasterInDragSnapshot();
                         if (hasGroupMasterSelected && this.wouldSplitGroup(targetIndex)) {
                             // Don't allow drop between group rows
                             continue;
@@ -2784,40 +2923,41 @@ export const TableComponent = {
         toggleGroupCollapse(rowIndex) {
             // Get the group ID from this row's metadata
             const row = this.data[rowIndex];
-            if (!row || !row.MetaData) return;
+            if (!row) return;
+
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            const grouping = metadata?.grouping;
             
-            try {
-                const metadata = JSON.parse(row.MetaData);
-                const grouping = metadata?.grouping;
-                
-                // Only toggle if this is a group master
-                if (grouping && grouping.isGroupMaster) {
-                    if (this.collapsedGroups.has(grouping.groupId)) {
-                        this.collapsedGroups.delete(grouping.groupId);
-                    } else {
-                        this.collapsedGroups.add(grouping.groupId);
-                    }
+            // Only toggle if this is a group master
+            if (grouping && grouping.isGroupMaster) {
+                if (this.collapsedGroups.has(grouping.groupId)) {
+                    this.collapsedGroups.delete(grouping.groupId);
+                } else {
+                    this.collapsedGroups.add(grouping.groupId);
                 }
-            } catch (e) {
-                console.error('Error toggling group collapse:', e);
+                // Replace Set reference so Vue reliably re-renders visibility-dependent rows.
+                this.collapsedGroups = new Set(this.collapsedGroups);
             }
         },
         
         isGroupCollapsed(rowIndex) {
             const row = this.data[rowIndex];
-            if (!row || !row.MetaData) return false;
-            
-            try {
-                const metadata = JSON.parse(row.MetaData);
-                const grouping = metadata?.grouping;
-                return grouping && grouping.isGroupMaster && this.collapsedGroups.has(grouping.groupId);
-            } catch (e) {
-                return false;
-            }
+            if (!row) return false;
+
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            const grouping = metadata?.grouping;
+            return grouping && grouping.isGroupMaster && this.collapsedGroups.has(grouping.groupId);
         },
         
         isRowExpanded(rowIndex) {
             return this.expandedRows.has(rowIndex);
+        },
+
+        shouldShowDetailsContent(row, rowIndex) {
+            if (this.forceDetails) {
+                return !this.rowDetailsVisible || this.rowDetailsVisible(row);
+            }
+            return this.isRowExpanded(rowIndex);
         },
         
         handleOutsideClick(event) {
@@ -2985,6 +3125,12 @@ export const TableComponent = {
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
                     <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">🗙</button>
+                    <button v-if="canCreateGroupFromSelection" @click="handleCreateGroupFromSelection" class="button-symbol white" title="Group Selected Rows">
+                        <span class="material-symbols-outlined">cell_merge</span>
+                    </button>
+                    <button v-if="hasSelectedGroupMasters" @click="handleToggleSelectedGroups" class="button-symbol white" :title="groupToggleTitle">
+                        <span class="material-symbols-outlined">{{ groupToggleSymbol }}</span>
+                    </button>
                     <button @click="handleMoreOptions" class="button-symbol blue" title="More Options">☰</button>
                     <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white" title="Add Row Below">+</button>
                     <slot
@@ -3096,7 +3242,7 @@ export const TableComponent = {
                             :style="column.width ? 'width:' + column.width + 'px' : ''"
                             :class="column.columnClass || ''"
                         />
-                        <col v-if="allowDetails" />
+                        <col v-if="allowDetails && !forceDetails" />
                     </colgroup>
                     <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header' }">
                         <tr>
@@ -3126,7 +3272,7 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;" title="Details">&#9432;</th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" title="Details">&#9432;</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3215,7 +3361,7 @@ export const TableComponent = {
                                         ></slot>
                                     </div>
                                 </td>
-                                <td v-if="allowDetails" class="details-cell">
+                                <td v-if="allowDetails && !forceDetails" class="details-cell">
                                     <button 
                                         @click="toggleRowDetails(idx)"
                                         :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
@@ -3225,12 +3371,17 @@ export const TableComponent = {
                                 </td>
                             </tr>
                             
-                            <!-- Expandable details row with Vue transition -->
-                            <tr v-if="allowDetails" class="details-row-container">
+                            <!-- Column-aligned detail rows (row-detail-rows slot) -->
+                            <template v-if="allowDetails && $slots['row-detail-rows'] && shouldShowDetailsContent(row, idx)">
+                                <slot name="row-detail-rows" :row="row" :rowIndex="idx" :visibleColumns="visibleColumns" />
+                            </template>
+
+                            <!-- Expandable single-cell details row (row-details slot) -->
+                            <tr v-if="allowDetails && !$slots['row-detail-rows']" class="details-row-container">
                                 <td v-if="draggable"></td>
-                                <td :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" class="details-container">
+                                <td :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" class="details-container">
                                     
-                                    <div v-if="isRowExpanded(idx)" class="details-content">
+                                    <div v-if="shouldShowDetailsContent(row, idx)" class="details-content">
                                         <!-- Auto-generated details from columns marked with details: true -->
                                         <div v-if="detailsColumns.length > 0" class="auto-details">
                                             <div class="details-grid">
@@ -3253,11 +3404,6 @@ export const TableComponent = {
                                             :isExpanded="isRowExpanded(idx)"
                                             :detailsColumns="detailsColumns"
                                         >
-                                            <!-- Fallback if no details columns and no custom slot -->
-                                            <div v-if="detailsColumns.length === 0" class="default-details">
-                                                <h4>Row Details</h4>
-                                                <pre>{{ JSON.stringify(row, null, 2) }}</pre>
-                                            </div>
                                         </slot>
                                     </div>
                                 </td>
@@ -3268,7 +3414,7 @@ export const TableComponent = {
                         <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
                             <td class="spacer-cell"></td>
                             <td
-                                :colspan="visibleColumns.length + (allowDetails ? 1 : 0)"
+                                :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)"
                                 class="empty-message"
                                 style="text-align: center;"
                             >
@@ -3280,7 +3426,7 @@ export const TableComponent = {
                         <tr>
                             <td v-if="draggable" class="spacer-cell"></td>
                             <td 
-                                :colspan="visibleColumns.length + (allowDetails ? 1 : 0)" 
+                                :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" 
                                 class="new-row-button" 
                                 @click="$emit('new-row')"
                             >
@@ -3300,7 +3446,7 @@ export const TableComponent = {
                         :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
                         :class="column.columnClass || ''"
                     />
-                    <col v-if="allowDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
+                    <col v-if="allowDetails && !forceDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
                 </colgroup>
                 <thead :class="{ [theme]: true }">
                     <tr>
@@ -3331,7 +3477,7 @@ export const TableComponent = {
                                 </button>
                             </div>
                         </th>
-                        <th v-if="allowDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
+                        <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
                     </tr>
                 </thead>
             </table>
@@ -3347,7 +3493,7 @@ export const TableComponent = {
                 <p v-if="isLoading || isAnalyzing" class="loading-message">{{ loadingMessage }}</p>
                 <p v-else-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
                 <p v-else-if="!data || data.length === 0" class="empty-message">{{ emptyMessage }}</p>
-                <p v-else>Found {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                <p v-else>Showing {{ data.length }} row{{ data.length !== 1 ? 's' : '' }}</p>
                 
                 <button
                     v-if="activeSearchValue"

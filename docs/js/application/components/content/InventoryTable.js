@@ -1,4 +1,5 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { InventorySaveModal } from '../interface/inventorySaveModal.js';
 
 
 // Simple modal component for entering new item number
@@ -339,6 +340,12 @@ export const InventoryTableComponent = {
                     label: 'Notes (internal only)',
                     editable: this.allowEdit,
                     sortable: false
+                },
+                {
+                    key: '_navigate',
+                    label: '',
+                    width: 36,
+                    sortable: false
                 }
             ];
         },
@@ -394,9 +401,16 @@ export const InventoryTableComponent = {
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle, undefined, undefined], // No filters needed - search is handled in UI
+            [this.tabTitle, undefined, undefined, todayISOString()], // No filters needed - search is handled in UI
             analysisConfig
         );
+        
+        // Apply any pending changes that are due today or earlier
+        if (this.tabTitle) {
+            Requests.checkAndApplyPendingChanges(this.tabTitle).catch(err => {
+                console.warn('[InventoryTable] Pending changes check failed:', err);
+            });
+        }
         
         // Check lock status when component mounts
         await this.checkLockStatus();
@@ -552,31 +566,44 @@ export const InventoryTableComponent = {
         async handleCellEdit(rowIdx, colIdx, value) {
             const user = authState.user?.email;
             if (!user || !this.tabTitle) return;
-            
+
+            const colKey = this.columns[colIdx]?.key;
+            const originalValue = colKey && this.inventoryTableStore ? this.inventoryTableStore.data[rowIdx]?.[colKey] : undefined;
+
+            // Apply the value immediately to prevent flicker during async lock operations.
+            // If the lock check fails, revert below.
+            if (colKey && this.inventoryTableStore) {
+                this.inventoryTableStore.data[rowIdx][colKey] = value;
+            }
+
             try {
                 const lockInfo = await Requests.getInventoryLock(this.tabTitle);
                 if (lockInfo && lockInfo.user !== user) {
+                    if (colKey && this.inventoryTableStore && originalValue !== undefined) {
+                        this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
+                    }
                     this.setLockState(false, lockInfo.user);
                     this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
                     return;
                 }
-                
+
                 if (!this.isLocked) {
                     const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
                     if (lockAcquired) {
                         this.setLockState(true, user);
                     } else {
+                        if (colKey && this.inventoryTableStore && originalValue !== undefined) {
+                            this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
+                        }
                         return;
                     }
                 }
             } catch (error) {
                 console.error('[InventoryTable] Error checking lock on edit:', error);
+                if (colKey && this.inventoryTableStore && originalValue !== undefined) {
+                    this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
+                }
                 return;
-            }
-            
-            const colKey = this.columns[colIdx]?.key;
-            if (colKey && this.inventoryTableStore) {
-                this.inventoryTableStore.data[rowIdx][colKey] = value;
             }
         },
         async handleNewRow(positionData) {
@@ -706,11 +733,40 @@ export const InventoryTableComponent = {
         },
         
         async handleSave() {
-            // Only use the store's save method if this is called from the on-save event
-            if (this.inventoryTableStore) {
-                console.log('[InventoryTableComponent] Saving data:', JSON.parse(JSON.stringify(this.inventoryTableStore.data)));
-                await this.inventoryTableStore.save('Saving inventory...');
-            }
+            if (!this.inventoryTableStore) return;
+            this.$modal.custom(InventorySaveModal, {
+                onConfirm: async (scheduledDate, note) => {
+                    await this.inventoryTableStore.save('Saving inventory...', { scheduledDate, note });
+                }
+            }, 'Save Changes');
+        },
+
+        getPendingEntries(item) {
+            const eh = item?.edithistory || item?.EditHistory;
+            return EditHistoryUtils.getPendingEntries(eh);
+        },
+
+        // Returns pending entries sorted ascending by t, each annotated with cumulative
+        // field values so quantity deltas stack correctly across multiple scheduled entries.
+        getPendingEntriesForDisplay(item) {
+            const entries = this.getPendingEntries(item);
+            if (!entries.length) return [];
+            const sorted = [...entries].sort((a, b) => a.t - b.t);
+            const running = {};
+            return sorted.map(entry => {
+                const fields = {};
+                for (const ch of entry.c) {
+                    const base = running[ch.n] !== undefined ? running[ch.n] : (item[ch.n] ?? '');
+                    const computed = EditHistoryUtils.applyNeValue(base, ch.ne);
+                    fields[ch.n] = computed;
+                    running[ch.n] = computed;
+                }
+                return { ...entry, fields };
+            });
+        },
+
+        formatPendingDate(deciseconds) {
+            return new Date(deciseconds * 100).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         },
 
         handleReportsClick() {
@@ -718,6 +774,13 @@ export const InventoryTableComponent = {
                 const path = this.tabTitle 
                     ? NavigationRegistry.buildPath('inventory/reports', { itemCategoryFilter: this.tabTitle })
                     : 'inventory/reports';
+                this.appContext.navigateToPath(path);
+            }
+        },
+        navigateToItemPage(row) {
+            if (!row.itemNumber || !this.tabTitle) return;
+            const path = `inventory/categories/${this.tabTitle.toLowerCase()}/${row.itemNumber}`;
+            if (this.appContext?.navigateToPath) {
                 this.appContext.navigateToPath(path);
             }
         }
@@ -745,6 +808,9 @@ export const InventoryTableComponent = {
                 :navigate-to-path="appContext.navigateToPath"
                 :newRow="allowEdit"
                 :external-dirty-state="isDirty"
+                :allowDetails="true"
+                :forceDetails="editMode"
+                :rowDetailsVisible="row => getPendingEntries(row).length > 0"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
                 class="inventory-table-component mark-dirty"
@@ -765,6 +831,26 @@ export const InventoryTableComponent = {
                         :itemNumber="row.itemNumber"
                         :imageUrl="row.AppData && row.AppData.imageUrl"
                     />
+                    <button
+                        v-else-if="column.key === '_navigate'"
+                        class="button-symbol purple"
+                        @click.stop="navigateToItemPage(row)"
+                        title="View item timeline"
+                    >☷</button>
+                </template>
+                <template #row-detail-rows="{ row }">
+                    <tr
+                        v-for="(entry, i) in getPendingEntriesForDisplay(row)"
+                        :key="i"
+                        class="detail-row-pending in-group"
+                    >
+                        <td colspan="2" class="detail-meta-cell">
+                            <strong>{{ formatPendingDate(entry.t) }}→ </strong>
+                        </td>
+                        <td class="detail-value-cell">{{ entry.fields.quantity !== undefined ? entry.fields.quantity : '' }}</td>
+                        <td class="detail-value-cell">{{ entry.fields.description !== undefined ? entry.fields.description : '' }}</td>
+                        <td class="detail-value-cell">{{ entry.fields.notes !== undefined ? entry.fields.notes : '' }}</td>
+                    </tr>
                 </template>
             </TableComponent>
         </slot>

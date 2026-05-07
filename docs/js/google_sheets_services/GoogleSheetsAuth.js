@@ -199,6 +199,14 @@ export class GoogleSheetsAuth {
         return !!gapi.client?.getToken();
     }
 
+    static getMissingScopes() {
+        const token = gapi.client?.getToken() || BaseTokenManager.getStoredToken();
+        if (!token || !token.scope) return [];
+        const grantedScopes = token.scope.split(' ');
+        const requiredScopes = SCOPES.split(' ').filter(s => s);
+        return requiredScopes.filter(scope => !grantedScopes.includes(scope));
+    }
+
     static async getUserEmail() {
         if (this.userEmail) return this.userEmail;
         
