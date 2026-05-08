@@ -119,7 +119,7 @@ export const InventoryItemTimeline = {
             :is-loading="timelineStore?.isLoading ?? false"
             :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
             :error="timelineStore?.error ?? null"
-            empty-message="No usage or change data found in this date range."
+            empty-message="No inventory changes found in this date range. Try expanding the date filters."
         >
             <template #header-area>
                 <div class="button-bar">

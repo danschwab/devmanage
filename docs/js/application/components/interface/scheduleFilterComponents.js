@@ -1337,7 +1337,9 @@ export const ScheduleFilterSelect = {
             selectedValue: '',
             isLoadingOptions: false,
             availableOptions: [],
-            hasPerformedInitialSync: false
+            hasPerformedInitialSync: false,
+            resolvedStartDate: null,
+            resolvedEndDate: null
         };
     },
     computed: {
@@ -1347,6 +1349,16 @@ export const ScheduleFilterSelect = {
         
         isLoading() {
             return this.savedSearchesStore?.isLoading || this.isLoadingOptions;
+        },
+
+        dateRangeDisplay() {
+            if (!this.resolvedStartDate && !this.resolvedEndDate) return null;
+            const fmt = (iso) => {
+                if (!iso) return '?';
+                const [y, m, d] = iso.split('-');
+                return `${m}/${d}/${y}`;
+            };
+            return `${fmt(this.resolvedStartDate)} → ${fmt(this.resolvedEndDate)}`;
         }
     },
     watch: {
@@ -1483,6 +1495,8 @@ export const ScheduleFilterSelect = {
         
         applyOption(option) {
             if (option.type === 'show-all') {
+                this.resolvedStartDate = null;
+                this.resolvedEndDate = null;
                 this.$emit('search-selected', { type: 'show-all', startDate: null, endDate: null });
                 this.updateURL({ view: 'all' });
             } else if (option.type === 'year') {
@@ -1497,6 +1511,8 @@ export const ScheduleFilterSelect = {
                         { column: 'Show Date', value: `${year}-12-31`, type: 'before' }
                     ]
                 };
+                this.resolvedStartDate = searchData.startDate;
+                this.resolvedEndDate = searchData.endDate;
                 this.$emit('search-selected', searchData);
                 this.updateURL({
                     view: undefined, // Clear show-all view parameter
@@ -1504,7 +1520,7 @@ export const ScheduleFilterSelect = {
                 });
             } else if (option.type === 'search') {
                 const cleanDateFilters = cleanFilters(option.searchData.dateFilters) || [];
-                const { startDate, endDate } = resolveWindowDates(cleanDateFilters);
+                let { startDate, endDate } = this.computeDisplayDates(cleanDateFilters);
                 const searchData = {
                     type: 'search',
                     name: option.searchData.name,
@@ -1513,8 +1529,16 @@ export const ScheduleFilterSelect = {
                     startDate,
                     endDate
                 };
+                this.resolvedStartDate = startDate;
+                this.resolvedEndDate = endDate;
                 this.$emit('search-selected', searchData);
                 this.updateURLFromSearch(option.searchData);
+                // Async-resolve overlap identifier dates if sync resolution returned null
+                if (!startDate && !endDate) {
+                    this.resolveOverlapDisplayDates(cleanDateFilters).then(({ startDate: s, endDate: e }) => {
+                        if (s || e) { this.resolvedStartDate = s; this.resolvedEndDate = e; }
+                    });
+                }
             }
         },
         
@@ -1619,6 +1643,8 @@ export const ScheduleFilterSelect = {
                         
                         if (yearOption) {
                             this.selectedValue = year;
+                            this.resolvedStartDate = `${year}-01-01`;
+                            this.resolvedEndDate = `${year}-12-31`;
                             this.$emit('search-selected', {
                                 type: 'year',
                                 year: parseInt(year),
@@ -1640,7 +1666,9 @@ export const ScheduleFilterSelect = {
                 this.selectedValue = `search-${matchedSearchIndex}`;
                 const matchedSearch = savedSearches[matchedSearchIndex];
                 const cleanDateFilters = cleanFilters(matchedSearch.dateFilters) || [];
-                const { startDate, endDate } = resolveWindowDates(cleanDateFilters);
+                let { startDate, endDate } = this.computeDisplayDates(cleanDateFilters);
+                this.resolvedStartDate = startDate;
+                this.resolvedEndDate = endDate;
                 this.$emit('search-selected', {
                     type: 'search',
                     name: matchedSearch.name,
@@ -1649,11 +1677,19 @@ export const ScheduleFilterSelect = {
                     startDate,
                     endDate
                 });
+                // Async-resolve overlap identifier dates if sync resolution returned null
+                if (!startDate && !endDate) {
+                    this.resolveOverlapDisplayDates(cleanDateFilters).then(({ startDate: s, endDate: e }) => {
+                        if (s || e) { this.resolvedStartDate = s; this.resolvedEndDate = e; }
+                    });
+                }
                 return;
             }
             
             // URL params don't match any saved search - show as custom search
-            const { startDate: customStart, endDate: customEnd } = resolveWindowDates(filter.dateFilters);
+            const { startDate: customStart, endDate: customEnd } = this.computeDisplayDates(filter.dateFilters);
+            this.resolvedStartDate = customStart ?? params.startDate ?? null;
+            this.resolvedEndDate   = customEnd   ?? params.endDate   ?? null;
             this.selectedValue = 'custom';
             this.$emit('search-selected', {
                 type: 'url',
@@ -1665,6 +1701,47 @@ export const ScheduleFilterSelect = {
             });
         },
         
+        // Resolves ISO strings and numeric day-offsets synchronously
+        computeDisplayDates(dateFilters) {
+            if (!dateFilters?.length) return { startDate: null, endDate: null };
+            const afterFilter  = dateFilters.find(f => f.type === 'after'  && f.column === 'Show Date');
+            const beforeFilter = dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
+            const resolve = (v) => {
+                if (v == null) return null;
+                if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+                const n = Number(v);
+                if (!isNaN(n)) {
+                    const d = new Date();
+                    d.setDate(d.getDate() + n);
+                    return d.toISOString().split('T')[0];
+                }
+                return null;
+            };
+            return {
+                startDate: resolve(afterFilter?.value) ?? null,
+                endDate:   resolve(beforeFilter?.value) ?? null
+            };
+        },
+
+        // Async-resolves overlap-mode saved searches (Return/Ship column with identifier value)
+        async resolveOverlapDisplayDates(dateFilters) {
+            const returnFilter = dateFilters?.find(f => f.column === 'Return' && f.type === 'after');
+            if (!returnFilter) return { startDate: null, endDate: null };
+            const val = returnFilter.value;
+            if (!val || typeof val !== 'string' || /^\d{4}-\d{2}-\d{2}$/.test(val) || !isNaN(Number(val))) {
+                return { startDate: null, endDate: null };
+            }
+            try {
+                const [startDate, endDate] = await Promise.all([
+                    Requests.getProjectShipDate(val),
+                    Requests.getProjectReturnDate(val)
+                ]);
+                return { startDate: startDate || null, endDate: endDate || null };
+            } catch (_) {
+                return { startDate: null, endDate: null };
+            }
+        },
+
         openAdvancedSearchModal() {
             // Open the advanced search component in a modal
             this.$modal.custom(ScheduleAdvancedFilter, {
@@ -1696,6 +1773,7 @@ export const ScheduleFilterSelect = {
             </option>
             <option value="custom" disabled>Custom</option>
         </select>
+        <div v-if="dateRangeDisplay" class="card gray" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">{{ dateRangeDisplay }}</div>
         <button 
             v-if="showAdvancedButton" 
             class="button-symbol"

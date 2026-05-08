@@ -19,6 +19,8 @@ export const PacklistItemsSummary = {
         return {
             itemsSummaryStore: null,
             showDetails: null, // Production schedule show details
+            projectShipDate: null,
+            projectReturnDate: null,
             error: null,
             selectedCategoryFilter: null, // Filter by inventory category
             NavigationRegistry // Make NavigationRegistry available in template
@@ -76,8 +78,13 @@ export const PacklistItemsSummary = {
         async initializeStore() {
             if (!this.projectIdentifier) return;
 
-            // Fetch ship date so inventory quantities reflect state at time of packing
-            const shipDate = await Requests.getProjectShipDate(this.projectIdentifier);
+            // Fetch ship/return dates so inventory quantities reflect state at time of packing
+            const [shipDate, returnDate] = await Promise.all([
+                Requests.getProjectShipDate(this.projectIdentifier),
+                Requests.getProjectReturnDate(this.projectIdentifier)
+            ]);
+            this.projectShipDate = shipDate || null;
+            this.projectReturnDate = returnDate || null;
             const referenceDate = shipDate || todayISOString();
 
             const analysisConfig = [
@@ -143,6 +150,21 @@ export const PacklistItemsSummary = {
             invalidateCache([
                 { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.projectIdentifier] }
             ], true);
+        },
+
+        navigateToItemPage(row) {
+            if (!row.tabName || !row.itemId) return;
+            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const dateFilters = (this.projectShipDate && this.projectReturnDate)
+                ? [
+                    { column: 'Show Date', value: this.projectShipDate,  type: 'after'  },
+                    { column: 'Show Date', value: this.projectReturnDate, type: 'before' }
+                  ]
+                : null;
+            const finalPath = dateFilters
+                ? NavigationRegistry.buildPath(basePath, { dateFilters })
+                : basePath;
+            this.appContext.navigateToPath(finalPath);
         },
 
         handleCategorySelected(categoryName) {
@@ -222,9 +244,9 @@ export const PacklistItemsSummary = {
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">
                         <button v-if="row.tabName" 
-                                @click="appContext.navigateToPath(NavigationRegistry.buildPath('inventory/categories/' + row.tabName, { searchTerm: row.itemId }))"
-                                class="purple"
-                                :title="'Search for ' + row.itemId + ' in ' + row.tabName">
+                                @click="navigateToItemPage(row)"
+                                class="purple card"
+                                :title="'View timeline for ' + row.itemId">
                             {{ row.itemId }}
                         </button>
                         <span v-else>{{ row.itemId }}</span>

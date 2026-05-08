@@ -894,7 +894,7 @@ export const PacklistContent = {
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
-                        <button @click="togglePinnedView" :class="{ 'active': showPinnedOnly }">
+                        <button @click="togglePinnedView" :class="{ 'active': showPinnedOnly }" style="flex-shrink: 0;">
                             {{ showPinnedOnly ? 'All Packlists' : 'Pins' }}
                             <span v-if="!showPinnedOnly" class="material-symbols-outlined">keep</span>
                         </button>

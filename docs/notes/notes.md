@@ -85,7 +85,7 @@ For design and project queue:
 - [x] adding an item within a group needs to add the item to the group
 - [x] items currently can't be rearranged if they are grouped
 - [?] some group dragging breaks the group
-- [ ] !!!! I have not tested that scheduled changes are applied correctly, or what happens if two users simultaniously trigger resolution
+- [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] !!! thumbnails not showing for dan
 - [ ] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
@@ -147,6 +147,12 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [ ] show notifications if the packlist was in-app changed to not match the current model for inventoried items
       automatically add thumbnails for uninventoried items?
 
+notifications system
+
+- [ ] !!! Provide a feedback mechanism for users to suggest improvements or report issues
+- [ ] allow notifications throughout application to be picked up by components
+- [ ] basic notification center on dashboard
+
 show management system
 
 - [x] link shows to pack lists
@@ -154,8 +160,8 @@ show management system
 - [x] default schedule ship date as analytics step
 - [x] text-match needs to have a dropdown to determine type of match (includes, excludes, etc.)
 - [x] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
-- [ ] !!! move indexes to app data and start using live table for information
-- [ ] !!! detection and addition of new shows into index
+- [x] !!! move indexes to app data and start using live table for information
+- [x] !!! detection and addition of new shows into index
 - [ ] ! add "views" system to show different columns and layouts for different purposes
 - [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
 - [ ] ! we may need a workzone integration
@@ -168,12 +174,6 @@ show management system
       allow user to access show searches as pages and pin to dashboard
       analyze and show the rough number and complexity of shows throughout the year
       calendar view of shows
-
-notifications system
-
-- [ ] !!! Provide a feedback mechanism for users to suggest improvements or report issues
-- [ ] allow notifications throughout application to be picked up by components
-- [ ] basic notification center on dashboard
 
 dropbox / workzone / sql integrations
 
