@@ -528,6 +528,30 @@ class Requests_uncached {
     }
 
     /**
+     * Analyze a schedule row's client/show value against reference index data.
+     * Returns a clickable alert object when attention is needed, otherwise null.
+     * @param {Object} deps
+     * @param {Object} scheduleRow
+     * @param {'client'|'show'} referenceType
+     * @returns {Promise<Object|null>}
+     */
+    static async checkScheduleReferenceState(deps, scheduleRow, referenceType) {
+        return await deps.call(ProductionUtils.checkReferenceNameState, scheduleRow, referenceType);
+    }
+
+    /**
+     * Build modal resolution options for a schedule client/show reference value.
+     * @param {Object} deps
+     * @param {'client'|'show'} referenceType
+     * @param {string} rawValue
+     * @param {boolean} includeAllCandidates
+     * @returns {Promise<{referenceType:string, rawValue:string, options:Array<Object>}>}
+     */
+    static async getScheduleReferenceResolutionOptions(deps, referenceType, rawValue, includeAllCandidates = false) {
+        return await deps.call(ProductionUtils.getReferenceResolutionOptions, referenceType, rawValue, includeAllCandidates);
+    }
+
+    /**
      * Ensure CACHE index rows exist for client/show values found in schedule rows.
      * Mutation — uncached.
      * @param {Array<Object>} scheduleRows - Rows containing Client and Show fields
@@ -547,6 +571,31 @@ class Requests_uncached {
      */
     static async updateScheduleReferenceAbbreviation(referenceTab, name, abbreviation) {
         return await ProductionUtils.updateReferenceAbbreviation(referenceTab, name, abbreviation);
+    }
+
+    /**
+     * Add a new canonical client/show reference name.
+     * Mutation — uncached.
+     * @param {'client'|'show'} referenceType
+     * @param {string} name
+     * @returns {Promise<{added:boolean,rowNumber:number|null}>}
+     */
+    static async addScheduleReferenceName(referenceType, name) {
+        const referenceTab = referenceType === 'show' ? 'Shows' : 'Clients';
+        return await ProductionUtils.addReferenceName(referenceTab, name);
+    }
+
+    /**
+     * Append an abbreviation token to an indexed client/show.
+     * Mutation — uncached.
+     * @param {'client'|'show'} referenceType
+     * @param {string} canonicalName
+     * @param {string} abbreviation
+     * @returns {Promise<{updated:boolean,addedRow:boolean,rowNumber:number|null,abbreviations:string}>}
+     */
+    static async appendScheduleReferenceAbbreviation(referenceType, canonicalName, abbreviation) {
+        const referenceTab = referenceType === 'show' ? 'Shows' : 'Clients';
+        return await ProductionUtils.appendReferenceAbbreviation(referenceTab, canonicalName, abbreviation);
     }
 
     /**
@@ -1074,7 +1123,8 @@ export const Requests = wrapMethods(
         'saveInventoryTabData', 'savePackList', 'storeUserData',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
-        'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation'
+        'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
+        'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation'
     ], // Mutation methods and pass-through methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

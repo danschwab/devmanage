@@ -270,6 +270,122 @@ class productionUtils_uncached {
     }
 
     /**
+     * Analyze whether a schedule row value is healthy against the index.
+     * Returns a clickable alert payload for unresolved entries; returns null when healthy.
+     * @param {Object} deps
+     * @param {Object} scheduleRow
+     * @param {'client'|'show'} referenceType
+     * @returns {Promise<Object|null>}
+     */
+    static async checkReferenceNameState(deps, scheduleRow, referenceType = 'client') {
+        const kind = referenceType === 'show' ? 'show' : 'client';
+        const tabName = kind === 'show' ? 'Shows' : 'Clients';
+        const rawValue = _normalizeIndexName(kind === 'show' ? scheduleRow?.Show : scheduleRow?.Client);
+
+        if (!rawValue) {
+            return null;
+        }
+
+        const indexData = await _getReferenceIndexData(tabName);
+        const state = _classifyReferenceState(rawValue, indexData);
+
+        // Exact matches should not render cards.
+        if (state.status === 'exact-name' || state.status === 'exact-abbreviation') {
+            return null;
+        }
+
+        if (state.status === 'fuzzy-pass' && state.bestMatch) {
+            return {
+                message: state.bestMatch,
+                type: 'index-reference-resolved',
+                color: 'gray',
+                clickable: true,
+                referenceType: kind,
+                rawValue,
+                status: state.status,
+                bestMatch: state.bestMatch
+            };
+        }
+
+        const message = 'unrecognized';
+
+        return {
+            message,
+            type: 'index-reference',
+            color: 'red',
+            clickable: true,
+            referenceType: kind,
+            rawValue,
+            status: state.status,
+            bestMatch: state.bestMatch || null
+        };
+    }
+
+    /**
+     * Build resolution options for an unresolved client/show value.
+     * @param {Object} deps
+     * @param {'client'|'show'} referenceType
+     * @param {string} rawValue
+     * @param {boolean} includeAllCandidates
+     * @returns {Promise<{referenceType:string, rawValue:string, options:Array<Object>}>}
+     */
+    static async getReferenceResolutionOptions(deps, referenceType, rawValue, includeAllCandidates = false) {
+        const kind = referenceType === 'show' ? 'show' : 'client';
+        const tabName = kind === 'show' ? 'Shows' : 'Clients';
+        const normalizedRaw = _normalizeIndexName(rawValue);
+        const indexData = await _getReferenceIndexData(tabName);
+
+        if (!normalizedRaw) {
+            return { referenceType: kind, rawValue: '', options: [] };
+        }
+
+        const guessedAbbreviations = _guessAbbreviations(normalizedRaw);
+        const candidates = _rankReferenceCandidates(normalizedRaw, indexData, guessedAbbreviations);
+        const topCandidates = includeAllCandidates
+            ? candidates.sort((a, b) => a.name.localeCompare(b.name))
+            : _filterHighConfidenceCandidates(candidates);
+
+        const options = [];
+
+        if (!includeAllCandidates) {
+            options.push({
+                actionType: 'add-new',
+                label: `Add ${normalizedRaw} to ${kind} index`,
+                buttonClass: 'green',
+                canonicalName: normalizedRaw,
+                abbreviation: ''
+            });
+        }
+
+        topCandidates.forEach((candidate) => {
+            options.push({
+                actionType: 'add-abbreviation',
+                label: `Abbreviation for ${candidate.name}`,
+                canonicalName: candidate.name,
+                abbreviation: normalizedRaw,
+                reason: candidate.reason,
+                score: candidate.score
+            });
+        });
+
+        if (!includeAllCandidates) {
+            options.push({
+                actionType: 'browse-all',
+                label: `See all ${kind}s`,
+                buttonClass: 'blue',
+                canonicalName: '',
+                abbreviation: normalizedRaw
+            });
+        }
+
+        return {
+            referenceType: kind,
+            rawValue: normalizedRaw,
+            options
+        };
+    }
+
+    /**
      * Ensure missing client/show index rows exist in CACHE reference tabs.
      * Only appends missing rows and never rewrites the whole table.
      * @param {Array<Object>} scheduleRows - Rows containing Client and Show fields
@@ -339,6 +455,74 @@ class productionUtils_uncached {
         ], true);
 
         return { updated: true, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
+    }
+
+    /**
+     * Ensure a canonical reference name exists in the index.
+     * @param {'Clients'|'Shows'} referenceTab
+     * @param {string} name
+     * @returns {Promise<{added:boolean,rowNumber:number|null}>}
+     */
+    static async addReferenceName(referenceTab, name) {
+        const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
+        const normalizedName = _normalizeIndexName(name);
+        if (!normalizedName) {
+            return { added: false, rowNumber: null };
+        }
+
+        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        _invalidateReferenceCaches();
+        return { added: rowResult.added, rowNumber: rowResult.rowNumber };
+    }
+
+    /**
+     * Append an abbreviation token to an existing canonical name.
+     * Preserves existing abbreviations and writes only the abbreviation cell.
+     * @param {'Clients'|'Shows'} referenceTab
+     * @param {string} name
+     * @param {string} abbreviation
+     * @returns {Promise<{updated:boolean,addedRow:boolean,rowNumber:number|null,abbreviations:string}>}
+     */
+    static async appendReferenceAbbreviation(referenceTab, name, abbreviation) {
+        const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
+        const normalizedName = _normalizeIndexName(name);
+        const nextAbbr = _normalizeIndexName(abbreviation);
+
+        if (!normalizedName || !nextAbbr) {
+            return { updated: false, addedRow: false, rowNumber: null, abbreviations: '' };
+        }
+
+        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rawData = await Database.getData('CACHE', tabName);
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
+        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+
+        if (abbrColIndex === -1 || !rowResult.rowNumber) {
+            throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
+        }
+
+        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
+        const existingAbbrText = String(targetRow[abbrColIndex] || '').trim();
+        const mergedAbbr = _mergeAbbreviations(existingAbbrText, nextAbbr);
+
+        if (mergedAbbr === existingAbbrText) {
+            return {
+                updated: false,
+                addedRow: rowResult.added,
+                rowNumber: rowResult.rowNumber,
+                abbreviations: mergedAbbr
+            };
+        }
+
+        await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
+        _invalidateReferenceCaches();
+
+        return {
+            updated: true,
+            addedRow: rowResult.added,
+            rowNumber: rowResult.rowNumber,
+            abbreviations: mergedAbbr
+        };
     }
 
     /**
@@ -452,7 +636,12 @@ class productionUtils_uncached {
 export const ProductionUtils = wrapMethods(
     productionUtils_uncached,
     'production_utils',
-    ['ensureScheduleReferenceRows', 'updateReferenceAbbreviation']
+    [
+        'ensureScheduleReferenceRows',
+        'updateReferenceAbbreviation',
+        'addReferenceName',
+        'appendReferenceAbbreviation'
+    ]
 );
 
 
@@ -559,6 +748,210 @@ function _calculateReturnDate(row, shipDate = null) {
 
 function _normalizeIndexName(value) {
     return String(value || '').trim();
+}
+
+function _normalizeMatchText(value) {
+    return _normalizeIndexName(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function _splitAbbreviations(value) {
+    return String(value || '')
+        .split(',')
+        .map(part => part.trim())
+        .filter(Boolean);
+}
+
+function _mergeAbbreviations(existingText, nextToken) {
+    const tokens = _splitAbbreviations(existingText);
+    const normalizedTokens = new Set(tokens.map(token => _normalizeMatchText(token)));
+
+    if (!normalizedTokens.has(_normalizeMatchText(nextToken))) {
+        tokens.push(nextToken);
+    }
+
+    return tokens.join(', ');
+}
+
+async function _getReferenceIndexData(tabName) {
+    const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
+    const rows = await Database.getData('CACHE', tabName, {
+        name: nameColumn,
+        abbr: 'Abbreviations'
+    });
+
+    return rows
+        .map(row => ({
+            name: _normalizeIndexName(row.name),
+            abbreviations: _splitAbbreviations(row.abbr)
+        }))
+        .filter(row => row.name);
+}
+
+function _classifyReferenceState(rawValue, indexData) {
+    const rawNorm = _normalizeMatchText(rawValue);
+    if (!rawNorm || !Array.isArray(indexData) || indexData.length === 0) {
+        return { status: 'missing', bestMatch: '' };
+    }
+
+    const exactName = indexData.find(entry => _normalizeMatchText(entry.name) === rawNorm);
+    if (exactName) {
+        return { status: 'exact-name', bestMatch: exactName.name };
+    }
+
+    const exactAbbreviation = indexData.find(entry =>
+        Array.isArray(entry.abbreviations) &&
+        entry.abbreviations.some(abbr => _normalizeMatchText(abbr) === rawNorm)
+    );
+    if (exactAbbreviation) {
+        return { status: 'exact-abbreviation', bestMatch: exactAbbreviation.name };
+    }
+
+    let bestMatch = '';
+    try {
+        const names = indexData.map(entry => entry.name);
+        const abbrList = indexData.map(entry => (entry.abbreviations || []).join(', '));
+        bestMatch = GetTopFuzzyMatch(rawValue, names, abbrList, 2.5);
+    } catch (error) {
+        bestMatch = '';
+    }
+
+    if (bestMatch) {
+        return { status: 'fuzzy-pass', bestMatch };
+    }
+
+    const sortedCandidates = _rankReferenceCandidates(rawValue, indexData, _guessAbbreviations(rawValue));
+    if (sortedCandidates.length > 1 && sortedCandidates[0].score - sortedCandidates[1].score < 0.15) {
+        return { status: 'ambiguous', bestMatch: sortedCandidates[0].name };
+    }
+
+    return { status: 'missing', bestMatch: sortedCandidates[0]?.name || '' };
+}
+
+function _rankReferenceCandidates(rawValue, indexData, guessedAbbreviations = []) {
+    const rawNorm = _normalizeMatchText(rawValue);
+    const rawUpper = _normalizeIndexName(rawValue).toUpperCase();
+    const guessedSet = new Set((guessedAbbreviations || []).map(_normalizeMatchText));
+
+    const scored = (indexData || []).map(entry => {
+        const nameNorm = _normalizeMatchText(entry.name);
+        const abbrNorms = (entry.abbreviations || []).map(_normalizeMatchText);
+        const nameDistance = _levenshtein(rawNorm, nameNorm);
+        const maxLen = Math.max(rawNorm.length, nameNorm.length, 1);
+        const editScore = 1 - (nameDistance / maxLen);
+        const startsScore = nameNorm.startsWith(rawNorm) || rawNorm.startsWith(nameNorm) ? 0.2 : 0;
+
+        const guessedAbbrMatch = abbrNorms.some(abbr => guessedSet.has(abbr)) ? 0.35 : 0;
+        const containsRawAsAbbr = abbrNorms.includes(rawNorm) ? 0.45 : 0;
+        const tokenOverlap = _tokenOverlap(rawUpper, entry.name.toUpperCase()) * 0.25;
+
+        const score = editScore + startsScore + guessedAbbrMatch + containsRawAsAbbr + tokenOverlap;
+        let reason = 'fuzzy name similarity';
+        if (containsRawAsAbbr) reason = 'already close to existing abbreviation';
+        else if (guessedAbbrMatch) reason = 'matches guessed abbreviation pattern';
+
+        return {
+            name: entry.name,
+            score,
+            reason
+        };
+    });
+
+    return scored.sort((a, b) => b.score - a.score);
+}
+
+function _filterHighConfidenceCandidates(candidates) {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+        return [];
+    }
+
+    const topScore = candidates[0].score;
+
+    return candidates.filter(candidate =>
+        candidate.score >= 0.9 || (candidate.score >= 0.5 && candidate.score >= topScore - 0.12)
+    );
+}
+
+function _guessAbbreviations(rawValue) {
+    const cleaned = _normalizeIndexName(rawValue);
+    if (!cleaned) return [];
+
+    const words = cleaned
+        .split(/\s+/)
+        .map(w => w.replace(/[^A-Za-z0-9]/g, ''))
+        .filter(Boolean);
+
+    const stopWords = new Set(['THE', 'AND', 'OF', 'FOR', 'TO', 'IN', 'AT', 'ON', 'BY']);
+    const significant = words.filter(w => !stopWords.has(w.toUpperCase()));
+    const basis = significant.length > 0 ? significant : words;
+
+    const candidates = new Set();
+    candidates.add(cleaned);
+
+    if (basis.length > 0) {
+        candidates.add(basis.map(w => w[0]).join('').toUpperCase());
+        candidates.add(basis.map(w => w.slice(0, 2)).join('').toUpperCase());
+        candidates.add(basis.map(w => w.slice(0, 3)).join('').toUpperCase());
+    }
+
+    const alnum = cleaned.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (alnum) {
+        candidates.add(alnum);
+        candidates.add(alnum.replace(/[AEIOU]/g, ''));
+        candidates.add(alnum.slice(0, 6));
+    }
+
+    return Array.from(candidates).filter(Boolean);
+}
+
+function _tokenOverlap(a, b) {
+    const left = new Set(String(a || '').split(/\s+/).filter(Boolean));
+    const right = new Set(String(b || '').split(/\s+/).filter(Boolean));
+    if (left.size === 0 || right.size === 0) return 0;
+
+    let common = 0;
+    left.forEach(token => {
+        if (right.has(token)) common += 1;
+    });
+
+    return common / Math.max(left.size, right.size);
+}
+
+function _levenshtein(a, b) {
+    const s = String(a || '');
+    const t = String(b || '');
+    const m = s.length;
+    const n = t.length;
+
+    if (m === 0) return n;
+    if (n === 0) return m;
+
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i += 1) dp[i][0] = i;
+    for (let j = 0; j <= n; j += 1) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i += 1) {
+        for (let j = 1; j <= n; j += 1) {
+            const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+            dp[i][j] = Math.min(
+                dp[i - 1][j] + 1,
+                dp[i][j - 1] + 1,
+                dp[i - 1][j - 1] + cost
+            );
+        }
+    }
+
+    return dp[m][n];
+}
+
+function _invalidateReferenceCaches() {
+    invalidateCache([
+        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
+        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
+        { namespace: 'api', methodName: 'computeIdentifier', args: [] },
+        { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] },
+        { namespace: 'production_utils', methodName: 'checkReferenceNameState', args: [] },
+        { namespace: 'production_utils', methodName: 'getReferenceResolutionOptions', args: [] }
+    ], true);
 }
 
 async function _appendMissingReferenceRows(tabName, names) {

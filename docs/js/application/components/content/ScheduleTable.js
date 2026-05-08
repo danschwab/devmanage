@@ -205,6 +205,24 @@ export const ScheduleTableComponent = {
                     null, // Results go to AppData
                     true // Pass full item/row
                 ),
+                createAnalysisConfig(
+                    Requests.checkScheduleReferenceState,
+                    'clientIndexIssue',
+                    'Checking client index health...',
+                    null, // Pass full item
+                    ['client'],
+                    null,
+                    true
+                ),
+                createAnalysisConfig(
+                    Requests.checkScheduleReferenceState,
+                    'showIndexIssue',
+                    'Checking show index health...',
+                    null, // Pass full item
+                    ['show'],
+                    null,
+                    true
+                ),
                 // Guess ship date if missing and store in AppData
                 createAnalysisConfig(
                     Requests.guessShipDate,
@@ -239,6 +257,8 @@ export const ScheduleTableComponent = {
             // Reload schedule data (cache will be automatically invalidated)
             invalidateCache([
                 { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED'] }, // invalidate all prod sched tabs to force refresh of client and show ref info as well
+                { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
+                { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
             ], true);
         },
@@ -422,7 +442,7 @@ export const ScheduleTableComponent = {
             // Only show card if there's an estimated date
             if (estimatedDate) {
                 return [{
-                    message: `Est: ${estimatedDate}`,
+                    message: `estimated`,
                     hoverMessage: `Starts: ${startDate}`,
                     clickable: false,
                     class: 'gray' // Gray card to indicate estimated value
@@ -461,6 +481,174 @@ export const ScheduleTableComponent = {
                     action: () => this.handleCreatePacklist(packlistInfo.identifier, row)
                 }];
             }
+        },
+        getIndexIssueCards(row, columnKey) {
+            if (!row || !row.AppData) {
+                return [];
+            }
+
+            if (columnKey === 'Client' && row.AppData.clientIndexIssue) {
+                return [{
+                    ...row.AppData.clientIndexIssue,
+                    action: row.AppData.clientIndexIssue.clickable
+                        ? () => this.handleIndexIssueClick(row, row.AppData.clientIndexIssue)
+                        : null
+                }];
+            }
+
+            if (columnKey === 'Show' && row.AppData.showIndexIssue) {
+                return [{
+                    ...row.AppData.showIndexIssue,
+                    action: row.AppData.showIndexIssue.clickable
+                        ? () => this.handleIndexIssueClick(row, row.AppData.showIndexIssue)
+                        : null
+                }];
+            }
+
+            return [];
+        },
+        async handleIndexIssueClick(row, issue) {
+            if (!issue?.referenceType || !issue?.rawValue) {
+                return;
+            }
+
+            await this.showIndexResolutionModal(row, issue, false);
+        },
+        async showIndexResolutionModal(row, issue, includeAllCandidates = false) {
+            try {
+                const resolutionData = await Requests.getScheduleReferenceResolutionOptions(
+                    issue.referenceType,
+                    issue.rawValue,
+                    includeAllCandidates
+                );
+
+                const options = resolutionData?.options || [];
+                if (options.length === 0) {
+                    this.$modal.alert('No resolution options available for this value.', 'Missing');
+                    return;
+                }
+
+                const modalTitle = includeAllCandidates
+                    ? `Select ${issue.referenceType}`
+                    : `${issue.referenceType === 'show' ? 'Show' : 'Client'} Missing`;
+
+                const IndexResolutionComponent = {
+                    props: {
+                        issue: Object,
+                        options: Array,
+                        includeAllCandidates: Boolean,
+                        onSelectOption: Function
+                    },
+                    data() {
+                        return {
+                            filterText: '',
+                            isSubmitting: false
+                        };
+                    },
+                    computed: {
+                        filteredOptions() {
+                            if (!this.includeAllCandidates || !this.filterText.trim()) {
+                                return this.options;
+                            }
+                            const search = this.filterText.trim().toLowerCase();
+                            return this.options.filter(option =>
+                                option.label.toLowerCase().includes(search)
+                            );
+                        }
+                    },
+                    methods: {
+                        async selectOption(option) {
+                            if (this.isSubmitting) {
+                                return;
+                            }
+
+                            this.isSubmitting = true;
+
+                            try {
+                                if (this.onSelectOption) {
+                                    await this.onSelectOption(option);
+                                }
+                                this.$emit('close-modal');
+                            } catch (error) {
+                                // Keep modal open so user can retry after a failed request.
+                                this.isSubmitting = false;
+                            }
+                        }
+                    },
+                    template: html`
+                        <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                            <div v-if="includeAllCandidates" class="input-container" style="margin-bottom: 0.5rem;">
+                                <input type="text" v-model="filterText" :disabled="isSubmitting" placeholder="Filter options..." class="search-input" style="width: 100%;" />
+                            </div>
+                            <div v-else style="margin-bottom: 1rem;">
+                                <p>A production schedule index entry was missing.</p>
+                                <p v-if="isSubmitting">Applying update...</p>
+                                <p v-else>Resolve below to prevent analytics issues:</p>
+                            </div>
+                            <ul>
+                                <li v-for="option in filteredOptions"
+                                    :key="option.actionType + '-' + option.label">
+                                    <button
+                                        @click="selectOption(option)"
+                                        :disabled="isSubmitting"
+                                        :class="option.buttonClass || 'white'"
+                                        style="text-align: left;"
+                                    >
+                                        {{ option.label }}
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    `
+                };
+
+                this.$modal.custom(IndexResolutionComponent, {
+                    issue,
+                    options,
+                    includeAllCandidates,
+                    onSelectOption: async (option) => {
+                        await this.applyIndexResolutionOption(option, row, issue);
+                    },
+                    modalClass: 'hamburger-menu'
+                }, modalTitle);
+            } catch (error) {
+                console.error('[ScheduleTable] Failed to open index resolution modal:', error);
+                this.$modal.error(`Failed to load resolution options: ${error.message}`, 'Index Resolution Error');
+            }
+        },
+        async applyIndexResolutionOption(option, row, issue) {
+            try {
+                if (!option || !issue) {
+                    return;
+                }
+
+                if (option.actionType === 'browse-all') {
+                    await this.showIndexResolutionModal(row, issue, true);
+                    return;
+                }
+
+                if (option.actionType === 'add-new') {
+                    await Requests.addScheduleReferenceName(issue.referenceType, option.canonicalName);
+                } else if (option.actionType === 'add-abbreviation') {
+                    await Requests.appendScheduleReferenceAbbreviation(
+                        issue.referenceType,
+                        option.canonicalName,
+                        option.abbreviation
+                    );
+                } else {
+                    return;
+                }
+
+                if (this.scheduleTableStore && typeof this.scheduleTableStore.clearSpecificAnalysisResults === 'function') {
+                    this.scheduleTableStore.clearSpecificAnalysisResults(['clientIndexIssue', 'showIndexIssue']);
+                }
+                if (this.scheduleTableStore && typeof this.scheduleTableStore.runConfiguredAnalysis === 'function') {
+                    await this.scheduleTableStore.runConfiguredAnalysis({ skipIfAnalyzed: false });
+                }
+            } catch (error) {
+                console.error('[ScheduleTable] Failed to apply index resolution:', error);
+                this.$modal.error(`Failed to apply resolution: ${error.message}`, 'Index Resolution Error');
+            }
         }
     },
     template: html`
@@ -485,7 +673,7 @@ export const ScheduleTableComponent = {
             <template #header-area>
                 <slot name="header-area"></slot>
             </template>
-            <template #default="{ row, column }">
+            <template #cell-extra="{ row, column }">
                 <!-- Add estimated ship date cards in Ship column -->
                 <template v-for="card in getShipDateCards(row, column.key)" :key="'ship-' + card.message">
                     <span 
@@ -503,6 +691,15 @@ export const ScheduleTableComponent = {
                         @click="!card.disabled ? card.action() : null"
                         v-html="card.message"
                     ></button>
+                </template>
+
+                <template v-for="card in getIndexIssueCards(row, column.key)" :key="card.referenceType + '-' + card.rawValue">
+                    <div
+                        :class="['card', card.color || 'red', { 'clickable': card.clickable }]"
+                        @click="card.clickable ? card.action() : null"
+                        :title="card.rawValue"
+                        v-html="card.message"
+                    ></div>
                 </template>
             </template>
         </TableComponent>
