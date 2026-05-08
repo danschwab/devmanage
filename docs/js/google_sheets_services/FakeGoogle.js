@@ -423,7 +423,7 @@ export class FakeGoogleSheetsService {
             ]
         },
         'PROD_SCHED': {
-            'ProductionSchedule': [
+            'Production Schedule': [
                 ['Show', 'Client', 'Year', 'Identifier', 'City', 'Size', 'Booth#', 'S. Start', 'S. End', 'Ship', 'Ship BKD', 'O/B BKD', 'MHA Done', 'Expected Return Date', 'Recieved', 'GC', 'Sup', 'Sup Badge Req.', 'Pack List', 'PL to OPS', 'SOW Sent', 'SOW Ret', 'Elev', 'Panels', 'Setups', 'ER to OPG', 'GD DUE', 'GP DUE', '3rd Party Auth', 'I&D', 'S/U to Elite', 'MH', 'Elec', 'Elec and Net dwg sent', 'H/S', 'H/S dwg sent', 'Net', 'Oth', 'EAC', 'COI', 'DWG (H/S-ELEC) TO SHOW BY', 'S/U IN SHOP'],
                 ['SHOT Show', 'Allen Arms', '2025', 'ALLEN ARMS 2025 SHOT', 'Las Vegas, NV', '10x40 & 10x10', '75323 & 75324', '21-Jan', '24-Jan', '1/13/2025', 'X', 'X', 'X', '', '2/3', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', 'in', '1/10', 'X', 'X', '', 'X', 'X', '', '', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['SHOT Show', 'MOJO', '2025', 'MOJO 2025 SHOT', 'Las Vegas, NV', '30x30', '10518', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', '', 'X', '', '', 'X', '', '', '10-Dec', ''],
@@ -483,6 +483,17 @@ export class FakeGoogleSheetsService {
                 // Shows with ambiguous dates (no full date) - should use Year column for inference
                 ,['Test Ambiguous Early','AmbiguousCo','2026','AMBIGUOUSCO 2026 TEST AMBIGUOUS EARLY', 'Las Vegas, NV','10x10','1111','1/5','1/8','12/29/2025','X','X','X','','1/15/2026','Freeman','Top Shelf','','X','X','X','X','','','X','','12/15','12/28','X','X','','','X','','','','','','X','X','','']
                 ,['Test Ambiguous Late','LateShowInc','2025','LATESHOWINC 2025 TEST AMBIGUOUS LATE', 'Chicago, IL','10x10','2222','12/28','12/31','12/21/2025','X','X','X','','1/5/2026','GES','ELITE','','X','X','X','X','','','X','','12/10','12/20','X','X','','','X','','','','','','X','X','','']
+            ]
+        },
+        'CACHE': {
+            'UserData_test_example_com': [
+                ['ID', 'Value'],
+                ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
+            ],
+            'Locks': [
+                ['Lock Key', 'locked.user@example.com', 'another.user@example.com'], // Row 0: Headers with users
+                ['PACK_LISTS:ATSC 2025 NAB', '2026-01-19T10:30:00.000Z', '0'], // Row 1+: Lock key rows with timestamps
+                ['INVENTORY:CABINETS', '2026-01-19T10:30:00.000Z', '0'] // Row 2: Another lock key
             ],
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
@@ -746,17 +757,6 @@ export class FakeGoogleSheetsService {
                 ['WORKBOAT', '', ''],
                 ['XPONENTIAL', '', '']
             ]
-        },
-        'CACHE': {
-            'UserData_test_example_com': [
-                ['ID', 'Value'],
-                ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
-            ],
-            'Locks': [
-                ['Lock Key', 'locked.user@example.com', 'another.user@example.com'], // Row 0: Headers with users
-                ['PACK_LISTS:ATSC 2025 NAB', '2026-01-19T10:30:00.000Z', '0'], // Row 1+: Lock key rows with timestamps
-                ['INVENTORY:CABINETS', '2026-01-19T10:30:00.000Z', '0'] // Row 2: Another lock key
-            ]
         }
     };
 
@@ -783,13 +783,13 @@ export class FakeGoogleSheetsService {
             { title: 'TEST 2025 ENHANCED', sheetId: 5 }
         ],
         'PROD_SCHED': [
-            { title: 'ProductionSchedule', sheetId: 0 },
-            { title: 'Clients', sheetId: 1 },
-            { title: 'Shows', sheetId: 2 }
+            { title: 'Production Schedule', sheetId: 0 }
         ],
         'CACHE': [
             { title: 'UserData_test_example_com', sheetId: 0 },
-            { title: 'Locks', sheetId: 1 }
+            { title: 'Locks', sheetId: 1 },
+            { title: 'Clients', sheetId: 1 },
+            { title: 'Shows', sheetId: 2 }
         ]
     };
 

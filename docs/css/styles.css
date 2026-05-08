@@ -986,7 +986,7 @@ tr.selected.drop-target-above > td::after, .drop-target-header + tbody > tr:firs
 }
 
 /* Analyzing Row Styling */
-tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
+/* tr.analyzing > td:not(.spacer-cell):not(.row-drag-handle)::after,
 .card.analyzing::after,
 input.analyzing::after,
 button.analyzing::after {
@@ -1000,7 +1000,7 @@ button.analyzing::after {
     inset: 0;
     z-index: 1000;
     pointer-events: none;
-}
+} */
 
 
 

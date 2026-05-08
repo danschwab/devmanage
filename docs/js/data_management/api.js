@@ -528,6 +528,28 @@ class Requests_uncached {
     }
 
     /**
+     * Ensure CACHE index rows exist for client/show values found in schedule rows.
+     * Mutation — uncached.
+     * @param {Array<Object>} scheduleRows - Rows containing Client and Show fields
+     * @returns {Promise<{clientsAdded:number, showsAdded:number}>}
+     */
+    static async ensureScheduleReferenceRows(scheduleRows) {
+        return await ProductionUtils.ensureScheduleReferenceRows(scheduleRows);
+    }
+
+    /**
+     * Update exactly one abbreviation cell in CACHE reference tabs.
+     * Mutation — uncached.
+     * @param {'Clients'|'Shows'} referenceTab
+     * @param {string} name
+     * @param {string} abbreviation
+     * @returns {Promise<{updated:boolean, addedRow:boolean, rowNumber:number|null}>}
+     */
+    static async updateScheduleReferenceAbbreviation(referenceTab, name, abbreviation) {
+        return await ProductionUtils.updateReferenceAbbreviation(referenceTab, name, abbreviation);
+    }
+
+    /**
      * Get show details by project identifier
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
@@ -1051,7 +1073,8 @@ export const Requests = wrapMethods(
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
         'saveInventoryTabData', 'savePackList', 'storeUserData',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock',
-        'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry'
+        'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
+        'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation'
     ], // Mutation methods and pass-through methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

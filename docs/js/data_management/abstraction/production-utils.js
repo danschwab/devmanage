@@ -1,4 +1,4 @@
-import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
+import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch, invalidateCache } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -10,7 +10,7 @@ class productionUtils_uncached {
      * @returns {Promise<Object>} Mapping object where keys and values are the same (all available headers)
      */
     static async GetMappingFromProductionSchedule(deps) {
-        const tabName = "ProductionSchedule";
+        const tabName = "Production Schedule";
         
         // Get the raw data (2D array) to extract headers from first row
         const rawData = await deps.call(Database.getData, 'PROD_SCHED', tabName);
@@ -49,7 +49,7 @@ class productionUtils_uncached {
      */
     static async getOverlappingShows(deps, parameters = null, searchParams = null) {
         console.log('[production-utils] getOverlappingShows called with:', parameters);
-        const tabName = "ProductionSchedule";
+        const tabName = "Production Schedule";
         
         // Get dynamic mapping from ProductionSchedule headers
         const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
@@ -254,8 +254,8 @@ class productionUtils_uncached {
      * @private
      */
     static async computeIdentifierReferenceData(deps) {
-        const clientsData = await deps.call(Database.getData, 'PROD_SCHED', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
-        const showsData = await deps.call(Database.getData, 'PROD_SCHED', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
+        const clientsData = await deps.call(Database.getData, 'CACHE', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
+        const showsData = await deps.call(Database.getData, 'CACHE', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
         console.log('[production-utils] Loaded reference data for fuzzy matching:', { clientsData, showsData });
         return {
             clients: {
@@ -270,6 +270,78 @@ class productionUtils_uncached {
     }
 
     /**
+     * Ensure missing client/show index rows exist in CACHE reference tabs.
+     * Only appends missing rows and never rewrites the whole table.
+     * @param {Array<Object>} scheduleRows - Rows containing Client and Show fields
+     * @returns {Promise<{clientsAdded:number, showsAdded:number}>}
+     */
+    static async ensureScheduleReferenceRows(scheduleRows) {
+        const rows = Array.isArray(scheduleRows) ? scheduleRows : [];
+        const uniqueClients = new Set();
+        const uniqueShows = new Set();
+
+        rows.forEach((row) => {
+            const client = _normalizeIndexName(row?.Client);
+            const show = _normalizeIndexName(row?.Show);
+            if (client) uniqueClients.add(client);
+            if (show) uniqueShows.add(show);
+        });
+
+        const clientsAdded = await _appendMissingReferenceRows('Clients', Array.from(uniqueClients));
+        const showsAdded = await _appendMissingReferenceRows('Shows', Array.from(uniqueShows));
+
+        // Force downstream identifier caches to refresh after reference updates.
+        invalidateCache([
+            { namespace: 'api', methodName: 'computeIdentifier', args: [] },
+            { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
+        ], true);
+
+        return { clientsAdded, showsAdded };
+    }
+
+    /**
+     * Upsert a specific abbreviation by editing exactly one cell in CACHE.
+     * Creates the row first when the reference value does not yet exist.
+     * @param {'Clients'|'Shows'} referenceTab - Reference tab name
+     * @param {string} name - Client/show name to locate or add
+     * @param {string} abbreviation - New abbreviation value
+     * @returns {Promise<{updated:boolean, addedRow:boolean, rowNumber:number|null}>}
+     */
+    static async updateReferenceAbbreviation(referenceTab, name, abbreviation) {
+        const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
+        const normalizedName = _normalizeIndexName(name);
+        if (!normalizedName) {
+            return { updated: false, addedRow: false, rowNumber: null };
+        }
+
+        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rawData = await Database.getData('CACHE', tabName);
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
+        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+
+        if (abbrColIndex === -1 || !rowResult.rowNumber) {
+            throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
+        }
+
+        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
+        const existingAbbr = String(targetRow[abbrColIndex] || '').trim();
+        const nextAbbr = String(abbreviation || '').trim();
+
+        if (existingAbbr === nextAbbr) {
+            return { updated: false, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
+        }
+
+        await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, nextAbbr);
+
+        invalidateCache([
+            { namespace: 'api', methodName: 'computeIdentifier', args: [] },
+            { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
+        ], true);
+
+        return { updated: true, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
+    }
+
+    /**
      * Get show details by project identifier
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
@@ -278,7 +350,7 @@ class productionUtils_uncached {
     static async getShowDetails(deps, identifier) {
         if (!identifier) return null;
 
-        const tabName = "ProductionSchedule";
+        const tabName = "Production Schedule";
         
         // Get dynamic mapping from ProductionSchedule headers
         const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
@@ -377,7 +449,11 @@ class productionUtils_uncached {
 
 }
 
-export const ProductionUtils = wrapMethods(productionUtils_uncached, 'production_utils');
+export const ProductionUtils = wrapMethods(
+    productionUtils_uncached,
+    'production_utils',
+    ['ensureScheduleReferenceRows', 'updateReferenceAbbreviation']
+);
 
 
 
@@ -479,4 +555,47 @@ function _calculateReturnDate(row, shipDate = null) {
     }
     
     return null;
+}
+
+function _normalizeIndexName(value) {
+    return String(value || '').trim();
+}
+
+async function _appendMissingReferenceRows(tabName, names) {
+    if (!Array.isArray(names) || names.length === 0) {
+        return 0;
+    }
+
+    let addedCount = 0;
+    for (const name of names) {
+        const result = await _findOrCreateReferenceRow(tabName, name);
+        if (result.added) {
+            addedCount += 1;
+        }
+    }
+    return addedCount;
+}
+
+async function _findOrCreateReferenceRow(tabName, name) {
+    const rawData = await Database.getData('CACHE', tabName);
+    const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
+    const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
+    const nameColIndex = headers.findIndex((header) => String(header || '').trim() === nameColumn);
+
+    if (nameColIndex === -1) {
+        throw new Error(`[production-utils] Missing ${nameColumn} column in CACHE/${tabName}`);
+    }
+
+    for (let rowIndex = 1; rowIndex < rawData.length; rowIndex += 1) {
+        const row = Array.isArray(rawData[rowIndex]) ? rawData[rowIndex] : [];
+        const existingName = _normalizeIndexName(row[nameColIndex]);
+        if (existingName && existingName.toLowerCase() === name.toLowerCase()) {
+            return { rowNumber: rowIndex + 1, added: false };
+        }
+    }
+
+    const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
+    rowValues[nameColIndex] = name;
+    const rowNumber = await Database.appendSheetRow('CACHE', tabName, rowValues);
+    return { rowNumber, added: true };
 }

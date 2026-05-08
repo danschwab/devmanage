@@ -263,6 +263,51 @@ class database_uncached {
 
         return true;
     }
+
+    /**
+     * Write a single cell value using A1 notation range.
+     * This avoids full-table writes for high-concurrency updates.
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Sheet/tab name
+     * @param {number} rowNumber - 1-based row number
+     * @param {number} columnNumber - 1-based column number
+     * @param {string} value - Cell value
+     * @returns {Promise<boolean>}
+     */
+    static async setCellValue(tableId, tabName, rowNumber, columnNumber, value) {
+        const colLetter = _numberToColumnLetter(columnNumber);
+        const range = `${tabName}!${colLetter}${rowNumber}:${colLetter}${rowNumber}`;
+
+        await GoogleSheetsService.setSheetData(tableId, range, [[value ?? '']], null);
+
+        invalidateCache([
+            { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
+        ], true);
+
+        return true;
+    }
+
+    /**
+     * Append a single row to the end of a tab using a targeted range write.
+     * @param {string} tableId - Identifier for the table
+     * @param {string} tabName - Sheet/tab name
+     * @param {Array<string>} values - Row values in column order
+     * @returns {Promise<number>} 1-based row number that was appended
+     */
+    static async appendSheetRow(tableId, tabName, values) {
+        const rawData = await GoogleSheetsService.getSheetData(tableId, tabName);
+        const nextRow = (Array.isArray(rawData) ? rawData.length : 0) + 1;
+        const endCol = _numberToColumnLetter(Math.max(values.length, 1));
+        const range = `${tabName}!A${nextRow}:${endCol}${nextRow}`;
+
+        await GoogleSheetsService.setSheetData(tableId, range, [values], null);
+
+        invalidateCache([
+            { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
+        ], true);
+
+        return nextRow;
+    }
     
     /**
      * Hides specified logical tabs in a table
@@ -311,7 +356,7 @@ class database_uncached {
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow'],
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow'],
     ['getItemImageUrl'] // Infinite cache for image URLs
 );
 
@@ -409,4 +454,19 @@ async function _archiveDeletedRows(sourceTable, sourceTab, deletedRows, username
         console.error('Failed to archive deleted rows:', error);
         // Don't throw - archival failure shouldn't block the main save
     }
+}
+
+/**
+ * Convert a 1-based column number to A1 notation column letter(s).
+ * @private
+ */
+function _numberToColumnLetter(num) {
+    let letter = '';
+    let n = Number(num);
+    while (n > 0) {
+        const remainder = (n - 1) % 26;
+        letter = String.fromCharCode(65 + remainder) + letter;
+        n = Math.floor((n - 1) / 26);
+    }
+    return letter;
 }

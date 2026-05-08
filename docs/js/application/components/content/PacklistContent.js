@@ -804,7 +804,7 @@ export const PacklistContent = {
             console.log('PacklistContent: Refresh requested');
             // Invalidate the getTabs cache to force reload
             invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'ProductionSchedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'Production Schedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
             ], true);
             

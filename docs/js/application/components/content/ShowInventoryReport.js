@@ -376,7 +376,7 @@ export const ShowInventoryReport = {
 
         async handleRefresh() {
             invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED','ProductionSchedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
+                { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED','Production Schedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
                 { namespace: 'database', methodName: 'getData', args: ['INVENTORY'] },
                 { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS'] },
                 { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
