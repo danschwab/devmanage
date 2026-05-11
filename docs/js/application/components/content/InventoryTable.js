@@ -415,6 +415,7 @@ export const InventoryTableComponent = {
                 { 
                     key: 'itemNumber', 
                     label: 'ITEM#',
+                    type: 'item',
                     width: 120,
                     sortable: true
                 },

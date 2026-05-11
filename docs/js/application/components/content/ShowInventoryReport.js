@@ -35,8 +35,8 @@ export const ShowInventoryReport = {
                     width: 1,
                     sortable: false
                 },
-                { key: 'itemId', label: 'Item#', sortable: true },
-                { key: 'description', label: 'Item Description', details: true, sortable: true },
+                { key: 'itemId', label: 'Item#', type: 'item', sortable: true },
+                { key: 'description', label: 'Item Description', type: 'item', details: true, sortable: true },
                 { key: 'available', label: 'Inv Qty.', sortable: true },
             ];
             

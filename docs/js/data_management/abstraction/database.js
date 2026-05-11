@@ -344,9 +344,10 @@ class database_uncached {
             await GoogleSheetsService.createBlankTab(tableId, newTabName);
         }
         
-        // Invalidate related caches
+        // Invalidate related caches, including the possible attempt to get data from this tab before it existed
         invalidateCache([
-            { namespace: 'database', methodName: 'getTabs', args: [tableId] }
+            { namespace: 'database', methodName: 'getTabs', args: [tableId] },
+            { namespace: 'database', methodName: 'getData', args: [tableId, newTabName] }
         ]);
     }
 }

@@ -651,7 +651,7 @@ export const PacklistTable = {
                     columns() {
                         return [
                             { key: 'image', label: 'IMG', width: 1, sortable: false },
-                            { key: 'itemNumber', label: 'Item #', width: 120, sortable: true },
+                            { key: 'itemNumber', label: 'Item #', type: 'item', width: 120, sortable: true },
                             { key: 'description', label: 'Description', sortable: true },
                             { key: 'quantity', label: 'Available', width: 100, sortable: true },
                             { key: 'actions', label: '', width: 100, sortable: false }

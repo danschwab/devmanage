@@ -1,6 +1,34 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 
+function normalizeItemSortWords(value) {
+    return String(value)
+        .toLowerCase()
+        .split(/[\s\-_,./\\:;|]+/)
+        .filter(Boolean);
+}
+
+function compareItemLikeValues(aValue, bValue) {
+    const aWords = normalizeItemSortWords(aValue);
+    const bWords = normalizeItemSortWords(bValue);
+    const maxWords = Math.max(aWords.length, bWords.length);
+
+    for (let i = 0; i < maxWords; i++) {
+        const aWord = aWords[i];
+        const bWord = bWords[i];
+
+        if (aWord === undefined) return -1;
+        if (bWord === undefined) return 1;
+
+        const wordComparison = aWord.localeCompare(bWord, undefined, { numeric: true, sensitivity: 'base' });
+        if (wordComparison !== 0) {
+            return wordComparison;
+        }
+    }
+
+    return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+}
+
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
     // Selection map with unique keys to handle multiple tables
@@ -1472,6 +1500,12 @@ export const TableComponent = {
                     // Handle null/undefined values
                     if (aValue === null || aValue === undefined) return 1;
                     if (bValue === null || bValue === undefined) return -1;
+
+                    const columnType = String(sortColumn.type || '').toLowerCase();
+                    if (columnType === 'item') {
+                        const comparison = compareItemLikeValues(aValue, bValue);
+                        return this.sortDirection === 'desc' ? -comparison : comparison;
+                    }
                     
                     // Try to parse as dates first
                     const aDate = parseDate(aValue);

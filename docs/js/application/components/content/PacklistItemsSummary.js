@@ -35,7 +35,7 @@ export const PacklistItemsSummary = {
                     width: 1,
                     sortable: false
                 },
-                { key: 'itemId', label: 'Item#', sortable: true},
+                { key: 'itemId', label: 'Item#', type: 'item', sortable: true},
                 { key: 'quantity', label: 'Quantity', sortable: true},
                 { key: 'available', label: 'Inv. Qty.', sortable: true},
                 { key: 'tabName', label: 'Tab', sortable: true},
