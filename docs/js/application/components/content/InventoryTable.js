@@ -1,5 +1,4 @@
 import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
-import { InventorySaveModal } from '../interface/inventorySaveModal.js';
 
 
 // Simple modal component for entering new item number
