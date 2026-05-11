@@ -1,5 +1,104 @@
 import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 
+/**
+ * Modal displayed before any inventory save.
+ * Asks for an effective date (today = apply immediately; future = schedule) and a required note.
+ *
+ * Props:
+ *   onConfirm(scheduledDate: string, note: string) — called with ISO date and trimmed note on confirm.
+ *
+ * Emits 'close-modal' to close itself.
+ */
+const InventorySaveModal = {
+    props: {
+        onConfirm: {
+            type: Function,
+            required: true
+        },
+        hasQtyChanges: {
+            type: Boolean,
+            default: true
+        }
+    },
+    data() {
+        return {
+            scheduledDate: todayISOString(),
+            note: '',
+            error: null
+        };
+    },
+    computed: {
+        todayISO() {
+            return todayISOString();
+        },
+        isFutureDate() {
+            return this.scheduledDate > this.todayISO;
+        },
+        charCount() {
+            return this.note.length;
+        }
+    },
+    methods: {
+        validate() {
+            if (this.hasQtyChanges && !this.note.trim()) {
+                this.error = 'A note is required for quantity changes';
+                return false;
+            }
+            if (!this.scheduledDate || this.scheduledDate < this.todayISO) {
+                this.error = 'Date cannot be in the past';
+                return false;
+            }
+            this.error = null;
+            return true;
+        },
+        handleApplyNow() {
+            if (!this.validate()) return;
+            this.onConfirm(this.todayISO, this.note.trim());
+            this.$emit('close-modal');
+        },
+        handleSchedule() {
+            if (!this.validate()) return;
+            if (!this.isFutureDate) {
+                this.error = 'Select a future date to schedule';
+                return;
+            }
+            this.onConfirm(this.scheduledDate, this.note.trim());
+            this.$emit('close-modal');
+        }
+    },
+    template: html`
+        <div class="content">
+            <div class="form-group">
+                <label>Note <span v-if="hasQtyChanges" style="color: var(--color-red)">*</span></label>
+                <input
+                    type="text"
+                    v-model="note"
+                    maxlength="25"
+                    :placeholder="hasQtyChanges ? 'What changed and why?' : 'Optional note'"
+                    :class="{ error: !!error && !note.trim() }"
+                    autofocus
+                    @keyup.enter="handleApplyNow"
+                />
+                <span v-if="error && !note.trim()" class="error-message">{{ error }}</span>
+                <span v-else class="helper-text">{{ charCount }}/25</span>
+            </div>
+            <div class="form-group">
+                <label>Effective Date</label>
+                <input type="date" v-model="scheduledDate" :min="todayISO" :class="{ error: !!error && scheduledDate < todayISO }" />
+                <span v-if="error && scheduledDate < todayISO" class="error-message">{{ error }}</span>
+                <span v-else-if="!isFutureDate" class="helper-text">Changes will be immediate</span>
+                <span v-else class="helper-text">Changes will be scheduled</span>
+            </div>
+            <div class="button-bar">
+                <button v-if="!isFutureDate" @click="handleApplyNow" class="purple">Apply Now</button>
+                <button v-else @click="handleSchedule" class="purple" :title="'Schedule for ' + scheduledDate">Schedule</button>
+                <button @click="$emit('close-modal')">Cancel</button>
+            </div>
+        </div>
+    `
+};
+
+
 
 // Simple modal component for entering new item number
 const NewItemNumberPrompt = {
@@ -733,7 +832,14 @@ export const InventoryTableComponent = {
         
         async handleSave() {
             if (!this.inventoryTableStore) return;
+            const data = this.inventoryTableStore.data || [];
+            const original = this.inventoryTableStore.originalData || [];
+            const hasQtyChanges = data.some(row => {
+                const orig = original.find(o => o.itemNumber === row.itemNumber);
+                return orig && String(row.quantity) !== String(orig.quantity);
+            });
             this.$modal.custom(InventorySaveModal, {
+                hasQtyChanges,
                 onConfirm: async (scheduledDate, note) => {
                     await this.inventoryTableStore.save('Saving inventory...', { scheduledDate, note });
                 }
