@@ -536,9 +536,10 @@ class inventoryUtils_uncached {
             const ds = entry.t;
             const date = toISODateString(new Date(ds * 100));
 
-            // Capture opening balance the moment we cross the startDate boundary.
-            // At this point runningQty reflects currentQty with all newer changes rewound.
-            if (!openingBalanceSet && startDs !== null && ds <= startDs) {
+            // Capture opening balance the moment we see the first entry strictly BEFORE startDate.
+            // Using strict less-than ensures entries ON startDate are fully rewound before capture,
+            // so the balance reflects qty before any startDate changes (preventing double-count).
+            if (!openingBalanceSet && startDs !== null && ds < startDs) {
                 startQty = runningQty;
                 openingBalanceSet = true;
             }
@@ -559,11 +560,12 @@ class inventoryUtils_uncached {
 
             const inWindow = (!startDs || ds >= startDs) && (!endDs || ds <= endDs);
             if (inWindow) {
+                const noteText = entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || '');
                 events.push({
                     date,
                     event: 'Inv. Change',
-                    note: entry.u || '',
-                    change: changeLabels.join(', ') || entry.s || '',
+                    note: noteText,
+                    change: changeLabels.join(', ') || '',
                     quantity: null,
                     _delta: delta
                 });
@@ -612,10 +614,11 @@ class inventoryUtils_uncached {
             const projectedInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity'], date);
             const projectedQty = parseInt(projectedInfo?.[0]?.quantity ?? 0, 10) || null;
 
+            const scheduledNote = entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || '');
             events.push({
                 date,
                 event: 'Scheduled',
-                note: entry.s || '',
+                note: scheduledNote,
                 change: changeLabels.join(', '),
                 quantity: null,
                 _absoluteQty: projectedQty
