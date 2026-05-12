@@ -232,16 +232,6 @@ export const ScheduleTableComponent = {
                     [], // No additional params
                     null, // Results go to AppData
                     true // Pass full item/row
-                ),
-                // Guess ship date if missing and store in AppData
-                createAnalysisConfig(
-                    Requests.guessShipDate,
-                    'estimatedShipDateEnrichment',
-                    'Adding missing ship dates to data...',
-                    null, // No specific source columns
-                    [], // No additional params
-                    'Ship', // Results go to ship date column
-                    true // Pass full item/row
                 )
             ];
 
@@ -438,10 +428,10 @@ export const ScheduleTableComponent = {
             // Only show card if there's an estimated date
             if (estimatedDate) {
                 return [{
-                    message: `estimated`,
-                    hoverMessage: `Starts: ${startDate}`,
+                    message: `${estimatedDate}`,
+                    hoverMessage: `Show starts: ${startDate}`,
                     clickable: false,
-                    class: 'gray' // Gray card to indicate estimated value
+                    class: 'orange' // Yellow card to indicate estimated value
                 }];
             }
             
@@ -817,7 +807,7 @@ export const ScheduleTableComponent = {
                     <div
                         :class="['card', card.color || 'red', { 'clickable': card.clickable }]"
                         @click="card.clickable ? card.action() : null"
-                        :title="card.rawValue"
+                        :title="'Missing from index: ' + card.rawValue"
                         v-html="card.message"
                     ></div>
                 </template>
