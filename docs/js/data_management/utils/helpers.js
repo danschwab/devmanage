@@ -236,6 +236,9 @@ class FuzzyMatcher {
     inputText = inputText.trim().toUpperCase().replace(/[\(\).'"]/g, '');
     const inputLen = inputText.length;
 
+    // Short strings (acronyms, etc.) require stricter matching to avoid false positives
+    if (inputLen <= 4) distanceThreshold = Math.min(distanceThreshold, 1);
+
     let bestMatch = '';
     let lowestDistance = distanceThreshold;
     let multipleBestResults = false;
