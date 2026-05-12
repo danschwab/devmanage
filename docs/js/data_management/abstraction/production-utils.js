@@ -312,7 +312,7 @@ class productionUtils_uncached {
             };
         }
 
-        const message = 'unrecognized';
+        const message = '⚠';
 
         return {
             message,

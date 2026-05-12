@@ -100,30 +100,6 @@ For design and project queue:
 
 **Application tasks**
 
-inventory updates
-
-- [x] include all current categories
-- [x] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
-- [x] allow editing of item quantities
-- [x] allow editing of item descriptions
-- [x] allow adding new items
-- [x] add existing item thumbnails
-- [x] make thumbnails be a cached analytics step
-- [x] force all inventory changes to have a "change date" that is separate from the edit history date, and update the table to show future changes (force reference date input) in additional rows following the main item row
-- [ ] !!! add all FURNITURE
-- [ ] !!! update LIGHTBOXES
-- [ ] !!! add all LIGHTING
-- [ ] track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
-- [ ] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
-- [ ] allow attaching a change dates to a project
-- [ ] create a history modification utility for viewing changes over time and changing their values if necessary
-- [ ] force projects to query the inventory by date
-      optimize thumbnail finding: cached call that gets thumbnail folder contents once
-      allow uploading new item thumbnails
-      allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
-      item status interface to locate items and update item status
-      We could integrate a repair schedule and other things into this system for a complete inventory management system
-
 HIGH PRIORITY: Export Basic Pack List from Inventor
 
 - [x] Create new pack list in Google Sheets
@@ -152,6 +128,30 @@ notifications system
 - [ ] !!! Provide a feedback mechanism for users to suggest improvements or report issues
 - [ ] allow notifications throughout application to be picked up by components
 - [ ] basic notification center on dashboard
+
+inventory updates
+
+- [x] include all current categories
+- [x] Improve inventory item finding: match actual bematrix hardware to inventory bematrix item numbers
+- [x] allow editing of item quantities
+- [x] allow editing of item descriptions
+- [x] allow adding new items
+- [x] add existing item thumbnails
+- [x] make thumbnails be a cached analytics step
+- [x] force all inventory changes to have a "change date" that is separate from the edit history date, and update the table to show future changes (force reference date input) in additional rows following the main item row
+- [ ] ! update LIGHTBOXES
+- [ ] ! add all FURNITURE
+- [ ] ! add all LIGHTING
+- [ ] track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
+- [ ] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
+- [ ] allow attaching a change dates to a project
+- [ ] create a history modification utility for viewing changes over time and changing their values if necessary
+- [ ] force projects to query the inventory by date
+      optimize thumbnail finding: cached call that gets thumbnail folder contents once
+      allow uploading new item thumbnails
+      allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
+      item status interface to locate items and update item status
+      We could integrate a repair schedule and other things into this system for a complete inventory management system
 
 show management system
 

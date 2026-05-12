@@ -3525,7 +3525,7 @@ export const TableComponent = {
             <!-- Data Summary -->
             <div key="data-summary" v-if="showFooter" :class="['content-footer', theme ]">
                 <p v-if="isLoading || isAnalyzing" class="loading-message">{{ loadingMessage }}</p>
-                <p v-else-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} item{{ data.length !== 1 ? 's' : '' }}</p>
+                <p v-else-if="visibleRows.length < data.length">Showing {{ visibleRows.length }} of {{ data.length }} row{{ data.length !== 1 ? 's' : '' }}</p>
                 <p v-else-if="!data || data.length === 0" class="empty-message">{{ emptyMessage }}</p>
                 <p v-else>Showing {{ data.length }} row{{ data.length !== 1 ? 's' : '' }}</p>
                 

@@ -412,10 +412,6 @@ export const ScheduleTableComponent = {
                             // Emit event for parent to handle (e.g., close modal)
                             this.$emit('packlist-created', identifier);
                             
-                            // Trigger re-analysis to update button
-                            if (this.scheduleTableStore) {
-                                this.scheduleTableStore.runConfiguredAnalysis();
-                            }
                         } catch (createError) {
                             console.error('Error in create confirmation:', createError);
                             this.$modal.error(`Failed to create packlist: ${createError.message}`, 'Error');
@@ -533,6 +529,7 @@ export const ScheduleTableComponent = {
                     : `${issue.referenceType === 'show' ? 'Show' : 'Client'} Missing`;
 
                 const IndexResolutionComponent = {
+                    inject: ['$modal'],
                     props: {
                         issue: Object,
                         options: Array,
@@ -560,14 +557,6 @@ export const ScheduleTableComponent = {
                         }
                     },
                     methods: {
-                        async refreshIndexAnalysis() {
-                            if (this.scheduleTableStore && typeof this.scheduleTableStore.clearSpecificAnalysisResults === 'function') {
-                                this.scheduleTableStore.clearSpecificAnalysisResults(['clientIndexIssue', 'showIndexIssue']);
-                            }
-                            if (this.scheduleTableStore && typeof this.scheduleTableStore.runConfiguredAnalysis === 'function') {
-                                await this.scheduleTableStore.runConfiguredAnalysis({ skipIfAnalyzed: false });
-                            }
-                        },
                         async selectOption(option) {
                             if (this.isSubmitting) {
                                 return;
@@ -576,10 +565,15 @@ export const ScheduleTableComponent = {
                             this.isSubmitting = true;
 
                             try {
+                                let result;
                                 if (this.onSelectOption) {
-                                    await this.onSelectOption(option);
+                                    result = await this.onSelectOption(option);
                                 }
-                                this.$emit('close-modal');
+                                if (!result || result.applied || result.browsedAll) {
+                                    this.$emit('close-modal');
+                                } else {
+                                    this.isSubmitting = false;
+                                }
                             } catch (error) {
                                 // Keep modal open so user can retry after a failed request.
                                 this.isSubmitting = false;
@@ -665,6 +659,9 @@ export const ScheduleTableComponent = {
                                             canonicalName: customName,
                                             abbreviation: this.issue.rawValue
                                         });
+                                        if (result?.applied) {
+                                            this.$emit('close-modal');
+                                        }
                                         return result;
                                     }
 
@@ -738,7 +735,6 @@ export const ScheduleTableComponent = {
 
                 if (option.actionType === 'add-new') {
                     await Requests.addScheduleReferenceName(issue.referenceType, option.canonicalName);
-                    await this.refreshIndexAnalysis();
                     return { applied: true };
                 } else if (option.actionType === 'add-abbreviation') {
                     await Requests.appendScheduleReferenceAbbreviation(
@@ -746,7 +742,6 @@ export const ScheduleTableComponent = {
                         option.canonicalName,
                         option.abbreviation
                     );
-                    await this.refreshIndexAnalysis();
                     return { applied: true };
                 } else if (option.actionType === 'add-custom') {
                     const result = await Requests.addCustomScheduleReferenceEntry(
@@ -765,7 +760,6 @@ export const ScheduleTableComponent = {
                         };
                     }
 
-                    await this.refreshIndexAnalysis();
                     return { applied: true };
                 } else {
                     return { applied: false };
