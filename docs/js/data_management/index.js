@@ -6,7 +6,7 @@ export { Database } from './abstraction/database.js';
 export { InventoryUtils } from './abstraction/inventory-utils.js';
 export { ApplicationUtils } from './abstraction/application-utils.js';
 export { PackListUtils } from './abstraction/packlist-utils.js';
-export { ProductionUtils } from './abstraction/production-utils.js';
+export { ProductionUtils, findPackListTab } from './abstraction/production-utils.js';
 
 // Utility classes
 export { parseDate, toISODateString, todayISOString, searchFilter, GetTopFuzzyMatch, GetParagraphMatchRating } from './utils/helpers.js';

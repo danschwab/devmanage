@@ -551,12 +551,23 @@ export const ScheduleTableComponent = {
                                 return this.options;
                             }
                             const search = this.filterText.trim().toLowerCase();
-                            return this.options.filter(option =>
-                                option.label.toLowerCase().includes(search)
-                            );
+                            return this.options.filter(option => {
+                                // Extract searchable text: use canonicalName for "Abbreviation for" and "Add" options
+                                // For other options, search the label normally
+                                const searchableText = option.canonicalName || option.label;
+                                return searchableText.toLowerCase().includes(search);
+                            });
                         }
                     },
                     methods: {
+                        async refreshIndexAnalysis() {
+                            if (this.scheduleTableStore && typeof this.scheduleTableStore.clearSpecificAnalysisResults === 'function') {
+                                this.scheduleTableStore.clearSpecificAnalysisResults(['clientIndexIssue', 'showIndexIssue']);
+                            }
+                            if (this.scheduleTableStore && typeof this.scheduleTableStore.runConfiguredAnalysis === 'function') {
+                                await this.scheduleTableStore.runConfiguredAnalysis({ skipIfAnalyzed: false });
+                            }
+                        },
                         async selectOption(option) {
                             if (this.isSubmitting) {
                                 return;
@@ -573,6 +584,94 @@ export const ScheduleTableComponent = {
                                 // Keep modal open so user can retry after a failed request.
                                 this.isSubmitting = false;
                             }
+                        },
+                        async openCustomEntryModal() {
+                            if (this.isSubmitting) {
+                                return;
+                            }
+
+                            const CustomEntryComponent = {
+                                props: {
+                                    issue: Object,
+                                    onSubmit: Function
+                                },
+                                data() {
+                                    return {
+                                        customName: '',
+                                        isSubmitting: false,
+                                        errorMessage: ''
+                                    };
+                                },
+                                methods: {
+                                    async submitCustomName() {
+                                        if (this.isSubmitting) {
+                                            return;
+                                        }
+
+                                        const nextName = this.customName.trim();
+                                        if (!nextName) {
+                                            this.errorMessage = 'Enter a name before submitting.';
+                                            return;
+                                        }
+
+                                        this.isSubmitting = true;
+                                        this.errorMessage = '';
+
+                                        try {
+                                            const result = await this.onSubmit?.(nextName);
+                                            if (result?.applied) {
+                                                this.$emit('close-modal');
+                                                return;
+                                            }
+
+                                            this.errorMessage = result?.message || 'That value already exists in the index or abbreviations.';
+                                        } catch (error) {
+                                            this.errorMessage = error?.message || 'Unable to add the custom entry.';
+                                        } finally {
+                                            this.isSubmitting = false;
+                                        }
+                                    }
+                                },
+                                template: html`
+                                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                                        <p>Enter a custom new {{ issue.referenceType }}.</p>
+                                        <p>The new name must not already exist in the index or abbreviations.</p>
+                                        <div class="input-container" style="margin: 0.75rem 0;">
+                                            <input
+                                                type="text"
+                                                v-model="customName"
+                                                :disabled="isSubmitting"
+                                                :placeholder="'Enter custom new ' + issue.referenceType"
+                                                class="search-input"
+                                                style="width: 100%;"
+                                                @keydown.enter.prevent="submitCustomName"
+                                            />
+                                        </div>
+                                        <p v-if="errorMessage" style="color: var(--color-red, #b00020); margin-bottom: 0.75rem;">{{ errorMessage }}</p>
+                                        <div class="button-bar">
+                                            <button @click="submitCustomName" :disabled="isSubmitting || !customName.trim()" class="blue">Submit</button>
+                                            <button @click="$emit('close-modal')" :disabled="isSubmitting" class="gray">Cancel</button>
+                                        </div>
+                                    </div>
+                                `
+                            };
+
+                            this.$modal.custom(CustomEntryComponent, {
+                                issue: this.issue,
+                                onSubmit: async (customName) => {
+                                    if (this.onSelectOption) {
+                                        const result = await this.onSelectOption({
+                                            actionType: 'add-custom',
+                                            canonicalName: customName,
+                                            abbreviation: this.issue.rawValue
+                                        });
+                                        return result;
+                                    }
+
+                                    return { applied: false, message: 'Unable to submit the custom entry.' };
+                                },
+                                modalClass: 'hamburger-menu'
+                            }, `Enter custom new ${this.issue.referenceType}`);
                         }
                     },
                     template: html`
@@ -597,6 +696,16 @@ export const ScheduleTableComponent = {
                                         {{ option.label }}
                                     </button>
                                 </li>
+                                <li v-if="!includeAllCandidates" style="margin-top: 0.5rem;">
+                                    <button
+                                        @click="openCustomEntryModal"
+                                        :disabled="isSubmitting"
+                                        class="blue"
+                                        style="text-align: left; width: 100%;"
+                                    >
+                                        Enter custom new {{ issue.referenceType }}
+                                    </button>
+                                </li>
                             </ul>
                         </div>
                     `
@@ -607,7 +716,7 @@ export const ScheduleTableComponent = {
                     options,
                     includeAllCandidates,
                     onSelectOption: async (option) => {
-                        await this.applyIndexResolutionOption(option, row, issue);
+                        return await this.applyIndexResolutionOption(option, row, issue);
                     },
                     modalClass: 'hamburger-menu'
                 }, modalTitle);
@@ -619,35 +728,52 @@ export const ScheduleTableComponent = {
         async applyIndexResolutionOption(option, row, issue) {
             try {
                 if (!option || !issue) {
-                    return;
+                    return { applied: false };
                 }
 
                 if (option.actionType === 'browse-all') {
                     await this.showIndexResolutionModal(row, issue, true);
-                    return;
+                    return { applied: false, browsedAll: true };
                 }
 
                 if (option.actionType === 'add-new') {
                     await Requests.addScheduleReferenceName(issue.referenceType, option.canonicalName);
+                    await this.refreshIndexAnalysis();
+                    return { applied: true };
                 } else if (option.actionType === 'add-abbreviation') {
                     await Requests.appendScheduleReferenceAbbreviation(
                         issue.referenceType,
                         option.canonicalName,
                         option.abbreviation
                     );
-                } else {
-                    return;
-                }
+                    await this.refreshIndexAnalysis();
+                    return { applied: true };
+                } else if (option.actionType === 'add-custom') {
+                    const result = await Requests.addCustomScheduleReferenceEntry(
+                        issue.referenceType,
+                        option.canonicalName,
+                        option.abbreviation
+                    );
 
-                if (this.scheduleTableStore && typeof this.scheduleTableStore.clearSpecificAnalysisResults === 'function') {
-                    this.scheduleTableStore.clearSpecificAnalysisResults(['clientIndexIssue', 'showIndexIssue']);
-                }
-                if (this.scheduleTableStore && typeof this.scheduleTableStore.runConfiguredAnalysis === 'function') {
-                    await this.scheduleTableStore.runConfiguredAnalysis({ skipIfAnalyzed: false });
+                    if (!result?.applied) {
+                        const conflictName = result?.conflict?.existingName || '';
+                        const conflictValue = result?.conflict?.value || option.canonicalName;
+                        const fieldLabel = result?.conflict?.field === 'abbreviation' ? 'abbreviation' : 'name';
+                        return {
+                            applied: false,
+                            message: `The ${fieldLabel} "${conflictValue}" already exists${conflictName ? ` on ${conflictName}` : ''}.`
+                        };
+                    }
+
+                    await this.refreshIndexAnalysis();
+                    return { applied: true };
+                } else {
+                    return { applied: false };
                 }
             } catch (error) {
                 console.error('[ScheduleTable] Failed to apply index resolution:', error);
                 this.$modal.error(`Failed to apply resolution: ${error.message}`, 'Index Resolution Error');
+                return { applied: false, message: error.message };
             }
         }
     },

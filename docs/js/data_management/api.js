@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, findPackListTab, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -599,6 +599,18 @@ class Requests_uncached {
     }
 
     /**
+     * Add a custom canonical client/show name and attach the unresolved value as an abbreviation.
+     * Mutation — uncached.
+     * @param {'client'|'show'} referenceType
+     * @param {string} canonicalName
+     * @param {string} abbreviation
+     * @returns {Promise<{applied:boolean,addedRow:boolean,rowNumber:number|null,canonicalName:string,abbreviation:string,conflict:Object|null}>}
+     */
+    static async addCustomScheduleReferenceEntry(referenceType, canonicalName, abbreviation) {
+        return await ProductionUtils.addCustomReferenceEntry(referenceType, canonicalName, abbreviation);
+    }
+
+    /**
      * Get show details by project identifier
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
@@ -644,11 +656,11 @@ class Requests_uncached {
      */
     static async checkPacklistExists(deps, scheduleRow) {
         // Compute the identifier from the row data
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, parseInt(scheduleRow.Year));
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
         
         // Get available tabs and check if packlist exists
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        const tab = availableTabs.find(tab => tab.title === identifier);
+        const tab = findPackListTab(identifier, availableTabs);
         
         return {
             exists: !!tab,
@@ -1124,7 +1136,8 @@ export const Requests = wrapMethods(
         'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
-        'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation'
+        'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
+        'addCustomScheduleReferenceEntry'
     ], // Mutation methods and pass-through methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

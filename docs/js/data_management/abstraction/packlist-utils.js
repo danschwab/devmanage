@@ -1,4 +1,7 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, findPackListTab, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
+
+/** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
+function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
 /**
  * Utility functions for pack list operations
@@ -147,12 +150,12 @@ class packListUtils_uncached {
      */
     static async getContent(deps, projectIdentifier, itemColumnsStart = "Pack") {
         // First verify the tab exists
-        const tabs = await Database.getTabs('PACK_LISTS'); // Not adding as a dependency to avoid unnecessary cache invalidation.
-                                                           // This only works if null is returned on failure to avoid this function being cached.
+        const tabs = await Database.getTabs('PACK_LISTS'); // Uncached so we don't invalidate on every tabs invalidation
 
-        const matchedTab = tabs.find(tab => tab.title.toLowerCase() === projectIdentifier.toLowerCase());
+        const matchedTab = findPackListTab(projectIdentifier, tabs);
         console.log('[getContent]', projectIdentifier, '| tabs:', tabs?.map(t => t.title), '| found:', !!matchedTab);
         if (!matchedTab) {
+            await deps.call(Database.getTabs, 'PACK_LISTS'); // Creates tabs cache dependency for nonexistant packlists
             return null;
         }
         const resolvedIdentifier = matchedTab.title;
@@ -535,7 +538,7 @@ class packListUtils_uncached {
                 const otherId = overlapRow.Identifier || 
                                await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
 
-                if (otherId === projectIdentifier) continue;
+                if (_normalizeId(otherId) === _normalizeId(projectIdentifier)) continue;
                 
                 try {
                     const otherItemMap = await deps.call(PackListUtils.extractItems, otherId);
@@ -678,7 +681,7 @@ class packListUtils_uncached {
             const projectId = projectRow.Identifier || 
                             await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
             
-            if (projectId === currentProjectId) continue;
+            if (_normalizeId(projectId) === _normalizeId(currentProjectId)) continue;
             
             try {
                 const projectItems = await deps.call(PackListUtils.extractItems, projectId);
@@ -900,8 +903,13 @@ class packListUtils_uncached {
                 }
             }
             
-            // Filter tabs to only those matching show identifiers
-            return tabs.filter(tab => identifiers.has(tab.title));
+            // Filter tabs to only those matching show identifiers (using findPackListTab for fuzzy/case fallback)
+            const matchedTitles = new Set();
+            for (const id of identifiers) {
+                const tab = findPackListTab(id, tabs);
+                if (tab) matchedTitles.add(tab.title);
+            }
+            return tabs.filter(tab => matchedTitles.has(tab.title));
         } catch (error) {
             console.error('[PackListUtils] Error filtering packlists by schedule:', error);
             return [];

@@ -1,5 +1,8 @@
 import { Database, ProductionUtils, PackListUtils, wrapMethods, parseDate, toISODateString, searchFilter, todayISOString, ApplicationUtils, invalidateCache, EditHistoryUtils } from '../index.js';
 
+/** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
+function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
 /**
  * Utility functions for inventory operations
  */
@@ -320,7 +323,7 @@ class inventoryUtils_uncached {
                 const overlapId = overlapRow.Identifier || 
                                  await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
                 
-                if (overlapId === projectIdentifier) continue;
+                if (_normalizeId(overlapId) === _normalizeId(projectIdentifier)) continue;
                 
                 const overlapInfo = await deps.call(PackListUtils.extractItems, overlapId);
                 

@@ -210,8 +210,13 @@ class productionUtils_uncached {
      * @returns {Promise<string>} The computed identifier string
      */
     static async computeIdentifier(deps, showName, clientName, year) {
+        // Normalize inputs so all callers produce the same result regardless of type or whitespace
+        const normalizedShow   = String(showName   || '').trim();
+        const normalizedClient = String(clientName || '').trim();
+        const normalizedYear   = String(parseInt(year, 10) || '').replace('NaN', '').trim();
+
         // If showName is blank, return blank
-        if (!showName || !showName.trim()) {
+        if (!normalizedShow) {
             return '';
         }
 
@@ -222,29 +227,29 @@ class productionUtils_uncached {
         let clientMatch = '';
         try {
             clientMatch = GetTopFuzzyMatch(
-                clientName,
+                normalizedClient,
                 referenceData.clients.names,
                 referenceData.clients.abbrs
             );
         } catch (e) {
-            clientMatch = clientName || '';
+            clientMatch = normalizedClient;
         }
 
         // Fuzzy match show
         let showMatch = '';
         try {
             showMatch = GetTopFuzzyMatch(
-                showName,
+                normalizedShow,
                 referenceData.shows.names,
                 referenceData.shows.abbrs,
                 2.5
             );
         } catch (e) {
-            showMatch = showName || '';
+            showMatch = normalizedShow;
         }
 
         // Compose identifier
-        return `${clientMatch} ${year || ''} ${showMatch}`.trim();
+        return `${clientMatch} ${normalizedYear} ${showMatch}`.trim();
     }
 
     /**
@@ -382,6 +387,98 @@ class productionUtils_uncached {
             referenceType: kind,
             rawValue: normalizedRaw,
             options
+        };
+    }
+
+    /**
+     * Add a custom canonical client/show name and store the missing value as its abbreviation.
+     * Mutation — uncached.
+     * @param {Object} deps
+     * @param {'client'|'show'} referenceType
+     * @param {string} canonicalName
+     * @param {string} abbreviation
+     * @returns {Promise<{applied:boolean,addedRow:boolean,rowNumber:number|null,canonicalName:string,abbreviation:string,conflict:Object|null}>}
+     */
+    static async addCustomReferenceEntry(deps, referenceType, canonicalName, abbreviation) {
+        const kind = referenceType === 'show' ? 'show' : 'client';
+        const tabName = kind === 'show' ? 'Shows' : 'Clients';
+        const normalizedName = _normalizeIndexName(canonicalName);
+        const normalizedAbbreviation = _normalizeIndexName(abbreviation);
+
+        if (!normalizedName || !normalizedAbbreviation) {
+            return {
+                applied: false,
+                addedRow: false,
+                rowNumber: null,
+                canonicalName: normalizedName,
+                abbreviation: normalizedAbbreviation,
+                conflict: {
+                    field: !normalizedName ? 'name' : 'abbreviation',
+                    value: !normalizedName ? canonicalName : abbreviation,
+                    existingName: ''
+                }
+            };
+        }
+
+        const indexData = await _getReferenceIndexData(tabName);
+        const nameConflict = _findReferenceConflict(normalizedName, indexData);
+        if (nameConflict) {
+            return {
+                applied: false,
+                addedRow: false,
+                rowNumber: null,
+                canonicalName: normalizedName,
+                abbreviation: normalizedAbbreviation,
+                conflict: {
+                    field: 'name',
+                    value: normalizedName,
+                    existingName: nameConflict.name
+                }
+            };
+        }
+
+        const abbreviationConflict = _findReferenceConflict(normalizedAbbreviation, indexData);
+        if (abbreviationConflict) {
+            return {
+                applied: false,
+                addedRow: false,
+                rowNumber: null,
+                canonicalName: normalizedName,
+                abbreviation: normalizedAbbreviation,
+                conflict: {
+                    field: 'abbreviation',
+                    value: normalizedAbbreviation,
+                    existingName: abbreviationConflict.name
+                }
+            };
+        }
+
+        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rawData = await Database.getData('CACHE', tabName);
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
+        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+
+        if (abbrColIndex === -1 || !rowResult.rowNumber) {
+            throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
+        }
+
+        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
+        const existingAbbrText = String(targetRow[abbrColIndex] || '').trim();
+        const mergedAbbr = _mergeAbbreviations(existingAbbrText, normalizedAbbreviation);
+
+        if (mergedAbbr !== existingAbbrText) {
+            await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
+        }
+
+        _invalidateReferenceCaches();
+
+        return {
+            applied: true,
+            addedRow: rowResult.added,
+            rowNumber: rowResult.rowNumber,
+            canonicalName: normalizedName,
+            abbreviation: mergedAbbr,
+            conflict: null
         };
     }
 
@@ -644,6 +741,24 @@ export const ProductionUtils = wrapMethods(
     ]
 );
 
+/**
+ * Find the matching packlist tab for an identifier string.
+ * Tries in order: exact → case-insensitive → normalized (strip non-alphanumeric, uppercase).
+ * This is the single source of truth for packlist tab resolution.
+ * @param {string} identifier
+ * @param {Array<{title:string}>} tabs
+ * @returns {{title:string}|null}
+ */
+export function findPackListTab(identifier, tabs) {
+    if (!identifier || !Array.isArray(tabs)) return null;
+    const exact = tabs.find(t => t.title === identifier);
+    if (exact) return exact;
+    const lc = identifier.toLowerCase();
+    const ci = tabs.find(t => t.title.toLowerCase() === lc);
+    if (ci) return ci;
+    const norm = _normalizeMatchText(identifier);
+    return tabs.find(t => _normalizeMatchText(t.title) === norm) || null;
+}
 
 
 // Helper functions not exposed via API
@@ -759,6 +874,28 @@ function _splitAbbreviations(value) {
         .split(',')
         .map(part => part.trim())
         .filter(Boolean);
+}
+
+function _findReferenceConflict(candidate, indexData) {
+    const rawNorm = _normalizeMatchText(candidate);
+    if (!rawNorm || !Array.isArray(indexData) || indexData.length === 0) {
+        return null;
+    }
+
+    const exactName = indexData.find(entry => _normalizeMatchText(entry.name) === rawNorm);
+    if (exactName) {
+        return { type: 'exact-name', name: exactName.name };
+    }
+
+    const exactAbbreviation = indexData.find(entry =>
+        Array.isArray(entry.abbreviations) &&
+        entry.abbreviations.some(abbr => _normalizeMatchText(abbr) === rawNorm)
+    );
+    if (exactAbbreviation) {
+        return { type: 'exact-abbreviation', name: exactAbbreviation.name };
+    }
+
+    return null;
 }
 
 function _mergeAbbreviations(existingText, nextToken) {
