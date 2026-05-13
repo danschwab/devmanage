@@ -1436,7 +1436,7 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
                     }
                     
                     // Clear and rerun only the specific analysis that was invalidated
-                    console.log(`[ReactiveStore] Re-running analysis step ${index + 1} for ${analysisMethodName}`);
+                    //console.log(`[ReactiveStore] Re-running analysis step ${index + 1} for ${analysisMethodName}`);
                     store.clearSpecificAnalysisResults([config.resultKey || config.targetColumn]);
                     store.runConfiguredAnalysis({ skipIfAnalyzed: false });
                 });
