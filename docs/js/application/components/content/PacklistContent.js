@@ -699,7 +699,7 @@ export const PacklistContent = {
             );
         },
         formatPacklistCard(tab) {
-            console.log(`[PacklistContent.formatPacklistCard] Formatting card for "${tab.title}", lockInfo:`, tab.lockInfo);
+            //console.log(`[PacklistContent.formatPacklistCard] Formatting card for "${tab.title}", lockInfo:`, tab.lockInfo);
             // Find any reactive stores for this packlist (regardless of analysis config)
             const matchingStores = findMatchingStores(
                 Requests.getPackList,
@@ -713,12 +713,12 @@ export const PacklistContent = {
             
             // Check if the packlist is locked
             const isLocked = tab.lockInfo && tab.lockInfo !== null;
-            console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - isLocked: ${isLocked}, hasUnsavedChanges: ${hasUnsavedChanges}`);
+            //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - isLocked: ${isLocked}, hasUnsavedChanges: ${hasUnsavedChanges}`);
             
             // Determine card styling based on lock state and unsaved changes
             // Priority: locked (white) > unsaved changes (red) > normal (gray)
             const cardClass = isLocked ? 'white' : (hasUnsavedChanges ? 'red' : 'gray');
-            console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
+            //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
             
             // Build content footer
             let contentFooter = undefined;
@@ -801,7 +801,7 @@ export const PacklistContent = {
             }
         },
         async handleRefresh() {
-            console.log('PacklistContent: Refresh requested');
+            //console.log('PacklistContent: Refresh requested');
             // Invalidate the getTabs cache to force reload
             invalidateCache([
                 { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'Production Schedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
