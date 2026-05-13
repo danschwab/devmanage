@@ -49,7 +49,7 @@ class PriorityQueueManager {
         this.processingIntervalId = null;
         this.isDisabled = false; // Permanently disabled during logout
         
-        console.log(`[PriorityQueue] Initialized with ${this.cpuCount} CPU cores, max concurrent: ${this.maxConcurrent}`);
+        //console.log(`[PriorityQueue] Initialized with ${this.cpuCount} CPU cores, max concurrent: ${this.maxConcurrent}`);
     }
     
     /**
@@ -121,7 +121,7 @@ class PriorityQueueManager {
         
         if (subscriberCount > 0) {
             const totalSubscribers = entry.subscribers.length;
-            console.log(`[PriorityQueue] ${subscriberCount} older call(s) subscribed to newer call (${totalSubscribers} total subscribers, priority ${priority})`);
+            //console.log(`[PriorityQueue] ${subscriberCount} older call(s) subscribed to newer call (${totalSubscribers} total subscribers, priority ${priority})`);
         }
 
         // Add to appropriate priority queue
@@ -251,7 +251,7 @@ class PriorityQueueManager {
                 entry.subscribers.forEach(subscriber => {
                     subscriber.resolve(result);
                 });
-                console.log(`[PriorityQueue] Notified ${entry.subscribers.length} subscriber(s) with result`);
+                //console.log(`[PriorityQueue] Notified ${entry.subscribers.length} subscriber(s) with result`);
             }
             
             // Update statistics
