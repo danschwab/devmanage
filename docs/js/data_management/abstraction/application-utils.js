@@ -206,7 +206,7 @@ class applicationUtils_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} username - The username to retrieve data for
      * @param {string} keyPrefix - Prefix to match against ID column
-     * @returns {Object|null} Parsed value for the most recent matching entry, or null
+     * @returns {{id: string, value: *}|null} Matching entry metadata, or null
      */
     static async getUserDataByPrefix(deps, username, keyPrefix) {
         const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -222,7 +222,7 @@ class applicationUtils_uncached {
         if (matches.length === 0) return null;
 
         // Choose newest by embedded timestamp when present, otherwise keep first.
-        let newestValue = null;
+        let newestMatch = null;
         let newestTimestamp = -Infinity;
 
         for (const match of matches) {
@@ -238,13 +238,16 @@ class applicationUtils_uncached {
                 : Number.NaN;
             const comparableTs = Number.isFinite(ts) ? ts : -Infinity;
 
-            if (newestValue === null || comparableTs > newestTimestamp) {
-                newestValue = parsedValue;
+            if (newestMatch === null || comparableTs > newestTimestamp) {
+                newestMatch = {
+                    id: match.ID,
+                    value: parsedValue
+                };
                 newestTimestamp = comparableTs;
             }
         }
 
-        return newestValue;
+        return newestMatch;
     }
     
     /**

@@ -296,7 +296,7 @@ class Requests_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} username - The username to retrieve data for
      * @param {string} keyPrefix - Prefix to match against stored IDs
-     * @returns {Object|null} Parsed value or null if no matching entry exists
+     * @returns {{id: string, value: *}|null} Matching entry or null if no match exists
      */
     static async getUserDataByPrefix(deps, username, keyPrefix) {
         return await deps.call(ApplicationUtils.getUserDataByPrefix, username, keyPrefix);

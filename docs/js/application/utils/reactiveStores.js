@@ -1229,9 +1229,42 @@ function applyDiffToData(data, diff) {
 }
 
 /**
+ * Normalize possible backup payload shapes from different autosave versions.
+ * @param {*} backupData - Parsed user data payload
+ * @returns {{mode: 'diff', diff: Array}|{mode: 'full', data: Array}|null}
+ */
+function normalizeBackupPayload(backupData) {
+    if (!backupData) {
+        return null;
+    }
+
+    // Current format: { diff: [...], timestamp }
+    if (Array.isArray(backupData.diff)) {
+        return { mode: 'diff', diff: backupData.diff };
+    }
+
+    // Legacy format: direct diff array
+    if (Array.isArray(backupData)) {
+        return { mode: 'diff', diff: backupData };
+    }
+
+    // Legacy alias occasionally used in prototypes.
+    if (Array.isArray(backupData.changes)) {
+        return { mode: 'diff', diff: backupData.changes };
+    }
+
+    // Legacy snapshot format: full data captured directly.
+    if (Array.isArray(backupData.data)) {
+        return { mode: 'full', data: backupData.data };
+    }
+
+    return null;
+}
+
+/**
  * Load saved store data from user data
  * @param {string} storeKey - Store registry key (used as the user data ID)
- * @returns {{diff: Array, key: string}|null} Diff payload and source key, or null if none found
+ * @returns {{mode: 'diff', diff: Array, key: string|null}|{mode: 'full', data: Array, key: string|null}|null}
  */
 async function loadStoreBackupFromUserData(storeKey) {
     if (!authState.isAuthenticated || !authState.user?.email) {
@@ -1241,11 +1274,11 @@ async function loadStoreBackupFromUserData(storeKey) {
     try {
         // Retrieve using the storeKey as the ID
         const backupData = await Requests.getUserData(authState.user.email, storeKey);
-        // Check for null (deleted entry) or missing data
-        if (backupData && backupData !== null && backupData.diff) {
-            console.log(`[ReactiveStore] Found backup for store, timestamp: ${backupData.timestamp}`);
+        const normalizedExact = normalizeBackupPayload(backupData);
+        if (normalizedExact) {
+            console.log('[ReactiveStore] Found backup for store (exact key match)');
             return {
-                diff: backupData.diff,
+                ...normalizedExact,
                 key: storeKey
             };
         }
@@ -1255,11 +1288,12 @@ async function loadStoreBackupFromUserData(storeKey) {
         if (keySeparatorIndex > 0) {
             const keyPrefix = storeKey.substring(0, keySeparatorIndex);
             const prefixBackupData = await Requests.getUserDataByPrefix(authState.user.email, keyPrefix);
-            if (prefixBackupData && prefixBackupData.diff) {
+            const normalizedPrefix = normalizeBackupPayload(prefixBackupData?.value);
+            if (normalizedPrefix) {
                 console.log('[ReactiveStore] Found backup by store key prefix fallback');
                 return {
-                    diff: prefixBackupData.diff,
-                    key: null
+                    ...normalizedPrefix,
+                    key: prefixBackupData?.id || null
                 };
             }
         }
@@ -1390,7 +1424,7 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
                     
                     // Check for backup first
                     const backupInfo = await loadStoreBackupFromUserData(key);
-                    const hasBackup = backupInfo && Array.isArray(backupInfo.diff) && backupInfo.diff.length > 0;
+                    const hasBackup = !!backupInfo;
                     
                     if (hasBackup) {
                         store.setLoading(true, 'Restoring saved changes...');
@@ -1403,8 +1437,12 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
                     // Apply backup after load if found
                     if (hasBackup && store.data) {
                         console.log('[ReactiveStore] Applying backup to store data');
-                        const restoredData = applyDiffToData(store.data, backupInfo.diff);
-                        store.setData(restoredData);
+                        if (backupInfo.mode === 'diff') {
+                            const restoredData = applyDiffToData(store.data, backupInfo.diff);
+                            store.setData(restoredData);
+                        } else if (backupInfo.mode === 'full') {
+                            store.setData(backupInfo.data);
+                        }
                         store.loadedBackupKey = backupInfo.key || null;
                         store.autoSaved = true; // Mark that this store was loaded from auto-save
                         // setData will trigger analysis automatically if configured
