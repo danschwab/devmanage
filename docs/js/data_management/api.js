@@ -531,12 +531,12 @@ class Requests_uncached {
      * Analyze a schedule row's client/show value against reference index data.
      * Returns a clickable alert object when attention is needed, otherwise null.
      * @param {Object} deps
-     * @param {Object} scheduleRow
+     * @param {string} rawName
      * @param {'client'|'show'} referenceType
      * @returns {Promise<Object|null>}
      */
-    static async checkScheduleReferenceState(deps, scheduleRow, referenceType) {
-        return await deps.call(ProductionUtils.checkReferenceNameState, scheduleRow, referenceType);
+    static async checkScheduleReferenceState(deps, rawName, referenceType) {
+        return await deps.call(ProductionUtils.checkReferenceNameState, rawName, referenceType);
     }
 
     /**
@@ -654,9 +654,9 @@ class Requests_uncached {
      * @param {Object} scheduleRow - Full schedule row object with Show, Client, Year properties
      * @returns {Promise<Object>} Object with { exists: boolean, identifier: string|null }
      */
-    static async checkPacklistExists(deps, scheduleRow) {
-        // Compute the identifier from the row data
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
+    static async checkPacklistExists(deps, rowData) {
+        // Compute the identifier from the extracted columns
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, rowData.Show, rowData.Client, rowData.Year);
         
         // Get available tabs and check if packlist exists
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
@@ -675,10 +675,10 @@ class Requests_uncached {
      * @param {Object} scheduleRow - Full schedule row object
      * @returns {Promise<string|undefined>} Guessed ship date or undefined (to preserve existing)
      */
-    static async guessShipDate(deps, scheduleRow) {
+    static async guessShipDate(deps, rowData) {
         // Only guess if Ship field is empty or null
-        if (!scheduleRow.Ship || scheduleRow.Ship.toString().trim() === '') {
-            return await deps.call(ProductionUtils.guessShipDate, scheduleRow);
+        if (!rowData.Ship || rowData.Ship.toString().trim() === '') {
+            return await deps.call(ProductionUtils.guessShipDate, rowData);
         }
         // Return undefined to preserve existing ship date
         return undefined;
@@ -745,10 +745,10 @@ class Requests_uncached {
      * @param {string} item['Packing/shop notes'] - Alternative source for description
      * @returns {Promise<Object|null>} Alert object if match is poor, null if good match
      */
-    static async checkDescriptionMatch(deps, item) {
-        // Extract item number and description from the item object
-        const itemNumber = item['Extracted Item'];
-        const description = item.Description || item['Packing/shop notes'] || '';
+    static async checkDescriptionMatch(deps, itemData) {
+        // Extract item number and description from the extracted columns
+        const itemNumber = itemData['Extracted Item'];
+        const description = itemData.Description || itemData['Packing/shop notes'] || '';
         
         if (!itemNumber || !description) {
             return null;
@@ -796,11 +796,10 @@ class Requests_uncached {
      * Check edit history source timeline and create an alert for CAD-overwritten rows.
      * Condition: most recent edit source is CAD and a prior web/app edit exists.
      * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Object} item - Item row object containing EditHistory
+     * @param {string|Object} rawHistory - EditHistory string or parsed object
      * @returns {Promise<Object|null>} Alert object for AppData or null
      */
-    static async checkCadSourceHistory(deps, item) {
-        const rawHistory = item?.EditHistory || item?.edithistory;
+    static async checkCadSourceHistory(deps, rawHistory) {
         if (!rawHistory) {
             return null;
         }
@@ -983,6 +982,7 @@ class Requests_uncached {
      * @returns {Promise<Object|null>} Alert object if inventory is low/shortage, null if sufficient
      */
     static async checkInventoryLevel(deps, item, currentProjectId) {
+        // item is the full item object (needed for all fields for context)
         const itemNumber = item['Extracted Item'];
         
         if (!itemNumber || !currentProjectId) {

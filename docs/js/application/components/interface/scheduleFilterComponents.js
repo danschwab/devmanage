@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, Priority } from '../../index.js';
 
 // Date preset offset constants
 const START_DATE_OFFSETS = { today: 0, monthAgo: -30, yearAgo: -365 };
@@ -268,13 +268,15 @@ export const ScheduleAdvancedFilter = {
             // Create analysis config to compute identifiers
             const analysisConfig = [
                 createAnalysisConfig(
-                    (show) => Requests.computeIdentifier(show.Show, show.Client, show.Year),
+                    (rowData) => Requests.computeIdentifier(rowData.Show, rowData.Client, rowData.Year),
                     'Identifier',
                     'Computing show identifiers...',
-                    null, // Pass full item
+                    ['Show', 'Client', 'Year'],
                     [],
                     'Identifier', // Store in Identifier column
-                    true // passFullItem
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
                 )
             ];
             

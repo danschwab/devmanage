@@ -278,14 +278,14 @@ class productionUtils_uncached {
      * Analyze whether a schedule row value is healthy against the index.
      * Returns a clickable alert payload for unresolved entries; returns null when healthy.
      * @param {Object} deps
-     * @param {Object} scheduleRow
+     * @param {string} rawName
      * @param {'client'|'show'} referenceType
      * @returns {Promise<Object|null>}
      */
-    static async checkReferenceNameState(deps, scheduleRow, referenceType = 'client') {
+    static async checkReferenceNameState(deps, rawName, referenceType = 'client') {
         const kind = referenceType === 'show' ? 'show' : 'client';
         const tabName = kind === 'show' ? 'Shows' : 'Clients';
-        const rawValue = _normalizeIndexName(kind === 'show' ? scheduleRow?.Show : scheduleRow?.Client);
+        const rawValue = _normalizeIndexName(rawName);
 
         if (!rawValue) {
             return null;

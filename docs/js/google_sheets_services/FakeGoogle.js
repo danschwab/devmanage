@@ -89,7 +89,8 @@ export class FakeGoogleSheetsService {
         const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
-            const idx = headers.findIndex(h => h.trim() === headerName);
+            const normalizedHeaderName = String(headerName ?? '').trim();
+            const idx = headers.findIndex(h => String(h ?? '').trim() === normalizedHeaderName);
             if (idx !== -1) headerIdxMap[key] = idx;
         });
         return rows.map(row => {

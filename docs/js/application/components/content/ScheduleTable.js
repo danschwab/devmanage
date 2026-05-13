@@ -200,38 +200,38 @@ export const ScheduleTableComponent = {
                     Requests.checkPacklistExists,
                     'packlist',
                     'Checking packlists...',
-                    null, // No specific source columns
-                    [], // No additional params
-                    null, // Results go to AppData
-                    true // Pass full item/row
+                    ['Show', 'Client', 'Year'],
+                    [],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
                 ),
                 createAnalysisConfig(
                     Requests.checkScheduleReferenceState,
                     'clientIndexIssue',
                     'Checking client index health...',
-                    null, // Pass full item
-                    ['client'],
-                    null,
-                    true
+                    'Client',
+                    ['client']
                 ),
                 createAnalysisConfig(
                     Requests.checkScheduleReferenceState,
                     'showIndexIssue',
                     'Checking show index health...',
-                    null, // Pass full item
-                    ['show'],
-                    null,
-                    true
+                    'Show',
+                    ['show']
                 ),
                 // Guess ship date if missing and store in AppData
                 createAnalysisConfig(
                     Requests.guessShipDate,
                     'estimatedShipDate',
                     'Guessing missing ship dates...',
-                    null, // No specific source columns
-                    [], // No additional params
-                    null, // Results go to AppData
-                    true // Pass full item/row
+                    ['Ship', 'S. Start', 'S. End', 'Year'],
+                    [],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
                 )
             ];
 

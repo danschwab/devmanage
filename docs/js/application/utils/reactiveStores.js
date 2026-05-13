@@ -626,9 +626,25 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
 
             try {
                 // Helper to find value from ordered source columns
-                const findSourceValue = (item, sourceColumns, parentItem = null) => {
+                const findSourceValue = (item, sourceColumns, parentItem = null, extractAsObject = false) => {
                     if (!sourceColumns || sourceColumns.length === 0) return item;
                     
+                    // If extractAsObject is true and multiple columns specified, extract all as an object
+                    if (extractAsObject && sourceColumns.length > 1) {
+                        const result = {};
+                        for (const column of sourceColumns) {
+                            if (item && (item[column] !== undefined && item[column] !== null && item[column] !== '')) {
+                                result[column] = item[column];
+                            } else if (parentItem && (parentItem[column] !== undefined && parentItem[column] !== null && parentItem[column] !== '')) {
+                                result[column] = parentItem[column];
+                            } else {
+                                result[column] = null;
+                            }
+                        }
+                        return result;
+                    }
+                    
+                    // Original behavior: return first non-empty value (fallback chain)
                     for (const column of sourceColumns) {
                         // First check the item itself
                         if (item && item[column] !== undefined && item[column] !== null && item[column] !== '') {
@@ -743,7 +759,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                             item.AppData._analyzing = true;
 
                             try {
-                                const inputValue = findSourceValue(item, config.sourceColumns);
+                                const inputValue = findSourceValue(item, config.sourceColumns, null, config.extractColumnsAsObject);
                                 
                                 if (inputValue !== null || config.passFullItem) {
                                     // Use full item if passFullItem is true, otherwise use extracted value
@@ -817,7 +833,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                         }
 
                                         const inputValue = findSourceValue(nestedItem, config.sourceColumns, 
-                                            config.needsParentContext ? parentItem : null);
+                                            config.needsParentContext ? parentItem : null, config.extractColumnsAsObject);
                                         
                                         if (inputValue !== null || config.passFullItem) {
                                             // Use full item if passFullItem is true, otherwise use extracted value
@@ -1455,9 +1471,10 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
  * @param {string} targetColumn - Optional: column name to store results directly in data (not AppData)
  * @param {boolean} passFullItem - If true, pass entire item as first param instead of extracted value
  * @param {number} priority - Priority level (0-9, default: Priority.ANALYSIS=1)
+ * @param {boolean} extractColumnsAsObject - If true and sourceColumns has multiple items, extract all as {col1, col2, ...} object
  * @returns {Object} Analysis configuration object
  */
-export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false, priority = Priority.ANALYSIS) {
+export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false, priority = Priority.ANALYSIS, extractColumnsAsObject = false) {
     return {
         apiFunction,
         resultKey,
@@ -1466,6 +1483,7 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
         additionalParams,
         targetColumn, // If set, results go to this column instead of AppData
         passFullItem, // If true, pass entire item even when sourceColumns specified
+        extractColumnsAsObject, // If true, extract multiple sourceColumns into {col1, col2, ...} object
         priority // Priority level for queue processing
     };
 }

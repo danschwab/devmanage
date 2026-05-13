@@ -357,10 +357,12 @@ export const PacklistTable = {
                     Requests.checkDescriptionMatch,
                     'descriptionAlert',
                     'Checking description match...',
-                    ['Description', 'Packing/shop notes'], // Source columns for nested detection
+                    ['Extracted Item', 'Description', 'Packing/shop notes'],
                     [],
-                    null, // No targetColumn - results go to AppData
-                    true // passFullItem = true to get entire item object (API expects full item)
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
                 ),
 
                 // Check inventory levels and create alerts for low quantities
@@ -379,10 +381,8 @@ export const PacklistTable = {
                     Requests.checkCadSourceHistory,
                     'cadSourceAlert',
                     'Checking CAD source history...',
-                    ['EditHistory'],
-                    [],
-                    null,
-                    true
+                    'EditHistory',
+                    []
                 )
             ];
             
