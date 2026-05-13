@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache } from '../../index.js';
+import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
 
 export const ScheduleTableComponent = {
     components: {
