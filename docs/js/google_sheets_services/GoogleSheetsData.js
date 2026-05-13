@@ -137,7 +137,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<Array<string>>>}
      */
     static async getSheetData(tableId, range) {
-        console.warn(`[GoogleSheets READ] 📖 ${tableId} → ${range}`);
+        console.warn(`[GoogleSheets READ] ${tableId} → ${range}`);
         
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.SPREADSHEET_IDS[tableId];

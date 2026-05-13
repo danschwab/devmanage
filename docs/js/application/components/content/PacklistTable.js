@@ -449,14 +449,16 @@ export const PacklistTable = {
                 if (lockInfo && lockInfo.user === user) {
                     this.setLockState(true, user);
                     
-                    if (this.packlistTableStore && this.packlistTableStore.isLoading) {
+                    if (this.packlistTableStore && (this.packlistTableStore.isLoading || this.packlistTableStore.initialLoad)) {
                         await new Promise(resolve => {
-                            const unwatch = this.$watch('packlistTableStore.isLoading', (newValue) => {
-                                if (!newValue) {
+                            const unwatch = this.$watch(
+                                () => this.packlistTableStore && !this.packlistTableStore.isLoading && !this.packlistTableStore.initialLoad,
+                                (isReady) => {
+                                    if (!isReady) return;
                                     unwatch();
                                     resolve();
                                 }
-                            });
+                            );
                         });
                     }
                     

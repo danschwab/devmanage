@@ -290,6 +290,17 @@ class Requests_uncached {
     static async getUserData(deps, username, id) {
         return await deps.call(ApplicationUtils.getUserData, username, id);
     }
+
+    /**
+     * Retrieve the most recent user data entry by ID prefix.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to retrieve data for
+     * @param {string} keyPrefix - Prefix to match against stored IDs
+     * @returns {Object|null} Parsed value or null if no matching entry exists
+     */
+    static async getUserDataByPrefix(deps, username, keyPrefix) {
+        return await deps.call(ApplicationUtils.getUserDataByPrefix, username, keyPrefix);
+    }
     
     /**
      * Check if a user data key or key prefix exists

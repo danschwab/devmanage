@@ -199,6 +199,53 @@ class applicationUtils_uncached {
         
         return parsedValue;
     }
+
+    /**
+     * Retrieve the most recent user data entry whose ID starts with a prefix.
+     * Useful when store key signatures change but backups should still be recoverable.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} username - The username to retrieve data for
+     * @param {string} keyPrefix - Prefix to match against ID column
+     * @returns {Object|null} Parsed value for the most recent matching entry, or null
+     */
+    static async getUserDataByPrefix(deps, username, keyPrefix) {
+        const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tabName = `UserData_${sanitizedUsername}`;
+
+        const userTab = await deps.call(Database.findTabByName, 'CACHE', tabName);
+        if (!userTab) return null;
+
+        const tabData = await deps.call(Database.getData, 'CACHE', tabName, { ID: 'ID', Value: 'Value' });
+        if (!tabData || tabData.length === 0) return null;
+
+        const matches = tabData.filter(obj => obj.ID && obj.ID.startsWith(keyPrefix));
+        if (matches.length === 0) return null;
+
+        // Choose newest by embedded timestamp when present, otherwise keep first.
+        let newestValue = null;
+        let newestTimestamp = -Infinity;
+
+        for (const match of matches) {
+            let parsedValue;
+            try {
+                parsedValue = JSON.parse(match.Value);
+            } catch (error) {
+                parsedValue = match.Value;
+            }
+
+            const ts = parsedValue && parsedValue.timestamp
+                ? new Date(parsedValue.timestamp).getTime()
+                : Number.NaN;
+            const comparableTs = Number.isFinite(ts) ? ts : -Infinity;
+
+            if (newestValue === null || comparableTs > newestTimestamp) {
+                newestValue = parsedValue;
+                newestTimestamp = comparableTs;
+            }
+        }
+
+        return newestValue;
+    }
     
     /**
      * Lock a spreadsheet tab for a user (single cell write)
