@@ -524,7 +524,23 @@ export const PacklistContent = {
             
             // Filter for pinned cards if showPinnedOnly is true
             const filteredTabs = this.showPinnedOnly
-                ? tabs.filter(tab => this.pinnedPacklists.has(tab.title))
+                ? tabs.filter(tab => {
+                    // Always include explicitly pinned packlists.
+                    if (this.pinnedPacklists.has(tab.title)) {
+                        return true;
+                    }
+
+                    // Also include packlists with unsaved/auto-saved changes.
+                    const matchingStores = findMatchingStores(
+                        Requests.getPackList,
+                        [tab.title]
+                    );
+                    const hasUnsavedChanges = matchingStores.length > 0
+                        ? matchingStores.some(match => match.isModified)
+                        : this.autoSavedPacklists.has(tab.title);
+
+                    return hasUnsavedChanges;
+                })
                 : tabs;
             
             // Format tabs for CardsComponent
