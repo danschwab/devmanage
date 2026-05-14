@@ -358,7 +358,7 @@ export const Database = wrapMethods(
     database_uncached, 
     'database', 
     ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow'],
-    ['getItemImageUrl'] // Infinite cache for image URLs
+    ['getItemImageUrl', 'getData', 'getTabs'] // Infinite cache: image URLs (expensive Drive API) + sheet data (invalidated explicitly by mutations and cross-session poller)
 );
 
 

@@ -821,6 +821,17 @@ export class FakeGoogleSheetsService {
 
         // Parse range to extract sheet name and cell range
         const [sheetName, cellRange] = range.split('!');
+
+        // Simulate an external session having changed PACK_LISTS data.
+        // The fresh timestamp is always newer than any local cache entry, so the poller
+        // will detect it and trigger externalConflict when a packlist has unsaved edits.
+        if (tableId === 'CACHE' && sheetName === 'Caching') {
+            return [
+                ['Key', 'Timestamp'],
+                ['database:getData:"PACK_LISTS","ATSC 2025 NAB"', new Date().toISOString()]
+            ];
+        }
+
         const sheetData = this.mockData[tableId] && this.mockData[tableId][sheetName];
         
         //console.log(`[FakeGoogle.getSheetData] Reading mockData['${tableId}']['${sheetName}']:`, JSON.stringify(sheetData));

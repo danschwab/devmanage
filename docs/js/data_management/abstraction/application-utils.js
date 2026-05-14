@@ -831,4 +831,4 @@ export const ApplicationUtils = wrapMethods(
 );
 
 setTimestampWriter((prefix) => ApplicationUtils.writeCacheTimestamp(prefix));
-startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps());
+startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps(), isLocalhost() ? 10_000 : 60_000);

@@ -401,7 +401,7 @@ export function setTimestampWriter(fn) {
     CacheManager._timestampWriter = fn;
 }
 
-export function startCacheTimestampPoller(readFn) {
+export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
     if (_cacheTimestampPollerInterval) return;
     _cacheTimestampPollerInterval = setInterval(async () => {
         try {
@@ -426,7 +426,7 @@ export function startCacheTimestampPoller(readFn) {
         } catch (err) {
             console.warn('[CacheTimestampPoller] Poll failed:', err);
         }
-    }, 60 * 1000);
+    }, intervalMs);
 }
 
 export function stopCacheTimestampPoller() {
