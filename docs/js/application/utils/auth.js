@@ -394,7 +394,7 @@ export class Auth {
                     'Show Popup Again',
                     'Cancel'
                 );
-            }, 10000);
+            }, 5000);
 
             GoogleSheetsAuth.authenticate()
                 .then((result) => { clearWarning(); resolve(result); })
