@@ -383,7 +383,7 @@ export class Auth {
         const attempt = () => new Promise((resolve, reject) => {
             warningTimer = setTimeout(() => {
                 warningModal = manager.confirm(
-                    "A Google sign-in popup should be visible. If you don't see it, click below to open it again.",
+                    "A Google sign-in popup should be visible.",
                     () => {
                         warningModal = null;
                         clearWarning();
@@ -391,10 +391,10 @@ export class Auth {
                     },
                     () => reject(new Error('Login canceled')),
                     'Sign In',
-                    'Show Popup Again',
+                    'Retry Login',
                     'Cancel'
                 );
-            }, 10000);
+            }, 4000);
 
             GoogleSheetsAuth.authenticate()
                 .then((result) => { clearWarning(); resolve(result); })
