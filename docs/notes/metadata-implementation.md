@@ -171,10 +171,10 @@ To compute what an inventory row's fields will be on a given reference date:
 The `n` field in `c` uses the application's mapped field names. The canonical mapping for inventory:
 
 | Sheet column header | Application field name (`n`) |
-|---|---|
-| `Item Number` | `itemNumber` |
-| `QTY` | `quantity` |
-| `Description` | `description` |
-| `Category` | `category` |
+| ------------------- | ---------------------------- |
+| `Item Number`       | `itemNumber`                 |
+| `QTY`               | `quantity`                   |
+| `Description`       | `description`                |
+| `Category`          | `category`                   |
 
 Other fields follow the same pattern (camelCase of the header), but `quantity` is the field most commonly targeted by pending entries.

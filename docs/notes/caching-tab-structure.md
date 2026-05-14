@@ -20,7 +20,7 @@ Tab name: `Caching`
 Keys are produced by serializing the first two call arguments with `JSON.stringify`, stripping the outer `[` and `]`, then prefixing with namespace and method name:
 
 ```js
-const argsString = JSON.stringify([tableId, tabName]).replace(/^\[|\]$/g, '');
+const argsString = JSON.stringify([tableId, tabName]).replace(/^\[|\]$/g, "");
 const key = `${namespace}:${methodName}:${argsString}`;
 ```
 
@@ -38,10 +38,10 @@ database:getData:"PACK_LISTS","NAB 2025"
 
 ### Valid TABLE_IDs
 
-| TABLE_ID | Spreadsheet |
-|---|---|
-| `INVENTORY` | Inventory spreadsheet |
-| `PACK_LISTS` | Pack lists spreadsheet |
+| TABLE_ID     | Spreadsheet                     |
+| ------------ | ------------------------------- |
+| `INVENTORY`  | Inventory spreadsheet           |
+| `PACK_LISTS` | Pack lists spreadsheet          |
 | `PROD_SCHED` | Production schedule spreadsheet |
 
 `CACHE` is explicitly excluded — no cache timestamps are written for CACHE table reads.
