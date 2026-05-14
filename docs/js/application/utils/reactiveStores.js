@@ -1494,28 +1494,42 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
     }
     
     // Subscribe to analysis function invalidations (triggers re-analysis only)
+    // A shared debounce timer coalesces rapid bursts of analysis invalidations into a
+    // single clear + re-run, preventing UI flickering from chain-reaction invalidations.
     if (analysisConfig && Array.isArray(analysisConfig)) {
-        analysisConfig.forEach((config, index) => {
+        let analysisDebounceTimer = null;
+        const pendingInvalidatedKeys = new Set();
+
+        const flushAnalysisInvalidations = () => {
+            analysisDebounceTimer = null;
+
+            // If main data is reloading, analysis will run automatically after load completes
+            if (store.isReloadingMainData) {
+                pendingInvalidatedKeys.clear();
+                return;
+            }
+
+            const keysToInvalidate = [...pendingInvalidatedKeys];
+            pendingInvalidatedKeys.clear();
+
+            // Clear all accumulated results in one pass, then run analysis once
+            store.clearSpecificAnalysisResults(keysToInvalidate);
+            store.runConfiguredAnalysis({ skipIfAnalyzed: false });
+        };
+
+        analysisConfig.forEach((config) => {
             const analysisMethodName = extractMethodName(config.apiFunction);
             if (analysisMethodName) {
                 const analysisPattern = `api:${analysisMethodName}`;
-                
-                CacheInvalidationBus.on(analysisPattern, async (eventData) => {
-                    console.log(`[ReactiveStore] Analysis invalidation received for ${analysisMethodName}`);
-                    
-                    // Add small delay to allow main data reload to register if happening simultaneously
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    
-                    // Check if main data is being reloaded - if so, skip (analysis will run after load)
-                    if (store.isReloadingMainData) {
-                        console.log(`[ReactiveStore] Skipping analysis rerun for ${analysisMethodName} - main data is reloading`);
-                        return;
-                    }
-                    
-                    // Clear and rerun only the specific analysis that was invalidated
-                    //console.log(`[ReactiveStore] Re-running analysis step ${index + 1} for ${analysisMethodName}`);
-                    store.clearSpecificAnalysisResults([config.resultKey || config.targetColumn]);
-                    store.runConfiguredAnalysis({ skipIfAnalyzed: false });
+
+                CacheInvalidationBus.on(analysisPattern, () => {
+                    pendingInvalidatedKeys.add(config.resultKey || config.targetColumn);
+
+                    // Reset the debounce window on every new invalidation so that a burst
+                    // of invalidations only triggers one re-analysis at the end of the burst.
+                    // 150ms is long enough to absorb cascade chains but short enough to feel responsive.
+                    if (analysisDebounceTimer) clearTimeout(analysisDebounceTimer);
+                    analysisDebounceTimer = setTimeout(flushAnalysisInvalidations, 150);
                 });
             }
         });
