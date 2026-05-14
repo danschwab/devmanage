@@ -52,6 +52,7 @@ class CacheManager {
     static dependencies = new Map();
     static pendingCalls = new Map(); // Maps cache keys to pending promises to prevent duplicate concurrent calls
     static CACHE_MISS = Symbol('CACHE_MISS');
+    static _timestampWriter = null;
     
     /**
      * Gets a value from cache with expiration check
@@ -92,7 +93,8 @@ class CacheManager {
         
         CacheManager.cache.set(key, {
             value,
-            expire: expirationMs ? Date.now() + expirationMs : null
+            expire: expirationMs ? Date.now() + expirationMs : null,
+            filled: Date.now()
         });
     }
     
@@ -255,10 +257,21 @@ class CacheManager {
                     const argsString = JSON.stringify(prefixArgs).replace(/^\[|\]$/g, '');
                     const prefix = `${namespace}:${methodName}:${argsString}`;
                     CacheManager.invalidateByPrefix(prefix);
+                    // Notify other sessions of this domain data change
+                    if (CacheManager._timestampWriter && namespace === 'database' && methodName === 'getData' && args[0] !== 'CACHE') {
+                        CacheManager._timestampWriter(prefix);
+                    }
                 } else {
                     // Exact key invalidation
                     const fullKey = CacheManager.generateCacheKey(namespace, methodName, args);
                     CacheManager.invalidate(fullKey);
+                    // Notify other sessions of this domain data change (compute 2-arg prefix for consistency)
+                    if (CacheManager._timestampWriter && namespace === 'database' && methodName === 'getData' && args[0] !== 'CACHE') {
+                        const prefixArgs = args.slice(0, 2);
+                        const argsString = JSON.stringify(prefixArgs).replace(/^\[|\]$/g, '');
+                        const prefix = `${namespace}:${methodName}:${argsString}`;
+                        CacheManager._timestampWriter(prefix);
+                    }
                 }
             }
         });
@@ -380,3 +393,45 @@ export function clearCache() {
     CacheManager.pendingCalls.clear();
 }
 export { CacheInvalidationBus };
+
+// Remote cache timestamp synchronization
+let _cacheTimestampPollerInterval = null;
+
+export function setTimestampWriter(fn) {
+    CacheManager._timestampWriter = fn;
+}
+
+export function startCacheTimestampPoller(readFn) {
+    if (_cacheTimestampPollerInterval) return;
+    _cacheTimestampPollerInterval = setInterval(async () => {
+        try {
+            const entries = await readFn();
+            if (!Array.isArray(entries) || entries.length === 0) return;
+            for (const { key, timestamp } of entries) {
+                if (!key || !timestamp) continue;
+                const remoteTs = new Date(timestamp).getTime();
+                if (isNaN(remoteTs)) continue;
+                let shouldInvalidate = false;
+                for (const [cacheKey, entry] of CacheManager.cache.entries()) {
+                    if (cacheKey.startsWith(key) && entry.filled && remoteTs > entry.filled) {
+                        shouldInvalidate = true;
+                        break;
+                    }
+                }
+                if (shouldInvalidate) {
+                    console.log('[CacheTimestampPoller] Remote change detected for', key, '- invalidating');
+                    CacheManager.invalidateByPrefix(key);
+                }
+            }
+        } catch (err) {
+            console.warn('[CacheTimestampPoller] Poll failed:', err);
+        }
+    }, 60 * 1000);
+}
+
+export function stopCacheTimestampPoller() {
+    if (_cacheTimestampPollerInterval) {
+        clearInterval(_cacheTimestampPollerInterval);
+        _cacheTimestampPollerInterval = null;
+    }
+}

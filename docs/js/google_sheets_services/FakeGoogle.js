@@ -491,6 +491,9 @@ export class FakeGoogleSheetsService {
                 ['ID', 'Value'],
                 ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ],
+            'Caching': [
+                ['Key', 'Timestamp']
+            ],
             'Locks': [
                 ['Lock Key', 'locked.user@example.com', 'another.user@example.com'], // Row 0: Headers with users
                 ['PACK_LISTS:ATSC 2025 NAB', '2026-01-19T10:30:00.000Z', '0'], // Row 1+: Lock key rows with timestamps

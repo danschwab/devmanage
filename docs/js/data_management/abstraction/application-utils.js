@@ -1,4 +1,5 @@
 import { Database, wrapMethods, invalidateCache } from '../index.js';
+import { setTimestampWriter, startCacheTimestampPoller } from '../utils/caching.js';
 
 // Dynamically import GoogleSheetsAuth based on environment
 import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
@@ -784,12 +785,50 @@ class applicationUtils_uncached {
             return { users: [], lockKeys: [], locks: [] };
         }
     }
+
+    static async writeCacheTimestamp(prefix) {
+        try {
+            const timestamp = new Date().toISOString();
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Caching').catch(() => null);
+            if (!rawData || rawData.length === 0) {
+                await GoogleSheetsService.setSheetData('CACHE', 'Caching', [['Key', 'Timestamp'], [prefix, timestamp]], null);
+                return;
+            }
+            const rows = rawData.slice(1);
+            const rowIndex = rows.findIndex(row => Array.isArray(row) && row[0] === prefix);
+            if (rowIndex !== -1) {
+                const sheetRow = rowIndex + 2;
+                await GoogleSheetsService.setSheetData('CACHE', `Caching!B${sheetRow}:B${sheetRow}`, [[timestamp]], null);
+            } else {
+                const newRowNumber = rows.length + 2;
+                await GoogleSheetsService.setSheetData('CACHE', `Caching!A${newRowNumber}:B${newRowNumber}`, [[prefix, timestamp]], null);
+            }
+        } catch (err) {
+            console.warn('[writeCacheTimestamp] Failed to write cache timestamp:', err);
+        }
+    }
+
+    static async readCacheTimestamps() {
+        try {
+            const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Caching');
+            if (!rawData || rawData.length < 2) return [];
+            return rawData.slice(1)
+                .filter(row => Array.isArray(row) && row[0] && row[1])
+                .map(row => ({ key: row[0], timestamp: row[1] }));
+        } catch (err) {
+            console.warn('[readCacheTimestamps] Failed to read cache timestamps:', err);
+            return [];
+        }
+    }
 }
 
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet'], // Mutation methods
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps'], // Mutation methods
     [], // Infinite cache methods
     { 'getSheetLock': 20000, 'getLocksData': 10000 } // Custom cache durations (20 seconds for getSheetLock, 10 seconds for getLocksData)
 );
+
+setTimestampWriter((prefix) => ApplicationUtils.writeCacheTimestamp(prefix));
+startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps());
