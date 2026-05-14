@@ -76,7 +76,7 @@ export class Auth {
         authState.error = null;
         
         try {
-            await GoogleSheetsAuth.authenticate();
+            await Auth._authenticateWithPopupWarning();
             
             let email = testModeEmail || await GoogleSheetsAuth.getUserEmail();
             if (!email || email.length === 0) {
@@ -369,6 +369,40 @@ export class Auth {
         const names = missing.map(s => s.split('/').pop()).join(', ');
         return `Missing required permissions: ${names}. Some features may not work correctly. Log out and back in making sure to grant all requested permissions.`;
     }
+
+    static async _authenticateWithPopupWarning() {
+        const manager = await getModalManager();
+        let warningModal = null;
+        let warningTimer = null;
+
+        const clearWarning = () => {
+            clearTimeout(warningTimer);
+            if (warningModal) { manager.removeModal(warningModal.id); warningModal = null; }
+        };
+
+        const attempt = () => new Promise((resolve, reject) => {
+            warningTimer = setTimeout(() => {
+                warningModal = manager.confirm(
+                    "A Google sign-in popup should be visible. If you don't see it, click below to open it again.",
+                    () => {
+                        warningModal = null;
+                        clearWarning();
+                        attempt().then(resolve).catch(reject);
+                    },
+                    () => reject(new Error('Login canceled')),
+                    'Sign In',
+                    'Show Popup Again',
+                    'Cancel'
+                );
+            }, 10000);
+
+            GoogleSheetsAuth.authenticate()
+                .then((result) => { clearWarning(); resolve(result); })
+                .catch((err) => { clearWarning(); reject(err); });
+        });
+
+        return attempt();
+    }
 }
 
 /**
@@ -392,3 +426,14 @@ window.switchUser = function(email) {
         console.log('No user currently authenticated.');
     }
 };
+
+console.log(
+    '%c💡 User Switch Testing Available',
+    'font-size: 12px; color: #4488ff; font-weight: bold'
+);
+console.log(
+    'Use window.switchUser(email) to test as a different user\n' +
+    'Usage:\n' +
+    '  switchUser(\'user@example.com\') - Test as specified user\n' +
+    '  switchUser(null)               - Disable, use real authenticated user'
+);
