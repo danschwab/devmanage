@@ -3186,6 +3186,7 @@ export const TableComponent = {
                 <slot 
                     name="header-area"
                 ></slot>
+                <div class="spacer"></div>
                 <div v-if="showNewRowButton || showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
                     <div v-if="showSearch" class="input-container">
                         <input

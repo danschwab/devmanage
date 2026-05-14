@@ -492,8 +492,7 @@ button.card {
     display: grid;
     place-items: center;
 }
-
-.button-bar button {
+.button-bar button:not(.button-symbol) {
     flex-grow: 1;
 }
 

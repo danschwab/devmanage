@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, findMatchingStores, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -17,15 +17,29 @@ export const ShowInventoryReport = {
             reportStore: null,
             referenceDate: null, // ISO date derived from the active schedule filter
             itemCategoryFilter: null, // Optional filter for item categories (string or null)
-            showIdentifiers: [], // List of show IDs from search
+            searchFilter: null, // Schedule filter parameters
+            searchParams: null, // Text search parameters
+            includeEmptyShows: true, // Include shows with no packlist or no matching items
             error: null,
-            isLoadingShows: false, // Loading state for fetching shows before store creation
-            showLoadingMessage: '', // Message for show loading phase
-            scheduleStore: null, // Shared store for production schedule data
             NavigationRegistry // Make NavigationRegistry available in template
         };
     },
     computed: {
+        // Extract show identifiers from the report data
+        showIdentifiers() {
+            if (!this.reportStore?.data || this.reportStore.data.length === 0) {
+                return [];
+            }
+            // Collect show IDs from all rows - each item may appear in different shows
+            const showSet = new Set();
+            for (const row of this.reportStore.data) {
+                if (row.shows) {
+                    Object.keys(row.shows).forEach(id => showSet.add(id));
+                }
+            }
+            return Array.from(showSet).sort();
+        },
+        
         // Dynamic table columns based on loaded shows
         tableColumns() {
             const baseColumns = [
@@ -96,7 +110,7 @@ export const ShowInventoryReport = {
         },
         
         isLoading() {
-            return this.isLoadingShows || this.reportStore?.isLoading || false;
+            return this.reportStore?.isLoading || false;
         },
         
         isAnalyzing() {
@@ -127,9 +141,6 @@ export const ShowInventoryReport = {
         },
         
         loadingMessage() {
-            if (this.isLoadingShows) {
-                return this.showLoadingMessage;
-            }
             return this.reportStore?.loadingMessage || 'Loading...';
         },
         
@@ -141,8 +152,8 @@ export const ShowInventoryReport = {
             );
             const hasSearchParams = params && (params.dateFilters || params.textFilters || params.view);
             
-            // If we have search params but no shows and not loading, it means no shows were found
-            if (hasSearchParams && this.showIdentifiers.length === 0 && !this.isLoadingShows) {
+            // If we have search params but no report store yet, it means no shows were found
+            if (hasSearchParams && !this.reportStore && !this.isLoading) {
                 return 'No shows found for the selected search criteria';
             }
             
@@ -160,20 +171,14 @@ export const ShowInventoryReport = {
         async loadShowsFromSearch(searchData) {
             // Handle empty/null search - clear the report
             if (!searchData) {
-                this.showIdentifiers = [];
+                this.searchFilter = null;
+                this.searchParams = null;
                 this.reportStore = null;
                 this.error = null;
-                this.isLoadingShows = false;
                 return;
             }
             
-            // Set loading state immediately when search starts
-            this.isLoadingShows = true;
-            this.showLoadingMessage = 'Finding shows...';
-            this.error = null;
-            this.reportStore = null; // Clear previous store
-            
-            // Parse search to get date filters and search params
+            // Build filter and search params from search data (let API handle show finding)
             const filter = {};
             const searchParams = {};
             
@@ -209,85 +214,28 @@ export const ShowInventoryReport = {
                 });
             }
             
+            // Store search params and initialize report store
+            this.searchFilter = filter;
+            this.searchParams = searchParams;
+            
             try {
-                // Try to find existing schedule store from ScheduleAdvancedFilter
-                const existingStores = findMatchingStores(
-                    Requests.getProductionScheduleData,
-                    []
-                );
-                
-                let shows;
-                if (existingStores.length > 0 && existingStores[0].data && existingStores[0].data.length > 0) {
-                    // Use cached data from existing store
-                    console.log('[ShowInventoryReport] Using cached schedule data from existing store');
-                    this.scheduleStore = existingStores[0];
-                    
-                    // Filter the cached data
-                    shows = this.scheduleStore.data.filter(show => {
-                        // Apply filter logic (this is simplified, you may need more complex filtering)
-                        if (filter.identifier) {
-                            return show.Identifier === filter.identifier;
-                        }
-                        // Add more filter logic as needed
-                        return true;
-                    });
-                } else {
-                    // No cached store or empty data, fetch directly
-                    console.log('[ShowInventoryReport] No cached store available, fetching fresh data');
-                    shows = await Requests.getProductionScheduleData(filter, searchParams);
-                }
-                
-                // Update loading message for identifier computation phase
-                this.showLoadingMessage = `Computing identifiers for ${shows.length} show${shows.length !== 1 ? 's' : ''}...`;
-                
-                // Extract identifiers from shows
-                this.showIdentifiers = shows
-                    .map(s => s.Identifier || null)
-                    .filter(id => id);
-                
-                // If some shows don't have identifiers, compute them
-                if (this.showIdentifiers.length < shows.length) {
-                    const computedIdentifiers = await Promise.all(
-                        shows.map(async (s) => {
-                            if (s.Identifier) return s.Identifier;
-                            // Compute identifier via API if not present
-                            if (s.Show && s.Client && s.Year) {
-                                return await Requests.computeIdentifier(s.Show, s.Client, parseInt(s.Year));
-                            }
-                            return null;
-                        })
-                    );
-                    this.showIdentifiers = computedIdentifiers.filter(id => id);
-                }
-                
-                console.log('[ShowInventoryReport] Loaded shows:', this.showIdentifiers);
-                console.log('[ShowInventoryReport] Current itemCategoryFilter at this point:', this.itemCategoryFilter);
-                
-                // Clear the loading state now that we have identifiers
-                this.isLoadingShows = false;
-                
-                // Initialize report store with these shows
-                if (this.showIdentifiers.length > 0) {
-                    console.log('[ShowInventoryReport] Calling initializeReportStore from loadShowsFromSearch');
-                    this.initializeReportStore();
-                }
-                // If no shows found, the computed emptyMessage will handle displaying appropriate message
+                this.initializeReportStore();
             } catch (err) {
-                console.error('[ShowInventoryReport] Error loading shows:', err);
-                this.error = 'Failed to load shows: ' + err.message;
-                this.isLoadingShows = false;
-                this.$modal.error('Failed to load shows for the inventory report. Please check your search criteria and try again.', 'Show Load Error');
+                console.error('[ShowInventoryReport] Error initializing report:', err);
+                this.error = 'Failed to load report: ' + err.message;
+                this.$modal.error('Failed to load the inventory report. Please check your search criteria and try again.', 'Report Load Error');
             }
         },
 
         initializeReportStore() {
             console.log('[ShowInventoryReport] initializeReportStore called', {
-                showIdentifiersCount: this.showIdentifiers.length,
+                searchFilter: this.searchFilter,
+                searchParams: this.searchParams,
                 itemCategoryFilter: this.itemCategoryFilter
             });
             
-            if (this.showIdentifiers.length === 0) {
-                console.log('[ShowInventoryReport] Skipping store initialization - no show identifiers yet');
+            if (!this.searchFilter && !this.searchParams) {
+                console.log('[ShowInventoryReport] Skipping store initialization - no search parameters');
                 return;
             }
             
@@ -340,7 +288,7 @@ export const ShowInventoryReport = {
             this.reportStore = getReactiveStore(
                 Requests.getMultipleShowsItemsSummary,
                 null,
-                [this.showIdentifiers, this.itemCategoryFilter ? [this.itemCategoryFilter] : undefined],
+                [this.searchFilter, this.searchParams, this.itemCategoryFilter, this.includeEmptyShows],
                 analysisConfig,
                 true // Auto-load
             );
@@ -386,7 +334,8 @@ export const ShowInventoryReport = {
         handleCategorySelected(categoryName) {
             console.log('[ShowInventoryReport] handleCategorySelected called with:', categoryName);
             console.log('[ShowInventoryReport] Current state:', {
-                showIdentifiers: this.showIdentifiers,
+                searchFilter: this.searchFilter,
+                searchParams: this.searchParams,
                 itemCategoryFilter: this.itemCategoryFilter,
                 hasReportStore: !!this.reportStore
             });

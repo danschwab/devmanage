@@ -187,7 +187,7 @@ export const CardsComponent = {
                 <slot 
                     name="header-area" 
                 ></slot>
-                
+                <div class="spacer"></div>
                 <div v-if="showRefresh || showSearch" class="button-bar">
                     <div v-if="showSearch" class="input-container">
                         <input

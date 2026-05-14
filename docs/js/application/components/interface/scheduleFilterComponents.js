@@ -386,6 +386,26 @@ export const ScheduleAdvancedFilter = {
                 this.nextFilterId = filter.textFilters.length + 1;
             }
         },
+        updateURL(params) {
+            const targetPath = this.containerPath || 'schedule/advanced-search';
+            const cleanPath = targetPath.split('?')[0];
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                cleanPath,
+                this.appContext?.currentPath,
+                params
+            );
+
+            if (isOnDashboard) {
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    cleanPath,
+                    newPath
+                );
+            } else if (this.navigateToPath) {
+                this.navigateToPath(newPath);
+            }
+        },
         saveFiltersToURL() {
             // Build dateFilters array from UI state
             const dateFilters = [];
@@ -457,26 +477,9 @@ export const ScheduleAdvancedFilter = {
             if (validTextFilters.length > 0) {
                 params.textFilters = validTextFilters;
             }
-            
-            // Use containerPath prop instead of hardcoded path
-            const targetPath = this.containerPath || 'schedule/advanced-search';
-            
-            if (this.navigateToPath) {
-                const path = NavigationRegistry.buildPath(targetPath, params);
-                
-                const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
-                if (isOnDashboard) {
-                    // Update dashboard registry with new path including params
-                    NavigationRegistry.dashboardRegistry.updatePath(
-                        targetPath.split('?')[0],
-                        path
-                    );
-                } else if (this.dateFilterMode !== 'overlap') {
-                    // For overlap mode, emitSearchSelected resolves dates first then updates URL,
-                    // so navigating here would trigger syncWithURL before dates are resolved.
-                    this.navigateToPath(path);
-                }
-            }
+
+            // Use the same URL update path for all filter modes.
+            this.updateURL(params);
             
             // Emit search-selected event with filter data for table display
             this.emitSearchSelected();
@@ -984,7 +987,9 @@ export const ScheduleAdvancedFilter = {
                     if (startDate && endDate) {
                         this.updateURL({ dateFilters, startDate, endDate });
                     }
-                } catch (_) {}
+                } catch (error) {
+                    console.warn('[ScheduleAdvancedFilter] Failed to resolve overlap date window:', error);
+                }
             } else if (this.dateFilterMode === 'dateRange') {
                 let startValue = null;
                 let endValue = null;
@@ -1573,11 +1578,12 @@ export const ScheduleFilterSelect = {
         handleChange(event) {
             const value = event.target.value;
             if (value === 'custom') {
+                const revertTo = this.lastNonCustomValue || '';
+                this.selectedValue = revertTo;
+                // Force DOM to revert even when selectedValue didn't change reactively
+                this.$nextTick(() => { event.target.value = revertTo; });
                 if (this.showAdvancedButton) {
-                    this.selectedValue = this.lastNonCustomValue || '';
                     this.openAdvancedSearchModal();
-                } else {
-                    this.selectedValue = this.lastNonCustomValue || '';
                 }
                 return;
             }

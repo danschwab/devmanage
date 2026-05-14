@@ -118,7 +118,7 @@ class productionUtils_uncached {
                     const year = row.Year;
                     if (showName && client && year) {
                         const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, year);
-                        if (computedIdentifier === value) {
+                        if (findBestProjectIdentifierMatch(computedIdentifier, [value])) {
                             // Special overlap logic for identifiers:
                             // To find shows active during identifier's period:
                             // - column='Return' + type='after' → check if target returns after identifier ships
@@ -647,7 +647,7 @@ class productionUtils_uncached {
             
             if (showName && client && yearVal) {
                 const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
-                if (computedIdentifier === identifier) {
+                if (findBestProjectIdentifierMatch(computedIdentifier, [identifier])) {
                     return row;
                 }
             }
@@ -751,13 +751,67 @@ export const ProductionUtils = wrapMethods(
  */
 export function findPackListTab(identifier, tabs) {
     if (!identifier || !Array.isArray(tabs)) return null;
-    const exact = tabs.find(t => t.title === identifier);
-    if (exact) return exact;
-    const lc = identifier.toLowerCase();
-    const ci = tabs.find(t => t.title.toLowerCase() === lc);
-    if (ci) return ci;
-    const norm = _normalizeMatchText(identifier);
-    return tabs.find(t => _normalizeMatchText(t.title) === norm) || null;
+    const titleToTab = new Map();
+    const titles = [];
+
+    tabs.forEach((tab) => {
+        const title = _normalizeIndexName(tab?.title);
+        if (!title || titleToTab.has(title)) {
+            return;
+        }
+        titleToTab.set(title, tab);
+        titles.push(title);
+    });
+
+    const matchedTitle = findBestProjectIdentifierMatch(identifier, titles);
+    return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
+}
+
+/**
+ * Resolve the best matching project identifier candidate.
+ * Matching order: exact -> case-insensitive -> normalized -> fuzzy/abbreviation fallback.
+ * @param {string} identifier
+ * @param {string[]} candidates
+ * @returns {string|null}
+ */
+export function findBestProjectIdentifierMatch(identifier, candidates = []) {
+    const rawIdentifier = _normalizeIndexName(identifier);
+    if (!rawIdentifier || !Array.isArray(candidates) || candidates.length === 0) {
+        return null;
+    }
+
+    const cleanCandidates = candidates
+        .map(candidate => _normalizeIndexName(candidate))
+        .filter(Boolean);
+
+    if (cleanCandidates.length === 0) {
+        return null;
+    }
+
+    const exact = cleanCandidates.find(candidate => candidate === rawIdentifier);
+    if (exact) {
+        return exact;
+    }
+
+    const lowerIdentifier = rawIdentifier.toLowerCase();
+    const caseInsensitive = cleanCandidates.find(candidate => candidate.toLowerCase() === lowerIdentifier);
+    if (caseInsensitive) {
+        return caseInsensitive;
+    }
+
+    const normalizedIdentifier = _normalizeMatchText(rawIdentifier);
+    const normalizedMatch = cleanCandidates.find(candidate => _normalizeMatchText(candidate) === normalizedIdentifier);
+    if (normalizedMatch) {
+        return normalizedMatch;
+    }
+
+    try {
+        const abbreviationRange = cleanCandidates.map(candidate => _buildIdentifierAbbreviationSet(candidate).join(', '));
+        const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
+        return GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
+    } catch (error) {
+        return null;
+    }
 }
 
 
@@ -1038,6 +1092,25 @@ function _guessAbbreviations(rawValue) {
     }
 
     return Array.from(candidates).filter(Boolean);
+}
+
+function _buildIdentifierAbbreviationSet(identifier) {
+    const cleanIdentifier = _normalizeIndexName(identifier);
+    if (!cleanIdentifier) return [];
+
+    const variants = new Set([
+        cleanIdentifier,
+        _normalizeMatchText(cleanIdentifier)
+    ]);
+
+    _guessAbbreviations(cleanIdentifier).forEach(variant => {
+        if (variant) {
+            variants.add(variant);
+            variants.add(_normalizeMatchText(variant));
+        }
+    });
+
+    return Array.from(variants).filter(Boolean);
 }
 
 function _tokenOverlap(a, b) {

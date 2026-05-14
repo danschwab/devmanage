@@ -910,10 +910,9 @@ export const PacklistContent = {
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
-                        <button @click="togglePinnedView" :class="{ 'active': showPinnedOnly }" style="flex-shrink: 0;">
-                            {{ showPinnedOnly ? 'All Packlists' : 'Pins' }}
-                            <span v-if="!showPinnedOnly" class="material-symbols-outlined">keep</span>
-                        </button>
+                        <button v-if="!showPinnedOnly" @click="togglePinnedView" class="button-symbol"><span class="material-symbols-outlined">keep</span></button>
+                        <div v-if="showPinnedOnly" class='card' style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">pinned or unsaved packlists</div>
+                        <button v-if="showPinnedOnly" @click="togglePinnedView">All Packlists</button>
                     </div>
                 </template>
             </cards-grid>

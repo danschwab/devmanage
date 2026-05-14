@@ -785,8 +785,9 @@ class packListUtils_uncached {
      * @param {Array<string>} projectIdentifiers - Array of project identifiers to extract items from
      * @returns {Promise<Array>} Array of items with quantities per show and total
      */
-    static async extractItemsFromMultipleShows(deps, projectIdentifiers, itemCategoryFilter = undefined) {
+    static async extractItemsFromMultipleShows(deps, projectIdentifiers, itemCategoryFilter = undefined, includeEmptyShows = true) {
         const allItemsMap = {};
+        const processedShows = [];
         
         // Extract items from each show
         for (const projectId of projectIdentifiers) {
@@ -804,13 +805,38 @@ class packListUtils_uncached {
                             available: null,
                             remaining: null
                         };
+                        // Backfill all previously processed shows as null for this new item
+                        if (includeEmptyShows) {
+                            for (const prevShowId of processedShows) {
+                                allItemsMap[itemId].shows[prevShowId] = null;
+                            }
+                        }
                     }
                     allItemsMap[itemId].shows[projectId] = quantity;
                     allItemsMap[itemId].totalQuantity += quantity;
                 }
+                
+                // For all existing items missing this show, set to null
+                if (includeEmptyShows) {
+                    for (const item of Object.values(allItemsMap)) {
+                        if (!(projectId in item.shows)) {
+                            item.shows[projectId] = null;
+                        }
+                    }
+                }
             } catch (e) {
                 console.warn(`Failed to load items for ${projectId}:`, e);
+                // Add this show as null to all existing items
+                if (includeEmptyShows) {
+                    for (const item of Object.values(allItemsMap)) {
+                        if (!(projectId in item.shows)) {
+                            item.shows[projectId] = null;
+                        }
+                    }
+                }
             }
+            
+            processedShows.push(projectId);
         }
         
         // Transform to array format for table display

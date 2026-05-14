@@ -913,13 +913,48 @@ class Requests_uncached {
     }
 
     /**
-     * Get item quantities summary for multiple projects
+     * Get item quantities summary for multiple shows based on search parameters
+     * Finds shows matching the search criteria, then extracts items from them
      * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Array<string>} projectIdentifiers - Array of project identifiers
+     * @param {Object|Array} filter - Schedule filter parameters (e.g., { dateFilters: [...] }) or legacy array of identifiers
+     * @param {Object|string} searchParams - Search parameters for text filters, or legacy itemCategoryFilter
+     * @param {string|undefined} itemCategoryFilter - Optional category filter (new signature) or undefined
      * @returns {Promise<Array<Object>>} Array of item objects with quantities per show
      */
-    static async getMultipleShowsItemsSummary(deps, projectIdentifiers, itemCategoryFilter = undefined) {
-        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, itemCategoryFilter);
+    static async getMultipleShowsItemsSummary(deps, filter = null, searchParams = null, itemCategoryFilter = undefined, includeEmptyShows = true) {
+        // Legacy signature: (deps, projectIdentifiers, itemCategoryFilter)
+        if (Array.isArray(filter)) {
+            return await deps.call(PackListUtils.extractItemsFromMultipleShows, filter, searchParams);
+        }
+        
+        // New signature: (deps, filterParams, searchParams, itemCategoryFilter)
+        // Find all shows matching the search criteria
+        const shows = await deps.call(ProductionUtils.getOverlappingShows, filter, searchParams);
+        
+        // Extract identifiers from shows
+        let projectIdentifiers = shows
+            .map(s => s.Identifier || null)
+            .filter(id => id);
+        
+        // If some shows don't have identifiers, compute them
+        if (projectIdentifiers.length < shows.length) {
+            const computedIdentifiers = await Promise.all(
+                shows.map(async (s) => {
+                    if (s.Identifier) return s.Identifier;
+                    // Compute identifier via API if not present
+                    if (s.Show && s.Client && s.Year) {
+                        return await deps.call(ProductionUtils.computeIdentifier, s.Show, s.Client, parseInt(s.Year));
+                    }
+                    return null;
+                })
+            );
+            projectIdentifiers = computedIdentifiers.filter(id => id);
+        }
+        
+        // Extract items from the identified shows
+        // Convert string filter to array as extractItemsFromMultipleShows expects an array
+        const categoryFilterArray = itemCategoryFilter ? [itemCategoryFilter] : undefined;
+        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
     }
 
     /**
