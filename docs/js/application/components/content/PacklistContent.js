@@ -911,8 +911,8 @@ export const PacklistContent = {
                             @search-selected="handleSearchSelected"
                         />
                         <button v-if="!showPinnedOnly" @click="togglePinnedView" class="button-symbol"><span class="material-symbols-outlined">keep</span></button>
-                        <div v-if="showPinnedOnly" class='card' style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">pinned or unsaved packlists</div>
-                        <button v-if="showPinnedOnly" @click="togglePinnedView">All Packlists</button>
+                        <div v-if="showPinnedOnly" class='card' style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">showing pinned or unsaved packlists</div>
+                        <button v-if="showPinnedOnly" @click="togglePinnedView">Back</button>
                     </div>
                 </template>
             </cards-grid>
