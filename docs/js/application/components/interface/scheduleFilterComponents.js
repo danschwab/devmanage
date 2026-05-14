@@ -907,7 +907,6 @@ export const ScheduleAdvancedFilter = {
                                     this.ScheduleAdvancedFilter.selectedSavedSearchIndex = this.savedSearchesStore.data.length - 1;
                                 }
                                 
-                                this.$modal.alert('Filter saved successfully!', 'Success');
                                 this.$emit('close-modal');
                             } else {
                                 throw new Error('Saved filterss store not initialized');
