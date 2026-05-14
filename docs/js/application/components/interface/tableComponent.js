@@ -1175,7 +1175,8 @@ export const TableComponent = {
             mouseMoveCounter: 0,
             hiddenColumns: [], // Reactive property for dynamically hiding columns (internal use only)
             showStickyHeader: false, // Controls visibility of sticky header
-            stickyColumnWidths: [] // Store actual column widths from original table
+            stickyColumnWidths: [], // Store actual column widths from original table
+            hideRowsOnSearchLocal: this.hideRowsOnSearch // Runtime toggle for hide-rows-on-search behavior
         };
     },
     watch: {
@@ -1461,14 +1462,15 @@ export const TableComponent = {
                     // Show if not in a group OR if it's a group master
                     if (!grouping || grouping.isGroupMaster) return true;
 
-                    // This is a group child - check if its group is collapsed
-                    // If group is NOT collapsed, show the child
-                    return !this.collapsedGroups.has(grouping.groupId);
+                    // This is a group child - check if its group should be hidden
+                    // If hideGroupMembers is true, always hide group children (view mode)
+                    // Otherwise, show based on whether the group is collapsed
+                    return this.hideGroupMembers ? false : !this.collapsedGroups.has(grouping.groupId);
                 });
             }
 
             // Apply search filter if activeSearchValue is provided and hideRowsOnSearch is enabled
-            if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearch) {
+            if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearchLocal) {
                 const searchTerm = this.activeSearchValue.toLowerCase().trim();
                 // Split search term into multiple words for partial matching
                 const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
@@ -3205,6 +3207,14 @@ export const TableComponent = {
                         >
                             🗙
                         </button>
+                        <button
+                            v-if="showSearch"
+                            @mousedown.prevent="hideRowsOnSearchLocal = !hideRowsOnSearchLocal"
+                            class="column-button"
+                            :title="hideRowsOnSearchLocal ? 'Show all rows' : 'Hide non-matching rows'"
+                        >
+                            <span class="material-symbols-outlined">{{ hideRowsOnSearchLocal ? 'visibility' : 'visibility_off' }}</span>
+                        </button>
                     </div>
                     <button
                         v-if="showNewRowButton"
@@ -3531,7 +3541,7 @@ export const TableComponent = {
                 <p v-else>Showing {{ data.length }} row{{ data.length !== 1 ? 's' : '' }}</p>
                 
                 <button
-                    v-if="activeSearchValue"
+                    v-if="activeSearchValue && hideRowsOnSearchLocal"
                     @click="search.clearSearch"
                     class="card"
                     style="width: auto;"
