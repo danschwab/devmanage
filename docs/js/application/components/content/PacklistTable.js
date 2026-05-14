@@ -228,6 +228,9 @@ export const PacklistTable = {
         isDirty() {
             return this.packlistTableStore?.isModified || false;
         },
+        hasExternalConflict() {
+            return this.packlistTableStore?.externalConflict ?? false;
+        },
         
         editMode() {
             let path = this.containerPath;
@@ -1226,6 +1229,9 @@ export const PacklistTable = {
             
             <div v-if="!editMode && lockedByOther && !isPrinting" class="card white">
                 Locked for edit by: {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
+            </div>
+            <div v-if="hasExternalConflict" class="card red">
+                Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.
             </div>
 
 

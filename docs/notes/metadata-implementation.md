@@ -107,3 +107,74 @@ This is the authoritative behavior as of current code in:
 - `docs/js/data_management/abstraction/database.js`
 - `docs/js/data_management/api.js`
 - `docs/js/application/components/content/PacklistTable.js`
+
+---
+
+## Appendix: Scheduled (Pending) Quantity Changes — Date-Based Inventory Queries
+
+Inventory rows carry a `p` array inside their `EditHistory` value. These are future-dated quantity changes that have not yet been applied to the live row data. To query inventory as it will appear on any given date, a reader must apply all pending entries whose effective date falls on or before the query date.
+
+### Pending Entry Shape
+
+```json
+{
+  "u": "dan",
+  "t": 17400000000,
+  "d": 17380000000,
+  "s": "restock",
+  "c": [{ "n": "quantity", "ne": "+5" }]
+}
+```
+
+Field contract:
+
+- `u`: user short name (email prefix before `@`).
+- `t`: **effective date** in deciseconds (start-of-day precision — compare dates only, ignore time-of-day).
+- `d`: creation timestamp in deciseconds (when the entry was scheduled).
+- `s`: note text (max 25 characters; NOT a source system flag — that differs from `h` entries).
+- `c`: changed fields array.
+- `n`: column name (uses the application field name, e.g. `"quantity"`).
+- `ne`: new value descriptor — either an absolute value (`"10"`, `10`) or a numeric delta string (`"+5"`, `"-2"`). A delta string starts with `+` or `-` followed by a digit.
+
+### Full EditHistory Shape (with pending entries)
+
+```json
+{
+  "h": [ ... ],
+  "p": [
+    { "u": "dan", "t": 17400000000, "d": 17380000000, "s": "restock", "c": [{ "n": "quantity", "ne": "+5" }] }
+  ]
+}
+```
+
+### Algorithm: Project Inventory to a Reference Date
+
+To compute what an inventory row's fields will be on a given reference date:
+
+1. Read `edithistory` (or `EditHistory`) from the row and parse the JSON.
+2. Normalize the reference date to start-of-day (midnight local time), expressed in deciseconds.
+3. Filter `p` entries where `entry.t` (normalized to start-of-day deciseconds) `<=` reference cutoff. Date comparison is date-only — strip the time component from `entry.t` before comparing.
+4. Sort the filtered entries ascending by `t`.
+5. For each entry in order, apply each change in `entry.c`:
+   - If `ne` is a string matching `/^[+\-]\d/`, treat it as a numeric delta: `newValue = parseFloat(currentValue) + parseFloat(ne)`.
+   - Otherwise treat `ne` as an absolute replacement: `newValue = ne`.
+6. The result is the projected row state on that date.
+
+### Application Lifecycle
+
+- When the application processes a date at or past today, it calls `checkAndApplyPendingChanges`, which applies due entries permanently: they are removed from `p` and prepended to `h` (capped at 10). After this, the live row data reflects those changes.
+- Before that permanent apply, the `p` entries are the only source of truth for future state — live row values do not include them.
+- Entries in `p` have no cap on array length; they accumulate until applied or deleted.
+
+### Column Name Mapping
+
+The `n` field in `c` uses the application's mapped field names. The canonical mapping for inventory:
+
+| Sheet column header | Application field name (`n`) |
+|---|---|
+| `Item Number` | `itemNumber` |
+| `QTY` | `quantity` |
+| `Description` | `description` |
+| `Category` | `category` |
+
+Other fields follow the same pattern (camelCase of the header), but `quantity` is the field most commonly targeted by pending entries.

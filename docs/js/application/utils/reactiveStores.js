@@ -300,6 +300,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         error: null,
         isAnalyzing: false,
         isReloadingMainData: false, // Lock to prevent analysis during main data reload
+        externalConflict: false, // True when an external session mutated this data while we have unsaved changes
         analysisProgress: 0,
         analysisMessage: '',
         analysisConfig,
@@ -383,6 +384,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
             this.setLoading(true, message);
             this.isReloadingMainData = true; // Lock to prevent analysis during reload
+            this.externalConflict = false;
             this.setError(null);
             try {
                 // Use priority queue for load operations (high priority)
@@ -445,6 +447,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.loadedBackupKey = null;
                 this.autoSaved = false; // Clear auto-save flag after successful save
                 this.lastAutoSaveHash = null; // Clear auto-save hash after manual save
+                this.externalConflict = false; // Conflict resolved — our save is now the latest
                 
                 return result;
             } catch (err) {
@@ -901,12 +904,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
         },
         async handleInvalidation() {
-            // Reload both originalData and data from the server
-            // The load() method will:
-            // 1. Set isReloadingMainData = true (prevents concurrent analysis)
-            // 2. Load fresh data from API
-            // 3. Run analysis automatically after data loads
-            // 4. Set isReloadingMainData = false
+            // If unsaved changes exist, don't silently overwrite them — flag the conflict instead.
+            // The UI will show a warning banner; reload happens after the user saves or discards.
+            if (this.isModified) {
+                this.externalConflict = true;
+                return;
+            }
             await this.load('Reloading data due to invalidation...');
         }
     });

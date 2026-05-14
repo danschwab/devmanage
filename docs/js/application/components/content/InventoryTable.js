@@ -471,6 +471,9 @@ export const InventoryTableComponent = {
             console.log('[InventoryTable] isDirty computed:', result, '| store exists:', !!this.inventoryTableStore, '| isModified:', this.inventoryTableStore?.isModified);
             return result;
         },
+        hasExternalConflict() {
+            return this.inventoryTableStore?.externalConflict ?? false;
+        },
         allowEdit() {
             // Allow editing only if editMode is true AND not locked by another user AND lock check is complete
             return this.editMode && !this.lockedByOther && this.lockCheckComplete;
@@ -895,6 +898,9 @@ export const InventoryTableComponent = {
         <slot>
             <div v-if="lockedByOther" class="card white">
                 Locked for edit by: {{ lockOwner && lockOwner.includes('@') ? lockOwner.split('@')[0] : (lockOwner || 'Unknown') }}
+            </div>
+            <div v-if="hasExternalConflict" class="card red">
+                Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.
             </div>
 
             <TableComponent
