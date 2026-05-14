@@ -145,21 +145,14 @@ export const ShowInventoryReport = {
         },
         
         emptyMessage() {
-            // Check if a search has been performed by looking at URL parameters
-            const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-inventory',
-                this.appContext?.currentPath
-            );
-            const hasSearchParams = params && (params.dateFilters || params.textFilters || params.view);
+            const storeLoaded = this.reportStore && !this.isLoading;
+            const hasNoData = (this.reportStore?.data?.length ?? 0) === 0;
             
-            // If we have search params but no report store yet, it means no shows were found
-            if (hasSearchParams && !this.reportStore && !this.isLoading) {
-                return 'No shows found for the selected search criteria';
-            }
-            
-            // If we have shows selected but no items in the data, it means the category has no items
-            if (this.showIdentifiers.length > 0 && this.tableData.length === 0 && !this.isLoading && !this.isAnalyzing) {
-                return 'No items were found in this category.';
+            if (storeLoaded && hasNoData) {
+                if (this.itemCategoryFilter) {
+                    return 'No items were found in this category.';
+                }
+                return 'No shows with packlist items found for the selected search criteria';
             }
             
             return 'Select a schedule filter to load shows and generate report';

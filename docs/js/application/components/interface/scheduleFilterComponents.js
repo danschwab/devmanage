@@ -909,7 +909,7 @@ export const ScheduleAdvancedFilter = {
                                 
                                 this.$emit('close-modal');
                             } else {
-                                throw new Error('Saved filterss store not initialized');
+                                throw new Error('Saved filters store not initialized');
                             }
                         } catch (error) {
                             console.error('Failed to save filter:', error);
