@@ -422,9 +422,12 @@ div:has(span:empty)+.card {
     margin-top: 0;
 }
 
-.card.clickable,
-button.card {
+.card.clickable {
     cursor: pointer;
+}
+
+button.card {
+    width: 100%;
 }
 
 /* Cards Grid Component */
