@@ -152,7 +152,7 @@ class packListUtils_uncached {
         // First verify the tab exists
         const tabs = await Database.getTabs('PACK_LISTS'); // Uncached so we don't invalidate on every tabs invalidation
 
-        const matchedTab = findPackListTab(projectIdentifier, tabs);
+        const matchedTab = await findPackListTab(deps, projectIdentifier, tabs);
         //console.log('[getContent]', projectIdentifier, '| tabs:', tabs?.map(t => t.title), '| found:', !!matchedTab);
         if (!matchedTab) {
             await deps.call(Database.getTabs, 'PACK_LISTS'); // Creates tabs cache dependency for nonexistant packlists
@@ -945,7 +945,7 @@ class packListUtils_uncached {
             // Filter tabs to only those matching show identifiers (using findPackListTab for fuzzy/case fallback)
             const matchedTitles = new Set();
             for (const id of identifiers) {
-                const tab = findPackListTab(id, tabs);
+                const tab = await findPackListTab(deps, id, tabs);
                 if (tab) matchedTitles.add(tab.title);
             }
             return tabs.filter(tab => matchedTitles.has(tab.title));

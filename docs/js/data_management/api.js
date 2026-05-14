@@ -671,7 +671,7 @@ class Requests_uncached {
         
         // Get available tabs and check if packlist exists
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        const tab = findPackListTab(identifier, availableTabs);
+        const tab = await findPackListTab(deps, identifier, availableTabs);
         
         return {
             exists: !!tab,

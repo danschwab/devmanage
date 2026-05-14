@@ -118,7 +118,7 @@ class productionUtils_uncached {
                     const year = row.Year;
                     if (showName && client && year) {
                         const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, year);
-                        if (findBestProjectIdentifierMatch(computedIdentifier, [value])) {
+                        if (await findBestProjectIdentifierMatch(deps, computedIdentifier, [value])) {
                             // Special overlap logic for identifiers:
                             // To find shows active during identifier's period:
                             // - column='Return' + type='after' → check if target returns after identifier ships
@@ -647,7 +647,7 @@ class productionUtils_uncached {
             
             if (showName && client && yearVal) {
                 const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
-                if (findBestProjectIdentifierMatch(computedIdentifier, [identifier])) {
+                if (await findBestProjectIdentifierMatch(deps, computedIdentifier, [identifier])) {
                     return row;
                 }
             }
@@ -749,7 +749,7 @@ export const ProductionUtils = wrapMethods(
  * @param {Array<{title:string}>} tabs
  * @returns {{title:string}|null}
  */
-export function findPackListTab(identifier, tabs) {
+export async function findPackListTab(deps, identifier, tabs) {
     if (!identifier || !Array.isArray(tabs)) return null;
     const titleToTab = new Map();
     const titles = [];
@@ -763,7 +763,7 @@ export function findPackListTab(identifier, tabs) {
         titles.push(title);
     });
 
-    const matchedTitle = findBestProjectIdentifierMatch(identifier, titles);
+    const matchedTitle = await findBestProjectIdentifierMatch(deps, identifier, titles);
     return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
 }
 
@@ -774,7 +774,7 @@ export function findPackListTab(identifier, tabs) {
  * @param {string[]} candidates
  * @returns {string|null}
  */
-export function findBestProjectIdentifierMatch(identifier, candidates = []) {
+export async function findBestProjectIdentifierMatch(deps, identifier, candidates = []) {
     const rawIdentifier = _normalizeIndexName(identifier);
     if (!rawIdentifier || !Array.isArray(candidates) || candidates.length === 0) {
         return null;
@@ -788,23 +788,44 @@ export function findBestProjectIdentifierMatch(identifier, candidates = []) {
         return null;
     }
 
+    // Quick sync checks — short-circuit before any async work
     const exact = cleanCandidates.find(candidate => candidate === rawIdentifier);
-    if (exact) {
-        return exact;
-    }
+    if (exact) return exact;
 
     const lowerIdentifier = rawIdentifier.toLowerCase();
     const caseInsensitive = cleanCandidates.find(candidate => candidate.toLowerCase() === lowerIdentifier);
-    if (caseInsensitive) {
-        return caseInsensitive;
-    }
+    if (caseInsensitive) return caseInsensitive;
 
     const normalizedIdentifier = _normalizeMatchText(rawIdentifier);
     const normalizedMatch = cleanCandidates.find(candidate => _normalizeMatchText(candidate) === normalizedIdentifier);
-    if (normalizedMatch) {
-        return normalizedMatch;
+    if (normalizedMatch) return normalizedMatch;
+
+    // Component-level resolution: parse year out of identifiers, resolve client/show via index
+    if (deps) {
+        const queryParts = _parseIdentifierParts(rawIdentifier);
+        if (queryParts) {
+            const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+            for (const candidate of cleanCandidates) {
+                const candidateParts = _parseIdentifierParts(candidate);
+                if (!candidateParts || candidateParts.year !== queryParts.year) continue;
+
+                let resolvedClient = candidateParts.client;
+                try {
+                    resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs);
+                } catch (e) {}
+
+                let resolvedShow = candidateParts.show;
+                try {
+                    resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                } catch (e) {}
+
+                const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
+                if (_normalizeMatchText(resolvedCandidate) === normalizedIdentifier) return candidate;
+            }
+        }
     }
 
+    // Fuzzy fallback with abbreviation set
     try {
         const abbreviationRange = cleanCandidates.map(candidate => _buildIdentifierAbbreviationSet(candidate).join(', '));
         const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
@@ -1092,6 +1113,12 @@ function _guessAbbreviations(rawValue) {
     }
 
     return Array.from(candidates).filter(Boolean);
+}
+
+function _parseIdentifierParts(identifier) {
+    const match = String(identifier || '').trim().match(/^(.+?)\s+(\d{4})\s+(.+)$/);
+    if (!match) return null;
+    return { client: match[1].trim(), year: match[2], show: match[3].trim() };
 }
 
 function _buildIdentifierAbbreviationSet(identifier) {
