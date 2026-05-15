@@ -313,10 +313,11 @@ export const PacklistTable = {
                 
                 if (this.editMode) {
                     const viewPath = NavigationRegistry.buildPathWithCurrentParams(
-                        'packlistTable',
-                        { tabName: this.tabName, mode: 'view' }
+                        `packlist/${this.tabName}`,
+                        this.appContext?.currentPath,
+                        { edit: undefined }
                     );
-                    NavigationRegistry.navigateTo(viewPath, false);
+                    this.$emit('navigate-to-path', viewPath);
                 }
                 
                 this.$modal.alert(`Cannot save: this pack list is locked by ${match[1]}`, 'Locked');
