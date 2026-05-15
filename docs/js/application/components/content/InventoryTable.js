@@ -1,4 +1,5 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
  * Modal displayed before any inventory save.
@@ -369,8 +370,10 @@ export const ItemImageComponent = {
 
 
 export const InventoryTableComponent = {
+    mixins: [sheetLockMixin],
     components: {
         TableComponent,
+        BannerNotifications,
         ItemImageComponent
     },
     inject: ['appContext', '$modal'],
@@ -395,11 +398,7 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
-            isLocked: false, // Track lock state (owned by this component)
-            lockingInProgress: false, // Prevent concurrent lock operations
-            lockedByOther: false, // Track if locked by another user
-            lockOwner: null, // Track who owns the lock
-            lockCheckComplete: false // Track if initial lock check is done
+            lockNamespace: 'INVENTORY'
         };
     },
     computed: {
@@ -471,8 +470,31 @@ export const InventoryTableComponent = {
             console.log('[InventoryTable] isDirty computed:', result, '| store exists:', !!this.inventoryTableStore, '| isModified:', this.inventoryTableStore?.isModified);
             return result;
         },
+        lockKey() {
+            return this.tabTitle;
+        },
+        activeStore() {
+            return this.inventoryTableStore;
+        },
         hasExternalConflict() {
             return this.inventoryTableStore?.externalConflict ?? false;
+        },
+        banners() {
+            return [
+                {
+                    key: 'lock',
+                    color: 'white',
+                    message: `Locked for edit by: ${this.lockOwnerDisplay}`,
+                    visible: this.lockedByOther,
+                    poll: { fn: () => this.checkLockStatus(), intervalMs: 10000 }
+                },
+                {
+                    key: 'conflict',
+                    color: 'red',
+                    message: 'Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.',
+                    visible: this.hasExternalConflict
+                }
+            ];
         },
         allowEdit() {
             // Allow editing only if editMode is true AND not locked by another user AND lock check is complete
@@ -534,110 +556,13 @@ export const InventoryTableComponent = {
                 this.setLockState(false, match[1]);
                 this.$modal.alert(`Cannot save: this inventory tab is locked by ${match[1]}`, 'Locked');
             }
-        },
-        
-        // Watch for lock status changes
-        // Note: InventoryTable doesn't have explicit edit mode navigation like PacklistTable,
-        // but allowEdit computed property will prevent further edits when lockedByOther=true
-        lockedByOther(newValue) {
-            if (newValue) {
-                console.log(`[InventoryTable] Lock detected - editing disabled (locked by ${this.lockOwner})`);
-            }
         }
     },
     methods: {
-        async checkLockStatus() {
-            const user = authState.user?.email;
-            if (!user || !this.tabTitle) return;
-            
-            try {
-                const lockInfo = await Requests.getInventoryLock(this.tabTitle);
-                
-                if (lockInfo && lockInfo.user !== user) {
-                    this.setLockState(false, lockInfo.user);
-                    this.lockCheckComplete = true;
-                    return;
-                }
-                
-                if (lockInfo && lockInfo.user === user) {
-                    this.setLockState(true, user);
-                    
-                    if (this.inventoryTableStore && this.inventoryTableStore.isLoading) {
-                        await new Promise(resolve => {
-                            const unwatch = this.$watch('inventoryTableStore.isLoading', (newValue) => {
-                                if (!newValue) {
-                                    unwatch();
-                                    resolve();
-                                }
-                            });
-                        });
-                    }
-                    
-                    if (!this.isDirty) {
-                        const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
-                        if (!unlocked) {
-                            console.warn('[InventoryTable] Failed to remove stale lock');
-                        }
-                        this.setLockState(false, null);
-                    }
-                } else {
-                    this.setLockState(false, null);
-                }
-            } catch (error) {
-                console.error('[InventoryTable] Failed to check lock status:', error);
-            } finally {
-                this.lockCheckComplete = true;
-            }
+        onLockAcquireFailed() {
+            this.handleRefresh();
         },
-        
-        async handleLockState(isDirty) {
-            //console.log('[InventoryTable] handleLockState called with isDirty:', isDirty, '| isLocked:', this.isLocked, '| lockingInProgress:', this.lockingInProgress, '| lockedByOther:', this.lockedByOther);
-            if (this.lockingInProgress || this.lockedByOther) return;
-            
-            const user = authState.user?.email;
-            if (!user || !this.tabTitle) return;
-            
-            this.lockingInProgress = true;
-            
-            try {
-                if (isDirty && !this.isLocked) {
-                    const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
-                    if (lockAcquired) {
-                        this.setLockState(true, user);
-                    } else {
-                        const lockInfo = await Requests.getInventoryLock(this.tabTitle, user);
-                        if (lockInfo && lockInfo.user !== user) {
-                            this.setLockState(false, lockInfo.user);
-                            console.warn(`[InventoryTable] Category locked by ${lockInfo.user}`);
-                            await this.handleRefresh();
-                        }
-                    }
-                } else if (!isDirty && this.isLocked) {
-                    const unlocked = await Requests.unlockSheet('INVENTORY', this.tabTitle, user);
-                    if (unlocked) {
-                        this.setLockState(false, null);
-                    } else {
-                        console.warn('[InventoryTable] Failed to release lock');
-                    }
-                }
-            } catch (error) {
-                console.error('[InventoryTable] Lock operation failed:', error);
-                if (error.message && error.message.includes('Failed to acquire write lock')) {
-                    this.$modal.alert(
-                        `Unable to acquire lock for ${this.tabTitle}. The system is experiencing high concurrency. Please try again in a moment.`,
-                        'Error'
-                    );
-                } else {
-                    this.$modal.alert(
-                        `Lock operation failed: ${error.message}`,
-                        'Error'
-                    );
-                }
-            } finally {
-                this.lockingInProgress = false;
-            }
-        },
-        
+
         async handleRefresh() {
             this.$modal.confirm(
                 'This removes undo history and clears unsaved changes.',
@@ -657,12 +582,6 @@ export const InventoryTableComponent = {
                 'Refresh Data',
                 'Cancel'
             );
-        },
-        
-        setLockState(isLocked, owner = null) {
-            this.isLocked = isLocked;
-            this.lockedByOther = owner && owner !== authState.user?.email;
-            this.lockOwner = owner;
         },
         
         async handleCellEdit(rowIdx, colIdx, value) {
@@ -896,12 +815,7 @@ export const InventoryTableComponent = {
     },
     template: html `
         <slot>
-            <div v-if="lockedByOther" class="card white">
-                Locked for edit by: {{ lockOwner && lockOwner.includes('@') ? lockOwner.split('@')[0] : (lockOwner || 'Unknown') }}
-            </div>
-            <div v-if="hasExternalConflict" class="card red">
-                Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.
-            </div>
+            <BannerNotifications :banners="banners" />
 
             <TableComponent
                 ref="tableComponent"

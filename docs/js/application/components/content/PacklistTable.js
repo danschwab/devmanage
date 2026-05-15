@@ -1,5 +1,6 @@
-import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString } from '../../index.js';
+import { html, TableComponent, BannerNotifications, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
+import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 // Packlist Table Hamburger Menu Component
 const PacklistTableMenuComponent = {
@@ -119,7 +120,8 @@ const RowOptionsMenuComponent = {
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    components: { TableComponent },
+    mixins: [sheetLockMixin],
+    components: { TableComponent, BannerNotifications },
     inject: ['$modal', 'appContext'],
     props: {
         content: { type: Object, required: false, default: () => ({}) },
@@ -132,12 +134,8 @@ export const PacklistTable = {
             isPrinting: false,
             databaseItemHeaders: null,
             hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty'],
-            NavigationRegistry, // Make available in template
-            isLocked: false, // Track lock state (owned by this component)
-            lockingInProgress: false, // Prevent concurrent lock operations
-            lockedByOther: false, // Track if locked by another user
-            lockOwner: null, // Track who owns the lock
-            lockCheckComplete: false // Track if initial lock check is done
+            NavigationRegistry,
+            lockNamespace: 'PACK_LISTS'
         };
     },
     computed: {
@@ -228,8 +226,37 @@ export const PacklistTable = {
         isDirty() {
             return this.packlistTableStore?.isModified || false;
         },
+        lockKey() {
+            return this.tabName;
+        },
+        activeStore() {
+            return this.packlistTableStore;
+        },
         hasExternalConflict() {
             return this.packlistTableStore?.externalConflict ?? false;
+        },
+        banners() {
+            return [
+                {
+                    key: 'error',
+                    color: 'red',
+                    message: `Error: ${this.error}`,
+                    visible: !!this.error
+                },
+                {
+                    key: 'lock',
+                    color: 'white',
+                    message: `Locked for edit by: ${this.lockOwnerDisplay}`,
+                    visible: !this.editMode && this.lockedByOther && !this.isPrinting,
+                    poll: { fn: () => this.checkLockStatus(), intervalMs: 10000 }
+                },
+                {
+                    key: 'conflict',
+                    color: 'red',
+                    message: 'Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.',
+                    visible: this.hasExternalConflict
+                }
+            ];
         },
         
         editMode() {
@@ -430,113 +457,17 @@ export const PacklistTable = {
             );
         },
         
-        setLockState(isLocked, owner = null) {
-            this.isLocked = isLocked;
-            this.lockedByOther = owner && owner !== authState.user?.email;
-            this.lockOwner = owner;
-        },
-        
-        async checkLockStatus() {
-            const user = authState.user?.email;
-            if (!user || !this.tabName) return;
-            
-            try {
-                const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName);
-                
-                if (lockInfo && lockInfo.user !== user) {
-                    this.setLockState(false, lockInfo.user);
-                    this.lockCheckComplete = true;
-                    return;
-                }
-                
-                if (lockInfo && lockInfo.user === user) {
-                    this.setLockState(true, user);
-                    
-                    if (this.packlistTableStore && (this.packlistTableStore.isLoading || this.packlistTableStore.initialLoad)) {
-                        await new Promise(resolve => {
-                            const unwatch = this.$watch(
-                                () => this.packlistTableStore && !this.packlistTableStore.isLoading && !this.packlistTableStore.initialLoad,
-                                (isReady) => {
-                                    if (!isReady) return;
-                                    unwatch();
-                                    resolve();
-                                }
-                            );
-                        });
-                    }
-                    
-                    if (!this.isDirty) {
-                        const unlocked = await Requests.unlockSheet('PACK_LISTS', this.tabName, user);
-                        if (!unlocked) {
-                            console.warn('[PacklistTable] Failed to remove stale lock');
-                        }
-                        this.setLockState(false, null);
-                    }
-                } else {
-                    this.setLockState(false, null);
-                }
-            } catch (error) {
-                console.error('[PacklistTable] Failed to check lock status:', error);
-            } finally {
-                this.lockCheckComplete = true;
-                
-                this.$nextTick(() => {
-                    if (this.isDirty && !this.editMode && this.tabName && !this.lockedByOther) {
-                        const editPath = NavigationRegistry.buildPathWithCurrentParams(
-                            `packlist/${this.tabName}`,
-                            this.appContext?.currentPath,
-                            { edit: true }
-                        );
-                        this.$emit('navigate-to-path', editPath);
-                    }
-                });
-            }
-        },
-        
-        async handleLockState(isDirty) {
-            if (this.lockingInProgress || this.lockedByOther) return;
-            
-            const user = authState.user?.email;
-            if (!user || !this.tabName) return;
-            
-            this.lockingInProgress = true;
-            
-            try {
-                if (isDirty && !this.isLocked) {
-                    const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
-                    if (lockAcquired) {
-                        this.setLockState(true, user);
-                    } else {
-                        const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
-                        if (lockInfo && lockInfo.user !== user) {
-                            this.setLockState(false, lockInfo.user);
-                            console.warn(`[PacklistTable] Sheet locked by ${lockInfo.user}`);
-                        }
-                    }
-                } else if (!isDirty && this.isLocked) {
-                    const unlocked = await Requests.unlockSheet('PACK_LISTS', this.tabName, user);
-                    if (unlocked) {
-                        this.setLockState(false, null);
-                    } else {
-                        console.warn('[PacklistTable] Failed to release lock');
-                    }
-                }
-            } catch (error) {
-                console.error('[PacklistTable] Lock operation failed:', error);
-                if (error.message && error.message.includes('Failed to acquire write lock')) {
-                    this.$modal.alert(
-                        `Unable to acquire lock for ${this.tabName}. The system is experiencing high concurrency. Please try again in a moment.`,
-                        'Error'
+        afterCheckLockComplete() {
+            this.$nextTick(() => {
+                if (this.isDirty && !this.editMode && this.tabName && !this.lockedByOther) {
+                    const editPath = NavigationRegistry.buildPathWithCurrentParams(
+                        `packlist/${this.tabName}`,
+                        this.appContext?.currentPath,
+                        { edit: true }
                     );
-                } else {
-                    this.$modal.alert(
-                        `Lock operation failed: ${error.message}`,
-                        'Error'
-                    );
+                    this.$emit('navigate-to-path', editPath);
                 }
-            } finally {
-                this.lockingInProgress = false;
-            }
+            });
         },
         
         async handleCellEdit(rowIdx, colIdx, value, type = 'main') {
@@ -1223,16 +1154,7 @@ export const PacklistTable = {
                 <span class="page-number"></span>
             </div>
             
-            <div v-if="error" class="card red">
-                <p>Error: {{ error }}</p>
-            </div>
-            
-            <div v-if="!editMode && lockedByOther && !isPrinting" class="card white">
-                Locked for edit by: {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
-            </div>
-            <div v-if="hasExternalConflict" class="card red">
-                Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.
-            </div>
+            <BannerNotifications :banners="banners" />
 
 
             <!-- Main Packlist View -->

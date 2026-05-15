@@ -359,14 +359,14 @@ export class GoogleSheetsService {
         
         const requests = [];
         
-        // Expand rows if needed
+        // Expand rows if needed, adding 10 extra rows as buffer
         if (requiredRows && requiredRows > currentRows) {
-            console.log(`[_ensureSheetSize] Expanding rows from ${currentRows} to ${requiredRows}`);
+            console.log(`[_ensureSheetSize] Expanding rows from ${currentRows} to ${requiredRows + 10}`);
             requests.push({
                 appendDimension: {
                     sheetId: sheet.properties.sheetId,
                     dimension: 'ROWS',
-                    length: requiredRows - currentRows
+                    length: requiredRows - currentRows + 10
                 }
             });
         }
