@@ -450,6 +450,7 @@ export const PacklistTable = {
                     invalidateCache([
                         { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
                     ], true);
+                    this.packlistTableStore?.load('Refreshing data...');
                 },
                 null,
                 'Refresh Data',

@@ -576,6 +576,7 @@ export const InventoryTableComponent = {
                     invalidateCache([
                         { namespace: 'database', methodName: 'getData', args: ['INVENTORY', this.tabTitle] }
                     ], true);
+                    this.inventoryTableStore?.load('Refreshing data...');
                 },
                 null,
                 'Refresh Data',
