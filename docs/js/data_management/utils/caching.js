@@ -348,12 +348,14 @@ class CacheManager {
                     const result = await targetClass[methodName](deps, ...args);
                     
                     // Determine expiration time:
-                    // 1. Custom duration if specified for this method
+                    // 1. Custom duration if specified for this method — value may be a number, null, or
+                    //    a function (args) => number | null for per-argument control
                     // 2. Infinite cache (null) if in infiniteCacheMethods
                     // 3. Default duration otherwise (undefined = use DEFAULT_CACHE_EXPIRATION_MS)
                     let expirationMs;
                     if (customCacheDurations[methodName] !== undefined) {
-                        expirationMs = customCacheDurations[methodName];
+                        const durValue = customCacheDurations[methodName];
+                        expirationMs = typeof durValue === 'function' ? durValue(args) : durValue;
                     } else if (infiniteCacheMethods.includes(methodName)) {
                         expirationMs = null;
                     } else {

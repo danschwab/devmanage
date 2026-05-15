@@ -358,7 +358,12 @@ export const Database = wrapMethods(
     database_uncached, 
     'database', 
     ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow'],
-    ['getItemImageUrl', 'getData', 'getTabs'] // Infinite cache: image URLs (expensive Drive API) + sheet data (invalidated explicitly by mutations and cross-session poller)
+    ['getItemImageUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    {
+        // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
+        // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)
+        'getData': (args) => (args[0] === 'INVENTORY' || args[0] === 'PACK_LISTS') ? null : undefined
+    }
 );
 
 
