@@ -124,6 +124,10 @@ export class FakeGoogleSheetsService {
         'CACHE': 'fake_cache_sheet_id'
     };
 
+    // Captured once on the first Caching poll so it stays older than subsequently-refilled cache entries.
+    // This simulates a one-time external change rather than a perpetual loop.
+    static _simulatedCachingTimestamp = null;
+
     // Mock data for different sheets
     static mockData = {
         'INVENTORY': {
@@ -823,12 +827,15 @@ export class FakeGoogleSheetsService {
         const [sheetName, cellRange] = range.split('!');
 
         // Simulate an external session having changed PACK_LISTS data.
-        // The fresh timestamp is always newer than any local cache entry, so the poller
-        // will detect it and trigger externalConflict when a packlist has unsaved edits.
+        // The timestamp is captured once on first call — subsequent polls return the same value
+        // so the poller only fires once (when cache.filled < timestamp), not on every tick.
         if (tableId === 'CACHE' && sheetName === 'Caching') {
+            if (!FakeGoogleSheetsService._simulatedCachingTimestamp) {
+                FakeGoogleSheetsService._simulatedCachingTimestamp = new Date().toISOString();
+            }
             return [
                 ['Key', 'Timestamp'],
-                ['database:getData:"PACK_LISTS","ATSC 2025 NAB"', new Date().toISOString()]
+                ['database:getData:"PACK_LISTS","ATSC 2025 NAB"', FakeGoogleSheetsService._simulatedCachingTimestamp]
             ];
         }
 

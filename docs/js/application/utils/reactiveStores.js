@@ -437,6 +437,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 );
                 // now remove the rows marked for deletion from live data without breaking reactivity:
                 this.removeMarkedRows();
+                // Sync originalData to the saved state so isModified becomes false.
+                // Must happen after removeMarkedRows so deleted rows are not included in the baseline.
+                this.setOriginalData(this.data);
                 
                 // Remove backup from user data after successful save
                 const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
