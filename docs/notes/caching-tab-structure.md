@@ -50,6 +50,29 @@ database:getData:"PACK_LISTS","NAB 2025"
 
 The tab name is the exact Google Sheets tab title within the spreadsheet (e.g. `"NAB 2025"`, `"Sheet1"`). Tab names are case-sensitive and must match exactly as they appear in the sheet.
 
+## getTabs key format
+
+`database:getTabs` entries use only the TABLE_ID — there is no tab name argument:
+
+```js
+const argsString = JSON.stringify([tableId]).replace(/^\[|\]$/g, "");
+const key = `database:getTabs:${argsString}`;
+```
+
+Resulting format:
+
+```
+database:getTabs:"TABLE_ID"
+```
+
+Example:
+
+```
+database:getTabs:"PACK_LISTS"
+```
+
+This entry is written when `createTab` is called. Other sessions whose poller detects a newer timestamp will invalidate their `database:getTabs:"TABLE_ID"` cache entries and refetch the tab list.
+
 ## Timestamp format
 
 ISO 8601 string from `new Date().toISOString()`. Example: `2026-05-14T18:30:00.000Z`

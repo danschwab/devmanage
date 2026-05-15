@@ -258,7 +258,7 @@ class CacheManager {
                     const prefix = `${namespace}:${methodName}:${argsString}`;
                     CacheManager.invalidateByPrefix(prefix);
                     // Notify other sessions of this domain data change
-                    if (CacheManager._timestampWriter && namespace === 'database' && methodName === 'getData' && args[0] !== 'CACHE') {
+                    if (CacheManager._timestampWriter && namespace === 'database' && args[0] !== 'CACHE') {
                         CacheManager._timestampWriter(prefix);
                     }
                 } else {
@@ -266,7 +266,7 @@ class CacheManager {
                     const fullKey = CacheManager.generateCacheKey(namespace, methodName, args);
                     CacheManager.invalidate(fullKey);
                     // Notify other sessions of this domain data change (compute 2-arg prefix for consistency)
-                    if (CacheManager._timestampWriter && namespace === 'database' && methodName === 'getData' && args[0] !== 'CACHE') {
+                    if (CacheManager._timestampWriter && namespace === 'database' && args[0] !== 'CACHE') {
                         const prefixArgs = args.slice(0, 2);
                         const argsString = JSON.stringify(prefixArgs).replace(/^\[|\]$/g, '');
                         const prefix = `${namespace}:${methodName}:${argsString}`;
