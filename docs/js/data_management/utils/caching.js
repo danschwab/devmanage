@@ -257,21 +257,10 @@ class CacheManager {
                     const argsString = JSON.stringify(prefixArgs).replace(/^\[|\]$/g, '');
                     const prefix = `${namespace}:${methodName}:${argsString}`;
                     CacheManager.invalidateByPrefix(prefix);
-                    // Notify other sessions of this domain data change
-                    if (CacheManager._timestampWriter && namespace === 'database' && args[0] !== 'CACHE') {
-                        CacheManager._timestampWriter(prefix);
-                    }
                 } else {
                     // Exact key invalidation
                     const fullKey = CacheManager.generateCacheKey(namespace, methodName, args);
                     CacheManager.invalidate(fullKey);
-                    // Notify other sessions of this domain data change (compute 2-arg prefix for consistency)
-                    if (CacheManager._timestampWriter && namespace === 'database' && args[0] !== 'CACHE') {
-                        const prefixArgs = args.slice(0, 2);
-                        const argsString = JSON.stringify(prefixArgs).replace(/^\[|\]$/g, '');
-                        const prefix = `${namespace}:${methodName}:${argsString}`;
-                        CacheManager._timestampWriter(prefix);
-                    }
                 }
             }
         });
@@ -390,6 +379,11 @@ class CacheManager {
 
 export const wrapMethods = CacheManager.wrapMethods;
 export const invalidateCache = CacheManager.invalidateCache;
+export function stampDataChange(prefix) {
+    if (CacheManager._timestampWriter) {
+        CacheManager._timestampWriter(prefix);
+    }
+}
 export function clearCache() {
     CacheManager.cache.clear();
     CacheManager.pendingCalls.clear();

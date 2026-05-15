@@ -15,7 +15,7 @@ if (isLocalhost()) {
     ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
 }
 
-import { wrapMethods, invalidateCache, EditHistoryUtils } from '../index.js';
+import { wrapMethods, invalidateCache, stampDataChange, EditHistoryUtils } from '../index.js';
 
 class database_uncached {
     /**
@@ -196,6 +196,7 @@ class database_uncached {
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         
         return result;
     }
@@ -260,6 +261,7 @@ class database_uncached {
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return true;
     }
@@ -283,6 +285,7 @@ class database_uncached {
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return true;
     }
@@ -305,6 +308,7 @@ class database_uncached {
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return nextRow;
     }
@@ -349,6 +353,7 @@ class database_uncached {
             { namespace: 'database', methodName: 'getTabs', args: [tableId] },
             { namespace: 'database', methodName: 'getData', args: [tableId, newTabName] }
         ]);
+        stampDataChange(`database:getTabs:"${tableId}"`);
     }
 }
 
