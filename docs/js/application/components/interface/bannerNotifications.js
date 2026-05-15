@@ -91,11 +91,13 @@ export const BannerNotifications = {
         }
     },
     template: html`
-        <template v-for="banner in visibleBanners" :key="banner.key">
-            <div :class="['card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
-                <span>{{ banner.message }}</span>
-                <button @click="dismiss(banner.key)" title="Dismiss" :class="['column-button', banner.color]">🗙</button>
-            </div>
-        </template>
+        <transition-group name="expand" tag="div" style="position: relative;">
+            <template v-for="banner in visibleBanners" :key="banner.key">
+                <div :class="['card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
+                    <span>{{ banner.message }}</span>
+                    <button @click="dismiss(banner.key)" title="Dismiss" :class="['column-button', banner.color]">🗙</button>
+                </div>
+            </template>
+        </transition-group>
     `
 };
