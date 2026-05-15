@@ -91,7 +91,7 @@ export const BannerNotifications = {
         }
     },
     template: html`
-        <transition-group name="expand" tag="div" style="position: relative;">
+        <transition-group name="expand" tag="div">
             <template v-for="banner in visibleBanners" :key="banner.key">
                 <div :class="['card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
                     <span>{{ banner.message }}</span>

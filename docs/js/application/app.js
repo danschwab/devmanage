@@ -309,14 +309,16 @@ const App = {
             </primary-nav>
 
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
-
-                <div v-if="permissionsWarning" class="card red auth-error-banner">
-                    <strong>Permissions Warning: </strong>{{ permissionsWarning }}
-                </div>
-
-                <div v-if="authError && !isAuthenticated" class="empty-message" style="color: var(--color-text);">
-                    <div class="card red"><strong>Error: </strong>{{ authError }} </div>
-                </div>
+                <transition-group name="expand" tag="div">
+                    <div v-if="permissionsWarning" :key="permissionsWarning" class="card red auth-error-banner">
+                        <strong>Permissions Warning: </strong>{{ permissionsWarning }}
+                    </div>
+                    
+                    <div v-if="authError && !isAuthenticated" :key="authError" class="empty-message" style="color: var(--color-text);">
+                        <div class="card red"><strong>Error: </strong>{{ authError }} </div>
+                    </div>
+                </transition-group>
+                
                 <div v-else-if="!isAuthenticated" class="empty-message">
                     please log in to view content
                 </div>
