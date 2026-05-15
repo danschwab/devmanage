@@ -145,7 +145,7 @@ class inventoryUtils_uncached {
     }
 
     static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null, options = {}) {
-        const { force = false, reason = '', autoLock = false, source = 'web', scheduledDate = null, note = '' } = options;
+        const { source = 'web', scheduledDate = null, note = '' } = options;
         
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
@@ -159,7 +159,7 @@ class inventoryUtils_uncached {
         
         // CRITICAL: Check lock status before saving to prevent conflicts
         const lockInfo = await ApplicationUtils.getSheetLock('INVENTORY', resolvedTabName, username);
-        if (lockInfo) {
+        if (lockInfo && lockInfo.user !== username) {
             const errorMsg = `Cannot save: inventory category is locked by ${lockInfo.user}`;
             console.error(`[InventoryUtils.saveInventoryTabData] ${errorMsg}`);
             throw new Error(errorMsg);
