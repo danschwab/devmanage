@@ -769,7 +769,6 @@ td:has(img) {
     font-size: 14px;
     border-radius: var(--radius-md);
     color: var(--color-text-light);
-    opacity: 0;
 }
 .column-button:not(:first-of-type) {
     right: 22px;
@@ -780,12 +779,15 @@ td:has(img) {
 .input-container .column-button {
     margin-right: .3em;
 }
+.input-container .column-button, th .column-button {    
+        opacity: 0;
+}
 .input-container input {
     /*width: 100%;*/
     min-width: inherit;
 }
 
-.content-header > .column-button {
+.content-header > .column-button, .card > .column-button {
     right: var(--padding-md);
     top: var(--padding-md);
 }

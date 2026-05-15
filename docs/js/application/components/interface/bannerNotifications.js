@@ -27,18 +27,30 @@ export const BannerNotifications = {
             default: () => []
         }
     },
+    data() {
+        return {
+            dismissedKeys: {}
+        };
+    },
     created() {
         // Store interval IDs outside Vue reactivity — they are implementation detail, not state.
         this._pollIntervals = {};
     },
     computed: {
         visibleBanners() {
-            return this.banners.filter(b => b.visible);
+            return this.banners.filter(b => b.visible && !this.dismissedKeys[b.key]);
         }
     },
     watch: {
         banners: {
             handler(newBanners) {
+                // Clear dismissed state for any banner that is no longer visible,
+                // so it will re-show if its condition becomes true again.
+                for (const banner of newBanners) {
+                    if (!banner.visible && this.dismissedKeys[banner.key]) {
+                        delete this.dismissedKeys[banner.key];
+                    }
+                }
                 this._reconcilePolling(newBanners);
             },
             deep: true,
@@ -50,6 +62,9 @@ export const BannerNotifications = {
         this._pollIntervals = {};
     },
     methods: {
+        dismiss(key) {
+            this.dismissedKeys = { ...this.dismissedKeys, [key]: true };
+        },
         _reconcilePolling(banners) {
             if (!this._pollIntervals) this._pollIntervals = {};
             const activeKeys = new Set();
@@ -77,7 +92,10 @@ export const BannerNotifications = {
     },
     template: html`
         <template v-for="banner in visibleBanners" :key="banner.key">
-            <div :class="['card', banner.color]">{{ banner.message }}</div>
+            <div :class="['card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
+                <span>{{ banner.message }}</span>
+                <button @click="dismiss(banner.key)" title="Dismiss" :class="['column-button', banner.color]">🗙</button>
+            </div>
         </template>
     `
 };

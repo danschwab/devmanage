@@ -483,7 +483,7 @@ export const InventoryTableComponent = {
             return [
                 {
                     key: 'lock',
-                    color: 'white',
+                    color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
                     visible: this.lockedByOther,
                     poll: { fn: () => this.checkLockStatus(), intervalMs: 10000 }
