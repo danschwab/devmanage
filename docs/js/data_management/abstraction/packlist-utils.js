@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, findPackListTab, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
 
 /** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
 function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -152,7 +152,7 @@ class packListUtils_uncached {
         // First verify the tab exists
         const tabs = await Database.getTabs('PACK_LISTS'); // Uncached so we don't invalidate on every tabs invalidation
 
-        const matchedTab = await findPackListTab(deps, projectIdentifier, tabs);
+        const matchedTab = await deps.call(ProductionUtils.findPackListTab, projectIdentifier, tabs);
         //console.log('[getContent]', projectIdentifier, '| tabs:', tabs?.map(t => t.title), '| found:', !!matchedTab);
         if (!matchedTab) {
             await deps.call(Database.getTabs, 'PACK_LISTS'); // Creates tabs cache dependency for nonexistant packlists
@@ -945,7 +945,7 @@ class packListUtils_uncached {
             // Filter tabs to only those matching show identifiers (using findPackListTab for fuzzy/case fallback)
             const matchedTitles = new Set();
             for (const id of identifiers) {
-                const tab = await findPackListTab(deps, id, tabs);
+                const tab = await deps.call(ProductionUtils.findPackListTab, id, tabs);
                 if (tab) matchedTitles.add(tab.title);
             }
             return tabs.filter(tab => matchedTitles.has(tab.title));

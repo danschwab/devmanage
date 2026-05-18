@@ -118,7 +118,7 @@ class productionUtils_uncached {
                     const year = row.Year;
                     if (showName && client && year) {
                         const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, year);
-                        if (await findBestProjectIdentifierMatch(deps, computedIdentifier, [value])) {
+                        if (await deps.call(ProductionUtils.findBestProjectIdentifierMatch, computedIdentifier, [value])) {
                             // Special overlap logic for identifiers:
                             // To find shows active during identifier's period:
                             // - column='Return' + type='after' → check if target returns after identifier ships
@@ -284,14 +284,17 @@ class productionUtils_uncached {
      */
     static async checkReferenceNameState(deps, rawName, referenceType = 'client') {
         const kind = referenceType === 'show' ? 'show' : 'client';
-        const tabName = kind === 'show' ? 'Shows' : 'Clients';
         const rawValue = _normalizeIndexName(rawName);
 
         if (!rawValue) {
             return null;
         }
 
-        const indexData = await _getReferenceIndexData(tabName);
+        const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+        const ref = kind === 'show' ? refData.shows : refData.clients;
+        const indexData = ref.names
+            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
+            .filter(entry => entry.name);
         const state = _classifyReferenceState(rawValue, indexData);
 
         // Exact matches should not render cards.
@@ -336,9 +339,12 @@ class productionUtils_uncached {
      */
     static async getReferenceResolutionOptions(deps, referenceType, rawValue, includeAllCandidates = false) {
         const kind = referenceType === 'show' ? 'show' : 'client';
-        const tabName = kind === 'show' ? 'Shows' : 'Clients';
         const normalizedRaw = _normalizeIndexName(rawValue);
-        const indexData = await _getReferenceIndexData(tabName);
+        const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+        const ref = kind === 'show' ? refData.shows : refData.clients;
+        const indexData = ref.names
+            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
+            .filter(entry => entry.name);
 
         if (!normalizedRaw) {
             return { referenceType: kind, rawValue: '', options: [] };
@@ -420,7 +426,11 @@ class productionUtils_uncached {
             };
         }
 
-        const indexData = await _getReferenceIndexData(tabName);
+        const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+        const ref = kind === 'show' ? refData.shows : refData.clients;
+        const indexData = ref.names
+            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
+            .filter(entry => entry.name);
         const nameConflict = _findReferenceConflict(normalizedName, indexData);
         if (nameConflict) {
             return {
@@ -505,7 +515,6 @@ class productionUtils_uncached {
 
         // Force downstream identifier caches to refresh after reference updates.
         invalidateCache([
-            { namespace: 'api', methodName: 'computeIdentifier', args: [] },
             { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
         ], true);
 
@@ -547,7 +556,6 @@ class productionUtils_uncached {
         await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, nextAbbr);
 
         invalidateCache([
-            { namespace: 'api', methodName: 'computeIdentifier', args: [] },
             { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
         ], true);
 
@@ -647,7 +655,7 @@ class productionUtils_uncached {
             
             if (showName && client && yearVal) {
                 const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
-                if (await findBestProjectIdentifierMatch(deps, computedIdentifier, [identifier])) {
+                if (await deps.call(ProductionUtils.findBestProjectIdentifierMatch, computedIdentifier, [identifier])) {
                     return row;
                 }
             }
@@ -728,6 +736,97 @@ class productionUtils_uncached {
         }
     }
 
+
+    /**
+     * Resolve the best matching project identifier candidate.
+     * Matching order: exact -> case-insensitive -> normalized -> fuzzy/abbreviation fallback.
+     * @param {string} identifier
+     * @param {string[]} candidates
+     * @returns {string|null}
+     */
+    static async findBestProjectIdentifierMatch(deps, identifier, candidates = []) {
+        const rawIdentifier = _normalizeIndexName(identifier);
+        if (!rawIdentifier || !Array.isArray(candidates) || candidates.length === 0) {
+            return null;
+        }
+
+        const cleanCandidates = candidates
+            .map(candidate => _normalizeIndexName(candidate))
+            .filter(Boolean);
+
+        if (cleanCandidates.length === 0) {
+            return null;
+        }
+
+        // Quick sync checks — short-circuit before any async work
+        const exact = cleanCandidates.find(candidate => candidate === rawIdentifier);
+        if (exact) return exact;
+
+        const lowerIdentifier = rawIdentifier.toLowerCase();
+        const caseInsensitive = cleanCandidates.find(candidate => candidate.toLowerCase() === lowerIdentifier);
+        if (caseInsensitive) return caseInsensitive;
+
+        const normalizedIdentifier = _normalizeMatchText(rawIdentifier);
+        const normalizedMatch = cleanCandidates.find(candidate => _normalizeMatchText(candidate) === normalizedIdentifier);
+        if (normalizedMatch) return normalizedMatch;
+
+        // Component-level resolution: parse year out of identifiers, resolve client/show via index
+        if (deps) {
+            const queryParts = _parseIdentifierParts(rawIdentifier);
+            if (queryParts) {
+                const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+                for (const candidate of cleanCandidates) {
+                    const candidateParts = _parseIdentifierParts(candidate);
+                    if (!candidateParts || candidateParts.year !== queryParts.year) continue;
+
+                    let resolvedClient = candidateParts.client;
+                    try {
+                        resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs);
+                    } catch (e) {}
+
+                    let resolvedShow = candidateParts.show;
+                    try {
+                        resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                    } catch (e) {}
+
+                    const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
+                    if (_normalizeMatchText(resolvedCandidate) === normalizedIdentifier) return candidate;
+                }
+            }
+        }
+
+        // Fuzzy fallback with abbreviation set
+        try {
+            const abbreviationRange = cleanCandidates.map(candidate => _buildIdentifierAbbreviationSet(candidate).join(', '));
+            const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
+            return GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
+        } catch (error) {
+            return null;
+        }
+    }
+
+
+    static async findPackListTab(deps, identifier, tabs) {
+        if (!identifier || !Array.isArray(tabs)) return null;
+        const titleToTab = new Map();
+        const titles = [];
+
+        tabs.forEach((tab) => {
+            const title = _normalizeIndexName(tab?.title);
+            if (!title || titleToTab.has(title)) {
+                return;
+            }
+            titleToTab.set(title, tab);
+            titles.push(title);
+        });
+
+        const matchedTitle = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, titles);
+        return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
+    }
+
+
+
+
 }
 
 export const ProductionUtils = wrapMethods(
@@ -749,91 +848,9 @@ export const ProductionUtils = wrapMethods(
  * @param {Array<{title:string}>} tabs
  * @returns {{title:string}|null}
  */
-export async function findPackListTab(deps, identifier, tabs) {
-    if (!identifier || !Array.isArray(tabs)) return null;
-    const titleToTab = new Map();
-    const titles = [];
 
-    tabs.forEach((tab) => {
-        const title = _normalizeIndexName(tab?.title);
-        if (!title || titleToTab.has(title)) {
-            return;
-        }
-        titleToTab.set(title, tab);
-        titles.push(title);
-    });
 
-    const matchedTitle = await findBestProjectIdentifierMatch(deps, identifier, titles);
-    return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
-}
 
-/**
- * Resolve the best matching project identifier candidate.
- * Matching order: exact -> case-insensitive -> normalized -> fuzzy/abbreviation fallback.
- * @param {string} identifier
- * @param {string[]} candidates
- * @returns {string|null}
- */
-export async function findBestProjectIdentifierMatch(deps, identifier, candidates = []) {
-    const rawIdentifier = _normalizeIndexName(identifier);
-    if (!rawIdentifier || !Array.isArray(candidates) || candidates.length === 0) {
-        return null;
-    }
-
-    const cleanCandidates = candidates
-        .map(candidate => _normalizeIndexName(candidate))
-        .filter(Boolean);
-
-    if (cleanCandidates.length === 0) {
-        return null;
-    }
-
-    // Quick sync checks — short-circuit before any async work
-    const exact = cleanCandidates.find(candidate => candidate === rawIdentifier);
-    if (exact) return exact;
-
-    const lowerIdentifier = rawIdentifier.toLowerCase();
-    const caseInsensitive = cleanCandidates.find(candidate => candidate.toLowerCase() === lowerIdentifier);
-    if (caseInsensitive) return caseInsensitive;
-
-    const normalizedIdentifier = _normalizeMatchText(rawIdentifier);
-    const normalizedMatch = cleanCandidates.find(candidate => _normalizeMatchText(candidate) === normalizedIdentifier);
-    if (normalizedMatch) return normalizedMatch;
-
-    // Component-level resolution: parse year out of identifiers, resolve client/show via index
-    if (deps) {
-        const queryParts = _parseIdentifierParts(rawIdentifier);
-        if (queryParts) {
-            const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
-            for (const candidate of cleanCandidates) {
-                const candidateParts = _parseIdentifierParts(candidate);
-                if (!candidateParts || candidateParts.year !== queryParts.year) continue;
-
-                let resolvedClient = candidateParts.client;
-                try {
-                    resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs);
-                } catch (e) {}
-
-                let resolvedShow = candidateParts.show;
-                try {
-                    resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
-                } catch (e) {}
-
-                const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
-                if (_normalizeMatchText(resolvedCandidate) === normalizedIdentifier) return candidate;
-            }
-        }
-    }
-
-    // Fuzzy fallback with abbreviation set
-    try {
-        const abbreviationRange = cleanCandidates.map(candidate => _buildIdentifierAbbreviationSet(candidate).join(', '));
-        const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
-        return GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
-    } catch (error) {
-        return null;
-    }
-}
 
 
 // Helper functions not exposed via API
@@ -982,21 +999,6 @@ function _mergeAbbreviations(existingText, nextToken) {
     }
 
     return tokens.join(', ');
-}
-
-async function _getReferenceIndexData(tabName) {
-    const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
-    const rows = await Database.getData('CACHE', tabName, {
-        name: nameColumn,
-        abbr: 'Abbreviations'
-    });
-
-    return rows
-        .map(row => ({
-            name: _normalizeIndexName(row.name),
-            abbreviations: _splitAbbreviations(row.abbr)
-        }))
-        .filter(row => row.name);
 }
 
 function _classifyReferenceState(rawValue, indexData) {
@@ -1184,7 +1186,6 @@ function _invalidateReferenceCaches() {
     invalidateCache([
         { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
         { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
-        { namespace: 'api', methodName: 'computeIdentifier', args: [] },
         { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] },
         { namespace: 'production_utils', methodName: 'checkReferenceNameState', args: [] },
         { namespace: 'production_utils', methodName: 'getReferenceResolutionOptions', args: [] }

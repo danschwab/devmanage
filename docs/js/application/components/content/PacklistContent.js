@@ -821,7 +821,8 @@ export const PacklistContent = {
             // Invalidate the getTabs cache to force reload
             invalidateCache([
                 { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'Production Schedule'] }, // Ensure schedule data is fresh, but don't refresh client and show ref data
-                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] }
+                { namespace: 'database', methodName: 'getTabs', args: ['PACK_LISTS'] },
+                { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS'] }
             ], true);
             
             // If viewing a packlist table, refresh its lock status

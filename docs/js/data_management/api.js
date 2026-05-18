@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, findPackListTab, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -667,7 +667,7 @@ class Requests_uncached {
         
         // Get available tabs and check if packlist exists
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        const tab = await findPackListTab(deps, identifier, availableTabs);
+        const tab = await deps.call(ProductionUtils.findPackListTab, identifier, availableTabs);
         
         return {
             exists: !!tab,

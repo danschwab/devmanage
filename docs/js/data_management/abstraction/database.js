@@ -193,10 +193,10 @@ class database_uncached {
         const result = await GoogleSheetsService.setSheetData(tableId, tabName, updatesWithMetadata, mapping);
         
         // Invalidate related caches using prefix to handle custom mapped data
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
-        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         
         return result;
     }
@@ -258,10 +258,10 @@ class database_uncached {
         await GoogleSheetsService.setSheetData(tableId, tabName, updatedSheetData);
 
         // Invalidate related caches using prefix to handle custom mapped data
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
-        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return true;
     }
@@ -282,10 +282,10 @@ class database_uncached {
 
         await GoogleSheetsService.setSheetData(tableId, range, [[value ?? '']], null);
 
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
-        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return true;
     }
@@ -305,10 +305,10 @@ class database_uncached {
 
         await GoogleSheetsService.setSheetData(tableId, range, [values], null);
 
+        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }
         ], true);
-        stampDataChange(`database:getData:"${tableId}","${tabName}"`);
 
         return nextRow;
     }
@@ -349,11 +349,11 @@ class database_uncached {
         }
         
         // Invalidate related caches, including the possible attempt to get data from this tab before it existed
+        stampDataChange(`database:getTabs:"${tableId}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getTabs', args: [tableId] },
             { namespace: 'database', methodName: 'getData', args: [tableId, newTabName] }
         ]);
-        stampDataChange(`database:getTabs:"${tableId}"`);
     }
 }
 
