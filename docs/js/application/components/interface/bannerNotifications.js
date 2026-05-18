@@ -9,6 +9,7 @@ import { html } from '../../index.js';
  *     color:     String   — card color class ('red', 'white', 'orange', 'purple', ...)
  *     message:   String   — text to display
  *     visible:   Boolean  — whether to render this banner
+ *     dismissible?: Boolean — whether the dismiss button is enabled (default true)
  *     poll?: {            — optional: while visible, call fn on a recurring interval
  *       fn:          Function  — async function to call
  *       intervalMs:  Number   — interval in milliseconds
@@ -65,6 +66,7 @@ export const BannerNotifications = {
         dismiss(key) {
             this.dismissedKeys = { ...this.dismissedKeys, [key]: true };
         },
+
         _reconcilePolling(banners) {
             if (!this._pollIntervals) this._pollIntervals = {};
             const activeKeys = new Set();
@@ -95,7 +97,12 @@ export const BannerNotifications = {
             <template v-for="banner in visibleBanners" :key="banner.key">
                 <div :class="['card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
                     <span>{{ banner.message }}</span>
-                    <button @click="dismiss(banner.key)" title="Dismiss" :class="['column-button', banner.color]">🗙</button>
+                    <button
+                        v-if="banner.dismissible !== false"
+                        @click="dismiss(banner.key)"
+                        title="Dismiss"
+                        :class="['column-button', banner.color]"
+                    >🗙</button>
                 </div>
             </template>
         </transition-group>

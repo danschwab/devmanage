@@ -247,7 +247,8 @@ export const PacklistTable = {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
-                    visible: this.lockedByOther && !this.isPrinting
+                    visible: this.lockedByOther && !this.isPrinting,
+                    dismissible: false
                 },
                 {
                     key: 'conflict',

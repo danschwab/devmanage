@@ -494,7 +494,8 @@ export const InventoryTableComponent = {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
-                    visible: this.lockedByOther
+                    visible: this.lockedByOther,
+                    dismissible: false
                 },
                 {
                     key: 'conflict',
