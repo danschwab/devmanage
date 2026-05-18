@@ -71,6 +71,19 @@ export const sheetLockMixin = {
     },
 
     watch: {
+        'activeStore.lockConflictOwner'(newOwner) {
+            if (!newOwner) return;
+            this.setLockState(false, newOwner);
+            this.onLockConflictDetected?.(newOwner);
+            if (this.activeStore) {
+                this.$nextTick(() => {
+                    if (this.activeStore.lockConflictOwner === newOwner) {
+                        this.activeStore.lockConflictOwner = null;
+                    }
+                });
+            }
+        },
+
         'activeStore.error'(newError) {
             if (!newError) return;
             const match = newError.match(/locked by (.+)$/i);

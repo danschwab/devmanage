@@ -398,10 +398,7 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
-            lockNamespace: 'INVENTORY',
-            lockAlertMessage: '',
-            lockAlertVisible: false,
-            lockAlertNonce: 0
+            lockNamespace: 'INVENTORY'
         };
     },
     computed: {
@@ -485,12 +482,6 @@ export const InventoryTableComponent = {
         banners() {
             return [
                 {
-                    key: `lock-alert-${this.lockAlertNonce}`,
-                    color: 'red',
-                    message: this.lockAlertMessage,
-                    visible: this.lockAlertVisible
-                },
-                {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
@@ -554,16 +545,6 @@ export const InventoryTableComponent = {
         }
     },
     methods: {
-        showLockBanner(message) {
-            this.lockAlertMessage = message;
-            this.lockAlertNonce += 1;
-            this.lockAlertVisible = true;
-        },
-
-        onLockConflictDetected(lockOwner) {
-            this.showLockBanner(`Cannot save: locked by ${lockOwner}`);
-        },
-
         onForeignLockWhileClean() {
             if (!this.appContext?.navigateToPath) return;
 
@@ -587,7 +568,6 @@ export const InventoryTableComponent = {
                 );
                 this.appContext.navigateToPath(viewPath);
             }
-            this.showLockBanner(`Cannot edit: this category is locked by ${lockInfo?.user || 'another user'}`);
         },
 
         async handleRefresh() {
@@ -628,9 +608,6 @@ export const InventoryTableComponent = {
             if (!await this.acquireLockForEdit()) {
                 if (colKey && this.inventoryTableStore && originalValue !== undefined) {
                     this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
-                }
-                if (this.lockOwner) {
-                    this.showLockBanner(`Cannot edit: this category is locked by ${this.lockOwnerDisplay}`);
                 }
                 return;
             }

@@ -301,6 +301,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         isAnalyzing: false,
         isReloadingMainData: false, // Lock to prevent analysis during main data reload
         externalConflict: false, // True when an external session mutated this data while we have unsaved changes
+        lockConflictOwner: null, // Set when a save is blocked by a competing lock
         analysisProgress: 0,
         analysisMessage: '',
         analysisConfig,
@@ -385,6 +386,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.setLoading(true, message);
             this.isReloadingMainData = true; // Lock to prevent analysis during reload
             this.externalConflict = false;
+            this.lockConflictOwner = null;
             this.setError(null);
             try {
                 // Use priority queue for load operations (high priority)
@@ -424,6 +426,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
             this.setLoading(true, message);
             this.setError(null);
+            this.lockConflictOwner = null;
             try {
                 // Remove all objects marked for deletion and analysis target columns before saving
                 const cleanData = removeAppData(this.data, this.analysisConfig);
@@ -454,7 +457,13 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 
                 return result;
             } catch (err) {
-                this.setError(err.message || 'Failed to save data');
+                const lockMatch = err?.message?.match(/locked by (.+)$/i);
+                if (lockMatch) {
+                    this.lockConflictOwner = lockMatch[1];
+                    this.setError(null);
+                } else {
+                    this.setError(err.message || 'Failed to save data');
+                }
                 return false;
             } finally {
                 this.setLoading(false, '');

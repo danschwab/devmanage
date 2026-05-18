@@ -161,7 +161,7 @@ class inventoryUtils_uncached {
         const lockInfo = await ApplicationUtils.getSheetLock('INVENTORY', resolvedTabName, username);
         if (lockInfo && lockInfo.user !== username) {
             const errorMsg = `Cannot save: inventory category is locked by ${lockInfo.user}`;
-            console.error(`[InventoryUtils.saveInventoryTabData] ${errorMsg}`);
+            console.warn(`[InventoryUtils.saveInventoryTabData] ${errorMsg}`);
             throw new Error(errorMsg);
         }
         

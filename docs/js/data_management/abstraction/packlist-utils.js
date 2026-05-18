@@ -322,7 +322,7 @@ class packListUtils_uncached {
         const lockInfo = await ApplicationUtils.getSheetLock('PACK_LISTS', tabName, username);
         if (lockInfo && lockInfo.user !== username) {
             const errorMsg = `Cannot save: pack list is locked by ${lockInfo.user}`;
-            console.error(`[PackListUtils.savePackList] ${errorMsg}`);
+            console.warn(`[PackListUtils.savePackList] ${errorMsg}`);
             throw new Error(errorMsg);
         }
         
