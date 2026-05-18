@@ -75,17 +75,36 @@ export const sheetLockMixin = {
             if (!newError) return;
             const match = newError.match(/locked by (.+)$/i);
             if (match) {
-                this.setLockState(false, match[1]);
-                this.$modal.alert(`Cannot save: locked by ${match[1]}`, 'Locked');
+                const lockOwner = match[1];
+                this.setLockState(false, lockOwner);
+                if (typeof this.onLockConflictDetected === 'function') {
+                    this.onLockConflictDetected(lockOwner);
+                    return;
+                }
+                this.$modal.alert(`Cannot save: locked by ${lockOwner}`, 'Locked');
             }
         }
     },
 
     methods: {
         setLockState(isLocked, owner = null) {
+            const wasLockedByOther = this.lockedByOther;
+            const previousOwner = this.lockOwner;
+
             this.isLocked = isLocked;
             this.lockedByOther = !!(owner && owner !== authState.user?.email);
             this.lockOwner = owner;
+
+            // When a foreign lock appears while this table has no unsaved changes,
+            // immediately let the component exit edit mode.
+            if (this.lockedByOther && (!wasLockedByOther || previousOwner !== owner)) {
+                this.handleForeignLockDiscovery(owner);
+            }
+        },
+
+        handleForeignLockDiscovery(owner) {
+            if (!this.editMode || this.isDirty) return;
+            this.onForeignLockWhileClean?.(owner);
         },
 
         /**

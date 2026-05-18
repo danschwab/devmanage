@@ -11,6 +11,31 @@ if (isLocalhost()) {
     ({ GoogleSheetsService } = await import('../../google_sheets_services/GoogleSheetsData.js'));
 }
 
+function isActiveLockTimestamp(timestamp) {
+    return !!(timestamp && timestamp !== '0');
+}
+
+function toLockTimestampMs(timestamp) {
+    const ms = new Date(timestamp).getTime();
+    return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
+}
+
+function getOldestActiveLock(locks, spreadsheet, tab) {
+    const candidates = (locks || []).filter(lock =>
+        lock.spreadsheet === spreadsheet &&
+        lock.tab === tab &&
+        isActiveLockTimestamp(lock.timestamp)
+    );
+
+    if (!candidates.length) return null;
+
+    return candidates.reduce((oldest, current) => {
+        return toLockTimestampMs(current.timestamp) < toLockTimestampMs(oldest.timestamp)
+            ? current
+            : oldest;
+    });
+}
+
 /**
  * Utility functions for application-specific operations
  */
@@ -269,17 +294,10 @@ class applicationUtils_uncached {
             const locksGrid = await ApplicationUtils.getLocksData();
             //console.log(`[lockSheet] Got locks data:`, locksGrid);
             
-            // Check if already locked by another user
-            // Must filter out "0" timestamps (released locks) and empty strings
-            const existingLock = locksGrid.locks.find(lock => 
-                lock.spreadsheet === spreadsheet && 
-                lock.tab === tab && 
-                lock.user !== user && 
-                lock.timestamp && 
-                lock.timestamp !== '0'
-            );
+            // Resolve the effective lock: oldest active timestamp wins.
+            const existingLock = getOldestActiveLock(locksGrid.locks, spreadsheet, tab);
             
-            if (existingLock) {
+            if (existingLock && existingLock.user !== user) {
                 console.warn(`Sheet ${spreadsheet}/${tab} is locked by ${existingLock.user}`);
                 return false;
             }
@@ -409,14 +427,9 @@ class applicationUtils_uncached {
     static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
         const locksGrid = await deps.call(ApplicationUtils.getLocksData);
         //console.log(`[ApplicationUtils.getSheetLock] Found ${locksGrid.locks.length} total locks`);
-        
-        // Find locks for this spreadsheet/tab with valid timestamps (not "0" or empty)
-        const matchedLock = locksGrid.locks.find(lock => 
-            lock.spreadsheet === spreadsheet && 
-            lock.tab === tab && 
-            lock.timestamp && 
-            lock.timestamp !== '0'
-        ) || null;
+
+        // When multiple active locks exist, only the oldest timestamp is authoritative.
+        const matchedLock = getOldestActiveLock(locksGrid.locks, spreadsheet, tab);
         
         // Filter out if locked by current user
         if (matchedLock && currentUser && matchedLock.user === currentUser) {
@@ -451,12 +464,7 @@ class applicationUtils_uncached {
             // Get lock info first to identify the owner
             const locksGrid = await ApplicationUtils.getLocksData();
             
-            const lockInfo = locksGrid.locks.find(lock => 
-                lock.spreadsheet === spreadsheet && 
-                lock.tab === tab && 
-                lock.timestamp && 
-                lock.timestamp !== '0'
-            );
+            const lockInfo = getOldestActiveLock(locksGrid.locks, spreadsheet, tab);
             
             if (!lockInfo) {
                 return {

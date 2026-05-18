@@ -398,7 +398,10 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
-            lockNamespace: 'INVENTORY'
+            lockNamespace: 'INVENTORY',
+            lockAlertMessage: '',
+            lockAlertVisible: false,
+            lockAlertNonce: 0
         };
     },
     computed: {
@@ -482,6 +485,12 @@ export const InventoryTableComponent = {
         banners() {
             return [
                 {
+                    key: `lock-alert-${this.lockAlertNonce}`,
+                    color: 'red',
+                    message: this.lockAlertMessage,
+                    visible: this.lockAlertVisible
+                },
+                {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
@@ -544,6 +553,27 @@ export const InventoryTableComponent = {
         }
     },
     methods: {
+        showLockBanner(message) {
+            this.lockAlertMessage = message;
+            this.lockAlertNonce += 1;
+            this.lockAlertVisible = true;
+        },
+
+        onLockConflictDetected(lockOwner) {
+            this.showLockBanner(`Cannot save: locked by ${lockOwner}`);
+        },
+
+        onForeignLockWhileClean() {
+            if (!this.appContext?.navigateToPath) return;
+
+            const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                this.containerPath,
+                this.appContext?.currentPath,
+                { edit: undefined }
+            );
+            this.appContext.navigateToPath(viewPath);
+        },
+
         onLockAcquireFailed(lockInfo) {
             if (this.inventoryTableStore) {
                 this.inventoryTableStore.setData(this.inventoryTableStore.originalData);
@@ -556,7 +586,7 @@ export const InventoryTableComponent = {
                 );
                 this.appContext.navigateToPath(viewPath);
             }
-            this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo?.user || 'another user'}`, 'Locked');
+            this.showLockBanner(`Cannot edit: this category is locked by ${lockInfo?.user || 'another user'}`);
         },
 
         async handleRefresh() {
@@ -599,7 +629,7 @@ export const InventoryTableComponent = {
                     this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
                 }
                 if (this.lockOwner) {
-                    this.$modal.alert(`Cannot edit: this category is locked by ${this.lockOwnerDisplay}`, 'Locked');
+                    this.showLockBanner(`Cannot edit: this category is locked by ${this.lockOwnerDisplay}`);
                 }
                 return;
             }

@@ -331,6 +331,17 @@ export const PacklistTable = {
         }, { immediate: true });
     },
     methods: {
+        onForeignLockWhileClean() {
+            if (!this.tabName) return;
+
+            const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                `packlist/${this.tabName}`,
+                this.appContext?.currentPath,
+                { edit: undefined }
+            );
+            this.$emit('navigate-to-path', viewPath);
+        },
+
         initializeStore() {
             if (!this.tabName) return;
             
