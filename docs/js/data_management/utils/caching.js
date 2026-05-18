@@ -20,6 +20,13 @@ class CacheInvalidationBus {
         }
         CacheInvalidationBus.listeners.get(pattern).push(callback);
     }
+
+    static off(pattern, callback) {
+        const callbacks = CacheInvalidationBus.listeners.get(pattern);
+        if (!callbacks) return;
+        const idx = callbacks.indexOf(callback);
+        if (idx !== -1) callbacks.splice(idx, 1);
+    }
     
     /**
      * Emit cache invalidation event
@@ -238,6 +245,7 @@ class CacheManager {
     static generateCacheKey(namespace, methodName, args) {
         // Remove brackets to make prefix matching work for custom mapped data
         const argsString = JSON.stringify(args).replace(/^\[|\]$/g, '');
+        console.log('[cache] generateCacheKey:', `${namespace}:${methodName}:${argsString}`);
         return `${namespace}:${methodName}:${argsString}`;
     }
 
@@ -247,6 +255,8 @@ class CacheManager {
      * @param {boolean} invalidateByPrefix - If true, invalidates all caches that start with the cache key prefix
      */
     static invalidateCache(cacheEntries, invalidateByPrefix = false) {
+        console.log('[cache] invalidateCache called with entries:', cacheEntries, '| invalidateByPrefix:', invalidateByPrefix);
+        
         if (!Array.isArray(cacheEntries)) return;
         cacheEntries.forEach(({ namespace, methodName, args }) => {
             if (namespace && methodName && args) {

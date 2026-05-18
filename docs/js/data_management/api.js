@@ -372,18 +372,14 @@ class Requests_uncached {
     
     /**
      * Get lock details for a spreadsheet tab
-     * 
-     * PASS-THROUGH METHOD - Not wrapped, calls already-wrapped ApplicationUtils
-     * Does NOT accept deps parameter - delegates to ApplicationUtils which handles caching
-     * 
+     * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} spreadsheet - The spreadsheet name
      * @param {string} tab - The tab name
      * @param {string} [currentUser] - Optional current user email to filter out their own locks
      * @returns {Promise<Object|null>} Lock details or null if not locked
      */
-    static async getSheetLock(spreadsheet, tab, currentUser = null) {
-        // ApplicationUtils.getSheetLock is already wrapped with caching, call it directly
-        return await ApplicationUtils.getSheetLock(spreadsheet, tab, currentUser);
+    static async getSheetLock(deps, spreadsheet, tab, currentUser = null) {
+        return await deps.call(ApplicationUtils.getSheetLock, spreadsheet, tab, currentUser);
     }
     
     /**
@@ -1167,9 +1163,6 @@ class Requests_uncached {
  * - unlockSheet: Triggers cache invalidation via ApplicationUtils.unlockSheet()
  * - forceUnlockSheet: Triggers cache invalidation via ApplicationUtils.forceUnlockSheet()
  * 
- * PASS-THROUGH LOCK QUERY METHODS (not wrapped, delegate to ApplicationUtils):
- * - getSheetLock: Delegates to ApplicationUtils.getSheetLock (cached at abstraction layer)
- * 
  * These mutation methods are passed through without modification, preserving their original
  * signatures (no deps parameter) and allowing them to trigger invalidation independently.
  */
@@ -1179,12 +1172,12 @@ export const Requests = wrapMethods(
     [
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
         'saveInventoryTabData', 'savePackList', 'storeUserData',
-        'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'getSheetLock',
+        'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
         'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
         'addCustomScheduleReferenceEntry'
-    ], // Mutation methods and pass-through methods
+    ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
 );

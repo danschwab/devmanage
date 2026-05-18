@@ -485,8 +485,7 @@ export const InventoryTableComponent = {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
-                    visible: this.lockedByOther,
-                    poll: { fn: () => this.checkLockStatus(), intervalMs: 10000 }
+                    visible: this.lockedByOther
                 },
                 {
                     key: 'conflict',
@@ -540,27 +539,24 @@ export const InventoryTableComponent = {
         await this.checkLockStatus();
     },
     watch: {
-        isDirty(newValue, oldValue) {
-            console.log('[InventoryTable] isDirty watcher fired:', oldValue, '->', newValue, '| lockCheckComplete:', this.lockCheckComplete, '| lockedByOther:', this.lockedByOther);
-            if (!this.lockCheckComplete || this.lockedByOther) return;
+        isDirty(newValue) {
             this.handleLockState(newValue);
-        },
-        
-        'inventoryTableStore.error'(newError) {
-            if (!newError) return;
-            
-            const lockErrorPattern = /locked by (.+)$/i;
-            const match = newError.match(lockErrorPattern);
-            
-            if (match) {
-                this.setLockState(false, match[1]);
-                this.$modal.alert(`Cannot save: this inventory tab is locked by ${match[1]}`, 'Locked');
-            }
         }
     },
     methods: {
-        onLockAcquireFailed() {
-            this.handleRefresh();
+        onLockAcquireFailed(lockInfo) {
+            if (this.inventoryTableStore) {
+                this.inventoryTableStore.setData(this.inventoryTableStore.originalData);
+            }
+            if (this.appContext?.navigateToPath) {
+                const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                    this.containerPath,
+                    this.appContext?.currentPath,
+                    { edit: undefined }
+                );
+                this.appContext.navigateToPath(viewPath);
+            }
+            this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo?.user || 'another user'}`, 'Locked');
         },
 
         async handleRefresh() {
@@ -598,32 +594,12 @@ export const InventoryTableComponent = {
                 this.inventoryTableStore.data[rowIdx][colKey] = value;
             }
 
-            try {
-                const lockInfo = await Requests.getInventoryLock(this.tabTitle);
-                if (lockInfo && lockInfo.user !== user) {
-                    if (colKey && this.inventoryTableStore && originalValue !== undefined) {
-                        this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
-                    }
-                    this.setLockState(false, lockInfo.user);
-                    this.$modal.alert(`Cannot edit: this category is locked by ${lockInfo.user}`, 'Locked');
-                    return;
-                }
-
-                if (!this.isLocked) {
-                    const lockAcquired = await Requests.lockSheet('INVENTORY', this.tabTitle, user);
-                    if (lockAcquired) {
-                        this.setLockState(true, user);
-                    } else {
-                        if (colKey && this.inventoryTableStore && originalValue !== undefined) {
-                            this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
-                        }
-                        return;
-                    }
-                }
-            } catch (error) {
-                console.error('[InventoryTable] Error checking lock on edit:', error);
+            if (!await this.acquireLockForEdit()) {
                 if (colKey && this.inventoryTableStore && originalValue !== undefined) {
                     this.inventoryTableStore.data[rowIdx][colKey] = originalValue;
+                }
+                if (this.lockOwner) {
+                    this.$modal.alert(`Cannot edit: this category is locked by ${this.lockOwnerDisplay}`, 'Locked');
                 }
                 return;
             }

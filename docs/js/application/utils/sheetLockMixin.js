@@ -1,4 +1,4 @@
-import { Requests, authState } from '../index.js';
+import { Requests, authState, CacheInvalidationBus } from '../index.js';
 
 /**
  * sheetLockMixin — Vue Options API mixin for sheet-level write-lock management.
@@ -51,11 +51,33 @@ export const sheetLockMixin = {
         };
     },
 
+    created() {
+        this._lockInvalidationHandler = () => this.checkLockStatus();
+        CacheInvalidationBus.on('api:getSheetLock', this._lockInvalidationHandler);
+    },
+
+    beforeUnmount() {
+        if (this._lockInvalidationHandler) {
+            CacheInvalidationBus.off('api:getSheetLock', this._lockInvalidationHandler);
+        }
+    },
+
     computed: {
         lockOwnerDisplay() {
             return this.lockOwner && this.lockOwner.includes('@')
                 ? this.lockOwner.split('@')[0]
                 : (this.lockOwner || 'Unknown');
+        }
+    },
+
+    watch: {
+        'activeStore.error'(newError) {
+            if (!newError) return;
+            const match = newError.match(/locked by (.+)$/i);
+            if (match) {
+                this.setLockState(false, match[1]);
+                this.$modal.alert(`Cannot save: locked by ${match[1]}`, 'Locked');
+            }
         }
     },
 
@@ -140,7 +162,7 @@ export const sheetLockMixin = {
          * Called from the component's isDirty watcher.
          */
         async handleLockState(isDirty) {
-            if (this.lockingInProgress || this.lockedByOther) return;
+            if (!this.lockCheckComplete || this.lockingInProgress || this.lockedByOther) return;
 
             const user = authState.user?.email;
             if (!user || !this.lockKey) return;
@@ -178,6 +200,35 @@ export const sheetLockMixin = {
                 );
             } finally {
                 this.lockingInProgress = false;
+            }
+        },
+
+        async acquireLockForEdit() {
+            const user = authState.user?.email;
+            if (!user || !this.lockKey) return false;
+            if (this.isLocked) return true;
+
+            try {
+                const lockInfo = await Requests.getSheetLock(this.lockNamespace, this.lockKey, user);
+                if (lockInfo) {
+                    this.setLockState(false, lockInfo.user);
+                    return false;
+                }
+
+                const lockAcquired = await Requests.lockSheet(this.lockNamespace, this.lockKey, user);
+                if (lockAcquired) {
+                    this.setLockState(true, user);
+                    return true;
+                }
+
+                const recheckInfo = await Requests.getSheetLock(this.lockNamespace, this.lockKey, user);
+                if (recheckInfo) {
+                    this.setLockState(false, recheckInfo.user);
+                }
+                return false;
+            } catch (error) {
+                console.error(`[sheetLockMixin] acquireLockForEdit failed for ${this.lockKey}:`, error);
+                return false;
             }
         }
     }

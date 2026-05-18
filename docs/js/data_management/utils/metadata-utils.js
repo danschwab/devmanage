@@ -60,10 +60,10 @@ export class EditHistoryUtils {
      * Append a new entry to existing edithistory history
      * @param {string|Object} existingEditHistory - Existing edithistory (JSON string or object)
      * @param {Object} newEntry - New edithistory entry to append
-     * @param {number} maxHistory - Maximum history entries to keep (default: 10)
+     * @param {number} maxHistory - Maximum history entries to keep (default: 100)
      * @returns {string} Updated edithistory as JSON string
      */
-    static appendToEditHistory(existingEditHistory, newEntry, maxHistory = 10) {
+    static appendToEditHistory(existingEditHistory, newEntry, maxHistory = 100) {
         let edithistory;
         
         // Parse existing edithistory

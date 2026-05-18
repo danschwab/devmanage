@@ -247,8 +247,7 @@ export const PacklistTable = {
                     key: 'lock',
                     color: '',
                     message: `Locked for edit by: ${this.lockOwnerDisplay}`,
-                    visible: this.lockedByOther && !this.isPrinting,
-                    poll: { fn: () => this.checkLockStatus(), intervalMs: 10000 }
+                    visible: this.lockedByOther && !this.isPrinting
                 },
                 {
                     key: 'conflict',
@@ -286,8 +285,6 @@ export const PacklistTable = {
     },
     watch: {
         isDirty(newValue) {
-            if (!this.lockCheckComplete) return;
-            
             if (newValue && !this.editMode && this.tabName && !this.lockedByOther) {
                 const editPath = NavigationRegistry.buildPathWithCurrentParams(
                     `packlist/${this.tabName}`,
@@ -296,32 +293,8 @@ export const PacklistTable = {
                 );
                 this.$emit('navigate-to-path', editPath);
             }
-            
-            if (!this.lockedByOther) {
-                this.handleLockState(newValue);
-            }
-        },
-        
-        'packlistTableStore.error'(newError) {
-            if (!newError) return;
-            
-            const lockErrorPattern = /locked by (.+)$/i;
-            const match = newError.match(lockErrorPattern);
-            
-            if (match) {
-                this.setLockState(false, match[1]);
-                
-                if (this.editMode) {
-                    const viewPath = NavigationRegistry.buildPathWithCurrentParams(
-                        `packlist/${this.tabName}`,
-                        this.appContext?.currentPath,
-                        { edit: undefined }
-                    );
-                    this.$emit('navigate-to-path', viewPath);
-                }
-                
-                this.$modal.alert(`Cannot save: this pack list is locked by ${match[1]}`, 'Locked');
-            }
+
+            this.handleLockState(newValue);
         }
     },
     async mounted() {
@@ -471,43 +444,38 @@ export const PacklistTable = {
                 }
             });
         },
+
+        onLockAcquireFailed(lockInfo) {
+            if (this.packlistTableStore) {
+                this.packlistTableStore.setData(this.packlistTableStore.originalData);
+            }
+            if (this.editMode) {
+                const viewPath = NavigationRegistry.buildPathWithCurrentParams(
+                    `packlist/${this.tabName}`,
+                    this.appContext?.currentPath,
+                    { edit: undefined }
+                );
+                this.$emit('navigate-to-path', viewPath);
+            }
+            this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo?.user || 'another user'}`, 'Locked');
+        },
         
         async handleCellEdit(rowIdx, colIdx, value, type = 'main') {
             const user = authState.user?.email;
             if (user && this.tabName) {
-                try {
-                    const lockInfo = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
-                    if (lockInfo) {
-                        this.setLockState(false, lockInfo.user);
-                        
-                        if (this.editMode) {
-                            const currentParams = NavigationRegistry.getParametersForContainer(
-                                `packlist/${this.tabName}`,
-                                this.appContext?.currentPath
-                            );
-                            const { edit, ...paramsWithoutEdit } = currentParams;
-                            this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
-                        }
-                        
-                        this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo.user}`, 'Locked');
-                        return;
+                if (!await this.acquireLockForEdit()) {
+                    if (this.editMode && this.lockOwner) {
+                        const currentParams = NavigationRegistry.getParametersForContainer(
+                            `packlist/${this.tabName}`,
+                            this.appContext?.currentPath
+                        );
+                        const { edit, ...paramsWithoutEdit } = currentParams;
+                        this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
                     }
-                    
-                    if (!this.isLocked) {
-                        const lockAcquired = await Requests.lockSheet('PACK_LISTS', this.tabName, user);
-                        if (lockAcquired) {
-                            this.setLockState(true, user);
-                        } else {
-                            const recheckLock = await Requests.getSheetLock('PACK_LISTS', this.tabName, user);
-                            if (recheckLock) {
-                                this.setLockState(false, recheckLock.user);
-                                this.$modal.alert(`Cannot edit: this pack list is locked by ${recheckLock.user}`, 'Locked');
-                                return;
-                            }
-                        }
+                    if (this.lockOwner) {
+                        this.$modal.alert(`Cannot edit: this pack list is locked by ${this.lockOwnerDisplay}`, 'Locked');
                     }
-                } catch (error) {
-                    console.error('[PacklistTable] Error checking lock on edit:', error);
+                    return;
                 }
             }
             

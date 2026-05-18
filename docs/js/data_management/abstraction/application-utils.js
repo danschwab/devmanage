@@ -1,4 +1,4 @@
-import { Database, wrapMethods, invalidateCache } from '../index.js';
+import { Database, wrapMethods, invalidateCache, stampDataChange } from '../index.js';
 import { setTimestampWriter, startCacheTimestampPoller } from '../utils/caching.js';
 
 // Dynamically import GoogleSheetsAuth based on environment
@@ -316,12 +316,10 @@ class applicationUtils_uncached {
             //console.log(`[lockSheet] Timestamp written successfully`);
             
             // Invalidate getSheetLock cache so UI components see the new lock
+            stampDataChange('app_utils:getLocksData');
             invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
                 { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
-            
             //console.log(`[lockSheet] Locked ${lockKey} for ${user} at cell R${cellRow}C${cellCol}`);
             return true;
             
@@ -387,11 +385,10 @@ class applicationUtils_uncached {
             
             // Invalidate getSheetLock cache so UI components see the lock is gone
             // Must invalidate all possible argument combinations since cache includes optional currentUser
+            stampDataChange('app_utils:getLocksData');
             invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab], prefixMatch: true },
                 { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
-            
             //console.log(`[unlockSheet] Unlocked ${lockKey} for ${user} at cell R${cellRow}C${cellCol}`);
             return true;
             
@@ -560,12 +557,8 @@ class applicationUtils_uncached {
             }
             
             // Invalidate getSheetLock cache so UI components see the lock is gone
-            // Must invalidate all possible argument combinations since cache includes optional currentUser
+            stampDataChange('app_utils:getLocksData');
             invalidateCache([
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab] },
-                { namespace: 'app_utils', methodName: 'getSheetLock', args: [spreadsheet, tab, null] },
-                // Can't know all possible currentUser values, but the most common case is null
-                // Components will re-fetch with their specific user after refresh
                 { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
             
@@ -620,6 +613,7 @@ class applicationUtils_uncached {
             }
             
             // Invalidate cache
+            stampDataChange('app_utils:getLocksData');
             invalidateCache([
                 { namespace: 'app_utils', methodName: 'getLocksData', args: [] }
             ]);
@@ -829,8 +823,8 @@ export const ApplicationUtils = wrapMethods(
     'app_utils', 
     ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps'], // Mutation methods
     [], // Infinite cache methods
-    { 'getSheetLock': 20000, 'getLocksData': 10000 } // Custom cache durations (20 seconds for getSheetLock, 10 seconds for getLocksData)
+    { 'getSheetLock': 10000, 'getLocksData': 10000 } // Custom cache durations (10 seconds for getSheetLock and getLocksData)
 );
 
 setTimestampWriter((prefix) => ApplicationUtils.writeCacheTimestamp(prefix));
-startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps(), isLocalhost() ? 10_000 : 60_000);
+startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps(), isLocalhost() ? 10_000 : 30_000);
