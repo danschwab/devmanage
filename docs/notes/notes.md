@@ -85,18 +85,19 @@ For design and project queue:
 - [x] adding an item within a group needs to add the item to the group
 - [x] items currently can't be rearranged if they are grouped
 - [?] some group dragging breaks the group
+- [x] make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] !!! thumbnails not showing for dan
 - [ ] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
 - [ ] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
-- [ ] ! make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 - [ ] date columns are not always presenting as dates, especially the ship date, in searches
 - [ ] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] if there are duplicate shows on the production schedule, they are duplicated in reports
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
+- [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
 
 **Application tasks**
 
