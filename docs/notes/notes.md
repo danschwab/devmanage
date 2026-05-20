@@ -89,7 +89,7 @@ For design and project queue:
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [ ] !!! thumbnails not showing for dan
-- [ ] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
+- [?] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
 - [ ] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
 - [ ] date columns are not always presenting as dates, especially the ship date, in searches
 - [ ] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
@@ -108,16 +108,16 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - [x] make sure panel and hardware part numbers come in correctly
 - [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
-- [ ] !!! fix oauth token refresh so no errors are hidden, and refresh is automatic
-- [ ] !!! Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
-- [ ] !!! Use folder->category mapping to determine transformation necessary
+- [?] !!! fix oauth token refresh so no errors are hidden, and refresh is automatic
+- [?] !!! Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
+- [?] !!! Use folder->category mapping to determine transformation necessary
 - [ ] !!! fix CABINET item numbers in inventor
 - [ ] !!! fix FURNITURE item numbers in inventor
 - [ ] !!! fix HANGING SIGN item numbers in inventor
 - [ ] !!! fix duplication of bematrix VELCRO PANELS
 - [ ] !!! fix 45 degree curved panels
 - [ ] !!! verify panel and hardware and other possible edge-cases
-- [ ] !!! Add support to automatically group items
+- [x] !!! Add support to automatically group items
 - [ ] !!! allow pack list export from project manager
 - [ ] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
 - [ ] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
