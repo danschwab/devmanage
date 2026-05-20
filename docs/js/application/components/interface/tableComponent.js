@@ -1082,6 +1082,11 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        groupVisibilityOverride: {
+            // 'open' = expand all groups, 'closed' = collapse all groups, null = no override
+            type: String,
+            default: null
+        },
         syncSearchWithUrl: {
             type: Boolean,
             default: false
@@ -1147,7 +1152,7 @@ export const TableComponent = {
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             expandedRows: new Set(), // Track which rows are expanded for details
-            collapsedGroups: new Set(), // Track which group IDs are collapsed
+            overriddenGroups: new Set(), // Groups deviating from the current visibility default
             hasUndoCaptured: false, // Track if first edit has been captured for undo
             lastEditTimestamp: null, // Track last edit time for 5-second idle detection
             clickState: {
@@ -1221,6 +1226,24 @@ export const TableComponent = {
                 this.updateAllEditableCells();
                 this.compareAllCellsDirty();
             });
+        },
+        groupVisibilityOverride(val) {
+            if (!val) return;
+            const allGroupIds = this.data
+                .map(row => tableRowSelectionState._getRowMetadata(row)?.grouping)
+                .filter(g => g?.isGroupMaster)
+                .map(g => g.groupId);
+            if (val === 'open') {
+                // Open all: in view mode, populate overrides (exceptions = open); in edit mode, clear them
+                this.overriddenGroups = this.hideGroupMembers ? new Set(allGroupIds) : new Set();
+            } else if (val === 'closed') {
+                // Close all: in view mode, clear overrides; in edit mode, populate them
+                this.overriddenGroups = this.hideGroupMembers ? new Set() : new Set(allGroupIds);
+            }
+        },
+        hideGroupMembers() {
+            // Reset per-group overrides when the default visibility mode changes
+            this.overriddenGroups = new Set();
         },
         columns: {
             handler() {
@@ -1333,7 +1356,7 @@ export const TableComponent = {
             return this.selectedGroupMasterIds.length > 0;
         },
         anySelectedGroupCollapsed() {
-            return this.selectedGroupMasterIds.some(groupId => this.collapsedGroups.has(groupId));
+            return this.selectedGroupMasterIds.some(groupId => this.isGroupMembersHiddenById(groupId));
         },
         canCreateGroupFromSelection() {
             if (!this.newRow || this.firstSelectedVisibleRowIndex === -1) return false;
@@ -1454,18 +1477,13 @@ export const TableComponent = {
                 .map((row, idx) => ({ row, idx }))
                 .filter(({ row }) => row); // Only filter out null/undefined rows
 
-            // Hide group children when explicitly enabled OR when any group is collapsed
-            if (this.hideGroupMembers || this.collapsedGroups.size > 0) {
+            // Hide group children when the default is closed or any group has been overridden
+            if (this.hideGroupMembers || this.overriddenGroups.size > 0) {
                 filteredData = filteredData.filter(({ row, idx }) => {
                     const metadata = tableRowSelectionState._getRowMetadata(row);
                     const grouping = metadata?.grouping;
-                    // Show if not in a group OR if it's a group master
                     if (!grouping || grouping.isGroupMaster) return true;
-
-                    // This is a group child - check if its group should be hidden
-                    // If hideGroupMembers is true, always hide group children (view mode)
-                    // Otherwise, show based on whether the group is collapsed
-                    return this.hideGroupMembers ? false : !this.collapsedGroups.has(grouping.groupId);
+                    return !this.isGroupMembersHiddenById(grouping.groupId);
                 });
             }
 
@@ -1790,18 +1808,20 @@ export const TableComponent = {
         handleToggleSelectedGroups() {
             if (!this.hasSelectedGroupMasters) return;
 
-            // If any selected group is collapsed, expand selected groups; otherwise collapse them.
-            const shouldCollapse = !this.anySelectedGroupCollapsed;
+            // If any selected group is hidden, show all selected; otherwise hide all.
+            const shouldHide = !this.anySelectedGroupCollapsed;
             this.selectedGroupMasterIds.forEach(groupId => {
-                if (shouldCollapse) {
-                    this.collapsedGroups.add(groupId);
+                // shouldOverride = add to overriddenGroups; the meaning of overridden flips with mode.
+                // view mode: overridden = open (exception to default-closed)
+                // edit mode: overridden = closed (exception to default-open)
+                const shouldOverride = shouldHide !== this.hideGroupMembers;
+                if (shouldOverride) {
+                    this.overriddenGroups.add(groupId);
                 } else {
-                    this.collapsedGroups.delete(groupId);
+                    this.overriddenGroups.delete(groupId);
                 }
             });
-
-            // Replace Set reference to ensure template updates consistently.
-            this.collapsedGroups = new Set(this.collapsedGroups);
+            this.overriddenGroups = new Set(this.overriddenGroups);
         },
 
         createEmptyGroupMasterRow(targetIndex) {
@@ -2956,33 +2976,50 @@ export const TableComponent = {
             }
         },
         
-        toggleGroupCollapse(rowIndex) {
-            // Get the group ID from this row's metadata
-            const row = this.data[rowIndex];
-            if (!row) return;
-
-            const metadata = tableRowSelectionState._getRowMetadata(row);
-            const grouping = metadata?.grouping;
-            
-            // Only toggle if this is a group master
-            if (grouping && grouping.isGroupMaster) {
-                if (this.collapsedGroups.has(grouping.groupId)) {
-                    this.collapsedGroups.delete(grouping.groupId);
-                } else {
-                    this.collapsedGroups.add(grouping.groupId);
-                }
-                // Replace Set reference so Vue reliably re-renders visibility-dependent rows.
-                this.collapsedGroups = new Set(this.collapsedGroups);
-            }
+        isGroupMembersHiddenById(groupId) {
+            // view mode (hideGroupMembers=true): default=closed, override=open → hidden when NOT overridden
+            // edit mode (hideGroupMembers=false): default=open, override=closed → hidden when overridden
+            return this.hideGroupMembers
+                ? !this.overriddenGroups.has(groupId)
+                : this.overriddenGroups.has(groupId);
         },
-        
-        isGroupCollapsed(rowIndex) {
+
+        isGroupMembersHidden(rowIndex) {
             const row = this.data[rowIndex];
             if (!row) return false;
-
             const metadata = tableRowSelectionState._getRowMetadata(row);
             const grouping = metadata?.grouping;
-            return grouping && grouping.isGroupMaster && this.collapsedGroups.has(grouping.groupId);
+            if (!grouping?.isGroupMaster) return false;
+            return this.isGroupMembersHiddenById(grouping.groupId);
+        },
+
+        toggleGroupCollapse(rowIndex) {
+            const row = this.data[rowIndex];
+            if (!row) return;
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            const grouping = metadata?.grouping;
+            if (!grouping?.isGroupMaster) return;
+            if (this.overriddenGroups.has(grouping.groupId)) {
+                this.overriddenGroups.delete(grouping.groupId);
+            } else {
+                this.overriddenGroups.add(grouping.groupId);
+            }
+            this.overriddenGroups = new Set(this.overriddenGroups);
+        },
+
+        showGroup(rowIndex) {
+            const row = this.data[rowIndex];
+            if (!row) return;
+            const metadata = tableRowSelectionState._getRowMetadata(row);
+            const grouping = metadata?.grouping;
+            if (!grouping?.isGroupMaster) return;
+            // To open: in view mode add the exception (open), in edit mode remove the exception (not closed)
+            if (this.hideGroupMembers) {
+                this.overriddenGroups.add(grouping.groupId);
+            } else {
+                this.overriddenGroups.delete(grouping.groupId);
+            }
+            this.overriddenGroups = new Set(this.overriddenGroups);
         },
         
         isRowExpanded(rowIndex) {
@@ -3402,6 +3439,8 @@ export const TableComponent = {
                                             :column="column"
                                             :cellRowIndex="idx"
                                             :cellColIndex="colIndex"
+                                            :isGroupMembersHidden="isGroupMembersHidden(idx)"
+                                            :showGroup="() => showGroup(idx)"
                                             :isEditable="column.editable"
                                         ></slot>
                                     </div>

@@ -6,14 +6,18 @@ import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 const PacklistTableMenuComponent = {
     props: {
         clearAllAlertsCallback: Function,
-        refreshCallback: Function
+        refreshCallback: Function,
+        showAllGroupsCallback: Function,
+        hideAllGroupsCallback: Function
     },
     inject: ['$modal'],
     computed: {
         menuItems() {
             return [
                 { label: 'Refresh', action: 'refresh' },
-                { label: 'Clear All Alerts', action: 'clearAllAlerts' }
+                { label: 'Clear All Alerts', action: 'clearAllAlerts' },
+                { label: 'Show All Groups', action: 'showAllGroups' },
+                { label: 'Hide All Groups', action: 'hideAllGroups' }
             ];
         }
     },
@@ -29,6 +33,18 @@ const PacklistTableMenuComponent = {
                 case 'clearAllAlerts':
                     if (this.clearAllAlertsCallback) {
                         this.clearAllAlertsCallback();
+                    }
+                    this.$emit('close-modal');
+                    break;
+                case 'showAllGroups':
+                    if (this.showAllGroupsCallback) {
+                        this.showAllGroupsCallback();
+                    }
+                    this.$emit('close-modal');
+                    break;
+                case 'hideAllGroups':
+                    if (this.hideAllGroupsCallback) {
+                        this.hideAllGroupsCallback();
                     }
                     this.$emit('close-modal');
                     break;
@@ -135,7 +151,8 @@ export const PacklistTable = {
             databaseItemHeaders: null,
             hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty'],
             NavigationRegistry,
-            lockNamespace: 'PACK_LISTS'
+            lockNamespace: 'PACK_LISTS',
+            itemGroupVisibilityOverride: null
         };
     },
     computed: {
@@ -279,7 +296,9 @@ export const PacklistTable = {
                 components: PacklistTableMenuComponent,
                 props: {
                     clearAllAlertsCallback: () => this.clearAllAlerts(),
-                    refreshCallback: () => this.handleRefresh()
+                    refreshCallback: () => this.handleRefresh(),
+                    showAllGroupsCallback: () => { this.itemGroupVisibilityOverride = 'open'; this.$nextTick(() => { this.itemGroupVisibilityOverride = null; }); },
+                    hideAllGroupsCallback: () => { this.itemGroupVisibilityOverride = 'closed'; this.$nextTick(() => { this.itemGroupVisibilityOverride = null; }); }
                 }
             };
         }
@@ -432,8 +451,10 @@ export const PacklistTable = {
                         undoRegistry.clearRouteHistory(routeKey);
                     }
                     
+                    // Invalidate cache for database first, then API call for the current pack list in case it was empty
                     invalidateCache([
-                        { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] }
+                        { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] },
+                        { namespace: 'api', methodName: 'getPackList', args: [this.tabName] }
                     ], true);
                     this.packlistTableStore?.load('Refreshing data...');
                 },
@@ -799,6 +820,114 @@ export const PacklistTable = {
             return colorMap[type] || 'red'; // Default to red if type is unknown
         },
 
+        getRowGrouping(row) {
+            if (!row || !row.MetaData) return null;
+            try {
+                const metadata = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                return metadata?.grouping || null;
+            } catch (e) {
+                return null;
+            }
+        },
+
+        isGroupMasterRow(row) {
+            const grouping = this.getRowGrouping(row);
+            return grouping?.isGroupMaster === true;
+        },
+
+        getGroupChildRows(sourceArray, groupId) {
+            if (!Array.isArray(sourceArray) || !groupId) return [];
+            return sourceArray.filter(item => {
+                const grouping = this.getRowGrouping(item);
+                return grouping && grouping.groupId === groupId && grouping.isGroupMaster !== true;
+            });
+        },
+
+        getAlertItemNumber(item) {
+            const extracted = String(item?.['Extracted Item'] || '').trim();
+            if (extracted) return extracted;
+
+            const description = String(item?.Description || '').trim();
+            const prefixedMatch = description.match(/^\(\s*\d+\s*\)\s*([^\s]+)/);
+            if (prefixedMatch && prefixedMatch[1]) return prefixedMatch[1];
+
+            return 'Unknown Item';
+        },
+
+        getAlertEntriesForItem(item, isSurfaced = false) {
+            if (!item?.AppData || typeof item.AppData !== 'object') return [];
+
+            return Object.entries(item.AppData)
+                .filter(([key, value]) => value && typeof value === 'object' && value.message && !key.endsWith('_error'))
+                .map(([key, alert]) => {
+                    const itemNumber = this.getAlertItemNumber(item);
+                    const message = isSurfaced ? `Item ${itemNumber}: ${alert.message}` : alert.message;
+
+                    return {
+                        key,
+                        alert,
+                        sourceItem: item,
+                        message,
+                        clickable: !!alert.clickable,
+                        isSurfaced
+                    };
+                });
+        },
+
+        dedupeAlertEntries(entries) {
+            if (!Array.isArray(entries) || entries.length === 0) return [];
+
+            const seen = new Set();
+            return entries.filter(entry => {
+                const signature = [
+                    entry?.isSurfaced ? 'surfaced' : 'row',
+                    entry?.key || '',
+                    entry?.message || ''
+                ].join('|');
+
+                if (seen.has(signature)) {
+                    return false;
+                }
+
+                seen.add(signature);
+                return true;
+            });
+        },
+
+        getSurfacedAlertsForRow(sourceArray, row, areGroupMembersHidden = false) {
+            if (!areGroupMembersHidden || !this.isGroupMasterRow(row)) {
+                return [];
+            }
+
+            const grouping = this.getRowGrouping(row);
+            const childRows = this.getGroupChildRows(sourceArray, grouping?.groupId);
+            const surfacedChildAlerts = childRows.flatMap(child => this.getAlertEntriesForItem(child, true));
+
+            return this.dedupeAlertEntries(surfacedChildAlerts);
+        },
+
+        shouldShowshowGroupCard(sourceArray, row, areGroupMembersHidden = false) {
+            return this.getSurfacedAlertsForRow(sourceArray, row, areGroupMembersHidden).length > 0;
+        },
+
+        getRenderableAlertsForRow(sourceArray, row, areGroupMembersHidden = false) {
+            const ownAlerts = this.getAlertEntriesForItem(row, false);
+            const surfacedAlerts = this.getSurfacedAlertsForRow(sourceArray, row, areGroupMembersHidden);
+
+            return this.dedupeAlertEntries([...ownAlerts, ...surfacedAlerts]);
+        },
+
+        clearAlertsFromItem(item) {
+            if (!item?.AppData || typeof item.AppData !== 'object') return;
+
+            Object.keys(item.AppData).forEach(key => {
+                const value = item.AppData[key];
+                if (value && typeof value === 'object' && value.message && !key.endsWith('_error')) {
+                    delete item.AppData[key];
+                }
+            });
+        },
+
         /**
          * Clear all alerts from all items in the table
          */
@@ -812,15 +941,7 @@ export const PacklistTable = {
                 if (crate.Items && Array.isArray(crate.Items)) {
                     // Iterate through all items in the crate
                     crate.Items.forEach(item => {
-                        if (item.AppData) {
-                            // Only delete alert keys (objects with message property, not ending in _error)
-                            Object.keys(item.AppData).forEach(key => {
-                                const value = item.AppData[key];
-                                if (value && typeof value === 'object' && value.message && !key.endsWith('_error')) {
-                                    delete item.AppData[key];
-                                }
-                            });
-                        }
+                        this.clearAlertsFromItem(item);
                     });
                 }
             });
@@ -1111,18 +1232,13 @@ export const PacklistTable = {
         },
 
         clearRowAlerts(selectedRows) {
-            // Clear alerts from AppData for selected rows
-            let clearedCount = 0;
-            
-            selectedRows.forEach(({ row }) => {
-                // AppData is stored as an object, not a JSON string
-                if (row && row.AppData && typeof row.AppData === 'object') {
-                    // Clear specific alert types
-                    if (row.AppData.descriptionAlert || row.AppData.inventoryAlert) {
-                        delete row.AppData.descriptionAlert;
-                        delete row.AppData.inventoryAlert;
-                        clearedCount++;
-                    }
+            selectedRows.forEach(({ row, sourceArray }) => {
+                this.clearAlertsFromItem(row);
+
+                const grouping = this.getRowGrouping(row);
+                if (grouping?.isGroupMaster && Array.isArray(sourceArray)) {
+                    const childRows = this.getGroupChildRows(sourceArray, grouping.groupId);
+                    childRows.forEach(child => this.clearAlertsFromItem(child));
                 }
             });
         }
@@ -1242,6 +1358,7 @@ export const PacklistTable = {
                                 :newRow="editMode"
                                 :allowDropOnto="editMode"
                                 :hide-group-members="hideGroupMembersInViewMode"
+                                :group-visibility-override="itemGroupVisibilityOverride"
                                 :showFooter="false"
                                 :showHeader="false"
                                 :isLoading="isLoading"
@@ -1267,16 +1384,23 @@ export const PacklistTable = {
                                 </template>
                                 
                                 <!-- Cell-extra slot for alerts (proper location for warnings/notifications) -->
-                                <template #cell-extra="{ row: itemRow, column: itemColumn }">
+                                <template #cell-extra="{ row: itemRow, column: itemColumn, isGroupMembersHidden, showGroup }">
                                     <!-- Display all AppData alerts as colored cards (visible in both view and edit modes) -->
-                                    <template v-if="itemRow.AppData && itemColumn.key === 'Packing/shop notes'">
-                                        <template v-for="(value, key) in itemRow.AppData" :key="key">
+                                    <template v-if="itemColumn.key === 'Packing/shop notes'">
+                                        <div
+                                            v-if="shouldShowshowGroupCard(row.Items, itemRow, isGroupMembersHidden)"
+                                            class="card gray clickable"
+                                            title="click to show grouped rows"
+                                            @click="showGroup ? showGroup() : null"
+                                        >
+                                            hidden rows
+                                        </div>
+                                        <template v-for="(alertEntry, alertIndex) in getRenderableAlertsForRow(row.Items, itemRow, isGroupMembersHidden)" :key="alertEntry.key + '-' + alertIndex">
                                             <div 
-                                                v-if="value && typeof value === 'object' && value.message && !key.endsWith('_error')"
-                                                :class="['card', getAlertColor(value), { 'clickable': value.clickable }]"
-                                                @click="value.clickable ? handleAlertClick(itemRow, key, value) : null"
+                                                :class="['card', getAlertColor(alertEntry.alert), { 'clickable': alertEntry.clickable }]"
+                                                @click="alertEntry.clickable ? handleAlertClick(alertEntry.sourceItem, alertEntry.key, alertEntry.alert) : null"
                                             >
-                                                {{ value.message }}
+                                                {{ alertEntry.message }}
                                             </div>
                                         </template>
                                     </template>
