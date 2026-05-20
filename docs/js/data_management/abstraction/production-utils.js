@@ -1,4 +1,4 @@
-import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch, invalidateCache } from '../index.js';
+import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -405,7 +405,7 @@ class productionUtils_uncached {
      * @param {string} abbreviation
      * @returns {Promise<{applied:boolean,addedRow:boolean,rowNumber:number|null,canonicalName:string,abbreviation:string,conflict:Object|null}>}
      */
-    static async addCustomReferenceEntry(deps, referenceType, canonicalName, abbreviation) {
+    static async addCustomReferenceEntry(referenceType, canonicalName, abbreviation) {
         const kind = referenceType === 'show' ? 'show' : 'client';
         const tabName = kind === 'show' ? 'Shows' : 'Clients';
         const normalizedName = _normalizeIndexName(canonicalName);
@@ -426,7 +426,7 @@ class productionUtils_uncached {
             };
         }
 
-        const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+        const refData = await ProductionUtils.computeIdentifierReferenceData();
         const ref = kind === 'show' ? refData.shows : refData.clients;
         const indexData = ref.names
             .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
@@ -480,8 +480,6 @@ class productionUtils_uncached {
             await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
         }
 
-        _invalidateReferenceCaches();
-
         return {
             applied: true,
             addedRow: rowResult.added,
@@ -512,11 +510,6 @@ class productionUtils_uncached {
 
         const clientsAdded = await _appendMissingReferenceRows('Clients', Array.from(uniqueClients));
         const showsAdded = await _appendMissingReferenceRows('Shows', Array.from(uniqueShows));
-
-        // Force downstream identifier caches to refresh after reference updates.
-        invalidateCache([
-            { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
-        ], true);
 
         return { clientsAdded, showsAdded };
     }
@@ -555,10 +548,6 @@ class productionUtils_uncached {
 
         await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, nextAbbr);
 
-        invalidateCache([
-            { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] }
-        ], true);
-
         return { updated: true, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
     }
 
@@ -576,7 +565,6 @@ class productionUtils_uncached {
         }
 
         const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
-        _invalidateReferenceCaches();
         return { added: rowResult.added, rowNumber: rowResult.rowNumber };
     }
 
@@ -620,7 +608,6 @@ class productionUtils_uncached {
         }
 
         await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
-        _invalidateReferenceCaches();
 
         return {
             updated: true,
@@ -836,7 +823,8 @@ export const ProductionUtils = wrapMethods(
         'ensureScheduleReferenceRows',
         'updateReferenceAbbreviation',
         'addReferenceName',
-        'appendReferenceAbbreviation'
+        'appendReferenceAbbreviation',
+        'addCustomReferenceEntry'
     ]
 );
 
@@ -1180,16 +1168,6 @@ function _levenshtein(a, b) {
     }
 
     return dp[m][n];
-}
-
-function _invalidateReferenceCaches() {
-    invalidateCache([
-        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
-        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
-        { namespace: 'production_utils', methodName: 'computeIdentifierReferenceData', args: [] },
-        { namespace: 'production_utils', methodName: 'checkReferenceNameState', args: [] },
-        { namespace: 'production_utils', methodName: 'getReferenceResolutionOptions', args: [] }
-    ], true);
 }
 
 async function _appendMissingReferenceRows(tabName, names) {
