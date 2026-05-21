@@ -270,7 +270,7 @@ export const CardsComponent = {
             
             <!-- Initial Loading State (no items yet) -->
             <div v-if="isLoading || isAnalyzing" class="loading-message">
-                <img v-if="!showHeader && !shouldShowCards" src="images/loading.gif" alt="Loading..."/>
+                <img v-if="!showHeader && !shouldShowCards" src="assets/loading.gif" alt="Loading..."/>
                 <p>{{ loadingMessage || 'Loading...' }}</p>
             </div>
             <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>

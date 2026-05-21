@@ -617,6 +617,24 @@ export const undoRegistry = Vue.reactive({
             }));
     },
     
+    // Discard the last undo snapshot for a route if the current array state matches it.
+    // Called when the edit idle timer expires to avoid keeping no-op snapshots.
+    discardLastSnapshotIfUnchanged(array, routeKey) {
+        if (!routeKey) return;
+        const stacks = this.undoStacksByRoute.get(routeKey);
+        if (!stacks || stacks.undoStack.length === 0) return;
+
+        const lastSnapshot = stacks.undoStack[stacks.undoStack.length - 1];
+        // Only discard single-array cell-edit snapshots
+        if (lastSnapshot.arrays.length !== 1 || lastSnapshot.arrays[0].arrayRef !== array) return;
+
+        const currentSnapshot = this._createSnapshotWithoutAppData(array);
+        if (JSON.stringify(currentSnapshot) === JSON.stringify(lastSnapshot.arrays[0].snapshot)) {
+            stacks.undoStack.pop();
+            console.log(`[Undo] Discarded no-op snapshot for route: ${routeKey} (state unchanged after idle)`);
+        }
+    },
+
     // Clear undo/redo history for a specific route
     // Used when data is refreshed from the server to prevent stale undo states
     clearRouteHistory(routeKey) {

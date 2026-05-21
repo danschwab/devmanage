@@ -39,7 +39,7 @@ const ImageContentComponent = {
 // Error icon component
 const ErrorIconComponent = {
     template: html`
-        <img src="images/error.png" alt="Error" style="width: 64px; height: 64px; margin-bottom: 1rem;" />
+        <img src="assets/error.png" alt="Error" style="width: 64px; height: 64px; margin-bottom: 1rem;" />
     `
 };
 

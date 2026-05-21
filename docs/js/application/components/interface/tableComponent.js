@@ -1155,6 +1155,7 @@ export const TableComponent = {
             overriddenGroups: new Set(), // Groups deviating from the current visibility default
             hasUndoCaptured: false, // Track if first edit has been captured for undo
             lastEditTimestamp: null, // Track last edit time for 5-second idle detection
+            _undoIdleTimer: null, // Timer to discard no-op snapshot after idle period
             clickState: {
                 isMouseDown: false,
                 startRowIndex: null,
@@ -2166,6 +2167,16 @@ export const TableComponent = {
                 this.hasUndoCaptured = true;
             }
             
+            // Reset the idle timer — when it fires, discard the snapshot if state is unchanged
+            if (this._undoIdleTimer) clearTimeout(this._undoIdleTimer);
+            if (this.appContext?.currentPath) {
+                const routeKey = this.appContext.currentPath.split('?')[0];
+                this._undoIdleTimer = setTimeout(() => {
+                    this._undoIdleTimer = null;
+                    undoRegistry.discardLastSnapshotIfUnchanged(this.data, routeKey);
+                }, 5000);
+            }
+            
             // Update last edit timestamp
             this.lastEditTimestamp = now;
             
@@ -2188,6 +2199,10 @@ export const TableComponent = {
             this.hasUndoCaptured = false;
             this.lastEditTimestamp = null;
             undoRegistry.clearCurrentEditCapture();
+            if (this._undoIdleTimer) {
+                clearTimeout(this._undoIdleTimer);
+                this._undoIdleTimer = null;
+            }
         },
         compareAllCellsDirty() {
             // Compare all cells in data vs originalData and update dirtyCells
@@ -3265,7 +3280,7 @@ export const TableComponent = {
                         v-if="showSaveButton || allowSaveEvent"
                         @click="handleSave"
                         :disabled="isLoading || !allowSaveEvent"
-                        class="save-button green"
+                        class="green"
                     >
                         Save
                     </button>
@@ -3273,7 +3288,7 @@ export const TableComponent = {
                         v-if="showRefresh" 
                         @click="handleRefresh" 
                         :disabled="isLoading" 
-                        :class="'refresh-button ' + (allowSaveEvent ? 'red' : '')"
+                        :class="allowSaveEvent ? 'red' : ''"
                     >
                         {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
                     </button>
@@ -3336,7 +3351,8 @@ export const TableComponent = {
                                 :title="column.title || column.label"
                             >
                                 <div>
-                                    <span>{{ column.label }}</span>
+                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
+                                    <span v-else>{{ column.label }}</span>
                                     <button 
                                         v-if="isColumnSortable(column)"
                                         @click="handleSort(column.key)"
@@ -3450,7 +3466,7 @@ export const TableComponent = {
                                         @click="toggleRowDetails(idx)"
                                         :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
-                                        {{ isRowExpanded(idx) ? '🗙' : '›' }}
+                                        {{ isRowExpanded(idx) ? '🗙' : '☷' }}
                                     </button>
                                 </td>
                             </tr>
@@ -3511,7 +3527,8 @@ export const TableComponent = {
                             <td v-if="draggable" class="spacer-cell"></td>
                             <td 
                                 :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" 
-                                class="new-row-button" 
+                                class="new-row-button"
+                                title="Add new row"
                                 @click="$emit('new-row')"
                             >
                             </td>
@@ -3543,7 +3560,8 @@ export const TableComponent = {
                             :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}"
                         >
                             <div>
-                                <span>{{ column.label }}</span>
+                                <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
+                                <span v-else>{{ column.label }}</span>
                                 <button 
                                     v-if="isColumnSortable(column)"
                                     @click="handleSort(column.key)"
@@ -3568,7 +3586,7 @@ export const TableComponent = {
 
             <!-- Loading State >
             <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">
-                <img src="images/loading.gif" alt="..."/>
+                <img src="assets/loading.gif" alt="..."/>
                 <p>{{ loadingMessage }}</p>
             </div-->
 

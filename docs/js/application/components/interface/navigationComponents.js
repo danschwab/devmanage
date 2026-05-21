@@ -49,7 +49,7 @@ export const PrimaryNavComponent = {
             return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         },
         logoSrc() {
-            return this.isDarkMode ? 'images/logoW.png' : 'images/logo.png';
+            return this.isDarkMode ? 'assets/logoW.png' : 'assets/logo.png';
         },
         isMobileView() {
             // Mobile view is max-width: 800px

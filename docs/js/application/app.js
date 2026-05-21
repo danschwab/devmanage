@@ -325,7 +325,7 @@ const App = {
                 <!-- App loading indicator -->
                 <div v-else-if="appLoading || (isDashboardInitialLoad && currentPage === 'dashboard')" :class="'container' + (currentPage === 'dashboard' ? ' dashboard-card' : '')" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">
-                        <img src="images/loading.gif" alt="..."/>
+                        <img src="assets/loading.gif" alt="..."/>
                         <p>{{ isDashboardInitialLoad ? 'Loading dashboard...' : appLoadingMessage }}</p>
                     </div>
                 </div>
@@ -334,7 +334,7 @@ const App = {
                 <!-- Dashboard loading indicators >
                 <div v-else-if="dashboardLoading && currentPage === 'dashboard'" class="container dashboard-card" style="display:flex; align-items: center; justify-content: center;">
                     <div class="loading-message">
-                        <img src="images/loading.gif" alt="..."/>
+                        <img src="assets/loading.gif" alt="..."/>
                         <p>loading dashboard...</p>
                     </div>
                 </div-->

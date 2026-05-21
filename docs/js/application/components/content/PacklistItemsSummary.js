@@ -31,6 +31,7 @@ export const PacklistItemsSummary = {
             return [
                 { 
                     key: 'image', 
+                    labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
                     sortable: false
@@ -199,7 +200,8 @@ export const PacklistItemsSummary = {
     },
     template: html`
         <slot class="packlist-items-summary">
-            <button @click="navigateBackToPacklist">Back to View</button>
+                <button @click="navigateBackToPacklist" class="small">Back</button>
+
             <div class="details-grid">
                 <div v-for="key in showDetailsVisible" :key="key" class="detail-item">
                     <label>{{ key }}:</label>

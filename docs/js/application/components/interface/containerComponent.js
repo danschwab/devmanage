@@ -144,12 +144,12 @@ export const ContainerComponent = {
                     @navigate-to-path="(path) => $emit('navigate-to-path', path)" />
                 <div style="flex-grow: 1;"></div>
                 <div v-if="hamburgerMenuComponent || showExpandButton || !cardStyle" class="button-group">
-                    <button v-if="!cardStyle"
+                    <!-- <button v-if="!cardStyle"
                             class="button-symbol white"
                             @click="toggleDashboardState" 
                             title="Pin to dashboard">
                         <span class="material-symbols-outlined">{{ pinnedToDashboard ? 'keep_off' : 'keep' }}</span>
-                    </button>
+                    </button> -->
                     <button v-if="hamburgerMenuComponent"
                             class="button-symbol white" 
                             @click="openHamburgerMenu" 
@@ -169,7 +169,7 @@ export const ContainerComponent = {
             
             <div class="content">
                 <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
-                    <img src="images/loading.gif" alt="..."/>
+                    <img src="assets/loading.gif" alt="..."/>
                     <p>Loading data...</p>
                 </div>
                 <slot v-else name="content">

@@ -154,7 +154,17 @@ export const ShowInventoryReport = {
             
             // If we have search params but no report store yet, it means no shows were found
             if (hasSearchParams && !this.reportStore && !this.isLoading) {
-                return 'No shows found for the selected search criteria';
+                return 'No packlists found for the selected search criteria';
+            }
+            
+            // If the store loaded but found no data and no category filter is active, the schedule filter yielded no results
+            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.showIdentifiers.length === 0 && !this.itemCategoryFilter) {
+                return 'No packlists found for the selected search criteria';
+            }
+            
+            // If the store loaded but found no items and a category filter is active, the category has no items
+            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0 && this.itemCategoryFilter) {
+                return 'No items were found in this category.';
             }
             
             // If we have shows selected but no items in the data, it means the category has no items

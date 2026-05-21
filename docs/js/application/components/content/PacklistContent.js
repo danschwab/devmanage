@@ -464,6 +464,46 @@ export const PacklistMenuComponent = {
 
 
 
+const PacklistPinToggleComponent = {
+    props: {
+        containerPath: String
+    },
+    computed: {
+        currentPacklistName() {
+            if (!this.containerPath) return null;
+            const segments = this.containerPath.split('?')[0].split('/').filter(Boolean);
+            return (segments[0] === 'packlist' && segments[1] && segments[1] !== 'pins')
+                ? segments[1]
+                : null;
+        },
+        pinnedStore() {
+            if (!authState.user?.email) return null;
+            return getReactiveStore(Requests.getUserData, Requests.storeUserData, [authState.user.email, 'pinned_packlists']);
+        },
+        isPinned() {
+            return this.currentPacklistName ? this.pinnedStore?.data?.includes(this.currentPacklistName) : false;
+        }
+    },
+    methods: {
+        async handleToggle() {
+            const store = this.pinnedStore;
+            if (!store || !this.currentPacklistName) return;
+            const idx = store.data.indexOf(this.currentPacklistName);
+            if (idx !== -1) store.data.splice(idx, 1);
+            else store.data.push(this.currentPacklistName);
+            await store.save();
+        }
+    },
+    template: html`
+        <button
+            v-if="currentPacklistName"
+            @click="handleToggle"
+            :class="{ 'red': isPinned, 'green': !isPinned }">
+            {{ isPinned ? 'Unpin Packlist' : 'Pin Packlist' }}
+        </button>
+    `
+};
+
 export const PacklistContent = {
     components: {
         'packlist-table': PacklistTable,
@@ -480,11 +520,17 @@ export const PacklistContent = {
         return {
             packlistsStore: null, // Reactive store for packlists
             autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
-            filter: null, // Filter for schedule overlaps (date range or identifier)
-            pinnedPacklists: new Set() // Track which packlists are pinned
+            filter: null // Filter for schedule overlaps (date range or identifier)
         };
     },
     computed: {
+        pinnedPacklistsStore() {
+            if (!authState.user?.email) return null;
+            return getReactiveStore(Requests.getUserData, Requests.storeUserData, [authState.user.email, 'pinned_packlists']);
+        },
+        pinnedPacklists() {
+            return new Set(this.pinnedPacklistsStore?.data || []);
+        },
         pathSegments() {
             // Strip query parameters before splitting
             const cleanPath = this.containerPath.split('?')[0];
@@ -591,9 +637,6 @@ export const PacklistContent = {
         }
     },
     async mounted() {
-        // Load pinned packlists from user data
-        await this.loadPinnedPacklists();
-
         // Register packlist navigation routes
         NavigationRegistry.registerNavigation('packlist', {
             routes: {
@@ -614,7 +657,7 @@ export const PacklistContent = {
 
         // Register hamburger menu for packlist
         hamburgerMenuRegistry.registerMenu('packlist', {
-            components: [PacklistMenuComponent, DashboardToggleComponent],
+            components: [PacklistMenuComponent, PacklistPinToggleComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
                 navigateToPath: this.navigateToPath,
@@ -833,37 +876,13 @@ export const PacklistContent = {
         handlePacklistSelect(packlistName) {
             this.navigateToPath('packlist/' + packlistName);
         },
-        async loadPinnedPacklists() {
-            if (!authState.isAuthenticated || !authState.user?.email) return;
-            
-            try {
-                const pinnedData = await Requests.getUserData(authState.user.email, 'pinned_packlists');
-                if (pinnedData && Array.isArray(pinnedData)) {
-                    this.pinnedPacklists = new Set(pinnedData);
-                    console.log('[PacklistContent] Loaded pinned packlists:', Array.from(this.pinnedPacklists));
-                }
-            } catch (error) {
-                console.error('[PacklistContent] Error loading pinned packlists:', error);
-            }
-        },
-        async savePinnedPacklists() {
-            if (!authState.isAuthenticated || !authState.user?.email) return;
-            
-            try {
-                const pinnedArray = Array.from(this.pinnedPacklists);
-                await Requests.storeUserData(pinnedArray, authState.user.email, 'pinned_packlists');
-                console.log('[PacklistContent] Saved pinned packlists:', pinnedArray);
-            } catch (error) {
-                console.error('[PacklistContent] Error saving pinned packlists:', error);
-            }
-        },
         async togglePin(packlistName) {
-            if (this.pinnedPacklists.has(packlistName)) {
-                this.pinnedPacklists.delete(packlistName);
-            } else {
-                this.pinnedPacklists.add(packlistName);
-            }
-            await this.savePinnedPacklists();
+            const store = this.pinnedPacklistsStore;
+            if (!store) return;
+            const idx = store.data.indexOf(packlistName);
+            if (idx !== -1) store.data.splice(idx, 1);
+            else store.data.push(packlistName);
+            await store.save();
         },
         togglePinnedView() {
             // Navigate between packlist and packlist/pins
@@ -913,7 +932,7 @@ export const PacklistContent = {
                         />
                         <button v-if="!showPinnedOnly" @click="togglePinnedView" class="button-symbol"><span class="material-symbols-outlined">keep</span></button>
                         <div v-if="showPinnedOnly" class='card' style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">showing pinned or unsaved packlists</div>
-                        <button v-if="showPinnedOnly" @click="togglePinnedView">Back</button>
+                        <button v-if="showPinnedOnly" @click="togglePinnedView" class="small">Back</button>
                     </div>
                 </template>
             </cards-grid>

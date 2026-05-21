@@ -323,7 +323,7 @@ export const ItemImageComponent = {
     props: {
         imageUrl: {
             type: String,
-            default: 'images/placeholder.png'
+            default: 'assets/placeholder.png'
         },
         itemNumber: {
             type: String,
@@ -337,10 +337,10 @@ export const ItemImageComponent = {
     inject: ['$modal'],
     computed: {
         displayUrl() {
-            return this.imageUrl || 'images/placeholder.png';
+            return this.imageUrl || 'assets/placeholder.png';
         },
         imageFound() {
-            return this.displayUrl !== 'images/placeholder.png';
+            return this.displayUrl !== 'assets/placeholder.png';
         }
     },
     methods: {
@@ -407,6 +407,7 @@ export const InventoryTableComponent = {
             return [
                 { 
                     key: 'image', 
+                    labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
                     sortable: false
@@ -441,6 +442,7 @@ export const InventoryTableComponent = {
                 },
                 {
                     key: '_navigate',
+                    labelHtml: '<span class="material-symbols-outlined">calendar_month</span>',
                     label: '',
                     width: 36,
                     sortable: false

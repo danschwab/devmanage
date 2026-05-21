@@ -589,7 +589,7 @@ export const PacklistTable = {
                 computed: {
                     columns() {
                         return [
-                            { key: 'image', label: 'IMG', width: 1, sortable: false },
+                            { key: 'image', labelHtml: '<span class="material-symbols-outlined">imagesmode</span>', label: 'IMG', width: 1, sortable: false },
                             { key: 'itemNumber', label: 'Item #', type: 'item', width: 120, sortable: true },
                             { key: 'description', label: 'Description', sortable: true },
                             { key: 'quantity', label: 'Available', width: 100, sortable: true },
@@ -1247,7 +1247,7 @@ export const PacklistTable = {
         <slot>
             <!-- Print-only Header -->
             <div class="print-header">
-                <img src="images/logo.png" alt="Top Shelf Exhibits Logo" class="print-logo" />
+                <img src="assets/logo.png" alt="Top Shelf Exhibits Logo" class="print-logo" />
                 <h1>Pack List: <strong>{{ tabName }}</strong></h1>
                 <span class="page-number"></span>
             </div>
@@ -1295,8 +1295,9 @@ export const PacklistTable = {
                                     @click="() => tabName ? $emit('navigate-to-path', NavigationRegistry.buildPathWithCurrentParams('packlist/' + tabName, appContext?.currentPath, { edit: true })) : null"
                                     :disabled="!lockCheckComplete || lockedByOther"
                                     :title="!lockCheckComplete ? 'Checking lock status...' : (lockedByOther ? 'Locked by ' + (lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner) : 'Edit this pack list')"
+                                    class="small"
                                 >
-                                    Edit Packlist
+                                    Edit
                                 </button> 
                             </template>
                             <template v-else>
@@ -1309,15 +1310,17 @@ export const PacklistTable = {
                                         }
                                     }"
                                     :disabled="isDirty"
-                                    :title="isDirty ? 'Save or discard changes before returning to view mode' : 'Return to view mode'">
-                                    Back to View
+                                    :title="isDirty ? 'Save or discard changes before returning to view mode' : 'Return to view mode'"
+                                    class="small"
+                                >
+                                    View
                                 </button>
                             </template>
-                            <button @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName + '/details') : null">
-                                Details
-                            </button>
+                            <button @click="() => tabName ? $emit('navigate-to-path', 'packlist/' + tabName + '/details') : null" class="button-symbol" title="View Packlist Details">☷</button>
 
-                            <button v-if="!editMode" @click="handlePrint" :disabled="isLoading || isAnalyzing" class="white">Print</button>
+                            <button v-if="!editMode" @click="handlePrint" :disabled="isLoading || isAnalyzing" class="button-symbol white" title="Print Packlist">
+                                <span class="material-symbols-outlined">print</span>
+                            </button>
                             <!--this was moved span v-if="!editMode && lockedByOther" style="margin-left: 1rem; color: var(--color-text-secondary);">
                                 Locked by {{ lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner }}
                             </span-->

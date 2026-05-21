@@ -143,7 +143,15 @@ button {
     border-radius: var(--radius-md);
     box-shadow: 2px 2px 8px -4px var(--color-shadow);
     /*overflow: hidden;*/
+    user-select: none;
 }
+input[type="submit"].small,
+input[type="button"].small,
+button.small {
+    width: 60px;
+}
+
+
 
 input[type="submit"]:hover,
 input[type="button"]:hover,

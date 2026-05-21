@@ -1403,7 +1403,10 @@ export const ScheduleDateRangeCard = {
         }
     },
     template: html`
-        <div v-if="dateRangeDisplay" class="card gray" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">{{ dateRangeDisplay }}</div>
+        <template v-if="dateRangeDisplay">
+            <div class="card gray hide-when-narrow" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">{{ dateRangeDisplay }}</div>
+            <div :title="dateRangeDisplay" class="card clickable gray show-when-narrow">⋯</div>
+        </template>
     `
 };
 
@@ -1831,10 +1834,10 @@ export const ScheduleFilterSelect = {
         <button 
             v-if="showAdvancedButton" 
             class="button-symbol"
-            title="Open advanced search options"
+            title="Schedule filtering options"
             @click="openAdvancedSearchModal"
         >
-            ☰
+            <span class="material-symbols-outlined">calendar_month</span>
         </button>
     `
 };

@@ -1210,12 +1210,12 @@ export class FakeGoogleSheetsService {
         
         // Create fake image URLs for common item numbers for testing
         const mockImages = {
-            'CHAIR-001.jpg': 'images/logo.png',
-            'CHAIR-002.jpg': 'images/logo.png',
-            'CHAIR-003.jpg': 'images/logo.png',
-            'TABLE-001.jpg': 'images/logo.png',
-            'TABLE-002.jpg': 'images/logo.png',
-            'TABLE-003.jpg': 'images/logo.png'
+            'CHAIR-001.jpg': 'assets/logo.png',
+            'CHAIR-002.jpg': 'assets/logo.png',
+            'CHAIR-003.jpg': 'assets/logo.png',
+            'TABLE-001.jpg': 'assets/logo.png',
+            'TABLE-002.jpg': 'assets/logo.png',
+            'TABLE-003.jpg': 'assets/logo.png'
         };
         
         if (mockImages[fileName]) {
@@ -1236,7 +1236,7 @@ export class FakeGoogleSheetsService {
      * @returns {string} Direct image URL
      */
     static getDriveImageUrl(fileId) {
-        return `images/placeholder.png`; // Always return placeholder for fake implementation
+        return `assets/placeholder.png`; // Always return placeholder for fake implementation
     }
 }
 
