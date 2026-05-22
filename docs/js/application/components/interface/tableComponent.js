@@ -1164,9 +1164,12 @@ export const TableComponent = {
                 startY: null,
                 longClickTimer: null,
                 hasMoved: false,
+                shiftKey: false, // Track shift key during mousedown for shift-select
                 // Multi-selection state
                 isMultiSelecting: false,
                 lastHoveredRowIndex: null,
+                // Shift-select anchor: the last row explicitly selected without shift
+                lastAnchorRowIndex: null,
                 // Touch-specific state for table tracking
                 lastTouchTable: null // Track which table element finger was last over
             },
@@ -2311,6 +2314,7 @@ export const TableComponent = {
             this.clickState.startX = event.clientX;
             this.clickState.startY = event.clientY;
             this.clickState.hasMoved = false;
+            this.clickState.shiftKey = event.shiftKey;
             
             // Set up long click timer (800ms)
             this.clickState.longClickTimer = setTimeout(() => {
@@ -2472,17 +2476,23 @@ export const TableComponent = {
                 
                 // Short click logic (only if no movement occurred)
                 if (!this.clickState.hasMoved && !this.clickState.isMultiSelecting) {
-                    // Capture selection state before toggle
-                    const routeKey = this.appContext?.currentPath?.split('?')[0];
-                    if (routeKey) {
-                        undoRegistry.capture(this.data, routeKey, { 
-                            type: 'selection-toggle',
-                            selectionState: tableRowSelectionState
-                        });
+                    if (this.clickState.shiftKey && this.clickState.lastAnchorRowIndex !== null) {
+                        // Shift-click: range select from anchor to clicked row
+                        this.selectRowRange(this.clickState.lastAnchorRowIndex, this.clickState.startRowIndex);
+                    } else {
+                        // Capture selection state before toggle
+                        const routeKey = this.appContext?.currentPath?.split('?')[0];
+                        if (routeKey) {
+                            undoRegistry.capture(this.data, routeKey, { 
+                                type: 'selection-toggle',
+                                selectionState: tableRowSelectionState
+                            });
+                        }
+                        
+                        // Toggle selection state of clicked row
+                        tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
+                        this.clickState.lastAnchorRowIndex = this.clickState.startRowIndex;
                     }
-                    
-                    // Toggle selection state of clicked row
-                    tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
                 }
             }
             
@@ -2648,6 +2658,7 @@ export const TableComponent = {
                     
                     // Toggle selection state of tapped row
                     tableRowSelectionState.toggleRow(this.clickState.startRowIndex, this.data, this.dragId);
+                    this.clickState.lastAnchorRowIndex = this.clickState.startRowIndex;
                 }
             }
             
@@ -2667,6 +2678,7 @@ export const TableComponent = {
             this.clickState.startX = null;
             this.clickState.startY = null;
             this.clickState.hasMoved = false;
+            this.clickState.shiftKey = false;
             this.clickState.isMultiSelecting = false;
             this.clickState.lastHoveredRowIndex = null;
             this.clickState.lastTouchTable = null;
@@ -3103,6 +3115,7 @@ export const TableComponent = {
                     }
                     
                     tableRowSelectionState.clearAll();
+                    this.clickState.lastAnchorRowIndex = null;
                 }
             }
             
