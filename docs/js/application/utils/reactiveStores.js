@@ -300,6 +300,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         error: null,
         isAnalyzing: false,
         isReloadingMainData: false, // Lock to prevent analysis during main data reload
+        isSaving: false, // True only during the save operation (used to suppress false conflict detection from the save cascade)
         externalConflict: false, // True when an external session mutated this data while we have unsaved changes
         lockConflictOwner: null, // Set when a save is blocked by a competing lock
         analysisProgress: 0,
@@ -424,6 +425,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setError('No save API call provided');
                 return;
             }
+            this.isSaving = true;
             this.setLoading(true, message);
             this.setError(null);
             this.lockConflictOwner = null;
@@ -454,6 +456,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.autoSaved = false; // Clear auto-save flag after successful save
                 this.lastAutoSaveHash = null; // Clear auto-save hash after manual save
                 this.externalConflict = false; // Conflict resolved — our save is now the latest
+                // Repopulate cache after save so the poller can detect future cross-session changes.
+                // The cascade during setData deleted the cache entries; this restores them without
+                // affecting store state (result is discarded).
+                apiCall(...apiArgs).catch(() => {});
                 
                 return result;
             } catch (err) {
@@ -466,6 +472,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 }
                 return false;
             } finally {
+                this.isSaving = false;
                 this.setLoading(false, '');
             }
         },
@@ -916,6 +923,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
         },
         async handleInvalidation() {
+            // Block during save: the invalidation cascade fires synchronously inside the save's PriorityQueue
+            // call (via stampDataChange/setData), so isSaving=true means this is our own write, not an
+            // external change. isReloadingMainData=true means a fresh data fetch is already in flight;
+            // starting another load would be redundant. Analysis (isAnalyzing=true) is explicitly allowed
+            // so external changes are detected even when a large packlist is still being analyzed.
+            if (this.isSaving || this.isReloadingMainData) return;
             // If unsaved changes exist, don't silently overwrite them — flag the conflict instead.
             // The UI will show a warning banner; reload happens after the user saves or discards.
             if (this.isModified) {

@@ -784,10 +784,21 @@ export const PacklistTable = {
             }
         },
         async handleSave() {
-            // Only use the store's save method if this is called from the on-save event
-            if (this.packlistTableStore) {
-                await this.packlistTableStore.save('Saving packlist...');
+            if (!this.packlistTableStore) return;
+            if (this.hasExternalConflict) {
+                this.$modal.confirm(
+                    'Another session changed this data. Saving will overwrite their changes.',
+                    async () => {
+                        await this.packlistTableStore.save('Saving packlist...');
+                    },
+                    null,
+                    'External Changes Detected',
+                    'Save Anyway',
+                    'Cancel'
+                );
+                return;
             }
+            await this.packlistTableStore.save('Saving packlist...');
         },
 
         handleInnerTableDirty(isDirty, rowIndex) {
