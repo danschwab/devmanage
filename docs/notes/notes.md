@@ -140,6 +140,9 @@ inventory updates
 - [x] add existing item thumbnails
 - [x] make thumbnails be a cached analytics step
 - [x] force all inventory changes to have a "change date" that is separate from the edit history date, and update the table to show future changes (force reference date input) in additional rows following the main item row
+- [x] force projects to query the inventory by date
+- [ ] optimize thumbnails: app data sheet needs to have a table of thumbnail locations that is loaded and checked before calling the function that gets thumbnail folder contents
+- [ ] optimize thumbnails: invalidate this cache only when new thumbnails are added, or a thumbnail change occurrs
 - [ ] ! update LIGHTBOXES
 - [ ] ! add all FURNITURE
 - [ ] ! add all LIGHTING
@@ -147,8 +150,6 @@ inventory updates
 - [ ] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
 - [ ] allow attaching a change dates to a project
 - [ ] create a history modification utility for viewing changes over time and changing their values if necessary
-- [ ] force projects to query the inventory by date
-      optimize thumbnail finding: cached call that gets thumbnail folder contents once
       allow uploading new item thumbnails
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
@@ -195,12 +196,11 @@ Architecture Improvements
 - [x] log out needs to skip database operations if the token is already expired
 - [x] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
 - [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
-- [x] !!! add info source to metadata history to track inventor / app update location for packlists
+- [x] add info source to metadata history to track inventor / app update location for packlists
+- [x] improve error handling and user notifications for failed auth and failed permissions
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
-- [ ] improve error handling and user notifications for failed auth and failed permissions
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
-      consider always checking the edithistory last-edited date before saving to prevent overwriting simultaneous changes?
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
       remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
@@ -223,9 +223,9 @@ Pack Lists in Web
 - [x] Allow new packlists from template
 - [x] Allow duplicate packlists from existing packlists (add to main packlist page, and as an action on a packlist)
 - [x] add category filtering to packlist-details table
-- [x] !!! allow group closing and hiding in actions bubbles and default to this
+- [x] allow group closing and hiding in actions bubbles and default to this
+- [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [ ] ! enable actions bubbles for crates selections
-- [ ] ! information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [ ] ! cut and paste between packlist functionality
 - [ ] ! automations interface, packlist rules
 - [ ] allow user to configure automations

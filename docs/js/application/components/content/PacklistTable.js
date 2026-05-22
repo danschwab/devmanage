@@ -1279,7 +1279,7 @@ export const PacklistTable = {
                     :sync-search-with-url="true"
                     :container-path="containerPath || 'packlist/' + tabName"
                     :navigate-to-path="(path) => $emit('navigate-to-path', path)"
-                    :hideRowsOnSearch="true"
+                    :hideRowsOnSearch="false"
                     :emptyMessage="'No crates'"
                     :draggable="editMode"
                     :newRow="editMode"
@@ -1377,9 +1377,9 @@ export const PacklistTable = {
                                 :showHeader="false"
                                 :isLoading="isLoading"
                                 :drag-id="'packlist-items'"
-                                :parent-search-value="$refs.mainTableComponent?.searchValue || ''"
+                                :parent-search-value="$refs.mainTableComponent?.search?.searchValue?.value || ''"
                                 :showSearch="true"
-                                :hideRowsOnSearch="true"
+                                :hideRowsOnSearch="false"
                                 :showSelectionBubble="editMode"
                                 @cell-edit="(itemRowIdx, itemColIdx, value) => { row.Items[itemRowIdx][itemHeaders[itemColIdx]] = value; }"
                                 @new-row="(positionData) => { handleAddItem(rowIndex, positionData); }"
@@ -1392,11 +1392,6 @@ export const PacklistTable = {
                                 @row-options="handleRowOptions"
                                 class="table-fixed"
                             >
-                                <!-- Default slot for cell content -->
-                                <template #default="{ row: itemRow, column: itemColumn }">
-                                    <span>{{ itemRow[itemColumn.key] }}</span>
-                                </template>
-                                
                                 <!-- Cell-extra slot for alerts (proper location for warnings/notifications) -->
                                 <template #cell-extra="{ row: itemRow, column: itemColumn, isGroupMembersHidden, showGroup }">
                                     <!-- Display all AppData alerts as colored cards (visible in both view and edit modes) -->

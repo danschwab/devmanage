@@ -1722,8 +1722,9 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         font-size: 10pt !important;
     }
     
-    button, header, footer, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header {
+    button, header, footer, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notification {
         display: none;
+        opacity: 0;
     }
 
     body,

@@ -3260,7 +3260,7 @@ export const TableComponent = {
                             🗙
                         </button>
                         <button
-                            v-if="showSearch"
+                            v-if="showSearch && hideRowsOnSearch"
                             @mousedown.prevent="hideRowsOnSearchLocal = !hideRowsOnSearchLocal"
                             class="column-button"
                             :title="hideRowsOnSearchLocal ? 'Show all rows' : 'Hide non-matching rows'"
