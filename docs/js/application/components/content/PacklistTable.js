@@ -1009,7 +1009,7 @@ export const PacklistTable = {
          */
         showCadSourceRestoreModal(item, alert) {
             const CadSourceRestoreComponent = {
-                props: ['alert', 'editMode', 'onRestore'],
+                props: ['alert', 'editMode', 'onRestore', 'onClearAlert'],
                 computed: {
                     previousSummary() {
                         return this.alert?.previousWebSummary || 'unknown';
@@ -1027,6 +1027,12 @@ export const PacklistTable = {
                         }
                         if (this.onRestore) {
                             this.onRestore();
+                        }
+                        this.$emit('close-modal');
+                    },
+                    clearAlert() {
+                        if (this.onClearAlert) {
+                            this.onClearAlert();
                         }
                         this.$emit('close-modal');
                     },
@@ -1048,6 +1054,7 @@ export const PacklistTable = {
                         </div>
                         <div class="button-bar">
                             <button @click="restore" :disabled="!editMode" :title="!editMode ? 'Enable edit mode to restore values' : 'Restore values from before CAD changes'">Restore</button>
+                            <button @click="clearAlert" class="gray">Clear Alert</button>
                             <button @click="close" class="gray">Close</button>
                         </div>
                     </slot>
@@ -1060,6 +1067,10 @@ export const PacklistTable = {
                 onRestore: () => {
                     if (!item || !Array.isArray(alert?.restoreChanges)) return;
                     this.applyItemChanges(item, alert.restoreChanges, 'cadSourceAlert');
+                },
+                onClearAlert: () => {
+                    if (!item?.AppData) return;
+                    delete item.AppData.cadSourceAlert;
                 },
                 modalClass: 'reading-menu'
             }, 'CAD Source Change');
