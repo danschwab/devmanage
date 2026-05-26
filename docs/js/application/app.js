@@ -280,12 +280,14 @@ const App = {
             // Ctrl+Z or Cmd+Z for undo
             if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
                 event.preventDefault();
-                undoRegistry.undo();
+                const alert = undoRegistry.undo();
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
             }
             // Ctrl+Y or Ctrl+Shift+Z or Cmd+Shift+Z for redo
             else if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.shiftKey && event.key === 'z'))) {
                 event.preventDefault();
-                undoRegistry.redo();
+                const alert = undoRegistry.redo();
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
             }
         },
     },

@@ -621,6 +621,9 @@ button.card {
     min-width: var(--page-width-small);
     height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
 }
+.small-menu .content {
+    max-width: var(--page-width-card);
+}
 .reading-menu .content {
     display: flex;
     flex-direction: column;

@@ -62,7 +62,8 @@ export const undoRegistry = Vue.reactive({
             type = 'operation',
             cellInfo = null,
             preventDuplicates = false,
-            selectionState = null // Optional: pass tableRowSelectionState to capture selections
+            selectionState = null, // Optional: pass tableRowSelectionState to capture selections
+            undoAlert = null // Optional: message to show when this snapshot is undone/redone
         } = options;
         
         // Normalize arrays to always be an array of data arrays
@@ -174,7 +175,8 @@ export const undoRegistry = Vue.reactive({
             routeKey,
             cellInfo,
             arrays: arraySnapshots,
-            selections: capturedSelections // Store selection state
+            selections: capturedSelections, // Store selection state
+            undoAlert // Message to surface when this snapshot is undone/redone
         };
         
         // Add to undo stack
@@ -459,7 +461,8 @@ export const undoRegistry = Vue.reactive({
                 arrayRef: arrSnapshot.arrayRef,
                 snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
             })),
-            selections: currentSelections // Use captured current selections
+            selections: currentSelections, // Use captured current selections
+            undoAlert: state.undoAlert || null // Carry alert forward so redo also warns
         };
         stacks.redoStack.push(redoState);
         
@@ -485,7 +488,7 @@ export const undoRegistry = Vue.reactive({
         this._currentSelectionCapture = null;
         
         console.log(`[Undo] Undid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
-        return true;
+        return state.undoAlert || null;
     },
     
     // Redo last undone operation for current route
@@ -528,7 +531,8 @@ export const undoRegistry = Vue.reactive({
                 arrayRef: arrSnapshot.arrayRef,
                 snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
             })),
-            selections: currentSelections // Use captured current selections
+            selections: currentSelections, // Use captured current selections
+            undoAlert: state.undoAlert || null // Carry alert forward
         };
         stacks.undoStack.push(undoState);
         
@@ -554,7 +558,7 @@ export const undoRegistry = Vue.reactive({
         this._currentSelectionCapture = null;
         
         console.log(`[Undo] Redid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
-        return true;
+        return state.undoAlert || null;
     },
     
     // Get memory usage statistics

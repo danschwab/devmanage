@@ -1,4 +1,4 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState } from '../../index.js';
+import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 
 function normalizeItemSortWords(value) {
@@ -59,6 +59,14 @@ export const tableRowSelectionState = Vue.reactive({
     // Snapshot selections at drag start so drag gating stays stable during a drag session
     dragSelectionSnapshot: null,
 
+    // Clipboard mode state
+    clipboardMode: null,           // null | 'copy' | 'cut'
+    clipboardItems: [],            // Array of { clone, original } where original is null for 'copy'
+    clipboardSourceDragId: null,   // dragId to gate which tables show drop targets
+    clipboardSourceRoute: null,    // route key at the time Ctrl+C/X was pressed
+    _clipboardCommitting: false,   // internal guard: true while completeClipboard mutates state
+    _handleClipboardKeydown: null, // bound reference to the global keydown listener
+
     // Cache parsed row metadata by row reference and raw MetaData string
     _metaParseCache: new WeakMap(),
     
@@ -66,6 +74,316 @@ export const tableRowSelectionState = Vue.reactive({
     setActiveRoute(routeKey) {
         this.currentRouteKey = routeKey;
     },
+
+    // --- Clipboard helpers ---
+
+    // Deep-clone a row for clipboard use, stripping runtime/grouping/deletion state
+    _cloneRow(row) {
+        const raw = { ...row };
+        delete raw.AppData;
+        if (raw.MetaData) {
+            try {
+                const meta = JSON.parse(raw.MetaData);
+                delete meta.deletion;
+                delete meta.grouping;
+                raw.MetaData = Object.keys(meta).length > 0 ? JSON.stringify(meta) : '';
+            } catch (e) {
+                raw.MetaData = '';
+            }
+        }
+        return raw;
+    },
+
+    // Enter clipboard mode: snapshot selected rows from sourceArray and activate drop-target scanning
+    startClipboard(mode, sourceArray, dragId, routeKey) {
+        const selectedRows = this.getSelectedRowData(sourceArray);
+        if (selectedRows.length === 0) return false;
+
+        this.clipboardItems = selectedRows.map(row => ({
+            clone: this._cloneRow(row),
+            original: mode === 'cut' ? row : null
+        }));
+
+        this.clipboardMode = mode;
+        this.clipboardSourceDragId = dragId;
+        this.clipboardSourceRoute = routeKey;
+
+        // Reuse findingDropTargets so all matching tables show drop target indicators
+        this.findingDropTargets = true;
+        this.dragId = dragId;
+        this.dragTargetArray = null;
+        this.currentDropTarget = null;
+        this._version++;
+
+        this._handleClipboardKeydown = this._onClipboardKeydown.bind(this);
+        document.addEventListener('keydown', this._handleClipboardKeydown);
+        return true;
+    },
+
+    // Global keydown handler active while clipboard mode is on
+    _onClipboardKeydown(event) {
+        if (event.key === 'Escape') {
+            this.cancelClipboard();
+            event.preventDefault();
+            return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+            if (this.dragTargetArray && this.currentDropTarget && this.currentDropTarget.type) {
+                this.completeClipboard(this.currentDropTarget);
+            }
+            event.preventDefault();
+        }
+    },
+
+    // Exit clipboard mode and clear all clipboard state
+    cancelClipboard() {
+        this.clipboardMode = null;
+        this.clipboardItems = [];
+        this.clipboardSourceDragId = null;
+        this.clipboardSourceRoute = null;
+        this.findingDropTargets = false;
+        this.dragId = null;
+        this.dragTargetArray = null;
+        this.currentDropTarget = null;
+        this._version++;
+
+        if (this._handleClipboardKeydown) {
+            document.removeEventListener('keydown', this._handleClipboardKeydown);
+            this._handleClipboardKeydown = null;
+        }
+    },
+
+    // Complete a clipboard paste at the registered drop target
+    completeClipboard(dropTarget) {
+        if (!this.clipboardMode || !this.clipboardItems.length || !this.dragTargetArray) {
+            this.cancelClipboard();
+            return false;
+        }
+
+        const isCut = this.clipboardMode === 'cut';
+        // Same-route cut behaves like drag-drop: move originals without marking for deletion
+        const shouldMove = isCut && this.clipboardSourceRoute === this.currentRouteKey;
+
+        // Capture state before any mutation for undo.
+        // For cross-route cut: capture the paste-side and cut-side arrays independently
+        // so each route's undo stack only contains its own mutations.
+        if (this.currentRouteKey) {
+            if (isCut && !shouldMove) {
+                const formatRoute = r => r ? r.replace(/\b\w/g, c => c.toUpperCase()) : 'another page';
+                const sourceName = formatRoute(this.clipboardSourceRoute);
+                const destName = formatRoute(this.currentRouteKey);
+                const count = this.clipboardItems.length;
+
+                // Paste route: only the target array. Undoing here will remove the pasted clones
+                // but cannot undo the deletion-marking on the source route.
+                undoRegistry.capture([this.dragTargetArray], this.currentRouteKey, {
+                    type: 'drag',
+                    selectionState: tableRowSelectionState,
+                    undoAlert: `The removal of ${count} item(s) on ${sourceName} must be undone or redone separately.`
+                });
+                // Cut route: snapshot source arrays so deletion-marking can be independently undone.
+                if (this.clipboardSourceRoute) {
+                    const sourceArrays = [];
+                    for (const selection of this.selections.values()) {
+                        if (!sourceArrays.includes(selection.sourceArray)) {
+                            sourceArrays.push(selection.sourceArray);
+                        }
+                    }
+                    if (sourceArrays.length > 0) {
+                        undoRegistry.capture(sourceArrays, this.clipboardSourceRoute, {
+                            type: 'drag',
+                            undoAlert: `The addition of ${count} item(s) on ${destName} must be undone or redone separately.`
+                        });
+                    }
+                }
+            } else {
+                // Same-route cut or copy: capture all involved arrays together under this route.
+                const arraysToCapture = new Set([this.dragTargetArray]);
+                for (const selection of this.selections.values()) {
+                    arraysToCapture.add(selection.sourceArray);
+                }
+                undoRegistry.capture(Array.from(arraysToCapture), this.currentRouteKey, {
+                    type: 'drag',
+                    selectionState: tableRowSelectionState
+                });
+            }
+        }
+
+        // For same-route cut: build a map from sourceArray → [{row, index}] using the
+        // original object references still in this.selections.
+        let clipboardBySource = null;
+        if (shouldMove) {
+            const sourceArraysSet = new Set();
+            for (const selection of this.selections.values()) {
+                sourceArraysSet.add(selection.sourceArray);
+            }
+            clipboardBySource = new Map();
+            for (const item of this.clipboardItems) {
+                if (!item.original) continue;
+                for (const arr of sourceArraysSet) {
+                    const idx = arr.indexOf(item.original);
+                    if (idx !== -1) {
+                        if (!clipboardBySource.has(arr)) clipboardBySource.set(arr, []);
+                        clipboardBySource.get(arr).push({ row: item.original, index: idx });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Handle 'onto' drop: group rows under the target row
+        if (dropTarget.type === 'onto') {
+            const targetIndex = dropTarget.targetIndex;
+            const targetItem = this.dragTargetArray[targetIndex];
+            if (!targetItem) {
+                this.cancelClipboard();
+                return false;
+            }
+
+            const existingGrouping = this._getRowGrouping(targetIndex, this.dragTargetArray);
+            const groupId = existingGrouping?.groupId || `G${Date.now()}`;
+
+            if (!existingGrouping?.isGroupMaster) {
+                let meta = {};
+                try { meta = JSON.parse(targetItem.MetaData || '{}'); } catch (e) {}
+                meta.grouping = { groupId, isGroupMaster: true };
+                targetItem.MetaData = JSON.stringify(meta);
+            }
+
+            let rowsToInsert;
+            if (shouldMove) {
+                // Remove originals from their source arrays, then insert
+                rowsToInsert = [];
+                for (const [sourceArray, entries] of clipboardBySource) {
+                    const sortedAsc = entries.sort((a, b) => a.index - b.index);
+                    const sortedDesc = [...sortedAsc].reverse();
+                    sortedAsc.forEach(e => { delete e.row.AppData; rowsToInsert.push(e.row); });
+                    sortedDesc.forEach(e => {
+                        if (e.index < sourceArray.length) sourceArray.splice(e.index, 1);
+                    });
+                }
+            } else {
+                // Cross-route cut or copy: use clones; mark originals for deletion if cut
+                rowsToInsert = this.clipboardItems.map(item => item.clone);
+                if (isCut) {
+                    for (const item of this.clipboardItems) {
+                        if (item.original) {
+                            let meta = {};
+                            try { meta = JSON.parse(item.original.MetaData || '{}'); } catch (e) {}
+                            meta.deletion = { marked: true };
+                            item.original.MetaData = JSON.stringify(meta);
+                        }
+                    }
+                }
+            }
+
+            rowsToInsert.forEach(row => {
+                let meta = {};
+                try { meta = JSON.parse(row.MetaData || '{}'); } catch (e) {}
+                meta.grouping = { groupId, isGroupMaster: false };
+                row.MetaData = JSON.stringify(meta);
+            });
+
+            // Re-find target index after possible removals (same-array removal shifts indices)
+            const newTargetIndex = this.dragTargetArray.indexOf(targetItem);
+            this.dragTargetArray.splice(newTargetIndex + 1, 0, ...rowsToInsert);
+
+            const targetDragId = this.clipboardSourceDragId;
+            this._clipboardCommitting = true;
+            this.clearAll();
+            rowsToInsert.forEach(row => {
+                const idx = this.dragTargetArray.indexOf(row);
+                if (idx !== -1) this.addRow(idx, this.dragTargetArray, targetDragId);
+            });
+            this._clipboardCommitting = false;
+
+            this.lastDragEndTime = Date.now();
+            this.cancelClipboard();
+            return true;
+        }
+
+        // Determine insertion position for between/header/footer drops
+        let insertPosition;
+        if (dropTarget.type === 'header') {
+            insertPosition = 0;
+        } else if (dropTarget.type === 'footer') {
+            insertPosition = this.dragTargetArray.length;
+        } else if (dropTarget.type === 'between') {
+            insertPosition = dropTarget.targetIndex;
+        } else {
+            this.cancelClipboard();
+            return false;
+        }
+
+        let finalRows;
+        if (shouldMove) {
+            // Same-route cut: move originals exactly like completeDrag
+            finalRows = [];
+            let totalRowsInserted = 0;
+
+            for (const [sourceArray, entries] of clipboardBySource) {
+                const sortedAsc = entries.sort((a, b) => a.index - b.index);
+                const sortedDesc = [...sortedAsc].reverse();
+                const rowsData = sortedAsc.map(e => e.row);
+
+                rowsData.forEach(row => { delete row.AppData; });
+                finalRows.push(...rowsData);
+
+                if (sourceArray === this.dragTargetArray) {
+                    // Same array: reorder (mirrors completeDrag same-array branch)
+                    let adjustedInsertPosition = insertPosition + totalRowsInserted;
+                    sortedDesc.forEach(e => {
+                        if (e.index < sourceArray.length) {
+                            sourceArray.splice(e.index, 1);
+                            if (e.index < adjustedInsertPosition) adjustedInsertPosition--;
+                        }
+                    });
+                    if (adjustedInsertPosition >= 0 && adjustedInsertPosition <= sourceArray.length) {
+                        sourceArray.splice(adjustedInsertPosition, 0, ...rowsData);
+                    }
+                } else {
+                    // Different array on same route: remove from source, insert into target
+                    sortedDesc.forEach(e => {
+                        if (e.index < sourceArray.length) sourceArray.splice(e.index, 1);
+                    });
+                    const adjustedInsertPosition = insertPosition + totalRowsInserted;
+                    if (adjustedInsertPosition >= 0 && adjustedInsertPosition <= this.dragTargetArray.length) {
+                        this.dragTargetArray.splice(adjustedInsertPosition, 0, ...rowsData);
+                    }
+                    totalRowsInserted += rowsData.length;
+                }
+            }
+        } else {
+            // Copy or cross-route cut: insert clones
+            finalRows = this.clipboardItems.map(item => item.clone);
+            this.dragTargetArray.splice(insertPosition, 0, ...finalRows);
+            if (isCut) {
+                for (const item of this.clipboardItems) {
+                    if (item.original) {
+                        let meta = {};
+                        try { meta = JSON.parse(item.original.MetaData || '{}'); } catch (e) {}
+                        meta.deletion = { marked: true };
+                        item.original.MetaData = JSON.stringify(meta);
+                    }
+                }
+            }
+        }
+
+        const targetDragId = this.clipboardSourceDragId;
+        this._clipboardCommitting = true;
+        this.clearAll();
+        finalRows.forEach(row => {
+            const idx = this.dragTargetArray.indexOf(row);
+            if (idx !== -1) this.addRow(idx, this.dragTargetArray, targetDragId);
+        });
+        this._clipboardCommitting = false;
+
+        this.lastDragEndTime = Date.now();
+        this.cancelClipboard();
+        return true;
+    },
+
+    // --- End clipboard helpers ---
     
     // Generate unique selection key for a row in a specific table
     _getSelectionKey(rowIndex, sourceArray) {
@@ -221,6 +539,10 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Toggle row selection
     toggleRow(rowIndex, sourceArray, dragId = null) {
+        if (this.clipboardMode && !this._clipboardCommitting) {
+            this.cancelClipboard();
+            return;
+        }
         if (this.hasRow(sourceArray, rowIndex)) {
             this.removeRow(rowIndex, sourceArray); // removeRow handles children
         } else {
@@ -236,6 +558,9 @@ export const tableRowSelectionState = Vue.reactive({
     
     // Clear all selections
     clearAll() {
+        if (this.clipboardMode && !this._clipboardCommitting) {
+            this.cancelClipboard();
+        }
         this.selections.clear();
         this._version++;
     },
@@ -1717,10 +2042,12 @@ export const TableComponent = {
         },
 
         isRowDragging(rowIndex) {
-            // Check if this row is currently being dragged
-            return tableRowSelectionState.findingDropTargets && 
-                   tableRowSelectionState.dragSourceArray === this.data &&
-                   tableRowSelectionState.hasRow(this.data, rowIndex);
+            if (!tableRowSelectionState.findingDropTargets) return false;
+            if (!tableRowSelectionState.hasRow(this.data, rowIndex)) return false;
+            // During clipboard mode, any selected row is a clipboard source
+            if (tableRowSelectionState.clipboardMode) return true;
+            // Regular drag: only rows in the source array get the dragging style
+            return tableRowSelectionState.dragSourceArray === this.data;
         },
 
         isRowAnalyzing(rowIndex) {
@@ -2291,13 +2618,15 @@ export const TableComponent = {
         
         handleUndo() {
             if (this.canUndo) {
-                undoRegistry.undo();
+                const alert = undoRegistry.undo();
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
             }
         },
         
         handleRedo() {
             if (this.canRedo) {
-                undoRegistry.redo();
+                const alert = undoRegistry.redo();
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
             }
         },
         
@@ -3133,6 +3462,21 @@ export const TableComponent = {
         },
         
         handleEscapeKey(event) {
+            // Handle Ctrl+C / Ctrl+X: activate clipboard mode for selected rows in this table
+            if ((event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'x')) {
+                if (
+                    tableRowSelectionState.getArraySelectionCount(this.data) > 0 &&
+                    !tableRowSelectionState.clipboardMode &&
+                    this.draggable
+                ) {
+                    const mode = event.key === 'c' ? 'copy' : 'cut';
+                    const routeKey = this.appContext?.currentPath?.split('?')[0];
+                    tableRowSelectionState.startClipboard(mode, this.data, this.dragId, routeKey);
+                    event.preventDefault();
+                }
+                return;
+            }
+
             // Handle keyboard shortcuts for table interactions
             if (event.key === 'Escape') {
                 let handled = false;

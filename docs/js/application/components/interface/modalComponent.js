@@ -122,14 +122,14 @@ export class ModalManager {
         });
     }
 
-    confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null) {
+    confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null, modalClass = 'reading-menu') {
         return this._create(title, ConfirmButtonsComponent, { 
             message, 
             onConfirm, 
             onCancel, 
             confirmText, 
             cancelText, 
-            modalClass: 'reading-menu' 
+            modalClass 
         });
     }
 
