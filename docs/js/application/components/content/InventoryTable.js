@@ -752,6 +752,12 @@ export const InventoryTableComponent = {
                 hasQtyChanges,
                 onConfirm: async (scheduledDate, note) => {
                     await this.inventoryTableStore.save('Saving inventory...', { scheduledDate, note });
+                    // After a scheduled (future) save the server keeps the original quantity and
+                    // stores the change as a pending entry. The store's optimistic data still
+                    // shows the user-edited quantity, so force a reload to display the actual state.
+                    if (scheduledDate > todayISOString()) {
+                        await this.inventoryTableStore.load('Loading...');
+                    }
                 }
             }, 'Save Changes');
         },

@@ -603,6 +603,7 @@ class inventoryUtils_uncached {
             if (!inWindow) continue;
 
             const changeLabels = [];
+            let qtyDelta = 0;
             if (Array.isArray(entry.c)) {
                 for (const ch of entry.c) {
                     const ne = ch.ne;
@@ -610,12 +611,13 @@ class inventoryUtils_uncached {
                         ? `quantity: ${ne.startsWith('+') ? ne : (parseInt(ne, 10) >= 0 ? '+' + ne : ne)}`
                         : `${ch.n}: ${ne}`;
                     changeLabels.push(label);
+                    // Accumulate quantity delta so the forward pass stacks entries correctly.
+                    // ne is always a delta string (e.g. '+2', '-1') for numeric fields.
+                    if ((ch.n === 'quantity' || ch.n === 'QTY') && typeof ne === 'string' && /^[+\-]\d/.test(ne)) {
+                        qtyDelta += parseFloat(ne);
+                    }
                 }
             }
-
-            // Use getItemInfo to get the projected quantity as an absolute anchor
-            const projectedInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity'], date);
-            const projectedQty = parseInt(projectedInfo?.[0]?.quantity ?? 0, 10) || null;
 
             const scheduledNote = entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || '');
             events.push({
@@ -624,7 +626,7 @@ class inventoryUtils_uncached {
                 note: scheduledNote,
                 change: changeLabels.join(', '),
                 quantity: null,
-                _absoluteQty: projectedQty
+                _delta: qtyDelta
             });
         }
 
@@ -695,16 +697,11 @@ class inventoryUtils_uncached {
             if (event._done) {
                 // Balance row: already has qty; reset accumulator
                 fwdQty = event.quantity;
-            } else if (event._absoluteQty !== undefined && event._absoluteQty !== null) {
-                // Scheduled: projected qty is an absolute anchor
-                fwdQty = event._absoluteQty;
-                event.quantity = fwdQty;
             } else {
                 fwdQty += (event._delta ?? 0);
                 event.quantity = fwdQty;
             }
             delete event._delta;
-            delete event._absoluteQty;
             delete event._done;
         }
 
