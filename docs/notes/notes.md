@@ -225,8 +225,8 @@ Pack Lists in Web
 - [x] add category filtering to packlist-details table
 - [x] allow group closing and hiding in actions bubbles and default to this
 - [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
+- [x] cut and paste between packlist functionality
 - [ ] ! enable actions bubbles for crates selections
-- [ ] ! cut and paste between packlist functionality
 - [ ] ! automations interface, packlist rules
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?
