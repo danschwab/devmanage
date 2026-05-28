@@ -39,6 +39,7 @@ export class BaseTokenManager {
 
 export class GoogleSheetsAuth {
     static userEmail = null;
+    static _silentRefreshPromise = null;
 
     static async initialize() {
         try {
@@ -125,8 +126,7 @@ export class GoogleSheetsAuth {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: '',
-                prompt: 'select_account'
+                callback: ''
             });
 
             return new Promise((resolve, reject) => {
@@ -158,7 +158,7 @@ export class GoogleSheetsAuth {
                 try {
                     tokenClient.requestAccessToken({
                         prompt: 'select_account'
-                    });
+                    }); // 'select_account' only on explicit user-initiated auth
                 } catch (error) {
                     console.error('Token request error:', error);
                     reject(error);
@@ -170,6 +170,49 @@ export class GoogleSheetsAuth {
         }
     }
 
+    static async silentRefresh() {
+        // Deduplicate concurrent calls — return the same in-flight promise to all callers
+        if (this._silentRefreshPromise) {
+            return this._silentRefreshPromise;
+        }
+
+        if (!gapiInited || !gisInited) return false;
+
+        const storedEmail = localStorage.getItem(BaseTokenManager.emailKey);
+
+        this._silentRefreshPromise = new Promise((resolve) => {
+            try {
+                const silentClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    login_hint: storedEmail || undefined,
+                    prompt: '',
+                    callback: (resp) => {
+                        if (resp.error) {
+                            resolve(false);
+                            return;
+                        }
+                        const token = gapi.client.getToken();
+                        if (!token) {
+                            resolve(false);
+                            return;
+                        }
+                        BaseTokenManager.storeToken(token);
+                        resolve(true);
+                    },
+                    error_callback: () => resolve(false)
+                });
+                silentClient.requestAccessToken({ prompt: '' });
+            } catch {
+                resolve(false);
+            }
+        }).finally(() => {
+            this._silentRefreshPromise = null;
+        });
+
+        return this._silentRefreshPromise;
+    }
+
     static async checkAuth() {
         const token = gapi.client.getToken();
         if (!token) {
@@ -178,20 +221,20 @@ export class GoogleSheetsAuth {
                 gapi.client.setToken(savedToken);
                 return true;
             }
-            
-            // No valid token available - user must authenticate interactively
-            return false;
+
+            // No stored token - try silent refresh before requiring interactive login
+            return await this.silentRefresh();
         }
-        
+
         // Token exists in gapi.client - verify it's not expired
         const savedToken = BaseTokenManager.getStoredToken();
         if (savedToken && BaseTokenManager.isTokenExpired(savedToken)) {
-            // Token is expired - clear it
             gapi.client.setToken(null);
             BaseTokenManager.clearStoredToken();
-            return false;
+            // Try silent refresh before requiring interactive login
+            return await this.silentRefresh();
         }
-        
+
         return true;
     }
 

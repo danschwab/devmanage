@@ -52,6 +52,19 @@ export class FakeGoogleSheetsAuth {
         return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
     }
 
+    static async silentRefresh() {
+        if (!this.isAuthenticatedState) return false;
+        // Simulate a silent token renewal — refresh the stored token timestamp
+        const mockToken = {
+            access_token: 'fake_access_token_' + Date.now(),
+            token_type: 'Bearer',
+            expires_in: 3600,
+            timestamp: Date.now()
+        };
+        BaseTokenManager.storeToken(mockToken);
+        return true;
+    }
+
     static isAuthenticated() {
         return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
     }
