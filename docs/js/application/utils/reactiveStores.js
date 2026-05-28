@@ -1091,17 +1091,10 @@ export async function saveDirtyStoresToUserData(options = {}) {
             return;
         }
     } else {
-        // Normal auto-save flow - check if auth prompt is showing
-        if (Auth.authPromptShowing) {
-            console.log('[ReactiveStore AutoSave] Auth prompt showing, skipping auto-save');
-            return;
-        }
-        
-        // Check authentication before attempting to save (with prompt if expired)
-        const isAuthenticated = await Auth.checkAuthWithPrompt({
-            context: 'auto-save',
-            message: 'Your session has expired.'
-        });
+        // Normal auto-save flow - check auth silently; proactive refresh handles renewal
+        // before expiry. If expired, skip this cycle without prompting — the user will
+        // be prompted on their next explicit action (save, navigation, etc.).
+        const isAuthenticated = await Auth.checkAuth();
         
         if (!isAuthenticated) {
             console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');

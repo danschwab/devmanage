@@ -156,9 +156,11 @@ export class GoogleSheetsAuth {
                 };
                 
                 try {
+                    const storedEmail = localStorage.getItem(BaseTokenManager.emailKey);
                     tokenClient.requestAccessToken({
-                        prompt: 'select_account'
-                    }); // 'select_account' only on explicit user-initiated auth
+                        prompt: storedEmail ? '' : 'select_account',
+                        login_hint: storedEmail || undefined
+                    });
                 } catch (error) {
                     console.error('Token request error:', error);
                     reject(error);
@@ -213,6 +215,13 @@ export class GoogleSheetsAuth {
         return this._silentRefreshPromise;
     }
 
+    static getTokenSecondsRemaining() {
+        const token = BaseTokenManager.getStoredToken();
+        if (!token || !token.timestamp) return 0;
+        const tokenAge = (Date.now() - token.timestamp) / 1000;
+        return Math.max(0, 3500 - tokenAge);
+    }
+
     static async checkAuth() {
         const token = gapi.client.getToken();
         if (!token) {
@@ -221,9 +230,7 @@ export class GoogleSheetsAuth {
                 gapi.client.setToken(savedToken);
                 return true;
             }
-
-            // No stored token - try silent refresh before requiring interactive login
-            return await this.silentRefresh();
+            return false;
         }
 
         // Token exists in gapi.client - verify it's not expired
@@ -231,8 +238,7 @@ export class GoogleSheetsAuth {
         if (savedToken && BaseTokenManager.isTokenExpired(savedToken)) {
             gapi.client.setToken(null);
             BaseTokenManager.clearStoredToken();
-            // Try silent refresh before requiring interactive login
-            return await this.silentRefresh();
+            return false;
         }
 
         return true;

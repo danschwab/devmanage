@@ -65,6 +65,13 @@ export class FakeGoogleSheetsAuth {
         return true;
     }
 
+    static getTokenSecondsRemaining() {
+        const token = BaseTokenManager.getStoredToken();
+        if (!token || !token.timestamp) return 0;
+        const tokenAge = (Date.now() - token.timestamp) / 1000;
+        return Math.max(0, 3500 - tokenAge);
+    }
+
     static isAuthenticated() {
         return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
     }

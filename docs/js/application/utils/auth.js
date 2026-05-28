@@ -49,6 +49,8 @@ let testModeEmail = null;
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
 export class Auth {
+    static _proactiveRefreshTimer = null;
+    static _proactiveInteractionHandler = null;
     static async initialize() {
         authState.isLoading = true;
         authState.error = null;
@@ -61,6 +63,7 @@ export class Auth {
                 authState.user = { email, name: email?.split('@')[0] || 'User' };
                 authState.isAuthenticated = true;
                 authState.permissionsWarning = Auth._buildPermissionsWarning();
+                Auth._startProactiveRefreshTimer();
             }
             authState.isInitialized = true;
         } catch (error) {
@@ -86,6 +89,7 @@ export class Auth {
             authState.user = { email, name: email?.split('@')[0] || 'User' };
             authState.isAuthenticated = true;
             authState.permissionsWarning = Auth._buildPermissionsWarning();
+            Auth._startProactiveRefreshTimer();
             
             // Re-enable priority queue if it was disabled during logout
             const { PriorityQueue } = await import('./priorityQueue.js');
@@ -108,6 +112,7 @@ export class Auth {
         authState.isLoading = true;
         authState.error = null;
         authPromptShowing = false; // Clear any auth prompts immediately
+        Auth._clearProactiveRefreshTimer();
 
         try {
             // Try to save data if token is valid and all permissions are granted
@@ -368,6 +373,60 @@ export class Auth {
         if (missing.length === 0) return null;
         const names = missing.map(s => s.split('/').pop()).join(', ');
         return `Missing required permissions: ${names}. Some features may not work correctly. Log out and back in making sure to grant all requested permissions.`;
+    }
+
+    /**
+     * Schedule a proactive token renewal that fires on the next user interaction
+     * at 55 minutes (5 min before expiry). Triggered within a real user gesture so
+     * browsers allow the GIS popup if one is needed.
+     */
+    static _startProactiveRefreshTimer() {
+        this._clearProactiveRefreshTimer();
+
+        const secondsRemaining = GoogleSheetsAuth.getTokenSecondsRemaining();
+        if (secondsRemaining <= 0) return;
+
+        // Fire 5 minutes before expiry
+        const refreshInMs = Math.max(0, secondsRemaining - 300) * 1000;
+
+        this._proactiveRefreshTimer = setTimeout(() => {
+            this._registerProactiveInteractionHandler();
+        }, refreshInMs);
+    }
+
+    static _clearProactiveRefreshTimer() {
+        if (this._proactiveRefreshTimer) {
+            clearTimeout(this._proactiveRefreshTimer);
+            this._proactiveRefreshTimer = null;
+        }
+        this._removeProactiveInteractionHandler();
+    }
+
+    static _registerProactiveInteractionHandler() {
+        this._removeProactiveInteractionHandler();
+
+        const handler = () => {
+            this._removeProactiveInteractionHandler();
+            GoogleSheetsAuth.silentRefresh().then(success => {
+                if (success) {
+                    console.log('[Auth] Proactive token renewal succeeded');
+                    this._startProactiveRefreshTimer();
+                }
+                // If failed, natural expiry flow (checkAuthWithPrompt) handles re-login
+            });
+        };
+
+        this._proactiveInteractionHandler = handler;
+        document.addEventListener('click', handler, { capture: true });
+        document.addEventListener('keydown', handler, { capture: true });
+    }
+
+    static _removeProactiveInteractionHandler() {
+        if (this._proactiveInteractionHandler) {
+            document.removeEventListener('click', this._proactiveInteractionHandler, { capture: true });
+            document.removeEventListener('keydown', this._proactiveInteractionHandler, { capture: true });
+            this._proactiveInteractionHandler = null;
+        }
     }
 
     static async _authenticateWithPopupWarning() {
