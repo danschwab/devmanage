@@ -238,85 +238,103 @@ export class Auth {
         } = options;
 
         try {
-            // Check current auth state
             const isAuthenticated = await this.checkAuth();
-            
-            if (!isAuthenticated && showModal) {
-                // If auth prompt is already showing, just return false immediately
-                if (authPromptShowing) {
-                    console.log(`[Auth] Auth prompt already showing, returning false`);
-                    return false;
+
+            // Layer 1: Token is valid — check if expiring within 10 minutes.
+            // We're in a user-gesture context so requestAccessToken won't be blocked.
+            // Fire-and-forget: don't hold up the current action while refreshing.
+            if (isAuthenticated) {
+                if (GoogleSheetsAuth.getTokenSecondsRemaining() < 600) {
+                    GoogleSheetsAuth.silentRefresh().then(success => {
+                        if (success) {
+                            console.log('[Auth] Proactive token renewal succeeded');
+                            Auth._startProactiveRefreshTimer();
+                        }
+                    });
                 }
-                
-                console.warn(`[Auth] Authentication check failed for ${context}`);
-                
-                authPromptShowing = true;
-                const manager = await getModalManager();
-                
-                // Create promise that will be resolved by user action
-                return new Promise((resolve) => {
-                    const defaultMessage = `Your session has expired. Would you like to log in again to continue?`;
-                    
-                    let modalDismissed = false;
-                    
-                    const modal = manager.confirm(
-                        message || defaultMessage,
-                        async () => {
-                            // User clicked "Log in"
-                            modalDismissed = true;
-                            try {
-                                console.log(`[Auth] Attempting re-authentication for ${context}...`);
-                                const success = await Auth.login();
-                                
-                                if (success) {
-                                    console.log(`[Auth] Re-authentication successful for ${context}`);
-                                    resolve(true);
-                                } else {
-                                    console.error(`[Auth] Re-authentication failed for ${context}`);
-                                    manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
-                                    resolve(false);
-                                }
-                            } catch (error) {
-                                console.error(`[Auth] Re-authentication error for ${context}:`, error);
-                                manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
-                                resolve(false);
-                            } finally {
-                                authPromptShowing = false;
+                return true;
+            }
+
+            if (!showModal) return false;
+
+            // Layer 2 / 3: Token expired — show modal.
+            // The modal button is a guaranteed user gesture:
+            //   Layer 2: silentRefresh() works  → no popup, session renewed silently.
+            //   Layer 3: silentRefresh() fails  → Auth.login() opens the full Google popup.
+            if (authPromptShowing) {
+                console.log(`[Auth] Auth prompt already showing, returning false`);
+                return false;
+            }
+
+            console.warn(`[Auth] Authentication check failed for ${context}`);
+            authPromptShowing = true;
+            const manager = await getModalManager();
+
+            return new Promise((resolve) => {
+                const defaultMessage = `Your session has expired. Would you like to continue?`;
+                let modalDismissed = false;
+
+                const modal = manager.confirm(
+                    message || defaultMessage,
+                    async () => {
+                        modalDismissed = true;
+                        try {
+                            // Layer 2: try silent refresh inside the button click gesture
+                            console.log(`[Auth] Attempting silent refresh for ${context}...`);
+                            const refreshed = await GoogleSheetsAuth.silentRefresh();
+                            if (refreshed) {
+                                console.log(`[Auth] Silent refresh succeeded for ${context}`);
+                                resolve(true);
+                                return;
                             }
-                        },
-                        () => {
-                            // User clicked "Cancel" - trigger logout
-                            modalDismissed = true;
-                            console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
+
+                            // Layer 3: Google session gone — open full login popup
+                            console.log(`[Auth] Silent refresh failed, opening login for ${context}...`);
+                            const success = await Auth.login();
+                            if (success) {
+                                console.log(`[Auth] Re-authentication successful for ${context}`);
+                                resolve(true);
+                            } else {
+                                console.error(`[Auth] Re-authentication failed for ${context}`);
+                                manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
+                                resolve(false);
+                            }
+                        } catch (error) {
+                            console.error(`[Auth] Re-authentication error for ${context}:`, error);
+                            manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
+                            resolve(false);
+                        } finally {
+                            authPromptShowing = false;
+                        }
+                    },
+                    () => {
+                        modalDismissed = true;
+                        console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
+                        authPromptShowing = false;
+                        Auth.logout();
+                        resolve(false);
+                    },
+                    'Session Expired',
+                    'Renew Session',
+                    'Log Out'
+                );
+
+                // Watch for modal dismissal via X button or overlay click
+                const checkModalDismissed = setInterval(() => {
+                    if (!manager.modals.find(m => m.id === modal.id)) {
+                        clearInterval(checkModalDismissed);
+                        if (!modalDismissed) {
+                            console.log(`[Auth] Auth modal dismissed without action, logging out`);
                             authPromptShowing = false;
                             Auth.logout();
                             resolve(false);
-                        },
-                        'Session Expired',
-                        'Log In',
-                        'Cancel'
-                    );
-                    
-                    // Watch for modal dismissal (X button or overlay click)
-                    const checkModalDismissed = setInterval(() => {
-                        if (!manager.modals.find(m => m.id === modal.id)) {
-                            clearInterval(checkModalDismissed);
-                            if (!modalDismissed) {
-                                // Modal was closed without clicking a button - trigger logout
-                                console.log(`[Auth] Auth modal dismissed without action, logging out`);
-                                authPromptShowing = false;
-                                Auth.logout();
-                                resolve(false);
-                            }
                         }
-                    }, 100);
-                }).finally(() => {
-                    // Ensure flag is always cleared, even if promise chain breaks
-                    authPromptShowing = false;
-                });
-            }
-            
-            return isAuthenticated;
+                    }
+                }, 100);
+            }).finally(() => {
+                authPromptShowing = false;
+            });
+
         } catch (error) {
             console.error(`[Auth] Auth check error for ${context}:`, error);
             authPromptShowing = false;
