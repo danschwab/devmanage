@@ -1,8 +1,10 @@
 import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
+import { CalendarComponent } from '../interface/calendarComponent.js';
 
 export const ScheduleTableComponent = {
     components: {
-        TableComponent
+        TableComponent,
+        CalendarComponent
     },
     props: {
         filter: {
@@ -20,6 +22,10 @@ export const ScheduleTableComponent = {
         templateName: {
             type: String,
             default: 'TEMPLATE'
+        },
+        calendarView: {
+            type: Boolean,
+            default: false
         }
     },
     inject: ['$modal'],
@@ -29,6 +35,7 @@ export const ScheduleTableComponent = {
             scheduleTableStore: null
         };
     },
+
     computed: {
         columns() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
@@ -56,6 +63,10 @@ export const ScheduleTableComponent = {
                 if (!['Show', 'Client', 'Ship', 'City', 'Size'].includes(header)) {
                     column.details = true;
                 }
+
+                // Calendar chip row flags
+                if (header === 'Show' || header === 'Client') column.firstRow = true;
+                if (header === 'City' || header === 'Size') column.secondRow = true;
 
                 // Add sortable configuration for useful columns
                 const sortableColumns = ['Show', 'Client', 'Ship', 'City', 'Size'];
@@ -160,6 +171,13 @@ export const ScheduleTableComponent = {
                 return `Shows during ${id}`;
             }
             return 'Production Schedule';
+        },
+        chipActionsProvider() {
+            return (row) => [
+                ...this.getPacklistCards(row, 'packlist'),
+                ...this.getIndexIssueCards(row, 'Client').map(c => ({ ...c, colKey: 'Client' })),
+                ...this.getIndexIssueCards(row, 'Show').map(c => ({ ...c, colKey: 'Show' }))
+            ];
         }
     },
     watch: {
@@ -712,6 +730,51 @@ export const ScheduleTableComponent = {
                 this.$modal.error(`Failed to load resolution options: ${error.message}`, 'Index Resolution Error');
             }
         },
+        handleCalendarEventClick(row) {
+            const self = this;
+            const DetailModalComponent = {
+                inject: ['$modal'],
+                props: { row: Object, columns: Array, actionCards: Array },
+                template: html`
+                    <div>
+                        <div class="details-grid" style="margin-bottom: var(--padding-md);">
+                            <template v-for="col in columns" :key="col.key">
+                                <div
+                                    class="detail-item"
+                                    v-if="row[col.key] != null && row[col.key] !== ''"
+                                >
+                                    <label>{{ col.label }}</label>
+                                    <span>{{ row[col.key] }}</span>
+                                </div>
+                            </template>
+                        </div>
+                        <div v-if="actionCards.length > 0" class="button-bar">
+                            <template v-for="card in actionCards" :key="card.message">
+                                <button
+                                    :class="['card', card.class]"
+                                    :disabled="card.disabled"
+                                    @click="!card.disabled && card.action ? card.action() : null"
+                                    v-html="card.message"
+                                ></button>
+                            </template>
+                        </div>
+                    </div>
+                `
+            };
+
+            const actionCards = [
+                ...this.getPacklistCards(row, 'packlist'),
+                ...this.getShipDateCards(row, 'Ship'),
+                ...this.getIndexIssueCards(row, 'Client'),
+                ...this.getIndexIssueCards(row, 'Show')
+            ];
+
+            // Filter out non-action columns for the details view (show all non-AppData fields)
+            const detailColumns = this.columns.filter(c => c.key !== 'packlist');
+
+            const title = row.Show || row.Client || 'Show Details';
+            this.$modal.custom(DetailModalComponent, { row, columns: detailColumns, actionCards, modalClass: 'event-detail' }, title);
+        },
         async applyIndexResolutionOption(option, row, issue) {
             try {
                 if (!option || !issue) {
@@ -762,7 +825,32 @@ export const ScheduleTableComponent = {
         }
     },
     template: html`
+        <CalendarComponent
+            v-if="calendarView"
+            :data="tableData"
+            :columns="columns"
+            :isLoading="isLoading"
+            :isAnalyzing="isAnalyzing"
+            :loading-progress="analysisProgress"
+            :error="error"
+            :show-refresh="true"
+            :title="tableTitle"
+            emptyMessage="No shows found."
+            :loading-message="loadingMessage"
+            eventStartColumn="S. Start"
+            eventEndColumn="S. End"
+            weekStart="sunday"
+            yearColumn="Year"
+            :chip-actions="chipActionsProvider"
+            @refresh="handleRefresh"
+            @event-click="handleCalendarEventClick"
+        >
+            <template #header-area>
+                <slot name="header-area"></slot>
+            </template>
+        </CalendarComponent>
         <TableComponent
+            v-else
             ref="tableComponent"
             :data="tableData"
             :originalData="originalData"

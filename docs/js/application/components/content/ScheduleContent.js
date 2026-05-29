@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect, CalendarLayoutToggle } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 // Schedule Hamburger Menu Component
@@ -58,7 +58,8 @@ export const ScheduleMenuComponent = {
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
-        ScheduleFilterSelect
+        ScheduleFilterSelect,
+        CalendarLayoutToggle
     },
     inject: ['$modal'],
     props: {
@@ -68,12 +69,18 @@ export const ScheduleContent = {
             default: 'schedule'
         }
     },
-    data() {
-        return {
-            filter: null
-        };
-    },
     computed: {
+        cleanContainerPath() {
+            return (this.containerPath || 'schedule').split('?')[0].replace(/\/calendar$/, '');
+        },
+        isCalendarView() {
+            const params = NavigationRegistry.getNavigationParameters(this.containerPath);
+            return params.layout === 'calendar';
+        },
+        // The effective base path for ScheduleFilterSelect URL sync
+        scheduleBasePath() {
+            return this.cleanContainerPath;
+        },
         // Split filter into dateFilters and searchParams for table
         dateFilter() {
             if (!this.filter) return null;
@@ -84,16 +91,16 @@ export const ScheduleContent = {
             return this.filter?.searchParams || null;
         }
     },
+    data() {
+        return {
+            filter: null
+        };
+    },
+
     mounted() {
         // Register schedule navigation routes
         NavigationRegistry.registerNavigation('schedule', {
-            routes: {
-                //advanced-search': {
-                //    displayName: 'Advanced Search',
-                //    dashboardTitle: 'Schedule Advanced Search',
-                //    icon: 'search'
-                //}
-            }
+            routes: {}
         });
 
         // Register hamburger menu for schedule
@@ -153,23 +160,27 @@ export const ScheduleContent = {
     },
     template: html`
         <slot>
-            <!-- Main Schedule View (Year Selector & Results Table) -->
             <div class="schedule-page">
-                <ScheduleTableComponent 
+                <ScheduleTableComponent
                     :filter="dateFilter"
                     :search-params="tableSearchParams"
+                    :calendar-view="isCalendarView"
                     @navigate-to-path="navigateToPath"
                 >
                     <template #header-area>
                         <div class="button-bar">
                             <ScheduleFilterSelect
-                                container-path="schedule"
+                                :container-path="scheduleBasePath"
                                 :include-years="true"
                                 :start-year="2023"
                                 :navigate-to-path="navigateToPath"
                                 :show-advanced-button="true"
                                 default-search="Upcoming"
                                 @search-selected="handleSearchSelected"
+                            />
+                            <CalendarLayoutToggle
+                                :container-path="containerPath"
+                                :navigate-to-path="navigateToPath"
                             />
                         </div>
                     </template>

@@ -22,6 +22,7 @@ export { LoadingBarComponent } from './components/interface/loadingBarComponent.
 export { BannerNotifications } from './components/interface/bannerNotifications.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
+export { CalendarComponent, CalendarLayoutToggle } from './components/interface/calendarComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
 export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } from './components/interface/scheduleFilterComponents.js';
 

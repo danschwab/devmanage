@@ -244,7 +244,7 @@ export const CardsComponent = {
                                 :class="['column-button', { 'active': isPinned(item) }]"
                                 :title="isPinned(item) ? 'Unpin' : 'Pin'"
                             >
-                                <span class="material-symbols-outlined">{{ isPinned(item) ? 'keep_off' : 'keep' }}</span>
+                                <span class="material-symbols-outlined" :title="isPinned(item) ? 'Unpin' : 'Pin'">{{ isPinned(item) ? 'keep' : 'keep_off' }}</span>
                             </button>
                         </slot>
                     </div>

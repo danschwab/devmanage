@@ -4017,7 +4017,7 @@ export const TableComponent = {
                     </template>
                     <template v-else>
                         <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
-                        <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected">🗙</button>
+                        <button @click="handleDeleteSelected" :class="['button-symbol', areAllSelectedMarkedForDeletion ? 'green' : 'red']" title="Delete Selected"><span v-if="areAllSelectedMarkedForDeletion" class="material-symbols-outlined">restore_from_trash</span><span v-else class="material-symbols-outlined">delete</span></button>
                         <button v-if="canCreateGroupFromSelection" @click="handleCreateGroupFromSelection" class="button-symbol white" title="Group Selected Rows">
                             <span class="material-symbols-outlined">cell_merge</span>
                         </button>

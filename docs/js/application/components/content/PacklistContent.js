@@ -930,7 +930,7 @@ export const PacklistContent = {
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
-                        <button v-if="!showPinnedOnly" @click="togglePinnedView" class="button-symbol"><span class="material-symbols-outlined">keep</span></button>
+                        <button v-if="!showPinnedOnly" @click="togglePinnedView" class="button-symbol" title="show pinned and unsaved packlists"><span class="material-symbols-outlined">keep</span></button>
                         <div v-if="showPinnedOnly" class='card' style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">showing pinned or unsaved packlists</div>
                         <button v-if="showPinnedOnly" @click="togglePinnedView" class="small">Back</button>
                     </div>
