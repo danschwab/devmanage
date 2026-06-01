@@ -36,8 +36,8 @@ export const InventoryItemReport = {
                 },
                 { key: 'itemId', label: 'Item#', type: 'item', sortable: true },
                 { key: 'description', label: 'Description', details: true, sortable: true },
-                { key: 'startDate', label: 'Start', sortable: true },
-                { key: 'endDate', label: 'End', sortable: true },
+                { key: 'startDate', label: 'Start', format: 'date', sortable: true },
+                { key: 'endDate', label: 'End', format: 'date', sortable: true },
                 { key: 'inventoryQty', label: 'Inv Qty', format: 'number', sortable: true },
                 {
                     key: 'minQty',

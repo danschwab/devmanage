@@ -57,6 +57,23 @@ export const InventoryItemTimeline = {
                 null,
                 [this.resolvedItemId, effectiveStart, effectiveEnd]
             );
+        },
+        calendarData() {
+            const raw = this.timelineStore?.data ?? [];
+            if (!raw.length) return [];
+            const effectiveEnd = this.endDate || this.filterEndDate || toISODateString(new Date());
+            return raw.map((row, i) => {
+                const nextRow = raw[i + 1];
+                let calendarEnd;
+                if (nextRow && nextRow.date > row.date) {
+                    const d = new Date(nextRow.date + 'T00:00:00');
+                    d.setDate(d.getDate() - 1);
+                    calendarEnd = toISODateString(d);
+                } else {
+                    calendarEnd = nextRow ? row.date : effectiveEnd;
+                }
+                return { ...row, calendarStart: row.date, calendarEnd };
+            });
         }
     },
     watch: {
@@ -141,10 +158,10 @@ export const InventoryItemTimeline = {
         <div>
             <CalendarComponent
                 v-if="isCalendarView"
-                :data="timelineStore?.data ?? []"
+                :data="calendarData"
                 :columns="columns"
-                event-start-column="date"
-                event-end-column="date"
+                event-start-column="calendarStart"
+                event-end-column="calendarEnd"
                 :chip-color-class="chipColorClassProvider"
                 :is-loading="timelineStore?.isLoading ?? false"
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"

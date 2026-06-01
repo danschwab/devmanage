@@ -1474,8 +1474,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 .calendar-chip {
-    background: var(--color-blue-bg);
-    border: 1px solid var(--color-blue);
+    border: 1px solid;
     border-radius: var(--radius-md);
     padding: var(--padding-sm);
     cursor: pointer;
@@ -1490,8 +1489,6 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     z-index: 1;
     margin: 2px;
 }
-.calendar-chip:hover { background: var(--color-blue-bg-hover); }
-.calendar-chip:focus { outline: 2px solid var(--color-primary-light); outline-offset: 1px; }
 
 .calendar-chip.chip-continuation {
     border-radius: 0 var(--radius-md) var(--radius-md) 0;

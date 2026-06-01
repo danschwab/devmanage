@@ -237,28 +237,28 @@ div.green, span.green, col.green, tr.green {
 }
 
 
-div.clickable.white:hover, span.clickable.white:hover, col.clickable.white:hover, tr.clickable.white:hover {
+div.clickable.white:hover, div.clickable.white.hovered, span.clickable.white:hover, col.clickable.white:hover, tr.clickable.white:hover {
     background-color: var(--background-color-hover);
 }
-div.clickable.gray:hover, span.clickable.gray:hover, col.clickable.gray:hover, tr.clickable.gray:hover {
+div.clickable.gray:hover, div.clickable.gray.hovered, span.clickable.gray:hover, col.clickable.gray:hover, tr.clickable.gray:hover {
     background-color: var(--color-gray-bg-hover);
 }
-div.clickable.purple:hover, span.clickable.purple:hover, col.clickable.purple:hover, tr.clickable.purple:hover {
+div.clickable.purple:hover, div.clickable.purple.hovered, span.clickable.purple:hover, col.clickable.purple:hover, tr.clickable.purple:hover {
     background-color: var(--color-purple-bg-hover);
 }
-div.clickable.red:hover, span.clickable.red:hover, col.clickable.red:hover, tr.clickable.red:hover {
+div.clickable.red:hover, div.clickable.red.hovered, span.clickable.red:hover, col.clickable.red:hover, tr.clickable.red:hover {
     background-color: var(--color-red-bg-hover);
 }
-div.clickable.orange:hover, span.clickable.orange:hover, col.clickable.orange:hover, tr.clickable.orange:hover {
+div.clickable.orange:hover, div.clickable.orange.hovered, span.clickable.orange:hover, col.clickable.orange:hover, tr.clickable.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
-div.clickable.yellow:hover, span.clickable.yellow:hover, col.clickable.yellow:hover, tr.clickable.yellow:hover {
+div.clickable.yellow:hover, div.clickable.yellow.hovered, span.clickable.yellow:hover, col.clickable.yellow:hover, tr.clickable.yellow:hover {
     background-color: var(--color-yellow-bg-hover);
 }
-div.clickable.blue:hover, span.clickable.blue:hover, col.clickable.blue:hover, tr.clickable.blue:hover {
+div.clickable.blue:hover, div.clickable.blue.hovered, span.clickable.blue:hover, col.clickable.blue:hover, tr.clickable.blue:hover {
     background-color: var(--color-blue-bg-hover);
 }
-div.clickable.green:hover, span.clickable.green:hover, col.clickable.green:hover, tr.clickable.green:hover {
+div.clickable.green:hover, div.clickable.green.hovered, span.clickable.green:hover, col.clickable.green:hover, tr.clickable.green:hover {
     background-color: var(--color-green-bg-hover);
 }
 

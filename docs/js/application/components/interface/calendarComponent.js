@@ -74,6 +74,7 @@ export const CalendarComponent = {
             stickyLeft: 0,
             stickyWidth: 0,
             stickyHeight: 0,
+            hoveredKey: null
         };
     },
     computed: {
@@ -97,7 +98,7 @@ export const CalendarComponent = {
         parsedEvents() {
             if (!this.data || this.data.length === 0) return [];
             return this.data
-                .map(row => {
+                .map((row, idx) => {
                     const defaultYear = this.yearColumn ? (row[this.yearColumn] || null) : null;
                     const start = parseDate(row[this.eventStartColumn], true, defaultYear);
                     const end = parseDate(row[this.eventEndColumn], true, defaultYear) || start;
@@ -106,7 +107,7 @@ export const CalendarComponent = {
                     const e = end
                         ? new Date(end.getFullYear(), end.getMonth(), end.getDate())
                         : new Date(s);
-                    return { row, start: s, end: e < s ? s : e };
+                    return { row, chipKey: idx, start: s, end: e < s ? s : e };
                 })
                 .filter(Boolean);
         },
@@ -151,6 +152,7 @@ export const CalendarComponent = {
 
                     segments.push({
                         row: event.row,
+                        chipKey: event.chipKey,
                         startIdx: startIdx >= 0 ? startIdx : 0,
                         endIdx: endIdx >= 0 ? endIdx : 6,
                         isStart: this._sameDay(event.start, segStartDate),
@@ -280,14 +282,13 @@ export const CalendarComponent = {
             return `${seg.startIdx + 1} / ${seg.endIdx + 2}`;
         },
         chipClasses(seg) {
-            const cls = [];
+            const cls = ['clickable'];
             if (!seg.isStart) cls.push('chip-continuation');
             if (!seg.isEnd) cls.push('chip-continues');
             if (seg.row && seg.row.AppData && seg.row.AppData._analyzing) cls.push('analyzing');
-            if (this.chipColorClass) {
-                const colorCls = this.chipColorClass(seg.row);
-                if (colorCls) cls.push(colorCls);
-            }
+            const colorCls = this.chipColorClass ? this.chipColorClass(seg.row) : '';
+            cls.push(colorCls || 'blue');
+            if (this.hoveredKey !== null && this.hoveredKey === seg.chipKey) cls.push('hovered');
             return cls;
         },
         chipTitle(row) {
@@ -409,6 +410,8 @@ export const CalendarComponent = {
                             :style="{ gridColumn: chipGridColumn(seg), gridRow: '1' }"
                             :title="chipTitle(seg.row)"
                             tabindex="0"
+                            @mouseenter="hoveredKey = seg.chipKey"
+                            @mouseleave="hoveredKey = null"
                             @click="handleEventClick(seg.row)"
                             @keydown="handleKeyDown($event, seg.row)"
                         >
