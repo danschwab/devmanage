@@ -486,9 +486,14 @@ export const InventoryTableComponent = {
                 {
                     key: 'lock',
                     color: '',
-                    message: `Locked for edit by: ${this.lockOwnerDisplay}`,
+                    message: this.lockedBySelf
+                        ? 'You have this table open for editing on another device.'
+                        : `Locked for edit by: ${this.lockOwnerDisplay}`,
                     visible: this.lockedByOther,
-                    dismissible: false
+                    dismissible: false,
+                    action: this.lockedBySelf
+                        ? { label: 'Claim this device', fn: () => this.claimLock() }
+                        : null
                 },
                 {
                     key: 'conflict',

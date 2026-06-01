@@ -12,11 +12,13 @@ if (isLocalhost()) {
 }
 
 function isActiveLockTimestamp(timestamp) {
-    return !!(timestamp && timestamp !== '0');
+    const ts = timestamp?.split('|')[0];
+    return !!(ts && ts !== '0');
 }
 
 function toLockTimestampMs(timestamp) {
-    const ms = new Date(timestamp).getTime();
+    const ts = (timestamp || '').split('|')[0];
+    const ms = new Date(ts).getTime();
     return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
 }
 
@@ -283,7 +285,7 @@ class applicationUtils_uncached {
      * @param {string} user - The user email claiming the lock
      * @returns {Promise<boolean>} Success status
      */
-    static async lockSheet(spreadsheet, tab, user) {
+    static async lockSheet(spreadsheet, tab, user, deviceId = null) {
         try {
             //console.log(`[lockSheet] START: ${spreadsheet}/${tab} for ${user}`);
             const timestamp = new Date().toISOString();
@@ -326,11 +328,12 @@ class applicationUtils_uncached {
                 //console.log(`[lockSheet] User column written successfully`);
             }
             
-            // Write timestamp to the specific cell (single cell write)
+            // Write timestamp (with optional deviceId) to the specific cell (single cell write)
             const cellRow = lockRowIndex + 2; // +2 for header row (1-indexed)
             const cellCol = userColIndex + 2; // +2 for Lock Key column (1-indexed)
+            const cellValue = deviceId ? `${timestamp}|${deviceId}` : timestamp;
             //console.log(`[lockSheet] Writing timestamp to R${cellRow}C${cellCol}`);
-            await this._writeLockCell(cellRow, cellCol, timestamp);
+            await this._writeLockCell(cellRow, cellCol, cellValue);
             //console.log(`[lockSheet] Timestamp written successfully`);
             
             // Invalidate getSheetLock cache so UI components see the new lock
@@ -752,7 +755,8 @@ class applicationUtils_uncached {
                 
                 // Process each user column for this lock key
                 for (let j = 1; j < row.length; j++) {
-                    const timestamp = row[j];
+                    const cellValue = row[j] || '';
+                    const [timestamp, deviceId] = cellValue.split('|');
                     const userEmail = users[j - 1]; // -1 because users is sliced
                     
                     if (!userEmail) continue;
@@ -762,7 +766,8 @@ class applicationUtils_uncached {
                         user: userEmail,
                         spreadsheet: spreadsheet,
                         tab: tab,
-                        timestamp: timestamp || null
+                        timestamp: timestamp || null,
+                        deviceId: deviceId || null
                     });
                 }
             }

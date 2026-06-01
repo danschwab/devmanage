@@ -1,4 +1,4 @@
-import { Requests, authState, CacheInvalidationBus } from '../index.js';
+import { Requests, authState, CacheInvalidationBus, getDeviceId } from '../index.js';
 
 /**
  * sheetLockMixin — Vue Options API mixin for sheet-level write-lock management.
@@ -36,9 +36,11 @@ import { Requests, authState, CacheInvalidationBus } from '../index.js';
  *     recovery (e.g. InventoryTable prompting the user to refresh).
  *
  * ─── PROVIDED ────────────────────────────────────────────────────────────────
- * data:    isLocked, lockingInProgress, lockedByOther, lockOwner, lockCheckComplete
+ * data:    isLocked, lockingInProgress, lockedByOther, lockedBySelf, lockOwner, lockCheckComplete
+ *            lockedBySelf — true when lockedByOther is true but the lock owner is the current user
+ *            on a different device. Lets components show a device-specific message and Claim action.
  * computed: lockOwnerDisplay
- * methods: setLockState, checkLockStatus, handleLockState
+ * methods: setLockState, checkLockStatus, handleLockState, claimLock
  */
 export const sheetLockMixin = {
     data() {
@@ -46,6 +48,7 @@ export const sheetLockMixin = {
             isLocked: false,
             lockingInProgress: false,
             lockedByOther: false,
+            lockedBySelf: false,
             lockOwner: null,
             lockCheckComplete: false
         };
@@ -100,12 +103,14 @@ export const sheetLockMixin = {
     },
 
     methods: {
-        setLockState(isLocked, owner = null) {
+        setLockState(isLocked, owner = null, isSelf = false) {
             const wasLockedByOther = this.lockedByOther;
             const previousOwner = this.lockOwner;
 
             this.isLocked = isLocked;
-            this.lockedByOther = !!(owner && owner !== authState.user?.email);
+            this.lockedBySelf = isSelf;
+            // isSelf means same user, different device — treat as foreign lock for all edit guards
+            this.lockedByOther = !!(owner && (owner !== authState.user?.email || isSelf));
             this.lockOwner = owner;
 
             // When a foreign lock appears while this table has no unsaved changes,
@@ -146,6 +151,14 @@ export const sheetLockMixin = {
                 }
 
                 if (lockInfo && lockInfo.user === user) {
+                    // Lock belongs to this user — check whether it's from a different device.
+                    // If so, don't release it: that would destroy the other session's work.
+                    // Instead block editing on this device and show the "Claim" banner.
+                    if (lockInfo.deviceId && lockInfo.deviceId !== getDeviceId()) {
+                        this.setLockState(false, user, true); // isSelf = true
+                        return;
+                    }
+
                     this.setLockState(true, user);
 
                     // Wait for store to finish its initial load before deciding whether
@@ -203,7 +216,7 @@ export const sheetLockMixin = {
 
             try {
                 if (isDirty && !this.isLocked) {
-                    const lockAcquired = await Requests.lockSheet(this.lockNamespace, this.lockKey, user);
+                    const lockAcquired = await Requests.lockSheet(this.lockNamespace, this.lockKey, user, getDeviceId());
                     if (lockAcquired) {
                         this.setLockState(true, user);
                     } else {
@@ -235,6 +248,27 @@ export const sheetLockMixin = {
             }
         },
 
+        /**
+         * Claims this sheet's write-lock for the current device.
+         *
+         * Writes a new lock cell value with this device's ID, then applies any
+         * autosave backup from the previous session so edits are not lost.
+         * Finally refreshes lock state so the banner clears.
+         */
+        async claimLock() {
+            const user = authState.user?.email;
+            if (!user || !this.lockKey) return;
+
+            await Requests.lockSheet(this.lockNamespace, this.lockKey, user, getDeviceId());
+
+            // Restore the other device's last autosave onto this device's store
+            if (this.activeStore?.applyLatestBackup) {
+                await this.activeStore.applyLatestBackup();
+            }
+
+            await this.checkLockStatus();
+        },
+
         async acquireLockForEdit() {
             const user = authState.user?.email;
             if (!user || !this.lockKey) return false;
@@ -247,7 +281,7 @@ export const sheetLockMixin = {
                     return false;
                 }
 
-                const lockAcquired = await Requests.lockSheet(this.lockNamespace, this.lockKey, user);
+                const lockAcquired = await Requests.lockSheet(this.lockNamespace, this.lockKey, user, getDeviceId());
                 if (lockAcquired) {
                     this.setLockState(true, user);
                     return true;

@@ -326,8 +326,8 @@ class Requests_uncached {
      * @param {string} user - The user email claiming the lock
      * @returns {Promise<boolean>} Success status
      */
-    static async lockSheet(spreadsheet, tab, user) {
-        return await ApplicationUtils.lockSheet(spreadsheet, tab, user);
+    static async lockSheet(spreadsheet, tab, user, deviceId = null) {
+        return await ApplicationUtils.lockSheet(spreadsheet, tab, user, deviceId);
     }
     
     /**

@@ -936,6 +936,26 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 return;
             }
             await this.load('Reloading data due to invalidation...');
+        },
+        /**
+         * Re-applies the most recent autosave backup for this store's key.
+         * Called by sheetLockMixin.claimLock() so that claiming a lock on this
+         * device also picks up the autosaved work from the previous device.
+         * @returns {Promise<boolean>} True if a backup was found and applied, false otherwise.
+         */
+        async applyLatestBackup() {
+            const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
+            const backupInfo = await loadStoreBackupFromUserData(storeKey);
+            if (!backupInfo) return false;
+            if (backupInfo.mode === 'diff') {
+                const restoredData = applyDiffToData(this.data, backupInfo.diff);
+                this.setData(restoredData);
+            } else if (backupInfo.mode === 'full') {
+                this.setData(backupInfo.data);
+            }
+            this.loadedBackupKey = backupInfo.key || null;
+            this.autoSaved = true;
+            return true;
         }
     });
 

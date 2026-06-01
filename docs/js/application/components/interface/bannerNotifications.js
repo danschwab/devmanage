@@ -98,6 +98,11 @@ export const BannerNotifications = {
                 <div :class="['banner-notification', 'card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5em;">
                     <span>{{ banner.message }}</span>
                     <button
+                        v-if="banner.action"
+                        @click="banner.action.fn()"
+                        :class="['column-button', banner.color]"
+                    >{{ banner.action.label }}</button>
+                    <button
                         v-if="banner.dismissible !== false"
                         @click="dismiss(banner.key)"
                         title="Dismiss"

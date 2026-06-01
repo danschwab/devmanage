@@ -263,9 +263,14 @@ export const PacklistTable = {
                 {
                     key: 'lock',
                     color: '',
-                    message: `Locked for edit by: ${this.lockOwnerDisplay}`,
+                    message: this.lockedBySelf
+                        ? 'You have this pack list open for editing on another device.'
+                        : `Locked for edit by: ${this.lockOwnerDisplay}`,
                     visible: this.lockedByOther && !this.isPrinting,
-                    dismissible: false
+                    dismissible: false,
+                    action: this.lockedBySelf
+                        ? { label: 'Claim this device', fn: () => this.claimLock() }
+                        : null
                 },
                 {
                     key: 'conflict',
