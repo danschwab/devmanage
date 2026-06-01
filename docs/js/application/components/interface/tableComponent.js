@@ -3595,24 +3595,15 @@ export const TableComponent = {
                     return; // Skip clearing - multiselect or drag just finished
                 }
                 
-                // Check if click was inside any table row at all
-                const clickedRow = clickedElement.closest('tr');
-                const clickedTable = clickedElement.closest('table');
-                
-                // If not clicking inside any table, don't clear selections (keep selections for UI elements)
-                if (!clickedTable && !clickedRow) {
-                    return;
-                }
-                
                 // Check if click was on a drag handle
                 const clickedDragHandle = clickedElement.closest('.row-drag-handle');
                 
                 // Check if click was on the selection bubble
                 const clickedSelectionBubble = clickedElement.closest('.selection-action-bubble');
                 
-                // Clear selections for any click inside a table that isn't on a drag handle or selection bubble.
-                // Clicking a drag handle is the only table interaction that intentionally toggles/builds selections.
-                if (!clickedDragHandle && !clickedSelectionBubble && (clickedTable || clickedRow)) {
+                // Clear selections for any click that isn't on a drag handle or selection bubble —
+                // including clicks outside all tables. Drag handles are the only way to build/extend selections.
+                if (!clickedDragHandle && !clickedSelectionBubble) {
                     // Capture state before clearing for undo
                     if (tableRowSelectionState.currentRouteKey) {
                         // Get all unique arrays involved in selections
