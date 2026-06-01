@@ -340,6 +340,21 @@ export const ShowInventoryReport = {
             ], true);
         },
 
+        navigateToItemPage(row) {
+            if (!row.tabName || !row.itemId) return;
+            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const dateFilters = this.referenceDate
+                ? [
+                    { column: 'Show Date', value: this.referenceDate, type: 'after' },
+                    ...(this.endDate ? [{ column: 'Show Date', value: this.endDate, type: 'before' }] : [])
+                  ]
+                : null;
+            const finalPath = dateFilters
+                ? NavigationRegistry.buildPath(basePath, { dateFilters })
+                : basePath;
+            this.navigateToPath(finalPath);
+        },
+
         handleCategorySelected(categoryName) {
             console.log('[ShowInventoryReport] handleCategorySelected called with:', categoryName);
             console.log('[ShowInventoryReport] Current state:', {
@@ -420,9 +435,9 @@ export const ShowInventoryReport = {
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">
                         <button v-if="row.tabName" 
-                                @click="navigateToPath(NavigationRegistry.buildPath('inventory/categories/' + row.tabName.toLowerCase(), { searchTerm: row.itemId }))"
+                                @click="navigateToItemPage(row)"
                                 class="purple"
-                                :title="'Search for ' + row.itemId + ' in ' + row.tabName">
+                                :title="'View timeline for ' + row.itemId">
                             {{ row.itemId }}
                         </button>
                         <span v-else>{{ row.itemId }}</span>

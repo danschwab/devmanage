@@ -235,6 +235,21 @@ export const InventoryItemReport = {
             this.initializeReportStore();
         },
 
+        navigateToItemPage(row) {
+            if (!row.tabName || !row.itemId) return;
+            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const dateFilters = (row.startDate || row.endDate)
+                ? [
+                    ...(row.startDate ? [{ column: 'Show Date', value: row.startDate, type: 'after'  }] : []),
+                    ...(row.endDate   ? [{ column: 'Show Date', value: row.endDate,   type: 'before' }] : [])
+                  ]
+                : null;
+            const finalPath = dateFilters
+                ? NavigationRegistry.buildPath(basePath, { dateFilters })
+                : basePath;
+            this.navigateToPath(finalPath);
+        },
+
         handleCategorySelected(categoryName) {
             this.itemCategoryFilter = categoryName || null;
             if (this.searchFilter || this.searchParams) {
@@ -287,7 +302,7 @@ export const InventoryItemReport = {
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />
-                        <input type="number" title="Minimum Quantity Shown" v-model.number="minQtyThreshold" style="width:60px" />
+                        <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" v-model.number="minQtyThreshold" style="width:60px" />
                     </div>
                 </template>
 
@@ -301,9 +316,9 @@ export const InventoryItemReport = {
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">
                         <button v-if="row.tabName"
-                                @click="navigateToPath(NavigationRegistry.buildPath('inventory/categories/' + row.tabName.toLowerCase(), { searchTerm: row.itemId }))"
+                                @click="navigateToItemPage(row)"
                                 class="purple"
-                                :title="'Search for ' + row.itemId + ' in ' + row.tabName">
+                                :title="'View timeline for ' + row.itemId">
                             {{ row.itemId }}
                         </button>
                         <span v-else>{{ row.itemId }}</span>
