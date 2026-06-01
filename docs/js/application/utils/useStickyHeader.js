@@ -4,6 +4,31 @@
  * Handles scroll and resize listener lifecycle and the activation check shared
  * by TableComponent (.sticky-header-wrapper) and CalendarComponent (.calendar-sticky-top).
  *
+ * CONSUMERS: tableComponent, calendarComponent, cardsComponent
+ *
+ * DOM PATTERN (tableComponent / cardsComponent):
+ *   .sticky-header-spacer  — always in flow; height:0 inactive, wrapper.offsetHeight active.
+ *                            Used as getAnchorEl for a position-stable activation trigger.
+ *                            If padding-bottom is needed below the header, add it to the
+ *                            wrapper's inactive style so offsetHeight includes it, preserving
+ *                            the gap when the spacer takes over.
+ *   .sticky-header-wrapper — position:fixed when active, normal flow otherwise.
+ *   [data container]       — always in flow below the wrapper.
+ *
+ * FRAGMENT-ROOT COMPONENTS (cardsComponent uses <slot> as template root):
+ *   this.$el is a text/comment node — querySelector fails. Use $refs on each element instead.
+ *   Also, fragment children become direct flex items of the parent (#app-content has gap),
+ *   so the 0-height spacer generates an extra gap. Wrap template content in a real <div>.
+ *
+ * DEACTIVATION BOUNDARIES — pass getContainerEl as an array to check multiple limits:
+ *   tableComponent:   [tableWrapper, .container ancestor]
+ *   calendarComponent:[this.$el, .container ancestor]
+ *   cardsComponent:   [$refs.cardsGridEl, stickySpacerEl.closest('.container')]
+ *
+ * OSCILLATION GUARD — _peakStickyHeight caches the max wrapper height seen so the
+ *   container-bottom threshold doesn't shrink when a clone/child is removed, which
+ *   would otherwise cause rapid activate/deactivate cycling at the data boundary.
+ *
  * @param {Object}   options
  * @param {Function} options.getStickyEl    () => the element to make sticky (used for height/top measurement)
  * @param {Function} [options.getAnchorEl]  () => stable reference element whose top is used for the activation

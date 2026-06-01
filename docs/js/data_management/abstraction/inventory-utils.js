@@ -774,6 +774,30 @@ class inventoryUtils_uncached {
     }
 
     /**
+     * Get the minimum inventory quantity for an item over a date range.
+     * Delegates to getItemTimeline and returns the lowest quantity value seen.
+     * @param {Object} deps
+     * @param {string} itemId
+     * @param {string|null} startDate - ISO date string (YYYY-MM-DD)
+     * @param {string|null} endDate - ISO date string (YYYY-MM-DD)
+     * @returns {Promise<number|null>} Minimum quantity in the range, or null if no data
+     */
+    static async getItemMinQuantityInRange(deps, itemId, startDate, endDate) {
+        if (!itemId) return null;
+        // getItemTimeline only includes show ship/return events when both dates are provided.
+        // Use a 2-year fallback so the full demand window is always evaluated.
+        let effectiveEnd = endDate;
+        if (!effectiveEnd) {
+            const d = new Date();
+            d.setFullYear(d.getFullYear() + 2);
+            effectiveEnd = toISODateString(d);
+        }
+        const events = await deps.call(InventoryUtils.getItemTimeline, itemId, startDate, effectiveEnd);
+        const quantities = events.map(e => e.quantity).filter(q => q !== null && q !== undefined && !isNaN(q));
+        return quantities.length > 0 ? Math.min(...quantities) : null;
+    }
+
+    /**
      * Remove a pending change entry by effectiveDateDeciseconds from matching rows
      * and save the updated EditHistory back. Mutation — uncached.
      * @param {string} tabOrItemName

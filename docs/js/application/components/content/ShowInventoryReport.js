@@ -15,7 +15,8 @@ export const ShowInventoryReport = {
     data() {
         return {
             reportStore: null,
-            referenceDate: null, // ISO date derived from the active schedule filter
+            referenceDate: null, // ISO date derived from the active schedule filter (start)
+            endDate: null, // ISO date derived from the active schedule filter (end)
             itemCategoryFilter: null, // Optional filter for item categories (string or null)
             searchFilter: null, // Schedule filter parameters
             searchParams: null, // Text search parameters
@@ -54,19 +55,16 @@ export const ShowInventoryReport = {
                 { key: 'available', label: 'Inv Qty.', sortable: true },
             ];
             
-            // Add remaining column with custom cellClass function (before show columns)
-            const remainingColumn = {
-                key: 'remaining',
-                label: 'Remaining',
+            // Add minQty column with custom cellClass function (before show columns)
+            const minQtyColumn = {
+                key: 'minQty',
+                label: 'Min Qty',
                 format: 'number',
-                columnClass: 'green',
                 sortable: true,
-                cellClass: (value, row) => {
-                    // Use the pre-computed remaining value from row data
-                    const remaining = row.remaining;
-                    if (remaining === null || remaining === undefined) return '';
-                    if (remaining < 0) return 'red';
-                    if (remaining < 5) return 'orange';
+                cellClass: (value) => {
+                    if (value === null || value === undefined) return '';
+                    if (value < 0) return 'red';
+                    if (value === 0) return 'orange';
                     return '';
                 }
             };
@@ -106,7 +104,7 @@ export const ShowInventoryReport = {
                 };
             });
             
-            return [...baseColumns, remainingColumn, ...showColumns];
+            return [...baseColumns, minQtyColumn, ...showColumns];
         },
         
         isLoading() {
@@ -123,7 +121,7 @@ export const ShowInventoryReport = {
             return data.map(row => {
                 const enhancedRow = {
                     ...row,
-                    remaining: this.calculateRemaining(row)
+                    minQty: row.minQty ?? null
                 };
                 
                 // Flatten show data for sorting - add show quantities as direct properties
@@ -196,22 +194,32 @@ export const ShowInventoryReport = {
                 filter.dateFilters = searchData.dateFilters;
             }
 
-            // Derive a referenceDate from the Ship filter (start of the range)
-            const shipFilter = searchData.dateFilters?.find(f => f.column === 'Ship');
-            if (shipFilter) {
-                if (typeof shipFilter.value === 'number') {
+            // Mirror InventoryItemTimeline: read top-level resolved dates first, then fall back
+            // to dateFilters. ScheduleFilterSelect resolves 'Show Date' column filters into
+            // top-level startDate/endDate; Ship-column filters must be resolved here manually.
+            const offsetToDate = (v) => {
+                if (typeof v === 'number') {
                     const d = new Date();
-                    d.setDate(d.getDate() + shipFilter.value);
-                    this.referenceDate = toISODateString(d);
-                } else if (typeof shipFilter.value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(shipFilter.value)) {
-                    this.referenceDate = shipFilter.value;
-                } else {
-                    this.referenceDate = todayISOString();
+                    d.setDate(d.getDate() + v);
+                    return toISODateString(d);
                 }
-            } else {
-                this.referenceDate = todayISOString();
+                if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+                return null;
+            };
+
+            let resolvedStart = searchData?.startDate ?? null;
+            let resolvedEnd   = searchData?.endDate   ?? null;
+
+            if (!resolvedStart || !resolvedEnd) {
+                const shipAfterFilter  = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'after');
+                const shipBeforeFilter = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'before');
+                if (!resolvedStart) resolvedStart = offsetToDate(shipAfterFilter?.value);
+                if (!resolvedEnd)   resolvedEnd   = offsetToDate(shipBeforeFilter?.value);
             }
-            
+
+            this.referenceDate = resolvedStart ?? todayISOString();
+            this.endDate = resolvedEnd ?? null;
+
             // Apply text filters
             if (searchData.textFilters && searchData.textFilters.length > 0) {
                 searchData.textFilters.forEach(textFilter => {
@@ -249,8 +257,19 @@ export const ShowInventoryReport = {
                 return;
             }
             
-            // Build analysis config (only for tab name and inventory quantity)
+            // Build analysis config
             const analysisConfig = [
+                // Compute minimum inventory quantity over the filter date range
+                createAnalysisConfig(
+                    Requests.getItemMinQuantityInRange,
+                    'minQty',
+                    'Computing minimum quantities...',
+                    ['itemId'],
+                    [this.referenceDate, this.endDate],
+                    'minQty',
+                    false,
+                    Priority.USER_ACTION
+                ),
                 // Get inventory tab name for each item
                 createAnalysisConfig(
                     Requests.getTabNameForItem,
@@ -304,26 +323,6 @@ export const ShowInventoryReport = {
             );
             
             this.error = null;
-        },
-
-        // Calculate remaining quantity for a row
-        calculateRemaining(row) {
-            if (!row) {
-                return null;
-            }
-            
-            let available = 0;
-            //if row.available is a number, then use it directly
-            if (typeof row.available === 'number') {
-                available = row.available;
-            }
-
-            const totalUsed = Object.values(row.shows || {}).reduce(
-                (sum, qty) => sum + (qty || 0), 
-                0
-            );
-            
-            return row.available - totalUsed;
         },
 
         async handleSearchSelected(searchData) {

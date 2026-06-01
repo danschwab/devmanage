@@ -1811,6 +1811,14 @@ export const ScheduleFilterSelect = {
         }
     },
     template: html`
+        <button 
+            v-if="showAdvancedButton" 
+            class="button-symbol"
+            title="Schedule filtering options"
+            @click="openAdvancedSearchModal"
+        >
+            <span class="material-symbols-outlined">settings</span>
+        </button>
         <select 
             :value="selectedValue"
             @change="handleChange"
@@ -1831,14 +1839,6 @@ export const ScheduleFilterSelect = {
             <option value="custom" :disabled="!showAdvancedButton">Custom</option>
         </select>
         <ScheduleDateRangeCard v-if="containerPath" :container-path="containerPath" />
-        <button 
-            v-if="showAdvancedButton" 
-            class="button-symbol"
-            title="Schedule filtering options"
-            @click="openAdvancedSearchModal"
-        >
-            <span class="material-symbols-outlined">calendar_month</span>
-        </button>
     `
 };
 

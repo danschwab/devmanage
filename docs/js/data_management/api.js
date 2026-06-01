@@ -655,6 +655,18 @@ class Requests_uncached {
     }
 
     /**
+     * Get the minimum inventory quantity for an item over a date range.
+     * @param {Object} deps
+     * @param {string} itemId
+     * @param {string|null} startDate - ISO date string (YYYY-MM-DD)
+     * @param {string|null} endDate - ISO date string (YYYY-MM-DD)
+     * @returns {Promise<number|null>}
+     */
+    static async getItemMinQuantityInRange(deps, itemId, startDate, endDate) {
+        return await deps.call(InventoryUtils.getItemMinQuantityInRange, itemId, startDate, endDate);
+    }
+
+    /**
      * Check if a packlist exists for a schedule row
      * Used by reactive store analysis to enrich schedule data with packlist information
      * @param {Object} deps - Dependency decorator for tracking calls
