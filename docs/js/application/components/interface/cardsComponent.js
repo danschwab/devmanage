@@ -1,5 +1,6 @@
 import { html, LoadingBarComponent, NavigationRegistry } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
+import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
@@ -98,7 +99,13 @@ export const CardsComponent = {
         };
     },
     data() {
-        return {};
+        return {
+            stickyActive: false,
+            stickyTop: 0,
+            stickyLeft: 0,
+            stickyWidth: 0,
+            stickySpacerHeight: 0,
+        };
     },
     computed: {
         shouldShowEmpty() {
@@ -145,6 +152,34 @@ export const CardsComponent = {
         // Initialize search from URL and setup watcher if syncSearchWithUrl is enabled
         this.search.initializeFromUrl();
         this.search.setupUrlWatcher();
+
+        this._stickyHeader = useStickyHeader({
+            getStickyEl: () => this.$refs.stickyWrapperEl,
+            getAnchorEl: () => this.$refs.stickySpacerEl,
+            getContainerEl: () => [
+                this.$refs.cardsGridEl,
+                this.$refs.stickySpacerEl?.closest('.container'),
+            ].filter(Boolean),
+            getIsActive: () => this.stickyActive,
+            onActivate: (navBottom) => {
+                const wrapper = this.$refs.stickyWrapperEl;
+                if (!this.stickyActive) {
+                    this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
+                }
+                const rect = wrapper ? wrapper.getBoundingClientRect() : null;
+                this.stickyActive = true;
+                this.stickyTop = navBottom;
+                this.stickyLeft = rect ? rect.left : 0;
+                this.stickyWidth = rect ? rect.width : 0;
+            },
+            onDeactivate: () => {
+                this.stickyActive = false;
+            },
+        });
+        this._stickyHeader.setup();
+    },
+    beforeUnmount() {
+        this._stickyHeader?.teardown();
     },
     methods: {
         
@@ -183,7 +218,11 @@ export const CardsComponent = {
     },
     template: html`
         <slot>
-            <div key="content-header" v-if="showHeader" class="content-header">
+            <div style="width: 100%;">
+            <template v-if="showHeader">
+            <div ref="stickySpacerEl" class="sticky-header-spacer" :style="{ height: stickyActive ? stickySpacerHeight + 'px' : '0' }"></div>
+            <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', top: stickyTop + 'px', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { paddingBottom: 'var(--padding-md)' }">
+            <div key="content-header" class="content-header">
                 <slot 
                     name="header-area" 
                 ></slot>
@@ -224,9 +263,11 @@ export const CardsComponent = {
                     class="embedded"
                 />
             </div>
+            </div>
+            </template>
 
             <!-- Cards Grid (shows during analysis with progressive updates) -->
-            <div v-if="shouldShowCards" class="cards-grid">
+            <div ref="cardsGridEl" v-if="shouldShowCards" class="cards-grid">
                 <div
                     v-for="(item, idx) in visibleCards"
                     :key="item.id || item.title"
@@ -274,6 +315,7 @@ export const CardsComponent = {
                 <p>{{ loadingMessage || 'Loading...' }}</p>
             </div>
             <p v-else-if="shouldShowEmpty" class="empty-message">{{ emptyMessage }}</p>
+            </div>
         </slot>
     `
 };

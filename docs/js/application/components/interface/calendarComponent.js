@@ -1,5 +1,6 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
+import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 export const CalendarLayoutToggle = {
     name: 'CalendarLayoutToggle',
@@ -54,7 +55,8 @@ export const CalendarComponent = {
         eventEndColumn: { type: String, required: true },
         weekStart: { type: String, default: 'sunday' },
         yearColumn: { type: String, default: null },
-        chipActions: { type: Function, default: null }
+        chipActions: { type: Function, default: null },
+        chipColorClass: { type: Function, default: null }
     },
     emits: ['refresh', 'event-click'],
     setup(props) {
@@ -213,20 +215,31 @@ export const CalendarComponent = {
         if (this.parentSearchValue) {
             this.search.searchValue.value = this.parentSearchValue;
         }
-        const appContent = document.querySelector('#app-content');
-        if (appContent) {
-            this._handleStickyScroll = () => this._updateStickyHeader();
-            appContent.addEventListener('scroll', this._handleStickyScroll, { passive: true });
-            window.addEventListener('resize', this._handleStickyScroll, { passive: true });
-            this.$nextTick(() => this._updateStickyHeader());
-        }
+        this._stickyHeader = useStickyHeader({
+            getStickyEl: () => this.$el?.querySelector('.calendar-sticky-top'),
+            getSpacerEl: () => this.$el?.querySelector('.calendar-sticky-spacer'),
+            getContainerEl: () => [
+                this.$el,
+                this.$el?.closest('.container'),
+            ].filter(Boolean),
+            getIsActive: () => this.stickyActive,
+            onActivate: (navBottom) => {
+                const stickyEl = this.$el?.querySelector('.calendar-sticky-top');
+                const rect = this.$el?.getBoundingClientRect();
+                this.stickyHeight = stickyEl ? stickyEl.offsetHeight : 0;
+                this.stickyActive = true;
+                this.stickyTop = navBottom;
+                this.stickyLeft = rect ? rect.left : 0;
+                this.stickyWidth = rect ? rect.width : 0;
+            },
+            onDeactivate: () => {
+                this.stickyActive = false;
+            },
+        });
+        this._stickyHeader.setup();
     },
     beforeUnmount() {
-        const appContent = document.querySelector('#app-content');
-        if (appContent && this._handleStickyScroll) {
-            appContent.removeEventListener('scroll', this._handleStickyScroll);
-            window.removeEventListener('resize', this._handleStickyScroll);
-        }
+        this._stickyHeader?.teardown();
     },
     watch: {
         parentSearchValue(val) {
@@ -271,6 +284,10 @@ export const CalendarComponent = {
             if (!seg.isStart) cls.push('chip-continuation');
             if (!seg.isEnd) cls.push('chip-continues');
             if (seg.row && seg.row.AppData && seg.row.AppData._analyzing) cls.push('analyzing');
+            if (this.chipColorClass) {
+                const colorCls = this.chipColorClass(seg.row);
+                if (colorCls) cls.push(colorCls);
+            }
             return cls;
         },
         chipTitle(row) {
@@ -290,29 +307,6 @@ export const CalendarComponent = {
         },
         handleRefresh() {
             this.$emit('refresh');
-        },
-        _updateStickyHeader() {
-            const stickyEl = this.$el.querySelector('.calendar-sticky-top');
-            const spacer = this.$el.querySelector('.calendar-sticky-spacer');
-            const navbar = document.querySelector('#navbar');
-            if (!stickyEl) return;
-            const navBottom = navbar ? navbar.getBoundingClientRect().bottom : 0;
-            // When active, measure the spacer (which stays in flow); otherwise measure the element itself
-            const flowEl = this.stickyActive ? spacer : stickyEl;
-            if (!flowEl) return;
-            const flowTop = flowEl.getBoundingClientRect().top;
-            const calendarRect = this.$el.getBoundingClientRect();
-            const shouldStick = flowTop < navBottom &&
-                                calendarRect.bottom > navBottom + stickyEl.offsetHeight;
-            if (shouldStick) {
-                this.stickyHeight = stickyEl.offsetHeight;
-                this.stickyTop = navBottom;
-                this.stickyLeft = calendarRect.left;
-                this.stickyWidth = calendarRect.width;
-                this.stickyActive = true;
-            } else {
-                this.stickyActive = false;
-            }
         },
         getChipInlineCards(row, colKey) {
             if (!this.chipActions) return [];

@@ -1,5 +1,6 @@
 import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
+import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 // Component for the external clipboard paste modal.
 // Shows row count, optional table selector, and Paste/Cancel buttons.
@@ -410,8 +411,6 @@ export const tableRowSelectionState = Vue.reactive({
         let insertPosition;
         if (dropTarget.type === 'header') {
             insertPosition = 0;
-        } else if (dropTarget.type === 'footer') {
-            insertPosition = this.dragTargetArray.length;
         } else if (dropTarget.type === 'between') {
             insertPosition = dropTarget.targetIndex;
         } else {
@@ -1249,11 +1248,6 @@ export const tableRowSelectionState = Vue.reactive({
         //console.log('dropTarget.type:', dropTarget.type);
         if (dropTarget.type === 'header') {
             insertPosition = 0;
-        } else if (dropTarget.type === 'footer') {
-            // For footer drops, insert after the last element (at the end of the array)
-            insertPosition = this.dragTargetArray.length;
-            // Mark selected rows for deletion after footer drop completes
-            this.markSelectedForDeletion(true);
         } else if (dropTarget.type === 'between') {
             insertPosition = dropTarget.targetIndex;
         } else {
@@ -1654,7 +1648,12 @@ export const TableComponent = {
             lastKnownMouseY: null,
             mouseMoveCounter: 0,
             hiddenColumns: [], // Reactive property for dynamically hiding columns (internal use only)
-            showStickyHeader: false, // Controls visibility of sticky header
+            showStickyHeader: false, // Controls visibility of sticky header clone
+            stickyActive: false, // Controls fixed positioning of sticky wrapper
+            stickyTop: 0,
+            stickyLeft: 0,
+            stickyWidth: 0,
+            stickySpacerHeight: 0, // Measured height of wrapper before clone is added
             stickyColumnWidths: [], // Store actual column widths from original table
             hideRowsOnSearchLocal: this.hideRowsOnSearch // Runtime toggle for hide-rows-on-search behavior
         };
@@ -2112,84 +2111,49 @@ export const TableComponent = {
         }
         
         // Set up sticky header positioning
-        const appContent = document.querySelector('#app-content');
-        if (appContent) {
-            this.handleStickyHeaders = () => {
-                const thead = this.$el.querySelector('thead');
-                if (!thead) return;
-
-                const table = this.$el.querySelector('table');
-                if (!table) return;
-
-                // Get navbar bottom position for sticky offset
-                const navbar = document.querySelector('#navbar');
-                const stickyOffset = navbar ? navbar.getBoundingClientRect().bottom : 0;
-
-                // Get positions
-                const tableRect = table.getBoundingClientRect();
-                const theadRect = thead.getBoundingClientRect();
-
-                // Capture actual column widths from the original table header
-                const headerCells = thead.querySelectorAll('th');
-                this.stickyColumnWidths = Array.from(headerCells).map(th => {
-                    const rect = th.getBoundingClientRect();
-                    return rect.width;
-                });
-
-                // Find the closest .container ancestor
-                let containerEl = table.closest('.container');
-                if (!containerEl) {
-                    // Fallback: try parentNode chain for .container
-                    let parent = table.parentNode;
-                    while (parent && parent !== document.body) {
-                        if (parent.classList && parent.classList.contains('container')) {
-                            containerEl = parent;
-                            break;
-                        }
-                        parent = parent.parentNode;
-                    }
+        this._stickyHeader = useStickyHeader({
+            getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
+            // .sticky-header-spacer sits in-flow at exactly the top of the content-header div
+            // and its position is invariant: when sticky is inactive the spacer is 0-height and
+            // the wrapper follows it; when sticky is active the spacer grows to the wrapper's
+            // former height, keeping spacer.top at the same viewport position in both states.
+            getAnchorEl: () => this.$el?.querySelector('.sticky-header-spacer'),
+            getContainerEl: () => [
+                this.$el?.querySelector('.table-wrapper'),
+                this.$el?.closest('.container'),
+            ].filter(Boolean),
+            getIsActive: () => this.stickyActive,
+            canActivate: () => {
+                const tableWrapper = this.$el?.querySelector('.table-wrapper');
+                return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
+            },
+            onActivate: (navBottom) => {
+                // Measure spacer height only on first activation (before thead clone is added)
+                if (!this.stickyActive) {
+                    const wrapper = this.$el?.querySelector('.sticky-header-wrapper');
+                    this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
                 }
-
-                // Calculate if header should stick
-                let shouldStick = tableRect.top <= stickyOffset && 
-                                   tableRect.bottom > stickyOffset + theadRect.height;
-
-                // Additional check: hide sticky header if closer than twice its height from bottom of container
-                if (shouldStick && containerEl) {
-                    const containerRect = containerEl.getBoundingClientRect();
-                    const distanceFromBottom = containerRect.bottom - (stickyOffset + theadRect.height);
-                    if (distanceFromBottom < 2 * theadRect.height) {
-                        shouldStick = false;
-                    }
+                // Re-measure column widths on every tick (table may resize)
+                const thead = this.$el?.querySelector('.table-wrapper thead');
+                if (thead) {
+                    this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
+                        .map(th => th.getBoundingClientRect().width);
                 }
-
-                // Check if table is horizontally overflowing (disable sticky header if scrollable)
-                if (shouldStick) {
-                    const tableWrapper = table.closest('.table-wrapper');
-                    if (tableWrapper) {
-                        const isHorizontallyScrollable = tableWrapper.scrollWidth > tableWrapper.clientWidth;
-                        if (isHorizontallyScrollable) {
-                            shouldStick = false;
-                        }
-                    }
-                }
-
-                // Update sticky header visibility and CSS variables for positioning
-                if (shouldStick) {
-                    this.showStickyHeader = true;
-                    // Set CSS custom properties for dynamic positioning
-                    this.$el.style.setProperty('--sticky-top', stickyOffset + 'px');
-                    this.$el.style.setProperty('--sticky-left', tableRect.left + 'px');
-                    this.$el.style.setProperty('--sticky-width', tableRect.width + 'px');
-                } else {
-                    this.showStickyHeader = false;
-                }
-            };
-            
-            appContent.addEventListener('scroll', this.handleStickyHeaders, { passive: true });
-            window.addEventListener('resize', this.handleStickyHeaders, { passive: true });
-            this.handleStickyHeaders(); // Initial position
-        }
+                // Update position
+                const tableWrapper = this.$el?.querySelector('.table-wrapper');
+                const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
+                this.stickyActive = true;
+                this.showStickyHeader = true;
+                this.stickyTop = navBottom;
+                this.stickyLeft = rect ? rect.left : 0;
+                this.stickyWidth = rect ? rect.width : 0;
+            },
+            onDeactivate: () => {
+                this.stickyActive = false;
+                this.showStickyHeader = false;
+            },
+        });
+        this._stickyHeader.setup();
     },
     beforeUnmount() {
         document.removeEventListener('click', this.handleOutsideClick);
@@ -2208,15 +2172,8 @@ export const TableComponent = {
         // Clean up any active click state
         this.resetClickState();
         
-        // Clean up sticky header scroll listener
-        const appContent = document.querySelector('#app-content');
-        if (appContent && this.handleStickyHeaders) {
-            appContent.removeEventListener('scroll', this.handleStickyHeaders);
-        }
-        // Clean up resize listener
-        if (this.handleStickyHeaders) {
-            window.removeEventListener('resize', this.handleStickyHeaders);
-        }
+        // Clean up sticky header scroll/resize listeners
+        this._stickyHeader?.teardown();
     },
     methods: {
         handleRefresh() {
@@ -3308,15 +3265,13 @@ export const TableComponent = {
             }
             
             // Find thead, tbody, and tfoot elements
-            let thead, tbody, tfoot;
+            let thead, tbody;
             if (this.dragId) {
                 thead = tableEl.querySelector(`table.${this.dragId} > thead`);
                 tbody = tableEl.querySelector(`table.${this.dragId} > tbody`);
-                tfoot = tableEl.querySelector(`table.${this.dragId} > tfoot`);
             } else {
                 thead = tableEl.querySelector('thead');
                 tbody = tableEl.querySelector('tbody');
-                tfoot = tableEl.querySelector('tfoot');
             }
             let newDropTarget = { type: null, position: null, isAbove: false };
             
@@ -3325,14 +3280,6 @@ export const TableComponent = {
                 const theadRect = thead.getBoundingClientRect();
                 if (mouseY >= theadRect.top && mouseY <= theadRect.bottom) {
                     newDropTarget = { type: 'header', position: null, isAbove: false };
-                }
-            }
-            
-            // Check footer drop target
-            if (tfoot && newDropTarget.type === null) {
-                const tfootRect = tfoot.getBoundingClientRect();
-                if (mouseY >= tfootRect.top && mouseY <= tfootRect.bottom) {
-                    newDropTarget = { type: 'footer', position: null, isAbove: false };
                 }
             }
             
@@ -3660,14 +3607,12 @@ export const TableComponent = {
                 // Check if click was on a drag handle
                 const clickedDragHandle = clickedElement.closest('.row-drag-handle');
                 
-                // Check if click was inside any selected row
-                const clickedSelectedRow = clickedElement.closest('tr.selected');
-                
                 // Check if click was on the selection bubble
                 const clickedSelectionBubble = clickedElement.closest('.selection-action-bubble');
                 
-                // Only clear selections if clicking inside a table on an unselected row (not drag handle, not selection bubble)
-                if (!clickedDragHandle && !clickedSelectedRow && !clickedSelectionBubble && (clickedTable || clickedRow)) {
+                // Clear selections for any click inside a table that isn't on a drag handle or selection bubble.
+                // Clicking a drag handle is the only table interaction that intentionally toggles/builds selections.
+                if (!clickedDragHandle && !clickedSelectionBubble && (clickedTable || clickedRow)) {
                     // Capture state before clearing for undo
                     if (tableRowSelectionState.currentRouteKey) {
                         // Get all unique arrays involved in selections
@@ -4052,99 +3997,153 @@ export const TableComponent = {
                 </div>
             </div>
 
-            <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
-                <slot 
-                    name="header-area"
-                ></slot>
-                <div class="spacer"></div>
-                <div v-if="showNewRowButton || showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
-                    <div v-if="showSearch" class="input-container">
-                        <input
-                            type="text"
-                            v-model="search.searchValue.value"
-                            @blur="search.handleBlur"
-                            @keydown.esc="search.clearSearch"
-                            placeholder="Find..."
-                            class="search-input"
-                        />
+            <!-- Spacer: holds layout space when sticky wrapper becomes fixed -->
+            <div class="sticky-header-spacer" :style="{ height: stickyActive ? stickySpacerHeight + 'px' : '0' }" aria-hidden="true"></div>
+
+            <!-- Sticky wrapper: content-header + loading bar + thead clone (all fixed together when sticky) -->
+            <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', top: stickyTop + 'px', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : {}">
+
+                <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
+                    <slot 
+                        name="header-area"
+                    ></slot>
+                    <div class="spacer"></div>
+                    <div v-if="showNewRowButton || showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
+                        <div v-if="showSearch" class="input-container">
+                            <input
+                                type="text"
+                                v-model="search.searchValue.value"
+                                @blur="search.handleBlur"
+                                @keydown.esc="search.clearSearch"
+                                placeholder="Find..."
+                                class="search-input"
+                            />
+                            <button
+                                v-if="search.searchValue.value"
+                                @mousedown="search.clearSearch"
+                                class="column-button"
+                                title="Clear search"
+                            >
+                                🗙
+                            </button>
+                            <button
+                                v-if="showSearch && hideRowsOnSearch"
+                                @mousedown.prevent="hideRowsOnSearchLocal = !hideRowsOnSearchLocal"
+                                class="column-button"
+                                :title="hideRowsOnSearchLocal ? 'Show all rows' : 'Hide non-matching rows'"
+                            >
+                                <span class="material-symbols-outlined">{{ hideRowsOnSearchLocal ? 'visibility' : 'visibility_off' }}</span>
+                            </button>
+                        </div>
                         <button
-                            v-if="search.searchValue.value"
-                            @mousedown="search.clearSearch"
-                            class="column-button"
-                            title="Clear search"
+                            v-if="showNewRowButton"
+                            @click="$emit('new-row')"
+                            :disabled="isLoading"
+                            :class="theme"
                         >
-                            🗙
+                            New Item
                         </button>
                         <button
-                            v-if="showSearch && hideRowsOnSearch"
-                            @mousedown.prevent="hideRowsOnSearchLocal = !hideRowsOnSearchLocal"
-                            class="column-button"
-                            :title="hideRowsOnSearchLocal ? 'Show all rows' : 'Hide non-matching rows'"
+                            v-if="showSaveButton || allowSaveEvent"
+                            @click="handleSave"
+                            :disabled="isLoading || !allowSaveEvent"
+                            class="green"
                         >
-                            <span class="material-symbols-outlined">{{ hideRowsOnSearchLocal ? 'visibility' : 'visibility_off' }}</span>
+                            Save
+                        </button>
+                        <button 
+                            v-if="showRefresh" 
+                            @click="handleRefresh" 
+                            :disabled="isLoading" 
+                            :class="allowSaveEvent ? 'red' : ''"
+                        >
+                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                        </button>
+                        <button
+                            v-if="hasEditableColumns"
+                            @click="handleUndo"
+                            :disabled="!canUndo"
+                            class="button-symbol white"
+                            title="Undo"
+                        >
+                            ⮢
+                        </button>
+                        <button
+                            v-if="hasEditableColumns"
+                            @click="handleRedo"
+                            :disabled="!canRedo"
+                            class="button-symbol white"
+                            title="Redo"
+                        >
+                            ⮣
+                        </button>
+                        <button
+                            v-if="hamburgerMenuComponent"
+                            @click="handleHamburgerMenu"
+                            class="button-symbol white"
+                        >
+                            ☰
                         </button>
                     </div>
-                    <button
-                        v-if="showNewRowButton"
-                        @click="$emit('new-row')"
-                        :disabled="isLoading"
-                        :class="theme"
-                    >
-                        New Item
-                    </button>
-                    <button
-                        v-if="showSaveButton || allowSaveEvent"
-                        @click="handleSave"
-                        :disabled="isLoading || !allowSaveEvent"
-                        class="green"
-                    >
-                        Save
-                    </button>
-                    <button 
-                        v-if="showRefresh" 
-                        @click="handleRefresh" 
-                        :disabled="isLoading" 
-                        :class="allowSaveEvent ? 'red' : ''"
-                    >
-                        {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
-                    </button>
-                    <button
-                        v-if="hasEditableColumns"
-                        @click="handleUndo"
-                        :disabled="!canUndo"
-                        class="button-symbol white"
-                        title="Undo"
-                    >
-                        ⮢
-                    </button>
-                    <button
-                        v-if="hasEditableColumns"
-                        @click="handleRedo"
-                        :disabled="!canRedo"
-                        class="button-symbol white"
-                        title="Redo"
-                    >
-                        ⮣
-                    </button>
-                    <button
-                        v-if="hamburgerMenuComponent"
-                        @click="handleHamburgerMenu"
-                        class="button-symbol white"
-                    >
-                        ☰
-                    </button>
                 </div>
+
+                <!-- Loading/Analysis Progress Indicator -->
+                <LoadingBarComponent
+                    :key="key + 'loading-progress'"
+                    v-if="showHeader"
+                    :is-loading="isLoading"
+                    :is-analyzing="isAnalyzing"
+                    :percent-complete="loadingProgress"
+                />
+
+                <!-- Sticky Header Clone (thead only, mirrors column widths) -->
+                <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }">
+                    <colgroup>
+                        <col v-if="draggable" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : { width: '20px' }" />
+                        <col v-for="(column, colIdx) in visibleColumns" 
+                            :key="column.key"
+                            :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
+                            :class="column.columnClass || ''"
+                        />
+                        <col v-if="allowDetails && !forceDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
+                    </colgroup>
+                    <thead :class="{ [theme]: true }">
+                        <tr>
+                            <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
+                            <th 
+                                v-for="(column, colIdx) in visibleColumns" 
+                                :key="column.key"
+                                :class="getColumnFont(column)"
+                                :title="column.title || column.label"
+                                :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}"
+                            >
+                                <div>
+                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
+                                    <span v-else>{{ column.label }}</span>
+                                    <button 
+                                        v-if="isColumnSortable(column)"
+                                        @click="handleSort(column.key)"
+                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
+                                    >
+                                        {{ getSortIcon(column.key) || '⭥' }}
+                                    </button>
+                                    <button 
+                                        v-if="column.allowHide"
+                                        @click="handleHideColumn(column.key)"
+                                        class="column-button"
+                                        title="Hide this column"
+                                    >
+                                        🗙
+                                    </button>
+                                </div>
+                            </th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
+                        </tr>
+                    </thead>
+                </table>
+
             </div>
-            
-            <!-- Loading/Analysis Progress Indicator -->
-            <LoadingBarComponent
-                :key="key + 'loading-progress'"
-                v-if="showHeader"
-                :is-loading="isLoading"
-                :is-analyzing="isAnalyzing"
-                :percent-complete="loadingProgress"
-            />
-            
+
             <!-- Data Table (always render if draggable, even when empty) -->
             <div key="data-table" v-if="(data && data.length > 0) || (draggable && !isLoading)" :class="'table-wrapper' + (theme ? ' ' + theme : '')">
                 <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
@@ -4339,7 +4338,7 @@ export const TableComponent = {
                             </td>
                         </tr>
                     </tbody>
-                    <tfoot v-if="newRow" :class="{ 'drop-target-footer': dropTarget?.type === 'footer' }">
+                    <tfoot v-if="newRow">
                         <tr>
                             <td v-if="draggable" class="spacer-cell"></td>
                             <td 
@@ -4354,52 +4353,6 @@ export const TableComponent = {
                 </table>
             </div>
         
-
-            <!-- Sticky Header Template -->
-            <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }">
-                <colgroup>
-                    <col v-if="draggable" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : { width: '20px' }" />
-                    <col v-for="(column, colIdx) in visibleColumns" 
-                        :key="column.key"
-                        :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
-                        :class="column.columnClass || ''"
-                    />
-                    <col v-if="allowDetails && !forceDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
-                </colgroup>
-                <thead :class="{ [theme]: true }">
-                    <tr>
-                        <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
-                        <th 
-                            v-for="(column, colIdx) in visibleColumns" 
-                            :key="column.key"
-                            :class="getColumnFont(column)"
-                            :title="column.title || column.label"
-                            :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}"
-                        >
-                            <div>
-                                <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
-                                <span v-else>{{ column.label }}</span>
-                                <button 
-                                    v-if="isColumnSortable(column)"
-                                    @click="handleSort(column.key)"
-                                    :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
-                                >
-                                    {{ getSortIcon(column.key) || '⭥' }}
-                                </button>
-                                <button 
-                                    v-if="column.allowHide"
-                                    @click="handleHideColumn(column.key)"
-                                    class="column-button"
-                                    title="Hide this column"
-                                >
-                                    🗙
-                                </button>
-                            </div>
-                        </th>
-                        <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
-                    </tr>
-                </thead>
-            </table>
 
             <!-- Loading State >
             <div key="loading-state" v-if="isLoading || isAnalyzing" class="content-footer loading-message">

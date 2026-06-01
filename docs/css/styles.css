@@ -675,16 +675,25 @@ button.card {
 }
 
 /* Sticky Header Styles */
-table.sticky-header {
-    position: fixed;
-    top: var(--sticky-top, 0);
-    left: var(--sticky-left, 0);
-    width: var(--sticky-width, auto);
-    z-index: 1000;
-    background: var(--background-color);
-    box-shadow: 0 2px 8px var(--color-shadow);
+.sticky-header-spacer {
+    flex-shrink: 0;
+    width: 100%;
+}
+
+.sticky-header-wrapper {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sticky-header-wrapper[style*="position: fixed"] {
+    box-shadow: 0 4px 8px var(--color-shadow);
+}
+
+.sticky-header-wrapper table.sticky-header {
     table-layout: fixed;
     border-collapse: collapse;
+    width: 100%;
+    background: var(--background-color);
 }
 
 /*table-wrapper:has(tbody:empty)::after {
@@ -857,29 +866,6 @@ table.editing tr:not(:first-child):has(table) {
     line-height: 100%;
 }
 
-/* Row delete button styling */
-/* Only select .new-row-button in the top-level table's tfoot, not in nested tables or parent tables */
-table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button {
-    min-width: 0;
-    cursor: pointer;
-    position: relative;
-    padding: 0 !important;
-    background-color: var(--color-red-bg);
-    border: none;
-    outline: none;
-}
-table:has(.dragging):not(:has(table .dragging))>tfoot>tr>.new-row-button:hover {
-    background-color: var(--color-red);
-}
-table:has(.dragging):not(:has(table .dragging)) > tfoot > tr > .new-row-button::before {
-    content: "🗙";
-    display: block;
-    text-align: center;
-    color: var(--color-text-inverted);
-    font-size: 20px;
-    line-height: 100%;
-}
-
 
 table:not(.editing) > tbody > tr.marked-for-deletion {
     display: none;
@@ -913,7 +899,7 @@ td.spacer-cell, th.spacer-cell {
 .content-header + .table-wrapper > table > tfoot > tr > td.spacer-cell {
     border: 1px solid var(--color-border);
 }
-.content-header + .table-wrapper > table > thead > tr > th.spacer-cell, .content-header + .loading-bar-container + .table-wrapper>table>thead>tr>th.spacer-cell, .sticky-header th.spacer-cell {
+.sticky-header-wrapper + .table-wrapper > table > thead > tr > th.spacer-cell, .sticky-header th.spacer-cell {
     border-left: 1px solid var(--color-border);
     border-top: 1px solid var(--color-gray-bg);
     background-color: var(--color-gray-bg);
@@ -1967,7 +1953,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         font-size: 10pt !important;
     }
     
-    button, header, footer, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notification {
+    button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notification {
         display: none;
         opacity: 0;
     }

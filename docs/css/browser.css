@@ -19,6 +19,10 @@ div#app-content::-webkit-scrollbar {
     background: transparent;
 }
 
+div#app-content::-webkit-scrollbar-track {
+    margin-top: var(--navbar-height);
+}
+
 div#app-content::-webkit-scrollbar-thumb {
     background: var(--color-primary);
 }
