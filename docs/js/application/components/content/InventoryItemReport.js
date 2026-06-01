@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
+import { html, TableComponent, CalendarComponent, CalendarLayoutToggle, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -7,7 +7,7 @@ import { normalizeFilterValues } from '../../../data_management/utils/helpers.js
  *   item# | description | startDate | endDate | Inv Qty | Min Qty | Overlapping Shows
  */
 export const InventoryItemReport = {
-    components: { TableComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
+    components: { TableComponent, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -88,6 +88,37 @@ export const InventoryItemReport = {
 
         loadingMessage() {
             return this.reportStore?.loadingMessage || 'Loading...';
+        },
+
+        isCalendarView() {
+            return NavigationRegistry.getNavigationParameters(this.containerPath || 'inventory/reports/item-shortages').layout === 'calendar';
+        },
+
+        calendarColumns() {
+            return [
+                { key: 'minQty', label: 'Min', width: 40, sortable: false, format: 'number', firstRow: true },
+                { key: 'itemId', label: 'Item#', width: 60, sortable: false, firstRow: true },
+                { key: 'description', label: 'Description', sortable: false, firstRow: true }
+            ];
+        },
+
+        calendarData() {
+            return this.tableData
+                .filter(row => row.startDate)
+                .map(row => ({
+                    ...row,
+                    calendarStart: row.startDate,
+                    calendarEnd: row.endDate || row.startDate
+                }));
+        },
+
+        chipColorClassProvider() {
+            return (row) => {
+                if (row.minQty === null || row.minQty === undefined) return '';
+                if (row.minQty < 0) return 'red';
+                if (row.minQty === 0) return 'orange';
+                return '';
+            };
         },
 
         emptyMessage() {
@@ -271,7 +302,46 @@ export const InventoryItemReport = {
                 <p>{{ error }}</p>
             </div>
 
+            <CalendarComponent
+                v-if="isCalendarView"
+                :data="calendarData"
+                :columns="calendarColumns"
+                event-start-column="calendarStart"
+                event-end-column="calendarEnd"
+                :chip-color-class="chipColorClassProvider"
+                :is-loading="isLoading"
+                :is-analyzing="isAnalyzing"
+                :loading-message="loadingMessage"
+                :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
+                :show-refresh="true"
+                :empty-message="emptyMessage"
+                @event-click="navigateToItemPage"
+                @refresh="handleRefresh"
+            >
+                <template #header-area>
+                    <div class="button-bar">
+                        <ScheduleFilterSelect
+                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :navigate-to-path="navigateToPath"
+                            :show-advanced-button="true"
+                            @search-selected="handleSearchSelected"
+                        />
+                        <InventoryCategoryFilter
+                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :navigate-to-path="navigateToPath"
+                            @category-selected="handleCategorySelected"
+                        />
+                        <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" v-model.number="minQtyThreshold" style="width:60px" />
+                        <CalendarLayoutToggle
+                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :navigate-to-path="navigateToPath"
+                        />
+                    </div>
+                </template>
+            </CalendarComponent>
+
             <TableComponent
+                v-else
                 :data="tableData"
                 :columns="tableColumns"
                 :hide-columns="['tabName', '_reportSummary']"
@@ -303,6 +373,10 @@ export const InventoryItemReport = {
                             @category-selected="handleCategorySelected"
                         />
                         <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" v-model.number="minQtyThreshold" style="width:60px" />
+                        <CalendarLayoutToggle
+                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :navigate-to-path="navigateToPath"
+                        />
                     </div>
                 </template>
 
