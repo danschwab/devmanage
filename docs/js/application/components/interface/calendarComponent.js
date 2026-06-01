@@ -275,6 +275,9 @@ export const CalendarComponent = {
         isFirstOfMonth(date) {
             return date.getDate() === 1;
         },
+        showYear(day, wIdx, dayIdx) {
+            return (wIdx === 0 && dayIdx === 0) || (day.getDate() === 1 && day.getMonth() === 0);
+        },
         monthAbbr(date) {
             return date.toLocaleDateString('en-US', { month: 'short' });
         },
@@ -392,7 +395,8 @@ export const CalendarComponent = {
                             :class="{ 'calendar-date-cell': true, 'month-old': (week.isMonthBoundary && dayIdx < week.monthBoundaryIdx) || (week.monthAfterBoundaryIdx > 0 && dayIdx >= week.monthAfterBoundaryIdx), 'month-new': (week.isMonthBoundary && dayIdx >= week.monthBoundaryIdx) || (week.monthAfterBoundaryIdx > 0 && dayIdx < week.monthAfterBoundaryIdx), 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && dayIdx === week.monthBoundaryIdx - 1 }"
                         >
                             <span :class="['calendar-date-number', { today: isToday(day) }]">{{ day.getDate() }}</span>
-                            <span v-if="isFirstOfMonth(day)" class="calendar-month-label">{{ monthAbbr(day) }}</span>
+                            <span v-if="isFirstOfMonth(day) || (wIdx === 0 && dayIdx === 0)" class="calendar-month-label">{{ monthAbbr(day) }}</span>
+                            <span v-if="showYear(day, wIdx, dayIdx)" class="calendar-year-label">{{ day.getFullYear() }}</span>
                         </div>
                     </div>
 

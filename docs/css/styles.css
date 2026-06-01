@@ -1407,7 +1407,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     align-items: center;
     justify-content: flex-start;
     gap: var(--padding-sm);
-    padding: none;
+    padding: 2px 2px 0 2px;
     border-right: 1px solid var(--color-border);
 }
 .calendar-date-cell:last-child { border-right: none; }
@@ -1423,12 +1423,9 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 .calendar-date-number {
     font-size: 0.8rem;
     color: var(--color-text);
-    width: 1.5em;
-    height: 1.5em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
     flex-shrink: 0;
 }
 .calendar-date-number.today {
@@ -1445,6 +1442,12 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     font-size: 0.75rem;
     color: var(--color-text);
     font-weight: 600;
+}
+.calendar-year-label {
+    font-size: 0.75rem;
+    color: var(--color-text);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .calendar-lane-row {
@@ -1572,7 +1575,8 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     }
     .chip-first-row, .chip-second-row { font-size: 0.65rem; }
     .calendar-dow-cell { padding: var(--padding-sm) 2px; font-size: 0.7rem; }
-    .calendar-date-cell { padding: var(--padding-sm) 2px; }
+    .calendar-date-cell { padding: var(--padding-sm) 2px; flex-wrap: wrap; align-items: flex-start; }
+    .calendar-year-label { flex-basis: 100%; }
 }
 
 .packlist-crates > tbody > tr > td {
