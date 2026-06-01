@@ -1,7 +1,23 @@
+## Present
+
+1. Export packlist from Inventor
+2. Harvests information from production schedule
+3. Contains our current inventory and allows easy updates
+4. Shows inventory shortages and overlapping shows as pack lists are generated
+
+Notes:
+
+- If we decide to pull this data into Access's barcode system, I can help manage importing data
+-
+
+## Important Notes
+
+- Allow and request email feedback from users
+- Bundle changes into updates, carefully log changes made, and send out a release email before making the updates
+
 ## NOTES
 
 whenever possible, rely on the caching system instead of data from live tables.
-Google oAuth2 for client-only apps requires a token refresh every hour, no exceptions
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
 We can potentially save Dropbox service account keys in google drive and use them to access our dropbox files without user auth. This risks key exposure.
 
@@ -34,19 +50,18 @@ For design and project queue:
 
 ## Primary Use Cases
 
-- [50%] We can have pack lists generated from Inventor
+- [80%] We can have pack lists generated from Inventor
 - [95%] We can know if there are item shortages as pack lists are generated
-- [80%] If we add bematrix stuff to pack lists, we can also check inventory qty of them
-- [ 0%] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved
-- [ 0%] We can get an inventory report of item quantities throughout the year
+- [100] If we add bematrix stuff to pack lists, we can also check inventory qty of them
+- [50%] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved (needs approval system)
+- [50%] We can get an inventory report of item quantities throughout the year
 - [ 0%] We can migrate all our checklists and schedule management to this system
-- [10%] All of our data is available and easy to update on the go
+- [40%] All of our data is available and easy to update on the go
 
 ## TO DO
 
 **chores**
 
-- [ ] clickable and highlightable (can copy contents) table cells instead of cell buttons
 - [ ] unify the styling of cards and buttons
 - [ ] make table headers accessible when scrolling, on hover over the sticky header?
 - [ ] reports column headers percentage based and dynamically abbreviate
@@ -61,8 +76,28 @@ For design and project queue:
 - [x] fix packlist table header alignment
 - [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [x] tableComponent finder needs: a clear all button
+      clickable and highlightable (can copy contents) table cells instead of cell buttons
 
 **problems**
+
+- [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
+- [ ] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
+- [ ] make external clicks clear checkboxes
+- [ ] icons still don't show for dan
+- [ ] allow pasting even if only a single column of data is copied
+- [ ] ui for paste
+- [ ] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
+- [ ] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
+- [ ] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
+- [ ] remove drag into bottom to delete.
+- [ ] collapsed groups mess up drop targets
+- [ ] don't highlight fields in tables...
+- [ ] add tooltip "3 rows copied..."
+- [ ] garbage can icon for deletion!!!!
+- [ ] fix thumbnail access
+- [ ] error occurred 11:00 updating cache datestamp?
+- [ ] add misc inventory table
+- [ ] allow "maintenance mode" activated that locks all editing
 
 - [x] packlist inventory overlap alerts showing wrong info. Probably due to reformatted abstraction code.
 - [x] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
