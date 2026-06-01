@@ -709,6 +709,71 @@ class inventoryUtils_uncached {
     }
 
     /**
+     * Compute a per-item inventory report summary across a set of shows.
+     * Returns start/end date range, inventory quantity, and the worst-case
+     * (minimum) remaining quantity across all simultaneous show demand.
+     *
+     * @param {Object} deps
+     * @param {string} itemId - Item identifier (e.g. "F-101")
+     * @param {Object} shows - Map of { showIdentifier: qty } for this item
+     * @returns {Promise<{startDate: string|null, endDate: string|null, inventoryQty: number|null, minQty: number|null}>}
+     */
+    static async getItemReportSummary(deps, rowData) {
+        const { itemId, shows } = rowData || {};
+        if (!itemId || !shows || Object.keys(shows).length === 0) {
+            return { startDate: null, endDate: null, inventoryQty: null, minQty: null };
+        }
+
+        const showIds = Object.keys(shows).filter(id => (shows[id] || 0) > 0);
+        if (showIds.length === 0) {
+            return { startDate: null, endDate: null, inventoryQty: null, minQty: null };
+        }
+
+        // Fetch ship and return dates for all shows
+        const showDates = await Promise.all(
+            showIds.map(async (showId) => {
+                const [shipDate, returnDate] = await Promise.all([
+                    deps.call(ProductionUtils.getProjectShipDate, showId).catch(() => null),
+                    deps.call(ProductionUtils.getProjectReturnDate, showId).catch(() => null)
+                ]);
+                return { showId, qty: shows[showId] || 0, shipDate, returnDate };
+            })
+        );
+
+        // Determine date range
+        const shipDates = showDates.map(s => s.shipDate).filter(Boolean).sort();
+        const returnDates = showDates.map(s => s.returnDate).filter(Boolean).sort();
+        const startDate = shipDates[0] || null;
+        const endDate = returnDates[returnDates.length - 1] || startDate;
+
+        // Get inventory qty as of the earliest ship date
+        const refDate = startDate || todayISOString();
+        const inventoryQty = await deps.call(PackListUtils.getItemInventoryQuantity, itemId, refDate);
+
+        if (inventoryQty === null) {
+            return { startDate, endDate, inventoryQty: null, minQty: null };
+        }
+
+        // Compute minimum remaining via running balance over ship/return events
+        const events = [];
+        for (const { qty, shipDate, returnDate } of showDates) {
+            if (qty <= 0) continue;
+            if (shipDate) events.push({ date: shipDate, delta: -qty });
+            if (returnDate) events.push({ date: returnDate, delta: qty });
+        }
+        events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+        let running = inventoryQty;
+        let minQty = inventoryQty;
+        for (const event of events) {
+            running += event.delta;
+            if (running < minQty) minQty = running;
+        }
+
+        return { startDate, endDate, inventoryQty, minQty };
+    }
+
+    /**
      * Remove a pending change entry by effectiveDateDeciseconds from matching rows
      * and save the updated EditHistory back. Mutation — uncached.
      * @param {string} tabOrItemName

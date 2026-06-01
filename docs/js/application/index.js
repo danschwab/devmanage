@@ -36,6 +36,7 @@ export { PacklistContent, PacklistMenuComponent } from './components/content/Pac
 export { InventoryContent, InventoryMenuComponent } from './components/content/InventoryContent.js';
 export { InventoryItemTimeline } from './components/content/InventoryItemTimeline.js';
 export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
+export { InventoryItemReport } from './components/content/InventoryItemReport.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleAdvancedFilter } from './components/interface/scheduleFilterComponents.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';

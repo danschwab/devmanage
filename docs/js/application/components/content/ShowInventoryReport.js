@@ -9,7 +9,7 @@ export const ShowInventoryReport = {
     components: { TableComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
     inject: ['$modal', 'appContext'],
     props: {
-        containerPath: { type: String, default: '' },
+        containerPath: { type: String, default: 'inventory/reports/show-usage' },
         navigateToPath: Function
     },
     data() {
@@ -147,7 +147,7 @@ export const ShowInventoryReport = {
         emptyMessage() {
             // Check if a search has been performed by looking at URL parameters
             const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-inventory',
+                this.containerPath || 'inventory/reports/show-usage',
                 this.appContext?.currentPath
             );
             const hasSearchParams = params && (params.dateFilters || params.textFilters || params.view);
@@ -364,7 +364,7 @@ export const ShowInventoryReport = {
         
         // Get URL parameters to check what should be initialized
         const params = NavigationRegistry.getParametersForContainer(
-            this.containerPath || 'inventory/reports/show-inventory',
+            this.containerPath || 'inventory/reports/show-usage',
             this.appContext?.currentPath
         );
         
@@ -383,7 +383,7 @@ export const ShowInventoryReport = {
                 :hide-columns="['tabName']"
                 :show-search="true"
                 :sync-search-with-url="true"
-                :container-path="containerPath || 'inventory/reports/show-inventory'"
+                :container-path="containerPath || 'inventory/reports/show-usage'"
                 :navigate-to-path="navigateToPath"
                 :hide-rows-on-search="false"
                 :readonly="true"
@@ -398,13 +398,13 @@ export const ShowInventoryReport = {
                 <template #header-area>
                     <div class="button-bar">
                         <ScheduleFilterSelect
-                            :container-path="containerPath || 'inventory/reports/show-inventory'"
+                            :container-path="containerPath || 'inventory/reports/show-usage'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter
-                            :container-path="containerPath || 'inventory/reports/show-inventory'"
+                            :container-path="containerPath || 'inventory/reports/show-usage'"
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />

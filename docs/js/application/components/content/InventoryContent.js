@@ -1,6 +1,7 @@
 import { html, InventoryTableComponent, hamburgerMenuRegistry, NavigationRegistry, Requests, CardsComponent, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, invalidateCache, todayISOString } from '../../index.js';
 import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
+import { InventoryItemReport } from './InventoryItemReport.js';
 import { InventoryItemTimeline } from './InventoryItemTimeline.js';
 
 // Inventory Hamburger Menu Component (content only)
@@ -176,6 +177,7 @@ export const InventoryContent = {
         'inventory-overview-table': InventoryOverviewTableComponent,
         'cards-grid': CardsComponent,
         'show-inventory-report': ShowInventoryReport,
+        'inventory-item-report': InventoryItemReport,
         'inventory-item-timeline': InventoryItemTimeline
     },
     props: {
@@ -439,9 +441,28 @@ export const InventoryContent = {
                 :tab-title="currentCategoryName"
             ></inventory-table>
 
+            <!-- Reports Landing -->
+            <cards-grid
+                v-else-if="cleanContainerPath === 'inventory/reports'"
+                :items="[
+                    { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.' },
+                    { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.' }
+                ]"
+                :on-item-click="card => navigateToPath('inventory/reports/' + card.toLowerCase().replace(/\s+/g, '-'))"
+                container-path="inventory/reports"
+                :navigate-to-path="navigateToPath"
+            />
+
             <!-- Show Inventory Report View -->
             <show-inventory-report
-                v-else-if="cleanContainerPath === 'inventory/reports'"
+                v-else-if="cleanContainerPath === 'inventory/reports/show-usage'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+            />
+
+            <!-- Item-centric Inventory Report View -->
+            <inventory-item-report
+                v-else-if="cleanContainerPath === 'inventory/reports/item-shortages'"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />

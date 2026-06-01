@@ -994,6 +994,18 @@ class Requests_uncached {
     }
 
     /**
+     * Compute inventory report summary for a single item across a set of shows.
+     * Returns startDate, endDate, inventoryQty, and minQty (worst-case remaining).
+     * @param {Object} deps
+     * @param {string} itemId
+     * @param {Object} shows - Map of { showIdentifier: qty }
+     * @returns {Promise<{startDate: string|null, endDate: string|null, inventoryQty: number|null, minQty: number|null}>}
+     */
+    static async getItemReportSummary(deps, rowData) {
+        return await deps.call(InventoryUtils.getItemReportSummary, rowData);
+    }
+
+    /**
      * Get overlapping projects that use a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier

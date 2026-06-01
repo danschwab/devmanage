@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString } from '../../index.js';
+import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle } from '../../index.js';
 
 /**
  * Lightweight item timeline component.
@@ -10,7 +10,7 @@ import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelec
  *   endDate    YYYY-MM-DD
  */
 export const InventoryItemTimeline = {
-    components: { TableComponent, ScheduleFilterSelect },
+    components: { TableComponent, ScheduleFilterSelect, CalendarComponent, CalendarLayoutToggle },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -31,11 +31,22 @@ export const InventoryItemTimeline = {
         columns() {
             return [
                 { key: 'date',     label: 'Date',     width: 120, sortable: false, format: 'date' },
-                { key: 'event',    label: 'Event',    width: 120, sortable: false },
-                { key: 'note',     label: 'Note',     sortable: false },
-                { key: 'change',   label: 'Change',   width: 160, sortable: false },
-                { key: 'quantity', label: 'Quantity', width: 90,  sortable: false, format: 'number', autoColor: true }
+                { key: 'quantity', label: 'Quantity', width: 90,  sortable: false, format: 'number', autoColor: true, firstRow: true },
+                { key: 'event',    label: 'Event',    width: 120, sortable: false, firstRow: true },
+                { key: 'note',     label: 'Note',     sortable: false, firstRow: true },
+                { key: 'change',   label: 'Change',   width: 160, sortable: false, secondRow: true }
             ];
+        },
+        chipColorClassProvider() {
+            return (row) => {
+                if (row.quantity < 0) return 'red';
+                if (row.quantity < 1) return 'yellow';
+                return '';
+            };
+        },
+        isCalendarView() {
+            const params = NavigationRegistry.getNavigationParameters(this.containerPath);
+            return params.layout === 'calendar';
         },
         timelineStore() {
             if (!this.resolvedItemId) return null;
@@ -104,33 +115,87 @@ export const InventoryItemTimeline = {
             this.filterStartDate = startDate;
             this.filterEndDate   = endDate;
             // timelineStore computed reacts automatically to the filter change
+        },
+        handleCalendarEventClick(row) {
+            const DetailModalComponent = {
+                props: { row: Object, columns: Array },
+                template: html`
+                    <div class="details-grid">
+                        <template v-for="col in columns" :key="col.key">
+                            <div class="detail-item" v-if="row[col.key] != null && row[col.key] !== ''">
+                                <label>{{ col.label }}</label>
+                                <span>{{ row[col.key] }}</span>
+                            </div>
+                        </template>
+                    </div>
+                `
+            };
+            const title = [row.event, row.note].filter(Boolean).join(' — ') || 'Event Details';
+            this.$modal.custom(DetailModalComponent, { row, columns: this.columns }, title);
         }
     },
     mounted() {
         this.resolveItemIdFromPath();
     },
     template: html`
-        <TableComponent
-            :data="timelineStore?.data ?? []"
-            :columns="columns"
-            :readonly="true"
-            :show-search="false"
-            :show-refresh="false"
-            :is-loading="timelineStore?.isLoading ?? false"
-            :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
-            :error="timelineStore?.error ?? null"
-            empty-message="No inventory changes found in this date range. Try expanding the date filters."
-        >
-            <template #header-area>
-                <div class="button-bar">
-                    <ScheduleFilterSelect
-                        :container-path="containerPath"
-                        :navigate-to-path="navigateToPath"
-                        :show-advanced-button="true"
-                        @search-selected="handleScheduleSearch"
-                    />
-                </div>
-            </template>
-        </TableComponent>
+        <div>
+            <CalendarComponent
+                v-if="isCalendarView"
+                :data="timelineStore?.data ?? []"
+                :columns="columns"
+                event-start-column="date"
+                event-end-column="date"
+                :chip-color-class="chipColorClassProvider"
+                :is-loading="timelineStore?.isLoading ?? false"
+                :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
+                :error="timelineStore?.error ?? null"
+                empty-message="No events found in this date range."
+                @event-click="handleCalendarEventClick"
+            >
+                <template #header-area>
+                    <div class="button-bar">
+                        <ScheduleFilterSelect
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                            :show-advanced-button="true"
+                            @search-selected="handleScheduleSearch"
+                        />
+                        <CalendarLayoutToggle
+                            v-if="navigateToPath"
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                        />
+                    </div>
+                </template>
+            </CalendarComponent>
+            <TableComponent
+                v-else
+                :data="timelineStore?.data ?? []"
+                :columns="columns"
+                :readonly="true"
+                :show-search="false"
+                :show-refresh="false"
+                :is-loading="timelineStore?.isLoading ?? false"
+                :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
+                :error="timelineStore?.error ?? null"
+                empty-message="No inventory changes found in this date range. Try expanding the date filters."
+            >
+                <template #header-area>
+                    <div class="button-bar">
+                        <ScheduleFilterSelect
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                            :show-advanced-button="true"
+                            @search-selected="handleScheduleSearch"
+                        />
+                        <CalendarLayoutToggle
+                            v-if="navigateToPath"
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                        />
+                    </div>
+                </template>
+            </TableComponent>
+        </div>
     `
 };
