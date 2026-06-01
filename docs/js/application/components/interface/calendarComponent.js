@@ -4,6 +4,7 @@ import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 export const CalendarLayoutToggle = {
     name: 'CalendarLayoutToggle',
+    inject: ['appContext'],
     props: {
         containerPath: { type: String, required: true },
         navigateToPath: { type: Function, required: true }
@@ -24,14 +25,25 @@ export const CalendarLayoutToggle = {
             return NavigationRegistry.buildPath(cleanPath, params);
         }
     },
+    methods: {
+        toggle() {
+            const cleanPath = this.containerPath.split('?')[0];
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            if (isOnDashboard) {
+                NavigationRegistry.dashboardRegistry.updatePath(cleanPath, this.togglePath);
+            } else {
+                this.navigateToPath(this.togglePath);
+            }
+        }
+    },
     template: html`
         <button
-            class="white"
+            class="white button-symbol"
             :title="isCalendarView ? 'Switch to table view' : 'Switch to calendar view'"
-            @click="navigateToPath(togglePath)"
+            @click="toggle()"
         >
             <span class="material-symbols-outlined">{{ isCalendarView ? 'table' : 'calendar_month' }}</span>
-            {{ isCalendarView ? 'Table' : 'Calendar' }}
+            <!--{{ isCalendarView ? 'Table' : 'Calendar' }}-->
         </button>
     `
 };

@@ -1494,6 +1494,12 @@ export const ScheduleFilterSelect = {
                 
                 // Skip if params haven't actually changed
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+
+                // Skip if only non-filter params changed (e.g. layout toggle)
+                const filterKeys = ['dateFilters', 'textFilters', 'view'];
+                const newFilter = JSON.stringify(filterKeys.map(k => newParams[k]));
+                const oldFilter = JSON.stringify(filterKeys.map(k => oldParams[k]));
+                if (newFilter === oldFilter) return;
                 
                 console.log('[ScheduleFilterSelect] URL parameters changed, syncing dropdown');
                 this.syncWithURL();
@@ -1727,6 +1733,12 @@ export const ScheduleFilterSelect = {
                 textFilters: params.textFilters || [],
                 view: params.view || null
             };
+
+            // Only non-filter params present (e.g. just layout) — don't change filter state
+            if (!filter.dateFilters.length && !filter.textFilters.length && !filter.view) {
+                this.defaultSearch && this.applyDefaultSearch();
+                return;
+            }
             
             // Check for view=all (show-all)
             if (filter.view === 'all' && this.allowShowAll) {
