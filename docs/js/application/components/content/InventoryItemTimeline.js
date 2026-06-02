@@ -74,7 +74,7 @@ export const InventoryItemTimeline = {
         itemImageUrlStore() {
             if (!this.resolvedItemId) return null;
             return getReactiveStore(
-                Requests.getItemImageUrl,
+                Requests.getItemImageBlobUrl,
                 null,
                 [this.resolvedItemId]
             );
@@ -188,12 +188,13 @@ export const InventoryItemTimeline = {
             <div v-if="resolvedItemId" style="margin-bottom: var(--padding-md);">
                 <div style="display: flex; gap: var(--padding-md); align-items: flex-start;">
                     <ItemImageComponent
+                        :key="itemImageUrl || 'loading'"
                         :itemNumber="resolvedItemId"
                         :imageUrl="itemImageUrl"
                         :imageSize="96"
-                        editable="true"
+                        :editable="true"
                     />
-                    <div class="details-grid" style="flex: 1;">
+                    <div class="details-grid" style="flex: 1; grid-template-columns: repeat(2, 1fr); align-content: start;">
                         <div class="detail-item">
                             <label>Item#:</label>
                             <span>{{ resolvedItemId }}</span>

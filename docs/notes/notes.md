@@ -91,12 +91,12 @@ For design and project queue:
 - [x] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
 - [x] remove drag into bottom to delete.
 - [ ] collapsed groups mess up drop targets
-- [ ] don't highlight fields in tables...
-- [ ] add tooltip "3 rows copied..."
+- [x] don't highlight fields in basic tables...
+- [x] add tooltip "3 rows copied..."
 - [x] garbage can icon for deletion!!!!
 - [x] fix thumbnail access
 - [ ] error occurred 11:00 updating cache datestamp?
-- [ ] add misc inventory table
+- [x] add misc inventory table
 - [ ] allow "maintenance mode" activated that locks all editing
 
 - [x] packlist inventory overlap alerts showing wrong info. Probably due to reformatted abstraction code.
@@ -146,6 +146,7 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [?] !!! fix oauth token refresh so no errors are hidden, and refresh is automatic
 - [?] !!! Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
 - [?] !!! Use folder->category mapping to determine transformation necessary
+- [ ] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
 - [ ] !!! fix CABINET item numbers in inventor
 - [ ] !!! fix FURNITURE item numbers in inventor
 - [ ] !!! fix HANGING SIGN item numbers in inventor

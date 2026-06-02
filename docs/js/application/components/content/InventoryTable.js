@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, setCacheValue, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
@@ -341,7 +341,7 @@ const ImageViewWithReplaceComponent = {
         <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
             <img :src="displayUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
             <div class="button-bar" v-if="onReplace">
-                <button class="gray" @click="() => { onReplace(); $emit('close-modal'); }">Replace Thumbnail</button>
+                <button class="" @click="() => { onReplace(); $emit('close-modal'); }">Replace</button>
             </div>
         </div>
     `
@@ -474,9 +474,13 @@ export const ItemImageComponent = {
                 onUploadSuccess: (newUrl) => {
                     this.localImageUrl = newUrl;
                     invalidateCache([
-                            { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] },
                             { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }
                         ]);
+                        // Prime both cache levels so the reactive analysis re-run
+                        // returns the new URL immediately without a Drive search.
+                        // (Drive search indexes newly uploaded files with a delay.)
+                        setCacheValue('database', 'getItemImageUrl', [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'], newUrl);
+                        setCacheValue('api', 'getItemImageUrl', [this.itemNumber], newUrl); // emits bus event;
                 }
             }, title);
         },
@@ -488,6 +492,7 @@ export const ItemImageComponent = {
     template: html`
         <div :class="['item-image-container', { 'image-missing': editable && !imageFound }]" :style="{ width: imageSize + 'px', height: imageSize + 'px' }">
             <img
+                :key="displayUrl"
                 :src="displayUrl"
                 alt="Item Image"
                 :title="imageFound ? 'Expand image' : (editable ? 'Upload thumbnail' : '')"

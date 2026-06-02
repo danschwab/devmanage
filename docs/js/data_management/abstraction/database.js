@@ -162,7 +162,10 @@ class database_uncached {
             await GoogleSheetsService.deleteDriveFile(oldId);
         }
 
-        return await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
+        // Prefer thumbnailLink (real Google URL) over blob URL — avoids CSP issues and
+        // works directly in <img> tags. Falls back to blob only if thumbnail not yet generated.
+        const thumbnailLink = await GoogleSheetsService.getDriveFileThumbnailLink(uploaded.id);
+        return thumbnailLink || await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
     }
 
     /**

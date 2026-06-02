@@ -1251,6 +1251,14 @@ export class FakeGoogleSheetsService {
     }
 
     /**
+     * Fake implementation of fetching a Drive file's thumbnail link
+     */
+    static async getDriveFileThumbnailLink(fileId) {
+        await this.delay(30);
+        return fileId ? 'assets/logo.png' : null;
+    }
+
+    /**
      * Fake implementation of fetching an authenticated image blob URL
      */
     static async getAuthenticatedImageUrl(fileId) {
