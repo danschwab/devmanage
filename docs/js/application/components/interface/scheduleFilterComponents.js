@@ -226,6 +226,9 @@ export const ScheduleAdvancedFilter = {
                 const year = parseInt(show.year);
                 return isUpcoming ? year >= targetYear : year === targetYear;
             });
+        },
+        authIsAuthenticated() {
+            return authState.isAuthenticated;
         }
     },
     async mounted() {
@@ -239,6 +242,13 @@ export const ScheduleAdvancedFilter = {
         this.syncWithURL();
     },
     watch: {
+        // Reinitialize stores when auth is restored after logout or reauth
+        authIsAuthenticated(isAuth, wasAuth) {
+            if (isAuth && !wasAuth) {
+                this.savedSearchesStore = initializeSavedSearchesStore();
+                this.initializeScheduleStore();
+            }
+        },
         // Watch for URL parameter changes
         'appContext.currentPath': {
             handler(newPath, oldPath) {
@@ -1464,9 +1474,22 @@ export const ScheduleFilterSelect = {
         
         isLoading() {
             return this.savedSearchesStore?.isLoading || this.isLoadingOptions;
+        },
+        authIsAuthenticated() {
+            return authState.isAuthenticated;
         }
     },
     watch: {
+        // Reinitialize saved searches store when auth is restored after logout or reauth
+        async authIsAuthenticated(isAuth, wasAuth) {
+            if (isAuth && !wasAuth) {
+                this.savedSearchesStore = initializeSavedSearchesStore();
+                await this.buildOptions();
+                if (this.containerPath) {
+                    this.syncWithURL();
+                }
+            }
+        },
         savedSearches: {
             async handler() {
                 // Rebuild options when saved searches change
@@ -1889,9 +1912,24 @@ export const InventoryCategoryFilter = {
         // Filter out INDEX category
         visibleCategories() {
             return this.categories.filter(cat => cat.title !== 'INDEX');
+        },
+        authIsAuthenticated() {
+            return authState.isAuthenticated;
         }
     },
     watch: {
+        // Reinitialize categories store when auth is restored after logout or reauth
+        authIsAuthenticated(isAuth, wasAuth) {
+            if (isAuth && !wasAuth && !this.categories.length) {
+                this.hasPerformedInitialSync = false;
+                this.categoriesStore = getReactiveStore(
+                    Requests.getAvailableTabs,
+                    null,
+                    ['INVENTORY'],
+                    null
+                );
+            }
+        },
         // Watch for URL parameter changes
         'appContext.currentPath': {
             handler(newPath, oldPath) {

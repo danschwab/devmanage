@@ -266,9 +266,18 @@ export const InventoryContent = {
         },
         isLoadingCategories() {
             return this.categoriesStore?.isLoading || false;
+        },
+        authIsAuthenticated() {
+            return authState.isAuthenticated;
         }
     },
     watch: {
+        // Reinitialize categories store when auth is restored after logout or reauth
+        authIsAuthenticated(isAuth, wasAuth) {
+            if (isAuth && !wasAuth) {
+                this.initializeCategoriesStore();
+            }
+        },
         // Watch for when categories data is loaded and check for auto-saved data
         'categoriesStore.data': {
             handler(newData) {
@@ -313,6 +322,24 @@ export const InventoryContent = {
                 console.error('[InventoryContent] Error checking auto-saved categories:', error);
             }
         },
+        initializeCategoriesStore() {
+            const analysisConfig = [
+                createAnalysisConfig(
+                    Requests.getInventoryLock,
+                    'lockInfo',
+                    'Checking lock status...',
+                    ['title'],
+                    [authState.user?.email],
+                    'lockInfo'
+                )
+            ];
+            this.categoriesStore = getReactiveStore(
+                Requests.getAvailableTabs,
+                null,
+                ['INVENTORY'],
+                analysisConfig
+            );
+        },
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
         },
@@ -331,23 +358,7 @@ export const InventoryContent = {
     },
     async mounted() {
         // Initialize categories store with lock analysis
-        const analysisConfig = [
-            createAnalysisConfig(
-                Requests.getInventoryLock,
-                'lockInfo',
-                'Checking lock status...',
-                ['title'], // Extract tab name from 'title' column
-                [authState.user?.email], // Pass current user to filter out their own locks
-                'lockInfo' // Store lock info in 'lockInfo' column
-            )
-        ];
-        
-        this.categoriesStore = getReactiveStore(
-            Requests.getAvailableTabs,
-            null, // No save function
-            ['INVENTORY'], // Arguments
-            analysisConfig
-        );
+        this.initializeCategoriesStore();
         
         // Note: checkAutoSavedCategories will be called by the watcher when data loads
 

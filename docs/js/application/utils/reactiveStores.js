@@ -1610,6 +1610,19 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
  * @param {Object} options - Configuration options
  * @param {boolean} options.skipSave - If true, skip auto-save during cleanup (used during logout)
  */
+/**
+ * Reload all stores in the registry that are in an error state.
+ * Called after successful re-authentication so stores cleared by a failed load
+ * during token expiry will recover automatically.
+ */
+export function reloadErrorStores() {
+    Object.values(reactiveStoreRegistry).forEach(store => {
+        if (store.error && !store.isLoading && !store.isSaving) {
+            store.handleInvalidation();
+        }
+    });
+}
+
 export async function clearAllReactiveStores(options = {}) {
     const { skipSave = false } = options;
     

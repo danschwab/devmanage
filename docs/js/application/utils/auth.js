@@ -23,7 +23,7 @@ export const authState = Vue.reactive({
 
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
-import { clearAllReactiveStores } from './reactiveStores.js';
+import { clearAllReactiveStores, reloadErrorStores } from './reactiveStores.js';
 import { clearCache } from '../../data_management/utils/caching.js';
 
 // Import modalManager for re-authentication prompts
@@ -94,6 +94,9 @@ export class Auth {
             // Re-enable priority queue if it was disabled during logout
             const { PriorityQueue } = await import('./priorityQueue.js');
             PriorityQueue.enable();
+            
+            // Reload any stores that failed during the previous token expiry
+            reloadErrorStores();
             
             return true;
         } catch (error) {
@@ -283,6 +286,7 @@ export class Auth {
                             console.log(`[Auth] Attempting silent refresh for ${context}...`);
                             const refreshed = await GoogleSheetsAuth.silentRefresh();
                             if (refreshed) {
+                                reloadErrorStores();
                                 console.log(`[Auth] Silent refresh succeeded for ${context}`);
                                 resolve(true);
                                 return;
