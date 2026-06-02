@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, setCacheValue, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
