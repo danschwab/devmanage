@@ -3,7 +3,7 @@ import { authState } from './auth.js';
 import { getReactiveStore } from './reactiveStores.js';
 import { Requests } from '../../data_management/api.js';
 
-export const DashboardRegistry = {
+export const DashboardRegistry = Vue.reactive({
     store: null,
     saveTimeout: null,
     isSaving: false, // Track save state to prevent invalidation-triggered reloads
@@ -314,4 +314,4 @@ export const DashboardRegistry = {
         }
         this.store = null;
     }
-};
+});
