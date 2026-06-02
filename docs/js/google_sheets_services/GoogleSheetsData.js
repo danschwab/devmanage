@@ -630,22 +630,32 @@ export class GoogleSheetsService {
                 }
                 
                 const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
-                
+                console.log(`[icons] Drive search: "${fileName}" in folder ${folderId}`);
+
+                // Log token scope so we can confirm drive.readonly was granted
+                const _token = gapi.client.getToken();
+                if (_token) {
+                    console.log('[icons] Token scope granted:', _token.scope || '(scope field not present in token)');
+                } else {
+                    console.warn('[icons] No OAuth token present — Drive call will fail');
+                }
+
                 const response = await gapi.client.request({
                     path: 'https://www.googleapis.com/drive/v3/files',
                     method: 'GET',
                     params: {
                         q: query,
-                        fields: 'files(id,name,webViewLink,webContentLink)'
+                        fields: 'files(id,name,webViewLink,webContentLink)',
+                        supportsAllDrives: true,
+                        includeItemsFromAllDrives: true
                     }
                 });
 
-                if (response.result && response.result.files && response.result.files.length > 0) {
-                    const file = response.result.files[0];
-                    
-                    // Create direct image URL using the file ID
-                    const directImageUrl = `https://lh3.googleusercontent.com/d/${file.id}?authuser=1/view`;//`https://drive.google.com/uc?id=${file.id}&export=view`;
-                    
+                const files = response.result?.files;
+                if (files && files.length > 0) {
+                    const file = files[0];
+                    const directImageUrl = `https://lh3.googleusercontent.com/d/${file.id}`;
+                    console.log(`[icons] Found: "${file.name}" → ${directImageUrl}`);
                     return {
                         id: file.id,
                         name: file.name,
@@ -653,10 +663,77 @@ export class GoogleSheetsService {
                         directImageUrl: directImageUrl
                     };
                 }
+
+                console.log(`[icons] Not found in Drive: "${fileName}" (${files ? files.length : 'null'} results)`);
                 return "";
             } catch (error) {
-                console.error('Error searching Drive file:', error);
+                const status = error?.result?.error?.code || error?.status;
+                const message = error?.result?.error?.message || error?.message;
+                console.error(`[icons] Drive API error (status ${status}): ${message}`, error);
+                if (status === 403) console.error('[icons] 403 = insufficient scope or folder access. Verify drive.readonly is granted AND listed in the OAuth consent screen.');
+                if (status === 401) console.error('[icons] 401 = unauthenticated. Token may be expired or missing drive scope.');
                 return "";
+            }
+        });
+    }
+
+    /**
+     * Upload a file to Google Drive using multipart upload
+     * @param {File} file - The file object to upload
+     * @param {string} fileName - Name to give the file in Drive
+     * @param {string} folderId - ID of the destination folder
+     * @returns {Promise<{id: string, name: string}|null>} Uploaded file metadata or null on failure
+     */
+    static async uploadDriveFile(file, fileName, folderId) {
+        return await this.withExponentialBackoff(async () => {
+            try {
+                const token = gapi.client.getToken();
+                if (!token || !token.access_token) throw new Error('Not authenticated');
+
+                const metadata = { name: fileName, parents: [folderId] };
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', file);
+
+                const response = await fetch(
+                    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name',
+                    {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token.access_token}` },
+                        body: form
+                    }
+                );
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(`Upload failed: ${response.status} ${err?.error?.message || ''}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error uploading Drive file:', error);
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Delete a file from Google Drive
+     * @param {string} fileId - ID of the file to delete
+     * @returns {Promise<boolean>} True on success, false on failure
+     */
+    static async deleteDriveFile(fileId) {
+        return await this.withExponentialBackoff(async () => {
+            try {
+                await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${fileId}`,
+                    method: 'DELETE',
+                    params: { supportsAllDrives: true }
+                });
+                return true;
+            } catch (error) {
+                console.error('Error deleting Drive file:', error);
+                return false;
             }
         });
     }

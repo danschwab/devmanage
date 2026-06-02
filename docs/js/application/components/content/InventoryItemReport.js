@@ -21,6 +21,7 @@ export const InventoryItemReport = {
             searchFilter: null,
             searchParams: null,
             error: null,
+            endDate: null,
             minQtyThreshold: 1,
             NavigationRegistry
         };
@@ -65,23 +66,14 @@ export const InventoryItemReport = {
 
         tableData() {
             return (this.reportStore?.data || [])
-                .map(row => {
-                    const summary = row._reportSummary || {};
-                    return {
-                        ...row,
-                        startDate: summary.startDate || null,
-                        endDate: summary.endDate || null,
-                        inventoryQty: summary.inventoryQty !== undefined ? summary.inventoryQty : null,
-                        minQty: summary.minQty !== undefined ? summary.minQty : null,
-                        overlappingShows: row.shows ? Object.keys(row.shows).filter(k => (row.shows[k] || 0) > 0) : []
-                    };
-                })
+                .map(row => ({
+                    ...row,
+                    startDate: this.referenceDate || null,
+                    endDate: this.endDate || null,
+                    overlappingShows: row.shows ? Object.keys(row.shows).filter(k => (row.shows[k] || 0) > 0) : []
+                }))
                 .filter(row => {
-                    // Keep rows whose analysis hasn't run yet (show while pending)
-                    if (row._reportSummary === null || row._reportSummary === undefined) return true;
-                    // Keep rows where item isn't in inventory (unknown — may be a concern)
-                    if (row.minQty === null) return true;
-                    // Only show items where inventory drops below threshold
+                    if (row.minQty === null || row.minQty === undefined) return true;
                     return row.minQty < this.minQtyThreshold;
                 });
         },
@@ -157,20 +149,25 @@ export const InventoryItemReport = {
                 filter.dateFilters = searchData.dateFilters;
             }
 
-            const shipFilter = searchData.dateFilters?.find(f => f.column === 'Ship');
-            if (shipFilter) {
-                if (typeof shipFilter.value === 'number') {
+            const offsetToDate = (v) => {
+                if (v === null || v === undefined) return null;
+                if (typeof v === 'number') {
                     const d = new Date();
-                    d.setDate(d.getDate() + shipFilter.value);
-                    this.referenceDate = toISODateString(d);
-                } else if (typeof shipFilter.value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(shipFilter.value)) {
-                    this.referenceDate = shipFilter.value;
-                } else {
-                    this.referenceDate = todayISOString();
+                    d.setDate(d.getDate() + v);
+                    return toISODateString(d);
                 }
-            } else {
-                this.referenceDate = todayISOString();
+                return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+            };
+            let resolvedStart = searchData?.startDate ?? null;
+            let resolvedEnd   = searchData?.endDate   ?? null;
+            if (!resolvedStart || !resolvedEnd) {
+                const shipAfterFilter  = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'after');
+                const shipBeforeFilter = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'before');
+                if (!resolvedStart) resolvedStart = offsetToDate(shipAfterFilter?.value);
+                if (!resolvedEnd)   resolvedEnd   = offsetToDate(shipBeforeFilter?.value);
             }
+            this.referenceDate = resolvedStart ?? todayISOString();
+            this.endDate = resolvedEnd ?? null;
 
             if (searchData.textFilters && searchData.textFilters.length > 0) {
                 searchData.textFilters.forEach(textFilter => {
@@ -199,12 +196,22 @@ export const InventoryItemReport = {
 
             const analysisConfig = [
                 createAnalysisConfig(
-                    Requests.getItemReportSummary,
-                    '_reportSummary',
-                    'Computing date ranges and min quantities...',
-                    null,  // no sourceColumns — passes full row as first argument
-                    [],
-                    '_reportSummary',
+                    Requests.getItemMinQuantityInRange,
+                    'minQty',
+                    'Computing min quantities...',
+                    ['itemId'],
+                    [this.referenceDate, this.endDate],
+                    'minQty',
+                    false,
+                    Priority.USER_ACTION
+                ),
+                createAnalysisConfig(
+                    Requests.getItemInventoryQuantity,
+                    'inventoryQty',
+                    'Loading inventory quantities...',
+                    ['itemId'],
+                    [this.referenceDate],
+                    'inventoryQty',
                     false,
                     Priority.USER_ACTION
                 ),
@@ -269,10 +276,10 @@ export const InventoryItemReport = {
         navigateToItemPage(row) {
             if (!row.tabName || !row.itemId) return;
             const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
-            const dateFilters = (row.startDate || row.endDate)
+            const dateFilters = (this.referenceDate || this.endDate)
                 ? [
-                    ...(row.startDate ? [{ column: 'Show Date', value: row.startDate, type: 'after'  }] : []),
-                    ...(row.endDate   ? [{ column: 'Show Date', value: row.endDate,   type: 'before' }] : [])
+                    ...(this.referenceDate ? [{ column: 'Show Date', value: this.referenceDate, type: 'after'  }] : []),
+                    ...(this.endDate       ? [{ column: 'Show Date', value: this.endDate,       type: 'before' }] : [])
                   ]
                 : null;
             const finalPath = dateFilters
@@ -344,7 +351,7 @@ export const InventoryItemReport = {
                 v-else
                 :data="tableData"
                 :columns="tableColumns"
-                :hide-columns="['tabName', '_reportSummary']"
+                :hide-columns="['tabName']"
                 :show-search="true"
                 :sync-search-with-url="true"
                 :container-path="containerPath || 'inventory/reports/item-shortages'"

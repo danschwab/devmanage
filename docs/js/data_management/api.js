@@ -714,6 +714,21 @@ class Requests_uncached {
     }
 
     /**
+     * Upload a thumbnail image for an item to the Drive thumbnails folder.
+     * Replaces any existing image for that item number.
+     *
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     *
+     * @param {File} file - The image file to upload
+     * @param {string} itemNumber - Item number the image belongs to
+     * @returns {Promise<string|null>} The new direct image URL, or null on failure
+     */
+    static async uploadItemImage(file, itemNumber) {
+        return await Database.uploadItemImage(file, itemNumber);
+    }
+
+    /**
      * Get the tab name for a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemName - The item name/ID to search for

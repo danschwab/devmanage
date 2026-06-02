@@ -406,8 +406,8 @@ export const CalendarComponent = {
                             :key="day.toISOString()"
                             :class="{ 'calendar-date-cell': true, 'month-old': (week.isMonthBoundary && dayIdx < week.monthBoundaryIdx) || (week.monthAfterBoundaryIdx > 0 && dayIdx >= week.monthAfterBoundaryIdx), 'month-new': (week.isMonthBoundary && dayIdx >= week.monthBoundaryIdx) || (week.monthAfterBoundaryIdx > 0 && dayIdx < week.monthAfterBoundaryIdx), 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && dayIdx === week.monthBoundaryIdx - 1 }"
                         >
-                            <span :class="['calendar-date-number', { today: isToday(day) }]">{{ day.getDate() }}</span>
                             <span v-if="isFirstOfMonth(day) || (wIdx === 0 && dayIdx === 0)" class="calendar-month-label">{{ monthAbbr(day) }}</span>
+                            <span :class="['calendar-date-number', { today: isToday(day) }]">{{ day.getDate() }}</span>
                             <span v-if="showYear(day, wIdx, dayIdx)" class="calendar-year-label">{{ day.getFullYear() }}</span>
                         </div>
                     </div>

@@ -1251,6 +1251,24 @@ export class FakeGoogleSheetsService {
     }
 
     /**
+     * Fake implementation of Google Drive file upload
+     */
+    static async uploadDriveFile(file, fileName, folderId) {
+        await this.delay(300);
+        console.log(`[FakeGoogle] uploadDriveFile: "${fileName}" to folder "${folderId}"`);
+        return { id: `fake_uploaded_${Date.now()}`, name: fileName };
+    }
+
+    /**
+     * Fake implementation of Google Drive file delete
+     */
+    static async deleteDriveFile(fileId) {
+        await this.delay(100);
+        console.log(`[FakeGoogle] deleteDriveFile: "${fileId}"`);
+        return true;
+    }
+
+    /**
      * Fake implementation of getting Drive image URL
      * @param {string} fileId - Google Drive file ID
      * @returns {string} Direct image URL

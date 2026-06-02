@@ -725,6 +725,7 @@ export const PacklistTable = {
                                     :imageUrl="row.AppData?.imageUrl"
                                     :itemNumber="row.itemNumber"
                                     :imageSize="48"
+                                    :editable="true"
                                 />
                             </template>
                             <template v-else-if="column.key === 'actions'">

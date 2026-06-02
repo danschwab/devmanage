@@ -317,6 +317,93 @@ const NewItemNumberPrompt = {
 };
 
 
+// Modal component for viewing a full-size thumbnail with a replace option
+const ImageViewWithReplaceComponent = {
+    props: {
+        imageUrl: { type: String, required: true },
+        onReplace: { type: Function, default: null }
+    },
+    template: html`
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <img :src="imageUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
+            <div class="button-bar" v-if="onReplace">
+                <button class="gray" @click="() => { onReplace(); $emit('close-modal'); }">Replace Thumbnail</button>
+            </div>
+        </div>
+    `
+};
+
+// Modal component for uploading or replacing an item thumbnail
+const ImageUploadComponent = {
+    props: {
+        itemNumber: { type: String, required: true },
+        mode: { type: String, default: 'add' }, // 'add' | 'replace'
+        onUploadSuccess: { type: Function, default: null }
+    },
+    data() {
+        return {
+            selectedFile: null,
+            previewUrl: null,
+            uploading: false,
+            uploadError: null
+        };
+    },
+    methods: {
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                this.uploadError = 'Please select an image file.';
+                return;
+            }
+            this.uploadError = null;
+            this.selectedFile = file;
+            if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+            this.previewUrl = URL.createObjectURL(file);
+        },
+        async handleUpload() {
+            if (!this.selectedFile || this.uploading) return;
+            this.uploading = true;
+            this.uploadError = null;
+            try {
+                const newUrl = await Requests.uploadItemImage(this.selectedFile, this.itemNumber);
+                if (newUrl) {
+                    this.onUploadSuccess?.(newUrl);
+                    this.$emit('close-modal');
+                } else {
+                    this.uploadError = 'Upload failed. Please try again.';
+                }
+            } catch (e) {
+                console.error('[ImageUploadComponent] Upload error:', e);
+                this.uploadError = 'Upload failed. Please try again.';
+            } finally {
+                this.uploading = false;
+            }
+        }
+    },
+    beforeUnmount() {
+        if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+    },
+    template: html`
+        <div style="display: flex; flex-direction: column; gap: 12px; min-width: 260px;">
+            <div v-if="previewUrl" style="text-align: center;">
+                <img :src="previewUrl" alt="Preview" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 4px;" />
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 0.85em; color: var(--color-text-secondary, #888);">Select image file</span>
+                <input type="file" accept="image/*" @change="handleFileSelect" :disabled="uploading" />
+            </label>
+            <div v-if="uploadError" style="color: var(--color-error, #c00); font-size: 0.85em;">{{ uploadError }}</div>
+            <div class="button-bar">
+                <button @click="handleUpload" :disabled="!selectedFile || uploading">
+                    {{ uploading ? 'Uploading...' : (mode === 'replace' ? 'Replace' : 'Upload') }}
+                </button>
+                <button class="gray" @click="$emit('close-modal')" :disabled="uploading">Cancel</button>
+            </div>
+        </div>
+    `
+};
+
 // Image component for displaying item thumbnails
 // Image URL should be provided via analysis step in reactive store
 export const ItemImageComponent = {
@@ -332,12 +419,21 @@ export const ItemImageComponent = {
         imageSize: {
             type: Number,
             default: 64
+        },
+        editable: {
+            type: Boolean,
+            default: false
         }
     },
     inject: ['$modal'],
+    data() {
+        return {
+            localImageUrl: null
+        };
+    },
     computed: {
         displayUrl() {
-            return this.imageUrl || 'assets/placeholder.png';
+            return this.localImageUrl || this.imageUrl || 'assets/placeholder.png';
         },
         imageFound() {
             return this.displayUrl !== 'assets/placeholder.png';
@@ -346,21 +442,39 @@ export const ItemImageComponent = {
     methods: {
         showImageModal() {
             if (this.imageFound) {
-                this.$modal.image(this.displayUrl, `Image: ${this.itemNumber}`, this.itemNumber);
+                this.$modal.custom(ImageViewWithReplaceComponent, {
+                    imageUrl: this.displayUrl,
+                    modalClass: 'reading-menu',
+                    onReplace: (this.editable && this.itemNumber) ? () => this.showUploadModal() : null
+                }, `Image: ${this.itemNumber}`);
             }
         },
+        showUploadModal() {
+            if (!this.editable) return;
+            const mode = this.imageFound ? 'replace' : 'add';
+            const title = this.imageFound ? 'Replace Thumbnail' : 'Add Thumbnail';
+            this.$modal.custom(ImageUploadComponent, {
+                itemNumber: this.itemNumber,
+                mode,
+                onUploadSuccess: (newUrl) => {
+                    this.localImageUrl = newUrl;
+                    invalidateCache([{ namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }]);
+                }
+            }, title);
+        },
         handleError() {
-            // If image fails to load, will fall back to placeholder via error handling in template
-            console.warn(`Failed to load image for item ${this.itemNumber}`);
+            console.warn(`[icons] Browser failed to load image for "${this.itemNumber}": ${this.displayUrl}`);
+            console.warn('[icons] If the URL looks correct, the file may not be shared with the authenticated user, or the lh3.googleusercontent.com CDN requires a valid Google session.');
         }
     },
     template: html`
-        <div class="item-image-container" :style="{ position: 'relative', width: imageSize + 'px', height: imageSize + 'px' }">
-            <img 
-                :src="displayUrl" 
-                alt="Item Image" 
-                :style="imageFound ? 'cursor: pointer;' : ''"
-                @click="showImageModal"
+        <div :class="['item-image-container', { 'image-missing': editable && !imageFound }]" :style="{ width: imageSize + 'px', height: imageSize + 'px' }">
+            <img
+                :src="displayUrl"
+                alt="Item Image"
+                :title="imageFound ? 'Expand image' : (editable ? 'Upload thumbnail' : '')"
+                :style="imageFound || editable ? 'cursor: pointer;' : ''"
+                @click="imageFound ? showImageModal() : (editable ? showUploadModal() : null)"
                 @error="handleError"
             />
         </div>
@@ -854,6 +968,7 @@ export const InventoryTableComponent = {
                         v-if="column.key === 'image'"
                         :itemNumber="row.itemNumber"
                         :imageUrl="row.AppData && row.AppData.imageUrl"
+                        :editable="true"
                     />
                     <button
                         v-else-if="column.key === '_navigate'"

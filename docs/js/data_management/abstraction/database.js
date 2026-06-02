@@ -97,8 +97,8 @@ class database_uncached {
             return '';
         }
         
-        //console.log('[Database.getItemImageUrl] Searching for image:', itemNumberStr);
-                
+        console.log(`[icons] getItemImageUrl: searching for "${itemNumberStr}" in folder ${folderId}`);
+
         // Try different file extensions
         const extensions = ['jpg', 'jpeg', 'png'];
         
@@ -107,7 +107,7 @@ class database_uncached {
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
             if (file && file.directImageUrl) {
-                //console.log(`[Database.getItemImageUrl] Found image for ${itemNumberStr}: ${file.directImageUrl}`);
+                console.log(`[icons] Image resolved for "${itemNumberStr}": ${file.directImageUrl}`);
                 return file.directImageUrl;
             }
         }
@@ -117,11 +117,44 @@ class database_uncached {
         const parts = itemNumberStr.split(separators);
         
         if (parts.length > 1 && parts[0]) {
-            // Recursively search with the first part (benefits from caching via deps.call)
+            console.log(`[icons] Trying prefix fallback for "${itemNumberStr}" → "${parts[0]}"`);
             return await deps.call(Database.getItemImageUrl, parts[0], folderId);
         }
         
+        console.log(`[icons] No image found for "${itemNumberStr}"`);
         return ''; // Return empty string if no image found
+    }
+
+    /**
+     * Upload an image for an item to the Drive thumbnails folder.
+     * Replaces any existing image files for that item number.
+     * MUTATION — not cached.
+     * @param {File} file - The image file to upload
+     * @param {string} itemNumber - The item number used to name the file
+     * @param {string} folderId - Google Drive folder ID for thumbnails
+     * @returns {Promise<string|null>} The new image URL, or null on failure
+     */
+    static async uploadItemImage(file, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+        const itemNumberStr = String(itemNumber).trim();
+        const ext = file.type === 'image/png' ? 'png' : 'jpg';
+        const fileName = `${itemNumberStr}.${ext}`;
+
+        // Find any existing files for this item to delete after upload
+        const extensions = ['jpg', 'jpeg', 'png'];
+        const existingFileIds = [];
+        for (const existingExt of extensions) {
+            const existing = await GoogleSheetsService.searchDriveFileInFolder(`${itemNumberStr}.${existingExt}`, folderId);
+            if (existing && existing.id) existingFileIds.push(existing.id);
+        }
+
+        const uploaded = await GoogleSheetsService.uploadDriveFile(file, fileName, folderId);
+        if (!uploaded || !uploaded.id) return null;
+
+        for (const oldId of existingFileIds) {
+            await GoogleSheetsService.deleteDriveFile(oldId);
+        }
+
+        return `https://lh3.googleusercontent.com/d/${uploaded.id}`;
     }
 
 
@@ -362,7 +395,7 @@ class database_uncached {
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow'],
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
     ['getItemImageUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);

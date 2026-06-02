@@ -41,7 +41,7 @@ export const InventoryItemTimeline = {
             return (row) => {
                 if (row.quantity < 0) return 'red';
                 if (row.quantity < 1) return 'yellow';
-                return '';
+                return 'green';
             };
         },
         isCalendarView() {

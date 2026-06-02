@@ -1129,6 +1129,18 @@ tr.is-group:hover .group-toggle {
     object-fit: cover;
 }
 
+.item-image-container.image-missing::after {
+    opacity: 0;
+    content: "+";
+    position: absolute;
+    color: var(--color-text-inverted);
+    font-size: 1.5rem;
+    text-align: center;
+    pointer-events: none;
+}
+.item-image-container.image-missing:hover::after {
+    opacity: 1;
+}
 
 .table-edit-textarea, td input[type="number"] {
     width: 100%;
@@ -1439,15 +1451,14 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 
 .calendar-month-label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--color-text);
-    font-weight: 600;
 }
 .calendar-year-label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--color-text);
     font-weight: 600;
-    white-space: nowrap;
+    padding-left: var(--padding-sm);
 }
 
 .calendar-lane-row {

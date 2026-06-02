@@ -118,11 +118,11 @@ export const PacklistItemsSummary = {
                     Priority.USER_ACTION // Used for navigation buttons
                 ),
                 createAnalysisConfig(
-                    (itemId, currentProjectId, refDate) => Requests.calculateRemainingQuantity(currentProjectId, itemId, refDate),
+                    Requests.getItemMinQuantityInRange,
                     'remaining',
                     'Calculating remaining quantities...',
                     ['itemId'],
-                    [this.projectIdentifier, referenceDate],
+                    [this.projectShipDate, this.projectReturnDate],
                     'remaining'
                 ),
                 createAnalysisConfig(
