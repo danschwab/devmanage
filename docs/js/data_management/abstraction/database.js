@@ -106,9 +106,17 @@ class database_uncached {
             const fileName = `${itemNumberStr}.${ext}`;            
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
-            if (file && file.directImageUrl) {
-                console.log(`[icons] Image resolved for "${itemNumberStr}": ${file.directImageUrl}`);
-                return file.directImageUrl;
+            if (file && file.thumbnailLink) {
+                console.log(`[icons] Thumbnail URL resolved for "${itemNumberStr}"`);
+                return file.thumbnailLink;
+            }
+            // Fallback: if Drive didn't return a thumbnailLink, fetch as blob
+            if (file && file.id) {
+                const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
+                if (blobUrl) {
+                    console.log(`[icons] Image resolved for "${itemNumberStr}" (blob fallback)`);
+                    return blobUrl;
+                }
             }
         }
         
@@ -154,7 +162,39 @@ class database_uncached {
             await GoogleSheetsService.deleteDriveFile(oldId);
         }
 
-        return `https://lh3.googleusercontent.com/d/${uploaded.id}`;
+        return await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
+    }
+
+    /**
+     * Fetch the full-resolution image for an item as a blob URL.
+     * Only called when the full-size image modal is opened.
+     * @param {Object} deps - Dependency decorator
+     * @param {string} itemNumber - Item number to search for
+     * @param {string} folderId - Google Drive folder ID
+     * @returns {Promise<string>} Blob URL or empty string
+     */
+    static async getItemImageBlobUrl(deps, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+        if (!itemNumber) return '';
+        const itemNumberStr = String(itemNumber).trim();
+        if (!itemNumberStr) return '';
+
+        const extensions = ['jpg', 'jpeg', 'png'];
+        for (const ext of extensions) {
+            const fileName = `${itemNumberStr}.${ext}`;
+            const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
+            if (file && file.id) {
+                const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
+                if (blobUrl) return blobUrl;
+            }
+        }
+
+        const separators = /[\s\-_]+/;
+        const parts = itemNumberStr.split(separators);
+        if (parts.length > 1 && parts[0]) {
+            return await deps.call(Database.getItemImageBlobUrl, parts[0], folderId);
+        }
+
+        return '';
     }
 
 
@@ -396,7 +436,7 @@ export const Database = wrapMethods(
     database_uncached, 
     'database', 
     ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
-    ['getItemImageUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    ['getItemImageUrl', 'getItemImageBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
         // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)

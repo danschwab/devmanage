@@ -714,6 +714,17 @@ class Requests_uncached {
     }
 
     /**
+     * Fetch the full-resolution image for an item as a blob URL.
+     * Only call this when the user requests the full-size view.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} itemNumber - The item number to search for
+     * @returns {Promise<string>} Blob URL or empty string
+     */
+    static async getItemImageBlobUrl(deps, itemNumber) {
+        return await deps.call(Database.getItemImageBlobUrl, itemNumber);
+    }
+
+    /**
      * Upload a thumbnail image for an item to the Drive thumbnails folder.
      * Replaces any existing image for that item number.
      *

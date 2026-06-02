@@ -320,12 +320,26 @@ const NewItemNumberPrompt = {
 // Modal component for viewing a full-size thumbnail with a replace option
 const ImageViewWithReplaceComponent = {
     props: {
-        imageUrl: { type: String, required: true },
+        thumbnailUrl: { type: String, required: true },
+        itemNumber: { type: String, default: '' },
         onReplace: { type: Function, default: null }
+    },
+    data() {
+        return { fullImageUrl: null };
+    },
+    computed: {
+        displayUrl() {
+            return this.fullImageUrl || this.thumbnailUrl;
+        }
+    },
+    async mounted() {
+        if (this.itemNumber) {
+            this.fullImageUrl = await Requests.getItemImageBlobUrl(this.itemNumber) || null;
+        }
     },
     template: html`
         <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
-            <img :src="imageUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
+            <img :src="displayUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
             <div class="button-bar" v-if="onReplace">
                 <button class="gray" @click="() => { onReplace(); $emit('close-modal'); }">Replace Thumbnail</button>
             </div>
@@ -443,7 +457,8 @@ export const ItemImageComponent = {
         showImageModal() {
             if (this.imageFound) {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
-                    imageUrl: this.displayUrl,
+                    thumbnailUrl: this.displayUrl,
+                    itemNumber: this.itemNumber,
                     modalClass: 'reading-menu',
                     onReplace: (this.editable && this.itemNumber) ? () => this.showUploadModal() : null
                 }, `Image: ${this.itemNumber}`);
@@ -458,7 +473,10 @@ export const ItemImageComponent = {
                 mode,
                 onUploadSuccess: (newUrl) => {
                     this.localImageUrl = newUrl;
-                    invalidateCache([{ namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }]);
+                    invalidateCache([
+                            { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] },
+                            { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }
+                        ]);
                 }
             }, title);
         },
@@ -538,7 +556,7 @@ export const InventoryTableComponent = {
                     label: 'QTY',
                     format: 'number',
                     editable: this.allowEdit,
-                    autoColor: true,
+                    autoColor: false,
                     width: 120,
                     sortable: true
                 },

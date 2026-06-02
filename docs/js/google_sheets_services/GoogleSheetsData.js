@@ -645,7 +645,7 @@ export class GoogleSheetsService {
                     method: 'GET',
                     params: {
                         q: query,
-                        fields: 'files(id,name,webViewLink,webContentLink)',
+                        fields: 'files(id,name,webViewLink,webContentLink,thumbnailLink)',
                         supportsAllDrives: true,
                         includeItemsFromAllDrives: true
                     }
@@ -654,13 +654,12 @@ export class GoogleSheetsService {
                 const files = response.result?.files;
                 if (files && files.length > 0) {
                     const file = files[0];
-                    const directImageUrl = `https://lh3.googleusercontent.com/d/${file.id}`;
-                    console.log(`[icons] Found: "${file.name}" → ${directImageUrl}`);
+                    console.log(`[icons] Found in Drive: "${file.name}" (id: ${file.id})`);
                     return {
                         id: file.id,
                         name: file.name,
                         webViewLink: file.webViewLink,
-                        directImageUrl: directImageUrl
+                        thumbnailLink: file.thumbnailLink || null
                     };
                 }
 
@@ -675,6 +674,36 @@ export class GoogleSheetsService {
                 return "";
             }
         });
+    }
+
+    /**
+     * Fetch a Drive file's content as an authenticated blob URL.
+     * Use this for any file that is not publicly shared — the blob URL
+     * works in <img> tags without needing auth headers.
+     * @param {string} fileId - Google Drive file ID
+     * @returns {Promise<string|null>} A blob object URL, or null on failure
+     */
+    static async getAuthenticatedImageUrl(fileId) {
+        try {
+            const token = gapi.client.getToken();
+            if (!token || !token.access_token) {
+                console.warn('[icons] getAuthenticatedImageUrl: no token available');
+                return null;
+            }
+            const response = await fetch(
+                `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+                { headers: { Authorization: `Bearer ${token.access_token}` } }
+            );
+            if (!response.ok) {
+                console.warn(`[icons] getAuthenticatedImageUrl failed for ${fileId}: HTTP ${response.status}`);
+                return null;
+            }
+            const blob = await response.blob();
+            return URL.createObjectURL(blob);
+        } catch (error) {
+            console.error('[icons] getAuthenticatedImageUrl error:', error);
+            return null;
+        }
     }
 
     /**

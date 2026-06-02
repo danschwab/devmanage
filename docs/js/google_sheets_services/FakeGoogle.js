@@ -1243,11 +1243,19 @@ export class FakeGoogleSheetsService {
                 id: `fake_id_${fileName.replace('.', '_')}`,
                 name: fileName,
                 webViewLink: `https://drive.google.com/fake/${fileName}`,
-                directImageUrl: mockImages[fileName]
+                thumbnailLink: mockImages[fileName]
             };
         }
         
         return ""; // File not found
+    }
+
+    /**
+     * Fake implementation of fetching an authenticated image blob URL
+     */
+    static async getAuthenticatedImageUrl(fileId) {
+        await this.delay(50);
+        return fileId ? 'assets/logo.png' : null;
     }
 
     /**
