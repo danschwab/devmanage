@@ -310,7 +310,7 @@ export const PacklistTable = {
     },
     watch: {
         isDirty(newValue) {
-            if (newValue && !this.editMode && this.tabName && !this.lockedByOther) {
+            if (newValue && !this.editMode && this.tabName && !this.lockedByOther && this.lockCheckComplete) {
                 const editPath = NavigationRegistry.buildPathWithCurrentParams(
                     `packlist/${this.tabName}`,
                     this.appContext?.currentPath,
