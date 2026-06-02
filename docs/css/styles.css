@@ -962,6 +962,30 @@ tr.dragging, tr.selected, tfoot tr.draggable {
     border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
+/* Drag follower - shows row count during drag/copy/cut operations */
+.drag-follower {
+    position: fixed;
+    background: var(--color-blue-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-blue);
+    border-radius: var(--radius-md);
+    padding: var(--padding-sm) var(--padding-md) var(--padding-sm) var(--padding-sm);
+    font-size: 11pt;
+    font-weight: 500;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px var(--color-shadow);
+    z-index: 10000;
+    transform: translate(-5%, -50%);
+    opacity: 0.75;
+}
+.drag-follower::before {
+    color: var(--color-blue);
+    content: "⋮⋮";
+    margin: 0 var(--padding-sm) 0 0;
+    padding: 0;
+}
 
 tr.selected > td::after {
     content: "";

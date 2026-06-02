@@ -53,7 +53,7 @@ export const InventoryOverviewTableComponent = {
                     label: 'QTY',
                     format: 'number',
                     editable: false,
-                    autoColor: true,
+                    autoColor: false,
                     sortable: true
                 }
             ],

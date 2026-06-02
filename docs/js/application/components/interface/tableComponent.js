@@ -84,6 +84,10 @@ export const tableRowSelectionState = Vue.reactive({
     // Snapshot selections at drag start so drag gating stays stable during a drag session
     dragSelectionSnapshot: null,
 
+    // Global mouse position for drag follower UI
+    mouseX: null,
+    mouseY: null,
+
     // Clipboard mode state
     clipboardMode: null,           // null | 'copy' | 'cut'
     clipboardItems: [],            // Array of { clone, original } where original is null for 'copy'
@@ -250,6 +254,8 @@ export const tableRowSelectionState = Vue.reactive({
         this.dragId = null;
         this.dragTargetArray = null;
         this.currentDropTarget = null;
+        this.mouseX = null;
+        this.mouseY = null;
         this._version++;
 
         if (this._handleClipboardKeydown) {
@@ -1422,6 +1428,8 @@ export const tableRowSelectionState = Vue.reactive({
         this.dragId = null;
         this.currentDropTarget = null;
         this.dragSelectionSnapshot = null;
+        this.mouseX = null;
+        this.mouseY = null;
         // Keep drag state registration managed by component lifecycle
         
         // Increment version to trigger reactivity for drag state change
@@ -1849,6 +1857,28 @@ export const TableComponent = {
         },
         anySelectedGroupCollapsed() {
             return this.selectedGroupMasterIds.some(groupId => this.isGroupMembersHiddenById(groupId));
+        },
+        shouldShowDragFollower() {
+            tableRowSelectionState._version;
+            return (tableRowSelectionState.findingDropTargets || tableRowSelectionState.clipboardMode) &&
+                   tableRowSelectionState.mouseX !== null && 
+                   tableRowSelectionState.mouseY !== null;
+        },
+        dragFollowerText() {
+            tableRowSelectionState._version;
+            const count = tableRowSelectionState.clipboardMode 
+                ? tableRowSelectionState.clipboardItems.length
+                : tableRowSelectionState.selections.size;
+            return `${count} row${count !== 1 ? 's' : ''}`;
+        },
+        dragFollowerStyle() {
+            tableRowSelectionState._version;
+            if (!this.shouldShowDragFollower) return { display: 'none' };
+            return {
+                position: 'fixed',
+                left: (tableRowSelectionState.mouseX) + 'px',
+                top: (tableRowSelectionState.mouseY) + 'px'
+            };
         },
         canCreateGroupFromSelection() {
             if (!this.newRow || this.firstSelectedVisibleRowIndex === -1) return false;
@@ -2938,6 +2968,10 @@ export const TableComponent = {
         handleGlobalMouseMove(event) {
             if (!this.clickState.isMouseDown) return;
             
+            // Update global mouse position for drag follower
+            tableRowSelectionState.mouseX = event.clientX;
+            tableRowSelectionState.mouseY = event.clientY;
+            
             const deltaX = Math.abs(event.clientX - this.clickState.startX);
             const deltaY = Math.abs(event.clientY - this.clickState.startY);
             const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -3487,6 +3521,12 @@ export const TableComponent = {
             const newX = event.clientX;
             const newY = event.clientY;
             
+            // Update global mouse position for drag follower when in drag/clipboard mode
+            if (tableRowSelectionState.findingDropTargets || tableRowSelectionState.clipboardMode) {
+                tableRowSelectionState.mouseX = newX;
+                tableRowSelectionState.mouseY = newY;
+            }
+            
             // Only increment counter if mouse has actually moved
             if (this.lastKnownMouseX !== newX || this.lastKnownMouseY !== newY) {
                 this.lastKnownMouseX = newX;
@@ -3994,6 +4034,10 @@ export const TableComponent = {
             @touchend="handleTableTouchEnd"
             @touchcancel="handleTableTouchEnd"
         >
+            <!-- Drag Follower UI -->
+            <div v-if="shouldShowDragFollower" class="drag-follower" :style="dragFollowerStyle">
+                {{ dragFollowerText }}
+            </div>
             <!-- Selection Action Bubble (outside table) -->
             <transition name="fade">
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
