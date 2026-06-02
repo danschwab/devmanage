@@ -32,9 +32,9 @@ header nav {
     user-select: none;
 }
 
-nav .button-symbol {
+nav .nav-toggle {
     display: none; /* Hidden by default on desktop */
-    position: fixed;
+    /*position: fixed;*/
     top: 24px;
     transform: translateY(-50%);
     box-shadow: .5px 2px 6px var(--color-shadow);
@@ -55,15 +55,17 @@ nav #navbar {
     width: 100%;
     transition: gap 0.2s ease-in-out;
 }
-nav #navbar button, nav #navbar a {
-    display: block;
-    overflow:hidden;
+nav #navbar > button, nav #navbar > .button-bar, nav #navbar > a {
+    overflow: hidden;
     max-height: 100px;
     opacity: 1;
     transition: opacity .1s ease-in-out, max-height 0.15s ease-in-out, margin 0.15s ease-in-out, padding 0.15s ease-in-out;
 }
+nav #navbar > button, nav #navbar > a {
+    display: block;
+}
 
-nav #navbar button {
+nav #navbar > button, nav #navbar .button-bar {
     margin-left: auto;
     width: auto;
     flex: 0 0 auto;
@@ -1650,7 +1652,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
         gap: 0;/*var(--padding-lg);*/
         box-sizing: border-box;
     }
-    nav:has(#navbar a) .button-symbol {
+    nav:has(#navbar a) .nav-toggle {
         display: block;
     }
     
@@ -1667,21 +1669,22 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     nav #navbar a {
         margin-top: var(--padding-lg);
     }
-    nav #navbar button {
+    nav #navbar > button, nav #navbar > .button-bar {
         margin-top: var(--padding-lg);
         margin-bottom: var(--padding-md);
     }
-    nav #navbar button:only-child {
+    nav #navbar > button:only-child, nav #navbar > .button-bar:only-child {
         margin-top: var(--padding-md);
     }
 
     nav:not(.open) #navbar a:not(.active), 
-    nav:not(.open) #navbar button:not(.active) {
+    nav:not(.open) #navbar > button:not(.active),
+    nav:not(.open) #navbar .button-bar:not(:has(button.active)) {
         max-height: 0;
         margin-top: 0;
-        margin-bottom:0;
-        padding-top:0;
-        padding-bottom:0;
+        margin-bottom: 0;
+        padding-top: 0;
+        padding-bottom: 0;
         opacity: 0;
     }
     
@@ -1689,7 +1692,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     nav #navbar a.active {
         color: var(--color-primary);
     }
-    nav #navbar button {
+    nav #navbar > button, nav #navbar .button-bar {
         margin-left: 0;
     }
     nav.open #navbar a.active {
@@ -1883,7 +1886,11 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
     }
 
     .column-button {
-        opacity: 1;
+        opacity: 0;
+    }
+
+    thead.active .column-button:not(.active) {
+        opacity: 0.7;
     }
 }
 

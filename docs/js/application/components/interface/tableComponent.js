@@ -1655,7 +1655,8 @@ export const TableComponent = {
             stickyWidth: 0,
             stickySpacerHeight: 0, // Measured height of wrapper before clone is added
             stickyColumnWidths: [], // Store actual column widths from original table
-            hideRowsOnSearchLocal: this.hideRowsOnSearch // Runtime toggle for hide-rows-on-search behavior
+            hideRowsOnSearchLocal: this.hideRowsOnSearch, // Runtime toggle for hide-rows-on-search behavior
+            theadActive: false // Mobile: tap-to-show column buttons toggle
         };
     },
     watch: {
@@ -2154,6 +2155,13 @@ export const TableComponent = {
             },
         });
         this._stickyHeader.setup();
+
+        // Mobile: collapse thead column buttons on scroll
+        this._theadActiveScrollEl = document.querySelector('#app-content');
+        if (this._theadActiveScrollEl) {
+            this._theadActiveScrollFn = () => { this.theadActive = false; };
+            this._theadActiveScrollEl.addEventListener('scroll', this._theadActiveScrollFn, { passive: true });
+        }
     },
     beforeUnmount() {
         document.removeEventListener('click', this.handleOutsideClick);
@@ -2174,6 +2182,11 @@ export const TableComponent = {
         
         // Clean up sticky header scroll/resize listeners
         this._stickyHeader?.teardown();
+
+        // Clean up thead active scroll listener
+        if (this._theadActiveScrollEl && this._theadActiveScrollFn) {
+            this._theadActiveScrollEl.removeEventListener('scroll', this._theadActiveScrollFn);
+        }
     },
     methods: {
         handleRefresh() {
@@ -2294,13 +2307,19 @@ export const TableComponent = {
             this.completeClipboardAtCurrentTarget();
         },
 
+        // Mobile: tap on thead (not on a button) toggles column-button visibility
+        handleTheadTap(event) {
+            if (event.target.closest('button')) return;
+            this.theadActive = !this.theadActive;
+        },
+
         // Click on a row while in clipboard mode — paste if that row is showing a drop-target indicator.
         handleClipboardRowClick(idx, visibleIdx, event) {
             if (!tableRowSelectionState.clipboardMode) return;
             const dt = this.dropTarget;
             if (!dt?.type) return;
             const isBetween = dt.type === 'between' &&
-                (dt.targetIndex === visibleIdx || dt.targetIndex === visibleIdx + 1);
+                (dt.visualTargetIndex === visibleIdx || dt.visualTargetIndex === visibleIdx + 1);
             const isOnto = dt.type === 'onto' && dt.targetIndex === idx;
             if (isBetween || isOnto) this.completeClipboardAtCurrentTarget();
         },
@@ -3339,22 +3358,50 @@ export const TableComponent = {
                         const midpoint = rowRect.top + rowRect.height / 2;
                         const isAbove = mouseY < midpoint;
                         
-                        // Map visual row index to actual data position
-                        // visibleRows contains { row, idx } where idx is the actual data index
+                        // Map visual row index to actual data position.
+                        // visibleRows contains { row, idx } where idx is the actual data index.
+                        // visualTargetIndex tracks which visual row shows the drop indicator;
+                        // targetIndex is the data insertion point (may differ when groups are closed).
                         let targetIndex;
+                        let visualTargetIndex;
                         if (isAbove) {
                             // Insert before this row
+                            visualTargetIndex = i;
                             if (i === 0) {
                                 targetIndex = 0; // Insert at beginning
                             } else {
-                                // Find the data index of the previous visible row and add 1
+                                // Find the data index of the previous visible row and add 1,
+                                // skipping past any hidden group children that follow it.
                                 const prevVisibleRow = this.visibleRows[i - 1];
-                                targetIndex = prevVisibleRow ? prevVisibleRow.idx + 1 : 0;
+                                if (prevVisibleRow) {
+                                    const prevMeta = tableRowSelectionState._getRowMetadata(prevVisibleRow.row);
+                                    const prevGrouping = prevMeta?.grouping;
+                                    if (prevGrouping?.isGroupMaster && this.isGroupMembersHiddenById(prevGrouping.groupId)) {
+                                        const children = tableRowSelectionState._getGroupChildren(prevVisibleRow.idx, this.data);
+                                        targetIndex = prevVisibleRow.idx + children.length + 1;
+                                    } else {
+                                        targetIndex = prevVisibleRow.idx + 1;
+                                    }
+                                } else {
+                                    targetIndex = 0;
+                                }
                             }
                         } else {
-                            // Insert after this row
+                            // Insert after this row, skipping past any hidden group children.
+                            visualTargetIndex = i + 1;
                             const currentVisibleRow = this.visibleRows[i];
-                            targetIndex = currentVisibleRow ? currentVisibleRow.idx + 1 : this.data.length;
+                            if (currentVisibleRow) {
+                                const curMeta = tableRowSelectionState._getRowMetadata(currentVisibleRow.row);
+                                const curGrouping = curMeta?.grouping;
+                                if (curGrouping?.isGroupMaster && this.isGroupMembersHiddenById(curGrouping.groupId)) {
+                                    const children = tableRowSelectionState._getGroupChildren(currentVisibleRow.idx, this.data);
+                                    targetIndex = currentVisibleRow.idx + children.length + 1;
+                                } else {
+                                    targetIndex = currentVisibleRow.idx + 1;
+                                }
+                            } else {
+                                targetIndex = this.data.length;
+                            }
                         }
                         
                         // Check if a group master is selected and this position would split a group
@@ -3366,7 +3413,8 @@ export const TableComponent = {
                         
                         newDropTarget = {
                             type: 'between',
-                            targetIndex: targetIndex
+                            targetIndex: targetIndex,
+                            visualTargetIndex: visualTargetIndex
                         };
                         //console.log('Drop target found:', newDropTarget, 'visual index:', i, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
                         break;
@@ -3376,7 +3424,8 @@ export const TableComponent = {
             
             // Update drop target if changed
             if (this.dropTarget.type !== newDropTarget.type ||
-                this.dropTarget.targetIndex !== newDropTarget.targetIndex) {
+                this.dropTarget.targetIndex !== newDropTarget.targetIndex ||
+                this.dropTarget.visualTargetIndex !== newDropTarget.visualTargetIndex) {
                 
                 this.dropTarget = newDropTarget;
                 
@@ -4098,7 +4147,7 @@ export const TableComponent = {
                         />
                         <col v-if="allowDetails && !forceDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
                     </colgroup>
-                    <thead :class="{ [theme]: true }">
+                    <thead :class="{ [theme]: true, active: theadActive }" @click="handleTheadTap($event)">
                         <tr>
                             <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
                             <th 
@@ -4147,7 +4196,7 @@ export const TableComponent = {
                         />
                         <col v-if="allowDetails && !forceDetails" />
                     </colgroup>
-                    <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header' }" @click="handleClipboardHeaderClick($event)">
+                    <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header', active: theadActive }" @click="handleClipboardHeaderClick($event); handleTheadTap($event)">
                         <tr>
                             <th v-if="draggable" class="spacer-cell"></th>
                             <th 
@@ -4192,8 +4241,8 @@ export const TableComponent = {
                                         'marked-for-deletion': isRowMarkedForDeletion(row),
                                         'in-group': isRowInGroup(idx),
                                         'is-group': isRowGroupMaster(idx),
-                                        'drop-target-above': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx,
-                                        'drop-target-below': dropTarget?.type === 'between' && dropTarget?.targetIndex === visibleIdx + 1,
+                                        'drop-target-above': dropTarget?.type === 'between' && dropTarget?.visualTargetIndex === visibleIdx,
+                                        'drop-target-below': dropTarget?.type === 'between' && dropTarget?.visualTargetIndex === visibleIdx + 1,
                                         'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx
                                     },
                                     getRowMetadataClass(row)

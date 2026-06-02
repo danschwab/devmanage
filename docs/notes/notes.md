@@ -81,20 +81,20 @@ For design and project queue:
 **problems**
 
 - [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
-- [ ] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
-- [ ] make external clicks clear checkboxes
-- [ ] icons still don't show for dan
+- [?] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
+- [x] make external clicks clear checkboxes
+- [x] icons still don't show for dan
 - [ ] allow pasting even if only a single column of data is copied
 - [ ] ui for paste
 - [ ] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
-- [ ] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
-- [ ] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
-- [ ] remove drag into bottom to delete.
+- [x] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
+- [x] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
+- [x] remove drag into bottom to delete.
 - [ ] collapsed groups mess up drop targets
 - [ ] don't highlight fields in tables...
 - [ ] add tooltip "3 rows copied..."
-- [ ] garbage can icon for deletion!!!!
-- [ ] fix thumbnail access
+- [x] garbage can icon for deletion!!!!
+- [x] fix thumbnail access
 - [ ] error occurred 11:00 updating cache datestamp?
 - [ ] add misc inventory table
 - [ ] allow "maintenance mode" activated that locks all editing

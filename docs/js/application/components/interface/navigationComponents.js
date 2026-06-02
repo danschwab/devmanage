@@ -34,9 +34,12 @@ export const PrimaryNavComponent = {
         'logout'
     ],
     data() {
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         return {
             isMenuVisible: true,
-            lastScrollTop: 0
+            lastScrollTop: 0,
+            darkMode: saved === 'dark' ? true : saved === 'light' ? false : prefersDark
         };
     },
     computed: {
@@ -45,8 +48,7 @@ export const PrimaryNavComponent = {
             return cleanPath.split('/')[0];
         },
         isDarkMode() {
-            // Use matchMedia to detect dark mode
-            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            return this.darkMode;
         },
         logoSrc() {
             return this.isDarkMode ? 'assets/logoW.png' : 'assets/logo.png';
@@ -57,6 +59,12 @@ export const PrimaryNavComponent = {
         }
     },
     methods: {
+        toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+            const theme = this.darkMode ? 'dark' : 'light';
+            document.documentElement.dataset.theme = theme;
+            localStorage.setItem('theme', theme);
+        },
         handleNavClick(item) {
             // In mobile view: if menu is closed, open it first; if open, then navigate
             // In desktop view: always navigate
@@ -75,6 +83,8 @@ export const PrimaryNavComponent = {
         }
     },
     mounted() {
+        const saved = localStorage.getItem('theme');
+        if (saved) document.documentElement.dataset.theme = saved;
         document.addEventListener('mouseup', this.handleClickOutside);
         //add a listener for scroll up or down in #app-content to hide or show the navbar
         document.querySelector('#app-content').addEventListener('scroll', () => {
@@ -110,21 +120,26 @@ export const PrimaryNavComponent = {
                         </a>
                     </template>
                     
-                    <button v-if="!isAuthenticated" 
-                            @click="$emit('login')" 
-                            :disabled="isAuthLoading"
-                            class="login-out-button active">
-                        {{ isAuthLoading ? 'Loading...' : 'Login' }}
-                    </button>
-                    <button v-else 
-                            @click="$emit('logout')" 
-                            :disabled="isAuthLoading"
-                            class="login-out-button">
-                        {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
-                    </button>
+                    <div class="button-bar">
+                        <button class="button-symbol" @click="toggleDarkMode" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+                            <span class="material-symbols-outlined">{{ darkMode ? 'light_mode' : 'dark_mode' }}</span>
+                        </button>
+                        <button v-if="!isAuthenticated" 
+                                @click="$emit('login')" 
+                                :disabled="isAuthLoading"
+                                class="login-out-button active">
+                            {{ isAuthLoading ? 'Loading...' : 'Login' }}
+                        </button>
+                        <button v-else 
+                                @click="$emit('logout')" 
+                                :disabled="isAuthLoading"
+                                class="login-out-button">
+                            {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
+                        </button>
+                    </div>
                 </span>
                 
-                <button class="button-symbol white" @click="$emit('toggle-menu')">
+                <button class="nav-toggle button-symbol white" @click="$emit('toggle-menu')">
                     {{ isMenuOpen ? '🗙' : '≡' }}
                 </button>
             </nav>

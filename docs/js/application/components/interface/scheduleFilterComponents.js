@@ -1357,7 +1357,7 @@ async function resolveOverlapDisplayDates(dateFilters) {
  * Only renders when a date range can be resolved.
  */
 export const ScheduleDateRangeCard = {
-    inject: ['appContext'],
+    inject: ['appContext', '$modal'],
     props: {
         containerPath: {
             type: String,
@@ -1410,12 +1410,15 @@ export const ScheduleDateRangeCard = {
                     if (s || e) { this.displayStart = s; this.displayEnd = e; }
                 });
             }
+        },
+        showDateRangeModal() {
+            this.$modal.alert(this.dateRangeDisplay, 'Date Range');
         }
     },
     template: html`
         <template v-if="dateRangeDisplay">
             <div class="card gray hide-when-narrow" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">{{ dateRangeDisplay }}</div>
-            <div :title="dateRangeDisplay" class="card clickable gray show-when-narrow">⋯</div>
+            <div class="card clickable gray show-when-narrow" @click="showDateRangeModal">⋯</div>
         </template>
     `
 };
