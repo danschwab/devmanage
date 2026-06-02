@@ -445,8 +445,8 @@ export const InventoryContent = {
             <cards-grid
                 v-else-if="cleanContainerPath === 'inventory/reports'"
                 :items="[
-                    { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.' },
-                    { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.' }
+                    { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.', cardClass: 'purple' },
+                    { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.', cardClass: 'purple' }
                 ]"
                 :on-item-click="card => navigateToPath('inventory/reports/' + card.toLowerCase().replace(/\s+/g, '-'))"
                 container-path="inventory/reports"

@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle } from '../../index.js';
+import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle, ItemImageComponent } from '../../index.js';
 
 /**
  * Lightweight item timeline component.
@@ -10,7 +10,7 @@ import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelec
  *   endDate    YYYY-MM-DD
  */
 export const InventoryItemTimeline = {
-    components: { TableComponent, ScheduleFilterSelect, CalendarComponent, CalendarLayoutToggle },
+    components: { TableComponent, ScheduleFilterSelect, CalendarComponent, CalendarLayoutToggle, ItemImageComponent },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -57,6 +57,35 @@ export const InventoryItemTimeline = {
                 null,
                 [this.resolvedItemId, effectiveStart, effectiveEnd]
             );
+        },
+        itemInfoStore() {
+            if (!this.resolvedItemId) return null;
+            return getReactiveStore(
+                Requests.getInventoryInfo,
+                null,
+                [this.resolvedItemId, ['description', 'notes', 'quantity']]
+            );
+        },
+        itemInfo() {
+            const data = this.itemInfoStore?.data;
+            if (!data || !data.length) return null;
+            return data[0];
+        },
+        itemImageUrlStore() {
+            if (!this.resolvedItemId) return null;
+            return getReactiveStore(
+                Requests.getItemImageUrl,
+                null,
+                [this.resolvedItemId]
+            );
+        },
+        itemImageUrl() {
+            return this.itemImageUrlStore?.data ?? null;
+        },
+        itemInfoEntries() {
+            if (!this.itemInfo) return null;
+            return Object.entries(this.itemInfo)
+                .filter(([key, value]) => key !== 'itemName' && !(value !== null && typeof value === 'object'));
         },
         calendarData() {
             const raw = this.timelineStore?.data ?? [];
@@ -156,6 +185,31 @@ export const InventoryItemTimeline = {
     },
     template: html`
         <div>
+            <div v-if="resolvedItemId" style="margin-bottom: var(--padding-md);">
+                <div style="display: flex; gap: var(--padding-md); align-items: flex-start;">
+                    <ItemImageComponent
+                        :itemNumber="resolvedItemId"
+                        :imageUrl="itemImageUrl"
+                        :imageSize="96"
+                        editable="true"
+                    />
+                    <div class="details-grid" style="flex: 1;">
+                        <div class="detail-item">
+                            <label>Item#:</label>
+                            <span>{{ resolvedItemId }}</span>
+                        </div>
+                        <template v-if="itemInfoEntries">
+                            <div v-for="[key, value] in itemInfoEntries" :key="key" class="detail-item">
+                                <label>{{ key.charAt(0).toUpperCase() + key.slice(1) }}:</label>
+                                <span>{{ value != null && value !== '' ? value : '—' }}</span>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="detail-item"><span>...</span></div>
+                        </template>
+                    </div>
+                </div>
+            </div>
             <CalendarComponent
                 v-if="isCalendarView"
                 :data="calendarData"
