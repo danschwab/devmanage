@@ -40,6 +40,9 @@ nav .nav-toggle {
     box-shadow: .5px 2px 6px var(--color-shadow);
     right: var(--padding-lg);
 }
+nav .login-out-button {
+    width: auto;
+}
 
 nav img {
     height: 64px;
