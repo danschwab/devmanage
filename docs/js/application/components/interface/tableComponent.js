@@ -4369,7 +4369,7 @@ export const TableComponent = {
                                 <td v-if="allowDetails && !forceDetails" class="details-cell">
                                     <button 
                                         @click="toggleRowDetails(idx)"
-                                        :class="['button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
+                                        :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
                                         {{ isRowExpanded(idx) ? '🗙' : '☷' }}
                                     </button>
