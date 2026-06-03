@@ -200,7 +200,7 @@ export const PacklistItemsSummary = {
     },
     template: html`
         <slot class="packlist-items-summary">
-                <button @click="navigateBackToPacklist" class="small">Back</button>
+                <!--button @click="navigateBackToPacklist" class="small">Back</button-->
 
             <div class="details-grid">
                 <div v-for="key in showDetailsVisible" :key="key" class="detail-item">

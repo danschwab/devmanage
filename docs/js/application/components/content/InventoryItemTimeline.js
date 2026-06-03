@@ -24,7 +24,8 @@ export const InventoryItemTimeline = {
         return {
             filterStartDate: null,
             filterEndDate: null,
-            resolvedItemId: null
+            resolvedItemId: null,
+            itemImageUrl: null
         };
     },
     computed: {
@@ -71,17 +72,6 @@ export const InventoryItemTimeline = {
             if (!data || !data.length) return null;
             return data[0];
         },
-        itemImageUrlStore() {
-            if (!this.resolvedItemId) return null;
-            return getReactiveStore(
-                Requests.getItemImageBlobUrl,
-                null,
-                [this.resolvedItemId]
-            );
-        },
-        itemImageUrl() {
-            return this.itemImageUrlStore?.data ?? null;
-        },
         itemInfoEntries() {
             if (!this.itemInfo) return null;
             return Object.entries(this.itemInfo)
@@ -113,6 +103,17 @@ export const InventoryItemTimeline = {
                 const oldParams = NavigationRegistry.getParametersForContainer(this.containerPath, oldPath);
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
                 this.resolveItemIdFromPath();
+            }
+        },
+        resolvedItemId: {
+            immediate: true,
+            async handler(newItemId) {
+                if (!newItemId) {
+                    this.itemImageUrl = null;
+                    return;
+                }
+                // Fetch image URL directly, not through reactive store
+                this.itemImageUrl = await Requests.getItemImageUrl(newItemId);
             }
         }
     },
@@ -188,7 +189,6 @@ export const InventoryItemTimeline = {
             <div v-if="resolvedItemId" style="margin-bottom: var(--padding-md);">
                 <div style="display: flex; gap: var(--padding-md); align-items: flex-start;">
                     <ItemImageComponent
-                        :key="itemImageUrl || 'loading'"
                         :itemNumber="resolvedItemId"
                         :imageUrl="itemImageUrl"
                         :imageSize="96"
