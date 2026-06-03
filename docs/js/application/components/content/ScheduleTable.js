@@ -230,14 +230,24 @@ export const ScheduleTableComponent = {
                     'clientIndexIssue',
                     'Checking client index health...',
                     'Client',
-                    ['client']
+                    ['client'],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
                 createAnalysisConfig(
                     Requests.checkScheduleReferenceState,
                     'showIndexIssue',
                     'Checking show index health...',
                     'Show',
-                    ['show']
+                    ['show'],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
                 // Guess ship date if missing and store in AppData
                 createAnalysisConfig(

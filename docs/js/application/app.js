@@ -7,7 +7,7 @@ import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
 import { undoRegistry } from './index.js';
-import { Requests, getReactiveStore } from './index.js';
+import { Requests, getReactiveStore, appSettings } from './index.js';
 
 const { createApp } = Vue;
 
@@ -24,6 +24,7 @@ const App = {
     provide() {
         return {
             appContext: this,
+            appSettings: appSettings,
             hamburgerMenuRegistry: hamburgerMenuRegistry,
             $modal: modalManager
         };

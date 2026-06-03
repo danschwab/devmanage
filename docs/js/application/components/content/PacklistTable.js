@@ -379,7 +379,11 @@ export const PacklistTable = {
                     'Extracting item numbers...',
                     ['Description', 'Packing/shop notes'], // Try Description first, then notes
                     [],
-                    'Extracted Item' // Target column name
+                    'Extracted Item', // Target column name
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
                 
                 // Extract quantity from Description and store in 'Extracted Qty' column  
@@ -389,7 +393,11 @@ export const PacklistTable = {
                     'Extracting quantities...',
                     ['Description', 'Packing/shop notes'], // Try Description first, then notes
                     [],
-                    'Extracted Qty' // Target column name
+                    'Extracted Qty', // Target column name
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
 
                 // Compare descriptions and store alert in AppData if mismatch
@@ -402,7 +410,8 @@ export const PacklistTable = {
                     null,
                     false,
                     Priority.ANALYSIS,
-                    true // extractColumnsAsObject
+                    true, // extractColumnsAsObject
+                    false // nonessential
                 ),
 
                 // Check inventory levels and create alerts for low quantities
@@ -413,7 +422,10 @@ export const PacklistTable = {
                     ['Description', 'Packing/shop notes'], // Source columns for nested detection (use existing columns, not generated ones)
                     [this.tabName], // Additional parameter: current project ID
                     null, // No targetColumn - results go to AppData
-                    true // passFullItem = true to get entire item object (API expects full item)
+                    true, // passFullItem = true to get entire item object (API expects full item)
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
 
                 // Check edit history source flow and flag rows changed in CAD after prior web/app edits
@@ -422,7 +434,12 @@ export const PacklistTable = {
                     'cadSourceAlert',
                     'Checking CAD source history...',
                     'EditHistory',
-                    []
+                    [],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 )
             ];
             
@@ -652,7 +669,9 @@ export const PacklistTable = {
                                     [],
                                     null, // Store in AppData, not a column
                                     false,
-                                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
+                                    Priority.BACKGROUND, // Images are visual enhancements, lowest priority
+                                    false,
+                                    false // nonessential
                                 )
                             ];
                             

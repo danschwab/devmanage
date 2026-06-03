@@ -5,6 +5,13 @@ import { PriorityQueue, Priority } from './priorityQueue.js';
 export { Priority };
 
 /**
+ * Global application settings for reactive stores and analysis
+ */
+export const appSettings = Vue.reactive({
+    onlyRunEssentialAnalysis: localStorage.getItem('essentialAnalysisOnly') === 'true' // When true, only run analysis marked as essential
+});
+
+/**
  * Reactive Store System with Configurable Analysis and Auto-Save
  * 
  * This system provides Vue 3 reactive data stores with optional automatic analysis
@@ -644,7 +651,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const {
                 batchSize = 10,
                 delayMs = 50,
-                skipIfAnalyzed = false
+                skipIfAnalyzed = false,
+                essentialOnly = appSettings.onlyRunEssentialAnalysis // Check global setting
             } = options;
 
             this.isAnalyzing = true;
@@ -751,11 +759,21 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 };
 
                 const relevantConfigs = detectRelevantArrays();
+                
+                // Filter configs based on essentialOnly flag
+                const configsToRun = essentialOnly
+                    ? relevantConfigs.filter(config => config.essential !== false)
+                    : relevantConfigs;
+                
+                if (essentialOnly && configsToRun.length < relevantConfigs.length) {
+                    console.log(`[ReactiveStore] Running ${configsToRun.length} essential analysis steps (skipping ${relevantConfigs.length - configsToRun.length} nonessential)`);
+                }
+                
                 let totalOperations = 0;
                 let completedOperations = 0;
 
                 // Calculate total operations for progress tracking
-                relevantConfigs.forEach(config => {
+                configsToRun.forEach(config => {
                     if (config.processMain) {
                         totalOperations += this.data.length;
                     }
@@ -769,7 +787,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 });
 
                 // Process main data
-                for (const config of relevantConfigs) {
+                for (const config of configsToRun) {
                     if (!config.processMain) continue;
 
                     this.analysisMessage = `${config.label || 'Processing'} main data...`;
@@ -802,6 +820,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                             label: config.label || config.resultKey,
                                             type: 'analysis',
                                             resultKey: config.resultKey,
+                                            essential: config.essential !== false, // Track if essential
                                             store: 'reactive'
                                         }
                                     );
@@ -832,7 +851,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 }
 
                 // Process nested data
-                for (const config of relevantConfigs) {
+                for (const config of configsToRun) {
                     for (const arrayKey of config.processNested) {
                         this.analysisMessage = `${config.label || 'Processing'} ${arrayKey} data...`;
 
@@ -876,6 +895,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                                                     label: config.label || config.resultKey,
                                                     type: 'analysis',
                                                     resultKey: config.resultKey,
+                                                    essential: config.essential !== false, // Track if essential
                                                     nested: arrayKey,
                                                     store: 'reactive'
                                                 }
@@ -1588,9 +1608,10 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
  * @param {boolean} passFullItem - If true, pass entire item as first param instead of extracted value
  * @param {number} priority - Priority level (0-9, default: Priority.ANALYSIS=1)
  * @param {boolean} extractColumnsAsObject - If true and sourceColumns has multiple items, extract all as {col1, col2, ...} object
+ * @param {boolean} essential - If true (default), this analysis is essential and runs even when onlyRunEssentialAnalysis is enabled
  * @returns {Object} Analysis configuration object
  */
-export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false, priority = Priority.ANALYSIS, extractColumnsAsObject = false) {
+export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumns = null, additionalParams = [], targetColumn = null, passFullItem = false, priority = Priority.ANALYSIS, extractColumnsAsObject = false, essential = true) {
     return {
         apiFunction,
         resultKey,
@@ -1600,7 +1621,8 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
         targetColumn, // If set, results go to this column instead of AppData
         passFullItem, // If true, pass entire item even when sourceColumns specified
         extractColumnsAsObject, // If true, extract multiple sourceColumns into {col1, col2, ...} object
-        priority // Priority level for queue processing
+        priority, // Priority level for queue processing
+        essential // If true, runs even when onlyRunEssentialAnalysis is enabled
     };
 }
 
@@ -1621,6 +1643,29 @@ export function reloadErrorStores() {
             store.handleInvalidation();
         }
     });
+}
+
+/**
+ * Trigger analysis on all stores that have nonessential analysis configured
+ * Used when enabling full analysis mode (onlyRunEssentialAnalysis: false -> true)
+ */
+export function runNonessentialAnalysisOnAllStores() {
+    let triggeredCount = 0;
+    Object.values(reactiveStoreRegistry).forEach(store => {
+        if (!store.analysisConfig) return;
+        
+        // Check if this store has any nonessential analysis
+        const hasNonessential = store.analysisConfig.some(config => config.essential === false);
+        if (hasNonessential && store.data && store.data.length > 0 && !store.isAnalyzing) {
+            // Trigger analysis with essentialOnly=false to run all analysis
+            store.runConfiguredAnalysis({ essentialOnly: false });
+            triggeredCount++;
+        }
+    });
+    
+    if (triggeredCount > 0) {
+        console.log(`[ReactiveStore] Triggered nonessential analysis on ${triggeredCount} store(s)`);
+    }
 }
 
 export async function clearAllReactiveStores(options = {}) {

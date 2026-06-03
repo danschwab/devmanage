@@ -1,4 +1,5 @@
-import { html, NavigationRegistry } from '../../index.js';
+import { html, NavigationRegistry, appSettings, runNonessentialAnalysisOnAllStores } from '../../index.js';
+import { PriorityQueue } from '../../utils/priorityQueue.js';
 
 export const PrimaryNavComponent = {
     props: {
@@ -56,9 +57,31 @@ export const PrimaryNavComponent = {
         isMobileView() {
             // Mobile view is max-width: 800px
             return window.innerWidth <= 800;
+        },
+        onlyEssentialAnalysis() {
+            return appSettings.onlyRunEssentialAnalysis;
         }
     },
     methods: {
+        toggleEssentialAnalysis() {
+            const wasEssentialOnly = appSettings.onlyRunEssentialAnalysis;
+            appSettings.onlyRunEssentialAnalysis = !appSettings.onlyRunEssentialAnalysis;
+            
+            // Save to localStorage
+            localStorage.setItem('essentialAnalysisOnly', appSettings.onlyRunEssentialAnalysis);
+            
+            if (wasEssentialOnly) {
+                // Switching from essential-only to full analysis
+                // Trigger nonessential analysis on all stores that have data
+                console.log('[Navigation] Enabling full analysis mode - triggering nonessential analysis');
+                runNonessentialAnalysisOnAllStores();
+            } else {
+                // Switching from full to essential-only
+                // Clear pending nonessential analysis tasks from queue
+                console.log('[Navigation] Enabling essential-only mode - clearing nonessential tasks');
+                PriorityQueue.clearNonessentialAnalysis();
+            }
+        },
         toggleDarkMode() {
             this.darkMode = !this.darkMode;
             const theme = this.darkMode ? 'dark' : 'light';
@@ -121,6 +144,12 @@ export const PrimaryNavComponent = {
                     </template>
                     
                     <div class="button-bar">
+                        <button class="button-symbol" 
+                                @click="toggleEssentialAnalysis" 
+                                :class="{ 'red': onlyEssentialAnalysis }"
+                                :title="onlyEssentialAnalysis ? 'Running essential analysis only (click to enable all)' : 'Running all analysis (click to enable essential only)'">
+                            <span class="material-symbols-outlined">timeline</span>
+                        </button>
                         <button class="button-symbol" @click="toggleDarkMode" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'">
                             <span class="material-symbols-outlined">{{ darkMode ? 'light_mode' : 'dark_mode' }}</span>
                         </button>

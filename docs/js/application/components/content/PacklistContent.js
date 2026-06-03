@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, invalidateCache } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, invalidateCache, Priority } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 import { ScheduleTableComponent } from './ScheduleTable.js';
@@ -737,7 +737,11 @@ export const PacklistContent = {
                     'Loading packlist details...',
                     ['title'], // Use title as the source (project identifier)
                     [],
-                    'description' // Store result in 'description' column
+                    'description', // Store result in 'description' column
+                    false,
+                    Priority.ANALYSIS,
+                    false,
+                    false // nonessential
                 ),
                 createAnalysisConfig(
                     Requests.getShowDetails,
@@ -801,15 +805,11 @@ export const PacklistContent = {
             }
             
             // Add description after ship date
-            const description = tab.description || '...';
+            const description = tab.description || (this.packlistsStore ? (this.packlistsStore.isAnalyzing ? 'Loading...' : '') : '');
             if (content) {
                 content += `<br>${description}`;
             } else {
                 content = description;
-            }
-
-            if (!tab.description && !(this.packlistsStore.isAnalyzing || this.packlistsStore.isLoading)) {
-                this.packlistsStore.runConfiguredAnalysis();
             }
 
             return {

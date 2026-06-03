@@ -319,6 +319,29 @@ class PriorityQueueManager {
     }
     
     /**
+     * Clear nonessential analysis tasks from all queues
+     * @returns {number} - Number of tasks cleared
+     */
+    clearNonessentialAnalysis() {
+        let clearedCount = 0;
+        this.queues.forEach(queue => {
+            for (let i = queue.length - 1; i >= 0; i--) {
+                const entry = queue[i];
+                // Clear if it's analysis type and marked as nonessential
+                if (entry.metadata?.type === 'analysis' && entry.metadata?.essential === false) {
+                    entry.reject(new Error('Nonessential analysis cancelled'));
+                    queue.splice(i, 1);
+                    clearedCount++;
+                }
+            }
+        });
+        if (clearedCount > 0) {
+            console.log(`[PriorityQueue] Cleared ${clearedCount} nonessential analysis task(s)`);
+        }
+        return clearedCount;
+    }
+    
+    /**
      * Get total pending calls across all priorities
      * @returns {number} - Total pending calls
      */
