@@ -388,7 +388,7 @@ export const InventoryItemReport = {
                     <slot v-else-if="column.key === 'itemId'">
                         <button v-if="row.tabName"
                                 @click="navigateToItemPage(row)"
-                                class="purple"
+                                class="purple card"
                                 :title="'View timeline for ' + row.itemId">
                             {{ row.itemId }}
                         </button>
