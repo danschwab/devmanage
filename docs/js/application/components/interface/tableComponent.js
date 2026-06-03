@@ -1,4 +1,4 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager } from '../../index.js';
+import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
@@ -2219,6 +2219,11 @@ export const TableComponent = {
         }
     },
     methods: {
+        // Universal autoColor method
+        getAutoColorClass(value) {
+            return getAutoColorClass(value);
+        },
+
         handleRefresh() {
             // Capture state before discarding changes (when allowSaveEvent is true)
             if (this.allowSaveEvent && undoRegistry.currentRouteKey) {
@@ -2697,10 +2702,10 @@ export const TableComponent = {
             }
             
             // Centralized autoColor logic for number columns
-            // Only apply if value is not null/undefined
-            if (column.autoColor && column.format === 'number' && value !== null && value !== undefined) {
-                if (value <= 0) baseClass = 'red';
-                else if (value < 5) baseClass = 'orange';
+            // Universal rule: < 0 → red, < 1 → yellow, >= 1 → no color
+            if (column.autoColor && column.format === 'number') {
+                const autoClass = this.getAutoColorClass(value);
+                if (autoClass) baseClass = autoClass;
             }
             
             // Centralized autoColor logic for date columns

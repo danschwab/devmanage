@@ -10,6 +10,7 @@ export { Auth, authState, getDeviceId } from './utils/auth.js';
 export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey } from './utils/reactiveStores.js';
 export { Priority } from './utils/priorityQueue.js';
 export { undoRegistry, setTableRowSelectionState } from './utils/undoRegistry.js';
+export { getAutoColorClass, shouldAutoColor } from './utils/autoColor.js';
 
 // Navigation components
 export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';

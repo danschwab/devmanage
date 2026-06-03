@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle, ItemImageComponent } from '../../index.js';
+import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, getAutoColorClass } from '../../index.js';
 
 /**
  * Lightweight item timeline component.
@@ -39,11 +39,7 @@ export const InventoryItemTimeline = {
             ];
         },
         chipColorClassProvider() {
-            return (row) => {
-                if (row.quantity < 0) return 'red';
-                if (row.quantity < 1) return 'yellow';
-                return 'green';
-            };
+            return (row) => getAutoColorClass(row.quantity) || 'green';
         },
         isCalendarView() {
             const params = NavigationRegistry.getNavigationParameters(this.containerPath);

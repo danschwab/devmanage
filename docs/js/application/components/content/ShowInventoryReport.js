@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, getAutoColorClass } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -55,18 +55,13 @@ export const ShowInventoryReport = {
                 { key: 'available', label: 'Inv Qty.', sortable: true },
             ];
             
-            // Add minQty column with custom cellClass function (before show columns)
+            // Add minQty column with unified autoColor
             const minQtyColumn = {
                 key: 'minQty',
                 label: 'Min Qty',
                 format: 'number',
                 sortable: true,
-                cellClass: (value) => {
-                    if (value === null || value === undefined) return '';
-                    if (value < 0) return 'red';
-                    if (value === 0) return 'orange';
-                    return '';
-                }
+                cellClass: (value) => getAutoColorClass(value)
             };
             
             // Add dynamic show columns (narrow width and narrow font)

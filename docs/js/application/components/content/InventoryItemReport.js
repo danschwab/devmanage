@@ -1,4 +1,4 @@
-import { html, TableComponent, CalendarComponent, CalendarLayoutToggle, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString } from '../../index.js';
+import { html, TableComponent, CalendarComponent, CalendarLayoutToggle, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, getAutoColorClass } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -45,12 +45,7 @@ export const InventoryItemReport = {
                     label: 'Min Qty',
                     format: 'number',
                     sortable: true,
-                    cellClass: (value) => {
-                        if (value === null || value === undefined) return '';
-                        if (value < 0) return 'red';
-                        if (value === 0) return 'orange';
-                        return '';
-                    }
+                    cellClass: (value) => getAutoColorClass(value)
                 },
                 { key: 'overlappingShows', label: 'Overlapping Shows', sortable: false }
             ];
@@ -105,12 +100,7 @@ export const InventoryItemReport = {
         },
 
         chipColorClassProvider() {
-            return (row) => {
-                if (row.minQty === null || row.minQty === undefined) return '';
-                if (row.minQty < 0) return 'red';
-                if (row.minQty === 0) return 'orange';
-                return '';
-            };
+            return (row) => getAutoColorClass(row.minQty) || 'green';
         },
 
         emptyMessage() {

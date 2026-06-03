@@ -1101,18 +1101,17 @@ class Requests_uncached {
             }
             
             // Build alert object based on inventory level
+            // Universal autoColor rule: < 0 → red, < 1 → orange, >= 1 → no alert
             if (remaining < 0) {
                 return {
                     type: 'item shortage',
-                    color: 'red',
                     clickable: true,
                     message: `Shortage: ${Math.abs(remaining)} units short`,
                     remaining
                 };
-            } else if (remaining === 0) {
+            } else if (remaining < 1) {
                 return {
                     type: 'item warning',
-                    color: 'yellow',
                     clickable: true,
                     message: 'No inventory buffer',
                     remaining

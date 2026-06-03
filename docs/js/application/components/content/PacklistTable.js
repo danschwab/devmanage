@@ -1,4 +1,4 @@
-import { html, TableComponent, BannerNotifications, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString } from '../../index.js';
+import { html, TableComponent, BannerNotifications, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString, getAutoColorClass } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
@@ -816,6 +816,7 @@ export const PacklistTable = {
         /**
          * Get card color for an alert
          * Prioritizes alert.color property, falls back to type-based mapping
+         * For inventory alerts, uses universal autoColor rule based on remaining quantity
          * @param {Object|string} alert - Alert object or type string
          * @returns {string} Color class name for the card
          */
@@ -823,6 +824,14 @@ export const PacklistTable = {
             // If alert is an object with a color property, use it
             if (typeof alert === 'object' && alert.color) {
                 return alert.color;
+            }
+            
+            // For inventory alerts with remaining quantity, use unified autoColor rule
+            if (typeof alert === 'object' && 
+                ['item shortage', 'item warning', 'low-inventory'].includes(alert.type) && 
+                alert.remaining !== undefined && alert.remaining !== null) {
+                const autoColor = getAutoColorClass(alert.remaining);
+                if (autoColor) return autoColor;
             }
             
             // Otherwise, map type to color
