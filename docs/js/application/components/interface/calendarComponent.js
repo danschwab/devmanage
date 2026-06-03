@@ -418,7 +418,7 @@ export const CalendarComponent = {
                         :key="laneIdx"
                         class="calendar-lane-row"
                     >
-                        <div v-for="n in 7" :key="'bg' + n" :class="{ 'calendar-grid-bg-cell': true, 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && (n - 1) === week.monthBoundaryIdx - 1, 'cal-bg-last': n === 7 }" :style="{ gridColumn: n, gridRow: '1' }" aria-hidden="true"></div>
+                        <div v-for="n in 7" :key="'bg' + n" :class="{ 'calendar-grid-bg-cell': true, 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && (n - 1) === week.monthBoundaryIdx - 1, 'cal-bg-last': n === 7, 'today': isToday(week.weekDays[n - 1]) }" :style="{ gridColumn: n, gridRow: '1' }" aria-hidden="true"></div>
                         <div
                             v-for="seg in lane"
                             :key="seg.row[eventStartColumn] + '-' + seg.row[eventEndColumn] + '-' + seg.startIdx"
@@ -467,7 +467,7 @@ export const CalendarComponent = {
                         class="calendar-lane-row calendar-lane-padding"
                         aria-hidden="true"
                     >
-                        <div v-for="n in 7" :key="'bgp' + n" :class="{ 'calendar-grid-bg-cell': true, 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && (n - 1) === week.monthBoundaryIdx - 1, 'cal-bg-last': n === 7 }" :style="{ gridColumn: n, gridRow: '1' }" aria-hidden="true"></div>
+                        <div v-for="n in 7" :key="'bgp' + n" :class="{ 'calendar-grid-bg-cell': true, 'month-last-old': week.isMonthBoundary && week.monthBoundaryIdx > 0 && (n - 1) === week.monthBoundaryIdx - 1, 'cal-bg-last': n === 7, 'today': isToday(week.weekDays[n - 1]) }" :style="{ gridColumn: n, gridRow: '1' }" aria-hidden="true"></div>
                     </div>
                 </div>
             </div>

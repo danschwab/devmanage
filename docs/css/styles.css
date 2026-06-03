@@ -1457,8 +1457,8 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 .calendar-date-cell.month-new { border-top: 2px solid var(--color-text-light); }
 .calendar-date-cell.month-last-old { border-right: 2px solid var(--color-text-light); }
 .calendar-grid-bg-cell.month-last-old { border-right: 2px solid var(--color-text-light); position: relative; z-index: 2; }
-.calendar-date-cell:has(.calendar-date-number.today) {
-    background-color: var(--color-red);
+.calendar-date-cell:has(.calendar-date-number.today), .calendar-grid-bg-cell.today {
+    background-color: var(--color-blue);
 }
 
 .calendar-date-number {
