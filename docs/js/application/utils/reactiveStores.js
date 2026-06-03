@@ -243,7 +243,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         if (!Array.isArray(arr)) return arr;
         return arr.map(obj => {
             if (obj && typeof obj === 'object') {
-                if (!('AppData' in obj)) obj['AppData'] = {};
+                if (!('AppData' in obj) || typeof obj.AppData !== 'object' || obj.AppData === null) {
+                    obj['AppData'] = {};
+                }
                 
                 // Initialize analysis target columns and AppData result keys if they don't exist
                 if (analysisConfig && Array.isArray(analysisConfig)) {
@@ -544,7 +546,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         addRow(row, fieldNames = null) {
             // Ensure AppData is set and nested arrays are initialized
             if (row && typeof row === 'object') {
-                if (!('AppData' in row)) row['AppData'] = {};
+                if (!('AppData' in row) || typeof row.AppData !== 'object' || row.AppData === null) {
+                    row['AppData'] = {};
+                }
                 // Initialize fields to empty string if fieldNames provided
                 if (Array.isArray(fieldNames)) {
                     row = initializeRowFields(row, fieldNames);
@@ -566,7 +570,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 Array.isArray(this.data[parentIdx][key])
             ) {
                 if (row && typeof row === 'object') {
-                    if (!('AppData' in row)) row['AppData'] = {};
+                    if (!('AppData' in row) || typeof row.AppData !== 'object' || row.AppData === null) {
+                        row['AppData'] = {};
+                    }
                     // Initialize fields to empty string if fieldNames provided
                     if (Array.isArray(fieldNames)) {
                         row = initializeRowFields(row, fieldNames);

@@ -3343,17 +3343,19 @@ export const TableComponent = {
             
             // Check between rows in tbody
             if (tbody && newDropTarget.type === null) {
-                let rows;
-                if (this.dragId) {
-                    rows = tbody.querySelectorAll(`table.${this.dragId} > tbody > tr`);
-                } else {
-                    rows = tbody.querySelectorAll('tr');
-                }
+                // Select only data rows (those with data-visible-idx) to correctly map back to
+                // visibleRows. This excludes details-row-container rows and any extra <tr> elements
+                // injected by slots, which would otherwise cause the loop index to drift ahead of
+                // visibleRows and break drop-target detection for rows lower in the table.
+                const rows = tbody.querySelectorAll(':scope > tr[data-visible-idx]');
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     const rowRect = row.getBoundingClientRect();
                     
                     if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+                        // Read visibleIdx directly from the element so the mapping is correct
+                        // regardless of how many non-data rows exist between data rows in the DOM.
+                        const visibleIdx = parseInt(row.getAttribute('data-visible-idx'), 10);
                         const rowHeight = rowRect.height;
                         const rowTop = rowRect.top;
                         const relativeY = mouseY - rowTop;
@@ -3365,8 +3367,8 @@ export const TableComponent = {
                             
                             if (relativeY >= topThird && relativeY <= bottomThird) {
                                 // Middle third - check if target row is eligible for drop-onto
-                                const currentVisibleRow = this.visibleRows[i];
-                                const targetIndex = currentVisibleRow ? currentVisibleRow.idx : i;
+                                const currentVisibleRow = this.visibleRows[visibleIdx];
+                                const targetIndex = currentVisibleRow ? currentVisibleRow.idx : visibleIdx;
                                 const targetRow = this.data[targetIndex];
                                 
                                 // Don't allow drop onto if:
@@ -3386,7 +3388,7 @@ export const TableComponent = {
                                         type: 'onto',
                                         targetIndex: targetIndex
                                     };
-                                    //console.log('Drop ONTO target found:', newDropTarget, 'visual index:', i, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                                    //console.log('Drop ONTO target found:', newDropTarget, 'visual index:', visibleIdx, 'mouseY:', mouseY, 'rowRect:', rowRect);
                                     break;
                                 }
                                 // If any condition fails, fall through to between logic below
@@ -3405,13 +3407,13 @@ export const TableComponent = {
                         let visualTargetIndex;
                         if (isAbove) {
                             // Insert before this row
-                            visualTargetIndex = i;
-                            if (i === 0) {
+                            visualTargetIndex = visibleIdx;
+                            if (visibleIdx === 0) {
                                 targetIndex = 0; // Insert at beginning
                             } else {
                                 // Find the data index of the previous visible row and add 1,
                                 // skipping past any hidden group children that follow it.
-                                const prevVisibleRow = this.visibleRows[i - 1];
+                                const prevVisibleRow = this.visibleRows[visibleIdx - 1];
                                 if (prevVisibleRow) {
                                     const prevMeta = tableRowSelectionState._getRowMetadata(prevVisibleRow.row);
                                     const prevGrouping = prevMeta?.grouping;
@@ -3427,8 +3429,8 @@ export const TableComponent = {
                             }
                         } else {
                             // Insert after this row, skipping past any hidden group children.
-                            visualTargetIndex = i + 1;
-                            const currentVisibleRow = this.visibleRows[i];
+                            visualTargetIndex = visibleIdx + 1;
+                            const currentVisibleRow = this.visibleRows[visibleIdx];
                             if (currentVisibleRow) {
                                 const curMeta = tableRowSelectionState._getRowMetadata(currentVisibleRow.row);
                                 const curGrouping = curMeta?.grouping;
@@ -3455,7 +3457,7 @@ export const TableComponent = {
                             targetIndex: targetIndex,
                             visualTargetIndex: visualTargetIndex
                         };
-                        //console.log('Drop target found:', newDropTarget, 'visual index:', i, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
+                        //console.log('Drop target found:', newDropTarget, 'visual index:', visibleIdx, 'isAbove:', isAbove, 'mouseY:', mouseY, 'rowRect:', rowRect);
                         break;
                     }
                 }
@@ -3476,26 +3478,23 @@ export const TableComponent = {
         },
 
         getRowIndexAtPosition(mouseY) {
-            // Find which row index corresponds to the given Y position - scope to this specific table
-            let rows;
-            if (this.dragId) {
-                rows = this.$el.querySelectorAll(`table.${this.dragId} > tbody > tr`);
-                if (!rows || rows.length === 0) return null;
-            } else {
-                const tableEl = this.$el.querySelector('table');
-                if (!tableEl) return null;
-                const tbody = tableEl.querySelector('tbody');
-                if (!tbody) return null;
-                rows = tbody.querySelectorAll('tr');
-            }
+            // Find which row index corresponds to the given Y position - scope to this specific table.
+            // Use [data-visible-idx] to select only data rows, excluding details rows and nested rows.
+            const tableEl = this.dragId
+                ? this.$el.querySelector(`table.${this.dragId}`)
+                : this.$el.querySelector('table');
+            if (!tableEl) return null;
+            const tbody = tableEl.querySelector('tbody');
+            if (!tbody) return null;
+            const rows = tbody.querySelectorAll(':scope > tr[data-visible-idx]');
             
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 const rowRect = row.getBoundingClientRect();
                 
                 if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
-                    // Need to map visual row index to actual data index
-                    const visibleRowData = this.visibleRows[i];
+                    const visibleIdx = parseInt(row.getAttribute('data-visible-idx'), 10);
+                    const visibleRowData = this.visibleRows[visibleIdx];
                     return visibleRowData ? visibleRowData.idx : null;
                 }
             }
