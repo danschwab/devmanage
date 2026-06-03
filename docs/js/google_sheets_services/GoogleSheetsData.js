@@ -630,12 +630,12 @@ export class GoogleSheetsService {
                 }
                 
                 const query = `name='${fileName}' and parents in '${folderId}' and trashed=false`;
-                console.log(`[icons] Drive search: "${fileName}" in folder ${folderId}`);
+                //console.log(`[icons] Drive search: "${fileName}" in folder ${folderId}`);
 
                 // Log token scope so we can confirm drive.readonly was granted
                 const _token = gapi.client.getToken();
                 if (_token) {
-                    console.log('[icons] Token scope granted:', _token.scope || '(scope field not present in token)');
+                    //console.log('[icons] Token scope granted:', _token.scope || '(scope field not present in token)');
                 } else {
                     console.warn('[icons] No OAuth token present — Drive call will fail');
                 }
@@ -654,7 +654,7 @@ export class GoogleSheetsService {
                 const files = response.result?.files;
                 if (files && files.length > 0) {
                     const file = files[0];
-                    console.log(`[icons] Found in Drive: "${file.name}" (id: ${file.id})`);
+                    //console.log(`[icons] Found in Drive: "${file.name}" (id: ${file.id})`);
                     return {
                         id: file.id,
                         name: file.name,
@@ -663,7 +663,7 @@ export class GoogleSheetsService {
                     };
                 }
 
-                console.log(`[icons] Not found in Drive: "${fileName}" (${files ? files.length : 'null'} results)`);
+                //console.log(`[icons] Not found in Drive: "${fileName}" (${files ? files.length : 'null'} results)`);
                 return "";
             } catch (error) {
                 const status = error?.result?.error?.code || error?.status;

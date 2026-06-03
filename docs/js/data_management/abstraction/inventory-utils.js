@@ -642,7 +642,7 @@ class inventoryUtils_uncached {
                     ]
                 });
 
-                console.log('[timeline] overlapping shows:', overlapping?.map(r => r.Identifier || r.Show));
+                //console.log('[timeline] overlapping shows:', overlapping?.map(r => r.Identifier || r.Show));
 
                 for (const showRow of overlapping) {
                     const identifier = showRow.Identifier ||
@@ -651,7 +651,7 @@ class inventoryUtils_uncached {
                     let packedQty = 0;
                     try {
                         const showItems = await deps.call(PackListUtils.extractItems, identifier);
-                        console.log('[timeline] extractItems for', identifier, '→', showItems);
+                        //console.log('[timeline] extractItems for', identifier, '→', showItems);
                         packedQty = showItems[itemId] || 0;
                         if (!packedQty) continue;
                     } catch (_) {
@@ -660,12 +660,12 @@ class inventoryUtils_uncached {
 
                     const shipDate = await deps.call(ProductionUtils.getProjectShipDateFromRow, showRow);
                     const returnDate = await deps.call(ProductionUtils.getProjectReturnDateFromRow, showRow);
-                    console.log('[timeline]', identifier, '| shipDate:', shipDate, '| returnDate:', returnDate, '| window:', startDate, '→', endDate);
+                    //console.log('[timeline]', identifier, '| shipDate:', shipDate, '| returnDate:', returnDate, '| window:', startDate, '→', endDate);
 
                     if (shipDate) {
                         const shipDs = Math.floor(parseDate(shipDate).getTime() / 100);
                         const shipInWindow = (!startDs || shipDs >= startDs) && (!endDs || shipDs <= endDs);
-                        console.log('[timeline] ship window check:', shipDate, '| inWindow:', shipInWindow, '| startDs:', startDs, 'shipDs:', shipDs, 'endDs:', endDs);
+                        //console.log('[timeline] ship window check:', shipDate, '| inWindow:', shipInWindow, '| startDs:', startDs, 'shipDs:', shipDs, 'endDs:', endDs);
                         if (shipInWindow) {
                             events.push({ date: shipDate, event: 'Ships', note: identifier, change: `quantity: -${packedQty}`, quantity: null, _delta: -packedQty });
                         }
@@ -673,7 +673,7 @@ class inventoryUtils_uncached {
                     if (returnDate) {
                         const retDs = Math.floor(parseDate(returnDate).getTime() / 100);
                         const retInWindow = (!startDs || retDs >= startDs) && (!endDs || retDs <= endDs);
-                        console.log('[timeline] return window check:', returnDate, '| inWindow:', retInWindow);
+                        //console.log('[timeline] return window check:', returnDate, '| inWindow:', retInWindow);
                         if (retInWindow) {
                             events.push({ date: returnDate, event: 'Returns', note: identifier, change: `quantity: +${packedQty}`, quantity: null, _delta: packedQty });
                         }

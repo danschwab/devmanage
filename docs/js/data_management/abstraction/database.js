@@ -97,7 +97,7 @@ class database_uncached {
             return '';
         }
         
-        console.log(`[icons] getItemImageUrl: searching for "${itemNumberStr}" in folder ${folderId}`);
+        //console.log(`[icons] getItemImageUrl: searching for "${itemNumberStr}" in folder ${folderId}`);
 
         // Try different file extensions
         const extensions = ['jpg', 'jpeg', 'png'];
@@ -107,14 +107,14 @@ class database_uncached {
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
             if (file && file.thumbnailLink) {
-                console.log(`[icons] Thumbnail URL resolved for "${itemNumberStr}"`);
+                //console.log(`[icons] Thumbnail URL resolved for "${itemNumberStr}"`);
                 return file.thumbnailLink;
             }
             // Fallback: if Drive didn't return a thumbnailLink, fetch as blob
             if (file && file.id) {
                 const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
                 if (blobUrl) {
-                    console.log(`[icons] Image resolved for "${itemNumberStr}" (blob fallback)`);
+                    //console.log(`[icons] Image resolved for "${itemNumberStr}" (blob fallback)`);
                     return blobUrl;
                 }
             }
@@ -125,11 +125,11 @@ class database_uncached {
         const parts = itemNumberStr.split(separators);
         
         if (parts.length > 1 && parts[0]) {
-            console.log(`[icons] Trying prefix fallback for "${itemNumberStr}" → "${parts[0]}"`);
+            //console.log(`[icons] Trying prefix fallback for "${itemNumberStr}" → "${parts[0]}"`);
             return await deps.call(Database.getItemImageUrl, parts[0], folderId);
         }
         
-        console.log(`[icons] No image found for "${itemNumberStr}"`);
+        //console.log(`[icons] No image found for "${itemNumberStr}"`);
         return ''; // Return empty string if no image found
     }
 
