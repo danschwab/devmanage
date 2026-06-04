@@ -1,6 +1,11 @@
-# EditHistory Contract (Current Implementation)
+# EditHistory Contract
 
 Purpose: canonical contract for any agent or automation that reads/writes row history.
+
+Status notes:
+
+- Unmarked sections describe current implemented behavior.
+- The move-tracking section below documents the approved next contract for row reordering, but that extension is not implemented yet.
 
 ## Scope
 
@@ -35,6 +40,61 @@ Field contract:
 - `n`: changed column name.
 - `o`: previous value (old value only; new value is already in current row).
 
+## Planned Extension: Row Move Tracking
+
+The approved next extension adds row-position tracking to `EditHistory` without changing load behavior. Initialization happens on save, not on read.
+
+### Planned Row EditHistory JSON Shape
+
+```json
+{
+  "h": [
+    {
+      "u": "dan",
+      "t": 17309064000,
+      "s": "web",
+      "c": [{ "n": "QTY", "o": "5" }, { "m": 3 }]
+    }
+  ],
+  "i": 7
+}
+```
+
+Additional field contract:
+
+- `i`: row identity index owned by EditHistory. This is the row's last-saved position and is the only identity used for move tracking.
+- `m`: previous row index, stored as a move record inside `c`.
+
+Interpretation:
+
+- `{ "m": 3 }` means the row moved from index `3` to its current saved position.
+- `i` is updated after save so future saves compare against the row's own last-saved position, not against external business identifiers.
+- No row identifier keys or composite business keys are used for move tracking.
+
+### Planned New-Row Initialization Shape
+
+Rows with no `EditHistory` value are treated as newly inserted rows and receive their first history payload on save:
+
+```json
+{
+  "h": [
+    {
+      "u": "dan",
+      "t": 17309064000,
+      "s": "web",
+      "c": []
+    }
+  ],
+  "i": 5
+}
+```
+
+Interpretation:
+
+- Empty `c` means "row creation recorded at this timestamp".
+- A row that lacks any `EditHistory` before save is assumed to be newly inserted data.
+- A row that already has history but lacks `i` is legacy data and gets `i` added on save.
+
 ## Write Rules (Required)
 
 - Always parse existing `EditHistory`; never overwrite blindly.
@@ -50,6 +110,25 @@ Source rules:
 - External CAD automation must write `s: cad`.
 - Reader normalization treats missing source as `web`.
 - Reader normalization treats legacy `app` source as `web`.
+
+### Planned Save Rules For Move Tracking
+
+- Do not add `i` or creation entries during data load. Reads remain unchanged.
+- On save, if a row has no `EditHistory`, create an initial entry with empty `c` and set root `i` to the row's current index.
+- On save, if a row has `EditHistory` but no root `i`, add `i` using the row's current index.
+- Detect movement by comparing stored root `i` against the row's current array index during the save operation.
+- If a row moved, append `{ "m": <previousIndex> }` inside the new history entry's `c` array.
+- If a row moved and business fields changed in the same save, record both in the same history entry.
+- After processing a save, update root `i` to the row's new current index.
+- Move tracking uses only `EditHistory.i`; no business-key identifiers participate in row matching.
+- If a row has no field changes and did not move, do not append a new history entry.
+
+### Planned Matching Model
+
+- During save, existing rows are matched by their stored root `i` value.
+- Newly inserted rows are recognized by missing `EditHistory`.
+- Legacy rows are recognized by existing `EditHistory` with missing `i`.
+- This keeps EditHistory coupled to its own internal index history rather than to current array position or domain identifiers.
 
 ## Archive Table (Deleted Rows)
 
@@ -101,12 +180,25 @@ To stay compatible:
 4. Prepend entry to `h`, cap at 10, reserialize.
 5. Write updated business fields and `EditHistory` together atomically when possible.
 
-This is the authoritative behavior as of current code in:
+For the planned move-tracking extension, compatible writers should additionally:
+
+6. Treat missing `EditHistory` as a newly inserted row and initialize `h` plus root `i` on save.
+7. Treat missing root `i` on an existing history object as legacy data and add `i` on save.
+8. Compare stored root `i` to the row's current save index to detect moves.
+9. Add `{ "m": <previousIndex> }` inside `c` when movement occurred.
+10. Update root `i` to the new saved index before persisting.
+
+Current implemented behavior lives in:
 
 - `docs/js/data_management/utils/metadata-utils.js`
 - `docs/js/data_management/abstraction/database.js`
 - `docs/js/data_management/api.js`
 - `docs/js/application/components/content/PacklistTable.js`
+
+Approved move-tracking design notes also live in:
+
+- `docs/notes/move-tracking-implementation-plan.md`
+- `docs/notes/move-tracking-simplification-analysis.md`
 
 ---
 
