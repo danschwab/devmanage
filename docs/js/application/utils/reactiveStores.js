@@ -239,11 +239,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         analysis: priorityConfig?.analysis !== undefined ? priorityConfig.analysis : Priority.ANALYSIS  // Default: 1
     };
     // Helper to recursively add AppData to all objects in an array (and nested arrays)
-    function appDataInit(arr) {
+    function appDataInit(arr, forceFresh = false) {
         if (!Array.isArray(arr)) return arr;
         return arr.map(obj => {
             if (obj && typeof obj === 'object') {
-                if (!('AppData' in obj) || typeof obj.AppData !== 'object' || obj.AppData === null) {
+                // Always create fresh AppData if forceFresh is true (e.g., on refresh to clear stale data)
+                if (forceFresh || !('AppData' in obj) || typeof obj.AppData !== 'object' || obj.AppData === null) {
                     obj['AppData'] = {};
                 }
                 
@@ -263,7 +264,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 // Recursively initialize nested arrays (e.g., Items)
                 Object.keys(obj).forEach(key => {
                     if (Array.isArray(obj[key])) {
-                        obj[key] = appDataInit(obj[key]);
+                        obj[key] = appDataInit(obj[key], forceFresh);
                     }
                 });
             }
@@ -340,8 +341,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         },
         
         setData(newData) {
-            // Deep clone and initialize AppData
-            const processedData = appDataInit(deepClone(newData));
+            // Deep clone and initialize AppData (force fresh to clear any stale data from server)
+            const processedData = appDataInit(deepClone(newData), true);
             // Clear any existing analysis results if analysis is configured
             if (this.analysisConfig) {
                 clearAnalysisResults(processedData, this.analysisConfig);
@@ -361,8 +362,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             }
         },
         setOriginalData(newOriginalData) {
-            // Deep clone and initialize AppData
-            const processedData = appDataInit(deepClone(newOriginalData));
+            // Deep clone and initialize AppData (force fresh for original data too)
+            const processedData = appDataInit(deepClone(newOriginalData), true);
             // Mutate existing array in place to preserve references
             this.originalData.splice(0, this.originalData.length, ...processedData);
         },

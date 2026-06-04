@@ -400,12 +400,27 @@ export const undoRegistry = Vue.reactive({
         return cloned;
     },
     
-    // Restore a snapshot while preserving current AppData
+    // Restore a snapshot while preserving current AppData (recursively for nested arrays)
     _restoreSnapshotPreservingAppData(targetArray, snapshot) {
         const beforeLength = targetArray.length;
         
-        // Save current AppData for each row
-        const currentAppData = targetArray.map(row => row?.AppData);
+        // Create a map of row identities to AppData (by object reference and identifiers)
+        const appDataMap = new Map();
+        for (const row of targetArray) {
+            if (row && typeof row === 'object') {
+                const savedAppData = this._saveAppDataRecursive(row);
+                if (savedAppData) {
+                    // Store by object reference
+                    appDataMap.set(row, savedAppData);
+                    
+                    // Also store by identifier for rows with key fields
+                    const identifier = this._createRowIdentifier(row);
+                    if (identifier) {
+                        appDataMap.set(identifier, savedAppData);
+                    }
+                }
+            }
+        }
         
         // Clear and restore from snapshot
         targetArray.splice(0, targetArray.length, ...snapshot);
@@ -413,45 +428,148 @@ export const undoRegistry = Vue.reactive({
         const afterLength = targetArray.length;
         console.log(`[Undo] Array restored: ${beforeLength} → ${afterLength} rows`);
         
-        // Restore AppData for rows that existed before and still exist
-        for (let i = 0; i < Math.min(currentAppData.length, targetArray.length); i++) {
-            if (currentAppData[i] && targetArray[i]) {
-                targetArray[i].AppData = currentAppData[i];
+        // Restore AppData by matching row identity (object reference first, then identifiers)
+        for (let i = 0; i < targetArray.length; i++) {
+            const row = targetArray[i];
+            if (row && typeof row === 'object') {
+                let savedAppData = null;
+                
+                // Try object reference first (works for moves/reorders where object is preserved)
+                if (appDataMap.has(row)) {
+                    savedAppData = appDataMap.get(row);
+                } else {
+                    // Try identifier match (works when row object is recreated but data matches)
+                    const identifier = this._createRowIdentifier(row);
+                    if (identifier && appDataMap.has(identifier)) {
+                        savedAppData = appDataMap.get(identifier);
+                    }
+                }
+                
+                if (savedAppData) {
+                    this._restoreAppDataRecursive(row, savedAppData);
+                }
+            }
+        }
+        
+        // Ensure ALL rows have AppData (initialize for rows restored from snapshot without saved AppData)
+        this._initializeAppDataRecursive(targetArray);
+    },
+    
+    // Create a unique identifier string for a row based on key fields
+    _createRowIdentifier(row) {
+        if (!row || typeof row !== 'object') return null;
+        
+        // Use multiple fields to create a reasonably unique identifier
+        const fields = ['Show', 'Item', 'Crate', 'Description', 'Quantity'];
+        const values = fields
+            .filter(field => row[field] !== undefined && row[field] !== null)
+            .map(field => `${field}:${row[field]}`);
+        
+        return values.length > 0 ? values.join('|') : null;
+    },
+    
+    // Initialize AppData for any rows that don't have it (recursively for nested arrays)
+    _initializeAppDataRecursive(array) {
+        if (!Array.isArray(array)) return;
+        
+        array.forEach(row => {
+            if (row && typeof row === 'object') {
+                // Initialize AppData if missing
+                if (!('AppData' in row) || typeof row.AppData !== 'object' || row.AppData === null) {
+                    row.AppData = {};
+                }
+                
+                // Recursively initialize nested arrays
+                for (const key in row) {
+                    if (Array.isArray(row[key])) {
+                        this._initializeAppDataRecursive(row[key]);
+                    }
+                }
+            }
+        });
+    },
+    
+    // Recursively save AppData from an object and its nested arrays
+    _saveAppDataRecursive(obj) {
+        if (!obj || typeof obj !== 'object') {
+            return null;
+        }
+        
+        const savedData = {
+            AppData: obj.AppData || null,
+            nestedArrays: {}
+        };
+        
+        // Save AppData from nested arrays
+        for (const key in obj) {
+            if (Array.isArray(obj[key]) && obj[key].length > 0) {
+                savedData.nestedArrays[key] = obj[key].map(item => this._saveAppDataRecursive(item));
+            }
+        }
+        
+        return savedData;
+    },
+    
+    // Recursively restore AppData to an object and its nested arrays
+    _restoreAppDataRecursive(obj, savedData) {
+        if (!obj || !savedData || typeof obj !== 'object') {
+            return;
+        }
+        
+        // Restore top-level AppData
+        if (savedData.AppData) {
+            obj.AppData = savedData.AppData;
+        }
+        
+        // Restore AppData in nested arrays
+        if (savedData.nestedArrays) {
+            for (const key in savedData.nestedArrays) {
+                if (Array.isArray(obj[key]) && Array.isArray(savedData.nestedArrays[key])) {
+                    const minLength = Math.min(obj[key].length, savedData.nestedArrays[key].length);
+                    for (let i = 0; i < minLength; i++) {
+                        if (savedData.nestedArrays[key][i]) {
+                            this._restoreAppDataRecursive(obj[key][i], savedData.nestedArrays[key][i]);
+                        }
+                    }
+                }
             }
         }
     },
     
-    // Undo last operation for current route
-    undo() {
+    // Common logic for undo/redo operations
+    _performUndoRedo(isUndo) {
         if (!this.currentRouteKey) {
             console.warn('[Undo] No active route set');
             return false;
         }
         
         const stacks = this._getRouteStacks(this.currentRouteKey);
+        const sourceStack = isUndo ? stacks.undoStack : stacks.redoStack;
+        const targetStack = isUndo ? stacks.redoStack : stacks.undoStack;
+        const operation = isUndo ? 'undo' : 'redo';
         
-        if (stacks.undoStack.length === 0) {
-            console.log('[Undo] Nothing to undo');
+        if (sourceStack.length === 0) {
+            console.log(`[Undo] Nothing to ${operation}`);
             return false;
         }
         
-        // Blur any focused contenteditable cell before undo
+        // Blur any focused contenteditable cell
         if (document.activeElement && document.activeElement.contentEditable === 'true') {
             document.activeElement.blur();
         }
         
-        // Pop state from undo stack
-        const state = stacks.undoStack.pop();
+        // Pop state from source stack
+        const state = sourceStack.pop();
         
-        // Capture current selection state BEFORE restoring arrays (if we have tableRowSelectionState)
+        // Capture current selection state BEFORE restoring arrays
         let currentSelections = null;
         if (typeof tableRowSelectionState !== 'undefined') {
             const arrayList = state.arrays.map(a => a.arrayRef);
             currentSelections = this._captureSelectionState(tableRowSelectionState, arrayList);
         }
         
-        // Save current state to redo stack before restoring (excluding AppData)
-        const redoState = {
+        // Save current state to target stack before restoring
+        const newState = {
             type: state.type,
             timestamp: Date.now(),
             routeKey: state.routeKey,
@@ -461,104 +579,37 @@ export const undoRegistry = Vue.reactive({
                 arrayRef: arrSnapshot.arrayRef,
                 snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
             })),
-            selections: currentSelections, // Use captured current selections
-            undoAlert: state.undoAlert || null // Carry alert forward so redo also warns
+            selections: currentSelections,
+            undoAlert: state.undoAlert || null
         };
-        stacks.redoStack.push(redoState);
+        targetStack.push(newState);
         
         // Restore state while preserving AppData
         state.arrays.forEach(arrSnapshot => {
-            const targetArray = arrSnapshot.arrayRef;
-            const snapshot = arrSnapshot.snapshot;
-            
-            // Restore snapshot while preserving current AppData
-            this._restoreSnapshotPreservingAppData(targetArray, snapshot);
+            this._restoreSnapshotPreservingAppData(arrSnapshot.arrayRef, arrSnapshot.snapshot);
         });
         
         // Restore selection state (must happen after arrays are restored)
-        console.log(`[Undo] About to restore selection state for undo operation`);
         if (state.selections && typeof tableRowSelectionState !== 'undefined') {
             this._restoreSelectionState(state.selections, tableRowSelectionState);
-        } else {
-            console.log(`[Undo] No selection state in undo snapshot`);
         }
         
-        // Clear current edit capture so subsequent edits can create new snapshots
+        // Clear current captures so subsequent operations can create new snapshots
         this._currentEditCapture = null;
         this._currentSelectionCapture = null;
         
-        console.log(`[Undo] Undid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
+        console.log(`[Undo] ${isUndo ? 'Undid' : 'Redid'} ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
         return state.undoAlert || null;
+    },
+    
+    // Undo last operation for current route
+    undo() {
+        return this._performUndoRedo(true);
     },
     
     // Redo last undone operation for current route
     redo() {
-        if (!this.currentRouteKey) {
-            console.warn('[Undo] No active route set');
-            return false;
-        }
-        
-        const stacks = this._getRouteStacks(this.currentRouteKey);
-        
-        if (stacks.redoStack.length === 0) {
-            console.log('[Undo] Nothing to redo');
-            return false;
-        }
-        
-        // Blur any focused contenteditable cell before redo
-        if (document.activeElement && document.activeElement.contentEditable === 'true') {
-            document.activeElement.blur();
-        }
-        
-        // Pop state from redo stack
-        const state = stacks.redoStack.pop();
-        
-        // Capture current selection state BEFORE restoring arrays (if we have tableRowSelectionState)
-        let currentSelections = null;
-        if (typeof tableRowSelectionState !== 'undefined') {
-            const arrayList = state.arrays.map(a => a.arrayRef);
-            currentSelections = this._captureSelectionState(tableRowSelectionState, arrayList);
-        }
-        
-        // Save current state to undo stack before restoring (excluding AppData)
-        const undoState = {
-            type: state.type,
-            timestamp: Date.now(),
-            routeKey: state.routeKey,
-            cellInfo: state.cellInfo,
-            arrays: state.arrays.map(arrSnapshot => ({
-                tableId: arrSnapshot.tableId,
-                arrayRef: arrSnapshot.arrayRef,
-                snapshot: this._createSnapshotWithoutAppData(arrSnapshot.arrayRef)
-            })),
-            selections: currentSelections, // Use captured current selections
-            undoAlert: state.undoAlert || null // Carry alert forward
-        };
-        stacks.undoStack.push(undoState);
-        
-        // Restore state while preserving AppData
-        state.arrays.forEach(arrSnapshot => {
-            const targetArray = arrSnapshot.arrayRef;
-            const snapshot = arrSnapshot.snapshot;
-            
-            // Restore snapshot while preserving current AppData
-            this._restoreSnapshotPreservingAppData(targetArray, snapshot);
-        });
-        
-        // Restore selection state (must happen after arrays are restored)
-        console.log(`[Undo] About to restore selection state for redo operation`);
-        if (state.selections && typeof tableRowSelectionState !== 'undefined') {
-            this._restoreSelectionState(state.selections, tableRowSelectionState);
-        } else {
-            console.log(`[Undo] No selection state in redo snapshot`);
-        }
-        
-        // Clear current edit capture so subsequent edits can create new snapshots
-        this._currentEditCapture = null;
-        this._currentSelectionCapture = null;
-        
-        console.log(`[Undo] Redid ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
-        return state.undoAlert || null;
+        return this._performUndoRedo(false);
     },
     
     // Get memory usage statistics

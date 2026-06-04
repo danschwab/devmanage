@@ -2101,11 +2101,18 @@ export const TableComponent = {
             if (!undoRegistry.currentRouteKey) return false;
             const stacks = undoRegistry.undoStacksByRoute.get(undoRegistry.currentRouteKey);
             return stacks && stacks.redoStack.length > 0;
+        },
+        
+        // Helper to get current route key without query params
+        currentRouteKey() {
+            return this.appContext?.currentPath?.split('?')[0] || null;
         }
     },
     mounted() {
         // Register route with undo system and tableRowSelectionState
-        if (this.appContext?.currentPath) {
+        // Only top-level tables (with showHeader=true) should set the active route
+        // Nested tables should not override the global route key
+        if (this.appContext?.currentPath && this.showHeader) {
             const routeKey = this.appContext.currentPath.split('?')[0]; // Remove query params
             undoRegistry.setActiveRoute(routeKey);
             tableRowSelectionState.setActiveRoute(routeKey);
@@ -3302,12 +3309,15 @@ export const TableComponent = {
                 mouseY = this.lastKnownMouseY;
             }
             
-            // Find the table element - scope to this specific table using drag-id
+            // Find the table element - scope to this specific table using drag-id.
+            // Exclude the sticky header clone (class 'sticky-header') which also carries the dragId
+            // class but has no tbody; without this exclusion a scrolled page would always resolve
+            // tableEl to the fixed clone, causing the bounds check to discard every cursor position.
             let tableEl;
             if (this.dragId) {
-                tableEl = this.$el.querySelector(`table.${this.dragId}`);
+                tableEl = this.$el.querySelector(`table.${this.dragId}:not(.sticky-header)`);
             } else {
-                tableEl = this.$el.querySelector('table');
+                tableEl = this.$el.querySelector('table:not(.sticky-header)');
             }
             if (!tableEl) return;
             
@@ -3348,6 +3358,23 @@ export const TableComponent = {
                 // injected by slots, which would otherwise cause the loop index to drift ahead of
                 // visibleRows and break drop-target detection for rows lower in the table.
                 const rows = tbody.querySelectorAll(':scope > tr[data-visible-idx]');
+                
+                // Special case: if table is empty but draggable, check the empty-drop-target row
+                if (rows.length === 0 && this.draggable) {
+                    const emptyRow = tbody.querySelector('tr.empty-drop-target');
+                    if (emptyRow) {
+                        const rowRect = emptyRow.getBoundingClientRect();
+                        if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+                            // Drop at the beginning of empty table
+                            newDropTarget = {
+                                type: 'between',
+                                targetIndex: 0,
+                                visualTargetIndex: 0
+                            };
+                        }
+                    }
+                }
+                
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     const rowRect = row.getBoundingClientRect();
@@ -3480,9 +3507,10 @@ export const TableComponent = {
         getRowIndexAtPosition(mouseY) {
             // Find which row index corresponds to the given Y position - scope to this specific table.
             // Use [data-visible-idx] to select only data rows, excluding details rows and nested rows.
+            // Exclude the sticky header clone so we always target the actual data table.
             const tableEl = this.dragId
-                ? this.$el.querySelector(`table.${this.dragId}`)
-                : this.$el.querySelector('table');
+                ? this.$el.querySelector(`table.${this.dragId}:not(.sticky-header)`)
+                : this.$el.querySelector('table:not(.sticky-header)');
             if (!tableEl) return null;
             const tbody = tableEl.querySelector('tbody');
             if (!tbody) return null;
@@ -3694,9 +3722,12 @@ export const TableComponent = {
                 // Check if click was on the selection bubble
                 const clickedSelectionBubble = clickedElement.closest('.selection-action-bubble');
                 
-                // Clear selections for any click that isn't on a drag handle or selection bubble —
+                // Check if click was within a table header (to avoid interfering with header buttons like undo/redo)
+                const clickedInHeader = clickedElement.closest('.content-header');
+                
+                // Clear selections for any click that isn't on a drag handle, selection bubble, or table header —
                 // including clicks outside all tables. Drag handles are the only way to build/extend selections.
-                if (!clickedDragHandle && !clickedSelectionBubble) {
+                if (!clickedDragHandle && !clickedSelectionBubble && !clickedInHeader) {
                     // Capture state before clearing for undo
                     if (tableRowSelectionState.currentRouteKey) {
                         // Get all unique arrays involved in selections
@@ -3936,8 +3967,7 @@ export const TableComponent = {
                     this.draggable
                 ) {
                     const mode = event.key === 'c' ? 'copy' : 'cut';
-                    const routeKey = this.appContext?.currentPath?.split('?')[0];
-                    tableRowSelectionState.startClipboard(mode, this.dragId, routeKey);
+                    tableRowSelectionState.startClipboard(mode, this.dragId, this.currentRouteKey);
                     // Also write selected rows as TSV to the OS clipboard so Excel/Sheets can receive them.
                     const tsv = this._serializeRowsToTsv();
                     if (tsv !== null) {
