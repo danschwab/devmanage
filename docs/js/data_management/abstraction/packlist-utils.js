@@ -721,19 +721,14 @@ class packListUtils_uncached {
             return null;
         }
 
-        // Run inventory lookup, overlapping shows, current project items, and return date in parallel
-        const [inventoryQuantity, overlappingShows, currentProjectItems, returnDate] = await Promise.all([
-            deps.call(PackListUtils.getItemInventoryQuantity, itemId, referenceDate),
+        // Run all required data fetches in parallel
+        const [overlappingShows, currentProjectItems, returnDate] = await Promise.all([
             deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId),
             deps.call(PackListUtils.extractItems, currentProjectId),
             deps.call(ProductionUtils.getProjectReturnDate, currentProjectId)
         ]);
 
-        // If item not found in inventory, return null
-        if (inventoryQuantity === null) {
-            return null;
-        }
-
+        // Calculate total usage from current project and all overlapping shows
         const currentProjectUsage = currentProjectItems[itemId] || 0;
         let totalUsed = currentProjectUsage;
 
@@ -747,36 +742,19 @@ class packListUtils_uncached {
             }
         }
 
-        // Start with remaining at ship date (referenceDate)
-        let minRemaining = inventoryQuantity - totalUsed;
-
-        // Check at each pending inventory change date within [ship, return] window.
-        // Inventory can only change at pending change breakpoints; between breakpoints it is constant.
-        // We evaluate at each breakpoint and return the minimum (worst-case) remaining.
-        if (referenceDate && returnDate && referenceDate < returnDate) {
-            const rawInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['edithistory'], null);
-            const rawEditHistory = rawInfo?.[0]?.edithistory || rawInfo?.[0]?.EditHistory || null;
-            if (rawEditHistory) {
-                const parsed = EditHistoryUtils.parseEditHistory(rawEditHistory);
-                const shipDeciseconds = Math.floor(parseDate(referenceDate).getTime() / 100);
-                const returnDeciseconds = Math.floor(parseDate(returnDate).getTime() / 100);
-                // Unique dates for pending changes strictly after ship and on or before return
-                const pendingDates = [...new Set(
-                    (parsed?.p || [])
-                        .filter(e => e.t > shipDeciseconds && e.t <= returnDeciseconds)
-                        .map(e => toISODateString(new Date(e.t * 100)))
-                        .filter(Boolean)
-                )];
-                for (const pendingDate of pendingDates) {
-                    const qtyAtDate = await deps.call(PackListUtils.getItemInventoryQuantity, itemId, pendingDate);
-                    if (qtyAtDate !== null) {
-                        minRemaining = Math.min(minRemaining, qtyAtDate - totalUsed);
-                    }
-                }
-            }
+        // Use getItemMinQuantityInRange to get the worst-case inventory level
+        // over the [ship, return] window, accounting for all inventory changes
+        // (both historical and pending) via the getItemTimeline chain.
+        const minInventoryQty = await deps.call(InventoryUtils.getItemMinQuantityInRange, itemId, referenceDate, returnDate);
+        
+        // If item not found in inventory, return null
+        if (minInventoryQty === null) {
+            return null;
         }
 
-        return minRemaining;
+        // The minimum remaining is the minimum inventory quantity minus total usage
+        // This represents the worst-case available quantity over the project window
+        return minInventoryQty - totalUsed;
     }
 
     /**

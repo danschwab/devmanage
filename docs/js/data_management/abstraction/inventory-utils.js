@@ -713,6 +713,9 @@ class inventoryUtils_uncached {
      * Returns start/end date range, inventory quantity, and the worst-case
      * (minimum) remaining quantity across all simultaneous show demand.
      *
+     * Uses getItemTimeline via getItemMinQuantityInRange to properly account
+     * for all inventory changes (historical and pending) combined with show demands.
+     *
      * @param {Object} deps
      * @param {string} itemId - Item identifier (e.g. "F-101")
      * @param {Object} shows - Map of { showIdentifier: qty } for this item
@@ -754,20 +757,52 @@ class inventoryUtils_uncached {
             return { startDate, endDate, inventoryQty: null, minQty: null };
         }
 
-        // Compute minimum remaining via running balance over ship/return events
-        const events = [];
+        // Get the full item timeline for the date range, which includes all inventory
+        // changes (historical and pending) as well as show ship/return events
+        const timeline = await deps.call(InventoryUtils.getItemTimeline, itemId, startDate, endDate);
+        
+        // Create a map of date -> inventory quantity from the timeline
+        const inventoryByDate = new Map();
+        for (const event of timeline) {
+            if (event.date && event.quantity !== null && event.quantity !== undefined) {
+                inventoryByDate.set(event.date, event.quantity);
+            }
+        }
+
+        // Build show demand events (ship = take items, return = return items)
+        const demandEvents = [];
         for (const { qty, shipDate, returnDate } of showDates) {
             if (qty <= 0) continue;
-            if (shipDate) events.push({ date: shipDate, delta: -qty });
-            if (returnDate) events.push({ date: returnDate, delta: qty });
+            if (shipDate) demandEvents.push({ date: shipDate, delta: -qty });
+            if (returnDate) demandEvents.push({ date: returnDate, delta: qty });
         }
-        events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        demandEvents.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-        let running = inventoryQty;
-        let minQty = inventoryQty;
-        for (const event of events) {
-            running += event.delta;
-            if (running < minQty) minQty = running;
+        // Combine inventory timeline with demand events to find minimum available quantity
+        // Walk through all dates where either inventory changes or demand changes
+        const allDates = [...new Set([...inventoryByDate.keys(), ...demandEvents.map(e => e.date)])].sort();
+        
+        let currentDemand = 0; // Running total of items currently out on shows
+        let minQty = inventoryQty; // Start with inventory at reference date
+        let currentInventory = inventoryQty;
+        
+        for (const date of allDates) {
+            // Update inventory if it changed on this date
+            if (inventoryByDate.has(date)) {
+                currentInventory = inventoryByDate.get(date);
+            }
+            
+            // Update demand if shows ship/return on this date
+            const dateEvents = demandEvents.filter(e => e.date === date);
+            for (const event of dateEvents) {
+                currentDemand += event.delta; // Negative for ships, positive for returns
+            }
+            
+            // Available = inventory + demand (demand is negative when items are out)
+            const available = currentInventory + currentDemand;
+            if (available < minQty) {
+                minQty = available;
+            }
         }
 
         return { startDate, endDate, inventoryQty, minQty };

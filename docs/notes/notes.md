@@ -1,6 +1,6 @@
 ## Present
 
-delete asp sgna and beckman cyto
+delete beckman cyto
 analytics off
 log out
 hard refresh browser and log in again
