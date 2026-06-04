@@ -22,6 +22,7 @@ export class FakeGoogleSheetsAuth {
     static userEmail = 'test@example.com';
     static isInitialized = false;
     static isAuthenticatedState = false;
+    static _authenticatePromise = null;
 
     static async initialize() {
         await this.delay(100); // Simulate async initialization
@@ -30,6 +31,23 @@ export class FakeGoogleSheetsAuth {
     }
 
     static async authenticate() {
+        if (this._authenticatePromise) {
+            return this._authenticatePromise;
+        }
+
+        this._authenticatePromise = this._authenticateInternal()
+            .finally(() => {
+                this._authenticatePromise = null;
+            });
+
+        return this._authenticatePromise;
+    }
+
+    static getAuthenticationPromise() {
+        return this._authenticatePromise;
+    }
+
+    static async _authenticateInternal() {
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
         this.userEmail = 'test@example.com'; // Reset email on re-authentication

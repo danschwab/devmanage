@@ -39,6 +39,7 @@ export class BaseTokenManager {
 
 export class GoogleSheetsAuth {
     static userEmail = null;
+    static _authenticatePromise = null;
     static _silentRefreshPromise = null;
 
     static async initialize() {
@@ -118,6 +119,23 @@ export class GoogleSheetsAuth {
     }
 
     static async authenticate() {
+        if (this._authenticatePromise) {
+            return this._authenticatePromise;
+        }
+
+        this._authenticatePromise = this._authenticateInternal()
+            .finally(() => {
+                this._authenticatePromise = null;
+            });
+
+        return this._authenticatePromise;
+    }
+
+    static getAuthenticationPromise() {
+        return this._authenticatePromise;
+    }
+
+    static async _authenticateInternal() {
         if (!gapiInited || !gisInited) {
             throw new Error('[GoogleSheetsAuth.authenticate] INIT_ERROR: Google API not properly initialized');
         }

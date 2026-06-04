@@ -49,6 +49,7 @@ let testModeEmail = null;
  * Simplified authentication utility class that wraps GoogleSheetsAuth
  */
 export class Auth {
+    static _loginPromise = null;
     static _proactiveRefreshTimer = null;
     static _proactiveInteractionHandler = null;
     static async initialize() {
@@ -75,6 +76,19 @@ export class Auth {
     }
 
     static async login() {
+        if (this._loginPromise) {
+            return this._loginPromise;
+        }
+
+        this._loginPromise = this._loginInternal()
+            .finally(() => {
+                this._loginPromise = null;
+            });
+
+        return this._loginPromise;
+    }
+
+    static async _loginInternal() {
         authState.isLoading = true;
         authState.error = null;
         
@@ -260,6 +274,14 @@ export class Auth {
 
             if (!showModal) return false;
 
+            const waitedForAuthentication = await this._waitForPendingAuthentication();
+            if (waitedForAuthentication) {
+                const isAuthenticatedAfterWait = await this.checkAuth();
+                if (isAuthenticatedAfterWait) {
+                    return true;
+                }
+            }
+
             // Layer 2 / 3: Token expired — show modal.
             // The modal button is a guaranteed user gesture:
             //   Layer 2: silentRefresh() works  → no popup, session renewed silently.
@@ -300,12 +322,12 @@ export class Auth {
                                 resolve(true);
                             } else {
                                 console.error(`[Auth] Re-authentication failed for ${context}`);
-                                manager.error('Re-authentication failed. Please log in manually.', 'Authentication Failed');
+                                await Auth._showAuthErrorModal('Authentication Failed', 'Re-authentication failed. Please log in manually.');
                                 resolve(false);
                             }
                         } catch (error) {
                             console.error(`[Auth] Re-authentication error for ${context}:`, error);
-                            manager.error('Re-authentication failed: ' + error.message, 'Authentication Error');
+                            await Auth._showAuthErrorModal('Authentication Error', 'Re-authentication failed: ' + error.message);
                             resolve(false);
                         } finally {
                             authPromptShowing = false;
@@ -319,8 +341,8 @@ export class Auth {
                         resolve(false);
                     },
                     'Session Expired',
-                    'Renew Session',
-                    'Log Out'
+                    'Log In',
+                    'Cancel'
                 );
 
                 // Watch for modal dismissal via X button or overlay click
@@ -451,6 +473,43 @@ export class Auth {
         }
     }
 
+    static async _waitForPendingAuthentication(options = {}) {
+        const excludedPromises = new Set((options.excludePromises || []).filter(Boolean));
+        const pendingAuthentications = [];
+
+        if (this._loginPromise && !excludedPromises.has(this._loginPromise)) {
+            pendingAuthentications.push(this._loginPromise);
+        }
+
+        const googleAuthPromise = typeof GoogleSheetsAuth.getAuthenticationPromise === 'function'
+            ? GoogleSheetsAuth.getAuthenticationPromise()
+            : null;
+        if (googleAuthPromise && !excludedPromises.has(googleAuthPromise)) {
+            pendingAuthentications.push(googleAuthPromise);
+        }
+
+        if (pendingAuthentications.length === 0) {
+            return false;
+        }
+
+        console.log('[Auth] Waiting for in-flight authentication before showing modal');
+        await Promise.allSettled([...new Set(pendingAuthentications)]);
+        return true;
+    }
+
+    static async _showAuthErrorModal(title, message) {
+        const waitedForAuthentication = await this._waitForPendingAuthentication();
+        if (waitedForAuthentication) {
+            const isAuthenticated = await this.checkAuth();
+            if (isAuthenticated) {
+                return;
+            }
+        }
+
+        const manager = await getModalManager();
+        manager.error(message, title);
+    }
+
     static async _authenticateWithPopupWarning() {
         const manager = await getModalManager();
         let warningModal = null;
@@ -462,7 +521,19 @@ export class Auth {
         };
 
         const attempt = () => new Promise((resolve, reject) => {
-            warningTimer = setTimeout(() => {
+            let authAttemptPromise = null;
+
+            warningTimer = setTimeout(async () => {
+                const waitedForAuthentication = await Auth._waitForPendingAuthentication({
+                    excludePromises: [authAttemptPromise]
+                });
+                if (waitedForAuthentication) {
+                    const isAuthenticated = await Auth.checkAuth();
+                    if (isAuthenticated) {
+                        return;
+                    }
+                }
+
                 warningModal = manager.confirm(
                     "A Google sign-in popup should be visible.",
                     () => {
@@ -477,7 +548,8 @@ export class Auth {
                 );
             }, 4000);
 
-            GoogleSheetsAuth.authenticate()
+            authAttemptPromise = GoogleSheetsAuth.authenticate();
+            authAttemptPromise
                 .then((result) => { clearWarning(); resolve(result); })
                 .catch((err) => { clearWarning(); reject(err); });
         });
