@@ -161,6 +161,11 @@ class database_uncached {
         for (const oldId of existingFileIds) {
             await GoogleSheetsService.deleteDriveFile(oldId);
         }
+        
+        invalidateCache([
+            { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [itemNumberStr] },
+            { namespace: 'database', methodName: 'getItemImageUrl', args: [itemNumberStr] }
+        ], true);
 
         // Prefer thumbnailLink (real Google URL) over blob URL — avoids CSP issues and
         // works directly in <img> tags. Falls back to blob only if thumbnail not yet generated.

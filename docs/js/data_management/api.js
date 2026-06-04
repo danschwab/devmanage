@@ -15,6 +15,7 @@ import { authState } from '../application/utils/auth.js';
  * - saveInventoryTabData
  * - savePackList
  * - storeUserData
+ * - uploadItemImage
  * 
  * CRITICAL: Mutation methods must NOT:
  * 1. Accept 'deps' as first parameter
@@ -1220,7 +1221,7 @@ export const Requests = wrapMethods(
     'api', 
     [
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
-        'saveInventoryTabData', 'savePackList', 'storeUserData',
+        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',

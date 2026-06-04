@@ -470,18 +470,18 @@ export const ItemImageComponent = {
             const title = this.imageFound ? 'Replace Thumbnail' : 'Add Thumbnail';
             this.$modal.custom(ImageUploadComponent, {
                 itemNumber: this.itemNumber,
-                mode,
-                onUploadSuccess: (newUrl) => {
-                    this.localImageUrl = newUrl;
-                    invalidateCache([
-                            { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }
-                        ]);
-                        // Prime both cache levels so the reactive analysis re-run
-                        // returns the new URL immediately without a Drive search.
-                        // (Drive search indexes newly uploaded files with a delay.)
-                        setCacheValue('database', 'getItemImageUrl', [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'], newUrl);
-                        setCacheValue('api', 'getItemImageUrl', [this.itemNumber], newUrl); // emits bus event;
-                }
+                mode//,
+                // onUploadSuccess: (newUrl) => {
+                //     this.localImageUrl = newUrl;
+                //     invalidateCache([
+                //             { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }
+                //         ]);
+                //         // Prime both cache levels so the reactive analysis re-run
+                //         // returns the new URL immediately without a Drive search.
+                //         // (Drive search indexes newly uploaded files with a delay.)
+                //         // setCacheValue('database', 'getItemImageUrl', [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'], newUrl);
+                //         // setCacheValue('api', 'getItemImageUrl', [this.itemNumber], newUrl); // emits bus event;
+                // }
             }, title);
         },
         handleError() {
@@ -606,7 +606,7 @@ export const InventoryTableComponent = {
         },
         isDirty() {
             const result = this.inventoryTableStore?.isModified || false;
-            console.log('[InventoryTable] isDirty computed:', result, '| store exists:', !!this.inventoryTableStore, '| isModified:', this.inventoryTableStore?.isModified);
+            //console.log('[InventoryTable] isDirty computed:', result, '| store exists:', !!this.inventoryTableStore, '| isModified:', this.inventoryTableStore?.isModified);
             return result;
         },
         lockKey() {
@@ -646,7 +646,7 @@ export const InventoryTableComponent = {
         },
         allowSave() {
             const result = this.isDirty && !this.lockedByOther && this.lockCheckComplete;
-            console.log('[InventoryTable] allowSave computed:', result, '| isDirty:', this.isDirty, '| lockedByOther:', this.lockedByOther, '| lockCheckComplete:', this.lockCheckComplete);
+            //console.log('[InventoryTable] allowSave computed:', result, '| isDirty:', this.isDirty, '| lockedByOther:', this.lockedByOther, '| lockCheckComplete:', this.lockCheckComplete);
             return result;
         }
     },
