@@ -70,6 +70,7 @@ static async checkAuthWithPrompt(options = {}) {
 ```
 
 **Issues:**
+
 - ⚠️ **Race condition**: Multiple near-simultaneous calls can check `authPromptShowing` before any sets it to `true`
 - ⚠️ **Not atomic**: JavaScript is single-threaded but async operations can interleave
 - ⚠️ **Edge case**: If two API calls fail auth at the same microsecond, both might pass the check
@@ -77,6 +78,7 @@ static async checkAuthWithPrompt(options = {}) {
 **Impact:** Low probability but possible duplicate modals
 
 **Recommendation:** Use a Promise-based approach like `silentRefresh`:
+
 ```javascript
 static _authPromptPromise = null;
 
@@ -84,10 +86,10 @@ static async checkAuthWithPrompt(options = {}) {
     if (this._authPromptPromise) {
         return this._authPromptPromise;
     }
-    
+
     this._authPromptPromise = this._showAuthPromptInternal(options)
         .finally(() => { this._authPromptPromise = null; });
-    
+
     return this._authPromptPromise;
 }
 ```
@@ -115,17 +117,20 @@ if (
 ```
 
 **Issues:**
+
 - ⚠️ **Silent popup**: This calls `GoogleSheetsAuth.authenticate()` which opens the Google login popup **without any warning modal**
 - ⚠️ **No user context**: User doesn't know why a popup appeared
 - ⚠️ **Bypasses checkAuthWithPrompt**: This bypasses the normal "Session Expired" modal flow
 - ⚠️ **Popup blocker risk**: If not in a user gesture context, popup may be blocked and fail silently
 
 **When this triggers:**
+
 - Any API call (read or write) that gets a 401 from Google
 - Token expired but the app didn't detect it proactively
 - Token was revoked externally
 
 **User Experience:**
+
 1. User is working normally
 2. Token expires
 3. User clicks "Save" or loads data
@@ -133,6 +138,7 @@ if (
 5. User may be confused - "Why am I seeing Google login?"
 
 **Recommendation:**
+
 - Remove automatic reauthentication from `withExponentialBackoff`
 - Let 401 errors bubble up to reactive stores
 - Reactive stores should catch auth errors and call `Auth.checkAuthWithPrompt()` with context
@@ -144,30 +150,35 @@ if (
 **Current paths to reauthentication:**
 
 #### Path 1: Proactive Refresh (GOOD)
+
 1. Timer fires 5 minutes before expiry
 2. User interacts (click/keydown)
 3. `silentRefresh()` called
 4. Token renewed silently (no popup if Google session active)
 
 #### Path 2: CheckAuthWithPrompt (GOOD)
+
 1. App code explicitly checks auth (navigation, save, etc.)
 2. Auth expired → Modal shown: "Session Expired"
 3. User clicks "Renew Session"
 4. Attempts silent refresh → falls back to full login if needed
 
 #### Path 3: Auto-401-Reauth (CONFUSING)
+
 1. API call fails with 401
 2. **No modal shown**
 3. **Popup immediately opened**
 4. User confused
 
 #### Path 4: Auto-save (SILENT)
+
 1. Auto-save timer fires (every 2 minutes)
 2. Checks auth silently
 3. If expired: skips save, **no modal**
 4. User not notified
 
 **Issues:**
+
 - ⚠️ User may not understand which path triggered auth
 - ⚠️ Inconsistent UX (sometimes modal, sometimes direct popup)
 - ⚠️ Path 3 can show popup when auth was actually fine (transient 401)
@@ -176,17 +187,17 @@ if (
 
 ### 5. Auth Check Methods - Confusion Matrix
 
-| Method | Shows Modal? | Opens Popup? | When Used |
-|--------|--------------|--------------|-----------|
-| `GoogleSheetsAuth.checkAuth()` | ❌ No | ❌ No | Silent check only |
-| `GoogleSheetsAuth.silentRefresh()` | ❌ No | ⚠️ Maybe* | Background refresh |
-| `GoogleSheetsAuth.authenticate()` | ❌ No | ✅ Yes | Direct login |
-| `Auth.checkAuth()` | ❌ No | ❌ No | Wrapper around GoogleSheetsAuth |
-| `Auth.checkAuthWithPrompt()` | ✅ Yes | ⚠️ Maybe** | Manual auth check |
-| `withExponentialBackoff` (401) | ❌ No | ✅ Yes | Auto-retry |
+| Method                             | Shows Modal? | Opens Popup? | When Used                       |
+| ---------------------------------- | ------------ | ------------ | ------------------------------- |
+| `GoogleSheetsAuth.checkAuth()`     | ❌ No        | ❌ No        | Silent check only               |
+| `GoogleSheetsAuth.silentRefresh()` | ❌ No        | ⚠️ Maybe\*   | Background refresh              |
+| `GoogleSheetsAuth.authenticate()`  | ❌ No        | ✅ Yes       | Direct login                    |
+| `Auth.checkAuth()`                 | ❌ No        | ❌ No        | Wrapper around GoogleSheetsAuth |
+| `Auth.checkAuthWithPrompt()`       | ✅ Yes       | ⚠️ Maybe\*\* | Manual auth check               |
+| `withExponentialBackoff` (401)     | ❌ No        | ✅ Yes       | Auto-retry                      |
 
 \* silentRefresh opens popup only if Google session expired  
-\** checkAuthWithPrompt shows modal first, then attempts silent refresh, then full login
+\*\* checkAuthWithPrompt shows modal first, then attempts silent refresh, then full login
 
 **Problem:** Too many overlapping mechanisms
 
@@ -195,9 +206,11 @@ if (
 ## Possible Weird States
 
 ### Scenario 1: Duplicate Modals (LOW PROBABILITY)
+
 **Trigger:** Two API calls fail auth at exactly the same time
 
 **Flow:**
+
 ```
 API Call 1 → fails auth → checkAuthWithPrompt() → check authPromptShowing=false
 API Call 2 → fails auth → checkAuthWithPrompt() → check authPromptShowing=false (race)
@@ -210,9 +223,11 @@ Call 2 → set authPromptShowing=true → show modal (DUPLICATE)
 ---
 
 ### Scenario 2: Modal During Valid Session
+
 **Trigger:** Transient 401 error from Google (network glitch, server hiccup)
 
 **Flow:**
+
 ```
 User authenticated with valid token
 API call → 401 (transient error)
@@ -225,9 +240,11 @@ User confused: "I'm already logged in!"
 ---
 
 ### Scenario 3: Popup Without Warning
+
 **Trigger:** Token expires, user triggers save
 
 **Flow:**
+
 ```
 User working offline/slowly
 Token expires silently
@@ -242,9 +259,11 @@ User: "What just happened?"
 ---
 
 ### Scenario 4: Proactive Refresh Fires During Modal
+
 **Trigger:** Proactive timer expires while modal is showing
 
 **Flow:**
+
 ```
 Auth expires → checkAuthWithPrompt() → modal shown: "Session Expired"
 (User reading modal)
@@ -259,9 +278,11 @@ User clicks "Renew Session" → auth already done → confusing state
 ---
 
 ### Scenario 5: Auto-save Silent Failure
+
 **Trigger:** Token expires between auto-saves
 
 **Flow:**
+
 ```
 Auto-save timer (2 min) → check auth → OK → saves
 60 seconds later → token expires
@@ -320,6 +341,7 @@ await GoogleSheetsAuth.authenticate(false); // No deduplication!
 ```
 
 **Potential issue:**
+
 ```
 API Call 1 → 401 → authenticate() → opens popup 1
 API Call 2 → 401 (simultaneous) → authenticate() → opens popup 2
@@ -327,6 +349,7 @@ Result: Two Google login popups
 ```
 
 **Recommendation:** Add deduplication to `authenticate()` as well:
+
 ```javascript
 static _authenticatePromise = null;
 
@@ -334,10 +357,10 @@ static async authenticate() {
     if (this._authenticatePromise) {
         return this._authenticatePromise;
     }
-    
+
     this._authenticatePromise = this._authenticateInternal()
         .finally(() => { this._authenticatePromise = null; });
-    
+
     return this._authenticatePromise;
 }
 ```
@@ -407,28 +430,33 @@ static async authenticate() {
 ## Summary
 
 **What can attempt reauthentication:**
+
 1. ✅ Proactive refresh timer (silent)
 2. ✅ `checkAuthWithPrompt()` (with modal)
 3. ⚠️ `withExponentialBackoff` on 401 (direct popup, confusing)
 4. ❌ Auto-save (only checks, doesn't reauth)
 
 **Methods to catch session expiry:**
+
 1. ✅ `checkAuth()` - silent check
 2. ✅ Token timestamp check (proactive timer)
 3. ✅ 401 error from API
 4. ✅ Explicit `checkAuthWithPrompt()` calls
 
 **Can show weird states:**
+
 - ⚠️ Yes - duplicate modals possible (low probability race)
 - ⚠️ Yes - modal during valid session (transient 401)
 - ⚠️ Yes - unexpected popup without warning (401 auto-reauth)
 - ⚠️ Yes - stale modal if proactive refresh succeeds during modal
 
 **Can two subscribers refresh simultaneously:**
+
 - ✅ silentRefresh: No (protected)
 - ⚠️ authenticate: Yes (not protected)
 
 **Can modal show unexpectedly:**
+
 - ⚠️ Yes - navigation can trigger modal when user doesn't expect it
 - ⚠️ Yes - auto-reauth bypasses modal and shows popup instead
 - ⚠️ Yes - race conditions can cause duplicate modals
