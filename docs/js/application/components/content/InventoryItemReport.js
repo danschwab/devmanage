@@ -63,8 +63,6 @@ export const InventoryItemReport = {
             return (this.reportStore?.data || [])
                 .map(row => ({
                     ...row,
-                    startDate: this.referenceDate || null,
-                    endDate: this.endDate || null,
                     overlappingShows: row.shows ? Object.keys(row.shows).filter(k => (row.shows[k] || 0) > 0) : []
                 }))
                 .filter(row => {
@@ -186,16 +184,6 @@ export const InventoryItemReport = {
 
             const analysisConfig = [
                 createAnalysisConfig(
-                    Requests.getItemMinQuantityInRange,
-                    'minQty',
-                    'Computing min quantities...',
-                    ['itemId'],
-                    [this.referenceDate, this.endDate],
-                    'minQty',
-                    false,
-                    Priority.USER_ACTION
-                ),
-                createAnalysisConfig(
                     Requests.getItemInventoryQuantity,
                     'inventoryQty',
                     'Loading inventory quantities...',
@@ -223,7 +211,9 @@ export const InventoryItemReport = {
                     [this.referenceDate],
                     'description',
                     false,
-                    Priority.BACKGROUND
+                    Priority.BACKGROUND,
+                    undefined,
+                    false
                 ),
                 createAnalysisConfig(
                     Requests.getItemImageUrl,
@@ -233,7 +223,9 @@ export const InventoryItemReport = {
                     [],
                     null,
                     false,
-                    Priority.BACKGROUND
+                    Priority.BACKGROUND,
+                    undefined,
+                    false
                 )
             ];
 
@@ -266,10 +258,10 @@ export const InventoryItemReport = {
         navigateToItemPage(row) {
             if (!row.tabName || !row.itemId) return;
             const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
-            const dateFilters = (this.referenceDate || this.endDate)
+            const dateFilters = (row.startDate || row.endDate)
                 ? [
-                    ...(this.referenceDate ? [{ column: 'Show Date', value: this.referenceDate, type: 'after'  }] : []),
-                    ...(this.endDate       ? [{ column: 'Show Date', value: this.endDate,       type: 'before' }] : [])
+                    ...(row.startDate ? [{ column: 'Show Date', value: row.startDate, type: 'after'  }] : []),
+                    ...(row.endDate   ? [{ column: 'Show Date', value: row.endDate,   type: 'before' }] : [])
                   ]
                 : null;
             const finalPath = dateFilters
@@ -349,6 +341,7 @@ export const InventoryItemReport = {
                 :hide-rows-on-search="false"
                 :readonly="true"
                 :allowDetails="true"
+                :show-search="true"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
                 :loading-message="loadingMessage"

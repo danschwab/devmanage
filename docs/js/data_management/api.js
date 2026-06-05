@@ -966,30 +966,178 @@ class Requests_uncached {
         // Find all shows matching the search criteria
         const shows = await deps.call(ProductionUtils.getOverlappingShows, filter, searchParams);
         
-        // Extract identifiers from shows
-        let projectIdentifiers = shows
-            .map(s => s.Identifier || null)
-            .filter(id => id);
-        
-        // If some shows don't have identifiers, compute them
-        if (projectIdentifiers.length < shows.length) {
-            const computedIdentifiers = await Promise.all(
-                shows.map(async (s) => {
-                    if (s.Identifier) return s.Identifier;
-                    // Compute identifier via API if not present
-                    if (s.Show && s.Client && s.Year) {
-                        return await deps.call(ProductionUtils.computeIdentifier, s.Show, s.Client, parseInt(s.Year));
-                    }
-                    return null;
-                })
-            );
-            projectIdentifiers = computedIdentifiers.filter(id => id);
-        }
-        
+        const resolvedShows = (await Promise.all(
+            shows.map(async (showRow) => {
+                let identifier = showRow.Identifier || null;
+                if (!identifier && showRow.Show && showRow.Client && showRow.Year) {
+                    identifier = await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, parseInt(showRow.Year));
+                }
+                if (!identifier) return null;
+
+                const [shipDate, returnDate] = await Promise.all([
+                    deps.call(ProductionUtils.getProjectShipDateFromRow, showRow).catch(() => null),
+                    deps.call(ProductionUtils.getProjectReturnDateFromRow, showRow).catch(() => null)
+                ]);
+
+                return {
+                    identifier,
+                    shipDate: shipDate || null,
+                    returnDate: returnDate || shipDate || null
+                };
+            })
+        )).filter(Boolean);
+
+        const projectIdentifiers = resolvedShows.map(show => show.identifier);
+
         // Extract items from the identified shows
         // Convert string filter to array as extractItemsFromMultipleShows expects an array
         const categoryFilterArray = itemCategoryFilter ? [itemCategoryFilter] : undefined;
-        return await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+        const itemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+
+        const dateFilters = Array.isArray(filter?.dateFilters) ? filter.dateFilters : [];
+        const offsetToDate = (value) => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'number') {
+                const date = new Date();
+                date.setDate(date.getDate() + value);
+                return date.toISOString().slice(0, 10);
+            }
+            return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+        };
+        const getFilterDate = (column, type) => offsetToDate(dateFilters.find(f => f.column === column && f.type === type)?.value);
+
+        let reportStart = getFilterDate('Show Date', 'after') || getFilterDate('Ship', 'after') || null;
+        let reportEnd = getFilterDate('Show Date', 'before') || getFilterDate('Ship', 'before') || null;
+
+        const shipDates = resolvedShows.map(show => show.shipDate).filter(Boolean).sort();
+        const returnDates = resolvedShows.map(show => show.returnDate).filter(Boolean).sort();
+        if (!reportStart) {
+            reportStart = shipDates[0] || todayISOString();
+        }
+        if (!reportEnd) {
+            reportEnd = returnDates[returnDates.length - 1] || shipDates[shipDates.length - 1] || reportStart;
+        }
+
+        const showRanges = new Map(
+            resolvedShows.map(show => [show.identifier, { shipDate: show.shipDate, returnDate: show.returnDate || show.shipDate }])
+        );
+        const getShowsForRange = (rowShows, startDate, endDate) => {
+            if (!rowShows || typeof rowShows !== 'object') return {};
+
+            const filteredShows = {};
+            for (const [showId, quantity] of Object.entries(rowShows)) {
+                if (!quantity) continue;
+
+                const range = showRanges.get(showId);
+                if (!range) {
+                    filteredShows[showId] = quantity;
+                    continue;
+                }
+
+                const showStart = range.shipDate;
+                const showEnd = range.returnDate || showStart;
+                const overlaps = (!showStart || !endDate || showStart <= endDate)
+                    && (!showEnd || !startDate || showEnd >= startDate);
+
+                if (overlaps) {
+                    filteredShows[showId] = quantity;
+                }
+            }
+
+            return filteredShows;
+        };
+
+        if (includeEmptyShows) {
+            return await Promise.all(itemRows.map(async (row) => ({
+                ...row,
+                startDate: reportStart || null,
+                endDate: reportEnd || null,
+                minQty: await deps.call(InventoryUtils.getItemMinQuantityInRange, row.itemId, reportStart, reportEnd)
+            })));
+        }
+
+        const shortageRows = [];
+        for (const row of itemRows) {
+            const timeline = await deps.call(InventoryUtils.getItemTimeline, row.itemId, reportStart, reportEnd);
+
+            if (!Array.isArray(timeline) || timeline.length === 0) {
+                shortageRows.push({
+                    ...row,
+                    startDate: null,
+                    endDate: null,
+                    minQty: null,
+                    shows: row.shows || {}
+                });
+                continue;
+            }
+
+            const quantities = timeline
+                .map(event => event.quantity)
+                .filter(quantity => quantity !== null && quantity !== undefined && !Number.isNaN(Number(quantity)))
+                .map(quantity => Number(quantity));
+            const overallMinQty = quantities.length ? Math.min(...quantities) : null;
+
+            let activeShortage = null;
+            let hasShortage = false;
+            const finalizeShortage = () => {
+                if (!activeShortage) return;
+
+                shortageRows.push({
+                    ...row,
+                    startDate: activeShortage.startDate,
+                    endDate: activeShortage.endDate || activeShortage.startDate,
+                    minQty: activeShortage.minQty,
+                    shows: getShowsForRange(row.shows, activeShortage.startDate, activeShortage.endDate || activeShortage.startDate)
+                });
+                activeShortage = null;
+            };
+
+            for (let index = 0; index < timeline.length; index++) {
+                const event = timeline[index];
+                const quantity = event.quantity === null || event.quantity === undefined ? null : Number(event.quantity);
+                if (quantity === null || Number.isNaN(quantity)) continue;
+
+                const nextDate = timeline[index + 1]?.date || reportEnd || event.date || reportStart;
+                if (quantity < 1) {
+                    hasShortage = true;
+                    if (!activeShortage) {
+                        activeShortage = {
+                            startDate: event.date || reportStart || null,
+                            endDate: nextDate || event.date || reportEnd || reportStart || null,
+                            minQty: quantity
+                        };
+                    } else {
+                        activeShortage.endDate = nextDate || activeShortage.endDate;
+                        activeShortage.minQty = Math.min(activeShortage.minQty, quantity);
+                    }
+                    continue;
+                }
+
+                finalizeShortage();
+            }
+
+            finalizeShortage();
+
+            if (!hasShortage) {
+                shortageRows.push({
+                    ...row,
+                    startDate: null,
+                    endDate: null,
+                    minQty: overallMinQty,
+                    shows: row.shows || {}
+                });
+            }
+        }
+
+        return shortageRows.sort((left, right) => {
+            if ((left.startDate || '') !== (right.startDate || '')) {
+                return (left.startDate || '') < (right.startDate || '') ? -1 : 1;
+            }
+            if (left.itemId !== right.itemId) {
+                return left.itemId < right.itemId ? -1 : 1;
+            }
+            return (left.endDate || '') < (right.endDate || '') ? -1 : 1;
+        });
     }
 
     /**

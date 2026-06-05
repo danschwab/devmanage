@@ -254,17 +254,6 @@ export const ShowInventoryReport = {
             
             // Build analysis config
             const analysisConfig = [
-                // Compute minimum inventory quantity over the filter date range
-                createAnalysisConfig(
-                    Requests.getItemMinQuantityInRange,
-                    'minQty',
-                    'Computing minimum quantities...',
-                    ['itemId'],
-                    [this.referenceDate, this.endDate],
-                    'minQty',
-                    false,
-                    Priority.USER_ACTION
-                ),
                 // Get inventory tab name for each item
                 createAnalysisConfig(
                     Requests.getTabNameForItem,

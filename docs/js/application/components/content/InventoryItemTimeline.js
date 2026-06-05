@@ -217,7 +217,7 @@ export const InventoryItemTimeline = {
                 :is-loading="timelineStore?.isLoading ?? false"
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
                 :error="timelineStore?.error ?? null"
-                empty-message="No events found in this date range."
+                :empty-message="filterStartDate && filterEndDate ? 'No inventory usage found in this date range. Try expanding the date filters.' : 'This item has no inventory changes. Set a date filter to see usage data.'"
                 @event-click="handleCalendarEventClick"
             >
                 <template #header-area>
@@ -246,7 +246,7 @@ export const InventoryItemTimeline = {
                 :is-loading="timelineStore?.isLoading ?? false"
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
                 :error="timelineStore?.error ?? null"
-                empty-message="No inventory changes found in this date range. Try expanding the date filters."
+                :empty-message="filterStartDate && filterEndDate ? 'No inventory usage found in this date range. Try expanding the date filters.' : 'This item has no inventory changes. Set a date filter to see usage data.'"
             >
                 <template #header-area>
                     <div class="button-bar">

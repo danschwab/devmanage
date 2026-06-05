@@ -61,6 +61,7 @@ export const CalendarComponent = {
         error: { type: String, default: null },
         title: { type: String, default: '' },
         emptyMessage: { type: String, default: 'No events to display.' },
+        showSearch: { type: Boolean, default: false },
         parentSearchValue: { type: String, default: '' },
         showRefresh: { type: Boolean, default: false },
         eventStartColumn: { type: String, required: true },
@@ -358,7 +359,7 @@ export const CalendarComponent = {
                     <slot name="header-area"></slot>
                     <div class="spacer"></div>
                     <div class="button-bar">
-                        <div class="input-container">
+                        <div v-if="showSearch" class="input-container">
                             <input
                                 type="text"
                                 v-model="search.searchValue.value"
@@ -380,20 +381,20 @@ export const CalendarComponent = {
                             :disabled="isLoading"
                         >{{ isLoading ? 'Loading...' : 'Refresh' }}</button>
                     </div>
-                    <LoadingBarComponent
-                        :is-loading="isLoading"
-                        :is-analyzing="isAnalyzing"
-                        :percent-complete="loadingProgress"
-                        class="embedded"
-                    />
                 </div>
-                <div v-if="calendarWeeks.length > 0" class="calendar-dow-header">
+                <LoadingBarComponent
+                    :is-loading="isLoading"
+                    :is-analyzing="isAnalyzing"
+                    :percent-complete="loadingProgress"
+                    class="embedded"
+                />
+                <div v-if="!isEmpty && calendarWeeks.length > 0" class="calendar-dow-header">
                     <div v-for="name in dayNames" :key="name" class="calendar-dow-cell">{{ name }}</div>
                 </div>
             </div>
 
             <!-- Weeks -->
-            <div class="calendar-weeks-container">
+            <div v-if="!isEmpty && calendarWeeks.length > 0" class="calendar-weeks-container">
                 <div
                     v-for="(week, wIdx) in calendarWeeks"
                     :key="week.weekDays[0].toISOString()"
@@ -473,11 +474,12 @@ export const CalendarComponent = {
             </div>
 
             <!-- Loading/empty states -->
-            <div v-if="isLoading && (!data || data.length === 0)" class="loading-message">
-                <img src="assets/loading.gif" alt="Loading..." />
+            <div v-if="isLoading && (!data || data.length === 0)" class="content-footer loading-message">
                 <p>{{ loadingMessage || 'Loading...' }}</p>
             </div>
-            <p v-else-if="isEmpty" class="empty-message">{{ emptyMessage }}</p>
+            <div v-else-if="isEmpty" class="content-footer">
+                <p class="empty-message">{{ emptyMessage }}</p>
+            </div>
         </div>
     `
 };

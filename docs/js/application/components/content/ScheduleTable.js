@@ -851,6 +851,7 @@ export const ScheduleTableComponent = {
             eventEndColumn="S. End"
             weekStart="sunday"
             yearColumn="Year"
+            showSearch="true"
             :chip-actions="chipActionsProvider"
             @refresh="handleRefresh"
             @event-click="handleCalendarEventClick"

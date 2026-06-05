@@ -83,7 +83,7 @@ For design and project queue:
 **chores**
 
 - [ ] unify the styling of cards and buttons
-- [ ] make table headers accessible when scrolling, on hover over the sticky header?
+- [x] make table headers accessible when scrolling, on hover over the sticky header?
 - [ ] reports column headers percentage based and dynamically abbreviate
 - [ ] basic schedule table needs to have return and show date columns visible
 - [ ] basic schedule table needs to allow wide table
@@ -110,7 +110,7 @@ For design and project queue:
 - [x] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
 - [x] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
 - [x] remove drag into bottom to delete.
-- [ ] collapsed groups mess up drop targets
+- [x] collapsed groups mess up drop targets
 - [x] don't highlight fields in basic tables...
 - [x] add tooltip "3 rows copied..."
 - [x] garbage can icon for deletion!!!!
@@ -142,8 +142,9 @@ For design and project queue:
 - [?] some group dragging breaks the group
 - [x] make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
-- [ ] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
-- [ ] !!! thumbnails not showing for dan
+- [x] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
+- [ ] !!! fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
+- [?] !!! thumbnails not showing for dan
 - [?] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
 - [ ] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
 - [ ] date columns are not always presenting as dates, especially the ship date, in searches
@@ -153,6 +154,7 @@ For design and project queue:
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
+- [ ] packlist item shortage alerts are still broken!!!!!!
 
 **Application tasks**
 

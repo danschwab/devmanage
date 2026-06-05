@@ -705,6 +705,9 @@ class inventoryUtils_uncached {
             delete event._done;
         }
 
+        if (events.length === 1 && events[0].event === 'Balance') {
+            return [];
+        }
         return events;
     }
 
