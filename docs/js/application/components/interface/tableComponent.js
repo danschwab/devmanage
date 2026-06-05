@@ -2784,10 +2784,20 @@ export const TableComponent = {
             // No undo capture on focus - only capture when user starts typing in handleCellEdit
         },
         handleEditableCellContainerClick(rowIndex, colIndex, column, event) {
-            if (!column?.editable || column.format === 'number') return;
+            if (!column?.editable) return;
 
             const target = event?.target;
-            if (target?.isContentEditable) return;
+            if (target?.isContentEditable || target?.tagName === 'INPUT') return;
+
+            if (column.format === 'number') {
+                const numberRefName = 'number_editable_' + rowIndex + '_' + colIndex;
+                const numberRef = this.$refs[numberRefName];
+                const numberInputEl = Array.isArray(numberRef) ? numberRef[0] : numberRef;
+                if (numberInputEl && typeof numberInputEl.focus === 'function') {
+                    numberInputEl.focus({ preventScroll: true });
+                }
+                return;
+            }
 
             const refName = 'editable_' + rowIndex + '_' + colIndex;
             const ref = this.$refs[refName];
@@ -4365,6 +4375,7 @@ export const TableComponent = {
                                             <input
                                                 type="number"
                                                 :value="row[column.key]"
+                                                :ref="'number_editable_' + idx + '_' + colIndex"
                                                 @input="handleCellEdit(idx, colIndex, $event.target.value)"
                                             />
                                         </slot>
