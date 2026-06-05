@@ -256,10 +256,24 @@ const App = {
                 modalManager.error('Failed to log out. Please try again or refresh the page.', 'Logout Error');
             }
         },
-        navigateToPath(targetPath) {
-            // Only accept string paths for simplicity
+        navigateToPath(pathOrNavigationData, params = null) {
+            let navigationData;
+
+            if (typeof pathOrNavigationData === 'string') {
+                const targetPath = params ? NavigationRegistry.buildPath(pathOrNavigationData, params) : pathOrNavigationData;
+                navigationData = { targetPath };
+            } else if (pathOrNavigationData && typeof pathOrNavigationData === 'object') {
+                navigationData = { ...pathOrNavigationData };
+            } else {
+                return;
+            }
+
+            if (!navigationData.targetPath || typeof navigationData.targetPath !== 'string') {
+                return;
+            }
+
             // Don't await - let navigation happen asynchronously
-            NavigationRegistry.handleNavigateToPath({ targetPath }, this);
+            NavigationRegistry.handleNavigateToPath(navigationData, this);
         },
         
         // Handle container expansion by navigating to its path
@@ -370,14 +384,14 @@ const App = {
                             <inventory-content 
                                 v-if="container.type === 'inventory' || container.containerPath?.startsWith('inventory')"
                                 :container-path="container.containerPath"
-                                :navigate-to-path="(path, params) => navigateToPath(params ? NavigationRegistry.buildPath(path, params) : path)"
+                                :navigate-to-path="(path, params) => navigateToPath(path, params)"
                             >
                             </inventory-content>
                             <!-- Packlist Content -->
                             <packlist-content 
                                 v-else-if="container.type === 'packlist' || container.containerPath?.startsWith('packlist')"
                                 :container-path="container.containerPath"
-                                :navigate-to-path="(path, params) => navigateToPath(params ? NavigationRegistry.buildPath(path, params) : path)"
+                                :navigate-to-path="(path, params) => navigateToPath(path, params)"
                             >
                             </packlist-content>
                             
@@ -385,7 +399,7 @@ const App = {
                             <schedule-content 
                                 v-else-if="container.type === 'schedule' || container.containerPath?.startsWith('schedule')"
                                 :container-path="container.containerPath"
-                                :navigate-to-path="(path, params) => navigateToPath(params ? NavigationRegistry.buildPath(path, params) : path)">
+                                :navigate-to-path="(path, params) => navigateToPath(path, params)">
                             </schedule-content>
                         </template>
                     </app-container>

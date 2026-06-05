@@ -316,7 +316,7 @@ export const PacklistTable = {
                     this.appContext?.currentPath,
                     { edit: true }
                 );
-                this.$emit('navigate-to-path', editPath);
+                this.$emit('navigate-to-path', { targetPath: editPath, replaceHistory: true });
             }
 
             this.handleLockState(newValue);
@@ -334,7 +334,10 @@ export const PacklistTable = {
                     this.appContext?.currentPath
                 );
                 const { edit, ...paramsWithoutEdit } = currentParams;
-                this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
+                    this.$emit('navigate-to-path', {
+                        targetPath: NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit),
+                        replaceHistory: true
+                    });
             }
         }
 
@@ -350,7 +353,10 @@ export const PacklistTable = {
                         this.appContext?.currentPath
                     );
                     const { edit, ...paramsWithoutEdit } = currentParams;
-                    this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${newTabName}`, paramsWithoutEdit));
+                    this.$emit('navigate-to-path', {
+                        targetPath: NavigationRegistry.buildPath(`packlist/${newTabName}`, paramsWithoutEdit),
+                        replaceHistory: true
+                    });
                 }
             }
         }, { immediate: true });
@@ -364,7 +370,7 @@ export const PacklistTable = {
                 this.appContext?.currentPath,
                 { edit: undefined }
             );
-            this.$emit('navigate-to-path', viewPath);
+            this.$emit('navigate-to-path', { targetPath: viewPath, replaceHistory: true });
         },
 
         initializeStore() {
@@ -495,7 +501,7 @@ export const PacklistTable = {
                         this.appContext?.currentPath,
                         { edit: true }
                     );
-                    this.$emit('navigate-to-path', editPath);
+                    this.$emit('navigate-to-path', { targetPath: editPath, replaceHistory: true });
                 }
             });
         },
@@ -510,7 +516,7 @@ export const PacklistTable = {
                     this.appContext?.currentPath,
                     { edit: undefined }
                 );
-                this.$emit('navigate-to-path', viewPath);
+                this.$emit('navigate-to-path', { targetPath: viewPath, replaceHistory: true });
             }
             this.$modal.alert(`Cannot edit: this pack list is locked by ${lockInfo?.user || 'another user'}`, 'Locked');
         },
@@ -525,7 +531,10 @@ export const PacklistTable = {
                             this.appContext?.currentPath
                         );
                         const { edit, ...paramsWithoutEdit } = currentParams;
-                        this.$emit('navigate-to-path', NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit));
+                        this.$emit('navigate-to-path', {
+                            targetPath: NavigationRegistry.buildPath(`packlist/${this.tabName}`, paramsWithoutEdit),
+                            replaceHistory: true
+                        });
                     }
                     if (this.lockOwner) {
                         this.$modal.alert(`Cannot edit: this pack list is locked by ${this.lockOwnerDisplay}`, 'Locked');

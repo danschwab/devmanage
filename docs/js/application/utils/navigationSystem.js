@@ -430,7 +430,7 @@ export const NavigationRegistry = {
      * Navigation handlers - consolidated
      */
     async handleNavigateToPath(navigationData, appContext) {
-        let { targetPath, isBrowserNavigation } = navigationData;
+        let { targetPath, isBrowserNavigation, replaceHistory } = navigationData;
         
         // Parse the target path to get the clean path
         let pathInfo = this.parsePath(targetPath);
@@ -492,7 +492,7 @@ export const NavigationRegistry = {
         
         // Update URL if not browser navigation
         if (!isBrowserNavigation && this.urlRouter) {
-            this.urlRouter.updateURL(pathInfo.fullPath);
+            this.urlRouter.updateURL(pathInfo.fullPath, !replaceHistory);
         }
         
         return { 
