@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, Auth, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
@@ -442,8 +442,21 @@ export const ItemImageComponent = {
     inject: ['$modal'],
     data() {
         return {
-            localImageUrl: null
+            localImageUrl: null,
+            isRecoveringImage: false,
+            hasAttemptedRecovery: false
         };
+    },
+    watch: {
+        imageUrl() {
+            // New upstream URL means this item image changed; allow one recovery attempt again.
+            this.hasAttemptedRecovery = false;
+            this.clearLocalImageUrl();
+        },
+        itemNumber() {
+            this.hasAttemptedRecovery = false;
+            this.clearLocalImageUrl();
+        }
     },
     computed: {
         displayUrl() {
@@ -454,6 +467,12 @@ export const ItemImageComponent = {
         }
     },
     methods: {
+        clearLocalImageUrl() {
+            if (this.localImageUrl && this.localImageUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(this.localImageUrl);
+            }
+            this.localImageUrl = null;
+        },
         showImageModal() {
             if (this.imageFound) {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
@@ -484,10 +503,51 @@ export const ItemImageComponent = {
                 // }
             }, title);
         },
-        handleError() {
+        async handleError() {
             console.warn(`[icons] Browser failed to load image for "${this.itemNumber}": ${this.displayUrl}`);
             console.warn('[icons] If the URL looks correct, the file may not be shared with the authenticated user, or the lh3.googleusercontent.com CDN requires a valid Google session.');
+
+            if (!this.itemNumber || this.isRecoveringImage || this.hasAttemptedRecovery) {
+                return;
+            }
+
+            this.isRecoveringImage = true;
+            this.hasAttemptedRecovery = true;
+
+            try {
+                const isAuthenticated = await Auth.checkAuth();
+                if (!isAuthenticated) {
+                    return;
+                }
+
+                // Clear stale image cache entries for this item so retry gets a fresh URL.
+                invalidateCache([
+                    { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber] },
+                    { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber] }
+                ], true);
+
+                const refreshedThumbnailUrl = await Requests.getItemImageUrl(this.itemNumber);
+                if (refreshedThumbnailUrl) {
+                    this.clearLocalImageUrl();
+                    this.localImageUrl = refreshedThumbnailUrl;
+                    return;
+                }
+
+                // Fallback to authenticated blob URL if thumbnail URL is unavailable.
+                const refreshedBlobUrl = await Requests.getItemImageBlobUrl(this.itemNumber);
+                if (refreshedBlobUrl) {
+                    this.clearLocalImageUrl();
+                    this.localImageUrl = refreshedBlobUrl;
+                }
+            } catch (error) {
+                console.warn('[icons] Failed to refresh image URL after load error:', error);
+            } finally {
+                this.isRecoveringImage = false;
+            }
         }
+    },
+    beforeUnmount() {
+        this.clearLocalImageUrl();
     },
     template: html`
         <div :class="['item-image-container', { 'image-missing': editable && !imageFound }]" :style="{ width: imageSize + 'px', height: imageSize + 'px' }">
