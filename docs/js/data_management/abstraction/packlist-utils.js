@@ -721,40 +721,10 @@ class packListUtils_uncached {
             return null;
         }
 
-        // Run all required data fetches in parallel
-        const [overlappingShows, currentProjectItems, returnDate] = await Promise.all([
-            deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId),
-            deps.call(PackListUtils.extractItems, currentProjectId),
-            deps.call(ProductionUtils.getProjectReturnDate, currentProjectId)
-        ]);
-
-        // Calculate total usage from current project and all overlapping shows
-        const currentProjectUsage = currentProjectItems[itemId] || 0;
-        let totalUsed = currentProjectUsage;
-
-        // Add quantities from overlapping shows (leveraging cache)
-        for (const projectId of overlappingShows) {
-            try {
-                const projectItems = await deps.call(PackListUtils.extractItems, projectId);
-                totalUsed += projectItems[itemId] || 0;
-            } catch (e) {
-                // Ignore if project can't be loaded
-            }
-        }
-
-        // Use getItemMinQuantityInRange to get the worst-case inventory level
-        // over the [ship, return] window, accounting for all inventory changes
-        // (both historical and pending) via the getItemTimeline chain.
-        const minInventoryQty = await deps.call(InventoryUtils.getItemMinQuantityInRange, itemId, referenceDate, returnDate);
-        
-        // If item not found in inventory, return null
-        if (minInventoryQty === null) {
-            return null;
-        }
-
-        // The minimum remaining is the minimum inventory quantity minus total usage
-        // This represents the worst-case available quantity over the project window
-        return minInventoryQty - totalUsed;
+        // Compute window end once; minimum quantity is sourced directly from timeline-based
+        // logic in InventoryUtils.getItemMinQuantityInRange (which delegates to getItemTimeline).
+        const returnDate = await deps.call(ProductionUtils.getProjectReturnDate, currentProjectId);
+        return await deps.call(InventoryUtils.getItemMinQuantityInRange, itemId, referenceDate, returnDate);
     }
 
     /**
