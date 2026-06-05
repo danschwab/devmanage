@@ -31,7 +31,7 @@ export const InventoryItemTimeline = {
     computed: {
         columns() {
             return [
-                { key: 'date',     label: 'Date',     width: 120, sortable: false, format: 'date' },
+                { key: 'date',     label: 'Date',     width: 120, sortable: true, format: 'date' },
                 { key: 'quantity', label: 'Quantity', width: 90,  sortable: false, format: 'number', autoColor: true, firstRow: true },
                 { key: 'event',    label: 'Event',    width: 120, sortable: false, firstRow: true },
                 { key: 'note',     label: 'Note',     sortable: false, firstRow: true },

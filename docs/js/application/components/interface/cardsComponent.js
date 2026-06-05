@@ -300,8 +300,7 @@ export const CardsComponent = {
                 <button
                     v-if="search.hasActiveSearch.value"
                     @click="search.clearSearch"
-                    class="card"
-                    style="height: auto; width: auto; align-self: flex-start; padding: var(--padding-sm);"
+                    style="align-self: flex-start;"
                     title="Clear filter"
                 >
                     🗙 Clear filter
