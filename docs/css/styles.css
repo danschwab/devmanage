@@ -1179,6 +1179,7 @@ tr.is-group:hover .group-toggle {
     background-color: transparent;
     border-radius: calc(var(--radius-md) - 2px);
     transition: background-color 0.15s ease-in-out, outline 0.05s ease-in-out;
+    outline: none;
 }
 
 .table-cell-container:has(input[type="number"]),
@@ -1200,7 +1201,11 @@ tr.is-group:hover .group-toggle {
     outline: 2px solid var(--color-red-bg-transparent);
 }
 
-tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .table-cell-container > input[type="number"] {
+td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-cell-container > input[type="number"]) {
+    background-color: var(--color-blue-bg-transparent);
+    cursor: text;
+}
+/* tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .table-cell-container > input[type="number"] {
     background-color: var(--color-blue-bg-transparent);
 }
 .mark-dirty .dirty > .table-cell-container > .table-edit-textarea:focus, .mark-dirty .dirty > .table-cell-container > input[type="number"]:focus {
@@ -1208,7 +1213,7 @@ tr:hover > td > .table-cell-container > .table-edit-textarea, tr:hover > td > .t
 }
 .table-edit-textarea:focus, td input[type="number"]:focus {
     outline: solid 2px var(--color-blue-bg-hover);
-}
+} */
 
 /* Search highlighting for editable table cells */
 .search-match:not(:has(.search-match)):not(:has(button)):not(:has(input)),

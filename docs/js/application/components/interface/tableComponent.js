@@ -7,7 +7,6 @@ import { useStickyHeader } from '../../utils/useStickyHeader.js';
 const ExternalPasteComponent = {
     props: {
         rowCount: Number,
-        dragIdOptions: Array,   // [{ dragId, label }]
         onConfirm: Function,
         onCancel: Function
     },
@@ -2784,6 +2783,19 @@ export const TableComponent = {
         handleCellFocus(rowIndex, colIndex, event) {
             // No undo capture on focus - only capture when user starts typing in handleCellEdit
         },
+        handleEditableCellContainerClick(rowIndex, colIndex, column, event) {
+            if (!column?.editable || column.format === 'number') return;
+
+            const target = event?.target;
+            if (target?.isContentEditable) return;
+
+            const refName = 'editable_' + rowIndex + '_' + colIndex;
+            const ref = this.$refs[refName];
+            const editableEl = Array.isArray(ref) ? ref[0] : ref;
+            if (editableEl && typeof editableEl.focus === 'function') {
+                editableEl.focus({ preventScroll: true });
+            }
+        },
         handleCellBlur(rowIndex, colIndex, event) {
             // Clear flags when cell loses focus (enables new snapshot on next focus+edit)
             this.hasUndoCaptured = false;
@@ -4339,6 +4351,7 @@ export const TableComponent = {
                                     :colspan="column.colspan || 1"
                                     :class="[getCellClass(row[column.key], column, idx, colIndex)]"
                                     v-show="!hideSet.has(column.key)"
+                                    @click="handleEditableCellContainerClick(idx, colIndex, column, $event)"
                                 >
                                     <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column) }]">
                                         <!-- Editable number input -->
