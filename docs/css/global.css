@@ -114,7 +114,7 @@ input[type="number"] {
     min-width: 30px;
 }
 input[type="text"], .input-container {
-    min-width: 200px;
+    min-width: 160px;
 }
 textarea {
     resize: vertical;

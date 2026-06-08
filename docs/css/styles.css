@@ -792,6 +792,7 @@ td:has(img) {
     background: var(--color-gray-bg);
     cursor: pointer;
     font-size: 14px;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text-light);
     opacity: 0;
@@ -819,9 +820,13 @@ td:has(img) {
 }
 
 thead:hover .column-button:not(.active), .input-container:hover .column-button:not(.active), div:hover>.column-button:not(.active), div:hover>.content-header>.column-button:not(.active) {
-    opacity: .7;
+    opacity: 1;
 }
-.column-button.active, .column-button:hover {
+.column-button.active {
+    opacity: 1 !important;
+}
+
+.column-button:hover {
     background-color: var(--color-gray-bg-hover);
     opacity: 1 !important;
 }

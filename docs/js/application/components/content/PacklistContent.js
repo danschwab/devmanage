@@ -824,9 +824,12 @@ export const PacklistContent = {
                 content = description;
             }
 
+            const shipDate = tab.showDetails?.Ship || null;
+
             return {
                 id: tab.sheetId,
                 title: tab.title,
+                shipDate,
                 content: content,
                 cardClass: cardClass,
                 contentFooter: contentFooter
@@ -953,11 +956,17 @@ export const PacklistContent = {
                 v-if="!isViewingPacklist"
                 :show-header="true"
                 :show-search="true"
+                :show-sort="true"
                 :sync-search-with-url="true"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
                 :show-refresh="true"
                 :items="availablePacklists"
+                :sort-columns="[
+                    { key: 'title', label: 'Title', type: 'string', sortable: true },
+                    { key: 'shipDate', label: 'Ship Date', type: 'date', sortable: true }
+                ]"
+                default-sort-column="title"
                 :on-item-click="handlePacklistSelect"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"

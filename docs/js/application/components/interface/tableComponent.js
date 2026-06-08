@@ -1595,6 +1595,15 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        defaultSortColumn: {
+            type: [String, Array],
+            default: null
+        },
+        defaultSortDirection: {
+            type: String,
+            default: 'asc',
+            validator: (value) => ['asc', 'desc'].includes(String(value || '').toLowerCase())
+        },
         dragLabel: {
             type: String,
             default: null
@@ -1623,6 +1632,7 @@ export const TableComponent = {
             nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
+            isUsingDefaultSort: true,
             expandedRows: new Set(), // Track which rows are expanded for details
             overriddenGroups: new Set(), // Groups deviating from the current visibility default
             hasUndoCaptured: false, // Track if first edit has been captured for undo
@@ -1730,10 +1740,19 @@ export const TableComponent = {
         columns: {
             handler() {
                 this.$nextTick(() => {
+                    this.applyDefaultSortColumn();
                     this.updateAllEditableCells();
                 });
             },
             deep: true
+        },
+        defaultSortColumn() {
+            this.applyDefaultSortColumn({ force: true });
+        },
+        defaultSortDirection() {
+            if (this.isUsingDefaultSort) {
+                this.sortDirection = this.getNormalizedDefaultSortDirection();
+            }
         },
         // Clear drop targets when drag ends (handles touch where mouseleave doesn't fire)
         isDraggingGlobally(isActive, wasActive) {
@@ -2038,53 +2057,18 @@ export const TableComponent = {
                 });
             }
 
-            // Apply sorting if sortColumn is set and the column is sortable
-            if (this.sortColumn) {
-                const sortColumn = this.columns.find(col => col.key === this.sortColumn);
-                if (sortColumn && this.isColumnSortable(sortColumn)) {
-                    filteredData.sort((a, b) => {
-                    const aValue = a.row[this.sortColumn];
-                    const bValue = b.row[this.sortColumn];
-                    
-                    // Handle null/undefined values
-                    if (aValue === null || aValue === undefined) return 1;
-                    if (bValue === null || bValue === undefined) return -1;
+            const sortCriteria = this.isUsingDefaultSort
+                ? this.getDefaultSortCriteria()
+                : this.getCurrentSortCriteria();
 
-                    const columnType = String(sortColumn.type || '').toLowerCase();
-                    if (columnType === 'item') {
-                        const comparison = compareItemLikeValues(aValue, bValue);
-                        return this.sortDirection === 'desc' ? -comparison : comparison;
+            if (sortCriteria.length > 0) {
+                filteredData.sort((a, b) => {
+                    for (const criterion of sortCriteria) {
+                        const comparison = this.compareRowsByColumn(a.row, b.row, criterion.column, criterion.direction);
+                        if (comparison !== 0) return comparison;
                     }
-                    
-                    // Try to parse as dates first
-                    const aDate = parseDate(aValue);
-                    const bDate = parseDate(bValue);
-                    
-                    if (aDate && bDate) {
-                        // Both are valid dates - compare chronologically
-                        const comparison = aDate.getTime() - bDate.getTime();
-                        return this.sortDirection === 'desc' ? -comparison : comparison;
-                    }
-                    
-                    // Determine if values are numbers
-                    const aNum = parseFloat(aValue);
-                    const bNum = parseFloat(bValue);
-                    const isANum = !isNaN(aNum);
-                    const isBNum = !isNaN(bNum);
-                    
-                    let comparison = 0;
-                    
-                    if (isANum && isBNum) {
-                        // Both are numbers
-                        comparison = aNum - bNum;
-                    } else {
-                        // String comparison
-                        comparison = String(aValue).localeCompare(String(bValue));
-                    }
-                    
-                    return this.sortDirection === 'desc' ? -comparison : comparison;
-                    });
-                }
+                    return 0;
+                });
             }
 
             return filteredData;
@@ -2108,6 +2092,8 @@ export const TableComponent = {
         }
     },
     mounted() {
+        this.applyDefaultSortColumn();
+
         // Register route with undo system and tableRowSelectionState
         // Only top-level tables (with showHeader=true) should set the active route
         // Nested tables should not override the global route key
@@ -2496,6 +2482,7 @@ export const TableComponent = {
             // Check if this specific column is sortable
             const column = this.columns.find(col => col.key === columnKey);
             if (!column || !this.isColumnSortable(column)) return;
+            this.isUsingDefaultSort = false;
             
             if (this.sortColumn === columnKey) {
                 // Toggle sort direction if same column
@@ -2505,6 +2492,100 @@ export const TableComponent = {
                 this.sortColumn = columnKey;
                 this.sortDirection = 'asc';
             }
+        },
+
+        getNormalizedDefaultSortDirection() {
+            return String(this.defaultSortDirection || '').toLowerCase() === 'desc' ? 'desc' : 'asc';
+        },
+
+        normalizeDefaultSortColumnConfig() {
+            const config = this.defaultSortColumn;
+            if (Array.isArray(config)) return config;
+            if (typeof config === 'string' && config.trim()) return [config.trim()];
+            return [];
+        },
+
+        getDefaultSortCriteria() {
+            const fallbackDirection = this.getNormalizedDefaultSortDirection();
+            return this.normalizeDefaultSortColumnConfig()
+                .map((entry) => {
+                    if (typeof entry === 'string') {
+                        return { key: entry.trim(), direction: fallbackDirection };
+                    }
+
+                    if (entry && typeof entry === 'object') {
+                        const key = typeof entry.key === 'string' ? entry.key.trim() : '';
+                        const direction = String(entry.direction || fallbackDirection).toLowerCase() === 'desc' ? 'desc' : 'asc';
+                        return { key, direction };
+                    }
+
+                    return null;
+                })
+                .filter(item => item && item.key)
+                .map(item => {
+                    const column = this.columns.find(col => col.key === item.key);
+                    return column && this.isColumnSortable(column)
+                        ? { column, direction: item.direction }
+                        : null;
+                })
+                .filter(Boolean);
+        },
+
+        getCurrentSortCriteria() {
+            if (!this.sortColumn) return [];
+            const column = this.columns.find(col => col.key === this.sortColumn);
+            if (!column || !this.isColumnSortable(column)) return [];
+            return [{ column, direction: this.sortDirection }];
+        },
+
+        compareRowsByColumn(aRow, bRow, column, direction) {
+            const aValue = aRow[column.key];
+            const bValue = bRow[column.key];
+
+            if (aValue === null || aValue === undefined) return 1;
+            if (bValue === null || bValue === undefined) return -1;
+
+            const columnType = String(column.type || '').toLowerCase();
+            if (columnType === 'item') {
+                const comparison = compareItemLikeValues(aValue, bValue);
+                return direction === 'desc' ? -comparison : comparison;
+            }
+
+            const aDate = parseDate(aValue);
+            const bDate = parseDate(bValue);
+            if (aDate && bDate) {
+                const comparison = aDate.getTime() - bDate.getTime();
+                return direction === 'desc' ? -comparison : comparison;
+            }
+
+            const aNum = parseFloat(aValue);
+            const bNum = parseFloat(bValue);
+            const isANum = !isNaN(aNum);
+            const isBNum = !isNaN(bNum);
+
+            let comparison = 0;
+            if (isANum && isBNum) {
+                comparison = aNum - bNum;
+            } else {
+                comparison = String(aValue).localeCompare(String(bValue));
+            }
+
+            return direction === 'desc' ? -comparison : comparison;
+        },
+
+        applyDefaultSortColumn(options = {}) {
+            const { force = false } = options;
+            const defaultSortCriteria = this.getDefaultSortCriteria();
+            if (defaultSortCriteria.length === 0) return;
+
+            const activeSortColumn = this.columns.find(col => col.key === this.sortColumn);
+            const hasValidActiveSort = !!(this.sortColumn && activeSortColumn && this.isColumnSortable(activeSortColumn));
+
+            if (!force && hasValidActiveSort) return;
+
+            this.sortColumn = defaultSortCriteria[0].column.key;
+            this.sortDirection = defaultSortCriteria[0].direction;
+            this.isUsingDefaultSort = true;
         },
         
         isColumnSortable(column) {

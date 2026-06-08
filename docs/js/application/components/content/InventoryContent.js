@@ -430,6 +430,8 @@ export const InventoryContent = {
             <cards-grid
                 v-else-if="cleanContainerPath === 'inventory/categories'"
                 :items="categoryList"
+                :sort-columns="[{ key: 'title', label: 'Category', type: 'string', sortable: true }]"
+                default-sort-column="title"
                 :on-item-click="handleCategorySelect"
                 :is-loading="isLoadingCategories"
                 loading-message="Loading..."

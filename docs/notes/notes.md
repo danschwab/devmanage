@@ -1,34 +1,11 @@
-## Present
+## Ask Ben
 
-delete beckman cyto
-analytics off
-log out
-hard refresh browser and log in again
-go to inventory and wait for icons to load, then all packlists and wait for them to load
-set packlists filter to upcoming
-
-1. Export packlist from Inventor
-   - Am I correct that currently, we manually create packlists as spreadsheets based on renderings?
-   - Dan and I have a full accurate model of the exhibit when we generate elevations documents.
-   - The first thing my application does is allow us to export that model and open it as a packlist.
-     [DEMO - BECKMAN CYTO]
-   - This packlist is fully editable, and can be printed in our standard format.
-     [QUICK DEMO - add crate, drag rows, delete a cell, edit a cell, save, print]
-     [NOTE] We can easily use this past year of Excel packlists by allowing copy-paste from existing spreadsheets, or a simple import feature.
-2. Harvests information from production schedule
-   - Our production schedule in google sheets has lots of information about our shows, and I can pull that information in and connect packlists to it.
-     [DEMO - go to schedule select upcoming]
-   - This is a filter of shows in the next month. We can see all the information and see what packlists are not yet generated.
-     [NOTE] If we move project management entirely to Workzone, I can pull this information straight from Workzone.
-3. Contains our current inventory and allows easy updates
-   - For the past several years, we have kept track of much of our inventory. I can pull that info in as well.
-   - I have built some tools to allow us to easily search and update the inventory.
-     [NOTE] If we decide to pull this data into Access's barcode system, I can help manage importing data and use that database in this app.
-4. Shows inventory shortages and overlapping shows as pack lists are generated
-   - The last feature I want to show you is the analysis that is possible with this information. Let's look at an item-shortage report for the next month.
-     [DEMO - shortages report for upcoming shows, note panel shortage]
-   - If I enable analysis, and we navigate back to packlists, there is a ton of information that is at our fingertips, and a ton of ways to explore that info.
-     [DEMO - enable analysis, follow the link to the packlist with the shortage]
+- Inventory Extras (Misc tab usage, easy additions, how to do this)
+- Nomenclature
+  TTOP/TBASE/TV/AV numbering
+  SHLF vs SHELF, CNTR vs COUNTER, CAB vs CABINET, etc
+- How can I make crating better?
+- Copy paste?
 
 ## Important Notes
 

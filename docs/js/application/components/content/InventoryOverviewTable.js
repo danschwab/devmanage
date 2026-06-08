@@ -149,6 +149,7 @@ export const InventoryOverviewTableComponent = {
                 title="All Inventory Overview"
                 :originalData="originalData"
                 :columns="columns"
+                :default-sort-column="['tab', 'itemNumber']"
                 :isLoading="isLoading"
                 :isAnalyzing="isAnalyzing"
                 :error="error"

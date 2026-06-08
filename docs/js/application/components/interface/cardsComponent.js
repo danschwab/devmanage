@@ -1,6 +1,34 @@
-import { html, LoadingBarComponent, NavigationRegistry } from '../../index.js';
+import { html, LoadingBarComponent, NavigationRegistry, parseDate } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
+
+function normalizeItemSortWords(value) {
+    return String(value)
+        .toLowerCase()
+        .split(/[\s\-_,./\\:;|]+/)
+        .filter(Boolean);
+}
+
+function compareItemLikeValues(aValue, bValue) {
+    const aWords = normalizeItemSortWords(aValue);
+    const bWords = normalizeItemSortWords(bValue);
+    const maxWords = Math.max(aWords.length, bWords.length);
+
+    for (let i = 0; i < maxWords; i++) {
+        const aWord = aWords[i];
+        const bWord = bWords[i];
+
+        if (aWord === undefined) return -1;
+        if (bWord === undefined) return 1;
+
+        const wordComparison = aWord.localeCompare(bWord, undefined, { numeric: true, sensitivity: 'base' });
+        if (wordComparison !== 0) {
+            return wordComparison;
+        }
+    }
+
+    return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+}
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
@@ -81,6 +109,23 @@ export const CardsComponent = {
         showPinnedOnly: {
             type: Boolean,
             default: false
+        },
+        showSort: {
+            type: Boolean,
+            default: false
+        },
+        sortColumns: {
+            type: Array,
+            default: () => []
+        },
+        defaultSortColumn: {
+            type: [String, Array],
+            default: null
+        },
+        defaultSortDirection: {
+            type: String,
+            default: 'asc',
+            validator: (value) => ['asc', 'desc'].includes(String(value || '').toLowerCase())
         }
     },
     setup(props, { emit }) {
@@ -105,9 +150,42 @@ export const CardsComponent = {
             stickyLeft: 0,
             stickyWidth: 0,
             stickySpacerHeight: 0,
+            selectedSortKey: null,
+            selectedSortDirection: 'asc',
+            isUsingDefaultSort: true,
         };
     },
+    watch: {
+        sortColumns: {
+            handler() {
+                const selectedColumnStillExists = this.sortableColumns.some(col => col.key === this.selectedSortKey);
+                if (!selectedColumnStillExists) {
+                    this.applyDefaultSortColumn({ force: true });
+                }
+            },
+            deep: true
+        },
+        defaultSortColumn() {
+            this.applyDefaultSortColumn({ force: true });
+        },
+        defaultSortDirection() {
+            if (this.isUsingDefaultSort) {
+                this.selectedSortDirection = this.getNormalizedDefaultSortDirection();
+            }
+        }
+    },
     computed: {
+        sortableColumns() {
+            return (this.sortColumns || [])
+                .filter(col => col && typeof col.key === 'string' && col.key.trim())
+                .filter(col => col.sortable !== false)
+                .map(col => ({
+                    key: col.key.trim(),
+                    label: col.label || col.key,
+                    type: col.type || null,
+                    sortable: true
+                }));
+        },
         shouldShowEmpty() {
             return !this.isLoading && !this.isAnalyzing && this.items && this.items.length === 0;
         },
@@ -145,6 +223,21 @@ export const CardsComponent = {
                 });
             }
 
+            const sortCriteria = this.isUsingDefaultSort
+                ? this.getDefaultSortCriteria()
+                : this.getCurrentSortCriteria();
+
+            if (sortCriteria.length > 0) {
+                const sortedData = [...filteredData].sort((a, b) => {
+                    for (const criterion of sortCriteria) {
+                        const comparison = this.compareCardsByColumn(a, b, criterion.column, criterion.direction);
+                        if (comparison !== 0) return comparison;
+                    }
+                    return 0;
+                });
+                filteredData = sortedData;
+            }
+
             return filteredData;
         }
     },
@@ -152,6 +245,7 @@ export const CardsComponent = {
         // Initialize search from URL and setup watcher if syncSearchWithUrl is enabled
         this.search.initializeFromUrl();
         this.search.setupUrlWatcher();
+        this.applyDefaultSortColumn();
 
         this._stickyHeader = useStickyHeader({
             getStickyEl: () => this.$refs.stickyWrapperEl,
@@ -202,6 +296,105 @@ export const CardsComponent = {
             console.log('CardsComponent: Refresh requested');
             this.$emit('refresh');
         },
+        getNormalizedDefaultSortDirection() {
+            return String(this.defaultSortDirection || '').toLowerCase() === 'desc' ? 'desc' : 'asc';
+        },
+        normalizeDefaultSortColumnConfig() {
+            const config = this.defaultSortColumn;
+            if (Array.isArray(config)) return config;
+            if (typeof config === 'string' && config.trim()) return [config.trim()];
+            return [];
+        },
+        getDefaultSortCriteria() {
+            const fallbackDirection = this.getNormalizedDefaultSortDirection();
+            return this.normalizeDefaultSortColumnConfig()
+                .map((entry) => {
+                    if (typeof entry === 'string') {
+                        return { key: entry.trim(), direction: fallbackDirection };
+                    }
+
+                    if (entry && typeof entry === 'object') {
+                        const key = typeof entry.key === 'string' ? entry.key.trim() : '';
+                        const direction = String(entry.direction || fallbackDirection).toLowerCase() === 'desc' ? 'desc' : 'asc';
+                        return { key, direction };
+                    }
+
+                    return null;
+                })
+                .filter(item => item && item.key)
+                .map(item => {
+                    const column = this.sortableColumns.find(col => col.key === item.key);
+                    return column ? { column, direction: item.direction } : null;
+                })
+                .filter(Boolean);
+        },
+        getCurrentSortCriteria() {
+            if (!this.selectedSortKey) return [];
+            const column = this.sortableColumns.find(col => col.key === this.selectedSortKey);
+            if (!column) return [];
+            return [{ column, direction: this.selectedSortDirection }];
+        },
+        applyDefaultSortColumn(options = {}) {
+            const { force = false } = options;
+            const defaultSortCriteria = this.getDefaultSortCriteria();
+            if (defaultSortCriteria.length === 0) return;
+
+            const currentSortColumn = this.sortableColumns.find(col => col.key === this.selectedSortKey);
+            const hasValidCurrentSort = !!(this.selectedSortKey && currentSortColumn);
+
+            if (!force && hasValidCurrentSort) return;
+
+            this.selectedSortKey = defaultSortCriteria[0].column.key;
+            this.selectedSortDirection = defaultSortCriteria[0].direction;
+            this.isUsingDefaultSort = true;
+        },
+        compareCardsByColumn(aCard, bCard, column, direction) {
+            const aValue = aCard?.[column.key];
+            const bValue = bCard?.[column.key];
+
+            const aMissing = aValue === null || aValue === undefined || aValue === '';
+            const bMissing = bValue === null || bValue === undefined || bValue === '';
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+
+            const columnType = String(column.type || '').toLowerCase();
+            if (columnType === 'item') {
+                const comparison = compareItemLikeValues(aValue, bValue);
+                return direction === 'desc' ? -comparison : comparison;
+            }
+
+            const aDate = parseDate(aValue);
+            const bDate = parseDate(bValue);
+            if ((columnType === 'date' || columnType === '') && aDate && bDate) {
+                const comparison = aDate.getTime() - bDate.getTime();
+                return direction === 'desc' ? -comparison : comparison;
+            }
+
+            const aNum = parseFloat(aValue);
+            const bNum = parseFloat(bValue);
+            const isANum = !isNaN(aNum);
+            const isBNum = !isNaN(bNum);
+
+            let comparison = 0;
+            if (columnType === 'number' && isANum && isBNum) {
+                comparison = aNum - bNum;
+            } else if (isANum && isBNum && columnType !== 'string') {
+                comparison = aNum - bNum;
+            } else {
+                comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            return direction === 'desc' ? -comparison : comparison;
+        },
+        handleSortSelectionChange() {
+            if (!this.selectedSortKey) {
+                this.applyDefaultSortColumn({ force: true });
+                return;
+            }
+            this.selectedSortDirection = 'asc';
+            this.isUsingDefaultSort = false;
+        },
         isCardAnalyzing(cardIndex) {
             // Check if this card is currently being analyzed
             const card = this.visibleCards[cardIndex];
@@ -227,7 +420,7 @@ export const CardsComponent = {
                     name="header-area" 
                 ></slot>
                 <div class="spacer"></div>
-                <div v-if="showRefresh || showSearch" class="button-bar">
+                <div v-if="showRefresh || showSearch || showSort" class="button-bar">
                     <div v-if="showSearch" class="input-container">
                         <input
                             type="text"
@@ -246,6 +439,10 @@ export const CardsComponent = {
                             🗙
                         </button>
                     </div>
+                    <select v-if="showSort && sortableColumns.length > 0" v-model="selectedSortKey" @change="handleSortSelectionChange" class="search-input" title="Sort cards">
+                        <option v-if="!selectedSortKey" value="">Default sort</option>
+                        <option v-for="col in sortableColumns" :key="col.key" :value="col.key">Sort by: {{ col.label }}</option>
+                    </select>
                     <button 
                         v-if="showRefresh" 
                         @click="handleRefresh" 
@@ -270,7 +467,7 @@ export const CardsComponent = {
             <div ref="cardsGridEl" v-if="shouldShowCards" class="cards-grid">
                 <div
                     v-for="(item, idx) in visibleCards"
-                    :key="item.id || item.title"
+                    :key="(item.id || item.sheetId || item.title) + '_' + idx"
                     :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx) }, item.cardClass || defaultCardClass]"
                     @click="handleCardClick(item)"
                     @keydown="handleKeyDown($event, item)"

@@ -1019,6 +1019,7 @@ export const InventoryTableComponent = {
                 :title="inventoryName || tabTitle"
                 :originalData="originalData"
                 :columns="columns"
+                default-sort-column="itemNumber"
                 :isLoading="isLoading"
                 :error="error"
                 :showRefresh="true"
