@@ -1,4 +1,4 @@
-import { Database, parseDate, toISODateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
+import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -197,6 +197,35 @@ class productionUtils_uncached {
         });
 
         console.log(`[production-utils] Filtered ${data.length} shows to ${filtered.length} matching date filters`);
+        
+        // Normalize all date columns to ensure correct years before returning
+        // This fixes user data entry errors (e.g., Dec ship dates for Jan shows)
+        filtered.forEach(row => {
+            // Normalize Ship date using validation logic
+            const correctedShip = _calculateShipDate(row);
+            if (correctedShip) {
+                row.Ship = toUSDateString(correctedShip);
+            }
+            
+            // Normalize S. Start date
+            const sStart = parseDate(row['S. Start'], true, row.Year);
+            if (sStart) {
+                row['S. Start'] = toUSDateString(sStart);
+            }
+            
+            // Normalize S. End date
+            const sEnd = parseDate(row['S. End'], true, row.Year);
+            if (sEnd) {
+                row['S. End'] = toUSDateString(sEnd);
+            }
+            
+            // Normalize Expected Return Date using validation logic
+            const correctedReturn = _calculateReturnDate(row, correctedShip);
+            if (correctedReturn && row['Expected Return Date']) {
+                row['Expected Return Date'] = toUSDateString(correctedReturn);
+            }
+        });
+        
         return filtered;
     }
     
@@ -643,6 +672,27 @@ class productionUtils_uncached {
             if (showName && client && yearVal) {
                 const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
                 if (await deps.call(ProductionUtils.findBestProjectIdentifierMatch, computedIdentifier, [identifier])) {
+                    // Normalize date columns before returning to ensure correct years
+                    const correctedShip = _calculateShipDate(row);
+                    if (correctedShip) {
+                        row.Ship = toUSDateString(correctedShip);
+                    }
+                    
+                    const sStart = parseDate(row['S. Start'], true, row.Year);
+                    if (sStart) {
+                        row['S. Start'] = toUSDateString(sStart);
+                    }
+                    
+                    const sEnd = parseDate(row['S. End'], true, row.Year);
+                    if (sEnd) {
+                        row['S. End'] = toUSDateString(sEnd);
+                    }
+                    
+                    const correctedReturn = _calculateReturnDate(row, correctedShip);
+                    if (correctedReturn && row['Expected Return Date']) {
+                        row['Expected Return Date'] = toUSDateString(correctedReturn);
+                    }
+                    
                     return row;
                 }
             }
@@ -661,66 +711,52 @@ class productionUtils_uncached {
      */
     static async getProjectShipDate(deps, projectIdentifier) {
         const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
-        if (!row) return null;
-        const ship = _calculateShipDate(row);
-        if (!ship) return null;
-        return toISODateString(ship);
+        return deps.call(ProductionUtils.getProjectShipDateFromRow, row);
     }
 
     static async getProjectShipDateFromRow(deps, row) {
-        if (!row) return null;
-        const ship = _calculateShipDate(row);
-        if (!ship) return null;
-        return toISODateString(ship);
+        return toISODateString(_calculateShipDate(row));
     }
 
     static async getProjectReturnDateFromRow(deps, row) {
-        if (!row) return null;
         const ship = _calculateShipDate(row);
-        const ret = _calculateReturnDate(row, ship);
-        if (!ret) return null;
-        return toISODateString(ret);
+        return toISODateString(_calculateReturnDate(row, ship));
     }
 
     static async getProjectReturnDate(deps, projectIdentifier) {
         const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
-        if (!row) return null;
-        const ship = _calculateShipDate(row);
-        const ret = _calculateReturnDate(row, ship);
-        if (!ret) return null;
-        return toISODateString(ret);
+        return deps.call(ProductionUtils.getProjectReturnDateFromRow, row);
     }
 
     /**
-     * Guess ship date based on other date fields in the row
-     * API function used by reactive store analysis to fill in missing ship dates
+     * Normalize ship date to include year, guessing if missing
+     * API function used by reactive store analysis to ensure all ship dates have years
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object} row - Schedule row with date fields (Ship, S. Start, S. End, Year)
-     * @returns {Promise<string|null>} Guessed ship date in MM/DD/YYYY format or null
+     * @returns {Promise<string|null>} Ship date in MM/DD/YYYY format or null
      */
     static async guessShipDate(deps, row) {
-        try {
-            // Only guess if Ship is empty
-            if (row.Ship && row.Ship.toString().trim() !== '') {
-                return row.Ship; // Return existing value
-            }
-            
-            // Use shared calculation logic
-            const guessedDate = _calculateShipDate(row);
-            
-            if (guessedDate) {
-                // Format as MM/DD/YYYY
-                const month = String(guessedDate.getMonth() + 1).padStart(2, '0');
-                const day = String(guessedDate.getDate()).padStart(2, '0');
-                const year = guessedDate.getFullYear();
-                return `${month}/${day}/${year}`;
-            }
-            
-            return null;
-        } catch (error) {
-            console.warn('[production-utils] Failed to guess ship date:', error);
-            return null;
-        }
+        return _normalizeScheduleDate(_calculateShipDate(row), 'ship');
+    }
+
+    /**
+     * Normalize show start date to include year
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} row - Schedule row with date fields
+     * @returns {Promise<string|null>} Start date in MM/DD/YYYY format or null
+     */
+    static async normalizeStartDate(deps, row) {
+        return _normalizeScheduleDate(parseDate(row['S. Start'], true, row.Year), 'start');
+    }
+
+    /**
+     * Normalize show end date to include year
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} row - Schedule row with date fields
+     * @returns {Promise<string|null>} End date in MM/DD/YYYY format or null
+     */
+    static async normalizeEndDate(deps, row) {
+        return _normalizeScheduleDate(parseDate(row['S. End'], true, row.Year), 'end');
     }
 
 
@@ -792,7 +828,15 @@ class productionUtils_uncached {
         }
     }
 
-
+    
+    /**
+     * Find the matching packlist tab for an identifier string.
+     * Tries in order: exact → case-insensitive → normalized (strip non-alphanumeric, uppercase).
+     * This is the single source of truth for packlist tab resolution.
+     * @param {string} identifier
+     * @param {Array<{title:string}>} tabs
+     * @returns {{title:string}|null}
+     */
     static async findPackListTab(deps, identifier, tabs) {
         if (!identifier || !Array.isArray(tabs)) return null;
         const titleToTab = new Map();
@@ -828,14 +872,6 @@ export const ProductionUtils = wrapMethods(
     ]
 );
 
-/**
- * Find the matching packlist tab for an identifier string.
- * Tries in order: exact → case-insensitive → normalized (strip non-alphanumeric, uppercase).
- * This is the single source of truth for packlist tab resolution.
- * @param {string} identifier
- * @param {Array<{title:string}>} tabs
- * @returns {{title:string}|null}
- */
 
 
 
@@ -855,7 +891,20 @@ function _calculateShipDate(row) {
     
     // Try explicit Ship date first
     let ship = parseDate(row.Ship, true, year);
-    if (ship) return ship;
+    if (ship) {
+        // Validate: ship date should be before show start
+        // If ship is after show start and both are in the same year,
+        // check if moving ship to previous year makes more sense
+        const sStart = parseDate(row['S. Start'], true, year);
+        if (sStart && ship >= sStart) {
+            // Ship is on or after show start - likely a year boundary issue
+            // Move ship to previous year
+            const shipPrevYear = new Date(ship);
+            shipPrevYear.setFullYear(ship.getFullYear() - 1);
+            ship = shipPrevYear;
+        }
+        return ship;
+    }
     
     // Fallback 1: S. Start - 14 days
     const sStart = parseDate(row['S. Start'], true, year);
@@ -913,7 +962,20 @@ function _calculateReturnDate(row, shipDate = null) {
     
     // Try explicit return date first
     let ret = parseDate(row['Expected Return Date'], true, year);
-    if (ret) return ret;
+    if (ret) {
+        // Validate: return date should be after show end (or show start if no end)
+        // If return is before show dates and both are in the same year,
+        // check if moving return to next year makes more sense
+        const sEnd = parseDate(row['S. End'], true, year) || parseDate(row['S. Start'], true, year);
+        if (sEnd && ret <= sEnd) {
+            // Return is on or before show - likely a year boundary issue
+            // Move return to next year
+            const retNextYear = new Date(ret);
+            retNextYear.setFullYear(ret.getFullYear() + 1);
+            ret = retNextYear;
+        }
+        return ret;
+    }
     
     // Fallback 1: S. End + 10 days
     const sEnd = parseDate(row['S. End'], true, year);
@@ -939,6 +1001,23 @@ function _calculateReturnDate(row, shipDate = null) {
     }
     
     return null;
+}
+
+/**
+ * Normalize a Date object to MM/DD/YYYY format with error handling
+ * Shared helper for all schedule date normalization functions
+ * @param {Date|null} date - Date object to format
+ * @param {string} dateType - Type of date for error logging (e.g., 'ship', 'start', 'end')
+ * @returns {string|null} Formatted date string or null
+ * @private
+ */
+function _normalizeScheduleDate(date, dateType) {
+    try {
+        return toUSDateString(date);
+    } catch (error) {
+        console.warn(`[production-utils] Failed to normalize ${dateType} date:`, error);
+        return null;
+    }
 }
 
 function _normalizeIndexName(value) {

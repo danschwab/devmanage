@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
+import { html, Requests, parseDate, toUSDateString, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
 import { CalendarComponent } from '../interface/calendarComponent.js';
 
 export const ScheduleTableComponent = {
@@ -120,51 +120,24 @@ export const ScheduleTableComponent = {
             return this.scheduleTableStore ? this.scheduleTableStore.analysisProgress : 0;
         },
         tableTitle() {
-            // Helper to format date as 'mmm d, yyyy'
-            function formatDate(dateStr) {
-                if (!dateStr) return '';
-                const date = parseDate(dateStr);
-                if (!date || isNaN(date)) return dateStr;
-                return date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
-            }
-            // Check for dateFilters array format
+            const fmtVal = (v) => {
+                if (typeof v === 'number') return toUSDateString(new Date(Date.now() + v * 86400000)) ?? '';
+                return toUSDateString(parseDate(v)) ?? String(v);
+            };
             if (this.filter && this.filter.dateFilters && this.filter.dateFilters.length > 0) {
                 const afterFilter = this.filter.dateFilters.find(f => f.type === 'after');
                 const beforeFilter = this.filter.dateFilters.find(f => f.type === 'before');
-                
                 if (afterFilter && beforeFilter) {
-                    // Handle date range with both start and end
                     const startVal = afterFilter.value;
                     const endVal = beforeFilter.value;
-                    
-                    // If values are offsets (numbers), convert to dates
-                    if (typeof startVal === 'number' && typeof endVal === 'number') {
-                        const today = new Date();
-                        const startDate = new Date(today.getTime() + startVal * 86400000);
-                        const endDate = new Date(today.getTime() + endVal * 86400000);
-                        const start = startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                        const end = endDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                        return `Shows between ${start} and ${end}`;
-                    } else if (typeof startVal === 'string' && typeof endVal === 'string') {
-                        // If values are date strings
-                        const start = formatDate(startVal);
-                        const end = formatDate(endVal);
-                        return `Shows between ${start} and ${end}`;
-                    } else if (typeof startVal === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(startVal)) {
-                        // If it's a show identifier
+                    if (typeof startVal === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(startVal)) {
                         return `Shows during ${startVal}`;
                     }
+                    return `Shows between ${fmtVal(startVal)} and ${fmtVal(endVal)}`;
                 }
             }
-            // Legacy format support (will be removed eventually)
             if (this.filter && typeof this.filter === 'object' && this.filter.startDate && this.filter.endDate) {
-                const start = formatDate(this.filter.startDate);
-                const end = formatDate(this.filter.endDate);
-                return `Shows between ${start} and ${end}`;
+                return `Shows between ${fmtVal(this.filter.startDate)} and ${fmtVal(this.filter.endDate)}`;
             }
             if (this.filter && (typeof this.filter === 'string' || this.filter.identifier)) {
                 const id = typeof this.filter === 'string' ? this.filter : this.filter.identifier;
@@ -249,14 +222,38 @@ export const ScheduleTableComponent = {
                     false,
                     false // nonessential
                 ),
-                // Guess ship date if missing and store in AppData
+                // Normalize ship dates to always include year
                 createAnalysisConfig(
                     Requests.guessShipDate,
                     'estimatedShipDate',
-                    'Guessing missing ship dates...',
+                    'Normalizing ship dates...',
                     ['Ship', 'S. Start', 'S. End', 'Year'],
                     [],
-                    null,
+                    'Ship', // Store directly in Ship column to display with year
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
+                ),
+                // Normalize show start dates to always include year
+                createAnalysisConfig(
+                    Requests.normalizeStartDate,
+                    'normalizedStartDate',
+                    'Normalizing start dates...',
+                    ['S. Start', 'Year'],
+                    [],
+                    'S. Start', // Store directly in S. Start column
+                    false,
+                    Priority.ANALYSIS,
+                    true // extractColumnsAsObject
+                ),
+                // Normalize show end dates to always include year
+                createAnalysisConfig(
+                    Requests.normalizeEndDate,
+                    'normalizedEndDate',
+                    'Normalizing end dates...',
+                    ['S. End', 'Year'],
+                    [],
+                    'S. End', // Store directly in S. End column
                     false,
                     Priority.ANALYSIS,
                     true // extractColumnsAsObject
@@ -445,24 +442,8 @@ export const ScheduleTableComponent = {
             }
         },
         getShipDateCards(row, columnKey) {
-            // Only show estimated ship date cards in the ship column
-            if (columnKey !== 'Ship') {
-                return [];
-            }
-            
-            const estimatedDate = row.AppData?.estimatedShipDate;
-            const startDate = row['S. Start'] ? row['S. Start'] : 'N/A';
-
-            // Only show card if there's an estimated date
-            if (estimatedDate) {
-                return [{
-                    message: `${estimatedDate}`,
-                    hoverMessage: `Show starts: ${startDate}`,
-                    clickable: false,
-                    class: 'orange' // Yellow card to indicate estimated value
-                }];
-            }
-            
+            // Cards are no longer needed - ship dates are now normalized and displayed directly in the column
+            // Keeping function for backwards compatibility but returning empty array
             return [];
         },
         getPacklistCards(row, columnKey) {

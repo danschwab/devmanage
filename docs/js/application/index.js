@@ -1,6 +1,6 @@
 // API
 export { Requests } from '../data_management/api.js';
-export { parseDate, toISODateString, todayISOString, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
+export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
 export { CacheInvalidationBus, invalidateCache } from '../data_management/utils/caching.js';
 export { EditHistoryUtils } from '../data_management/utils/metadata-utils.js';
 

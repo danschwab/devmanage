@@ -1,4 +1,4 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
+import { html, parseDate, toUSDateString, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
@@ -2614,14 +2614,10 @@ export const TableComponent = {
                 switch (column.format) {
                     case 'currency':
                         return `$${parseFloat(value).toFixed(2)}`;
-                    case 'date':
-                        // If value is a string and does not contain a year (4 consecutive digits), skip formatting
-                        if (typeof value === 'string' && !/\d{4}/.test(value)) {
-                            return value;
-                        }
-                        // Use parseDate helper to handle all supported date formats
+                    case 'date': {
                         const parsedDate = parseDate(value);
-                        return parsedDate ? parsedDate.toLocaleDateString() : value;
+                        return toUSDateString(parsedDate) ?? String(value);
+                    }
                     case 'number':
                         return parseFloat(value).toLocaleString();
                     case 'percentage':

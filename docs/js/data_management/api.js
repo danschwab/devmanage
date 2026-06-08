@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -689,19 +689,35 @@ class Requests_uncached {
     }
 
     /**
-     * Guess ship date if missing based on other date fields
-     * Used by reactive store analysis to fill in missing ship dates
+     * Normalize ship date to include year, guessing if missing
+     * Used by reactive store analysis to ensure all ship dates display with years
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object} scheduleRow - Full schedule row object
-     * @returns {Promise<string|undefined>} Guessed ship date or undefined (to preserve existing)
+     * @returns {Promise<string|null>} Normalized ship date with year or null
      */
     static async guessShipDate(deps, rowData) {
-        // Only guess if Ship field is empty or null
-        if (!rowData.Ship || rowData.Ship.toString().trim() === '') {
-            return await deps.call(ProductionUtils.guessShipDate, rowData);
-        }
-        // Return undefined to preserve existing ship date
-        return undefined;
+        // Always normalize to ensure year is included in display
+        return await deps.call(ProductionUtils.guessShipDate, rowData);
+    }
+
+    /**
+     * Normalize show start date to include year
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} scheduleRow - Full schedule row object
+     * @returns {Promise<string|null>} Normalized start date with year or null
+     */
+    static async normalizeStartDate(deps, rowData) {
+        return await deps.call(ProductionUtils.normalizeStartDate, rowData);
+    }
+
+    /**
+     * Normalize show end date to include year
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Object} scheduleRow - Full schedule row object
+     * @returns {Promise<string|null>} Normalized end date with year or null
+     */
+    static async normalizeEndDate(deps, rowData) {
+        return await deps.call(ProductionUtils.normalizeEndDate, rowData);
     }
 
     /**
@@ -995,16 +1011,7 @@ class Requests_uncached {
         const itemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
 
         const dateFilters = Array.isArray(filter?.dateFilters) ? filter.dateFilters : [];
-        const offsetToDate = (value) => {
-            if (value === null || value === undefined) return null;
-            if (typeof value === 'number') {
-                const date = new Date();
-                date.setDate(date.getDate() + value);
-                return date.toISOString().slice(0, 10);
-            }
-            return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
-        };
-        const getFilterDate = (column, type) => offsetToDate(dateFilters.find(f => f.column === column && f.type === type)?.value);
+        const getFilterDate = (column, type) => offsetToISO(dateFilters.find(f => f.column === column && f.type === type)?.value);
 
         let reportStart = getFilterDate('Show Date', 'after') || getFilterDate('Ship', 'after') || null;
         let reportEnd = getFilterDate('Show Date', 'before') || getFilterDate('Ship', 'before') || null;

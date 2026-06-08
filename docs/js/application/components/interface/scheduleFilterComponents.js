@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, Priority } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority } from '../../index.js';
 
 // Date preset offset constants
 const START_DATE_OFFSETS = { today: 0, monthAgo: -30, yearAgo: -365 };
@@ -1316,20 +1316,9 @@ function computeDisplayDates(dateFilters) {
     if (!dateFilters?.length) return { startDate: null, endDate: null };
     const afterFilter  = dateFilters.find(f => f.type === 'after'  && f.column === 'Show Date');
     const beforeFilter = dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
-    const resolve = (v) => {
-        if (v == null) return null;
-        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-        const n = Number(v);
-        if (!isNaN(n)) {
-            const d = new Date();
-            d.setDate(d.getDate() + n);
-            return d.toISOString().split('T')[0];
-        }
-        return null;
-    };
     return {
-        startDate: resolve(afterFilter?.value) ?? null,
-        endDate:   resolve(beforeFilter?.value) ?? null
+        startDate: offsetToISO(afterFilter?.value) ?? null,
+        endDate:   offsetToISO(beforeFilter?.value) ?? null
     };
 }
 
@@ -1373,11 +1362,7 @@ export const ScheduleDateRangeCard = {
     computed: {
         dateRangeDisplay() {
             if (!this.displayStart && !this.displayEnd) return null;
-            const fmt = (iso) => {
-                if (!iso) return '?';
-                const [y, m, d] = iso.split('-');
-                return `${m}/${d}/${y}`;
-            };
+            const fmt = (iso) => toUSDateString(parseDate(iso)) ?? '?';
             return `${fmt(this.displayStart)} → ${fmt(this.displayEnd)}`;
         }
     },

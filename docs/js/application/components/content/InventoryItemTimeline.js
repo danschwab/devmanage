@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, getAutoColorClass } from '../../index.js';
+import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, todayISOString, offsetToISO, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, getAutoColorClass } from '../../index.js';
 
 /**
  * Lightweight item timeline component.
@@ -76,7 +76,7 @@ export const InventoryItemTimeline = {
         calendarData() {
             const raw = this.timelineStore?.data ?? [];
             if (!raw.length) return [];
-            const effectiveEnd = this.endDate || this.filterEndDate || toISODateString(new Date());
+            const effectiveEnd = this.endDate || this.filterEndDate || todayISOString();
             return raw.map((row, i) => {
                 const nextRow = raw[i + 1];
                 let calendarEnd;
@@ -138,21 +138,10 @@ export const InventoryItemTimeline = {
             let endDate   = searchData?.endDate   ?? null;
 
             if ((!startDate || !endDate) && searchData?.dateFilters?.length) {
-                const offsetToDate = (value) => {
-                    if (typeof value === 'number') {
-                        const d = new Date();
-                        d.setDate(d.getDate() + value);
-                        return toISODateString(d);
-                    }
-                    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                        return value;
-                    }
-                    return null;
-                };
                 const afterFilter  = searchData.dateFilters.find(f => f.column === 'Show Date' && f.type === 'after');
                 const beforeFilter = searchData.dateFilters.find(f => f.column === 'Show Date' && f.type === 'before');
-                if (!startDate && afterFilter)  startDate = offsetToDate(afterFilter.value);
-                if (!endDate   && beforeFilter) endDate   = offsetToDate(beforeFilter.value);
+                if (!startDate && afterFilter)  startDate = offsetToISO(afterFilter.value);
+                if (!endDate   && beforeFilter) endDate   = offsetToISO(beforeFilter.value);
             }
 
             this.filterStartDate = startDate;

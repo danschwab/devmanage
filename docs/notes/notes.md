@@ -131,6 +131,7 @@ For design and project queue:
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
+- [ ] there is a ton of duplicated logic in production-utils that needs to be simplified or removed
 - [ ] packlist item shortage alerts are still broken!!!!!!
 
 **Application tasks**
@@ -158,12 +159,6 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [ ] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
 - [ ] show notifications if the packlist was in-app changed to not match the current model for inventoried items
       automatically add thumbnails for uninventoried items?
-
-notifications system
-
-- [ ] !!! Provide a feedback mechanism for users to suggest improvements or report issues
-- [ ] allow notifications throughout application to be picked up by components
-- [ ] basic notification center on dashboard
 
 inventory updates
 

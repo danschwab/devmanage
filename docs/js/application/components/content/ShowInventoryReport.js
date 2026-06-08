@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, getAutoColorClass } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, offsetToISO, getAutoColorClass } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -192,24 +192,14 @@ export const ShowInventoryReport = {
             // Mirror InventoryItemTimeline: read top-level resolved dates first, then fall back
             // to dateFilters. ScheduleFilterSelect resolves 'Show Date' column filters into
             // top-level startDate/endDate; Ship-column filters must be resolved here manually.
-            const offsetToDate = (v) => {
-                if (typeof v === 'number') {
-                    const d = new Date();
-                    d.setDate(d.getDate() + v);
-                    return toISODateString(d);
-                }
-                if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-                return null;
-            };
-
             let resolvedStart = searchData?.startDate ?? null;
             let resolvedEnd   = searchData?.endDate   ?? null;
 
             if (!resolvedStart || !resolvedEnd) {
                 const shipAfterFilter  = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'after');
                 const shipBeforeFilter = searchData.dateFilters?.find(f => f.column === 'Ship' && f.type === 'before');
-                if (!resolvedStart) resolvedStart = offsetToDate(shipAfterFilter?.value);
-                if (!resolvedEnd)   resolvedEnd   = offsetToDate(shipBeforeFilter?.value);
+                if (!resolvedStart) resolvedStart = offsetToISO(shipAfterFilter?.value);
+                if (!resolvedEnd)   resolvedEnd   = offsetToISO(shipBeforeFilter?.value);
             }
 
             this.referenceDate = resolvedStart ?? todayISOString();

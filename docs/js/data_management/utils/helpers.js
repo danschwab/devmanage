@@ -79,11 +79,42 @@ export function toISODateString(date) {
 }
 
 /**
+ * Converts a Date object to a MM/DD/YYYY date string using local calendar date.
+ * @param {Date} date
+ * @returns {string|null}
+ */
+export function toUSDateString(date) {
+    if (!date || !(date instanceof Date) || isNaN(date)) return null;
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${m}/${d}/${y}`;
+}
+
+/**
  * Returns today's date as a YYYY-MM-DD string using the local calendar date.
  * @returns {string}
  */
 export function todayISOString() {
     return toISODateString(new Date());
+}
+
+/**
+ * Converts a numeric day offset (relative to today) or an ISO date string to an ISO date string.
+ * Returns null for anything else (undefined, non-ISO strings, etc.).
+ * Single entry point for resolving date filter values from the URL / presets.
+ * @param {number|string|null|undefined} value
+ * @returns {string|null}
+ */
+export function offsetToISO(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') {
+        const d = new Date();
+        d.setDate(d.getDate() + value);
+        return toISODateString(d);
+    }
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    return null;
 }
 
 
