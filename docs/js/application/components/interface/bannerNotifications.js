@@ -100,6 +100,7 @@ export const BannerNotifications = {
                     <button
                         v-if="banner.action"
                         @click="banner.action.fn()"
+                        style="width: auto;"
                         :class="['column-button', banner.color]"
                     >{{ banner.action.label }}</button>
                     <button
