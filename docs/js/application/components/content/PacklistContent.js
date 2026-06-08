@@ -520,7 +520,10 @@ export const PacklistContent = {
         return {
             packlistsStore: null, // Reactive store for packlists
             autoSavedPacklists: new Set(), // Track which packlists have auto-saved data
-            filter: null // Filter for schedule overlaps (date range or identifier)
+            filter: null, // Filter for schedule overlaps (date range or identifier)
+            resolvedTabName: null, // Verified actual tab name after resolution
+            packlistNotFound: false, // True when route segment doesn't match any packlist
+            isResolving: false // True while resolving identifier
         };
     },
     computed: {
@@ -606,6 +609,15 @@ export const PacklistContent = {
         }
     },
     watch: {
+        // Watch for route changes to resolve packlist identifier
+        currentPacklist: {
+            handler(newVal, oldVal) {
+                if (newVal && newVal !== 'packlist' && newVal !== 'pins' && newVal !== oldVal) {
+                    this.resolvePacklistIdentifier(newVal);
+                }
+            },
+            immediate: true
+        },
         // Watch for when packlists data is loaded and check for auto-saved data
         'packlistsStore.data': {
             handler(newData) {
@@ -820,6 +832,48 @@ export const PacklistContent = {
                 contentFooter: contentFooter
             };
         },
+        async resolvePacklistIdentifier(identifier) {
+            // Reset state
+            this.packlistNotFound = false;
+            this.resolvedTabName = null;
+            this.isResolving = true;
+            
+            try {
+                // Resolve the identifier to actual tab name
+                const resolvedName = await Requests.resolvePacklistIdentifier(identifier);
+                
+                if (!resolvedName) {
+                    // No matching packlist found
+                    this.packlistNotFound = true;
+                    console.warn(`[PacklistContent] Packlist not found: ${identifier}`);
+                    return;
+                }
+                
+                if (resolvedName !== identifier) {
+                    // Route uses non-canonical name, redirect to actual tab name
+                    console.log(`[PacklistContent] Redirecting from "${identifier}" to canonical "${resolvedName}"`);
+                    
+                    // Build new path with resolved name
+                    const segments = this.containerPath.split('/');
+                    segments[1] = resolvedName;
+                    const newPath = segments.join('/');
+                    
+                    // Call navigateToPath directly (not emit) with replaceHistory to avoid back-button confusion
+                    this.navigateToPath({ targetPath: newPath, replaceHistory: true });
+                    return;
+                }
+                
+                // Identifier matches actual tab name, proceed
+                this.resolvedTabName = resolvedName;
+                console.log(`[PacklistContent] Verified packlist: ${resolvedName}`);
+                
+            } catch (error) {
+                console.error('[PacklistContent] Error resolving packlist identifier:', error);
+                this.packlistNotFound = true;
+            } finally {
+                this.isResolving = false;
+            }
+        },
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
@@ -937,19 +991,33 @@ export const PacklistContent = {
                 </template>
             </cards-grid>
             
-            <!-- Individual Packlist View (Read-only or Edit mode) -->
+            <!-- Loading state while resolving identifier -->
+            <div v-else-if="isResolving" class="loading-message">
+                <img src="assets/loading.gif" alt="..."/>
+                <p>Verifying packlist...</p>
+            </div>
+            
+            <!-- 404 state when packlist not found -->
+            <div v-else-if="packlistNotFound">
+                <div class="card red">
+                    <h3>Packlist Not Found</h3>
+                    <p>"{{ currentPacklist }}" could not be found.</p>
+                </div>
+            </div>
+            
+            <!-- Individual Packlist View (Read-only or Edit mode) - only render after verification -->
             <packlist-table 
                 ref="packlistTable"
-                v-else-if="!isDetailsView"
-                :tab-name="currentPacklist"
+                v-else-if="!isDetailsView && resolvedTabName"
+                :tab-name="resolvedTabName"
                 :container-path="containerPath"
                 @navigate-to-path="navigateToPath"
             />
             
-            <!-- Packlist Details View (Summary Table Only) -->
+            <!-- Packlist Details View (Summary Table Only) - only after verification -->
             <PacklistItemsSummary 
-                v-else-if="isDetailsView"
-                :project-identifier="currentPacklist"
+                v-else-if="isDetailsView && resolvedTabName"
+                :project-identifier="resolvedTabName"
                 :container-path="containerPath"
                 @navigate-to-path="navigateToPath"
             />

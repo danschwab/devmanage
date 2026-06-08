@@ -1141,6 +1141,19 @@ class Requests_uncached {
     }
 
     /**
+     * Resolve a packlist identifier to its actual tab name
+     * Handles abbreviations, case variations, and fuzzy matching
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} identifier - The identifier to resolve (could be abbreviation or variation)
+     * @returns {Promise<string|null>} Actual tab name if found, null otherwise
+     */
+    static async resolvePacklistIdentifier(deps, identifier) {
+        const tabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const resolvedTab = await deps.call(ProductionUtils.findPackListTab, identifier, tabs);
+        return resolvedTab ? resolvedTab.title : null;
+    }
+
+    /**
      * Get packlist summary description
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier (tab name)
