@@ -146,9 +146,9 @@ For design and project queue:
 - [ ] !!! fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
 - [?] !!! thumbnails not showing for dan
 - [?] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
-- [ ] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
+- [x] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
 - [ ] date columns are not always presenting as dates, especially the ship date, in searches
-- [ ] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
+- [?] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] if there are duplicate shows on the production schedule, they are duplicated in reports
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first

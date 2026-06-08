@@ -1130,19 +1130,20 @@ tr.is-group:hover .group-toggle {
 .detail-item {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-end;
     background-color: var(--color-gray-bg);
     padding: var(--padding-sm);
+    border-radius: var(--radius-md);
     gap: 0.5rem;
 }
 
 .detail-item label {
     color: var(--color-text-light);
+    font-size: 0.8rem;
 }
 
 .detail-item span {
-    color: var(--color-text);
-    border-radius: var(--radius-sm);
+    color: var(--color-text)
 }
 
 .item-image-container {

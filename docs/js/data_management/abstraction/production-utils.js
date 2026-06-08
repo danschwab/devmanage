@@ -919,7 +919,7 @@ function _calculateReturnDate(row, shipDate = null) {
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
         ret = new Date(sEnd.getTime() + 10 * 86400000);
-        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        // Return date is naturally after show end, so calculated year is correct
         return ret;
     }
     
@@ -927,14 +927,14 @@ function _calculateReturnDate(row, shipDate = null) {
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
         ret = new Date(sStart.getTime() + 30 * 86400000);
-        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        // Return date is naturally after show start, so calculated year is correct
         return ret;
     }
     
     // Fallback 3: Ship date + 30 days
     if (shipDate) {
         ret = new Date(shipDate.getTime() + 30 * 86400000);
-        if (ret.getFullYear() != year) ret.setFullYear(Number(year));
+        // Return date is naturally after ship date, so calculated year is correct
         return ret;
     }
     
