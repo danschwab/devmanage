@@ -710,11 +710,14 @@ class productionUtils_uncached {
         const data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
         
         // Build map of schedule identifiers to rows (computed once for efficiency)
+        // For shows with multiple entries (e.g., multiple booths), keep first match
         const scheduleMap = new Map();
         for (const row of data) {
             if (row.Show && row.Client && row.Year) {
                 const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-                scheduleMap.set(computedIdentifier, row);
+                if (!scheduleMap.has(computedIdentifier)) {
+                    scheduleMap.set(computedIdentifier, row);
+                }
             }
         }
         
@@ -769,6 +772,8 @@ class productionUtils_uncached {
 
     /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
+    /**
+     * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * Returns null if the project cannot be found or has no resolvable ship date.
      * @param {Object} deps
      * @param {string} projectIdentifier
@@ -780,10 +785,12 @@ class productionUtils_uncached {
     }
 
     static async getProjectShipDateFromRow(deps, row) {
+        if (!row) return null;
         return toISODateString(_calculateShipDate(row));
     }
 
     static async getProjectReturnDateFromRow(deps, row) {
+        if (!row) return null;
         const ship = _calculateShipDate(row);
         return toISODateString(_calculateReturnDate(row, ship));
     }
