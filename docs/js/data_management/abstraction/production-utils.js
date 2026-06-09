@@ -647,9 +647,55 @@ class productionUtils_uncached {
     }
 
     /**
-     * Get show details by project identifier
+     * Deduplicate schedule data by show identifier (for clients with multiple booths).
+     * Use this when you need unique shows for overlap calculations or counts.
      * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS")
+     * @param {Array} scheduleData - Array of schedule rows from getOverlappingShows
+     * @returns {Promise<Array>} Deduplicated array with one row per unique show
+     */
+    static async deduplicateScheduleByShow(deps, scheduleData) {
+        if (!Array.isArray(scheduleData)) {
+            return [];
+        }
+        
+        const seen = new Map();
+        const deduplicated = [];
+        
+        for (const row of scheduleData) {
+            // Use existing Identifier or compute one
+            let identifier = row.Identifier;
+            if (!identifier && row.Show && row.Client && row.Year) {
+                identifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+            }
+            
+            // Skip rows without valid identifier
+            if (!identifier) {
+                deduplicated.push(row);
+                continue;
+            }
+            
+            // Skip if we've already seen this show
+            if (seen.has(identifier)) {
+                continue;
+            }
+            
+            seen.set(identifier, true);
+            deduplicated.push(row);
+        }
+        
+        if (deduplicated.length < scheduleData.length) {
+            console.log(`[production-utils] Deduplicated ${scheduleData.length} rows to ${deduplicated.length} unique shows`);
+        }
+        
+        return deduplicated;
+    }
+
+    /**
+     * Get show details by project identifier.
+     * Supports suffix variants: if "LOCKHEED MARTIN 2025 NGAUS MEETING ROOM" is provided,
+     * will match "LOCKHEED MARTIN 2025 NGAUS" from the schedule.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS" or with suffix)
      * @returns {Promise<Object|null>} Show details object or null if not found
      */
     static async getShowDetails(deps, identifier) {
@@ -663,42 +709,61 @@ class productionUtils_uncached {
         // Get all production schedule data
         const data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
         
-        // Find the row matching the identifier
+        // Build map of schedule identifiers to rows (computed once for efficiency)
+        const scheduleMap = new Map();
         for (const row of data) {
-            const showName = row.Show;
-            const client = row.Client;
-            const yearVal = row.Year;
-            
-            if (showName && client && yearVal) {
-                const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, yearVal);
-                if (await deps.call(ProductionUtils.findBestProjectIdentifierMatch, computedIdentifier, [identifier])) {
-                    // Normalize date columns before returning to ensure correct years
-                    const correctedShip = _calculateShipDate(row);
-                    if (correctedShip) {
-                        row.Ship = toUSDateString(correctedShip);
-                    }
-                    
-                    const sStart = parseDate(row['S. Start'], true, row.Year);
-                    if (sStart) {
-                        row['S. Start'] = toUSDateString(sStart);
-                    }
-                    
-                    const sEnd = parseDate(row['S. End'], true, row.Year);
-                    if (sEnd) {
-                        row['S. End'] = toUSDateString(sEnd);
-                    }
-                    
-                    const correctedReturn = _calculateReturnDate(row, correctedShip);
-                    if (correctedReturn && row['Expected Return Date']) {
-                        row['Expected Return Date'] = toUSDateString(correctedReturn);
-                    }
-                    
-                    return row;
+            if (row.Show && row.Client && row.Year) {
+                const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+                scheduleMap.set(computedIdentifier, row);
+            }
+        }
+        
+        const candidates = Array.from(scheduleMap.keys());
+        
+        // Try matching with full identifier first (standard matching)
+        let match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, candidates);
+        
+        // If no match and identifier has multiple words, progressively strip words from end
+        // This handles suffix variants like "LOCKHEED MARTIN 2025 NGAUS MEETING ROOM"
+        if (!match) {
+            const words = identifier.trim().split(/\s+/);
+            for (let wordCount = words.length - 1; wordCount > 0; wordCount--) {
+                const shortenedIdentifier = words.slice(0, wordCount).join(' ');
+                match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, shortenedIdentifier, candidates);
+                if (match) {
+                    console.log(`[production-utils] Matched suffix variant: "${identifier}" -> "${match}"`);
+                    break;
                 }
             }
         }
         
-        return null;
+        if (!match) return null;
+        
+        const row = scheduleMap.get(match);
+        if (!row) return null;
+        
+        // Normalize date columns before returning to ensure correct years
+        const correctedShip = _calculateShipDate(row);
+        if (correctedShip) {
+            row.Ship = toUSDateString(correctedShip);
+        }
+        
+        const sStart = parseDate(row['S. Start'], true, row.Year);
+        if (sStart) {
+            row['S. Start'] = toUSDateString(sStart);
+        }
+        
+        const sEnd = parseDate(row['S. End'], true, row.Year);
+        if (sEnd) {
+            row['S. End'] = toUSDateString(sEnd);
+        }
+        
+        const correctedReturn = _calculateReturnDate(row, correctedShip);
+        if (correctedReturn && row['Expected Return Date']) {
+            row['Expected Return Date'] = toUSDateString(correctedReturn);
+        }
+        
+        return row;
     }
 
 
@@ -853,6 +918,52 @@ class productionUtils_uncached {
 
         const matchedTitle = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, titles);
         return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
+    }
+
+    /**
+     * Find all packlist tabs for a show, including suffix variants.
+     * A client may have multiple packlists for the same show (e.g., "LOCKHEED 2026 SNA" and
+     * "LOCKHEED 2026 SNA MEETING ROOM"). This method finds the primary match using full
+     * fuzzy/abbreviation/misspelling logic, then returns any other tabs whose title starts
+     * with that canonical primary title followed by a space.
+     * @param {Object} deps
+     * @param {string} identifier - Project identifier (may be abbreviated or misspelled)
+     * @param {Array<{title:string}>} tabs - Available packlist tabs (pre-filtered)
+     * @returns {Promise<Array<{title:string}>>} All matching tabs; empty array if none found
+     */
+    static async findAllPackListTabsForShow(deps, identifier, tabs) {
+        if (!identifier || !Array.isArray(tabs)) return [];
+
+        const titleToTab = new Map();
+        const titles = [];
+
+        tabs.forEach((tab) => {
+            const title = _normalizeIndexName(tab?.title);
+            if (!title || titleToTab.has(title)) return;
+            titleToTab.set(title, tab);
+            titles.push(title);
+        });
+
+        // Find primary match using full fuzzy/abbreviation/misspelling logic
+        const primaryTitle = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, titles);
+        if (!primaryTitle) return [];
+
+        const results = [];
+        const primaryTab = titleToTab.get(primaryTitle);
+        if (primaryTab) results.push(primaryTab);
+
+        // Find suffix variants: tabs whose title starts with the canonical primary title + space
+        // The space separator prevents false matches (e.g., "SNA" vs "SNAP")
+        const canonicalPrefix = primaryTitle.trim().toUpperCase();
+        for (const title of titles) {
+            if (title === primaryTitle) continue;
+            if (title.trim().toUpperCase().startsWith(canonicalPrefix + ' ')) {
+                const tab = titleToTab.get(title);
+                if (tab) results.push(tab);
+            }
+        }
+
+        return results;
     }
 
 

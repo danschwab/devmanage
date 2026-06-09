@@ -288,8 +288,8 @@ class inventoryUtils_uncached {
             const shipDate = await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
             const referenceDate = shipDate || todayISOString();
 
-            // 1. Get pack list items
-            const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
+            // 1. Get pack list items (all packlists for this show, including suffix variants)
+            const itemMap = await deps.call(PackListUtils.extractAllItemsForShow, projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If no items, return empty result
@@ -325,7 +325,7 @@ class inventoryUtils_uncached {
                 
                 if (_normalizeId(overlapId) === _normalizeId(projectIdentifier)) continue;
                 
-                const overlapInfo = await deps.call(PackListUtils.extractItems, overlapId);
+                const overlapInfo = await deps.call(PackListUtils.extractAllItemsForShow, overlapId);
                 
                 for (const itemId of Object.keys(overlapInfo)) {
                     if (!result[itemId]) continue;
@@ -650,7 +650,7 @@ class inventoryUtils_uncached {
 
                     let packedQty = 0;
                     try {
-                        const showItems = await deps.call(PackListUtils.extractItems, identifier);
+                        const showItems = await deps.call(PackListUtils.extractAllItemsForShow, identifier);
                         //console.log('[timeline] extractItems for', identifier, '→', showItems);
                         packedQty = showItems[itemId] || 0;
                         if (!packedQty) continue;

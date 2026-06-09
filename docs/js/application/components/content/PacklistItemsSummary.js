@@ -108,7 +108,7 @@ export const PacklistItemsSummary = {
                     'available'
                 ),
                 createAnalysisConfig(
-                    (itemId, currentProjectId) => Requests.getItemOverlappingShows(currentProjectId, itemId),
+                    (itemId, currentProjectId) => Requests.getItemOverlappingPacklists(currentProjectId, itemId),
                     'overlappingShows',
                     'Finding overlapping shows...',
                     ['itemId'],

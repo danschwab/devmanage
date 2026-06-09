@@ -524,6 +524,17 @@ class Requests_uncached {
     }
 
     /**
+     * Deduplicate schedule data to get unique shows (for clients with multiple booths).
+     * Use when you need unique shows for overlap/count calculations.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {Array} scheduleData - Schedule data from getProductionScheduleData
+     * @returns {Promise<Array>}
+     */
+    static async deduplicateScheduleByShow(deps, scheduleData) {
+        return await deps.call(ProductionUtils.deduplicateScheduleByShow, scheduleData);
+    }
+
+    /**
      * Compute Identifier from client, year, and show data
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} showName - The name of the show
@@ -1219,8 +1230,8 @@ class Requests_uncached {
      * @param {string} itemId - Item ID to check for conflicts
      * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
      */
-    static async getItemOverlappingShows(deps, currentProjectId, itemId) {
-        return await deps.call(PackListUtils.getItemOverlappingShows, currentProjectId, itemId);
+    static async getItemOverlappingPacklists(deps, currentProjectId, itemId) {
+        return await deps.call(PackListUtils.getItemOverlappingPacklists, currentProjectId, itemId);
     }
 
     /**

@@ -47,7 +47,7 @@ Requests.getItemInventoryQuantity(itemId);
 ### Analysis Step 2: Overlapping Shows
 
 ```javascript
-Requests.getItemOverlappingShows(currentProjectId, itemId);
+Requests.getItemOverlappingPacklists(currentProjectId, itemId);
 ```
 
 - **Input:** itemId + current project identifier

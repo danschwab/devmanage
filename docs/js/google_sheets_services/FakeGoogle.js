@@ -387,6 +387,31 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', 'Blank SEG\'s', '', '', ''],
                 ['', '', '', '', '', '', '', '', 'TABLE-001 Conference room table black 30 x 76 x 30', '', '', '']
             ],
+            'LOCKHEED MARTIN 2025 NGAUS VIP LOUNGE': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '32', '36', '400', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) CHAIR-102 Executive leather chairs', 'Black leather', '', ''],
+                ['', '', '', '', '', '', '', '', '(3) CAB-004 Curved-bottom white demo counter', 'Additional VIP counters', '', ''],
+                ['2', 'Box', '24', '24', '24', '100', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) TABLE-012 Coffee table walnut finish', 'VIP lounge area', '', ''],
+                ['', '', '', '', '', '', '', '', 'LIGHT-055 LED strip lighting kit', 'For accent lighting', '', ''],
+                ['3', 'Crate', '60', '40', '40', '500', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) PANEL-210 Privacy screens 6ft tall', 'Black fabric panels', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) SHELF-075 Wall mounted display shelf', 'Chrome finish', '', '']
+            ],
+            'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Skid', '96', '48', '48', '1000', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(8) CHAIR-102 Executive leather chairs', 'Conference seating', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) TABLE-001 Conference room tables', 'Black 30 x 76 x 30 - can link together', '', ''],
+                ['2', 'Box', '36', '36', '24', '150', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', 'TV-065 65" Display monitor with mount', 'For presentations', '', ''],
+                ['', '', '', '', '', '', '', '', 'AV equipment and cables', 'HDMI, power strips', '', ''],
+                ['3', 'Crate', '48', '48', '48', '300', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) CAB-004 Storage cabinet', 'For supplies', '', ''],
+                ['', '', '', '', '', '', '', '', 'LIGHT-055 LED lighting kit', 'Room lighting', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) PANEL-210 Room divider panels', 'Create enclosed meeting space', '', '']
+            ],
             'GEARFIRE 2025 SHOT': [
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
                 ['1', 'Skid', '72', '32', '48', '800', '', '', '', '', '', ''],
@@ -489,6 +514,8 @@ export class FakeGoogleSheetsService {
                 ['HIMSS', 'Codametrix', '2024', 'CODAMETRIX 2025 HIMSS', 'Las Vegas, NV', '20x20', '4657', '4-Mar', '6-Mar', '2/25/2024', 'X', 'X', 'X', '', '3/11', 'Freeman', 'Brian', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', 'X', 'X', 'X', '', 'X', '', '', '', ''],
                 ['HIMSS', 'Harmony Health', '2024', 'HARMONY HEALTH 2025 HIMSS', 'Las Vegas, NV', '10x20', '2748', '4-Mar', '6-Mar', '2/25/2024', 'X', 'X', 'X', '', '3/11', 'Freeman', 'Brian', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '2/7', '2/23', 'X', 'X', '', 'X', 'X', '', '', '', '', '', 'X', '', '', ''],
                 ['HIMSS', 'QGenda', '2024', 'QGENDA 2025 HIMSS', 'Las Vegas, NV', '20x20', '5222', '4-Mar', '6-Mar', '2/25/2024', 'X', 'X', 'X', '', '3/11', 'Freeman', 'Brian', '', 'X', 'X', 'X', '', '', 'X', 'X', '', '2/1', '2/20', 'X', 'X', '', 'X', 'X', 'X', 'X', 'X', 'X', '', 'X', '', '', ''],
+                // QGenda has a second booth at HIMSS - both rows visible in schedule, can be deduplicated for overlap calculations
+                ['HIMSS', 'QGenda', '2024', 'QGENDA 2025 HIMSS', 'Las Vegas, NV', '10x10', '5223', '4-Mar', '6-Mar', '2/25/2024', 'X', 'X', 'X', '', '3/11', 'Freeman', 'Brian', '', 'X', 'X', 'X', '', '', 'X', 'X', '', '2/1', '2/20', 'X', 'X', '', 'X', 'X', 'X', 'X', 'X', 'X', '', 'X', '', '', ''],
                 ['SIA Forum', 'Tracker', '2024', 'TRACKER 2025 SIA FORUM', 'Miami Beach', '10x10', '412', '10-Mar', '13-Mar', '3/5/2024', 'X', 'N/A', 'X', '', '3/19', 'GES', 'ELITE', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', ''],
                 ['IPC APEX (OSC)', 'Dymax', '2024', 'DYMAX 2025 IPC APEX OSC', 'Anaheim, CA', '10x10', '2305', '29-Dec', '30-Dec', '12/12/2025', 'X', 'X', 'X', '', '3/31', 'Shepard', 'Client', '', 'N/A', 'N/A', 'X', 'X', '', '', '-', '', '2/7', '', 'X', '', '', '', 'X', '', '', '', 'X', 'N/a', '', '', '', ''],
                 ['D2P', 'Dymax (ECT)', '2025', 'DYMAX 2025 D2P', 'Orlando, FL', '10x10', '418', '11-Mar', '12-Mar', '3/6/2025', 'X', 'X', 'X', '', '3/7', '', '', '', 'N/A', 'N/A', 'N/A', 'N/A', '', '', '-', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
@@ -497,7 +524,9 @@ export class FakeGoogleSheetsService {
                 ['ShopTalk', 'Tulip', '2025', 'TULIP 2025 SHOPTALK', 'Las Vegas, NV', '10x10', '752', '25-Mar', '27-Mar', '3/19/2025', 'X', 'X', '', '', '3/31', 'Freeman', 'Brian', '', 'X', 'X', 'X', '', '', 'X', '', '3/1', '3/13', '', 'X', '', '', 'X', '-', 'N/a', '-', '-', '', 'X', 'X', '11-Feb', ''],
                 ['ShopTalk', 'Kibo', '2025', 'KIBO 2025 SHOPTALK', 'Las Vegas, NV', '10x20', '2156', '25-Mar', '27-Mar', '3/19/2025', 'X', 'X', '', '', '3/31', 'Freeman', 'Brian', '', 'X', 'X', 'X', '', 'X', 'X', 'X', '', '3/1', '3/17', '', 'X', '', '', 'X', '-', 'N/a', '-', 'X', '', 'X', 'X', '11-Feb', 'X']
                 // --- Appended new rows from user ---
-                ,['NGAUS','Lockheed Martin','2025','', 'Milwaukee, WI','30x40','515','8/23','8/25','8/20/2025','','','','','Shepard','Ben','','X','X','X','X','','','','8/19/2025','','7/12','8/6','','X','','X','X','X','X','n/a','n/a','','']
+                // Test case: Lockheed Martin NGAUS has 3 packlists (main + VIP LOUNGE + MEETING ROOM suffix variants)
+                // Demonstrates findAllPackListTabsForShow() correctly aggregating items across multiple tabs
+                ,['NGAUS','Lockheed Martin','2025','LOCKHEED MARTIN 2025 NGAUS', 'Milwaukee, WI','30x40','515','8/23','8/25','8/20/2025','X','X','X','','','Shepard','Ben','','X','X','X','X','','','','8/19/2025','','7/12','8/6','','X','','X','X','X','X','n/a','n/a','X','X','']
                 ,['EPIC UGM','Microsoft','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
                 ,['EPIC UGM','Codametrix','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
                 ,['Showroom','ASP','2025','', 'Irvine, CA','30x30','N/A','8/25','N/A','8/24/2025','','','','','','','','X','X','','','','','','','','n/a','','','','','','','','','','']
@@ -824,9 +853,11 @@ export class FakeGoogleSheetsService {
             { title: 'TEMPLATE', sheetId: 1 },
             { title: 'ATSC 2025 NAB', sheetId: 2 },
             { title: 'TULIP 2025 NRF', sheetId: 3 },
-            { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 3 },
-            { title: 'GEARFIRE 2025 SHOT', sheetId: 4 },
-            { title: 'TEST 2025 ENHANCED', sheetId: 5 }
+            { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 4 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS VIP LOUNGE', sheetId: 5 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM', sheetId: 6 },
+            { title: 'GEARFIRE 2025 SHOT', sheetId: 7 },
+            { title: 'TEST 2025 ENHANCED', sheetId: 8 }
         ],
         'PROD_SCHED': [
             { title: 'Production Schedule', sheetId: 0 }

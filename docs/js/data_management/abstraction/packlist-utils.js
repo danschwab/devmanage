@@ -306,6 +306,32 @@ class packListUtils_uncached {
     }
 
     /**
+     * Extract and aggregate items from all packlists for a show, including suffix variants
+     * (e.g., "LOCKHEED 2026 SNA MEETING ROOM" alongside "LOCKHEED 2026 SNA").
+     * This is the preferred method for all analysis functions that need the full item set for a show.
+     * @param {Object} deps
+     * @param {string} projectIdentifier - Project identifier
+     * @param {string|undefined} itemCategoryFilter - Optional item category filter
+     * @returns {Promise<Object>} Aggregated item map { itemId: totalQuantity }
+     */
+    static async extractAllItemsForShow(deps, projectIdentifier, itemCategoryFilter = undefined) {
+        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const validTabs = allTabs.filter(tab => tab.title !== 'TEMPLATE' && !tab.title.startsWith('_'));
+        const matchingTabs = await deps.call(ProductionUtils.findAllPackListTabsForShow, projectIdentifier, validTabs);
+
+        if (!matchingTabs.length) return {};
+
+        const itemMap = {};
+        for (const tab of matchingTabs) {
+            const tabItems = await deps.call(PackListUtils.extractItems, tab.title, itemCategoryFilter);
+            for (const [itemId, qty] of Object.entries(tabItems)) {
+                itemMap[itemId] = (itemMap[itemId] || 0) + qty;
+            }
+        }
+        return itemMap;
+    }
+
+    /**
      * Save pack list data to the PACK_LISTS sheet.
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabName - The sheet/tab name.
@@ -483,9 +509,9 @@ class packListUtils_uncached {
     static async checkItemQuantities(deps, projectIdentifier) {
         //console.group(`Checking quantities for project: ${projectIdentifier}`);
         try {
-            // 1. Get pack list items
+            // 1. Get pack list items (all packlists for this show, including suffix variants)
             //console.log('1. Getting pack list items...');
-            const itemMap = await deps.call(PackListUtils.extractItems, projectIdentifier);
+            const itemMap = await deps.call(PackListUtils.extractAllItemsForShow, projectIdentifier);
             const itemIds = Object.keys(itemMap);
 
             // If there are no items in the pack list, return
@@ -554,7 +580,7 @@ class packListUtils_uncached {
                 if (_normalizeId(otherId) === _normalizeId(projectIdentifier)) continue;
                 
                 try {
-                    const otherItemMap = await deps.call(PackListUtils.extractItems, otherId);
+                    const otherItemMap = await deps.call(PackListUtils.extractAllItemsForShow, otherId);
                     Object.entries(otherItemMap).forEach(([id, qty]) => {
                         if (result[id]) {
                             result[id].remaining -= qty;
@@ -635,6 +661,7 @@ class packListUtils_uncached {
 
     /**
      * Get item quantities summary for a project (transformed to table format)
+     * THIS WILL NOT RETURN INVENTORY FOR ITEMS IN SUB-PACKLISTS WITH SUFFIXES
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<Array<Object>>} Array of item objects for table display
@@ -678,7 +705,7 @@ class packListUtils_uncached {
      * @param {string} itemId - Item ID to check for conflicts
      * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
      */
-    static async getItemOverlappingShows(deps, currentProjectId, itemId) {
+    static async getItemOverlappingPacklists(deps, currentProjectId, itemId) {
         // Get all overlapping projects for this project
         const overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, {
             dateFilters: [
@@ -697,7 +724,7 @@ class packListUtils_uncached {
             if (_normalizeId(projectId) === _normalizeId(currentProjectId)) continue;
             
             try {
-                const projectItems = await deps.call(PackListUtils.extractItems, projectId);
+                const projectItems = await deps.call(PackListUtils.extractAllItemsForShow, projectId);
                 if (projectItems[itemId] && projectItems[itemId] > 0) {
                     conflictingShows.push(projectId);
                 }
@@ -740,7 +767,7 @@ class packListUtils_uncached {
         // Extract items from each show
         for (const projectId of projectIdentifiers) {
             try {
-                const itemsMap = await deps.call(PackListUtils.extractItems, projectId, itemCategoryFilter);
+                const itemsMap = await deps.call(PackListUtils.extractAllItemsForShow, projectId, itemCategoryFilter);
                 
                 // Aggregate all unique items
                 for (const [itemId, quantity] of Object.entries(itemsMap)) {
@@ -890,11 +917,11 @@ class packListUtils_uncached {
                 }
             }
             
-            // Filter tabs to only those matching show identifiers (using findPackListTab for fuzzy/case fallback)
+            // Filter tabs to include all packlists for each show (including suffix variants)
             const matchedTitles = new Set();
             for (const id of identifiers) {
-                const tab = await deps.call(ProductionUtils.findPackListTab, id, tabs);
-                if (tab) matchedTitles.add(tab.title);
+                const matchedTabs = await deps.call(ProductionUtils.findAllPackListTabsForShow, id, tabs);
+                matchedTabs.forEach(tab => matchedTitles.add(tab.title));
             }
             return tabs.filter(tab => matchedTitles.has(tab.title));
         } catch (error) {
