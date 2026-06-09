@@ -565,6 +565,8 @@ class packListUtils_uncached {
                         { column: 'Ship', value: projectIdentifier, type: 'before' }
                     ]
                 });
+                // Deduplicate to prevent double-counting items when a show has multiple booths
+                overlappingIds = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingIds);
             } catch (err) {
                 console.error('Error getting overlapping shows:', err);
                 throw new Error('Failed to get overlapping shows');
@@ -707,12 +709,15 @@ class packListUtils_uncached {
      */
     static async getItemOverlappingPacklists(deps, currentProjectId, itemId) {
         // Get all overlapping projects for this project
-        const overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, {
+        let overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, {
             dateFilters: [
                 { column: 'Return', value: currentProjectId, type: 'after' },
                 { column: 'Ship', value: currentProjectId, type: 'before' }
             ]
         });
+        
+        // Deduplicate to prevent listing the same show multiple times
+        overlappingProjects = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingProjects);
         
         const conflictingShows = [];
         

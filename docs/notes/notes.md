@@ -4,6 +4,10 @@
 - Nomenclature
   TTOP/TBASE/TV/AV numbering
   SHLF vs SHELF, CNTR vs COUNTER, CAB vs CABINET, etc
+- doubles, as and bs
+  should we keep them as separate items knowing they won't inventory check? Or should we consolidate them and just track overall quantity?
+  A variant tracking system would allow for better tracking
+- descriptions in the software, what descriptions are useful
 - How can I make crating better?
 - Copy paste?
 

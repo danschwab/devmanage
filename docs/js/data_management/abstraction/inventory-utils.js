@@ -317,6 +317,9 @@ class inventoryUtils_uncached {
                 ]
             });
             
+            // Deduplicate to prevent double-counting items when a show has multiple booths
+            overlappingIds = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingIds);
+            
             // Process overlapping shows
             for (const overlapRow of overlappingIds) {
                 // Extract identifier from the row object
@@ -642,9 +645,12 @@ class inventoryUtils_uncached {
                     ]
                 });
 
-                //console.log('[timeline] overlapping shows:', overlapping?.map(r => r.Identifier || r.Show));
+                // Deduplicate to prevent double-counting items when a show has multiple booths
+                const deduplicated = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlapping);
 
-                for (const showRow of overlapping) {
+                //console.log('[timeline] overlapping shows:', deduplicated?.map(r => r.Identifier || r.Show));
+
+                for (const showRow of deduplicated) {
                     const identifier = showRow.Identifier ||
                         await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
 
