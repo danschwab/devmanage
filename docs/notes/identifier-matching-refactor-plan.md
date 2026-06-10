@@ -14,41 +14,41 @@ These two directions are currently handled by a mix of one-off code, shared help
 
 ### Direction 1 call sites (Schedule → Packlist)
 
-| Caller | What it does |
-|--------|-------------|
-| `api.js: checkPacklistExists` | `computeIdentifier(row.Show, row.Client, row.Year)` → `findPackListTab(identifier, tabs)` |
-| `packlist-utils.js: getPacklists` | `computeIdentifier(show.Show, show.Client, parseInt(show.Year))` → `findAllPackListTabsForShow(id, tabs)` |
-| `inventory-utils.js: getItemTimeline` (phase 4) | `computeIdentifier(showRow.Show, showRow.Client, showRow.Year)` → `extractAllItemsForShow(identifier)` |
-| `inventory-utils.js: getItemsInUseForShow` | `computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year)` → `extractAllItemsForShow(overlapId)` |
-| `packlist-utils.js: checkItemQuantities` | `computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year)` → `extractAllItemsForShow(otherId)` |
+| Caller                                           | What it does                                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `api.js: checkPacklistExists`                    | `computeIdentifier(row.Show, row.Client, row.Year)` → `findPackListTab(identifier, tabs)`                      |
+| `packlist-utils.js: getPacklists`                | `computeIdentifier(show.Show, show.Client, parseInt(show.Year))` → `findAllPackListTabsForShow(id, tabs)`      |
+| `inventory-utils.js: getItemTimeline` (phase 4)  | `computeIdentifier(showRow.Show, showRow.Client, showRow.Year)` → `extractAllItemsForShow(identifier)`         |
+| `inventory-utils.js: getItemsInUseForShow`       | `computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year)` → `extractAllItemsForShow(overlapId)` |
+| `packlist-utils.js: checkItemQuantities`         | `computeIdentifier(overlapRow.Show, overlapRow.Client, overlapRow.Year)` → `extractAllItemsForShow(otherId)`   |
 | `packlist-utils.js: getItemOverlappingPacklists` | `computeIdentifier(projectRow.Show, projectRow.Client, projectRow.Year)` → `extractAllItemsForShow(projectId)` |
-| `api.js: getMultipleShowsItemsSummary` | `computeIdentifier(showRow.Show, showRow.Client, parseInt(showRow.Year))` |
+| `api.js: getMultipleShowsItemsSummary`           | `computeIdentifier(showRow.Show, showRow.Client, parseInt(showRow.Year))`                                      |
 
 **Pattern:** All Direction 1 callers do the same boilerplate: call `computeIdentifier` on a row object, then pass the result into a packlist tab function. This is repeated 7 times.
 
 ### Direction 2 call sites (Packlist → Schedule)
 
-| Caller | What it does |
-|--------|-------------|
-| `api.js: getProjectShipDate` | `getProjectShipDate(projectIdentifier)` → `getShowDetails(identifier)` |
-| `api.js: getProjectReturnDate` | `getProjectReturnDate(projectIdentifier)` → `getShowDetails(identifier)` |
-| `api.js: resolvePacklistIdentifier` | `findPackListTab(identifier, tabs)` — only resolves tab name, never touches schedule |
-| `packlist-utils.js: getContent` | `findPackListTab(projectIdentifier, tabs)` — finds the exact tab to load |
-| `packlist-utils.js: extractAllItemsForShow` | `findAllPackListTabsForShow(projectIdentifier, validTabs)` |
-| `production-utils.js: getShowDetails` | Builds scheduleMap from all rows, `findBestProjectIdentifierMatch` + progressive word-strip |
-| `production-utils.js: getOverlappingShows` (identifier filter) | Loops all schedule rows, `computeIdentifier` each, `findBestProjectIdentifierMatch` |
+| Caller                                                         | What it does                                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `api.js: getProjectShipDate`                                   | `getProjectShipDate(projectIdentifier)` → `getShowDetails(identifier)`                      |
+| `api.js: getProjectReturnDate`                                 | `getProjectReturnDate(projectIdentifier)` → `getShowDetails(identifier)`                    |
+| `api.js: resolvePacklistIdentifier`                            | `findPackListTab(identifier, tabs)` — only resolves tab name, never touches schedule        |
+| `packlist-utils.js: getContent`                                | `findPackListTab(projectIdentifier, tabs)` — finds the exact tab to load                    |
+| `packlist-utils.js: extractAllItemsForShow`                    | `findAllPackListTabsForShow(projectIdentifier, validTabs)`                                  |
+| `production-utils.js: getShowDetails`                          | Builds scheduleMap from all rows, `findBestProjectIdentifierMatch` + progressive word-strip |
+| `production-utils.js: getOverlappingShows` (identifier filter) | Loops all schedule rows, `computeIdentifier` each, `findBestProjectIdentifierMatch`         |
 
 ### Shared utilities (used by both)
 
-| Function | Location | Role |
-|----------|----------|------|
-| `findBestProjectIdentifierMatch(deps, identifier, candidates[])` | `production-utils.js` | Generic string match: exact → case-insensitive → normalized → component-level (year-gated) → fuzzy (same-year-first) |
-| `computeIdentifier(deps, showName, clientName, year)` | `production-utils.js` | Normalizes Show+Client+Year into canonical identifier via fuzzy index lookup |
-| `computeIdentifierReferenceData(deps)` | `production-utils.js` | Gets Clients/Shows CACHE data for fuzzy matching |
-| `_parseIdentifierParts(identifier)` | `production-utils.js` (private) | Parses `"CLIENT YEAR SHOW"` → `{ client, year, show }` |
-| `_normalizeId(v)` | `packlist-utils.js` + `inventory-utils.js` (local duplicates) | Strips non-alphanumeric, uppercases — used only for self-comparison guards |
-| `_normalizeIndexName(v)` | `production-utils.js` (private) | `String(v).trim()` |
-| `_normalizeMatchText(v)` | `production-utils.js` (private) | Uppercase + strip non-alphanumeric |
+| Function                                                         | Location                                                      | Role                                                                                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `findBestProjectIdentifierMatch(deps, identifier, candidates[])` | `production-utils.js`                                         | Generic string match: exact → case-insensitive → normalized → component-level (year-gated) → fuzzy (same-year-first) |
+| `computeIdentifier(deps, showName, clientName, year)`            | `production-utils.js`                                         | Normalizes Show+Client+Year into canonical identifier via fuzzy index lookup                                         |
+| `computeIdentifierReferenceData(deps)`                           | `production-utils.js`                                         | Gets Clients/Shows CACHE data for fuzzy matching                                                                     |
+| `_parseIdentifierParts(identifier)`                              | `production-utils.js` (private)                               | Parses `"CLIENT YEAR SHOW"` → `{ client, year, show }`                                                               |
+| `_normalizeId(v)`                                                | `packlist-utils.js` + `inventory-utils.js` (local duplicates) | Strips non-alphanumeric, uppercases — used only for self-comparison guards                                           |
+| `_normalizeIndexName(v)`                                         | `production-utils.js` (private)                               | `String(v).trim()`                                                                                                   |
+| `_normalizeMatchText(v)`                                         | `production-utils.js` (private)                               | Uppercase + strip non-alphanumeric                                                                                   |
 
 ---
 
@@ -65,6 +65,7 @@ The recent fix (same-year candidates first in fuzzy fallback) addresses this par
 ### Bug 2: Packlist → Schedule lookup ignores year during suffix stripping
 
 In `getShowDetails`, the suffix stripping loop:
+
 ```javascript
 for (let wordCount = words.length - 1; wordCount > 0; wordCount--) {
     const shortenedIdentifier = words.slice(0, wordCount).join(' ');
@@ -85,7 +86,8 @@ When a filter value is an identifier string, the function loops all schedule row
 
 ### Two new public functions in `production-utils.js`
 
-#### `findScheduleRowsForPacklist(deps, packlistTitle, options?)`  
+#### `findScheduleRowsForPacklist(deps, packlistTitle, options?)`
+
 **Direction 2. Replaces the logic currently in `getShowDetails`.**
 
 ```
@@ -95,6 +97,7 @@ Output: Array of matching schedule rows (sorted: exact-identifier first, then ot
 ```
 
 Algorithm:
+
 1. Parse the packlist title to extract year: `_parseIdentifierParts(packlistTitle)` → `{ client, year, show }`. If no year found, fall back to unfiltered.
 2. If the packlist has a suffix (e.g., the word after the show abbreviation), progressively strip suffix words — but **stop before stripping the year token**.
 3. For each candidate form of the title (full → stripped until year is the last part that remains):
@@ -104,7 +107,8 @@ Algorithm:
    d. If a match is found, collect the row.
 4. Return all matching rows. First row is the canonical match.
 
-#### `findPacklistTabsForScheduleRow(deps, scheduleRow, tabs)`  
+#### `findPacklistTabsForScheduleRow(deps, scheduleRow, tabs)`
+
 **Direction 1. Replaces the repeated `computeIdentifier + findPackListTab/findAllPackListTabsForShow` boilerplate.**
 
 ```
@@ -114,6 +118,7 @@ Output: Array of matching tabs (primary first, suffix variants after)
 ```
 
 Algorithm:
+
 1. Get or reuse the row's precomputed identifier: use `row.Identifier` if present, otherwise call `computeIdentifier(row.Show, row.Client, row.Year)`.
 2. Delegate to `findAllPackListTabsForShow(identifier, tabs)` which already handles primary + suffix detection.
 
@@ -121,11 +126,11 @@ This is a thin wrapper that removes the boilerplate `computeIdentifier` call fro
 
 ### Shared private helpers to extract / consolidate
 
-| Helper | Change |
-|--------|--------|
-| `_getScheduleData(deps)` | New private helper. Gets mapping + data in one call. Used by `getShowDetails` AND `getOverlappingShows` today — both re-fetch independently. |
-| `_parseIdentifierParts` | Already exists. Expose usage note that `year` is a string like `"2026"`. |
-| `_normalizeId` | The duplicate in `packlist-utils.js` and `inventory-utils.js` can be removed once both files call `_normalizeMatchText` from production-utils, or they can remain local — they are only used for self-comparison guards. Not blocking. |
+| Helper                   | Change                                                                                                                                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_getScheduleData(deps)` | New private helper. Gets mapping + data in one call. Used by `getShowDetails` AND `getOverlappingShows` today — both re-fetch independently.                                                                                           |
+| `_parseIdentifierParts`  | Already exists. Expose usage note that `year` is a string like `"2026"`.                                                                                                                                                               |
+| `_normalizeId`           | The duplicate in `packlist-utils.js` and `inventory-utils.js` can be removed once both files call `_normalizeMatchText` from production-utils, or they can remain local — they are only used for self-comparison guards. Not blocking. |
 
 ---
 
@@ -138,7 +143,7 @@ Replace `getShowDetails` with a proper direction-2 function.
 ```javascript
 static async findScheduleRowsForPacklist(deps, packlistTitle) {
     if (!packlistTitle) return [];
-    
+
     // Parse year from the packlist title to narrow the schedule search
     const titleParts = _parseIdentifierParts(packlistTitle);
     const targetYear = titleParts ? titleParts.year : null;
@@ -240,15 +245,15 @@ This eliminates the O(n × computeIdentifier) loop and correctly uses the year-a
 
 ### Change 5 — Update Direction 1 call sites to use `findPacklistTabsForScheduleRow`
 
-| File | Current | Replace with |
-|------|---------|-------------|
-| `api.js: checkPacklistExists` | `computeIdentifier(...)` + `findPackListTab(identifier, tabs)` | `findPacklistTabsForScheduleRow(scheduleRow, tabs)`, take `[0]` |
-| `packlist-utils.js: getPacklists` | `computeIdentifier(...)` + `findAllPackListTabsForShow(id, tabs)` | `findPacklistTabsForScheduleRow(show, tabs)` |
-| `inventory-utils.js: getItemTimeline` | `computeIdentifier(...)` assigned to `identifier` | `findPacklistTabsForScheduleRow(showRow, allTabs)` returns `{ title }` for each; use `tab.title` as identifier |
-| `inventory-utils.js: getItemsInUseForShow` | same pattern | same replacement |
-| `packlist-utils.js: checkItemQuantities` | same pattern | same replacement |
-| `packlist-utils.js: getItemOverlappingPacklists` | same pattern | same replacement |
-| `api.js: getMultipleShowsItemsSummary` | `computeIdentifier(...)` | already has `Identifier` fallback; wrap into `findPacklistTabsForScheduleRow` or keep `computeIdentifier` since it then calls `extractItemsFromMultipleShows` with the identifier list |
+| File                                             | Current                                                           | Replace with                                                                                                                                                                           |
+| ------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api.js: checkPacklistExists`                    | `computeIdentifier(...)` + `findPackListTab(identifier, tabs)`    | `findPacklistTabsForScheduleRow(scheduleRow, tabs)`, take `[0]`                                                                                                                        |
+| `packlist-utils.js: getPacklists`                | `computeIdentifier(...)` + `findAllPackListTabsForShow(id, tabs)` | `findPacklistTabsForScheduleRow(show, tabs)`                                                                                                                                           |
+| `inventory-utils.js: getItemTimeline`            | `computeIdentifier(...)` assigned to `identifier`                 | `findPacklistTabsForScheduleRow(showRow, allTabs)` returns `{ title }` for each; use `tab.title` as identifier                                                                         |
+| `inventory-utils.js: getItemsInUseForShow`       | same pattern                                                      | same replacement                                                                                                                                                                       |
+| `packlist-utils.js: checkItemQuantities`         | same pattern                                                      | same replacement                                                                                                                                                                       |
+| `packlist-utils.js: getItemOverlappingPacklists` | same pattern                                                      | same replacement                                                                                                                                                                       |
+| `api.js: getMultipleShowsItemsSummary`           | `computeIdentifier(...)`                                          | already has `Identifier` fallback; wrap into `findPacklistTabsForScheduleRow` or keep `computeIdentifier` since it then calls `extractItemsFromMultipleShows` with the identifier list |
 
 > **Note for timeline / in-use callers:** These callers currently compute an identifier from a schedule row and then call `extractAllItemsForShow(identifier)`. After the refactor, `findPacklistTabsForScheduleRow` returns tabs directly, but `extractAllItemsForShow` still needs an identifier string to match. The cleanest path is to call `tab.title` on the primary returned tab as the identifier, since the tab title is the canonical source of truth for a packlist. The `computeIdentifier` call can remain as a fallback for rows that have no matching tab.
 
@@ -260,18 +265,18 @@ Both `findScheduleRowsForPacklist` and `findPacklistTabsForScheduleRow` need to 
 
 ## Functions Affected Summary
 
-| Function | File | Change type |
-|----------|------|-------------|
-| `getShowDetails` | `production-utils.js` | Delegate body to `findScheduleRowsForPacklist` |
-| `getOverlappingShows` | `production-utils.js` | Fix identifier resolution in `resolveFilterValue` |
-| `findScheduleRowsForPacklist` | `production-utils.js` | **New** |
-| `findPacklistTabsForScheduleRow` | `production-utils.js` | **New** |
-| `checkPacklistExists` | `api.js` | Use `findPacklistTabsForScheduleRow` |
-| `getPacklists` | `packlist-utils.js` | Use `findPacklistTabsForScheduleRow` |
-| `checkItemQuantities` | `packlist-utils.js` | Use `findPacklistTabsForScheduleRow` in overlap loop |
-| `getItemOverlappingPacklists` | `packlist-utils.js` | Use `findPacklistTabsForScheduleRow` in overlap loop |
-| `getItemTimeline` | `inventory-utils.js` | Use `findPacklistTabsForScheduleRow` in show-events phase |
-| `getItemsInUseForShow` | `inventory-utils.js` | Use `findPacklistTabsForScheduleRow` in overlap loop |
+| Function                         | File                  | Change type                                               |
+| -------------------------------- | --------------------- | --------------------------------------------------------- |
+| `getShowDetails`                 | `production-utils.js` | Delegate body to `findScheduleRowsForPacklist`            |
+| `getOverlappingShows`            | `production-utils.js` | Fix identifier resolution in `resolveFilterValue`         |
+| `findScheduleRowsForPacklist`    | `production-utils.js` | **New**                                                   |
+| `findPacklistTabsForScheduleRow` | `production-utils.js` | **New**                                                   |
+| `checkPacklistExists`            | `api.js`              | Use `findPacklistTabsForScheduleRow`                      |
+| `getPacklists`                   | `packlist-utils.js`   | Use `findPacklistTabsForScheduleRow`                      |
+| `checkItemQuantities`            | `packlist-utils.js`   | Use `findPacklistTabsForScheduleRow` in overlap loop      |
+| `getItemOverlappingPacklists`    | `packlist-utils.js`   | Use `findPacklistTabsForScheduleRow` in overlap loop      |
+| `getItemTimeline`                | `inventory-utils.js`  | Use `findPacklistTabsForScheduleRow` in show-events phase |
+| `getItemsInUseForShow`           | `inventory-utils.js`  | Use `findPacklistTabsForScheduleRow` in overlap loop      |
 
 ---
 
