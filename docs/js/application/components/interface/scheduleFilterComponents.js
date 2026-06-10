@@ -486,6 +486,9 @@ export const ScheduleAdvancedFilter = {
             
             if (validTextFilters.length > 0) {
                 params.textFilters = validTextFilters;
+            } else {
+                // Explicitly clear text filters from URL if none are valid
+                params.textFilters = undefined;
             }
 
             // Use the same URL update path for all filter modes.
@@ -1632,7 +1635,11 @@ export const ScheduleFilterSelect = {
 
             if (option.type === 'show-all') {
                 this.$emit('search-selected', { type: 'show-all', startDate: null, endDate: null });
-                this.updateURL({ view: 'all' });
+                this.updateURL({ 
+                    view: 'all',
+                    dateFilters: undefined, // Clear date filters for show-all
+                    textFilters: undefined  // Clear text filters for show-all
+                });
             } else if (option.type === 'year') {
                 const year = parseInt(option.value);
                 const searchData = {
@@ -1648,7 +1655,8 @@ export const ScheduleFilterSelect = {
                 this.$emit('search-selected', searchData);
                 this.updateURL({
                     view: undefined, // Clear show-all view parameter
-                    dateFilters: searchData.dateFilters
+                    dateFilters: searchData.dateFilters,
+                    textFilters: undefined // Explicitly clear text filters for year selection
                 });
             } else if (option.type === 'search') {
                 const cleanDateFilters = cleanFilters(option.searchData.dateFilters) || [];
@@ -1699,7 +1707,12 @@ export const ScheduleFilterSelect = {
             };
             // Clean filters to remove AppData before passing to URL
             if (searchData.dateFilters?.length) params.dateFilters = cleanFilters(searchData.dateFilters);
-            if (searchData.textFilters?.length) params.textFilters = cleanFilters(searchData.textFilters);
+            // Always set textFilters - either with values or undefined to clear from URL
+            if (searchData.textFilters?.length) {
+                params.textFilters = cleanFilters(searchData.textFilters);
+            } else {
+                params.textFilters = undefined; // Explicitly clear text filters if search has none
+            }
             
             this.updateURL(params);
         },

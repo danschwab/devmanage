@@ -1,3 +1,7 @@
+MAKE RETURN 14 days after show end
+quick tools wrong placement
+duplicate data on friday, backup google sheets
+
 ## Ask Ben
 
 - Inventory Extras (Misc tab usage, easy additions, how to do this)
