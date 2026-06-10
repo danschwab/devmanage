@@ -399,6 +399,23 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', '(2) PANEL-210 Privacy screens 6ft tall', 'Black fabric panels', '', ''],
                 ['', '', '', '', '', '', '', '', '(1) SHELF-075 Wall mounted display shelf', 'Chrome finish', '', '']
             ],
+            'QGENDA 2025 HIMSS': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '72', '48', '48', '600', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) TABLE-001 Standard Tables', 'Main booth display', '', ''],
+                ['', '', '', '', '', '', '', '', '(6) CHAIR-102 Executive Chairs', 'Meeting area', '', ''],
+                ['2', 'Box', '36', '36', '36', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) LIGHT-055 LED Light Panels', 'Booth lighting', '', '']
+            ],
+            'AUSTAL 2026 SNA': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '96', '48', '48', '800', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) TABLE-001 Display Tables', 'Navy exhibition', '', ''],
+                ['', '', '', '', '', '', '', '', '(8) CHAIR-102 Seating', 'Meeting area', '', ''],
+                ['2', 'Skid', '120', '60', '48', '1000', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', 'Ship model display case', 'Custom built showcase', '', ''],
+                ['', '', '', '', '', '', '', '', 'Marketing materials and brochures', 'Navy specs', '', '']
+            ],
             'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM': [
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
                 ['1', 'Skid', '96', '48', '48', '1000', '', '', '', '', '', ''],
@@ -527,6 +544,12 @@ export class FakeGoogleSheetsService {
                 // Test case: Lockheed Martin NGAUS has 3 packlists (main + VIP LOUNGE + MEETING ROOM suffix variants)
                 // Demonstrates findAllPackListTabsForShow() correctly aggregating items across multiple tabs
                 ,['NGAUS','Lockheed Martin','2025','LOCKHEED MARTIN 2025 NGAUS', 'Milwaukee, WI','30x40','515','8/23','8/25','8/20/2025','X','X','X','','','Shepard','Ben','','X','X','X','X','','','','8/19/2025','','7/12','8/6','','X','','X','X','X','X','n/a','n/a','X','X','']
+                // Test case: QGenda has TWO booths at HIMSS (duplicate schedule entries with same Show/Client/Year)
+                ,['HIMSS','QGenda','2025','QGENDA 2025 HIMSS', 'Las Vegas, NV','20x30','1234','9/7','9/10','9/2/2025','X','X','X','','9/15/2025','Freeman','Brian','','X','X','X','X','','','','9/1/2025','','8/1','8/20','','X','','X','X','X','X','n/a','n/a','X','X','']
+                ,['HIMSS','QGenda','2025','QGENDA 2025 HIMSS', 'Las Vegas, NV','10x20','5678','9/7','9/10','9/2/2025','X','X','X','','9/15/2025','Freeman','Brian','','X','X','X','X','','','','9/1/2025','','8/1','8/20','','X','','X','X','X','X','n/a','n/a','X','X','']
+                // Test case: Austal cross-year matching (should prefer 2026 over 2023 despite similar names)
+                ,['Workboat','Austal','2023','AUSTAL 2023 WORKBOAT', 'New Orleans, LA','10x10','123','12/5','12/8','11/28/2023','X','X','X','','12/15/2023','Freeman','Top Shelf','','X','X','X','X','','','','11/25/2023','','11/1','11/20','','X','','X','X','','','n/a','n/a','X','X','']
+                ,['Surface Navy','Austal USA','2026','AUSTAL USA 2026 SURFACE NAVY', 'San Diego, CA','20x30','789','5/15','5/18','5/8/2026','X','X','X','','5/25/2026','Freeman','Top Shelf','','X','X','X','X','','','','5/1/2026','','4/15','5/5','','X','','X','X','X','X','n/a','n/a','X','X','']
                 ,['EPIC UGM','Microsoft','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
                 ,['EPIC UGM','Codametrix','2025','', 'Verona, WI','10x10','N/A','8/18','8/21','8/12/2025','','','','','VIPER','VIPER','','X','X','','','','8/1','','','V','n/a','','','','','','','','','','']
                 ,['Showroom','ASP','2025','', 'Irvine, CA','30x30','N/A','8/25','N/A','8/24/2025','','','','','','','','X','X','','','','','','','','n/a','','','','','','','','','','']
@@ -578,7 +601,7 @@ export class FakeGoogleSheetsService {
                 ['AMENTUM', '', ''],
                 ['ASP', '', ''],
                 ['ATSC', '', ''],
-                ['AUSTAL', '', ''],
+                ['AUSTAL USA', 'AUSTAL', 'Primary name for Austal shipbuilding company'],
                 ['AWNINC', 'AWN', ''],
                 ['BECKMAN-COULTER', '', ''],
                 ['BESTBUY HEALTH', 'BB HEALTH, BEST BUY', ''],
@@ -856,8 +879,10 @@ export class FakeGoogleSheetsService {
             { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 4 },
             { title: 'LOCKHEED MARTIN 2025 NGAUS VIP LOUNGE', sheetId: 5 },
             { title: 'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM', sheetId: 6 },
-            { title: 'GEARFIRE 2025 SHOT', sheetId: 7 },
-            { title: 'TEST 2025 ENHANCED', sheetId: 8 }
+            { title: 'QGENDA 2025 HIMSS', sheetId: 7 },
+            { title: 'AUSTAL 2026 SNA', sheetId: 8 },
+            { title: 'GEARFIRE 2025 SHOT', sheetId: 9 },
+            { title: 'TEST 2025 ENHANCED', sheetId: 10 }
         ],
         'PROD_SCHED': [
             { title: 'Production Schedule', sheetId: 0 }

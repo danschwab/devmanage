@@ -112,35 +112,21 @@ class productionUtils_uncached {
             
             // Otherwise, treat as identifier - find the show and get its date
             if (typeof value === 'string') {
-                for (const row of data) {
-                    const showName = row.Show;
-                    const client = row.Client;
-                    const year = row.Year;
-                    if (showName && client && year) {
-                        const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, showName, client, year);
-                        if (await deps.call(ProductionUtils.findBestProjectIdentifierMatch, computedIdentifier, [value])) {
-                            // Special overlap logic for identifiers:
-                            // To find shows active during identifier's period:
-                            // - column='Return' + type='after' → check if target returns after identifier ships
-                            // - column='Ship' + type='before' → check if target ships before identifier returns
-                            const ship = _calculateShipDate(row);
-                            const ret = _calculateReturnDate(row, ship);
-                            
-                            if (filter.column === 'Return' && filter.type === 'after') {
-                                // Check if target's return is after identifier's ship
-                                return ship;
-                            } else if (filter.column === 'Ship' && filter.type === 'before') {
-                                // Check if target's ship is before identifier's return
-                                return ret;
-                            }
-                            
-                            // Fallback: use the specified column from the identifier show
-                            return getRowDate(row, filter.column);
-                        }
-                    }
+                // Use year-aware Direction-2 match: parse year from identifier, filter schedule, then match
+                const rows = await deps.call(ProductionUtils.findScheduleRowsForPacklist, value, data);
+                const row = rows[0] ?? null;
+                if (!row) {
+                    console.warn('[production-utils] No show found for identifier:', value);
+                    return null;
                 }
-                console.warn('[production-utils] No show found for identifier:', value);
-                return null;
+                const ship = _calculateShipDate(row);
+                const ret = _calculateReturnDate(row, ship);
+                if (filter.column === 'Return' && filter.type === 'after') {
+                    return ship;
+                } else if (filter.column === 'Ship' && filter.type === 'before') {
+                    return ret;
+                }
+                return getRowDate(row, filter.column);
             }
             
             return null;
@@ -691,87 +677,120 @@ class productionUtils_uncached {
     }
 
     /**
-     * Get show details by project identifier.
-     * Supports suffix variants: if "LOCKHEED MARTIN 2025 NGAUS MEETING ROOM" is provided,
-     * will match "LOCKHEED MARTIN 2025 NGAUS" from the schedule.
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} identifier - Project identifier (e.g., "LOCKHEED MARTIN 2025 NGAUS" or with suffix)
-     * @returns {Promise<Object|null>} Show details object or null if not found
+     * Direction 2: Packlist → Schedule.
+     * Find schedule row(s) matching a packlist tab title.
+     * Parses the year from the title to year-filter the schedule before matching,
+     * preventing cross-year mismatches. Strips suffix words (right of year) one at a
+     * time to handle suffix-variant tabs (e.g. "NGAUS MEETING ROOM" → "NGAUS").
+     * Always stops stripping before the year token would be removed.
+     * @param {Object} deps
+     * @param {string} packlistTitle - Packlist tab title (may include suffix)
+     * @param {Array} [scheduleData] - Pre-loaded schedule rows (optional; loaded if omitted)
+     * @returns {Promise<Array>} Matching schedule rows; first element is the canonical match
+     */
+    static async findScheduleRowsForPacklist(deps, packlistTitle, scheduleData = null) {
+        if (!packlistTitle) return [];
+
+        // Load schedule data if not provided
+        let data = scheduleData;
+        if (!data) {
+            const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+            data = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
+        }
+
+        // Parse year from the packlist title to narrow the schedule search
+        const titleParts = _parseIdentifierParts(packlistTitle);
+        const targetYear = titleParts ? titleParts.year : null;
+
+        // Year-filter schedule rows (all rows if year not parseable)
+        const yearData = targetYear
+            ? data.filter(row => String(parseInt(row.Year, 10)) === targetYear)
+            : data;
+
+        if (yearData.length === 0) return [];
+
+        // Build computed-identifier → row map for year-filtered rows; keep first for duplicate shows
+        const scheduleMap = new Map();
+        for (const row of yearData) {
+            if (!row.Show || !row.Client || !row.Year) continue;
+            const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+            if (computed && !scheduleMap.has(computed)) {
+                scheduleMap.set(computed, row);
+            }
+        }
+
+        const candidates = Array.from(scheduleMap.keys());
+        if (candidates.length === 0) return [];
+
+        // Find the index of the year token so suffix stripping never removes it
+        const words = packlistTitle.trim().split(/\s+/);
+        const yearIndex = words.findIndex(w => /^\d{4}$/.test(w));
+        // Must keep at least: everything up to and including year, plus one show word
+        const minWords = yearIndex >= 0 ? yearIndex + 2 : 1;
+
+        for (let count = words.length; count >= minWords; count--) {
+            const candidate = words.slice(0, count).join(' ');
+            const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, candidate, candidates);
+            if (match) {
+                if (count < words.length) {
+                    console.log(`[production-utils] Matched suffix variant: "${packlistTitle}" -> "${match}"`);
+                }
+                const row = scheduleMap.get(match);
+                return row ? [row] : [];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Get show details by project identifier. Delegates to findScheduleRowsForPacklist.
+     * @param {Object} deps
+     * @param {string} identifier - Packlist identifier (may include suffix variant)
+     * @returns {Promise<Object|null>} Schedule row or null
      */
     static async getShowDetails(deps, identifier) {
         if (!identifier) return null;
-
-        const tabName = "Production Schedule";
-        
-        // Get dynamic mapping from ProductionSchedule headers
-        const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
-        
-        // Get all production schedule data
-        const data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
-        
-        // Build map of schedule identifiers to rows (computed once for efficiency)
-        // For shows with multiple entries (e.g., multiple booths), keep first match
-        const scheduleMap = new Map();
-        for (const row of data) {
-            if (row.Show && row.Client && row.Year) {
-                const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-                if (!scheduleMap.has(computedIdentifier)) {
-                    scheduleMap.set(computedIdentifier, row);
-                }
-            }
-        }
-        
-        const candidates = Array.from(scheduleMap.keys());
-        
-        // Try matching with full identifier first (standard matching)
-        let match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, candidates);
-        
-        // If no match and identifier has multiple words, progressively strip words from end
-        // This handles suffix variants like "LOCKHEED MARTIN 2025 NGAUS MEETING ROOM"
-        if (!match) {
-            const words = identifier.trim().split(/\s+/);
-            for (let wordCount = words.length - 1; wordCount > 0; wordCount--) {
-                const shortenedIdentifier = words.slice(0, wordCount).join(' ');
-                match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, shortenedIdentifier, candidates);
-                if (match) {
-                    console.log(`[production-utils] Matched suffix variant: "${identifier}" -> "${match}"`);
-                    break;
-                }
-            }
-        }
-        
-        if (!match) return null;
-        
-        const row = scheduleMap.get(match);
+        const rows = await deps.call(ProductionUtils.findScheduleRowsForPacklist, identifier);
+        const row = rows[0] ?? null;
         if (!row) return null;
-        
+
         // Normalize date columns before returning to ensure correct years
         const correctedShip = _calculateShipDate(row);
-        if (correctedShip) {
-            row.Ship = toUSDateString(correctedShip);
-        }
-        
+        if (correctedShip) row.Ship = toUSDateString(correctedShip);
+
         const sStart = parseDate(row['S. Start'], true, row.Year);
-        if (sStart) {
-            row['S. Start'] = toUSDateString(sStart);
-        }
-        
+        if (sStart) row['S. Start'] = toUSDateString(sStart);
+
         const sEnd = parseDate(row['S. End'], true, row.Year);
-        if (sEnd) {
-            row['S. End'] = toUSDateString(sEnd);
-        }
-        
+        if (sEnd) row['S. End'] = toUSDateString(sEnd);
+
         const correctedReturn = _calculateReturnDate(row, correctedShip);
         if (correctedReturn && row['Expected Return Date']) {
             row['Expected Return Date'] = toUSDateString(correctedReturn);
         }
-        
+
         return row;
     }
 
-
     /**
-     * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
+     * Direction 1: Schedule → Packlist.
+     * Find all packlist tabs (primary + suffix variants) for a schedule row.
+     * Eliminates the repeated computeIdentifier + findAllPackListTabsForShow boilerplate.
+     * @param {Object} deps
+     * @param {Object} scheduleRow - Schedule row with Show, Client, Year (and optional Identifier)
+     * @param {Array<{title:string}>} tabs - Available packlist tabs
+     * @returns {Promise<Array<{title:string}>>} Matching tabs; empty array if none found
+     */
+    static async findPacklistTabsForScheduleRow(deps, scheduleRow, tabs) {
+        if (!scheduleRow || !Array.isArray(tabs)) return [];
+        const identifier = scheduleRow.Identifier ||
+            await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
+        if (!identifier) return [];
+        return deps.call(ProductionUtils.findAllPackListTabsForShow, identifier, tabs);
+    }
+
+
     /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * Returns null if the project cannot be found or has no resolvable ship date.
@@ -866,35 +885,83 @@ class productionUtils_uncached {
         if (normalizedMatch) return normalizedMatch;
 
         // Component-level resolution: parse year out of identifiers, resolve client/show via index
+        // Both query AND candidate parts are resolved to canonical form before comparing, so
+        // abbreviated tab names like "AUSTAL 2026 SNA" match canonical "AUSTAL USA 2026 SURFACE NAVY".
         if (deps) {
             const queryParts = _parseIdentifierParts(rawIdentifier);
             if (queryParts) {
                 const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+
+                // Resolve query parts to canonical form
+                let resolvedQueryClient = queryParts.client;
+                try {
+                    resolvedQueryClient = GetTopFuzzyMatch(queryParts.client, refData.clients.names, refData.clients.abbrs) || queryParts.client;
+                } catch (e) {}
+                let resolvedQueryShow = queryParts.show;
+                try {
+                    resolvedQueryShow = GetTopFuzzyMatch(queryParts.show, refData.shows.names, refData.shows.abbrs, 2.5) || queryParts.show;
+                } catch (e) {}
+                const resolvedQueryNormalized = _normalizeMatchText(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
+
                 for (const candidate of cleanCandidates) {
                     const candidateParts = _parseIdentifierParts(candidate);
                     if (!candidateParts || candidateParts.year !== queryParts.year) continue;
 
                     let resolvedClient = candidateParts.client;
                     try {
-                        resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs);
+                        resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs) || candidateParts.client;
                     } catch (e) {}
 
                     let resolvedShow = candidateParts.show;
                     try {
-                        resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                        resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5) || candidateParts.show;
                     } catch (e) {}
 
                     const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
-                    if (_normalizeMatchText(resolvedCandidate) === normalizedIdentifier) return candidate;
+                    if (_normalizeMatchText(resolvedCandidate) === resolvedQueryNormalized) return candidate;
                 }
             }
         }
 
-        // Fuzzy fallback with abbreviation set
+        // Fuzzy fallback with year filtering
+        // IMPORTANT: Always prefer matches within the same year to avoid cross-year mismatches
         try {
-            const abbreviationRange = cleanCandidates.map(candidate => _buildIdentifierAbbreviationSet(candidate).join(', '));
+            const queryParts = _parseIdentifierParts(rawIdentifier);
+            
+            // If we can extract a year, prioritize same-year candidates
+            if (queryParts) {
+                const sameYearCandidates = cleanCandidates.filter(candidate => {
+                    const candidateParts = _parseIdentifierParts(candidate);
+                    return candidateParts && candidateParts.year === queryParts.year;
+                });
+                
+                // Try fuzzy match within same year first
+                if (sameYearCandidates.length > 0) {
+                    const abbreviationRange = sameYearCandidates.map(candidate => 
+                        _buildIdentifierAbbreviationSet(candidate).join(', ')
+                    );
+                    const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
+                    const match = GetTopFuzzyMatch(rawIdentifier, sameYearCandidates, abbreviationRange, fuzzyThreshold);
+                    if (match) return match;
+                }
+            }
+            
+            // Last resort: year-agnostic fuzzy match (log warning since this may be incorrect)
+            const abbreviationRange = cleanCandidates.map(candidate => 
+                _buildIdentifierAbbreviationSet(candidate).join(', ')
+            );
             const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
-            return GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
+            const match = GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
+            if (match) {
+                const queryParts = _parseIdentifierParts(rawIdentifier);
+                const matchParts = _parseIdentifierParts(match);
+                if (queryParts && matchParts && queryParts.year !== matchParts.year) {
+                    console.warn(
+                        `[production-utils] Cross-year fuzzy match: "${rawIdentifier}" (${queryParts.year}) -> "${match}" (${matchParts.year})`
+                    );
+                }
+            }
+            return match;
         } catch (error) {
             return null;
         }
@@ -988,6 +1055,7 @@ export const ProductionUtils = wrapMethods(
         'appendReferenceAbbreviation',
         'addCustomReferenceEntry'
     ]
+    // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods
 );
 
 

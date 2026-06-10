@@ -319,12 +319,15 @@ class inventoryUtils_uncached {
             
             // Deduplicate to prevent double-counting items when a show has multiple booths
             overlappingIds = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingIds);
+            const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
             
             // Process overlapping shows
             for (const overlapRow of overlappingIds) {
-                // Extract identifier from the row object
-                const overlapId = overlapRow.Identifier || 
-                                 await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                // Use Direction-1 matching: schedule row → packlist tab(s)
+                const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, overlapRow, packlistTabs);
+                const overlapId = matchingTabs[0]?.title ||
+                    overlapRow.Identifier ||
+                    await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
                 
                 if (_normalizeId(overlapId) === _normalizeId(projectIdentifier)) continue;
                 
@@ -647,11 +650,13 @@ class inventoryUtils_uncached {
 
                 // Deduplicate to prevent double-counting items when a show has multiple booths
                 const deduplicated = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlapping);
-
-                //console.log('[timeline] overlapping shows:', deduplicated?.map(r => r.Identifier || r.Show));
+                const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
 
                 for (const showRow of deduplicated) {
-                    const identifier = showRow.Identifier ||
+                    // Use Direction-1 matching: schedule row → packlist tab(s)
+                    const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, showRow, packlistTabs);
+                    const identifier = matchingTabs[0]?.title ||
+                        showRow.Identifier ||
                         await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
 
                     let packedQty = 0;

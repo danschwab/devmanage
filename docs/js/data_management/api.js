@@ -686,16 +686,13 @@ class Requests_uncached {
      * @returns {Promise<Object>} Object with { exists: boolean, identifier: string|null }
      */
     static async checkPacklistExists(deps, rowData) {
-        // Compute the identifier from the extracted columns
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, rowData.Show, rowData.Client, rowData.Year);
-        
-        // Get available tabs and check if packlist exists
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        const tab = await deps.call(ProductionUtils.findPackListTab, identifier, availableTabs);
-        
+        const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, rowData, availableTabs);
+        const identifier = rowData.Identifier ||
+            await deps.call(ProductionUtils.computeIdentifier, rowData.Show, rowData.Client, rowData.Year);
         return {
-            exists: !!tab,
-            identifier: identifier
+            exists: matchingTabs.length > 0,
+            identifier
         };
     }
 
@@ -995,10 +992,9 @@ class Requests_uncached {
         
         const resolvedShows = (await Promise.all(
             shows.map(async (showRow) => {
-                let identifier = showRow.Identifier || null;
-                if (!identifier && showRow.Show && showRow.Client && showRow.Year) {
-                    identifier = await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, parseInt(showRow.Year));
-                }
+                const identifier = showRow.Identifier || await deps.call(
+                    ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, parseInt(showRow.Year)
+                );
                 if (!identifier) return null;
 
                 const [shipDate, returnDate] = await Promise.all([

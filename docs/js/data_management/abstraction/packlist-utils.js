@@ -573,11 +573,12 @@ class packListUtils_uncached {
             }
 
             // 5. Process overlapping shows
-            //console.log('5. Processing overlapping shows...');
+            const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
             for (const overlapRow of overlappingIds) {
-                // Extract identifier from the row object
-                const otherId = overlapRow.Identifier || 
-                               await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
+                const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, overlapRow, packlistTabs);
+                const otherId = matchingTabs[0]?.title ||
+                    overlapRow.Identifier ||
+                    await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
 
                 if (_normalizeId(otherId) === _normalizeId(projectIdentifier)) continue;
                 
@@ -720,11 +721,14 @@ class packListUtils_uncached {
         overlappingProjects = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingProjects);
         
         const conflictingShows = [];
+        const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         
         // Check each overlapping project to see if it uses this item
         for (const projectRow of overlappingProjects) {
-            const projectId = projectRow.Identifier || 
-                            await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
+            const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, projectRow, packlistTabs);
+            const projectId = matchingTabs[0]?.title ||
+                projectRow.Identifier ||
+                await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
             
             if (_normalizeId(projectId) === _normalizeId(currentProjectId)) continue;
             
@@ -908,24 +912,10 @@ class packListUtils_uncached {
             // Get overlapping shows from production schedule
             const shows = await deps.call(ProductionUtils.getOverlappingShows, filter);
             
-            // Compute identifiers for each show
-            const identifiers = new Set();
-            for (const show of shows) {
-                if (show.Show && show.Client && show.Year) {
-                    const identifier = await deps.call(
-                        ProductionUtils.computeIdentifier,
-                        show.Show,
-                        show.Client,
-                        parseInt(show.Year)
-                    );
-                    identifiers.add(identifier);
-                }
-            }
-            
-            // Filter tabs to include all packlists for each show (including suffix variants)
+            // Filter tabs: for each overlapping show, find its packlist tabs (Direction 1)
             const matchedTitles = new Set();
-            for (const id of identifiers) {
-                const matchedTabs = await deps.call(ProductionUtils.findAllPackListTabsForShow, id, tabs);
+            for (const show of shows) {
+                const matchedTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, show, tabs);
                 matchedTabs.forEach(tab => matchedTitles.add(tab.title));
             }
             return tabs.filter(tab => matchedTitles.has(tab.title));
