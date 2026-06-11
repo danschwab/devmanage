@@ -470,27 +470,35 @@ export const PacklistTable = {
             }
         },
         async handleRefresh() {
-            this.$modal.confirm(
-                'This removes undo history and clears unsaved changes.',
-                () => {
-                    // Clear undo/redo history for this route
-                    const routeKey = this.$route?.path;
-                    if (routeKey) {
-                        undoRegistry.clearRouteHistory(routeKey);
-                    }
-                    
-                    // Invalidate cache for database first, then API call for the current pack list in case it was empty
-                    invalidateCache([
-                        { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] },
-                        { namespace: 'api', methodName: 'getPackList', args: [this.tabName] }
-                    ], true);
-                    this.packlistTableStore?.load('Refreshing data...');
-                },
-                null,
-                'Refresh Data',
-                'Refresh Data',
-                'Cancel'
-            );
+            // create a function for use in the modal
+            const refreshData = async () => {
+                // Invalidate cache for database first, then API call for the current pack list in case it was empty
+                // Clear undo/redo history for this route
+                const routeKey = this.$route?.path;
+                if (routeKey) {
+                    undoRegistry.clearRouteHistory(routeKey);
+                }
+                invalidateCache([
+                    { namespace: 'database', methodName: 'getData', args: ['PACK_LISTS', this.tabName] },
+                ], true);
+                this.packlistTableStore?.load('Refreshing data...');
+            };
+            
+            // if not in edit mode, just refresh the data
+            if (!this.editMode) {
+                await refreshData();
+            } else {
+                this.$modal.confirm(
+                    'This removes undo history and clears unsaved changes.',
+                    () => {
+                        refreshData();
+                    },
+                    null,
+                    'Refresh Data',
+                    'Refresh Data',
+                    'Cancel'
+                );
+            }
         },
         
         afterCheckLockComplete() {
@@ -702,14 +710,13 @@ export const PacklistTable = {
                         :showRefresh="false"
                         :showFooter="true"
                         :sortable="true"
+                        default-sort-column="itemNumber"
                         :emptyMessage="'No inventory items found'"
                         :loadingMessage="inventoryStore && inventoryStore.isAnalyzing ? 'Loading images...' : 'Loading inventory...'"
                     >
                         <template #header-area>
-                            <div class="button-bar">
-                                <button @click="addEmpty" class="large">+ Empty Row</button>
-                                <div class="card gray">or add from inventory below...</div>
-                            </div>
+                            <button @click="addEmpty" class="large">+ Empty Row</button>
+                            <p style="margin-left: 1em;">Or add from inventory below...</p>
                         </template>
                         <template #default="{ row, column }">
                             <template v-if="column.key === 'image'">
@@ -721,7 +728,7 @@ export const PacklistTable = {
                                 />
                             </template>
                             <template v-else-if="column.key === 'actions'">
-                                <button @click="selectItem(row)" class="white card">+ Add Item</button>
+                                <button @click="selectItem(row)" class="card purple">+ Add Item</button>
                             </template>
                             <template v-else>
                                 {{ row[column.key] }}
@@ -1292,7 +1299,7 @@ export const PacklistTable = {
                     :columns="mainColumns"
                     :title="tabName"
                     theme="packlist-table"
-                    :showRefresh="false"
+                    :showRefresh="!editMode"
                     :showSearch="true"
                     :sync-search-with-url="true"
                     :container-path="containerPath || 'packlist/' + tabName"

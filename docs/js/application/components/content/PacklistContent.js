@@ -1003,7 +1003,7 @@ export const PacklistContent = {
             <!-- Loading state while resolving identifier -->
             <div v-else-if="isResolving" class="loading-message">
                 <img src="assets/loading.gif" alt="..."/>
-                <p>Verifying packlist...</p>
+                <p>Finding packlist...</p>
             </div>
             
             <!-- 404 state when packlist not found -->

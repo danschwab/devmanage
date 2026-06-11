@@ -170,7 +170,19 @@ export const InventoryItemTimeline = {
         this.resolveItemIdFromPath();
     },
     template: html`
-        <div>
+        <!-- Loading state while resolving identifier -->
+        <div v-if="!itemInfoStore || itemInfoStore.isLoading" class="loading-message">
+            <img src="assets/loading.gif" alt="..."/>
+            <p>Finding item...</p>
+        </div>
+        <!-- 404 state when item not found (aka when the store returns null) -->
+        <div v-else-if="itemInfoStore && itemInfoStore.data && itemInfoStore.data.length === 0">
+            <div class="card red">
+                <h3>Item Not Found</h3>
+                <p>"{{ resolvedItemId }}" could not be found.</p>
+            </div>
+        </div>
+        <div v-else>
             <div v-if="resolvedItemId" style="margin-bottom: var(--padding-md);">
                 <div style="display: flex; gap: var(--padding-md); align-items: flex-start;">
                     <ItemImageComponent

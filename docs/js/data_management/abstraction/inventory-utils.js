@@ -107,6 +107,11 @@ class inventoryUtils_uncached {
             infoFields.forEach(field => obj[field] = null);
             results.push(obj);
         });
+        
+        // if no items were found, throw an error instead of returning anything
+        if (results.every(r => r[infoFields[0]] === null)) {
+            return null;
+        }
         return results;
     }
 

@@ -4200,7 +4200,7 @@ export const TableComponent = {
                         <button v-if="hasSelectedGroupMasters" @click="handleToggleSelectedGroups" class="button-symbol white" :title="groupToggleTitle">
                             <span class="material-symbols-outlined">{{ groupToggleSymbol }}</span>
                         </button>
-                        <button @click="handleMoreOptions" class="button-symbol blue" title="More Options">☰</button>
+                        <button @click="handleMoreOptions" class="button-symbol blue" title="More Row Options">☰</button>
                         <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowBelow" class="button-symbol white" title="Add Row Below">+</button>
                         <slot
                             name="selection-actions"
@@ -4311,6 +4311,7 @@ export const TableComponent = {
                         <button
                             v-if="hamburgerMenuComponent"
                             @click="handleHamburgerMenu"
+                            title="More Table Options"
                             class="button-symbol white"
                         >
                             ☰
@@ -4513,6 +4514,7 @@ export const TableComponent = {
                                 <td v-if="allowDetails && !forceDetails" class="details-cell">
                                     <button 
                                         @click="toggleRowDetails(idx)"
+                                        title="Toggle Details"
                                         :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                     >
                                         {{ isRowExpanded(idx) ? '🗙' : '☷' }}

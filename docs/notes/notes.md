@@ -1,7 +1,3 @@
-MAKE RETURN 14 days after show end
-quick tools wrong placement
-duplicate data on friday, backup google sheets
-
 ## Ask Ben
 
 - Inventory Extras (Misc tab usage, easy additions, how to do this)
@@ -24,7 +20,6 @@ duplicate data on friday, backup google sheets
 
 whenever possible, rely on the caching system instead of data from live tables.
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
-We can potentially save Dropbox service account keys in google drive and use them to access our dropbox files without user auth. This risks key exposure.
 
 Inventory Handling:
 Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING
@@ -36,32 +31,27 @@ Will come in uninventoried: Client or new items shown in booth, Decorative Items
 Rules: Typical Client Items, Tools and Supplies, Tech Accessories
 ?: Monitor arms? Remotes and power strips?
 
-Need features:
+Feature ideas:
 
 - add new rows at end of packlist (client items, tools, etc)
 - add a row following an item for typical inclusions (carpet + pad, monitor + cabling, etc)
-- consolidate, but still track items (beMatrix panels and hardware)
 - track unique items (electronics with serial numbers, passwords, locations)
-
-For design and project queue:
-
 - checklists for each item? Define checklists for items somehow? Checklists with username requirements? User table? Checklists with linked data entry fields?
-- show what pdfs are exported for each project
-- nebulus project stages, base on current system: projects are requested, updated, communicated via email. Put all information in one place, but allow tags and filters? Or force update notes to be connected to a category or checklist?
-- if certain documents exist, they are assumed correct - force approvals? Assume approvals for certain types of projects? Allow document approvals to be revoked? Approvals are just checklists?
-- checklists need to have the ability to link to styles in schedule views. We have advanced search, maybe add "Advanced Views" that allows custom columns, column styling based on rules, etc? Should this be hardcoded?
-- allow calendar view of shows. Allow drag and drop scheduling for show dates and ship/ret date thresholds? Maybe the interface should allow "card view", "table view", and "calendar view" for things? Hard code, or option for user?
-- Notifications system? Integrate emails? Allow checkbox or defaults for recipients? Default text? Allow templates? Should the system allow changes via email replies?
+- show what pdfs are exported for each project or on workzone
+- Add "Advanced Views" that allows custom columns, column styling based on rules, etc? Should this be hardcoded?
+- change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.
+- allow analysis to intelligently slow or pause itself and notify user for slow connection states.
+- implement notes or message-center or chatroom for page endpoints that can allow basic communication between users
 
 ## Primary Use Cases
 
 - [80%] We can have pack lists generated from Inventor
-- [95%] We can know if there are item shortages as pack lists are generated
+- [100] We can know if there are item shortages as pack lists are generated
 - [100] If we add bematrix stuff to pack lists, we can also check inventory qty of them
 - [50%] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved (needs approval system)
 - [50%] We can get an inventory report of item quantities throughout the year
 - [ 0%] We can migrate all our checklists and schedule management to this system
-- [40%] All of our data is available and easy to update on the go
+- [60%] All of our data is available and easy to update on the go
 
 ## TO DO
 
@@ -82,16 +72,13 @@ For design and project queue:
 - [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [x] tableComponent finder needs: a clear all button
       clickable and highlightable (can copy contents) table cells instead of cell buttons
+      allow modals to receive the arrow keys and enter button
 
 **problems**
 
-- [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
-- [?] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
 - [x] make external clicks clear checkboxes
 - [x] icons still don't show for dan
-- [ ] allow pasting even if only a single column of data is copied
-- [ ] ui for paste
-- [ ] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
+- [?] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
 - [x] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
 - [x] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
 - [x] remove drag into bottom to delete.
@@ -100,10 +87,7 @@ For design and project queue:
 - [x] add tooltip "3 rows copied..."
 - [x] garbage can icon for deletion!!!!
 - [x] fix thumbnail access
-- [ ] error occurred 11:00 updating cache datestamp?
-- [x] add misc inventory table
-- [ ] allow "maintenance mode" activated that locks all editing
-
+- [x] add additions inventory table
 - [x] packlist inventory overlap alerts showing wrong info. Probably due to reformatted abstraction code.
 - [x] canceled due to newer identical call shouldn't cancel but should pass the promise around to avoid failed analysis
 - [x] navigation is not clearing prompt variable when the user selects logout or clicks out of the modal
@@ -126,21 +110,27 @@ For design and project queue:
 - [x] items currently can't be rearranged if they are grouped
 - [?] some group dragging breaks the group
 - [x] make the calls to user data automatically cancel and show a screen alert if the user hasnt given permissions.
-- [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
-- [x] !!! fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
-- [ ] !!! fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
+- [?] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
+- [?] error occurred 11:00 updating cache datestamp?
+- [x] nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
+- [x] date columns are not always presenting as dates, especially the ship date, in searches
+- [x] if there are duplicate shows on the production schedule, they are duplicated in reports
+- [x] packlist item shortage alerts are still broken!!!!!!
 - [?] !!! thumbnails not showing for dan
 - [?] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
-- [x] ! nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
-- [ ] date columns are not always presenting as dates, especially the ship date, in searches
-- [?] dan ran into issue where at slow speeds, the inventory categories didn't load and never refreshed
+- [x] fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
+- [ ] !!! fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
+- [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
+- [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
+- [ ] allow pasting even if only a single column of data is copied
+- [ ] ui for paste
+- [ ] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
+- [ ] allow "maintenance mode" activated that locks all editing
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
-- [ ] if there are duplicate shows on the production schedule, they are duplicated in reports
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
 - [ ] there is a ton of duplicated logic in production-utils that needs to be simplified or removed
-- [ ] packlist item shortage alerts are still broken!!!!!!
 
 **Application tasks**
 
@@ -154,6 +144,10 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [?] !!! fix oauth token refresh so no errors are hidden, and refresh is automatic
 - [?] !!! Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
 - [?] !!! Use folder->category mapping to determine transformation necessary
+- [x] !!! Add support to automatically group items
+- [x] !!! allow pack list export from project manager
+- [?] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
+- [?] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
 - [ ] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
 - [ ] !!! fix CABINET item numbers in inventor
 - [ ] !!! fix FURNITURE item numbers in inventor
@@ -161,10 +155,6 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [ ] !!! fix duplication of bematrix VELCRO PANELS
 - [ ] !!! fix 45 degree curved panels
 - [ ] !!! verify panel and hardware and other possible edge-cases
-- [x] !!! Add support to automatically group items
-- [ ] !!! allow pack list export from project manager
-- [ ] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
-- [ ] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
 - [ ] show notifications if the packlist was in-app changed to not match the current model for inventoried items
       automatically add thumbnails for uninventoried items?
 
@@ -179,51 +169,21 @@ inventory updates
 - [x] make thumbnails be a cached analytics step
 - [x] force all inventory changes to have a "change date" that is separate from the edit history date, and update the table to show future changes (force reference date input) in additional rows following the main item row
 - [x] force projects to query the inventory by date
+- [x] allow uploading new item thumbnails
 - [ ] optimize thumbnails: app data sheet needs to have a table of thumbnail locations that is loaded and checked before calling the function that gets thumbnail folder contents
 - [ ] optimize thumbnails: invalidate this cache only when new thumbnails are added, or a thumbnail change occurrs
 - [ ] ! update LIGHTBOXES
 - [ ] ! add all FURNITURE
 - [ ] ! add all LIGHTING
 - [ ] track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
-- [ ] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
+- [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
 - [ ] allow attaching a change dates to a project
 - [ ] create a history modification utility for viewing changes over time and changing their values if necessary
-      allow uploading new item thumbnails
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
       We could integrate a repair schedule and other things into this system for a complete inventory management system
 
-show management system
-
-- [x] link shows to pack lists
-- [x] advanced search and preset system
-- [x] default schedule ship date as analytics step
-- [x] text-match needs to have a dropdown to determine type of match (includes, excludes, etc.)
-- [x] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
-- [x] !!! move indexes to app data and start using live table for information
-- [x] !!! detection and addition of new shows into index
-- [ ] ! add "views" system to show different columns and layouts for different purposes
-- [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
-- [ ] ! we may need a workzone integration
-- [ ] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
-- [ ] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type), and boolean flags (future)
-- [ ] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
-- [ ] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
-- [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
-      express checklist columns as checkboxes
-      allow user to access show searches as pages and pin to dashboard
-      analyze and show the rough number and complexity of shows throughout the year
-      calendar view of shows
-
-dropbox / workzone / sql integrations
-
-- [ ] dropbox service account and auth sync
-- [ ] identify and show versions/dates of output files
-- [ ] allow opening link to dropbox pdfs
-- [ ] microsoft server or google workspace integration?
-- [ ] migrate thumbnails to shared folder in microsoft server? and allow uploading new thumbnails to dropbox???
-
-Architecture Improvements
+Architecture Improvements !!! offline mode
 
 - [x] dashboard configuration
 - [x] user preferences storage
@@ -236,12 +196,43 @@ Architecture Improvements
 - [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [x] add info source to metadata history to track inventor / app update location for packlists
 - [x] improve error handling and user notifications for failed auth and failed permissions
+- [ ] !!!!! out of network offline mode handling for auth and data access. Allow reactiveStores and all caching to freeze as infinite when offline. Disable all mutation functions. Notify users of offline status and limitations.
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
       remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
+
+show management system
+
+- [x] link shows to pack lists
+- [x] advanced search and preset system
+- [x] default schedule ship date as analytics step
+- [x] text-match needs to have a dropdown to determine type of match (includes, excludes, etc.)
+- [x] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
+- [x] !!! move indexes to app data and start using live table for information
+- [x] !!! detection and addition of new shows into index
+- [x] calendar view of shows
+- [ ] ! add "views" system to show different columns and layouts for different purposes
+- [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
+- [ ] ! we may need a workzone integration
+- [ ] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
+- [ ] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type), and boolean flags (future)
+- [ ] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
+- [ ] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
+- [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
+      express checklist columns as checkboxes
+      allow user to access show searches as pages and pin to dashboard
+      analyze and show the rough number and complexity of shows throughout the year
+
+dropbox / workzone / sql integrations
+
+- [ ] dropbox service account and auth sync
+- [ ] identify and show versions/dates of output files
+- [ ] allow opening link to dropbox pdfs
+- [ ] microsoft server or google workspace integration?
+- [ ] migrate thumbnails to shared folder in microsoft server? and allow uploading new thumbnails to dropbox???
 
 Pack Lists in Web
 
@@ -297,15 +288,3 @@ analysis of pack list against current inventory
 - [ ] allow showing quantity errors in a special schedule view, or always run this as an analysis step in schedule view. This needs to not explode computers. May need analysis caching first.
       increase the filtering options in reports
       link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)
-
-**maybe**
-change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.
-quick action buttons on cards?
-allow analysis to intelligently slow or pause itself and notify user for slow connection states.
-implement notes and checklists
-workspace system with multiple dashboards?
-allow modals to receive the arrow keys and enter button
-create backup of packlists before saving packlist to ensure no data loss
-find missing show or client index info and allow user to add it
-user preferences (allow delay save)
-add an optional flag that adds a start and end date selector to the ScheduleFilterSelect button-bar.
