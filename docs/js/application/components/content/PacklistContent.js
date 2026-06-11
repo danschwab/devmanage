@@ -156,7 +156,7 @@ export const PacklistMenuComponent = {
                 'Force Unlock'
             );
         },
-        openCreatePacklistModal(templateName = 'TEMPLATE') {
+        openCreatePacklistModal(templateName = '_TEMPLATE') {
             // Close the hamburger menu modal first
             this.$emit('close-modal');
             
@@ -171,7 +171,7 @@ export const PacklistMenuComponent = {
                     navigateToPath: Function,
                     templateName: {
                         type: String,
-                        default: 'TEMPLATE'
+                        default: '_TEMPLATE'
                     }
                 },
                 emits: ['close-modal'],
@@ -284,10 +284,10 @@ export const PacklistMenuComponent = {
             this.$modal.custom(
                 CreatePacklistModalContent,
                 { modalClass: 'page-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
-                templateName === 'TEMPLATE' ? 'Create Show Packlist' : 'Duplicate Packlist Attached to Show'
+                templateName === '_TEMPLATE' ? 'Create Show Packlist' : 'Duplicate Packlist Attached to Show'
             );
         },
-        openCreateCustomPacklistModal(templateName = 'TEMPLATE') {
+        openCreateCustomPacklistModal(templateName = '_TEMPLATE') {
             // Close the hamburger menu modal first
             this.$emit('close-modal');
             
@@ -299,7 +299,7 @@ export const PacklistMenuComponent = {
                     navigateToPath: Function,
                     templateName: {
                         type: String,
-                        default: 'TEMPLATE'
+                        default: '_TEMPLATE'
                     }
                 },
                 emits: ['close-modal'],
@@ -343,7 +343,7 @@ export const PacklistMenuComponent = {
                 },
                 template: html`
                     <slot>
-                        <div v-if="templateName === 'TEMPLATE'" class="card yellow">
+                        <div v-if="templateName === '_TEMPLATE'" class="card yellow">
                             <p><strong>Note:</strong> To attach a new packlist to a show, cancel and use "Create Show Packlist". <br> <em>This packlist will not be visible when packlists are filtered by the production schedule.</em></p>
                         </div>
                         <div v-else class="card">
@@ -351,7 +351,7 @@ export const PacklistMenuComponent = {
                         </div>
                         <div style="margin-bottom: 1rem;">
                             <label for="packlistNameInput" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">
-                                {{ templateName === 'TEMPLATE' ? 'Packlist Name:' : 'New Packlist Name:' }}
+                                {{ templateName === '_TEMPLATE' ? 'Packlist Name:' : 'New Packlist Name:' }}
                             </label>
                             <input 
                                 id="packlistNameInput"
@@ -378,7 +378,7 @@ export const PacklistMenuComponent = {
             this.$modal.custom(
                 CustomPacklistModalContent,
                 { modalClass: 'reading-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
-                templateName === 'TEMPLATE' ? 'Create Custom Packlist' : 'Duplicate As Custom Packlist'
+                templateName === '_TEMPLATE' ? 'Create Custom Packlist' : 'Duplicate As Custom Packlist'
             );
         },
         openDuplicatePacklistModal() {
@@ -888,7 +888,7 @@ export const PacklistContent = {
                 
                 // Check each individual packlist for auto-saved data
                 for (const tab of this.packlistsStore.data) {
-                    if (tab.title === 'TEMPLATE') continue;
+                    if (tab.title === '_TEMPLATE') continue;
                     
                     // Generate the store key prefix (without analysis config)
                     const storeKeyPrefix = generateStoreKey(

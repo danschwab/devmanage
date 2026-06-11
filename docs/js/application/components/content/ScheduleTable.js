@@ -21,7 +21,7 @@ export const ScheduleTableComponent = {
         },
         templateName: {
             type: String,
-            default: 'TEMPLATE'
+            default: '_TEMPLATE'
         },
         calendarView: {
             type: Boolean,
@@ -409,7 +409,7 @@ export const ScheduleTableComponent = {
                 const year = scheduleRow.Year || '';
                 const startDate = scheduleRow['S. Start'] || 'TBD';
                 
-                const isDuplicate = this.templateName !== 'TEMPLATE';
+                const isDuplicate = this.templateName !== '_TEMPLATE';
                 const confirmMessage = isDuplicate 
                     ? `Duplicate "${this.templateName}" and attach to:\n\nClient: ${client}\nShow: ${show}\nYear: ${year}\nStart Date: ${startDate}\n\nNew packlist will be named: ${identifier}`
                     : `Create new empty packlist for:\n\nClient: ${client}\nShow: ${show}\nYear: ${year}\nStart Date: ${startDate}`;

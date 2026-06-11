@@ -481,7 +481,7 @@ export class GoogleSheetsService {
     }
 
     /**
-     * Copy a sheet tab within a spreadsheet (e.g., to create a new tab from TEMPLATE).
+     * Copy a sheet tab within a spreadsheet (e.g., to create a new tab from _TEMPLATE).
      * @param {string} tableId
      * @param {{title: string, sheetId: number}} sourceTab
      * @param {string} newTabName

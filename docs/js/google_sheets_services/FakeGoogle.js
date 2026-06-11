@@ -265,7 +265,7 @@ export class FakeGoogleSheetsService {
             ]
         },
         'PACK_LISTS': {
-            'TEMPLATE': [
+            '_TEMPLATE': [
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
                 ['1', '', '', '', '', '', '', '', '', '', '', '']
             ],
@@ -873,7 +873,7 @@ export class FakeGoogleSheetsService {
             { title: 'HARDWARE', sheetId: 10 }
         ],
         'PACK_LISTS': [
-            { title: 'TEMPLATE', sheetId: 1 },
+            { title: '_TEMPLATE', sheetId: 1 },
             { title: 'ATSC 2025 NAB', sheetId: 2 },
             { title: 'TULIP 2025 NRF', sheetId: 3 },
             { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 4 },

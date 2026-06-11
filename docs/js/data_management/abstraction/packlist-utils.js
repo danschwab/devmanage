@@ -316,7 +316,7 @@ class packListUtils_uncached {
      */
     static async extractAllItemsForShow(deps, projectIdentifier, itemCategoryFilter = undefined) {
         const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        const validTabs = allTabs.filter(tab => tab.title !== 'TEMPLATE' && !tab.title.startsWith('_'));
+        const validTabs = allTabs.filter(tab => tab.title !== '_TEMPLATE' && !tab.title.startsWith('_'));
         const matchingTabs = await deps.call(ProductionUtils.findAllPackListTabsForShow, projectIdentifier, validTabs);
 
         if (!matchingTabs.length) return {};
@@ -882,7 +882,7 @@ class packListUtils_uncached {
 
     /**
      * Get filtered packlists based on schedule parameters
-     * Returns all packlist tabs (excluding TEMPLATE) optionally filtered by schedule overlap
+     * Returns all packlist tabs (excluding _TEMPLATE) optionally filtered by schedule overlap
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object|string} filter - Filter parameters:
      *   - null: returns empty array (no filter selected)
@@ -894,8 +894,8 @@ class packListUtils_uncached {
         // Get all available packlist tabs
         const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         
-        // Filter out TEMPLATE and hidden tabs
-        let tabs = allTabs.filter(tab => tab.title !== 'TEMPLATE' && !tab.title.startsWith('_'));
+        // Filter out _TEMPLATE and hidden tabs
+        let tabs = allTabs.filter(tab => tab.title !== '_TEMPLATE' && !tab.title.startsWith('_'));
         
         // If no filter, return empty array (user must select a filter)
         if (!filter) {
