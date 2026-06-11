@@ -1163,18 +1163,18 @@ function _calculateReturnDate(row, shipDate = null) {
         return ret;
     }
     
-    // Fallback 1: S. End + 10 days
+    // Fallback 1: S. End + 14 days
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
-        ret = new Date(sEnd.getTime() + 10 * 86400000);
+        ret = new Date(sEnd.getTime() + 14 * 86400000);
         // Return date is naturally after show end, so calculated year is correct
         return ret;
     }
     
-    // Fallback 2: S. Start + 30 days
+    // Fallback 2: S. Start + 21 days
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
-        ret = new Date(sStart.getTime() + 30 * 86400000);
+        ret = new Date(sStart.getTime() + 21 * 86400000);
         // Return date is naturally after show start, so calculated year is correct
         return ret;
     }
