@@ -599,21 +599,16 @@ export const PacklistTable = {
         },
         
         async showInventorySelector(crateIdx, position = null) {
-            // Fetch the show's ship date so inventory quantities reflect state at time of packing
-            const shipDate = await Requests.getProjectShipDate(this.tabName);
-            const referenceDate = shipDate || todayISOString();
-
-            // Create inventory selector modal component
+            // Create inventory selector modal component - show immediately, load data inside
             // position: { position: 'above'|'below', targetIndex: number } or null
+            const tabName = this.tabName; // Capture for use inside modal
             const InventorySelectorModal = {
                 components: { TableComponent, ItemImageComponent },
-                props: ['onAddEmpty', 'onItemSelected', 'referenceDate'],
+                props: ['onAddEmpty', 'onItemSelected', 'tabName'],
                 data() {
                     return {
                         inventoryStore: null,
-                        categories: [],
-                        selectedCategory: null,
-                        isLoading: true,
+                        referenceDate: null,
                         error: null
                     };
                 },
@@ -621,7 +616,7 @@ export const PacklistTable = {
                     columns() {
                         return [
                             { key: 'image', labelHtml: '<span class="material-symbols-outlined">imagesmode</span>', label: 'IMG', width: 1, sortable: false },
-                            { key: 'itemNumber', label: 'Item #', type: 'item', width: 120, sortable: true },
+                            { key: 'itemNumber', label: 'Item#', type: 'item', width: 120, sortable: true },
                             { key: 'description', label: 'Description', sortable: true },
                             { key: 'quantity', label: 'Available', width: 100, sortable: true },
                             { key: 'actions', label: '', width: 100, sortable: false }
@@ -634,38 +629,22 @@ export const PacklistTable = {
                         return this.inventoryStore && Array.isArray(this.inventoryStore.originalData)
                             ? JSON.parse(JSON.stringify(this.inventoryStore.originalData))
                             : [];
+                    },
+                    // Combine local loading state with store loading state
+                    isLoading() {
+                        return !this.inventoryStore || this.inventoryStore.isLoading;
                     }
                 },
                 async mounted() {
-                    try {
-                        this.isLoading = true;
-                        // Load available inventory categories
-                        const tabs = await Requests.getAvailableTabs('INVENTORY');
-                        this.categories = tabs.filter(tab => tab.title !== 'INDEX');
-                        
-                        // Select first category by default
-                        if (this.categories.length > 0) {
-                            this.selectedCategory = this.categories[0].title;
-                            await this.loadCategoryData();
-                        }
-                    } catch (error) {
-                        console.error('Failed to load inventory categories:', error);
-                        this.error = 'Failed to load inventory categories';
-                    } finally {
-                        this.isLoading = false;
-                    }
-                },
-                watch: {
-                    async selectedCategory(newCategory) {
-                        if (newCategory) {
-                            await this.loadCategoryData();
-                        }
-                    }
+                    // Fetch the show's ship date so inventory quantities reflect state at time of packing
+                    const shipDate = await Requests.getProjectShipDate(this.tabName);
+                    this.referenceDate = shipDate || todayISOString();
+                    
+                    await this.loadStore();
                 },
                 methods: {
-                    async loadCategoryData() {
+                    async loadStore() {
                         try {
-                            this.isLoading = true;
                             this.error = null;
                             
                             // Create analysis config for image URLs
@@ -678,24 +657,22 @@ export const PacklistTable = {
                                     [],
                                     null, // Store in AppData, not a column
                                     false,
-                                    Priority.BACKGROUND, // Images are visual enhancements, lowest priority
-                                    false,
-                                    false // nonessential
+                                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
                                 )
                             ];
                             
-                            // Create or update reactive store for selected category
+                            // Initialize reactive store using the new API method
+                            // Note: autoLoad is true by default, so data will load automatically
+                            // Don't set isLoading to false - let the computed property track store.isLoading
                             this.inventoryStore = getReactiveStore(
-                                Requests.getInventoryTabData,
-                                null, // No save function needed for read-only modal
-                                [this.selectedCategory, undefined, undefined, this.referenceDate],
+                                Requests.getAllInventoryData,
+                                null, // No save function (read-only)
+                                [this.referenceDate || todayISOString()], // Apply pending changes as of reference date
                                 analysisConfig
                             );
                         } catch (error) {
                             console.error('Failed to load inventory data:', error);
                             this.error = 'Failed to load inventory data';
-                        } finally {
-                            this.isLoading = false;
                         }
                     },
                     selectItem(item) {
@@ -709,12 +686,6 @@ export const PacklistTable = {
                             this.onAddEmpty();
                         }
                         this.$emit('close-modal');
-                    },
-                    handleReportsClick() {
-                        const path = this.selectedCategory
-                            ? NavigationRegistry.buildPath('inventory/reports', { itemCategoryFilter: this.selectedCategory })
-                            : 'inventory/reports';
-                        this.$emit('navigate-to-path', path);
                     }
                 },
                 template: html`
@@ -725,7 +696,8 @@ export const PacklistTable = {
                         :data="inventoryData"
                         :originalData="originalData"
                         :columns="columns"
-                        :isLoading="isLoading || (inventoryStore && inventoryStore.isAnalyzing)"
+                        :isLoading="isLoading"
+                        :isAnalyzing="inventoryStore && inventoryStore.isAnalyzing"
                         :showSearch="true"
                         :showRefresh="false"
                         :showFooter="true"
@@ -735,16 +707,8 @@ export const PacklistTable = {
                     >
                         <template #header-area>
                             <div class="button-bar">
-                                <button @click="addEmpty">Empty Row</button>
-                                <select 
-                                    id="category-select"
-                                    v-model="selectedCategory"
-                                >
-                                    <option v-for="cat in categories" :key="cat.title" :value="cat.title">
-                                        {{ cat.title }}
-                                    </option>
-                                </select>
-                                <button @click="handleReportsClick" class="purple">Reports</button>
+                                <button @click="addEmpty" class="large">+ Empty Row</button>
+                                <div class="card gray">or add from inventory below...</div>
                             </div>
                         </template>
                         <template #default="{ row, column }">
@@ -757,7 +721,7 @@ export const PacklistTable = {
                                 />
                             </template>
                             <template v-else-if="column.key === 'actions'">
-                                <button @click="selectItem(row)" class="purple">Select</button>
+                                <button @click="selectItem(row)" class="white card">+ Add Item</button>
                             </template>
                             <template v-else>
                                 {{ row[column.key] }}
@@ -772,7 +736,7 @@ export const PacklistTable = {
                 onItemSelected: (item) => this.addItemFromInventory(crateIdx, item, position),
                 modalClass: 'page-menu',
                 onAddEmpty: () => this.addEmptyItem(crateIdx, position),
-                referenceDate
+                tabName
             }, 'Add Item');
         },
         
