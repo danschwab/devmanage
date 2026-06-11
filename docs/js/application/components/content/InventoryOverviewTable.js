@@ -30,7 +30,7 @@ export const InventoryOverviewTableComponent = {
                 },
                 { 
                     key: 'itemNumber', 
-                    label: 'ITEM#',
+                    label: 'Item#',
                     type: 'item',
                     sortable: true
                 },
@@ -50,7 +50,7 @@ export const InventoryOverviewTableComponent = {
                 },
                 { 
                     key: 'quantity', 
-                    label: 'QTY',
+                    label: 'Qty',
                     format: 'number',
                     editable: false,
                     autoColor: false,

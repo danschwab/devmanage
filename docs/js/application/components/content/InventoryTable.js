@@ -611,14 +611,14 @@ export const InventoryTableComponent = {
                 },
                 { 
                     key: 'itemNumber', 
-                    label: 'ITEM#',
+                    label: 'Item#',
                     type: 'item',
                     width: 120,
                     sortable: true
                 },
                 { 
                     key: 'quantity', 
-                    label: 'QTY',
+                    label: 'Qty',
                     format: 'number',
                     editable: this.allowEdit,
                     autoColor: false,

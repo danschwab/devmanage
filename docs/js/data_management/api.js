@@ -439,7 +439,7 @@ class Requests_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @returns {Promise<Array<Object>>} - All inventory items with tab property
      */
-    static async getAllInventoryData(deps) {
+    static async getAllInventoryData(deps, referenceDate) {
         // Get all available tabs for INVENTORY
         const tabs = await deps.call(Requests.getAvailableTabs, 'INVENTORY');
         const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
@@ -449,7 +449,7 @@ class Requests_uncached {
         // Load data from each tab
         for (const tab of inventoryTabs) {
             try {
-                const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title, undefined, undefined, undefined);
+                const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title, undefined, undefined, referenceDate);
                 
                 // Add tab information to each item
                 if (Array.isArray(tabData)) {
