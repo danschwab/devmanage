@@ -39,7 +39,7 @@ export const undoRegistry = Vue.reactive({
             if (this.undoStacksByRoute.size > this.maxRouteStacks) {
                 const firstKey = this.undoStacksByRoute.keys().next().value;
                 const evictedStacks = this.undoStacksByRoute.get(firstKey);
-                console.log(`[Undo] Evicting route '${firstKey}' - had ${evictedStacks.arrayRefs.size} arrays with ${evictedStacks.undoStack.length} undo states`);
+                //console.log(`[Undo] Evicting route '${firstKey}' - had ${evictedStacks.arrayRefs.size} arrays with ${evictedStacks.undoStack.length} undo states`);
                 this.undoStacksByRoute.delete(firstKey);
                 // Snapshots are automatically GC'd when route is deleted
             }
@@ -52,7 +52,7 @@ export const undoRegistry = Vue.reactive({
         this.currentRouteKey = routeKey;
         this._currentEditCapture = null; // Clear edit capture when route changes
         this._currentSelectionCapture = null; // Clear selection capture cooldown when route changes
-        console.log(`[Undo] Active route set to: ${routeKey}`);
+        //console.log(`[Undo] Active route set to: ${routeKey}`);
     },
     
     // Unified capture function for all operations
@@ -92,7 +92,7 @@ export const undoRegistry = Vue.reactive({
                 this._currentEditCapture.tableId === tableId &&
                 this._currentEditCapture.rowIndex === cellInfo.rowIndex &&
                 this._currentEditCapture.colIndex === cellInfo.colIndex) {
-                console.log(`[Undo] Skipping duplicate capture for cell [${cellInfo.rowIndex}, ${cellInfo.colIndex}]`);
+                //console.log(`[Undo] Skipping duplicate capture for cell [${cellInfo.rowIndex}, ${cellInfo.colIndex}]`);
                 return;
             }
         }
@@ -112,11 +112,11 @@ export const undoRegistry = Vue.reactive({
                 if (newArrays.length === 0) {
                     // All arrays already captured, reset cooldown timer
                     this._currentSelectionCapture.timestamp = now;
-                    console.log(`[Undo] Selection in tracked array - cooldown reset (${this.selectionCooldown}ms)`);
+                    //console.log(`[Undo] Selection in tracked array - cooldown reset (${this.selectionCooldown}ms)`);
                     return;
                 } else {
                     // New arrays detected - add them to the existing capture
-                    console.log(`[Undo] Adding ${newArrays.length} new array(s) to existing selection capture`);
+                    //console.log(`[Undo] Adding ${newArrays.length} new array(s) to existing selection capture`);
                     
                     const stacks = this._getRouteStacks(routeKey);
                     const existingSnapshot = stacks.undoStack[stacks.undoStack.length - 1];
@@ -148,7 +148,7 @@ export const undoRegistry = Vue.reactive({
                     });
                     this._currentSelectionCapture.timestamp = now;
                     
-                    console.log(`[Undo] Updated selection capture - now tracking ${this._currentSelectionCapture.arrayRefs.size} array(s), cooldown reset`);
+                    //console.log(`[Undo] Updated selection capture - now tracking ${this._currentSelectionCapture.arrayRefs.size} array(s), cooldown reset`);
                     return;
                 }
             }
@@ -206,7 +206,7 @@ export const undoRegistry = Vue.reactive({
                 timestamp: Date.now(),
                 arrayRefs: new Set(arrayList)
             };
-            console.log(`[Undo] Started selection cooldown (${this.selectionCooldown}ms) for ${arrayList.length} array(s)`);
+            //console.log(`[Undo] Started selection cooldown (${this.selectionCooldown}ms) for ${arrayList.length} array(s)`);
         } else if (type !== 'selection-toggle') {
             // Clear selection cooldown for non-selection operations
             this._currentSelectionCapture = null;
@@ -214,7 +214,7 @@ export const undoRegistry = Vue.reactive({
         
         const selectionDesc = capturedSelections ? ` with ${capturedSelections.selections.length} selection(s)` : '';
         const opDesc = cellInfo ? `cell edit [${cellInfo.rowIndex}, ${cellInfo.colIndex}]` : `${type} with ${arrayList.length} array(s)`;
-        console.log(`[Undo] Captured ${opDesc}${selectionDesc} for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
+        //console.log(`[Undo] Captured ${opDesc}${selectionDesc} for route: ${routeKey} (stack: ${stacks.undoStack.length})`);
     },
     
     // Clear current edit capture (called on blur or route change)
@@ -243,7 +243,7 @@ export const undoRegistry = Vue.reactive({
             };
         }
         
-        console.log(`[Undo] Capturing ${selectionState.selections.size} selection(s)`);
+        //console.log(`[Undo] Capturing ${selectionState.selections.size} selection(s)`);
         
         // Store references to selected row objects and their source arrays
         // This allows us to find them after array mutations
@@ -252,7 +252,7 @@ export const undoRegistry = Vue.reactive({
         for (const [selectionKey, selection] of selectionState.selections) {
             const { rowIndex, sourceArray, dragId } = selection;
             const rowObject = sourceArray[rowIndex];
-            console.log(`[Undo]   - Capturing row ${rowIndex} from array (length: ${sourceArray.length})`);
+            //console.log(`[Undo]   - Capturing row ${rowIndex} from array (length: ${sourceArray.length})`);
             
             // Only capture selections for arrays involved in this operation
             if (rowObject && arrayList.includes(sourceArray)) {
@@ -275,7 +275,7 @@ export const undoRegistry = Vue.reactive({
             }
         }
         
-        console.log(`[Undo] Captured ${capturedSelections.length} selection(s) total`);
+        //console.log(`[Undo] Captured ${capturedSelections.length} selection(s) total`);
         
         return {
             selections: capturedSelections,
@@ -293,9 +293,9 @@ export const undoRegistry = Vue.reactive({
         
         const selectionCount = capturedSelections.selections.length;
         if (selectionCount === 0) {
-            console.log(`[Undo] Restoring empty selection state (clearing selections from affected arrays)`);
+            //console.log(`[Undo] Restoring empty selection state (clearing selections from affected arrays)`);
         } else {
-            console.log(`[Undo] Restoring ${selectionCount} selection(s)`);
+            //console.log(`[Undo] Restoring ${selectionCount} selection(s)`);
         }
         
         // Only clear selections from the arrays involved in this operation
@@ -307,7 +307,7 @@ export const undoRegistry = Vue.reactive({
             previousCount += countBefore;
             selectionState.clearArray(array);
         });
-        console.log(`[Undo]   - Cleared ${previousCount} previous selection(s) from ${affectedArrays.length} affected array(s)`);
+        //console.log(`[Undo]   - Cleared ${previousCount} previous selection(s) from ${affectedArrays.length} affected array(s)`);
         
         // Restore selections by finding where the rows are now
         let restoredCount = 0;
@@ -330,7 +330,7 @@ export const undoRegistry = Vue.reactive({
                 }
                 if (matches) {
                     currentIndex = rowIndex;
-                    console.log(`[Undo]   - Found row at original index ${rowIndex} (verified by identifiers)`);
+                    //console.log(`[Undo]   - Found row at original index ${rowIndex} (verified by identifiers)`);
                 }
             }
             
@@ -347,7 +347,7 @@ export const undoRegistry = Vue.reactive({
                     }
                     if (matches) {
                         currentIndex = i;
-                        console.log(`[Undo]   - Found row at index ${i} by matching identifiers`);
+                        //console.log(`[Undo]   - Found row at index ${i} by matching identifiers`);
                         break;
                     }
                 }
@@ -355,10 +355,10 @@ export const undoRegistry = Vue.reactive({
             
             if (currentIndex !== -1) {
                 selectionState.addRow(currentIndex, sourceArray, dragId);
-                console.log(`[Undo]   - Restored selection at index ${currentIndex} in array (length: ${sourceArray.length})`);
+                //console.log(`[Undo]   - Restored selection at index ${currentIndex} in array (length: ${sourceArray.length})`);
                 restoredCount++;
             } else {
-                console.log(`[Undo]   - Could not find row in array (length: ${sourceArray.length}), identifiers:`, identifiers);
+                //console.log(`[Undo]   - Could not find row in array (length: ${sourceArray.length}), identifiers:`, identifiers);
             }
         });
         
@@ -367,7 +367,7 @@ export const undoRegistry = Vue.reactive({
             selectionState.dragId = capturedSelections.dragId;
         }
         
-        console.log(`[Undo] Successfully restored ${restoredCount} of ${capturedSelections.selections.length} selection(s)`);
+        //console.log(`[Undo] Successfully restored ${restoredCount} of ${capturedSelections.selections.length} selection(s)`);
     },
     
     // Create a snapshot of an array without AppData (to avoid interfering with analytics)
@@ -426,7 +426,7 @@ export const undoRegistry = Vue.reactive({
         targetArray.splice(0, targetArray.length, ...snapshot);
         
         const afterLength = targetArray.length;
-        console.log(`[Undo] Array restored: ${beforeLength} → ${afterLength} rows`);
+        //console.log(`[Undo] Array restored: ${beforeLength} → ${afterLength} rows`);
         
         // Restore AppData by matching row identity (object reference first, then identifiers)
         for (let i = 0; i < targetArray.length; i++) {
@@ -549,7 +549,7 @@ export const undoRegistry = Vue.reactive({
         const operation = isUndo ? 'undo' : 'redo';
         
         if (sourceStack.length === 0) {
-            console.log(`[Undo] Nothing to ${operation}`);
+            //console.log(`[Undo] Nothing to ${operation}`);
             return false;
         }
         
@@ -598,7 +598,7 @@ export const undoRegistry = Vue.reactive({
         this._currentEditCapture = null;
         this._currentSelectionCapture = null;
         
-        console.log(`[Undo] ${isUndo ? 'Undid' : 'Redid'} ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
+        //console.log(`[Undo] ${isUndo ? 'Undid' : 'Redid'} ${state.type} operation (undo: ${stacks.undoStack.length}, redo: ${stacks.redoStack.length})`);
         return state.undoAlert || null;
     },
     
@@ -686,7 +686,7 @@ export const undoRegistry = Vue.reactive({
         const currentSnapshot = this._createSnapshotWithoutAppData(array);
         if (JSON.stringify(currentSnapshot) === JSON.stringify(lastSnapshot.arrays[0].snapshot)) {
             stacks.undoStack.pop();
-            console.log(`[Undo] Discarded no-op snapshot for route: ${routeKey} (state unchanged after idle)`);
+            //console.log(`[Undo] Discarded no-op snapshot for route: ${routeKey} (state unchanged after idle)`);
         }
     },
 
@@ -700,7 +700,7 @@ export const undoRegistry = Vue.reactive({
         
         const stacks = this.undoStacksByRoute.get(routeKey);
         if (!stacks) {
-            console.log(`[Undo] No history to clear for route: ${routeKey}`);
+            //console.log(`[Undo] No history to clear for route: ${routeKey}`);
             return false;
         }
         
@@ -711,7 +711,7 @@ export const undoRegistry = Vue.reactive({
         stacks.undoStack.splice(0);
         stacks.redoStack.splice(0);
         
-        console.log(`[Undo] Cleared history for route '${routeKey}' (${undoCount} undo, ${redoCount} redo)`);
+        //console.log(`[Undo] Cleared history for route '${routeKey}' (${undoCount} undo, ${redoCount} redo)`);
         return true;
     }
 });
