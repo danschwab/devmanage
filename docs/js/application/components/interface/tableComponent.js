@@ -1887,7 +1887,7 @@ export const TableComponent = {
             const count = tableRowSelectionState.clipboardMode 
                 ? tableRowSelectionState.clipboardItems.length
                 : tableRowSelectionState.selections.size;
-            return `${count} row${count !== 1 ? 's' : ''}`;
+            return `${tableRowSelectionState.clipboardMode === "copy" ? 'add ' : 'move '} ${count} row${count !== 1 ? 's' : ''}`;
         },
         dragFollowerStyle() {
             tableRowSelectionState._version;
@@ -1947,8 +1947,9 @@ export const TableComponent = {
                 return { display: 'none' };
             }
             
-            // Find the actual row element in the DOM using data attribute
-            const table = this.$el?.querySelector('table');
+            // Find the main data table (not the sticky header table)
+            // Use .table-wrapper to ensure we get the main table, not the sticky header clone
+            const table = this.$el?.querySelector('.table-wrapper table');
             if (!table) return { display: 'none' };
             
             const targetRow = table.querySelector(`tbody tr[data-visible-idx="${this.firstSelectedVisibleRowIndex}"]`);
@@ -2133,50 +2134,53 @@ export const TableComponent = {
             this.$nextTick(() => this._readAndProcessExternalClipboard());
         }
         
-        // Set up sticky header positioning
-        this._stickyHeader = useStickyHeader({
-            getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
-            // .sticky-header-spacer sits in-flow at exactly the top of the content-header div
-            // and its position is invariant: when sticky is inactive the spacer is 0-height and
-            // the wrapper follows it; when sticky is active the spacer grows to the wrapper's
-            // former height, keeping spacer.top at the same viewport position in both states.
-            getAnchorEl: () => this.$el?.querySelector('.sticky-header-spacer'),
-            getContainerEl: () => [
-                this.$el?.querySelector('.table-wrapper'),
-                this.$el?.closest('.container'),
-            ].filter(Boolean),
-            getIsActive: () => this.stickyActive,
-            canActivate: () => {
-                const tableWrapper = this.$el?.querySelector('.table-wrapper');
-                return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
-            },
-            onActivate: (navBottom) => {
-                // Measure spacer height only on first activation (before thead clone is added)
-                if (!this.stickyActive) {
-                    const wrapper = this.$el?.querySelector('.sticky-header-wrapper');
-                    this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
-                }
-                // Re-measure column widths on every tick (table may resize)
-                const thead = this.$el?.querySelector('.table-wrapper thead');
-                if (thead) {
-                    this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
-                        .map(th => th.getBoundingClientRect().width);
-                }
-                // Update position
-                const tableWrapper = this.$el?.querySelector('.table-wrapper');
-                const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
-                this.stickyActive = true;
-                this.showStickyHeader = true;
-                this.stickyTop = navBottom;
-                this.stickyLeft = rect ? rect.left : 0;
-                this.stickyWidth = rect ? rect.width : 0;
-            },
-            onDeactivate: () => {
-                this.stickyActive = false;
-                this.showStickyHeader = false;
-            },
-        });
-        this._stickyHeader.setup();
+        // Set up sticky header positioning (only for tables with showHeader enabled)
+        // Nested tables with showHeader=false don't need sticky headers
+        if (this.showHeader) {
+            this._stickyHeader = useStickyHeader({
+                getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
+                // .sticky-header-spacer sits in-flow at exactly the top of the content-header div
+                // and its position is invariant: when sticky is inactive the spacer is 0-height and
+                // the wrapper follows it; when sticky is active the spacer grows to the wrapper's
+                // former height, keeping spacer.top at the same viewport position in both states.
+                getAnchorEl: () => this.$el?.querySelector('.sticky-header-spacer'),
+                getContainerEl: () => [
+                    this.$el?.querySelector('.table-wrapper'),
+                    this.$el?.closest('.container'),
+                ].filter(Boolean),
+                getIsActive: () => this.stickyActive,
+                canActivate: () => {
+                    const tableWrapper = this.$el?.querySelector('.table-wrapper');
+                    return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
+                },
+                onActivate: (navBottom) => {
+                    // Measure spacer height only on first activation (before thead clone is added)
+                    if (!this.stickyActive) {
+                        const wrapper = this.$el?.querySelector('.sticky-header-wrapper');
+                        this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
+                    }
+                    // Re-measure column widths on every tick (table may resize)
+                    const thead = this.$el?.querySelector('.table-wrapper thead');
+                    if (thead) {
+                        this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
+                            .map(th => th.getBoundingClientRect().width);
+                    }
+                    // Update position
+                    const tableWrapper = this.$el?.querySelector('.table-wrapper');
+                    const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
+                    this.stickyActive = true;
+                    this.showStickyHeader = true;
+                    this.stickyTop = navBottom;
+                    this.stickyLeft = rect ? rect.left : 0;
+                    this.stickyWidth = rect ? rect.width : 0;
+                },
+                onDeactivate: () => {
+                    this.stickyActive = false;
+                    this.showStickyHeader = false;
+                },
+            });
+            this._stickyHeader.setup();
+        }
 
         // Mobile: collapse thead column buttons on scroll
         this._theadActiveScrollEl = document.querySelector('#app-content');
@@ -3786,6 +3790,16 @@ export const TableComponent = {
             }
             this.overriddenGroups = new Set(this.overriddenGroups);
         },
+
+        getGroupToggleIcon(rowIndex) {
+            // Returns 'expand' if group is collapsed, 'compress' if expanded
+            return this.isGroupMembersHidden(rowIndex) ? 'expand' : 'compress';
+        },
+
+        getGroupToggleTitle(rowIndex) {
+            // Returns appropriate title based on group state
+            return this.isGroupMembersHidden(rowIndex) ? 'Expand Group' : 'Collapse Group';
+        },
         
         isRowExpanded(rowIndex) {
             return this.expandedRows.has(rowIndex);
@@ -4505,6 +4519,17 @@ export const TableComponent = {
                                     </button>
                                 </td>
                             </tr>
+                            
+                            <!-- Group expand/collapse button between rows -->
+                            
+                            <button
+                                v-if="isRowGroupMaster(idx)"
+                                class="column-button between-rows" 
+                                :title="getGroupToggleTitle(idx)"
+                                @click="toggleGroupCollapse(idx)"
+                            >
+                                <span class="material-symbols-outlined">{{ getGroupToggleIcon(idx) }}</span>
+                            </button>
                             
                             <!-- Column-aligned detail rows (row-detail-rows slot) -->
                             <template v-if="allowDetails && $slots['row-detail-rows'] && shouldShowDetailsContent(row, idx)">

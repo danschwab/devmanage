@@ -667,6 +667,10 @@ button.card {
 
 /* Table Styling */
 
+.dynamic-table {
+    position: relative;
+}
+
 .table-wrapper{
     width: 100%;
     overflow-x: auto;
@@ -830,6 +834,24 @@ thead:hover .column-button:not(.active), .input-container:hover .column-button:n
     background-color: var(--color-gray-bg-hover);
     opacity: 1 !important;
 }
+
+.column-button.between-rows {
+    left: 50%;
+    top: auto;
+    transform: translate(-50%, -50%);
+    z-index: 2000;
+}
+.editing .column-button.between-rows {
+    opacity: 1;
+}
+.column-button.between-rows:last-child {
+    transform: translate(-50%, -100%);
+}
+tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hover) {
+    opacity: 1;
+}
+
+
 
 table:not(.editing) tr td:has(.table-wrapper) {
     padding: 0;
@@ -1902,6 +1924,11 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
     td.row-drag-handle {
         cursor: default;
     }
+
+    .column-button.between-rows {
+        opacity: 0;
+        pointer-events: none;
+    }
 }
 
 /* Detect devices that can't hover (touch-only devices) */
@@ -1929,6 +1956,10 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
 
     thead.active .column-button:not(.active) {
         opacity: 0.7;
+    }
+
+    .column-button.between-rows {
+        opacity: 1;
     }
 }
 

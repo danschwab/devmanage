@@ -150,7 +150,11 @@ input[type="button"].small,
 button.small {
     width: 60px;
 }
-
+input[type="submit"].large,
+input[type="button"].large,
+button.large {
+    width: 180px;
+}
 
 
 input[type="submit"]:hover,
