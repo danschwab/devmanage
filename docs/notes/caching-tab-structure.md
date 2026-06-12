@@ -2,7 +2,7 @@
 
 ## Tab location
 
-Spreadsheet: `CACHE` (`window.SPREADSHEET_IDS.CACHE` or the sheet id: `1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw`)
+Spreadsheet: `CACHE` (`window.ENDPOINT_IDS.CACHE` or the sheet id: `1lq3caE7Vjzit38ilGd9gLQd9F7W3X3pNIGLzbOB45aw`)
 Tab name: `Caching`
 
 ## Table layout

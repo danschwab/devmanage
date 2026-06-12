@@ -140,7 +140,7 @@ export class GoogleSheetsService {
         console.warn(`[GoogleSheets READ] ${tableId} → ${range}`);
         
         await GoogleSheetsAuth.checkAuth();
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.getSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
 
         // Remove try/catch to allow errors to bubble up to reactive store
@@ -168,7 +168,7 @@ export class GoogleSheetsService {
      */
     static async setSheetData(tableId, tabName, updates, mapping = null) {
         await GoogleSheetsAuth.checkAuth();
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.setSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         
         // Convert JS objects to sheet format
@@ -403,7 +403,7 @@ export class GoogleSheetsService {
     static async getSheetTabs(tableId) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
         
         const response = await GoogleSheetsService.withExponentialBackoff(() =>
@@ -429,7 +429,7 @@ export class GoogleSheetsService {
     static async hideTabs(tableId, tabs) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
@@ -459,7 +459,7 @@ export class GoogleSheetsService {
     static async showTabs(tableId, tabs) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId and title pairs
@@ -490,7 +490,7 @@ export class GoogleSheetsService {
     static async copySheetTab(tableId, sourceTab, newTabName) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Use provided sheetId directly
@@ -565,7 +565,7 @@ export class GoogleSheetsService {
     static async createBlankTab(tableId, newTabName) {
         await GoogleSheetsAuth.checkAuth();
 
-        const spreadsheetId = window.SPREADSHEET_IDS[tableId];
+        const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
 
         // Add the new sheet/tab

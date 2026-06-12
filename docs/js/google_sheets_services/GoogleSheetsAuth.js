@@ -42,6 +42,12 @@ export class GoogleSheetsAuth {
     static _authenticatePromise = null;
     static _silentRefreshPromise = null;
 
+    static _tokenCoversRequiredScopes(token) {
+        if (!token || !token.scope) return false;
+        const granted = token.scope.split(' ');
+        return SCOPES.split(' ').filter(s => s).every(s => granted.includes(s));
+    }
+
     static async initialize() {
         try {
             // Check if APIs are already loaded (from HTML script tags)
@@ -60,6 +66,11 @@ export class GoogleSheetsAuth {
             // Try to restore previous session
             const savedToken = BaseTokenManager.getStoredToken();
             if (savedToken && !BaseTokenManager.isTokenExpired(savedToken)) {
+                if (!this._tokenCoversRequiredScopes(savedToken)) {
+                    console.warn('[GoogleSheetsAuth] Stored token is missing required scopes — clearing to force re-auth');
+                    BaseTokenManager.clearStoredToken();
+                    return true;
+                }
                 gapi.client.setToken(savedToken);
                 return true;
             }
@@ -161,6 +172,11 @@ export class GoogleSheetsAuth {
                         reject(new Error('[GoogleSheetsAuth.authenticate] AUTH_FAILED: Authentication failed - no token obtained'));
                         return;
                     }
+
+                    if (!this._tokenCoversRequiredScopes(token)) {
+                        const missing = SCOPES.split(' ').filter(s => s && !token.scope?.split(' ').includes(s));
+                        console.warn('[GoogleSheetsAuth.authenticate] Granted token is missing scopes (user may have declined):', missing);
+                    }
                     
                     BaseTokenManager.storeToken(token);
                     
@@ -217,6 +233,11 @@ export class GoogleSheetsAuth {
                             resolve(false);
                             return;
                         }
+                        if (!this._tokenCoversRequiredScopes(token)) {
+                            console.warn('[GoogleSheetsAuth.silentRefresh] Refreshed token is missing required scopes — full re-auth needed');
+                            resolve(false);
+                            return;
+                        }
                         BaseTokenManager.storeToken(token);
                         resolve(true);
                     },
@@ -245,13 +266,18 @@ export class GoogleSheetsAuth {
         if (!token) {
             const savedToken = BaseTokenManager.getStoredToken();
             if (savedToken && !BaseTokenManager.isTokenExpired(savedToken)) {
+                if (!this._tokenCoversRequiredScopes(savedToken)) {
+                    console.warn('[GoogleSheetsAuth.checkAuth] Stored token is missing required scopes — clearing');
+                    BaseTokenManager.clearStoredToken();
+                    return false;
+                }
                 gapi.client.setToken(savedToken);
                 return true;
             }
             return false;
         }
 
-        // Token exists in gapi.client - verify it's not expired
+        // Token exists in gapi.client — verify it's not expired
         const savedToken = BaseTokenManager.getStoredToken();
         if (savedToken && BaseTokenManager.isTokenExpired(savedToken)) {
             gapi.client.setToken(null);

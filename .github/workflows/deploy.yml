@@ -17,6 +17,7 @@ jobs:
       PACK_LISTS: ${{ vars.PACK_LISTS }}
       PROD_SCHED: ${{ vars.PROD_SCHED }}
       CACHE: ${{ vars.CACHE }}
+      THUMBNAILS: ${{ vars.THUMBNAILS }}
       API_KEY: ${{ vars.API_KEY }}
       CLIENT_ID: ${{ vars.CLIENT_ID }}
     steps:
@@ -27,7 +28,7 @@ jobs:
       - name: Inject config.js from secrets and variables
         run: |
           echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
-          echo "window.SPREADSHEET_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}' };" >> docs/js/google_sheets_services/config.js
+          echo "window.ENDPOINT_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}', THUMBNAILS: '${THUMBNAILS}' };" >> docs/js/google_sheets_services/config.js
           echo "// Build timestamp: $(date -u +%Y%m%d%H%M%S)" >> docs/js/google_sheets_services/config.js
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

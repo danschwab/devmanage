@@ -82,7 +82,7 @@ class database_uncached {
      * @param {string} folderId - Google Drive folder ID containing the images
      * @returns {Promise<string|null>} Direct image URL or null if not found
      */
-    static async getItemImageUrl(deps, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+    static async getItemImageUrl(deps, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
         // Defensive: handle null, undefined, or non-string values
         if (!itemNumber || itemNumber === null || itemNumber === undefined) {
             //console.warn('[Database.getItemImageUrl] No itemNumber provided, returning empty string');
@@ -142,7 +142,7 @@ class database_uncached {
      * @param {string} folderId - Google Drive folder ID for thumbnails
      * @returns {Promise<string|null>} The new image URL, or null on failure
      */
-    static async uploadItemImage(file, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+    static async uploadItemImage(file, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
         const itemNumberStr = String(itemNumber).trim();
         const ext = file.type === 'image/png' ? 'png' : 'jpg';
         const fileName = `${itemNumberStr}.${ext}`;
@@ -181,7 +181,7 @@ class database_uncached {
      * @param {string} folderId - Google Drive folder ID
      * @returns {Promise<string>} Blob URL or empty string
      */
-    static async getItemImageBlobUrl(deps, itemNumber, folderId = '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM') {
+    static async getItemImageBlobUrl(deps, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
         if (!itemNumber) return '';
         const itemNumberStr = String(itemNumber).trim();
         if (!itemNumberStr) return '';
