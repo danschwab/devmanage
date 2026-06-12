@@ -83,7 +83,7 @@ class applicationUtils_uncached {
             if (data === null || 
                 (Array.isArray(data) && data.length === 0) || 
                 (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0)) {
-                console.log('Skipping tab creation for empty data, ID:', id);
+                //console.log('Skipping tab creation for empty data, ID:', id);
                 return;
             }
             
@@ -111,10 +111,10 @@ class applicationUtils_uncached {
                 if (rowIndex !== -1) {
                     // Remove the row from existingData
                     existingData.splice(rowIndex, 1);
-                    console.log('Deleting user data entry for ID:', id);
+                    //console.log('Deleting user data entry for ID:', id);
                 } else {
                     // Entry doesn't exist, nothing to delete
-                    console.log('User data entry not found for deletion, ID:', id);
+                    //console.log('User data entry not found for deletion, ID:', id);
                     return;
                 }
             } else {
@@ -128,7 +128,7 @@ class applicationUtils_uncached {
                 }
             }
             
-            console.log('Storing user data - writing all rows:', existingData);
+            //console.log('Storing user data - writing all rows:', existingData);
             
             // Write back ALL rows to the sheet
             return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' }, {
@@ -650,7 +650,7 @@ class applicationUtils_uncached {
         const colLetter = this._numberToColumnLetter(col);
         const range = `Locks!${colLetter}1:${colLetter}1`;
         await GoogleSheetsService.setSheetData('CACHE', range, [[user]], null);
-        console.log(`[_writeUserColumn] Added user ${user} at ${range}`);
+        //console.log(`[_writeUserColumn] Added user ${user} at ${range}`);
     }
     
     /**
@@ -729,7 +729,7 @@ class applicationUtils_uncached {
             //console.log('[getLocksData] Raw data from Locks sheet:', rawData);
             
             if (!rawData || rawData.length === 0) {
-                console.log('[getLocksData] No data found, returning empty grid');
+                //console.log('[getLocksData] No data found, returning empty grid');
                 return { users: [], lockKeys: [], locks: [] };
             }
             

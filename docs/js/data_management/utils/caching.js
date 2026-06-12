@@ -239,7 +239,7 @@ class CacheManager {
                 keysToInvalidate.push(key);
             }
         }
-        console.log('[cache] invalidateByPrefix:', prefix, '| matched:', keysToInvalidate);
+        //console.log('[cache] invalidateByPrefix:', prefix, '| matched:', keysToInvalidate);
         
         // Invalidate each matching key (this will also handle dependents)
         for (const key of keysToInvalidate) {

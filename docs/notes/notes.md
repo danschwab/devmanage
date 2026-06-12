@@ -1,15 +1,35 @@
 ## Ask Ben
 
+!!! update schedule filtering settings
+!!! simplify controls on reports page and add the
+!!! print view for reports page
+!!! share button on pages
+!! stack show buttons in overlapping show-lists
+! add and configure default crate types, ben often goes back and changes multiple times
+! individual item tracking? Maybe on a notes page? allow notes to be added to any endpoint and saved.
+! un-alert items???
+
+automation rules (MAYBE NOT RIGHT NOW...)
+
+- coffin crate 10' pile in, (sometimes furniture?)
+- some things have designated crates, some more than one config of crate and are split out on occasion, or split out when less than crate is sent
+- often if sending one, we will send on a skid
+
+furniture not inv?
+allow tables to be omitted from inventorying
+
+- communication tool??
+
 - Inventory Extras (Misc tab usage, easy additions, how to do this)
 - Nomenclature
   TTOP/TBASE/TV/AV numbering
   SHLF vs SHELF, CNTR vs COUNTER, CAB vs CABINET, etc
 - doubles, as and bs
   should we keep them as separate items knowing they won't inventory check? Or should we consolidate them and just track overall quantity?
-  A variant tracking system would allow for better tracking
+  A variant tracking system would allow for better tracking (NOT NOW)
 - descriptions in the software, what descriptions are useful
-- How can I make crating better?
 - Copy paste?
+- How can I make crating better?
 
 ## Important Notes
 
