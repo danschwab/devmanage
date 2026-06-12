@@ -408,7 +408,7 @@ class inventoryUtils_uncached {
      * @returns {Promise<{ applied: boolean }>}
      */
     static async checkAndApplyPendingChanges(tabOrItemName, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
-        console.log(`[InventoryUtils] Checking for pending changes to apply for "${tabOrItemName}"...`);
+        //console.log(`[InventoryUtils] Checking for pending changes to apply for "${tabOrItemName}"...`);
         
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
@@ -447,7 +447,7 @@ class inventoryUtils_uncached {
      * @returns {Promise<boolean>}
      */
     static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note = null, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
-        console.log(`[InventoryUtils] Saving pending change entry for "${tabOrItemName}"...`);
+        //console.log(`[InventoryUtils] Saving pending change entry for "${tabOrItemName}"...`);
         
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
