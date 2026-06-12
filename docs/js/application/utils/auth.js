@@ -469,7 +469,7 @@ export class Auth {
             return false;
         }
 
-        console.log('[Auth] Waiting for in-flight authentication before showing modal');
+        //console.log('[Auth] Waiting for in-flight authentication before showing modal');
         await Promise.allSettled([this._loginPromise]);
         return true;
     }
