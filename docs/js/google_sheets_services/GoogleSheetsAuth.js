@@ -142,10 +142,6 @@ export class GoogleSheetsAuth {
         return this._authenticatePromise;
     }
 
-    static getAuthenticationPromise() {
-        return this._authenticatePromise;
-    }
-
     static async _authenticateInternal() {
         if (!gapiInited || !gisInited) {
             throw new Error('[GoogleSheetsAuth.authenticate] INIT_ERROR: Google API not properly initialized');
@@ -306,21 +302,14 @@ export class GoogleSheetsAuth {
         try {
             await this.checkAuth();
             const token = gapi.client.getToken();
-            if (!token) return null;
+            if (!token?.access_token) return null;
 
-            // Get basic profile from google identity
-            const googleUser = google.accounts.oauth2.hasGrantedAllScopes(token, 'email');
-            const profile = googleUser && token.access_token;
-            
-            if (profile) {
-                const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { 'Authorization': `Bearer ${token.access_token}` }
-                });
-                const data = await response.json();
-                this.userEmail = data.email;
-                return this.userEmail;
-            }
-            return null;
+            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${token.access_token}` }
+            });
+            const data = await response.json();
+            this.userEmail = data.email;
+            return this.userEmail;
         } catch (error) {
             console.error('Error getting user email:', error);
             return null;

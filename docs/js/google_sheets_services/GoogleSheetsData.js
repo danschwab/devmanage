@@ -70,27 +70,15 @@ export class GoogleSheetsService {
                     throw err;
                 }
                 
-                // Immediately throw auth/permission errors - retrying won't help
+                // Immediately throw auth errors — retrying won't help; the Auth layer handles re-auth
                 const isAuthError = err && (
+                    err.status === 401 ||
+                    (err.result?.error?.code === 401) ||
                     err.result?.error?.status === 'PERMISSION_DENIED' ||
                     err.result?.error?.message?.toLowerCase().includes('insufficient authentication') ||
                     err.result?.error?.message?.toLowerCase().includes('insufficient auth')
                 );
                 if (isAuthError) throw err;
-
-                // If 401 Unauthorized, try to re-authenticate once and retry
-                if (
-                    (err && (err.status === 401 || (err.result && err.result.error && err.result.error.code === 401)))
-                    && attempt === 0
-                ) {
-                    try {
-                        await GoogleSheetsAuth.authenticate(false);
-                        attempt++;
-                        continue;
-                    } catch (reauthErr) {
-                        throw reauthErr;
-                    }
-                }
                 
                 // Check for rate limit or quota errors (429, or 403 quota exhausted only)
                 const isRateLimit = err && (

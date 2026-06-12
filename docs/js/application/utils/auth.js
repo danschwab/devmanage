@@ -475,25 +475,13 @@ export class Auth {
 
     static async _waitForPendingAuthentication(options = {}) {
         const excludedPromises = new Set((options.excludePromises || []).filter(Boolean));
-        const pendingAuthentications = [];
 
-        if (this._loginPromise && !excludedPromises.has(this._loginPromise)) {
-            pendingAuthentications.push(this._loginPromise);
-        }
-
-        const googleAuthPromise = typeof GoogleSheetsAuth.getAuthenticationPromise === 'function'
-            ? GoogleSheetsAuth.getAuthenticationPromise()
-            : null;
-        if (googleAuthPromise && !excludedPromises.has(googleAuthPromise)) {
-            pendingAuthentications.push(googleAuthPromise);
-        }
-
-        if (pendingAuthentications.length === 0) {
+        if (!this._loginPromise || excludedPromises.has(this._loginPromise)) {
             return false;
         }
 
         console.log('[Auth] Waiting for in-flight authentication before showing modal');
-        await Promise.allSettled([...new Set(pendingAuthentications)]);
+        await Promise.allSettled([this._loginPromise]);
         return true;
     }
 

@@ -43,10 +43,6 @@ export class FakeGoogleSheetsAuth {
         return this._authenticatePromise;
     }
 
-    static getAuthenticationPromise() {
-        return this._authenticatePromise;
-    }
-
     static async _authenticateInternal() {
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
