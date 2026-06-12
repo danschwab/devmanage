@@ -131,7 +131,7 @@ export class Auth {
     }
 
     static async logout() {
-        console.log('[Auth] Logout initiated');
+        //console.log('[Auth] Logout initiated');
         authState.isLoading = true;
         authState.error = null;
         authPromptShowing = false; // Clear any auth prompts immediately
@@ -142,7 +142,7 @@ export class Auth {
             const tokenValid = GoogleSheetsAuth.isAuthenticated();
             
             if (tokenValid && !authState.permissionsWarning) {
-                console.log('[Auth] Token still valid, attempting to save data before logout...');
+                //console.log('[Auth] Token still valid, attempting to save data before logout...');
                 const manager = await getModalManager();
                 
                 let saveCompleted = false;
@@ -160,7 +160,7 @@ export class Auth {
                             null, // No confirm button
                             () => {
                                 // User clicked cancel - abort the save and continue with logout
-                                console.log('[Auth] User canceled save during logout');
+                                //console.log('[Auth] User canceled save during logout');
                                 abortSave();
                             },
                             'Saving Changes',
@@ -174,7 +174,7 @@ export class Auth {
                     // Race the save against the user's cancel action
                     await Promise.race([this._saveDataBeforeLogout(), abortSavePromise]);
                     saveCompleted = true;
-                    console.log('[Auth] Data saved successfully before logout');
+                    //console.log('[Auth] Data saved successfully before logout');
                 } catch (saveError) {
                     console.warn('[Auth] Save failed during logout, continuing anyway:', saveError);
                 }
@@ -187,9 +187,9 @@ export class Auth {
                     manager.removeModal(savingModal.id);
                 }
             } else if (authState.permissionsWarning) {
-                console.log('[Auth] Missing permissions, skipping save during logout');
+                //console.log('[Auth] Missing permissions, skipping save during logout');
             } else {
-                console.log('[Auth] Token expired, skipping save during logout');
+                //console.log('[Auth] Token expired, skipping save during logout');
             }
             
             // Proceed with unconditional cleanup
@@ -270,7 +270,7 @@ export class Auth {
                 if (GoogleSheetsAuth.getTokenSecondsRemaining() < 600) {
                     GoogleSheetsAuth.silentRefresh().then(success => {
                         if (success) {
-                            console.log('[Auth] Proactive token renewal succeeded');
+                            //console.log('[Auth] Proactive token renewal succeeded');
                             Auth._startProactiveRefreshTimer();
                         }
                     });
@@ -293,11 +293,11 @@ export class Auth {
             //   Layer 2: silentRefresh() works  → no popup, session renewed silently.
             //   Layer 3: silentRefresh() fails  → Auth.login() opens the full Google popup.
             if (authPromptShowing) {
-                console.log(`[Auth] Auth prompt already showing, returning false`);
+                //console.log(`[Auth] Auth prompt already showing, returning false`);
                 return false;
             }
 
-            console.warn(`[Auth] Authentication check failed for ${context}`);
+            //console.warn(`[Auth] Authentication check failed for ${context}`);
             authPromptShowing = true;
             const manager = await getModalManager();
 
@@ -311,28 +311,28 @@ export class Auth {
                         modalDismissed = true;
                         try {
                             // Layer 2: try silent refresh inside the button click gesture
-                            console.log(`[Auth] Attempting silent refresh for ${context}...`);
+                            //console.log(`[Auth] Attempting silent refresh for ${context}...`);
                             const refreshed = await GoogleSheetsAuth.silentRefresh();
                             if (refreshed) {
                                 reloadErrorStores();
-                                console.log(`[Auth] Silent refresh succeeded for ${context}`);
+                                //console.log(`[Auth] Silent refresh succeeded for ${context}`);
                                 resolve(true);
                                 return;
                             }
 
                             // Layer 3: Google session gone — open full login popup
-                            console.log(`[Auth] Silent refresh failed, opening login for ${context}...`);
+                            //console.log(`[Auth] Silent refresh failed, opening login for ${context}...`);
                             const success = await Auth.login();
                             if (success) {
-                                console.log(`[Auth] Re-authentication successful for ${context}`);
+                                //console.log(`[Auth] Re-authentication successful for ${context}`);
                                 resolve(true);
                             } else {
-                                console.error(`[Auth] Re-authentication failed for ${context}`);
+                                //console.error(`[Auth] Re-authentication failed for ${context}`);
                                 await Auth._showAuthErrorModal('Authentication Failed', 'Re-authentication failed. Please log in manually.');
                                 resolve(false);
                             }
                         } catch (error) {
-                            console.error(`[Auth] Re-authentication error for ${context}:`, error);
+                            //console.error(`[Auth] Re-authentication error for ${context}:`, error);
                             await Auth._showAuthErrorModal('Authentication Error', 'Re-authentication failed: ' + error.message);
                             resolve(false);
                         } finally {
@@ -341,7 +341,7 @@ export class Auth {
                     },
                     () => {
                         modalDismissed = true;
-                        console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
+                        //console.log(`[Auth] User declined re-authentication for ${context}, logging out`);
                         authPromptShowing = false;
                         Auth.logout();
                         resolve(false);
@@ -356,7 +356,7 @@ export class Auth {
                     if (!manager.modals.find(m => m.id === modal.id)) {
                         clearInterval(checkModalDismissed);
                         if (!modalDismissed) {
-                            console.log(`[Auth] Auth modal dismissed without action, logging out`);
+                            //console.log(`[Auth] Auth modal dismissed without action, logging out`);
                             authPromptShowing = false;
                             Auth.logout();
                             resolve(false);
@@ -385,38 +385,6 @@ export class Auth {
         return authPromptShowing;
     }
 
-    /**
-     * Set a test mode email override (for development/testing only)
-     * This will make the application think the user is the specified email
-     * without affecting actual authentication
-     * @param {string|null} email - Email to use, or null to disable test mode
-     */
-    static setTestModeEmail(email) {
-        if (email === null || email === undefined) {
-            console.log('[Auth] Test mode disabled, using real user email');
-            testModeEmail = null;
-        } else {
-            console.log(`[Auth] Test mode enabled, user email set to: ${email}`);
-            testModeEmail = email;
-        }
-        
-        // Update current auth state if user is already authenticated
-        if (authState.isAuthenticated && authState.user) {
-            const effectiveEmail = testModeEmail || authState.user.email;
-            authState.user = {
-                email: effectiveEmail,
-                name: effectiveEmail?.split('@')[0] || 'User'
-            };
-            console.log('[Auth] User state updated with test email');
-        }
-    }
-
-    /**
-     * Get the current test mode email (if any)
-     */
-    static getTestModeEmail() {
-        return testModeEmail;
-    }
 
     static _buildPermissionsWarning() {
         const missing = GoogleSheetsAuth.getMissingScopes();
@@ -582,36 +550,3 @@ export function getDeviceId() {
     }
     return id;
 }
-
-/**
- * Expose console function for easy testing
- * Usage: switchUser('test@example.com') or switchUser(null) to reset
- */
-window.switchUser = function(email) {
-    if (email === null || email === undefined || email === '') {
-        Auth.setTestModeEmail(null);
-        console.log('✅ Test mode disabled. Using real authenticated user.');
-    } else {
-        Auth.setTestModeEmail(email);
-        console.log(`✅ Now testing as: ${email}`);
-        console.log('💡 Note: This only affects the email returned by the app, not actual authentication.');
-    }
-    
-    // Log current user state
-    if (Auth.state.isAuthenticated && Auth.state.user) {
-        console.log(`Current user state: ${Auth.state.user.email}`);
-    } else {
-        console.log('No user currently authenticated.');
-    }
-};
-
-console.log(
-    '%c💡 User Switch Testing Available',
-    'font-size: 12px; color: #4488ff; font-weight: bold'
-);
-console.log(
-    'Use window.switchUser(email) to test as a different user\n' +
-    'Usage:\n' +
-    '  switchUser(\'user@example.com\') - Test as specified user\n' +
-    '  switchUser(null)               - Disable, use real authenticated user'
-);

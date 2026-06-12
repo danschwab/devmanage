@@ -293,7 +293,7 @@ export const CardsComponent = {
             }
         },
         handleRefresh() {
-            console.log('CardsComponent: Refresh requested');
+            //console.log('CardsComponent: Refresh requested');
             this.$emit('refresh');
         },
         getNormalizedDefaultSortDirection() {

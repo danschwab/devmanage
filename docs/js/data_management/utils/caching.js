@@ -439,7 +439,7 @@ export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
                     }
                 }
                 if (shouldInvalidate) {
-                    console.log('[CacheTimestampPoller] Remote change detected for', key, '- invalidating');
+                    //console.log('[CacheTimestampPoller] Remote change detected for', key, '- invalidating');
                     CacheManager.invalidateByPrefix(key);
                 }
             }

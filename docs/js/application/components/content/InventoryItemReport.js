@@ -273,8 +273,8 @@ export const InventoryItemReport = {
             this.containerPath || 'inventory/reports/item-shortages',
             this.appContext?.currentPath
         );
-        console.log('[InventoryItemReport] Initial URL parameters:', params);
-        console.log('[InventoryItemReport] Waiting for child components to sync with URL...');
+        //console.log('[InventoryItemReport] Initial URL parameters:', params);
+        //console.log('[InventoryItemReport] Waiting for child components to sync with URL...');
     },
     template: html`
         <div>

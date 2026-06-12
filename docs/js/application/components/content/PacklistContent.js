@@ -121,9 +121,9 @@ export const PacklistMenuComponent = {
                 async () => {
                     this.isRemovingLock = true;
                     try {
-                        console.log(`[PacklistContent.removeLock] About to call forceUnlockSheet for ${tabName}`);
+                        //console.log(`[PacklistContent.removeLock] About to call forceUnlockSheet for ${tabName}`);
                         const result = await Requests.forceUnlockSheet('PACK_LISTS', tabName, 'User requested via hamburger menu');
-                        console.log(`[PacklistContent.removeLock] forceUnlockSheet returned:`, result);
+                        //console.log(`[PacklistContent.removeLock] forceUnlockSheet returned:`, result);
                         
                         if (result.success) {
                             // Cache is automatically invalidated by the mutation method
@@ -854,7 +854,7 @@ export const PacklistContent = {
                 
                 if (resolvedName !== identifier) {
                     // Route uses non-canonical name, redirect to actual tab name
-                    console.log(`[PacklistContent] Redirecting from "${identifier}" to canonical "${resolvedName}"`);
+                    //console.log(`[PacklistContent] Redirecting from "${identifier}" to canonical "${resolvedName}"`);
                     
                     // Build new path with resolved name
                     const segments = this.containerPath.split('/');
@@ -868,7 +868,7 @@ export const PacklistContent = {
                 
                 // Identifier matches actual tab name, proceed
                 this.resolvedTabName = resolvedName;
-                console.log(`[PacklistContent] Verified packlist: ${resolvedName}`);
+                //console.log(`[PacklistContent] Verified packlist: ${resolvedName}`);
                 
             } catch (error) {
                 console.error('[PacklistContent] Error resolving packlist identifier:', error);
@@ -880,7 +880,7 @@ export const PacklistContent = {
         async checkAutoSavedPacklists() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.packlistsStore?.data) return;
             
-            console.log('[PacklistContent] Checking auto-saved packlists...');
+            //console.log('[PacklistContent] Checking auto-saved packlists...');
             
             try {
                 // Clear the set before checking to avoid stale entries
@@ -906,12 +906,12 @@ export const PacklistContent = {
                     );
                     
                     if (hasAutoSave) {
-                        console.log(`[PacklistContent] Found auto-save for: ${tab.title}`);
+                        //console.log(`[PacklistContent] Found auto-save for: ${tab.title}`);
                         this.autoSavedPacklists.add(tab.title);
                     }
                 }
                 
-                console.log('[PacklistContent] Auto-saved packlists:', Array.from(this.autoSavedPacklists));
+                //console.log('[PacklistContent] Auto-saved packlists:', Array.from(this.autoSavedPacklists));
             } catch (error) {
                 console.error('[PacklistContent] Error checking auto-saved packlists:', error);
             }

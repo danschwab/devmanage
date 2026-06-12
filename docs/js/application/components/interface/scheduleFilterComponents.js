@@ -268,7 +268,7 @@ export const ScheduleAdvancedFilter = {
                 // Skip if params haven't actually changed
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
                 
-                console.log('[AdvancedSearch] URL parameters changed, syncing filters');
+                //console.log('[AdvancedSearch] URL parameters changed, syncing filters');
                 this.syncWithURL();
             }
         }
@@ -1515,7 +1515,7 @@ export const ScheduleFilterSelect = {
                 const oldFilter = JSON.stringify(filterKeys.map(k => oldParams[k]));
                 if (newFilter === oldFilter) return;
                 
-                console.log('[ScheduleFilterSelect] URL parameters changed, syncing dropdown');
+                //console.log('[ScheduleFilterSelect] URL parameters changed, syncing dropdown');
                 this.syncWithURL();
             },
             deep: true
@@ -1968,10 +1968,10 @@ export const InventoryCategoryFilter = {
         }
     },
     async mounted() {
-        console.log('[InventoryCategoryFilter] Mounting component', {
-            containerPath: this.containerPath,
-            currentPath: this.appContext?.currentPath
-        });
+        //console.log('[InventoryCategoryFilter] Mounting component', {
+        //    containerPath: this.containerPath,
+        //    currentPath: this.appContext?.currentPath
+        //});
         
         // Initialize categories store
         this.categoriesStore = getReactiveStore(
@@ -1981,15 +1981,15 @@ export const InventoryCategoryFilter = {
             null // No analysis config
         );
         
-        console.log('[InventoryCategoryFilter] Categories store initialized, isLoading:', this.categoriesStore.isLoading);
+        //console.log('[InventoryCategoryFilter] Categories store initialized, isLoading:', this.categoriesStore.isLoading);
         
         // Wait for initial load to complete
         if (this.categoriesStore.isLoading) {
-            console.log('[InventoryCategoryFilter] Waiting for categories to load...');
+            //console.log('[InventoryCategoryFilter] Waiting for categories to load...');
             await new Promise(resolve => {
                 const unwatch = this.$watch('categoriesStore.isLoading', (newValue) => {
                     if (!newValue) {
-                        console.log('[InventoryCategoryFilter] Categories loaded, count:', this.categories.length);
+                        //console.log('[InventoryCategoryFilter] Categories loaded, count:', this.categories.length);
                         unwatch();
                         resolve();
                     }
@@ -1998,34 +1998,34 @@ export const InventoryCategoryFilter = {
         }
         
         // Perform initial sync after data is loaded
-        console.log('[InventoryCategoryFilter] Performing initial sync with URL');
+        //console.log('[InventoryCategoryFilter] Performing initial sync with URL');
         this.hasPerformedInitialSync = true;
         this.syncWithURL();
     },
     methods: {
         handleChange(event) {
             const value = event.target.value;
-            console.log('[InventoryCategoryFilter] User changed category selection:', value);
+            //console.log('[InventoryCategoryFilter] User changed category selection:', value);
             this.selectedCategory = value;
             
             // Emit event with category name or null for "All Items"
             const categoryName = value || null;
             
-            console.log('[InventoryCategoryFilter] Emitting category-selected and updating URL with:', categoryName);
+            //console.log('[InventoryCategoryFilter] Emitting category-selected and updating URL with:', categoryName);
             this.$emit('category-selected', categoryName);
             this.updateURL(categoryName);
         },
         
         updateURL(categoryName) {
-            console.log('[InventoryCategoryFilter] updateURL called with:', categoryName);
+            //console.log('[InventoryCategoryFilter] updateURL called with:', categoryName);
             const cleanPath = this.containerPath.split('?')[0];
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
-            console.log('[InventoryCategoryFilter] Update context:', {
-                cleanPath,
-                isOnDashboard,
-                currentPath: this.appContext?.currentPath
-            });
+            //console.log('[InventoryCategoryFilter] Update context:', {
+            //    cleanPath,
+            //    isOnDashboard,
+            //    currentPath: this.appContext?.currentPath
+            //});
             
             // Build new path with itemCategoryFilter parameter
             const newPath = NavigationRegistry.buildPathWithCurrentParams(
@@ -2036,46 +2036,46 @@ export const InventoryCategoryFilter = {
                 }
             );
             
-            console.log('[InventoryCategoryFilter] Built new path:', newPath);
+            //console.log('[InventoryCategoryFilter] Built new path:', newPath);
             
             if (isOnDashboard) {
                 // Update dashboard registry with new path
-                console.log('[InventoryCategoryFilter] Updating dashboard registry');
+                //console.log('[InventoryCategoryFilter] Updating dashboard registry');
                 NavigationRegistry.dashboardRegistry.updatePath(
                     cleanPath,
                     newPath
                 );
             } else if (this.navigateToPath) {
-                console.log('[InventoryCategoryFilter] Calling navigateToPath with:', newPath);
+                //console.log('[InventoryCategoryFilter] Calling navigateToPath with:', newPath);
                 this.navigateToPath(newPath);
             } else {
-                console.log('[InventoryCategoryFilter] No navigation method available');
+                //console.log('[InventoryCategoryFilter] No navigation method available');
             }
         },
         
         syncWithURL() {
-            console.log('[InventoryCategoryFilter] syncWithURL called');
+            //console.log('[InventoryCategoryFilter] syncWithURL called');
             const params = NavigationRegistry.getParametersForContainer(
                 this.containerPath,
                 this.appContext?.currentPath
             );
             
-            console.log('[InventoryCategoryFilter] URL parameters:', params);
+            //console.log('[InventoryCategoryFilter] URL parameters:', params);
             
             // Get itemCategoryFilter from URL params
             const categoryFromUrl = params?.itemCategoryFilter || '';
             
-            console.log('[InventoryCategoryFilter] Category from URL:', categoryFromUrl, 'hasPerformedInitialSync:', this.hasPerformedInitialSync);
+            //console.log('[InventoryCategoryFilter] Category from URL:', categoryFromUrl, 'hasPerformedInitialSync:', this.hasPerformedInitialSync);
             
             // Update selected category
             this.selectedCategory = categoryFromUrl;
             
             // Emit the category if component is being used
             if (this.hasPerformedInitialSync) {
-                console.log('[InventoryCategoryFilter] Emitting category-selected event:', categoryFromUrl || null);
+                //console.log('[InventoryCategoryFilter] Emitting category-selected event:', categoryFromUrl || null);
                 this.$emit('category-selected', categoryFromUrl || null);
             } else {
-                console.log('[InventoryCategoryFilter] Skipping event emit - not initialized yet');
+                //console.log('[InventoryCategoryFilter] Skipping event emit - not initialized yet');
             }
         }
     },

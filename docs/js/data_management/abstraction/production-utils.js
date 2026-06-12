@@ -16,7 +16,7 @@ class productionUtils_uncached {
         const rawData = await deps.call(Database.getData, 'PROD_SCHED', tabName);
         
         if (!rawData || rawData.length === 0) {
-            console.log('[production-utils] No data available to generate mapping');
+            //console.log('[production-utils] No data available to generate mapping');
             return {};
         }
         
@@ -24,7 +24,7 @@ class productionUtils_uncached {
         const headers = rawData[0];
         
         if (!Array.isArray(headers)) {
-            console.log('[production-utils] Invalid data structure, expected array of headers');
+            //console.log('[production-utils] Invalid data structure, expected array of headers');
             return {};
         }
         
@@ -36,7 +36,7 @@ class productionUtils_uncached {
             }
         });
         
-        console.log('[production-utils] Generated mapping from ProductionSchedule headers:', mapping);
+        //console.log('[production-utils] Generated mapping from ProductionSchedule headers:', mapping);
         return mapping;
     }
 
@@ -48,14 +48,14 @@ class productionUtils_uncached {
      * @returns {Promise<Array>} Array of filtered show data
      */
     static async getOverlappingShows(deps, parameters = null, searchParams = null) {
-        console.log('[production-utils] getOverlappingShows called with:', parameters);
+        //console.log('[production-utils] getOverlappingShows called with:', parameters);
         const tabName = "Production Schedule";
         
         // Get dynamic mapping from ProductionSchedule headers
         const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
         
         let data = await deps.call(Database.getData, 'PROD_SCHED', tabName, mapping);
-        console.log('[production-utils] Loaded schedule data:', data);
+        //console.log('[production-utils] Loaded schedule data:', data);
 
         // Apply text filters first
         if (searchParams) {
@@ -64,12 +64,12 @@ class productionUtils_uncached {
 
         // If no parameters or no date filters, return all data
         if (!parameters || !parameters.dateFilters || parameters.dateFilters.length === 0) {
-            console.log('[production-utils] No date filters provided, returning all data');
+            //console.log('[production-utils] No date filters provided, returning all data');
             return data;
         }
 
         const dateFilters = parameters.dateFilters;
-        console.log('[production-utils] Processing date filters:', dateFilters);
+        //console.log('[production-utils] Processing date filters:', dateFilters);
 
         // Helper to get date from row based on column
         const getRowDate = (row, column) => {
@@ -139,7 +139,7 @@ class productionUtils_uncached {
         const validDates = filterDates.filter(d => d !== null);
         
         if (validDates.length === 0) {
-            console.log('[production-utils] Could not resolve any filter dates');
+            //console.log('[production-utils] Could not resolve any filter dates');
             return [];
         }
 
@@ -182,7 +182,7 @@ class productionUtils_uncached {
             });
         });
 
-        console.log(`[production-utils] Filtered ${data.length} shows to ${filtered.length} matching date filters`);
+        //console.log(`[production-utils] Filtered ${data.length} shows to ${filtered.length} matching date filters`);
         
         // Normalize all date columns to ensure correct years before returning
         // This fixes user data entry errors (e.g., Dec ship dates for Jan shows)
@@ -276,7 +276,7 @@ class productionUtils_uncached {
     static async computeIdentifierReferenceData(deps) {
         const clientsData = await deps.call(Database.getData, 'CACHE', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
         const showsData = await deps.call(Database.getData, 'CACHE', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
-        console.log('[production-utils] Loaded reference data for fuzzy matching:', { clientsData, showsData });
+        //console.log('[production-utils] Loaded reference data for fuzzy matching:', { clientsData, showsData });
         return {
             clients: {
                 names: clientsData.map(row => row.name || ''),
@@ -670,7 +670,7 @@ class productionUtils_uncached {
         }
         
         if (deduplicated.length < scheduleData.length) {
-            console.log(`[production-utils] Deduplicated ${scheduleData.length} rows to ${deduplicated.length} unique shows`);
+            //console.log(`[production-utils] Deduplicated ${scheduleData.length} rows to ${deduplicated.length} unique shows`);
         }
         
         return deduplicated;
@@ -733,7 +733,7 @@ class productionUtils_uncached {
             const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, candidate, candidates);
             if (match) {
                 if (count < words.length) {
-                    console.log(`[production-utils] Matched suffix variant: "${packlistTitle}" -> "${match}"`);
+                    //console.log(`[production-utils] Matched suffix variant: "${packlistTitle}" -> "${match}"`);
                 }
                 const row = scheduleMap.get(match);
                 return row ? [row] : [];

@@ -180,7 +180,7 @@ export const PacklistItemsSummary = {
             const expectedPath = `packlist/${this.projectIdentifier}/details`;
             
             if (!currentPath.includes(expectedPath)) {
-                console.log('[PacklistItemsSummary] Skipping navigation - user already navigated away');
+                //console.log('[PacklistItemsSummary] Skipping navigation - user already navigated away');
                 return;
             }
             

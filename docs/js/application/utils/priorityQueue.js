@@ -146,7 +146,7 @@ class PriorityQueueManager {
         if (this.isProcessing) return;
         
         this.isProcessing = true;
-        console.log('[PriorityQueue] Starting queue processor');
+        //console.log('[PriorityQueue] Starting queue processor');
         
         // Process queue continuously
         this.processQueue();
@@ -161,7 +161,7 @@ class PriorityQueueManager {
             clearTimeout(this.processingIntervalId);
             this.processingIntervalId = null;
         }
-        console.log('[PriorityQueue] Stopped queue processor');
+        //console.log('[PriorityQueue] Stopped queue processor');
     }
     
     /**
@@ -172,7 +172,7 @@ class PriorityQueueManager {
         this.isDisabled = true;
         this.stopProcessing();
         this.clearAll();
-        console.log('[PriorityQueue] Queue disabled');
+        //console.log('[PriorityQueue] Queue disabled');
     }
     
     /**
@@ -181,7 +181,7 @@ class PriorityQueueManager {
      */
     enable() {
         this.isDisabled = false;
-        console.log('[PriorityQueue] Queue enabled');
+        //console.log('[PriorityQueue] Queue enabled');
     }
     
     /**
@@ -315,7 +315,7 @@ class PriorityQueueManager {
             });
             q.length = 0;
         });
-        console.log('[PriorityQueue] All queues cleared');
+        //console.log('[PriorityQueue] All queues cleared');
     }
     
     /**
@@ -336,7 +336,7 @@ class PriorityQueueManager {
             }
         });
         if (clearedCount > 0) {
-            console.log(`[PriorityQueue] Cleared ${clearedCount} nonessential analysis task(s)`);
+            //console.log(`[PriorityQueue] Cleared ${clearedCount} nonessential analysis task(s)`);
         }
         return clearedCount;
     }

@@ -35,7 +35,7 @@ class database_uncached {
         // If mapping provided, transform to JS objects
         if (mapping) {
             const transformedData = GoogleSheetsService.transformSheetData(rawData, mapping, tabName);
-            console.log('[Database] Transformed data:', transformedData);
+            //console.log('[Database] Transformed data:', transformedData);
             return transformedData;
         }
         // If no mapping, return raw 2D array
@@ -505,7 +505,7 @@ async function _archiveDeletedRows(sourceTable, sourceTab, deletedRows, username
             edithistoryTableData = await Database.getData(sourceTable, 'EditHistory', edithistoryMapping);
         } catch (error) {
             // EditHistory tab doesn't exist yet, will be created
-            console.log('EditHistory tab does not exist yet, will create');
+            //console.log('EditHistory tab does not exist yet, will create');
             edithistoryTableData = [];
         }
 
@@ -536,12 +536,12 @@ async function _archiveDeletedRows(sourceTable, sourceTab, deletedRows, username
 
         await GoogleSheetsService.setSheetData(
             sourceTable,
-            'EditHistory',
+            '_EditHistory',
             updatedMetadata,
             edithistoryMapping
         );
 
-        console.log(`Archived ${deletedRows.length} deleted rows to EditHistory table`);
+        //console.log(`Archived ${deletedRows.length} deleted rows to EditHistory table`);
     } catch (error) {
         console.error('Failed to archive deleted rows:', error);
         // Don't throw - archival failure shouldn't block the main save

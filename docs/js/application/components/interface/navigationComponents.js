@@ -73,12 +73,12 @@ export const PrimaryNavComponent = {
             if (wasEssentialOnly) {
                 // Switching from essential-only to full analysis
                 // Trigger nonessential analysis on all stores that have data
-                console.log('[Navigation] Enabling full analysis mode - triggering nonessential analysis');
+                //console.log('[Navigation] Enabling full analysis mode - triggering nonessential analysis');
                 runNonessentialAnalysisOnAllStores();
             } else {
                 // Switching from full to essential-only
                 // Clear pending nonessential analysis tasks from queue
-                console.log('[Navigation] Enabling essential-only mode - clearing nonessential tasks');
+                //console.log('[Navigation] Enabling essential-only mode - clearing nonessential tasks');
                 PriorityQueue.clearNonessentialAnalysis();
             }
         },

@@ -647,7 +647,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         async runConfiguredAnalysis(options = {}) {
             // Check if main data is being reloaded - don't run analysis during reload
             if (this.isReloadingMainData) {
-                console.log('[ReactiveStore] Skipping analysis - main data is being reloaded');
+                //console.log('[ReactiveStore] Skipping analysis - main data is being reloaded');
                 return;
             }
             
@@ -773,7 +773,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     : relevantConfigs;
                 
                 if (essentialOnly && configsToRun.length < relevantConfigs.length) {
-                    console.log(`[ReactiveStore] Running ${configsToRun.length} essential analysis steps (skipping ${relevantConfigs.length - configsToRun.length} nonessential)`);
+                    //console.log(`[ReactiveStore] Running ${configsToRun.length} essential analysis steps (skipping ${relevantConfigs.length - configsToRun.length} nonessential)`);
                 }
                 
                 let totalOperations = 0;
@@ -1136,15 +1136,15 @@ export async function saveDirtyStoresToUserData(options = {}) {
     
     // If called during logout, skip auth checks entirely
     if (skipAuthCheck) {
-        console.log('[ReactiveStore AutoSave] Skipping auth check (logout in progress)');
+        //console.log('[ReactiveStore AutoSave] Skipping auth check (logout in progress)');
         if (!authState.user?.email) {
-            console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+            //console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
             return;
         }
     } else {
         // While offline, skip auto-save — the API call will fail and user data is preserved in memory.
         if (authState.isOffline) {
-            console.log('[ReactiveStore AutoSave] Network offline, skipping auto-save');
+            //console.log('[ReactiveStore AutoSave] Network offline, skipping auto-save');
             return;
         }
 
@@ -1154,12 +1154,12 @@ export async function saveDirtyStoresToUserData(options = {}) {
         const isAuthenticated = await Auth.checkAuth();
         
         if (!isAuthenticated) {
-            console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
+            //console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
             return;
         }
         
         if (!authState.user?.email) {
-            console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+            //console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
             return;
         }
     }
@@ -1204,18 +1204,18 @@ export async function saveDirtyStoresToUserData(options = {}) {
             }
         }
         
-        if (savedCount > 0) {
-            console.log(`[ReactiveStore AutoSave] Successfully saved ${savedCount} dirty store(s) to user data`);
-        }
-        if (cleanedCount > 0) {
-            console.log(`[ReactiveStore AutoSave] Cleaned up ${cleanedCount} resolved auto-save entries`);
-        }
-        if (skippedCount > 0) {
-            console.log(`[ReactiveStore AutoSave] Skipped ${skippedCount} store(s) - already auto-saved in current state`);
-        }
-        if (savedCount === 0 && cleanedCount === 0 && skippedCount === 0) {
-            console.log('[ReactiveStore AutoSave] No changes to save or clean up');
-        }
+        // if (savedCount > 0) {
+        //     console.log(`[ReactiveStore AutoSave] Successfully saved ${savedCount} dirty store(s) to user data`);
+        // }
+        // if (cleanedCount > 0) {
+        //     console.log(`[ReactiveStore AutoSave] Cleaned up ${cleanedCount} resolved auto-save entries`);
+        // }
+        // if (skippedCount > 0) {
+        //     console.log(`[ReactiveStore AutoSave] Skipped ${skippedCount} store(s) - already auto-saved in current state`);
+        // }
+        // if (savedCount === 0 && cleanedCount === 0 && skippedCount === 0) {
+        //     console.log('[ReactiveStore AutoSave] No changes to save or clean up');
+        // }
     } catch (error) {
         console.error('[ReactiveStore AutoSave] Failed to save dirty stores:', error);
     }
@@ -1229,13 +1229,13 @@ function startAutoSaveTimer() {
         return; // Already running
     }
     
-    console.log('[ReactiveStore AutoSave] Starting auto-save timer');
+    //console.log('[ReactiveStore AutoSave] Starting auto-save timer');
     autoSaveInterval = setInterval(() => {
         const storeCount = Object.keys(reactiveStoreRegistry).length;
         if (storeCount > 0) {
             saveDirtyStoresToUserData();
         } else {
-            console.log('[ReactiveStore AutoSave] No stores in registry, skipping auto-save');
+            //console.log('[ReactiveStore AutoSave] No stores in registry, skipping auto-save');
         }
     }, AUTO_SAVE_INTERVAL_MS);
 }
@@ -1245,7 +1245,7 @@ function startAutoSaveTimer() {
  */
 function stopAutoSaveTimer() {
     if (autoSaveInterval) {
-        console.log('[ReactiveStore AutoSave] Stopping auto-save timer');
+        //console.log('[ReactiveStore AutoSave] Stopping auto-save timer');
         clearInterval(autoSaveInterval);
         autoSaveInterval = null;
     }
@@ -1354,7 +1354,7 @@ async function loadStoreBackupFromUserData(storeKey) {
         const backupData = await Requests.getUserData(authState.user.email, storeKey);
         const normalizedExact = normalizeBackupPayload(backupData);
         if (normalizedExact) {
-            console.log('[ReactiveStore] Found backup for store (exact key match)');
+            //console.log('[ReactiveStore] Found backup for store (exact key match)');
             return {
                 ...normalizedExact,
                 key: storeKey
@@ -1368,7 +1368,7 @@ async function loadStoreBackupFromUserData(storeKey) {
             const prefixBackupData = await Requests.getUserDataByPrefix(authState.user.email, keyPrefix);
             const normalizedPrefix = normalizeBackupPayload(prefixBackupData?.value);
             if (normalizedPrefix) {
-                console.log('[ReactiveStore] Found backup by store key prefix fallback');
+                //console.log('[ReactiveStore] Found backup by store key prefix fallback');
                 return {
                     ...normalizedPrefix,
                     key: prefixBackupData?.id || null
@@ -1394,7 +1394,7 @@ async function removeStoreBackupFromUserData(storeKey) {
     try {
         // Store null to effectively delete the backup entry
         await Requests.storeUserData(null, authState.user.email, storeKey);
-        console.log(`[ReactiveStore] Removed backup for store after save`);
+        //console.log(`[ReactiveStore] Removed backup for store after save`);
     } catch (error) {
         console.warn('[ReactiveStore] Failed to remove backup from user data:', error);
     }
@@ -1514,7 +1514,7 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
                     
                     // Apply backup after load if found
                     if (hasBackup && store.data) {
-                        console.log('[ReactiveStore] Applying backup to store data');
+                        //console.log('[ReactiveStore] Applying backup to store data');
                         if (backupInfo.mode === 'diff') {
                             const restoredData = applyDiffToData(store.data, backupInfo.diff);
                             store.setData(restoredData);
@@ -1681,41 +1681,41 @@ export function runNonessentialAnalysisOnAllStores() {
     });
     
     if (triggeredCount > 0) {
-        console.log(`[ReactiveStore] Triggered nonessential analysis on ${triggeredCount} store(s)`);
+        //console.log(`[ReactiveStore] Triggered nonessential analysis on ${triggeredCount} store(s)`);
     }
 }
 
 export async function clearAllReactiveStores(options = {}) {
     const { skipSave = false } = options;
     
-    console.log('[ReactiveStore] Starting cleanup of all stores');
+    //console.log('[ReactiveStore] Starting cleanup of all stores');
     
     // Get count before clearing
     const storeCount = Object.keys(reactiveStoreRegistry).length;
     
     // Step 1: Immediately stop and clear all tasks in the Priority queue
-    console.log('[ReactiveStore] Step 1: Stopping and clearing Priority Queue');
+    //console.log('[ReactiveStore] Step 1: Stopping and clearing Priority Queue');
     PriorityQueue.stopProcessing();
     PriorityQueue.clearAll();
     
     // Step 2: Stop the autosave timer
-    console.log('[ReactiveStore] Step 2: Stopping auto-save timer');
+    //console.log('[ReactiveStore] Step 2: Stopping auto-save timer');
     stopAutoSaveTimer();
     
     // Step 3: Optionally save dirty stores (skip during logout since we save separately)
     if (!skipSave) {
-        console.log('[ReactiveStore] Step 3: Saving dirty stores');
+        //console.log('[ReactiveStore] Step 3: Saving dirty stores');
         await saveDirtyStoresToUserData({ skipAuthCheck: true });
     } else {
-        console.log('[ReactiveStore] Step 3: Skipping save (skipSave=true)');
+        //console.log('[ReactiveStore] Step 3: Skipping save (skipSave=true)');
     }
     
     // Step 4: Remove all reactive stores from registry
-    console.log('[ReactiveStore] Step 4: Clearing all stores from registry');
+    //console.log('[ReactiveStore] Step 4: Clearing all stores from registry');
     Object.keys(reactiveStoreRegistry).forEach(key => {
         delete reactiveStoreRegistry[key];
     });
     
-    console.log(`[ReactiveStore] Cleanup complete - cleared ${storeCount} store(s) from registry`);
+    //console.log(`[ReactiveStore] Cleanup complete - cleared ${storeCount} store(s) from registry`);
 }
 

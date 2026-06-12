@@ -231,14 +231,14 @@ export const ShowInventoryReport = {
         },
 
         initializeReportStore() {
-            console.log('[ShowInventoryReport] initializeReportStore called', {
-                searchFilter: this.searchFilter,
-                searchParams: this.searchParams,
-                itemCategoryFilter: this.itemCategoryFilter
-            });
+            //console.log('[ShowInventoryReport] initializeReportStore called', {
+            //    searchFilter: this.searchFilter,
+            //    searchParams: this.searchParams,
+            //    itemCategoryFilter: this.itemCategoryFilter
+            //});
             
             if (!this.searchFilter && !this.searchParams) {
-                console.log('[ShowInventoryReport] Skipping store initialization - no search parameters');
+                //console.log('[ShowInventoryReport] Skipping store initialization - no search parameters');
                 return;
             }
             
@@ -301,7 +301,7 @@ export const ShowInventoryReport = {
 
         async handleSearchSelected(searchData) {
             // Called when ScheduleFilterSelect emits search-selected event
-            console.log('[ShowInventoryReport] handleSearchSelected called with:', searchData);
+            //console.log('[ShowInventoryReport] handleSearchSelected called with:', searchData);
             await this.loadShowsFromSearch(searchData);
         },
 
@@ -330,25 +330,25 @@ export const ShowInventoryReport = {
         },
 
         handleCategorySelected(categoryName) {
-            console.log('[ShowInventoryReport] handleCategorySelected called with:', categoryName);
-            console.log('[ShowInventoryReport] Current state:', {
-                searchFilter: this.searchFilter,
-                searchParams: this.searchParams,
-                itemCategoryFilter: this.itemCategoryFilter,
-                hasReportStore: !!this.reportStore
-            });
+            //console.log('[ShowInventoryReport] handleCategorySelected called with:', categoryName);
+            //console.log('[ShowInventoryReport] Current state:', {
+            //     searchFilter: this.searchFilter,
+            //     searchParams: this.searchParams,
+            //     itemCategoryFilter: this.itemCategoryFilter,
+            //     hasReportStore: !!this.reportStore
+            // });
             
             // Update filter and reinitialize store
             this.itemCategoryFilter = categoryName;
-            console.log('[ShowInventoryReport] Calling initializeReportStore()');
+            //console.log('[ShowInventoryReport] Calling initializeReportStore()');
             this.initializeReportStore();
         }
     },
     mounted() {
-        console.log('[ShowInventoryReport] Component mounted', {
-            containerPath: this.containerPath,
-            currentPath: this.appContext?.currentPath
-        });
+        //console.log('[ShowInventoryReport] Component mounted', {
+        //    containerPath: this.containerPath,
+        //    currentPath: this.appContext?.currentPath
+        //});
         
         // Get URL parameters to check what should be initialized
         const params = NavigationRegistry.getParametersForContainer(
@@ -356,8 +356,8 @@ export const ShowInventoryReport = {
             this.appContext?.currentPath
         );
         
-        console.log('[ShowInventoryReport] Initial URL parameters:', params);
-        console.log('[ShowInventoryReport] Waiting for child components (ScheduleFilterSelect and InventoryCategoryFilter) to sync with URL and emit events...');
+        //console.log('[ShowInventoryReport] Initial URL parameters:', params);
+        //console.log('[ShowInventoryReport] Waiting for child components (ScheduleFilterSelect and InventoryCategoryFilter) to sync with URL and emit events...');
     },
     template: html`
         <div :class="(tableColumns && tableColumns.length > 10) ? 'wide-table' : ''">

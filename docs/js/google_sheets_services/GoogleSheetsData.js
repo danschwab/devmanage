@@ -107,7 +107,7 @@ export class GoogleSheetsService {
                         throw err;
                     }
                     
-                    console.warn(`[GoogleSheetsService] Rate limit hit (attempt ${consecutiveRateLimits}/${rateLimitMaxRetries}), waiting ${rateLimitDelay}ms before retry...`);
+                    //console.warn(`[GoogleSheetsService] Rate limit hit (attempt ${consecutiveRateLimits}/${rateLimitMaxRetries}), waiting ${rateLimitDelay}ms before retry...`);
                     await new Promise(res => setTimeout(res, rateLimitDelay));
                     continue; // Retry without incrementing main attempt counter
                 }
@@ -130,7 +130,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<Array<string>>>}
      */
     static async getSheetData(tableId, range) {
-        console.warn(`[GoogleSheets READ] ${tableId} → ${range}`);
+        //console.warn(`[GoogleSheets READ] ${tableId} → ${range}`);
         
         await GoogleSheetsAuth.checkAuth();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
@@ -200,7 +200,7 @@ export class GoogleSheetsService {
         } catch (error) {
             // Check if error is due to exceeding grid limits
             if (error.status === 400 && error.result?.error?.message?.includes('exceeds grid limits')) {
-                console.warn(`[setSheetData] Range exceeds grid limits, expanding sheet and retrying...`);
+                //console.warn(`[setSheetData] Range exceeds grid limits, expanding sheet and retrying...`);
                 
                 // Let _ensureSheetSize parse the range to determine absolute position
                 // Don't pass explicit row/col counts - let it extract from the range spec
@@ -354,7 +354,7 @@ export class GoogleSheetsService {
         
         // Expand rows if needed, adding 10 extra rows as buffer
         if (requiredRows && requiredRows > currentRows) {
-            console.log(`[_ensureSheetSize] Expanding rows from ${currentRows} to ${requiredRows + 10}`);
+            //console.log(`[_ensureSheetSize] Expanding rows from ${currentRows} to ${requiredRows + 10}`);
             requests.push({
                 appendDimension: {
                     sheetId: sheet.properties.sheetId,
@@ -366,7 +366,7 @@ export class GoogleSheetsService {
         
         // Expand columns if needed
         if (requiredCols && requiredCols > currentCols) {
-            console.log(`[_ensureSheetSize] Expanding columns from ${currentCols} to ${requiredCols}`);
+            //console.log(`[_ensureSheetSize] Expanding columns from ${currentCols} to ${requiredCols}`);
             requests.push({
                 appendDimension: {
                     sheetId: sheet.properties.sheetId,

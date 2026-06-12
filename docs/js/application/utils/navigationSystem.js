@@ -210,10 +210,10 @@ export const NavigationRegistry = {
                         }
                     });
                     
-                    console.log('[NavigationRegistry] Converted legacy URL format:', {
-                        flatParams,
-                        converted: parameters
-                    });
+                    //console.log('[NavigationRegistry] Converted legacy URL format:', {
+                    //    flatParams,
+                    //    converted: parameters
+                    //});
                 }
             }
         }
@@ -310,11 +310,11 @@ export const NavigationRegistry = {
         const cleanPath = containerPath.split('?')[0];
         const currentParams = this.getParametersForContainer(containerPath, currentPath);
         
-        console.log('[NavigationRegistry] buildPathWithCurrentParams:', {
-            cleanPath,
-            currentParams,
-            newParams
-        });
+        // console.log('[NavigationRegistry] buildPathWithCurrentParams:', {
+        //     cleanPath,
+        //     currentParams,
+        //     newParams
+        // });
         
         const mergedParams = { ...currentParams, ...newParams };
         
@@ -327,12 +327,12 @@ export const NavigationRegistry = {
             }
         });
         
-        if (keysToRemove.length > 0) {
-            console.log('[NavigationRegistry] Removed parameters:', keysToRemove);
-        }
+        // if (keysToRemove.length > 0) {
+        //     console.log('[NavigationRegistry] Removed parameters:', keysToRemove);
+        // }
         
         const finalPath = this.buildPath(cleanPath, mergedParams);
-        console.log('[NavigationRegistry] Built final path:', finalPath);
+        //console.log('[NavigationRegistry] Built final path:', finalPath);
         
         // If we removed parameters, update caches immediately to prevent stale cached params from being reapplied
         if (keysToRemove.length > 0) {
@@ -340,13 +340,13 @@ export const NavigationRegistry = {
             const route = this.getRoute(cleanPath);
             if (route) {
                 route.lastParameters = Object.keys(mergedParams).length > 0 ? { ...mergedParams } : {};
-                console.log('[NavigationRegistry] Updated route cache after removing params:', route.lastParameters);
+                //console.log('[NavigationRegistry] Updated route cache after removing params:', route.lastParameters);
             }
             
             // Update dashboard registry cache (for dashboard navigation)
             if (this.dashboardRegistry) {
                 this.dashboardRegistry.updatePath(cleanPath, finalPath);
-                console.log('[NavigationRegistry] Updated dashboard cache after removing params');
+                //console.log('[NavigationRegistry] Updated dashboard cache after removing params');
             }
         }
         
@@ -442,7 +442,7 @@ export const NavigationRegistry = {
                 // Build path with cached parameters
                 targetPath = this.buildPath(pathInfo.path, route.lastParameters);
                 pathInfo = this.parsePath(targetPath); // Re-parse with cached params
-                console.log('[NavigationRegistry] Applied cached parameters:', route.lastParameters);
+                //console.log('[NavigationRegistry] Applied cached parameters:', route.lastParameters);
             }
         }
         
@@ -456,7 +456,7 @@ export const NavigationRegistry = {
         const isAuthenticated = await Auth.checkAuth();
         
         if (!isAuthenticated) {
-            console.log('[NavigationRegistry] Not authenticated, showing login prompt');
+            //console.log('[NavigationRegistry] Not authenticated, showing login prompt');
             
             // Show auth prompt (non-blocking - user can login when ready)
             Auth.checkAuthWithPrompt({
@@ -470,7 +470,7 @@ export const NavigationRegistry = {
             return { action: 'navigation_blocked', reason: 'not_authenticated' };
         }
         
-        console.log('[NavigationRegistry] Navigation to:', pathInfo.fullPath, isSameBasePath ? '(parameter change)' : '(new location)');
+        //console.log('[NavigationRegistry] Navigation to:', pathInfo.fullPath, isSameBasePath ? '(parameter change)' : '(new location)');
         
         // Update app state
         appContext.currentPath = pathInfo.fullPath;
@@ -481,7 +481,7 @@ export const NavigationRegistry = {
             const route = this.getRoute(pathInfo.path);
             if (route) {
                 route.lastParameters = { ...pathInfo.parameters };
-                console.log('[NavigationRegistry] Cached parameters for', pathInfo.path, ':', route.lastParameters);
+                //console.log('[NavigationRegistry] Cached parameters for', pathInfo.path, ':', route.lastParameters);
             }
         }
         
@@ -516,7 +516,7 @@ export const NavigationRegistry = {
         // Build new path with parameters
         const newPath = this.buildPathWithCurrentParams(cleanPath, currentFullPath, newParams);
         
-        console.log('[NavigationRegistry] Silently updating parameters:', { cleanPath, newPath, isOnDashboard });
+        //console.log('[NavigationRegistry] Silently updating parameters:', { cleanPath, newPath, isOnDashboard });
         
         // Update URL without pushState ( using replaceState to avoid history pollution)
         if (this.urlRouter) {
@@ -527,7 +527,7 @@ export const NavigationRegistry = {
         const route = this.getRoute(cleanPath);
         if (route && newParams && Object.keys(newParams).length > 0) {
             route.lastParameters = { ...(route.lastParameters || {}), ...newParams };
-            console.log('[NavigationRegistry] Cached parameters for', cleanPath, ':', route.lastParameters);
+            //console.log('[NavigationRegistry] Cached parameters for', cleanPath, ':', route.lastParameters);
         }
         
         // For dashboard, also update the stored container path

@@ -30,7 +30,7 @@ export const DashboardRegistry = Vue.reactive({
             this.store.handleInvalidation = async () => {
                 // Skip reload if we're in the middle of saving
                 if (this.isSaving) {
-                    console.log('[DashboardRegistry] Skipping reload during save operation');
+                    //console.log('[DashboardRegistry] Skipping reload during save operation');
                     return;
                 }
                 await originalHandleInvalidation();
@@ -120,7 +120,7 @@ export const DashboardRegistry = Vue.reactive({
      * This allows dashboard containers to preserve parameter state
      */
     async updatePath(cleanPath, newPathWithParams) {
-        console.log('[DashboardRegistry] updatePath called:', { cleanPath, newPathWithParams });
+        //console.log('[DashboardRegistry] updatePath called:', { cleanPath, newPathWithParams });
         
         const index = this.store.data.findIndex(container => {
             const containerPath = typeof container === 'string' ? container : container.path;
@@ -132,7 +132,7 @@ export const DashboardRegistry = Vue.reactive({
                 ? this.store.data[index] 
                 : this.store.data[index].path;
             
-            console.log('[DashboardRegistry] Updating path from:', oldPath, 'to:', newPathWithParams);
+            //console.log('[DashboardRegistry] Updating path from:', oldPath, 'to:', newPathWithParams);
             
             if (typeof this.store.data[index] === 'string') {
                 this.store.data[index] = newPathWithParams;
@@ -141,7 +141,7 @@ export const DashboardRegistry = Vue.reactive({
             }
             await this.save();
             
-            console.log('[DashboardRegistry] Path updated successfully');
+            //console.log('[DashboardRegistry] Path updated successfully');
         } else {
             console.warn('[DashboardRegistry] Container not found for path:', cleanPath);
         }
@@ -255,7 +255,7 @@ export const DashboardRegistry = Vue.reactive({
             await this._performSave();
         }, this.SAVE_DELAY_MS);
         
-        console.log('[DashboardRegistry] Dashboard save queued for', this.SAVE_DELAY_MS, 'ms');
+        //console.log('[DashboardRegistry] Dashboard save queued for', this.SAVE_DELAY_MS, 'ms');
     },
 
     /**
@@ -293,7 +293,7 @@ export const DashboardRegistry = Vue.reactive({
             // This makes the store "clean" without reloading from server
             this.store.setOriginalData(dataToSave);
             
-            console.log('[DashboardRegistry] Dashboard saved successfully');
+            //console.log('[DashboardRegistry] Dashboard saved successfully');
         } catch (error) {
             console.error('[DashboardRegistry] Failed to save dashboard:', error);
             this.store.setError(error.message || 'Failed to save dashboard');

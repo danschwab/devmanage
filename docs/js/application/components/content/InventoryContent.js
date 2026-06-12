@@ -344,7 +344,7 @@ export const InventoryContent = {
             this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
         },
         async handleRefresh() {
-            console.log('InventoryContent: Refresh requested');
+            //console.log('InventoryContent: Refresh requested');
             // Invalidate the categories store cache to force reload with fresh lock status
             invalidateCache([
                 { namespace: 'database', methodName: 'getTabs', args: ['INVENTORY'] }
