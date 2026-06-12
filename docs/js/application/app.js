@@ -63,6 +63,9 @@ const App = {
         permissionsWarning() {
             return authState.permissionsWarning;
         },
+        isOffline() {
+            return authState.isOffline;
+        },
         dashboardLoading() {
             return NavigationRegistry.dashboardRegistry.isLoading;
         },
@@ -328,6 +331,10 @@ const App = {
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
                 <div v-if="permissionsWarning" class="card red auth-error-banner">
                     <strong>Permissions Warning: </strong>{{ permissionsWarning }}
+                </div>
+
+                <div v-if="isOffline" class="card orange auth-error-banner">
+                    <strong>No network connection. </strong>Your data is preserved. Changes cannot be saved until connectivity is restored.
                 </div>
                 
                 <div v-if="authError && !isAuthenticated" class="empty-message" style="color: var(--color-text);">

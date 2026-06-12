@@ -1,5 +1,6 @@
 // caching
 export { invalidateCache, wrapMethods, clearCache, stampDataChange } from './utils/caching.js';
+export { networkState } from './utils/networkState.js';
 
 // Data management components
 export { Database } from './abstraction/database.js';

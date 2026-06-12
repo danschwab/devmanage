@@ -956,6 +956,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // starting another load would be redundant. Analysis (isAnalyzing=true) is explicitly allowed
             // so external changes are detected even when a large packlist is still being analyzed.
             if (this.isSaving || this.isReloadingMainData) return;
+            // While offline, skip background reloads — the network call will fail and the cache is
+            // already frozen. Stores with errors are reloaded automatically by reloadErrorStores()
+            // when connectivity is restored.
+            if (authState.isOffline) return;
             // If unsaved changes exist, don't silently overwrite them — flag the conflict instead.
             // The UI will show a warning banner; reload happens after the user saves or discards.
             if (this.isModified) {
@@ -1138,6 +1142,12 @@ export async function saveDirtyStoresToUserData(options = {}) {
             return;
         }
     } else {
+        // While offline, skip auto-save — the API call will fail and user data is preserved in memory.
+        if (authState.isOffline) {
+            console.log('[ReactiveStore AutoSave] Network offline, skipping auto-save');
+            return;
+        }
+
         // Normal auto-save flow - check auth silently; proactive refresh handles renewal
         // before expiry. If expired, skip this cycle without prompting — the user will
         // be prompted on their next explicit action (save, navigation, etc.).

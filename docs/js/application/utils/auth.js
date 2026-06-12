@@ -18,13 +18,15 @@ export const authState = Vue.reactive({
     user: null,
     error: null,
     isInitialized: false,
-    permissionsWarning: null
+    permissionsWarning: null,
+    isOffline: !navigator.onLine
 });
 
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { clearAllReactiveStores, reloadErrorStores } from './reactiveStores.js';
 import { clearCache } from '../../data_management/utils/caching.js';
+import { networkState } from '../../data_management/utils/networkState.js';
 
 // Import modalManager for re-authentication prompts
 let modalManager;
@@ -53,6 +55,10 @@ export class Auth {
     static _proactiveRefreshTimer = null;
     static _proactiveInteractionHandler = null;
     static async initialize() {
+        Auth._startNetworkMonitoring();
+        // Sync initial state in case page loaded while offline
+        networkState.isOffline = !navigator.onLine;
+        authState.isOffline = !navigator.onLine;
         authState.isLoading = true;
         authState.error = null;
         try {
@@ -417,6 +423,21 @@ export class Auth {
         if (missing.length === 0) return null;
         const names = missing.map(s => s.split('/').pop()).join(', ');
         return `Missing required permissions: ${names}. Some features may not work correctly. Log out and back in making sure to grant all requested permissions.`;
+    }
+
+    static _startNetworkMonitoring() {
+        window.addEventListener('offline', () => {
+            console.warn('[Auth] Network offline detected');
+            networkState.isOffline = true;
+            authState.isOffline = true;
+        });
+        window.addEventListener('online', () => {
+            console.log('[Auth] Network online — resuming operations');
+            networkState.isOffline = false;
+            authState.isOffline = false;
+            // Reload any stores that errored during the outage
+            reloadErrorStores();
+        });
     }
 
     /**

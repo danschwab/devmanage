@@ -79,6 +79,11 @@ export class GoogleSheetsService {
                     err.result?.error?.message?.toLowerCase().includes('insufficient auth')
                 );
                 if (isAuthError) throw err;
+
+                // Immediately throw network-level errors (no HTTP response) — no point retrying
+                // when the device has no connectivity. The window 'offline' event sets the freeze state.
+                const isNetworkError = err instanceof TypeError && !err.status && !err.result;
+                if (isNetworkError) throw err;
                 
                 // Check for rate limit or quota errors (429, or 403 quota exhausted only)
                 const isRateLimit = err && (

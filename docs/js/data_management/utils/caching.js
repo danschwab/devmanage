@@ -1,3 +1,5 @@
+import { networkState } from './networkState.js';
+
 /**
  * Default cache expiration in milliseconds
  */
@@ -72,6 +74,13 @@ class CacheManager {
             return CacheManager.CACHE_MISS;
         }
         
+        // While offline, serve stale-but-valid cache entries regardless of expiry.
+        // The freeze prevents reloads that would fail anyway, and data is recovered
+        // on connectivity restore via reloadErrorStores().
+        if (networkState.isOffline) {
+            return entry.value;
+        }
+
         // Check expiration
         if (entry.expire && entry.expire < Date.now()) {
             CacheManager.invalidate(key); // Invalidate the cache entry before deletion
@@ -161,7 +170,10 @@ class CacheManager {
      * @param {string} key - Cache key to invalidate
      * @param {Set} invalidationStack - Set of keys currently being invalidated (to prevent recursion)
      */
-    static invalidate(key, invalidationStack = new Set()) {        
+    static invalidate(key, invalidationStack = new Set()) {
+        // While offline, preserve cached data — nothing can be re-fetched to replace it.
+        if (networkState.isOffline) return;
+
         // Prevent infinite recursion - if this key is already being invalidated, skip it
         if (invalidationStack.has(key)) {
             return;
@@ -395,6 +407,8 @@ export function stampDataChange(prefix) {
     }
 }
 export function clearCache() {
+    // While offline, the cache is the only copy of the data — don't wipe it.
+    if (networkState.isOffline) return;
     CacheManager.cache.clear();
     CacheManager.pendingCalls.clear();
 }
