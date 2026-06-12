@@ -691,6 +691,7 @@ class packListUtils_uncached {
      */
     static async getItemInventoryQuantity(deps, itemId, referenceDate) {
         const inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemId, ['quantity'], referenceDate);
+        if (!inventoryInfo) return null;
         const item = inventoryInfo.find(i => i.itemName === itemId);
         
         // Return null if item not found or quantity is null/undefined/empty
