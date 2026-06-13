@@ -1,6 +1,6 @@
 ## Ask Ben
 
-!!! update schedule filtering settings
+!!! simplify and update schedule filtering settings (make the interface provide a handful of super-simple clear options)
 !!! simplify controls on reports page and add the
 !!! print view for reports page
 !!! share button on pages

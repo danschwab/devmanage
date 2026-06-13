@@ -4466,7 +4466,7 @@ export const TableComponent = {
                                             </span>
                                             <input
                                                 type="number"
-                                                :value="row[column.key]"
+                                                :value="Number.isFinite(parseFloat(row[column.key])) ? parseFloat(row[column.key]) : ''"
                                                 :ref="'number_editable_' + idx + '_' + colIndex"
                                                 @input="handleCellEdit(idx, colIndex, $event.target.value)"
                                             />
