@@ -746,7 +746,9 @@ export const InventoryTableComponent = {
                 [],
                 null, // Store in AppData, not a column
                 false,
-                Priority.BACKGROUND // Images are visual enhancements, lowest priority
+                Priority.BACKGROUND, // Images are visual enhancements, lowest priority
+                false,
+                false // nonessential
             )
         ];
         
