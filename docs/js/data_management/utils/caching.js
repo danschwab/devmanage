@@ -416,6 +416,8 @@ export { CacheInvalidationBus };
 
 // Remote cache timestamp synchronization
 let _cacheTimestampPollerInterval = null;
+let _pollerReadFn = null;
+let _pollerIntervalMs = 60 * 1000;
 
 export function setTimestampWriter(fn) {
     CacheManager._timestampWriter = fn;
@@ -423,9 +425,16 @@ export function setTimestampWriter(fn) {
 
 export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
     if (_cacheTimestampPollerInterval) return;
+    _pollerReadFn = readFn;
+    _pollerIntervalMs = intervalMs;
     _cacheTimestampPollerInterval = setInterval(async () => {
         try {
             const entries = await readFn();
+            if (entries === null) {
+                // readFn signaled auth is unavailable — pause the poller until re-auth
+                stopCacheTimestampPoller();
+                return;
+            }
             if (!Array.isArray(entries) || entries.length === 0) return;
             for (const { key, timestamp } of entries) {
                 if (!key || !timestamp) continue;
@@ -453,5 +462,11 @@ export function stopCacheTimestampPoller() {
     if (_cacheTimestampPollerInterval) {
         clearInterval(_cacheTimestampPollerInterval);
         _cacheTimestampPollerInterval = null;
+    }
+}
+
+export function restartCacheTimestampPoller() {
+    if (!_cacheTimestampPollerInterval && _pollerReadFn) {
+        startCacheTimestampPoller(_pollerReadFn, _pollerIntervalMs);
     }
 }

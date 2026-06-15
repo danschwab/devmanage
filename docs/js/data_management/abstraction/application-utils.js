@@ -816,8 +816,8 @@ class applicationUtils_uncached {
     }
 
     static async readCacheTimestamps() {
-        // if this is ever serverside logic, we would need to throw errors to alert users that something is broken
-        if (!GoogleSheetsAuth?.isAuthenticated()) return [];
+        // Return null when auth is unavailable — signals the poller to pause itself
+        if (!GoogleSheetsAuth || !(await GoogleSheetsAuth.checkAuth())) return null;
         try {
             const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Caching');
             if (!rawData || rawData.length < 2) return [];

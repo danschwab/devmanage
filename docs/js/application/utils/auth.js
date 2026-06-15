@@ -25,7 +25,7 @@ export const authState = Vue.reactive({
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { clearAllReactiveStores, reloadErrorStores } from './reactiveStores.js';
-import { clearCache } from '../../data_management/utils/caching.js';
+import { clearCache, restartCacheTimestampPoller } from '../../data_management/utils/caching.js';
 import { networkState } from '../../data_management/utils/networkState.js';
 
 // Import modalManager for re-authentication prompts
@@ -53,6 +53,7 @@ let testModeEmail = null;
 export class Auth {
     static _loginPromise = null;
     static _proactiveRefreshTimer = null;
+    static _sessionExpiryTimer = null;
     static _proactiveInteractionHandler = null;
     static async initialize() {
         Auth._startNetworkMonitoring();
@@ -117,6 +118,9 @@ export class Auth {
             
             // Reload any stores that failed during the previous token expiry
             reloadErrorStores();
+
+            // Restart the cache timestamp poller if it was paused due to auth expiry
+            restartCacheTimestampPoller();
             
             return true;
         } catch (error) {
@@ -419,18 +423,30 @@ export class Auth {
         const secondsRemaining = GoogleSheetsAuth.getTokenSecondsRemaining();
         if (secondsRemaining <= 0) return;
 
-        // Fire 5 minutes before expiry
+        // Fire 5 minutes before expiry to register interaction handler for silent refresh
         const refreshInMs = Math.max(0, secondsRemaining - 300) * 1000;
 
         this._proactiveRefreshTimer = setTimeout(() => {
             this._registerProactiveInteractionHandler();
         }, refreshInMs);
+
+        // Fire at token expiry to proactively show the session timeout modal
+        this._sessionExpiryTimer = setTimeout(async () => {
+            const isStillAuthenticated = await GoogleSheetsAuth.checkAuth();
+            if (!isStillAuthenticated && !authPromptShowing) {
+                await this.checkAuthWithPrompt({ context: 'session expiry' });
+            }
+        }, secondsRemaining * 1000);
     }
 
     static _clearProactiveRefreshTimer() {
         if (this._proactiveRefreshTimer) {
             clearTimeout(this._proactiveRefreshTimer);
             this._proactiveRefreshTimer = null;
+        }
+        if (this._sessionExpiryTimer) {
+            clearTimeout(this._sessionExpiryTimer);
+            this._sessionExpiryTimer = null;
         }
         this._removeProactiveInteractionHandler();
     }
