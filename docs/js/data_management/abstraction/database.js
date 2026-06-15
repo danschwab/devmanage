@@ -86,7 +86,7 @@ class database_uncached {
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
-                const MAX = 32;
+                const MAX = 128; // Max thumbnail dimension
                 const scale = Math.min(MAX / img.width, MAX / img.height, 1);
                 const w = Math.max(1, Math.round(img.width * scale));
                 const h = Math.max(1, Math.round(img.height * scale));

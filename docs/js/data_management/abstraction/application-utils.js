@@ -843,9 +843,13 @@ class applicationUtils_uncached {
             const pending = _pendingThumbnailWrites.get(itemNumber);
             return { itemNumber, ...pending };
         }
-        const tab = await deps.call(Database.findTabByName, 'CACHE', 'Thumbnails');
+        // Call Database.getData directly (not via deps.call) so no dependency link is registered
+        // between this cache entry and the getData entry. This prevents Database.setData on the
+        // Thumbnails tab from cascading to invalidate every other item's thumbnail at once.
+        // Selective invalidation is done explicitly in _flushThumbnailWrites instead.
+        const tab = await Database.findTabByName('CACHE', 'Thumbnails');
         if (!tab) return null;
-        const rows = await deps.call(Database.getData, 'CACHE', 'Thumbnails', _THUMBNAILS_MAPPING);
+        const rows = await Database.getData('CACHE', 'Thumbnails', _THUMBNAILS_MAPPING);
         return rows.find(r => r.itemNumber === itemNumber) || null;
     }
 
@@ -893,6 +897,13 @@ async function _flushThumbnailWrites() {
             }
         }
         await Database.setData('CACHE', 'Thumbnails', existing, _THUMBNAILS_MAPPING, { skipMetadata: true });
+        // Selectively invalidate only the written items in this session.
+        for (const itemNumber of pending.keys()) {
+            invalidateCache([{ namespace: 'app_utils', methodName: 'getThumbnailRecord', args: [itemNumber] }]);
+        }
+        // Broadcast to other sessions via the cross-session timestamp poller so they
+        // invalidate their own getThumbnailRecord entries and re-read the updated sheet.
+        stampDataChange('app_utils:getThumbnailRecord');
         console.log(`[Thumbnails] Stored ${pending.size} thumbnail record(s) to CACHE sheet`);
     } catch (err) {
         console.warn('[Thumbnails] Failed to flush thumbnail writes:', err);
