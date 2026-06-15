@@ -78,6 +78,40 @@ class database_uncached {
 
 
     /**
+     * Resize a File to fit within maxDimension × maxDimension, preserving aspect ratio.
+     * Returns the original File unchanged if it is already within bounds.
+     * @param {File} file
+     * @param {number} maxDimension
+     * @returns {Promise<File>}
+     */
+    static _resizeImageFile(file, maxDimension) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                if (img.width <= maxDimension && img.height <= maxDimension) {
+                    resolve(file);
+                    return;
+                }
+                const scale = Math.min(maxDimension / img.width, maxDimension / img.height);
+                const w = Math.max(1, Math.round(img.width * scale));
+                const h = Math.max(1, Math.round(img.height * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                const mimeType = file.type || 'image/jpeg';
+                canvas.toBlob((blob) => {
+                    resolve(new File([blob], file.name, { type: mimeType }));
+                }, mimeType, 0.92);
+            };
+            img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+            img.src = objectUrl;
+        });
+    }
+
+    /**
      * Resize a blob URL to a 32×32 data URL using canvas.
      * Returns null on failure (e.g. non-browser environment or load error).
      * @private
@@ -168,6 +202,12 @@ class database_uncached {
         const ext = file.type === 'image/png' ? 'png' : 'jpg';
         const fileName = `${itemNumberStr}.${ext}`;
 
+        // Resize to max 512px before uploading. If the image is already within bounds,
+        // resizedFile === file (no copy made). If larger, upload the original as a backup first.
+        const MAX_UPLOAD_DIM = 512;
+        const resizedFile = await database_uncached._resizeImageFile(file, MAX_UPLOAD_DIM);
+        const wasResized = resizedFile !== file;
+
         // Find any existing files for this item to delete after upload
         const extensions = ['jpg', 'jpeg', 'png'];
         const existingFileIds = [];
@@ -176,10 +216,20 @@ class database_uncached {
             if (existing && existing.id) existingFileIds.push(existing.id);
         }
 
-        const uploaded = await GoogleSheetsService.uploadDriveFile(file, fileName, folderId);
+        // If the image was resized, save the original under <itemNumber>_ORIGINAL.<ext>
+        if (wasResized) {
+            const originalFileName = `${itemNumberStr}_ORIGINAL.${ext}`;
+            await GoogleSheetsService.uploadDriveFile(file, originalFileName, folderId)
+                .catch(err => console.warn('[icons] Failed to save original image backup:', err));
+        }
+
+        const uploaded = await GoogleSheetsService.uploadDriveFile(resizedFile, fileName, folderId);
         if (!uploaded || !uploaded.id) return null;
 
+        // Delete old files, skipping the newly uploaded file ID and any that can't be deleted
+        // (e.g. files owned by another user — Drive returns 404 for those, handled in deleteDriveFile).
         for (const oldId of existingFileIds) {
+            if (oldId === uploaded.id) continue;
             await GoogleSheetsService.deleteDriveFile(oldId);
         }
         

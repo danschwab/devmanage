@@ -774,6 +774,13 @@ export class GoogleSheetsService {
                 });
                 return true;
             } catch (error) {
+                const status = error?.result?.error?.code || error?.status;
+                if (status === 404) {
+                    // File not found — already deleted or owned by another user without delete permission.
+                    // This is expected when a user replaces an image uploaded by someone else.
+                    console.warn(`[icons] deleteDriveFile: file ${fileId} not found (404) — skipping`);
+                    return false;
+                }
                 console.error('Error deleting Drive file:', error);
                 return false;
             }
