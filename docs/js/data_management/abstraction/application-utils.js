@@ -829,13 +829,81 @@ class applicationUtils_uncached {
             return [];
         }
     }
+
+    // ─── Thumbnail table ─────────────────────────────────────────────────────────
+
+    /**
+     * Read one thumbnail record from the shared Thumbnails tab in the CACHE sheet.
+     * Returns { itemNumber, file, blob } or null if not found.
+     * Cached infinitely — invalidated by storeThumbnailRecord.
+     */
+    static async getThumbnailRecord(deps, itemNumber) {
+        // Serve from pending write buffer first (avoids a sheet read before the debounced flush fires)
+        if (_pendingThumbnailWrites.has(itemNumber)) {
+            const pending = _pendingThumbnailWrites.get(itemNumber);
+            return { itemNumber, ...pending };
+        }
+        const tab = await deps.call(Database.findTabByName, 'CACHE', 'Thumbnails');
+        if (!tab) return null;
+        const rows = await deps.call(Database.getData, 'CACHE', 'Thumbnails', _THUMBNAILS_MAPPING);
+        return rows.find(r => r.itemNumber === itemNumber) || null;
+    }
+
+    /**
+     * Queue a thumbnail record to be written to the Thumbnails tab.
+     * Writes are batched and flushed 2 s after the last call to avoid concurrent
+     * read-modify-write races when many items are loaded simultaneously.
+     * MUTATION — not cached.
+     */
+    static async storeThumbnailRecord(itemNumber, fileId, blobDataUrl) {
+        _pendingThumbnailWrites.set(itemNumber, { file: fileId, blob: blobDataUrl });
+        clearTimeout(_thumbnailFlushTimer);
+        _thumbnailFlushTimer = setTimeout(_flushThumbnailWrites, 2000);
+    }
+}
+
+// ─── Thumbnail batch-write state ─────────────────────────────────────────────
+// All storeThumbnailRecord calls within any 2-second window are merged into a
+// single read-modify-write so concurrent analysis runs don't race each other.
+
+const _THUMBNAILS_MAPPING = { itemNumber: 'ItemNumber', file: 'File', blob: 'Blob' };
+const _pendingThumbnailWrites = new Map(); // itemNumber → { file, blob }
+let _thumbnailFlushTimer = null;
+
+async function _flushThumbnailWrites() {
+    _thumbnailFlushTimer = null;
+    if (_pendingThumbnailWrites.size === 0) return;
+    const pending = new Map(_pendingThumbnailWrites);
+    _pendingThumbnailWrites.clear();
+    try {
+        const allTabs = await Database.getTabs('CACHE');
+        const tabExists = allTabs.some(t => t.title === 'Thumbnails');
+        if (!tabExists) {
+            await Database.createTab('CACHE', null, 'Thumbnails');
+        }
+        const existing = tabExists
+            ? await Database.getData('CACHE', 'Thumbnails', _THUMBNAILS_MAPPING)
+            : [];
+        for (const [itemNumber, { file, blob }] of pending) {
+            const idx = existing.findIndex(r => r.itemNumber === itemNumber);
+            if (idx !== -1) {
+                existing[idx] = { itemNumber, file, blob };
+            } else {
+                existing.push({ itemNumber, file, blob });
+            }
+        }
+        await Database.setData('CACHE', 'Thumbnails', existing, _THUMBNAILS_MAPPING, { skipMetadata: true });
+        console.log(`[Thumbnails] Stored ${pending.size} thumbnail record(s) to CACHE sheet`);
+    } catch (err) {
+        console.warn('[Thumbnails] Failed to flush thumbnail writes:', err);
+    }
 }
 
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps'], // Mutation methods
-    [], // Infinite cache methods
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps', 'storeThumbnailRecord'], // Mutation methods
+    ['getThumbnailRecord'], // Infinite cache methods
     { 'getSheetLock': 10000, 'getLocksData': 10000 } // Custom cache durations (10 seconds for getSheetLock and getLocksData)
 );
 

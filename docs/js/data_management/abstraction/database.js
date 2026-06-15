@@ -16,6 +16,7 @@ if (isLocalhost()) {
 }
 
 import { wrapMethods, invalidateCache, stampDataChange, EditHistoryUtils } from '../index.js';
+import { ApplicationUtils } from '../index.js';
 
 class database_uncached {
     /**
@@ -77,60 +78,72 @@ class database_uncached {
 
 
     /**
+     * Resize a blob URL to a 32×32 data URL using canvas.
+     * Returns null on failure (e.g. non-browser environment or load error).
+     * @private
+     */
+    static _generateThumbnailDataUrl(blobUrl) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 32;
+                const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+                const w = Math.max(1, Math.round(img.width * scale));
+                const h = Math.max(1, Math.round(img.height * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = blobUrl;
+        });
+    }
+
+    /**
      * Search for an item image in Google Drive folder
      * @param {string} itemNumber - The item number to search for
      * @param {string} folderId - Google Drive folder ID containing the images
      * @returns {Promise<string|null>} Direct image URL or null if not found
      */
     static async getItemImageUrl(deps, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
-        // Defensive: handle null, undefined, or non-string values
-        if (!itemNumber || itemNumber === null || itemNumber === undefined) {
-            //console.warn('[Database.getItemImageUrl] No itemNumber provided, returning empty string');
-            return '';
-        }
-        
-        // Convert to string if not already
+        if (!itemNumber || itemNumber === null || itemNumber === undefined) return '';
         const itemNumberStr = String(itemNumber).trim();
-        
-        if (!itemNumberStr) {
-            //console.warn('[Database.getItemImageUrl] Empty itemNumber after trim, returning empty string');
-            return '';
-        }
-        
-        //console.log(`[icons] getItemImageUrl: searching for "${itemNumberStr}" in folder ${folderId}`);
+        if (!itemNumberStr) return '';
 
-        // Try different file extensions
+        // 1. Check thumbnail table — avoids Drive API call entirely on subsequent loads
+        const record = await deps.call(ApplicationUtils.getThumbnailRecord, itemNumberStr);
+        if (record && record.blob) return record.blob;
+
+        // 2. Fall back to Drive search
         const extensions = ['jpg', 'jpeg', 'png'];
-        
         for (const ext of extensions) {
-            const fileName = `${itemNumberStr}.${ext}`;            
+            const fileName = `${itemNumberStr}.${ext}`;
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
-            
-            // Always use authenticated blob URL — thumbnailLink requires Google browser session
-            // cookies which can silently fail for users not signed into Drive in their browser.
-            // TODO: re-evaluate thumbnailLink after confirming blob works for all users.
-            //if (file && file.thumbnailLink) {
-            //    return file.thumbnailLink;
-            //}
             if (file && file.id) {
                 const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
                 if (blobUrl) {
+                    // Generate 32×32 thumbnail and store to CACHE sheet (fire-and-forget)
+                    database_uncached._generateThumbnailDataUrl(blobUrl).then(thumbnailDataUrl => {
+                        if (thumbnailDataUrl) {
+                            ApplicationUtils.storeThumbnailRecord(itemNumberStr, file.id, thumbnailDataUrl)
+                                .catch(err => console.warn('[icons] Failed to store thumbnail record:', err));
+                        }
+                    });
                     return blobUrl;
                 }
             }
         }
-        
-        // Fallback: Try splitting on common separators and search for the first part
-        const separators = /[\s\-_]+/; // Split on space, hyphen, or underscore
+
+        // 3. Prefix fallback — thumbnail stored for the prefix item, reused on next load
+        const separators = /[\s\-_]+/;
         const parts = itemNumberStr.split(separators);
-        
         if (parts.length > 1 && parts[0]) {
-            //console.log(`[icons] Trying prefix fallback for "${itemNumberStr}" → "${parts[0]}"`);
             return await deps.call(Database.getItemImageUrl, parts[0], folderId);
         }
-        
-        //console.log(`[icons] No image found for "${itemNumberStr}"`);
-        return ''; // Return empty string if no image found
+
+        return '';
     }
 
     /**
@@ -167,10 +180,17 @@ class database_uncached {
             { namespace: 'database', methodName: 'getItemImageUrl', args: [itemNumberStr] }
         ], true);
 
-        // Prefer thumbnailLink (real Google URL) over blob URL — avoids CSP issues and
-        // works directly in <img> tags. Falls back to blob only if thumbnail not yet generated.
-        const thumbnailLink = await GoogleSheetsService.getDriveFileThumbnailLink(uploaded.id);
-        return thumbnailLink || await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
+        // Fetch full blob, generate 32×32 thumbnail, store to CACHE sheet
+        const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
+        if (blobUrl) {
+            const thumbnailDataUrl = await database_uncached._generateThumbnailDataUrl(blobUrl);
+            if (thumbnailDataUrl) {
+                ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, thumbnailDataUrl)
+                    .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
+            }
+            return blobUrl;
+        }
+        return null;
     }
 
     /**
