@@ -738,6 +738,10 @@ class Requests_uncached {
         return await deps.call(Database.getItemImageUrl, itemNumber);
     }
 
+    static async getThumbnailRecord(deps, itemNumber) {
+        return await deps.call(ApplicationUtils.getThumbnailRecord, itemNumber);
+    }
+
     /**
      * Fetch the full-resolution image for an item as a blob URL.
      * Only call this when the user requests the full-size view.

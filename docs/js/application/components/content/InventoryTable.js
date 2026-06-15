@@ -443,30 +443,64 @@ export const ItemImageComponent = {
     data() {
         return {
             localImageUrl: null,
+            prefixImageUrl: null,  // Quick-load from prefix entry already in the Thumbnails table
             isRecoveringImage: false,
             hasAttemptedRecovery: false
         };
     },
     watch: {
         imageUrl() {
-            // New upstream URL means this item image changed; allow one recovery attempt again.
             this.hasAttemptedRecovery = false;
             this.clearLocalImageUrl();
         },
-        itemNumber() {
+        itemNumber(newVal) {
             this.hasAttemptedRecovery = false;
             this.clearLocalImageUrl();
+            this.prefixImageUrl = null;
+            this.loadPrefixImage(newVal);
         }
     },
     computed: {
         displayUrl() {
-            return this.localImageUrl || this.imageUrl || 'assets/placeholder.png';
+            // Real image > local recovery URL > prefix placeholder > asset placeholder
+            return this.localImageUrl || this.imageUrl || this.prefixImageUrl || 'assets/placeholder.png';
         },
+        // True only when displaying the real image (not just a prefix stand-in)
+        realImageFound() {
+            const url = this.localImageUrl || this.imageUrl;
+            return !!(url && url !== 'assets/placeholder.png');
+        },
+        // True when at least something other than the grey placeholder is showing
         imageFound() {
             return this.displayUrl !== 'assets/placeholder.png';
+        },
+        // Showing a prefix stand-in but not yet the real image
+        isShowingPrefixOnly() {
+            return !this.realImageFound && !!this.prefixImageUrl;
         }
     },
+    async mounted() {
+        this.loadPrefixImage(this.itemNumber);
+    },
     methods: {
+        async loadPrefixImage(itemNumber) {
+            if (!itemNumber) return;
+            const separators = /[\s\-_]+/;
+            const parts = itemNumber.split(separators);
+            if (parts.length < 2 || !parts[0] || parts[0] === itemNumber) return;
+            const prefix = parts[0];
+            try {
+                const record = await Requests.getThumbnailRecord(prefix);
+                if (record && record.file) {
+                    // Only set if real image hasn't arrived yet
+                    if (!this.realImageFound) {
+                        this.prefixImageUrl = await Requests.getItemImageBlobUrl(prefix);
+                    }
+                }
+            } catch {
+                // Non-fatal: prefix lookup failure just means no placeholder
+            }
+        },
         clearLocalImageUrl() {
             if (this.localImageUrl && this.localImageUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(this.localImageUrl);
@@ -474,7 +508,7 @@ export const ItemImageComponent = {
             this.localImageUrl = null;
         },
         showImageModal() {
-            if (this.imageFound) {
+            if (this.realImageFound) {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
                     thumbnailUrl: this.displayUrl,
                     itemNumber: this.itemNumber,
@@ -485,22 +519,11 @@ export const ItemImageComponent = {
         },
         showUploadModal() {
             if (!this.editable) return;
-            const mode = this.imageFound ? 'replace' : 'add';
-            const title = this.imageFound ? 'Replace Thumbnail' : 'Add Thumbnail';
+            const mode = this.realImageFound ? 'replace' : 'add';
+            const title = this.realImageFound ? 'Replace Thumbnail' : 'Add Thumbnail';
             this.$modal.custom(ImageUploadComponent, {
                 itemNumber: this.itemNumber,
-                mode//,
-                // onUploadSuccess: (newUrl) => {
-                //     this.localImageUrl = newUrl;
-                //     invalidateCache([
-                //             { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'] }
-                //         ]);
-                //         // Prime both cache levels so the reactive analysis re-run
-                //         // returns the new URL immediately without a Drive search.
-                //         // (Drive search indexes newly uploaded files with a delay.)
-                //         // setCacheValue('database', 'getItemImageUrl', [this.itemNumber, '1rvWRUB38BsQJQyOPtF1JEG20qJPvTjZM'], newUrl);
-                //         // setCacheValue('api', 'getItemImageUrl', [this.itemNumber], newUrl); // emits bus event;
-                // }
+                mode
             }, title);
         },
         async handleError() {
@@ -520,12 +543,6 @@ export const ItemImageComponent = {
                     return;
                 }
 
-                // Clear stale image cache entries for this item so retry gets a fresh URL.
-                // invalidateCache([
-                //     { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber] },
-                //     { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber] }
-                // ], true);
-
                 const refreshedThumbnailUrl = await Requests.getItemImageUrl(this.itemNumber);
                 if (refreshedThumbnailUrl) {
                     this.clearLocalImageUrl();
@@ -533,7 +550,6 @@ export const ItemImageComponent = {
                     return;
                 }
 
-                // Fallback to authenticated blob URL if thumbnail URL is unavailable.
                 const refreshedBlobUrl = await Requests.getItemImageBlobUrl(this.itemNumber);
                 if (refreshedBlobUrl) {
                     this.clearLocalImageUrl();
@@ -555,9 +571,9 @@ export const ItemImageComponent = {
                 :key="displayUrl"
                 :src="displayUrl"
                 alt="Item Image"
-                :title="imageFound ? 'Expand image' : (editable ? 'Upload thumbnail' : '')"
-                :style="imageFound || editable ? 'cursor: pointer;' : ''"
-                @click="imageFound ? showImageModal() : (editable ? showUploadModal() : null)"
+                :title="realImageFound ? 'Expand image' : (editable ? 'Upload thumbnail' : '')"
+                :style="(realImageFound || editable) ? 'cursor: pointer;' : ''"
+                @click="realImageFound ? showImageModal() : (editable ? showUploadModal() : null)"
                 @error="handleError"
             />
         </div>

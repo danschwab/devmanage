@@ -112,9 +112,16 @@ class database_uncached {
         const itemNumberStr = String(itemNumber).trim();
         if (!itemNumberStr) return '';
 
-        // 1. Check thumbnail table — avoids Drive API call entirely on subsequent loads
+        // 1. Check thumbnail table — serve prefix placeholder immediately if available,
+        //    then let the Drive fetch below replace it with the real image.
+        //    TODO: re-enable blob serving from the table once we confirm the file-based approach works.
         const record = await deps.call(ApplicationUtils.getThumbnailRecord, itemNumberStr);
-        if (record && record.blob) return record.blob;
+        if (record && record.file) {
+            // Use the stored Drive file ID to fetch the full authenticated blob directly.
+            // This bypasses the thumbnail blob entirely for testing.
+            const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(record.file);
+            if (blobUrl) return blobUrl;
+        }
 
         // 2. Fall back to Drive search
         const extensions = ['jpg', 'jpeg', 'png'];
@@ -124,7 +131,7 @@ class database_uncached {
             if (file && file.id) {
                 const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
                 if (blobUrl) {
-                    // Generate 32×32 thumbnail and store to CACHE sheet (fire-and-forget)
+                    // Generate thumbnail and store to CACHE sheet (fire-and-forget)
                     database_uncached._generateThumbnailDataUrl(blobUrl).then(thumbnailDataUrl => {
                         if (thumbnailDataUrl) {
                             ApplicationUtils.storeThumbnailRecord(itemNumberStr, file.id, thumbnailDataUrl)
@@ -136,12 +143,13 @@ class database_uncached {
             }
         }
 
-        // 3. Prefix fallback — thumbnail stored for the prefix item, reused on next load
-        const separators = /[\s\-_]+/;
-        const parts = itemNumberStr.split(separators);
-        if (parts.length > 1 && parts[0]) {
-            return await deps.call(Database.getItemImageUrl, parts[0], folderId);
-        }
+        // 3. Prefix fallback — commented out to prevent automatic prefix icon searching.
+        //    Prefix icons that already exist in the table are served via step 1 above.
+        // const separators = /[\s\-_]+/;
+        // const parts = itemNumberStr.split(separators);
+        // if (parts.length > 1 && parts[0]) {
+        //     return await deps.call(Database.getItemImageUrl, parts[0], folderId);
+        // }
 
         return '';
     }
@@ -218,9 +226,10 @@ class database_uncached {
 
         const separators = /[\s\-_]+/;
         const parts = itemNumberStr.split(separators);
-        if (parts.length > 1 && parts[0]) {
-            return await deps.call(Database.getItemImageBlobUrl, parts[0], folderId);
-        }
+        // Prefix fallback commented out — only search for exact match for now.
+        // if (parts.length > 1 && parts[0]) {
+        //     return await deps.call(Database.getItemImageBlobUrl, parts[0], folderId);
+        // }
 
         return '';
     }
