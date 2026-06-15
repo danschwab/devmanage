@@ -106,15 +106,15 @@ class database_uncached {
             const fileName = `${itemNumberStr}.${ext}`;            
             const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
             
-            if (file && file.thumbnailLink) {
-                //console.log(`[icons] Thumbnail URL resolved for "${itemNumberStr}"`);
-                return file.thumbnailLink;
-            }
-            // Fallback: if Drive didn't return a thumbnailLink, fetch as blob
+            // Always use authenticated blob URL — thumbnailLink requires Google browser session
+            // cookies which can silently fail for users not signed into Drive in their browser.
+            // TODO: re-evaluate thumbnailLink after confirming blob works for all users.
+            //if (file && file.thumbnailLink) {
+            //    return file.thumbnailLink;
+            //}
             if (file && file.id) {
                 const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
                 if (blobUrl) {
-                    //console.log(`[icons] Image resolved for "${itemNumberStr}" (blob fallback)`);
                     return blobUrl;
                 }
             }
