@@ -521,10 +521,10 @@ export const ItemImageComponent = {
                 }
 
                 // Clear stale image cache entries for this item so retry gets a fresh URL.
-                invalidateCache([
-                    { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber] },
-                    { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber] }
-                ], true);
+                // invalidateCache([
+                //     { namespace: 'database', methodName: 'getItemImageUrl', args: [this.itemNumber] },
+                //     { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [this.itemNumber] }
+                // ], true);
 
                 const refreshedThumbnailUrl = await Requests.getItemImageUrl(this.itemNumber);
                 if (refreshedThumbnailUrl) {
