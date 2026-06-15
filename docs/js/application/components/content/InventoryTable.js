@@ -419,12 +419,15 @@ const ImageUploadComponent = {
 };
 
 // Image component for displaying item thumbnails
-// Image URL should be provided via analysis step in reactive store
+// Image URL should be provided via analysis step in reactive store.
+// imageUrl === null  → analysis not yet complete (pending)
+// imageUrl === ''    → analysis complete, no image found
+// imageUrl = string  → analysis complete, image found
 export const ItemImageComponent = {
     props: {
         imageUrl: {
-            type: String,
-            default: 'assets/placeholder.png'
+            // null = pending, '' = confirmed missing, string = found
+            default: null
         },
         itemNumber: {
             type: String,
@@ -443,9 +446,8 @@ export const ItemImageComponent = {
     data() {
         return {
             localImageUrl: null,
-            prefixImageUrl: null,  // Quick-load from prefix entry already in the Thumbnails table
-            isRecoveringImage: false,
-            hasAttemptedRecovery: false
+            prefixImageUrl: null,   // Quick-load from prefix entry already in the Thumbnails table
+            isPrefixResolved: false // true once loadPrefixImage has completed (found or not)
         };
     },
     watch: {
@@ -457,15 +459,19 @@ export const ItemImageComponent = {
             this.hasAttemptedRecovery = false;
             this.clearLocalImageUrl();
             this.prefixImageUrl = null;
+            this.isPrefixResolved = false;
             this.loadPrefixImage(newVal);
         }
     },
     computed: {
+        // True once both analysis and prefix lookup have each settled
+        isResolved() {
+            return this.imageUrl !== null && this.isPrefixResolved;
+        },
         displayUrl() {
-            // Real image > local recovery URL > prefix placeholder > asset placeholder
             return this.localImageUrl || this.imageUrl || this.prefixImageUrl || 'assets/placeholder.png';
         },
-        // True only when displaying the real image (not just a prefix stand-in)
+        // True only when displaying the real image for this item (not a prefix stand-in)
         realImageFound() {
             const url = this.localImageUrl || this.imageUrl;
             return !!(url && url !== 'assets/placeholder.png');
@@ -474,7 +480,6 @@ export const ItemImageComponent = {
         imageFound() {
             return this.displayUrl !== 'assets/placeholder.png';
         },
-        // Showing a prefix stand-in but not yet the real image
         isShowingPrefixOnly() {
             return !this.realImageFound && !!this.prefixImageUrl;
         }
@@ -484,21 +489,22 @@ export const ItemImageComponent = {
     },
     methods: {
         async loadPrefixImage(itemNumber) {
-            if (!itemNumber) return;
-            const separators = /[\s\-_]+/;
-            const parts = itemNumber.split(separators);
-            if (parts.length < 2 || !parts[0] || parts[0] === itemNumber) return;
-            const prefix = parts[0];
             try {
+                if (!itemNumber) return;
+                const separators = /[\s\-_]+/;
+                const parts = itemNumber.split(separators);
+                if (parts.length < 2 || !parts[0] || parts[0] === itemNumber) return;
+                const prefix = parts[0];
                 const record = await Requests.getThumbnailRecord(prefix);
                 if (record && record.file) {
-                    // Only set if real image hasn't arrived yet
                     if (!this.realImageFound) {
                         this.prefixImageUrl = await Requests.getItemImageBlobUrl(prefix);
                     }
                 }
             } catch {
                 // Non-fatal: prefix lookup failure just means no placeholder
+            } finally {
+                this.isPrefixResolved = true;
             }
         },
         clearLocalImageUrl() {
@@ -566,14 +572,17 @@ export const ItemImageComponent = {
         this.clearLocalImageUrl();
     },
     template: html`
-        <div :class="['item-image-container', { 'image-missing': editable && !imageFound }]" :style="{ width: imageSize + 'px', height: imageSize + 'px' }">
+        <div
+            :class="['item-image-container', { 'image-missing': editable && !imageFound && isResolved }]"
+            :style="{ width: imageSize + 'px', height: imageSize + 'px' }"
+        >
             <img
                 :key="displayUrl"
                 :src="displayUrl"
                 alt="Item Image"
-                :title="realImageFound ? 'Expand image' : (editable ? 'Upload thumbnail' : '')"
-                :style="(realImageFound || editable) ? 'cursor: pointer;' : ''"
-                @click="realImageFound ? showImageModal() : (editable ? showUploadModal() : null)"
+                :title="realImageFound ? 'Expand image' : (editable && isResolved ? 'Upload thumbnail' : '')"
+                :style="(realImageFound || (editable && isResolved)) ? 'cursor: pointer;' : ''"
+                @click="realImageFound ? showImageModal() : (editable && isResolved ? showUploadModal() : null)"
                 @error="handleError"
             />
         </div>
