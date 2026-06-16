@@ -306,7 +306,7 @@ export class Auth {
             const manager = await getModalManager();
 
             return new Promise((resolve) => {
-                const defaultMessage = `Your session has expired. Would you like to continue?`;
+                const defaultMessage = `Continue this session as ${context}?`;
                 let modalDismissed = false;
 
                 const modal = manager.confirm(
@@ -351,8 +351,8 @@ export class Auth {
                         resolve(false);
                     },
                     'Session Expired',
-                    'Log In',
-                    'Cancel'
+                    'Continue',
+                    'Log Out'
                 );
 
                 // Watch for modal dismissal via X button or overlay click
