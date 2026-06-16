@@ -1417,7 +1417,7 @@ export const PacklistTable = {
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
                                 @row-options="handleRowOptions"
-                                class="table-fixed"
+                                class="table-fixed mark-dirty"
                             >
                                 <!-- Cell-extra slot for alerts (proper location for warnings/notifications) -->
                                 <template #cell-extra="{ row: itemRow, column: itemColumn, isGroupMembersHidden, showGroup }">

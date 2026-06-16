@@ -800,6 +800,8 @@ td:has(img) {
     border-radius: var(--radius-md);
     color: var(--color-text-light);
     opacity: 0;
+    pointer-events: none;
+    z-index: 10;
 }
 .column-button:not(:first-of-type) {
     right: 22px;
@@ -825,13 +827,16 @@ td:has(img) {
 
 thead:hover .column-button:not(.active), .input-container:hover .column-button:not(.active), div:hover>.column-button:not(.active), div:hover>.content-header>.column-button:not(.active) {
     opacity: 1;
+    pointer-events: auto;
 }
 .column-button.active {
+    pointer-events: auto !important;
     opacity: 1 !important;
 }
 
 .column-button:hover {
     background-color: var(--color-gray-bg-hover);
+    pointer-events: auto !important;
     opacity: 1 !important;
 }
 
@@ -842,14 +847,35 @@ thead:hover .column-button:not(.active), .input-container:hover .column-button:n
     z-index: 500;
 }
 .editing .column-button.between-rows {
+    pointer-events: auto;
     opacity: 1;
 }
 .column-button.between-rows:last-child {
     transform: translate(-50%, -100%);
 }
 tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hover) {
+    pointer-events: auto;
     opacity: 1;
 }
+
+/* Designed to overlap the container when hovered */
+.column-button-hint {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+    top:0;
+    background: var(--color-red-bg-transparent);
+    outline: 1px solid var(--color-red-bg);
+    border-radius: var(--radius-md);
+    z-index: 9;
+}
+.column-button-hint:has(+ .column-button:hover) {
+    display: block;
+}
+.table-edit-textarea:has(~ .column-button:hover) {
+    opacity: 0;
+}
+
 
 
 
@@ -1219,9 +1245,18 @@ tr.is-group:hover .group-toggle {
 }
 .original-value {
     display: block;
-    text-wrap: nowrap;
-    font-size: 0.9rem;
+    white-space: nowrap;
     opacity: 0.5;
+}
+.original-value.clickable {
+    border-radius: var(--radius-md);
+    padding: var(--padding-sm);
+    cursor: pointer;
+}
+.original-value.clickable:hover {
+    background: var(--color-red);
+    color: var(--color-text-inverted);
+    opacity: 1;
 }
 
 .mark-dirty .dirty > .table-cell-container > .table-edit-textarea, .mark-dirty .dirty input[type="number"] {
@@ -1671,6 +1706,10 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
     margin: var(--padding-sm);
     width: calc(100% - 2 * var(--padding-sm));
 }
+.packlist-crates td .column-button-hint {
+    padding: calc(var(--padding-sm) * 2) !important;
+}
+
 
 .show-when-narrow {
     display: none;
@@ -1952,14 +1991,17 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
 
     .column-button {
         opacity: 0;
+        pointer-events: none;
     }
 
     thead.active .column-button:not(.active) {
         opacity: 0.7;
+        pointer-events: auto;
     }
 
     .column-button.between-rows {
         opacity: 1;
+        pointer-events: auto;
     }
 }
 

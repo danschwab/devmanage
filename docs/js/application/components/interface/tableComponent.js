@@ -2861,6 +2861,47 @@ export const TableComponent = {
             }
             this.checkDirtyCells();
         },
+        revertCellToOriginal(rowIndex, colIndex, event) {
+            // Stop propagation to prevent cell focus
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            
+            const column = this.columns[colIndex];
+            const originalValue = this.originalData[rowIndex]?.[column.key];
+            
+            // Update the data
+            if (this.data[rowIndex]) {
+                this.data[rowIndex][column.key] = originalValue;
+            }
+            
+            // Update the DOM element if it exists
+            if (column.format === 'number') {
+                const refName = 'number_editable_' + rowIndex + '_' + colIndex;
+                const ref = this.$refs[refName];
+                const inputEl = Array.isArray(ref) ? ref[0] : ref;
+                if (inputEl) {
+                    inputEl.value = Number.isFinite(parseFloat(originalValue)) ? parseFloat(originalValue) : '';
+                }
+            } else {
+                const refName = 'editable_' + rowIndex + '_' + colIndex;
+                const ref = this.$refs[refName];
+                const editableEl = Array.isArray(ref) ? ref[0] : ref;
+                if (editableEl) {
+                    editableEl.textContent = originalValue || '';
+                }
+            }
+            
+            // Clear dirty flag
+            if (this.dirtyCells[rowIndex]) {
+                delete this.dirtyCells[rowIndex][colIndex];
+            }
+            
+            // Emit cell-edit event
+            this.$emit('cell-edit', rowIndex, colIndex, originalValue);
+            this.checkDirtyCells();
+        },
         handleCellFocus(rowIndex, colIndex, event) {
             // No undo capture on focus - only capture when user starts typing in handleCellEdit
         },
@@ -4461,7 +4502,12 @@ export const TableComponent = {
                                             v-if="column.editable && column.format === 'number'"
                                             :row="row"
                                             :column="column">
-                                            <span class="original-value" v-if="dirtyCells[idx] && dirtyCells[idx][colIndex]">
+                                            <span 
+                                                v-if="dirtyCells[idx] && dirtyCells[idx][colIndex]"
+                                                class="original-value clickable" 
+                                                :title="'Click to revert to: ' + formatCellValue(originalData[idx]?.[column.key], column)"
+                                                @click="revertCellToOriginal(idx, colIndex, $event)"
+                                            >
                                                 {{ formatCellValue(originalData[idx]?.[column.key], column) }} →
                                             </span>
                                             <input
@@ -4484,9 +4530,19 @@ export const TableComponent = {
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
                                         ></div>
+                                        <span class="column-button-hint">
+                                            {{ originalData[idx]?.[column.key] || '(empty)' }}
+                                        </span>
+                                        <button
+                                            v-if="column.editable && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number'"
+                                            @click="revertCellToOriginal(idx, colIndex, $event)"
+                                            title="Revert to original value"
+                                            class="column-button red">
+                                            ⮢
+                                        </button>
                                         <!-- Non-editable content (slot) -->
                                         <slot 
-                                            v-else 
+                                            v-if="!column.editable"
                                             :row="row" 
                                             :rowIndex="idx" 
                                             :column="column"
