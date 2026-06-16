@@ -185,7 +185,7 @@ export const PacklistTable = {
                     return {
                         key: label,
                         label,
-                        width: ['Description','Packing/shop notes'].includes(label) ? 200 : 40,
+                        width: ['Description','Packing/shop notes'].includes(label) ? 200 : ['L','W','H'].includes(label) ? 20 : 40,
                         colspan: this.itemHeaders.length,
                         font: ['Pack','Check','Weight'].includes(label) ? 'narrow' : undefined
                     };
@@ -195,7 +195,7 @@ export const PacklistTable = {
                         label,
                         editable: isEditable,
                         details: null,
-                        width: ['Description', 'Packing/shop notes'].includes(label) ? 200 : 40,
+                        width:  ['Description','Packing/shop notes'].includes(label) ? 200 : ['L','W','H'].includes(label) ? 20 : 40,
                         font: ['Pack','Check','Weight'].includes(label) ? 'narrow' : undefined
                     };
                 };

@@ -1228,7 +1228,7 @@ tr.is-group:hover .group-toggle {
 .table-edit-textarea, td input[type="number"] {
     width: 100%;
     display: inline-block;
-    min-width: 64px;
+    min-width: 40px;
     border:0;
     background-color: transparent;
     border-radius: calc(var(--radius-md) - 2px);
