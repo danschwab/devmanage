@@ -756,7 +756,7 @@ export const InventoryTableComponent = {
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle, undefined, undefined, todayISOString()], // No filters needed - search is handled in UI
+            [this.tabTitle, undefined, undefined, undefined], // No filters needed - search is handled in UI
             analysisConfig
         );
         

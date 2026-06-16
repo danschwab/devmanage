@@ -91,6 +91,30 @@ function getMethodIdentifier(fn) {
 }
 
 /**
+ * Create a concise identifier for an analysis configuration
+ * @param {Array} analysisConfig - Analysis configuration array
+ * @returns {string} A compact identifier string
+ */
+function getAnalysisIdentifier(analysisConfig) {
+    if (!analysisConfig || !Array.isArray(analysisConfig) || analysisConfig.length === 0) {
+        return '';
+    }
+    
+    // Create a compact representation: functionName(sourceColumns)[additionalParams]->resultKey
+    return analysisConfig.map(config => {
+        const funcName = getMethodIdentifier(config.apiFunction);
+        const sources = Array.isArray(config.sourceColumns) && config.sourceColumns.length > 0 
+            ? `(${config.sourceColumns.join(',')})` 
+            : '';
+        const params = Array.isArray(config.additionalParams) && config.additionalParams.length > 0 
+            ? `[${JSON.stringify(config.additionalParams)}]` 
+            : '';
+        const target = config.resultKey ? `->${config.resultKey}` : '';
+        return `${funcName}${sources}${params}${target}`;
+    }).join('|');
+}
+
+/**
  * Generate a store key from API calls and parameters
  * @param {Function} apiCall - The API load function
  * @param {Function} saveCall - The API save function
@@ -99,7 +123,7 @@ function getMethodIdentifier(fn) {
  * @returns {string} The generated store key
  */
 export function generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig) {
-    return getMethodIdentifier(apiCall) + ':' + getMethodIdentifier(saveCall) + ':' + JSON.stringify(apiArgs) + ':' + JSON.stringify(analysisConfig);
+    return getMethodIdentifier(apiCall) + ':' + getMethodIdentifier(saveCall) + ':' + JSON.stringify(apiArgs) + ':' + getAnalysisIdentifier(analysisConfig);
 }
 
 /**

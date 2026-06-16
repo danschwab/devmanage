@@ -7,7 +7,7 @@
 !! stack show buttons in overlapping show-lists
 ! add and configure default crate types, ben often goes back and changes multiple times
 ! individual item tracking? Maybe on a notes page? allow notes to be added to any endpoint and saved.
-! un-alert items???
+! un-alert items??? un-listed items?
 
 automation rules (MAYBE NOT RIGHT NOW...)
 
@@ -31,15 +31,16 @@ allow tables to be omitted from inventorying
 - Copy paste?
 - How can I make crating better?
 
-## Important Notes
+## Important Deployment Notes
 
 - Allow and request email feedback from users
 - Bundle changes into updates, carefully log changes made, and send out a release email before making the updates
 
-## NOTES
+## Important System Notes
 
 whenever possible, rely on the caching system instead of data from live tables.
 Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
+We must always query the inventory by date for analytics, but we must never pass the date into a reactiveStore save or load call. This causes auto-save mismatch, etc.
 
 Inventory Handling:
 Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING
@@ -51,7 +52,7 @@ Will come in uninventoried: Client or new items shown in booth, Decorative Items
 Rules: Typical Client Items, Tools and Supplies, Tech Accessories
 ?: Monitor arms? Remotes and power strips?
 
-Feature ideas:
+## Feature ideas
 
 - add new rows at end of packlist (client items, tools, etc)
 - add a row following an item for typical inclusions (carpet + pad, monitor + cabling, etc)

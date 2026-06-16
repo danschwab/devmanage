@@ -214,11 +214,10 @@ export const InventoryContent = {
                     const categoryTitle = cat.title ? cat.title.charAt(0).toUpperCase() + cat.title.slice(1).toLowerCase() : '';
                     
                     // Find any reactive stores for this inventory category (regardless of analysis config)
-                    // Note: Stores are created with [tabTitle, undefined, undefined, todayISO] where tabTitle is uppercase
-                    const todayISO = todayISOString();
+                    // Note: Stores are created with [tabTitle, undefined, undefined, undefined] where tabTitle is uppercase
                     const matchingStores = findMatchingStores(
                         Requests.getInventoryTabData,
-                        [cat.title, undefined, undefined, todayISO]
+                        [cat.title, undefined, undefined, undefined]
                     );
                     
                     // If a reactive store exists, use its state. Otherwise check userData for auto-save
@@ -291,8 +290,6 @@ export const InventoryContent = {
     methods: {
         async checkAutoSavedCategories() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.categoriesStore?.data) return;
-            
-            const todayISO = todayISOString();
 
             try {
                 // Check each individual category for auto-saved data
@@ -303,9 +300,9 @@ export const InventoryContent = {
                     const storeKeyPrefix = generateStoreKey(
                         Requests.getInventoryTabData,
                         Requests.saveInventoryTabData,
-                        [cat.title, undefined, undefined, todayISO],
+                        [cat.title, undefined, undefined, undefined],
                         null
-                    ).substring(0, generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [cat.title, undefined, undefined, todayISO], null).lastIndexOf(':'));
+                    ).substring(0, generateStoreKey(Requests.getInventoryTabData, Requests.saveInventoryTabData, [cat.title, undefined, undefined, undefined], null).lastIndexOf(':'));
                     
                     // Check if this specific key exists (prefix match since analysis config might vary)
                     const hasAutoSave = await Requests.hasUserDataKey(
