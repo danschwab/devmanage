@@ -71,7 +71,8 @@ class productionUtils_uncached {
         const dateFilters = parameters.dateFilters;
         //console.log('[production-utils] Processing date filters:', dateFilters);
 
-        // Helper to get date from row based on column
+        // Helper to get date from row based on column.
+        // Handles calculated columns (Ship, Return, Show Date) and any raw date column via parseDate.
         const getRowDate = (row, column) => {
             if (column === 'Ship') {
                 return _calculateShipDate(row);
@@ -91,6 +92,11 @@ class productionUtils_uncached {
                     }
                 }
                 return showDate;
+            }
+            // Generic: parse any raw date column with Year context for correct year boundaries
+            const rawValue = row[column];
+            if (rawValue) {
+                return parseDate(rawValue, true, row.Year) ?? null;
             }
             return null;
         };

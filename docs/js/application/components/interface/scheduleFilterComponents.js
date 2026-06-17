@@ -79,12 +79,12 @@ function cleanFilters(filters) {
 }
 
 // Shared utility: Resolve a window start/end from a dateFilters array.
-// Looks for column 'Show Date' after/before entries and extracts their values as ISO strings.
+// Finds the first after/before filter regardless of column and extracts their values as ISO strings.
 // Returns { startDate, endDate } — either may be null if not present or not resolvable.
 function resolveWindowDates(dateFilters) {
     if (!dateFilters?.length) return { startDate: null, endDate: null };
-    const afterFilter  = dateFilters.find(f => f.type === 'after'  && f.column === 'Show Date');
-    const beforeFilter = dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
+    const afterFilter  = dateFilters.find(f => f.type === 'after');
+    const beforeFilter = dateFilters.find(f => f.type === 'before');
     // Values can be ISO strings or numeric offsets; only include real date strings
     const toDateStr = (v) => (v != null && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
     return {
@@ -1165,10 +1165,11 @@ export const ScheduleAdvancedFilter = {
 };
 
 // Resolves ISO strings and numeric day-offsets from dateFilters to displayable dates synchronously.
+// Finds the first after/before filter regardless of column.
 function computeDisplayDates(dateFilters) {
     if (!dateFilters?.length) return { startDate: null, endDate: null };
-    const afterFilter  = dateFilters.find(f => f.type === 'after'  && f.column === 'Show Date');
-    const beforeFilter = dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
+    const afterFilter  = dateFilters.find(f => f.type === 'after');
+    const beforeFilter = dateFilters.find(f => f.type === 'before');
     return {
         startDate: offsetToISO(afterFilter?.value) ?? null,
         endDate:   offsetToISO(beforeFilter?.value) ?? null
