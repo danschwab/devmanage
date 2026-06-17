@@ -90,6 +90,7 @@ h5,
 h6 {
     margin: 0;
     font-family: unset;
+    white-space: pre-wrap;
 }
 
 input[type="text"],

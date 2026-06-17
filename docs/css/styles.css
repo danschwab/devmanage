@@ -266,7 +266,6 @@ div#app-content > div.empty-message {
     flex-direction: column;
     gap: var(--padding-md);
     box-sizing: border-box;
-    white-space: pre-wrap;
 }
 
 .content-header {
