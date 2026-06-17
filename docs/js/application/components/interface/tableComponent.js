@@ -1682,7 +1682,10 @@ export const TableComponent = {
         originalData: {
             handler() {
                 this.$nextTick(() => {
-                    this.compareAllCellsDirty();
+                    // Only compare if originalData is available
+                    if (this.originalData) {
+                        this.compareAllCellsDirty();
+                    }
                 });
             },
             deep: true
@@ -1695,7 +1698,10 @@ export const TableComponent = {
             handler() {
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
-                    this.compareAllCellsDirty();
+                    // Only compare dirty cells if originalData is available
+                    if (this.originalData) {
+                        this.compareAllCellsDirty();
+                    }
                 });
             },
             deep: true,
@@ -1705,7 +1711,10 @@ export const TableComponent = {
             // When loading state changes, update cells and compare dirty
             this.$nextTick(() => {
                 this.updateAllEditableCells();
-                this.compareAllCellsDirty();
+                // Only compare dirty cells if originalData is available
+                if (this.originalData) {
+                    this.compareAllCellsDirty();
+                }
             });
         },
         visibleRows() {
@@ -1716,7 +1725,10 @@ export const TableComponent = {
         draggable() {
             this.$nextTick(() => {
                 this.updateAllEditableCells();
-                this.compareAllCellsDirty();
+                // Only compare dirty cells if originalData is available
+                if (this.originalData) {
+                    this.compareAllCellsDirty();
+                }
             });
         },
         groupVisibilityOverride(val) {
@@ -2110,7 +2122,10 @@ export const TableComponent = {
         
         this.$nextTick(() => {
             this.updateAllEditableCells();
-            this.compareAllCellsDirty();
+            // Only compare dirty cells if originalData is available
+            if (this.originalData) {
+                this.compareAllCellsDirty();
+            }
         });
         
         // Listen for clicks outside details area to close expanded details
@@ -2138,19 +2153,19 @@ export const TableComponent = {
         // Nested tables with showHeader=false don't need sticky headers
         if (this.showHeader) {
             this._stickyHeader = useStickyHeader({
-                getStickyEl: () => (this.$el?.nodeType === 1 ? this.$el.querySelector('.sticky-header-wrapper') : null),
+                getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
                 // .sticky-header-spacer sits in-flow at exactly the top of the content-header div
                 // and its position is invariant: when sticky is inactive the spacer is 0-height and
                 // the wrapper follows it; when sticky is active the spacer grows to the wrapper's
                 // former height, keeping spacer.top at the same viewport position in both states.
-                getAnchorEl: () => (this.$el?.nodeType === 1 ? this.$el.querySelector('.sticky-header-spacer') : null),
+                getAnchorEl: () => this.$el?.querySelector('.sticky-header-spacer'),
                 getContainerEl: () => [
-                    this.$el?.nodeType === 1 ? this.$el.querySelector('.table-wrapper') : null,
-                    this.$el?.nodeType === 1 ? this.$el.closest('.container') : null,
+                    this.$el?.querySelector('.table-wrapper'),
+                    this.$el?.closest('.container'),
                 ].filter(Boolean),
                 getIsActive: () => this.stickyActive,
                 canActivate: () => {
-                    const tableWrapper = this.$el?.nodeType === 1 ? this.$el.querySelector('.table-wrapper') : null;
+                    const tableWrapper = this.$el?.querySelector('.table-wrapper');
                     return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
                 },
                 onActivate: (navBottom) => {
@@ -2950,7 +2965,7 @@ export const TableComponent = {
         compareAllCellsDirty() {
             // Compare all cells in data vs originalData and update dirtyCells
             this.dirtyCells = {};
-            if (!Array.isArray(this.data) || !Array.isArray(this.originalData) || !Array.isArray(this.columns)) return;
+            if (!Array.isArray(this.data) || !Array.isArray(this.originalData)) return;
             this.data.forEach((row, rowIndex) => {
                 const originalRow = this.originalData[rowIndex];
                 // Treat undefined originalRow as an object with all nulls for dirty checking
