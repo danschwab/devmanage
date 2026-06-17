@@ -285,7 +285,7 @@ div#app-content > div.empty-message {
 .content-header:has(.button-bar:only-child) {
     justify-content: right;
 } 
-.content-header:first-of-type:not(:only-of-type):not(:has(+ .cards-grid)), .sticky-header-wrapper .content-header:first-of-type:not(:has(+ .cards-grid)) {
+.content-header:first-of-type:not(:only-of-type):not(:has(+ .cards-grid)), .sticky-header-wrapper:not(:has(+ .cards-grid)) .content-header:first-of-type {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: none;
 }
