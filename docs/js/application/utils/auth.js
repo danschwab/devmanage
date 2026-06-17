@@ -306,7 +306,7 @@ export class Auth {
             const manager = await getModalManager();
 
             return new Promise((resolve) => {
-                const defaultMessage = `Continue this session as ${context}?`;
+                const defaultMessage = `Stay logged in as ${authState.user}?`;
                 let modalDismissed = false;
 
                 const modal = manager.confirm(

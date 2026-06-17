@@ -167,7 +167,13 @@ input[type="button"]:disabled,
 button:disabled {
     pointer-events: none;
     opacity: .2;
-    /*overflow: visible;*/
+}
+input[type="text"]:disabled,
+input[type="number"]:disabled,
+input[type="date"]:disabled,
+select:disabled {
+    pointer-events: none;
+    opacity: .5;
 }
 
 /*input[type="submit"]:after,
