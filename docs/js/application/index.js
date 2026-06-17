@@ -19,6 +19,7 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 // Interface components export
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent } from './components/interface/containerComponent.js';
+export { PageNoteComponent, PageNoteMenuComponent } from './components/interface/pageNoteComponent.js';
 export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
 export { BannerNotifications } from './components/interface/bannerNotifications.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';

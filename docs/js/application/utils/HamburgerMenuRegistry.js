@@ -1,4 +1,5 @@
 import { html, DashboardToggleComponent, NavigationRegistry } from '../index.js';
+import { PageNoteMenuComponent } from '../components/interface/pageNoteComponent.js';
 
 const { reactive } = Vue;
 
@@ -39,8 +40,14 @@ export class HamburgerMenuRegistry {
             ...menu.props
         };
         
+        // Automatically inject PageNoteMenuComponent into all menus as the top item
+        const components = [...menu.components];
+        if (!components.includes(PageNoteMenuComponent)) {
+            components.unshift(PageNoteMenuComponent);
+        }
+        
         return {
-            components: menu.components,
+            components,
             props: standardProps
         };
     }

@@ -1,9 +1,11 @@
 import { html, BreadcrumbComponent, NavigationRegistry } from '../../index.js';
+import { PageNoteComponent } from './pageNoteComponent.js';
 
 // Container component functionality
 export const ContainerComponent = {
     components: {
-        BreadcrumbComponent
+        BreadcrumbComponent,
+        PageNoteComponent
     },
     props: {
         containerId: {
@@ -168,6 +170,7 @@ export const ContainerComponent = {
             </div>
             
             <div class="content">
+                <PageNoteComponent v-if="containerPath" :container-path="containerPath" />
                 <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
                     <img src="assets/loading.gif" alt="..."/>
                     <p>Loading data...</p>

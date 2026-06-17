@@ -1375,6 +1375,28 @@ class Requests_uncached {
         return await InventoryUtils.deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds, username);
     }
 
+    /**
+     * Get all page notes from the CACHE Notes tab.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Array<{Path: string, Note: string, Color: string, Size: string, EditHistory: string}>>}
+     */
+    static async getPageNotes(deps) {
+        return await deps.call(Database.getData, 'CACHE', 'Notes', { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
+    }
+
+    /**
+     * Save all page notes to the CACHE Notes tab.
+     *
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     *
+     * @param {Array<{Path: string, Note: string, Color: string, Size: string, EditHistory: string}>} data
+     * @returns {Promise<boolean>}
+     */
+    static async savePageNotes(data) {
+        return await Database.setData('CACHE', 'Notes', data, { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
+    }
+
 }
 
 /**
@@ -1405,7 +1427,8 @@ export const Requests = wrapMethods(
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
         'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
-        'addCustomScheduleReferenceEntry'
+        'addCustomScheduleReferenceEntry',
+        'savePageNotes'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

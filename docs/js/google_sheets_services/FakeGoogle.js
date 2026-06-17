@@ -589,6 +589,9 @@ export class FakeGoogleSheetsService {
                 ['PACK_LISTS:ATSC 2025 NAB', '2026-01-19T10:30:00.000Z', '0'], // Row 1+: Lock key rows with timestamps
                 ['INVENTORY:CABINETS', '2026-01-19T10:30:00.000Z', '0'] // Row 2: Another lock key
             ],
+            'Notes': [
+                ['Path', 'Note', 'Color', 'Size', 'EditHistory']
+            ],
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
                 ['ABCAM', '', ''],
@@ -886,8 +889,9 @@ export class FakeGoogleSheetsService {
         'CACHE': [
             { title: 'UserData_test_example_com', sheetId: 0 },
             { title: 'Locks', sheetId: 1 },
-            { title: 'Clients', sheetId: 1 },
-            { title: 'Shows', sheetId: 2 }
+            { title: 'Clients', sheetId: 2 },
+            { title: 'Shows', sheetId: 3 },
+            { title: 'Notes', sheetId: 4 }
         ]
     };
 
