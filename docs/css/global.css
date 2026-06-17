@@ -62,7 +62,11 @@ input[type="submit"], input[type="button"], select, button {
     position: relative;
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out;
 }
-
+label {
+    color: var(--color-text-light);
+    line-height: 1.2rem;
+    font-size: 0.8rem;
+}
 
 
 /* Main interface defaults */
@@ -118,7 +122,8 @@ input[type="text"], .input-container {
 }
 textarea {
     resize: vertical;
-    min-height: 2.5em;
+    min-height: 5rem;
+    width:100%;
 }
 
 /* Button styles */

@@ -4,10 +4,9 @@
 !!! simplify controls on reports page and add the
 !!! print view for reports page
 !!! share button on pages
+!! dims at the beginning of item descriptions for all items
 !! stack show buttons in overlapping show-lists
-! add and configure default crate types, ben often goes back and changes multiple times
-! individual item tracking? Maybe on a notes page? allow notes to be added to any endpoint and saved.
-! un-alert items??? un-listed items?
+! add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?
 
 automation rules (MAYBE NOT RIGHT NOW...)
 
