@@ -1,11 +1,5 @@
 import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority } from '../../index.js';
 
-// Date preset offset constants
-const START_DATE_OFFSETS = { today: 0, monthAgo: -30, yearAgo: -365 };
-const END_DATE_OFFSETS = { today: 0, inMonth: 30, inYear: 365 };
-const OFFSET_TO_START_PRESET = { 0: 'today', '-30': 'monthAgo', '-365': 'yearAgo' };
-const OFFSET_TO_END_PRESET = { 0: 'today', 30: 'inMonth', 365: 'inYear' };
-
 // Shared utility: Match URL search data to a saved search
 function matchUrlToSavedSearch(savedSearches, urlSearchData) {
     if (!savedSearches || savedSearches.length === 0) return -1;
@@ -126,25 +120,24 @@ export const ScheduleAdvancedFilter = {
     },
     data() {
         return {
-            // Date range filters
-            startDate: '',
-            endDate: '',
-            startDatePreset: '', // Selected preset for start date (e.g., 'today', 'monthAgo')
-            endDatePreset: '', // Selected preset for end date (e.g., 'today', 'inMonth')
-            overlapShowIdentifier: '', // Identifier of the show to find overlaps with
-            overlapShowYearFilter: new Date().getFullYear().toString(), // 'upcoming' or specific year (defaults to current year)
-            dateFilterMode: 'dateRange', // 'dateRange' or 'overlap' - tracks which filter is active
+            // Date filter: After
+            afterColumn: 'Show Date', // Selected column (defaults to Show Date)
+            afterMode: 'date', // 'date' or 'offset'
+            afterValue: '', // ISO date string or offset number
             
-            // Dynamic text search filters
-            textFilters: [
-                { id: 1, column: '', values: [''], type: 'contains' }
-            ],
-            nextFilterId: 2,
+            // Date filter: Before
+            beforeColumn: 'Show Date', // Selected column (defaults to Show Date)
+            beforeMode: 'date', // 'date' or 'offset'
+            beforeValue: '', // ISO date string or offset number
+            
+            // Dynamic text search filters - start empty
+            textFilters: [],
+            nextFilterId: 1,
             
             // Reactive store for saved searches
             savedSearchesStore: null,
             
-            // Reactive store for production schedule data (for dropdowns)
+            // Reactive store for production schedule data (for column loading)
             scheduleStore: null,
             
             // Selected saved search for update/delete
@@ -167,30 +160,6 @@ export const ScheduleAdvancedFilter = {
         scheduleData() {
             return this.scheduleStore?.data || [];
         },
-        // Computed shows from store data
-        allShows() {
-            if (!this.scheduleData || this.scheduleData.length === 0) {
-                return [];
-            }
-            
-            // Extract shows with identifiers and display info from store
-            const shows = this.scheduleData
-                .filter(show => show.Identifier) // Only shows with computed identifiers
-                .map(show => ({
-                    identifier: show.Identifier,
-                    display: `${show.Show} - ${show.Client} (${show.Year})`,
-                    year: show.Year
-                }))
-                .sort((a, b) => {
-                    // Sort by year desc, then by display name
-                    if (a.year !== b.year) {
-                        return parseInt(b.year) - parseInt(a.year);
-                    }
-                    return a.display.localeCompare(b.display);
-                });
-            
-            return shows;
-        },
         // Computed columns from store data
         availableColumns() {
             if (!this.scheduleData || this.scheduleData.length === 0) {
@@ -203,36 +172,78 @@ export const ScheduleAdvancedFilter = {
                 .filter(key => key !== 'AppData')
                 .sort();
         },
+        // Date-formatted columns only
+        dateColumns() {
+            if (!this.scheduleData || this.scheduleData.length === 0) {
+                return ['Show Date']; // Default
+            }
+            
+            // Find columns that are date-related based on column name keywords
+            // Uses same logic as ScheduleTable.js isDateColumn method
+            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 's.', 'time'];
+            const firstRow = this.scheduleData[0];
+            
+            const dateColumns = Object.keys(firstRow)
+                .filter(key => {
+                    if (key === 'AppData') return false;
+                    // Check if column name contains date-related keywords (case-insensitive)
+                    const keyLower = key.toLowerCase();
+                    return dateKeywords.some(keyword => keyLower.includes(keyword));
+                })
+                .sort();
+            
+            // Always ensure 'Show Date' is included
+            if (!dateColumns.includes('Show Date')) {
+                dateColumns.unshift('Show Date');
+            }
+            
+            return dateColumns;
+        },
         // Loading states from store
-        isLoadingShows() {
+        isLoadingColumns() {
             return this.scheduleStore?.isLoading || this.scheduleStore?.isAnalyzing || false;
         },
-        isLoadingColumns() {
-            return this.isLoadingShows;
+        // Calculated date for After filter
+        afterCalculatedDate() {
+            if (this.afterMode === 'date') {
+                return 'No Offset';
+            } else if (this.afterMode === 'offset' && this.afterValue !== '' && !isNaN(Number(this.afterValue))) {
+                const offset = Number(this.afterValue);
+                const date = new Date();
+                date.setDate(date.getDate() + offset);
+                return toUSDateString(date) || toISODateString(date);
+            }
+            return null;
         },
-        availableYears() {
-            const currentYear = new Date().getFullYear();
-            return Array.from({ length: currentYear - 2021 }, (_, i) => currentYear + 2 - i);
+        // Calculated date for Before filter
+        beforeCalculatedDate() {
+            if (this.beforeMode === 'date') {
+                return 'No Offset';
+            } else if (this.beforeMode === 'offset' && this.beforeValue !== '' && !isNaN(Number(this.beforeValue))) {
+                const offset = Number(this.beforeValue);
+                const date = new Date();
+                date.setDate(date.getDate() + offset);
+                return toUSDateString(date) || toISODateString(date);
+            }
+            return null;
         },
-        
-        filteredShows() {
-            if (!this.allShows?.length) return [];
-            
-            const isUpcoming = this.overlapShowYearFilter === 'upcoming';
-            const currentYear = new Date().getFullYear();
-            const targetYear = isUpcoming ? currentYear : parseInt(this.overlapShowYearFilter);
-            
-            return this.allShows.filter(show => {
-                const year = parseInt(show.year);
-                return isUpcoming ? year >= targetYear : year === targetYear;
-            });
+        // Check if date range is valid
+        hasValidDateRange() {
+            // Valid if both dates are set OR both are empty
+            const hasAfter = !!(this.afterValue !== '' && this.afterColumn);
+            const hasBefore = !!(this.beforeValue !== '' && this.beforeColumn);
+            return (hasAfter && hasBefore) || (!hasAfter && !hasBefore);
+        },
+        // Check if all filters are valid
+        isFormValid() {
+            return this.hasValidDateRange;
         },
         authIsAuthenticated() {
             return authState.isAuthenticated;
         }
     },
     async mounted() {
-        // Initialize schedule store with analysis config
+        // Initialize schedule store for column loading
         await this.initializeScheduleStore();
         
         // Initialize saved searches store
@@ -275,31 +286,16 @@ export const ScheduleAdvancedFilter = {
     },
     methods: {
         async initializeScheduleStore() {
-            // Create analysis config to compute identifiers
-            const analysisConfig = [
-                createAnalysisConfig(
-                    (rowData) => Requests.computeIdentifier(rowData.Show, rowData.Client, rowData.Year),
-                    'Identifier',
-                    'Computing show identifiers...',
-                    ['Show', 'Client', 'Year'],
-                    [],
-                    'Identifier', // Store in Identifier column
-                    false,
-                    Priority.ANALYSIS,
-                    true // extractColumnsAsObject
-                )
-            ];
-            
-            // Initialize reactive store for production schedule
+            // Initialize reactive store for production schedule (for column loading only)
             this.scheduleStore = getReactiveStore(
                 Requests.getProductionScheduleData,
                 null, // No save function
                 [], // No arguments - load all shows
-                analysisConfig
+                null // No analysis needed
             );
             
             // Load the data
-            await this.scheduleStore.load('Loading production schedule...');
+            await this.scheduleStore.load('Loading schedule columns...');
         },
         syncWithURL() {
             const params = NavigationRegistry.getParametersForContainer(
@@ -326,61 +322,40 @@ export const ScheduleAdvancedFilter = {
             }
             
             // Load URL parameters into filter fields
-            // Parse dateFilters array - for now, UI only supports one date filter
+            // Parse dateFilters array
             if (filter.dateFilters && filter.dateFilters.length > 0) {
-                // Take the first date filter (UI limitation)
-                const firstDateFilter = filter.dateFilters[0];
+                // Look for "after" and "before" filters
+                const afterFilter = filter.dateFilters.find(f => f.type === 'after');
+                const beforeFilter = filter.dateFilters.find(f => f.type === 'before');
                 
-                // Check if it's a show identifier (for overlap mode)
-                if (typeof firstDateFilter.value === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(firstDateFilter.value) && isNaN(Number(firstDateFilter.value))) {
-                    // This is a show identifier for overlap mode
-                    const parts = firstDateFilter.value.split(' ');
-                    const yearMatch = parts.find(part => /^\d{4}$/.test(part));
-                    
-                    if (yearMatch) {
-                        this.overlapShowYearFilter = yearMatch;
+                // Handle "after" filter
+                if (afterFilter) {
+                    this.afterColumn = afterFilter.column || 'Show Date';
+                    const value = afterFilter.value;
+                    if (typeof value === 'number') {
+                        // It's an offset
+                        this.afterMode = 'offset';
+                        this.afterValue = value;
+                    } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        // It's an explicit date
+                        this.afterMode = 'date';
+                        this.afterValue = value;
                     }
-                    
-                    this.overlapShowIdentifier = firstDateFilter.value;
-                    this.dateFilterMode = 'overlap';
-                } else {
-                    // This is a date range filter
-                    // Look for both "after" and "before" filters on the same column
-                    const sameColumnFilters = filter.dateFilters.filter(f => f.column === firstDateFilter.column);
-                    const afterFilter = sameColumnFilters.find(f => f.type === 'after');
-                    const beforeFilter = sameColumnFilters.find(f => f.type === 'before');
-                    
-                    // Handle "after" filter as start date
-                    if (afterFilter) {
-                        const value = afterFilter.value;
-                        if (typeof value === 'number') {
-                            // It's an offset
-                            this.startDatePreset = OFFSET_TO_START_PRESET[value] || '';
-                            if (this.startDatePreset) {
-                                this.setStartDatePreset(this.startDatePreset);
-                            }
-                        } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                            // It's an explicit date
-                            this.startDate = value;
-                        }
+                }
+                
+                // Handle "before" filter
+                if (beforeFilter) {
+                    this.beforeColumn = beforeFilter.column || 'Show Date';
+                    const value = beforeFilter.value;
+                    if (typeof value === 'number') {
+                        // It's an offset
+                        this.beforeMode = 'offset';
+                        this.beforeValue = value;
+                    } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        // It's an explicit date
+                        this.beforeMode = 'date';
+                        this.beforeValue = value;
                     }
-                    
-                    // Handle "before" filter as end date
-                    if (beforeFilter) {
-                        const value = beforeFilter.value;
-                        if (typeof value === 'number') {
-                            // It's an offset
-                            this.endDatePreset = OFFSET_TO_END_PRESET[value] || '';
-                            if (this.endDatePreset) {
-                                this.setEndDatePreset(this.endDatePreset);
-                            }
-                        } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                            // It's an explicit date
-                            this.endDate = value;
-                        }
-                    }
-                    
-                    this.dateFilterMode = 'dateRange';
                 }
             }
             
@@ -394,6 +369,10 @@ export const ScheduleAdvancedFilter = {
                     type: filter.type || 'contains'
                 }));
                 this.nextFilterId = filter.textFilters.length + 1;
+            } else {
+                // Start with no text filters
+                this.textFilters = [];
+                this.nextFilterId = 1;
             }
         },
         updateURL(params) {
@@ -420,58 +399,32 @@ export const ScheduleAdvancedFilter = {
             // Build dateFilters array from UI state
             const dateFilters = [];
             
-            if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                // For overlap mode, create two filters to find shows active during identifier's period:
-                // 1. Return date after identifier ships (show still out when identifier starts)
-                // 2. Ship date before identifier returns (show goes out before identifier ends)
+            // Add "after" filter
+            if (this.afterValue !== '' && this.afterColumn) {
+                let value = this.afterValue;
+                // Convert to number if in offset mode
+                if (this.afterMode === 'offset') {
+                    value = Number(value);
+                }
                 dateFilters.push({
-                    column: 'Return',
-                    value: this.overlapShowIdentifier,
+                    column: this.afterColumn,
+                    value: value,
                     type: 'after'
                 });
+            }
+            
+            // Add "before" filter
+            if (this.beforeValue !== '' && this.beforeColumn) {
+                let value = this.beforeValue;
+                // Convert to number if in offset mode
+                if (this.beforeMode === 'offset') {
+                    value = Number(value);
+                }
                 dateFilters.push({
-                    column: 'Ship',
-                    value: this.overlapShowIdentifier,
+                    column: this.beforeColumn,
+                    value: value,
                     type: 'before'
                 });
-            } else if (this.dateFilterMode === 'dateRange') {
-                // For date range mode, build filters from start/end dates
-                let startValue = null;
-                let endValue = null;
-                
-                // Get start date value (offset or explicit date)
-                const startOffset = START_DATE_OFFSETS[this.startDatePreset] ?? null;
-                if (startOffset !== null) {
-                    startValue = startOffset;
-                } else if (this.startDate) {
-                    startValue = this.startDate;
-                }
-                
-                // Get end date value (offset or explicit date)
-                const endOffset = END_DATE_OFFSETS[this.endDatePreset] ?? null;
-                if (endOffset !== null) {
-                    endValue = endOffset;
-                } else if (this.endDate) {
-                    endValue = this.endDate;
-                }
-                
-                // Add "after" filter for start date
-                if (startValue !== null && startValue !== '') {
-                    dateFilters.push({
-                        column: 'Show Date',
-                        value: startValue,
-                        type: 'after'
-                    });
-                }
-                
-                // Add "before" filter for end date
-                if (endValue !== null && endValue !== '') {
-                    dateFilters.push({
-                        column: 'Show Date',
-                        value: endValue,
-                        type: 'before'
-                    });
-                }
             }
             
             // Build parameters object directly
@@ -499,16 +452,16 @@ export const ScheduleAdvancedFilter = {
         },
         clearAllFilters() {
             // Clear date filters
-            this.startDate = '';
-            this.endDate = '';
-            this.startDatePreset = '';
-            this.endDatePreset = '';
-            this.overlapShowIdentifier = '';
-            this.dateFilterMode = 'dateRange';
+            this.afterColumn = 'Show Date';
+            this.afterMode = 'date';
+            this.afterValue = '';
+            this.beforeColumn = 'Show Date';
+            this.beforeMode = 'date';
+            this.beforeValue = '';
             
             // Clear text filters
-            this.textFilters = [{ id: 1, column: '', values: [''], type: 'contains' }];
-            this.nextFilterId = 2;
+            this.textFilters = [];
+            this.nextFilterId = 1;
         },
         addTextFilter() {
             this.textFilters.push({
@@ -553,59 +506,76 @@ export const ScheduleAdvancedFilter = {
             }
         },
         removeTextFilter(filterId) {
-            // Keep at least one filter
-            if (this.textFilters.length > 1) {
-                this.textFilters = this.textFilters.filter(f => f.id !== filterId);
-            }
+            // Remove the filter (no minimum required)
+            this.textFilters = this.textFilters.filter(f => f.id !== filterId);
         },
-        setStartDatePreset(preset) {
-            if (preset === 'clear') {
-                this.startDate = '';
-                this.startDatePreset = '';
-            } else {
-                this.startDatePreset = preset;
-                const offset = this.getStartDateOffset();
-                if (offset !== null) {
-                    const date = new Date();
-                    date.setDate(date.getDate() + offset);
-                    this.startDate = toISODateString(date);
-                }
-            }
-            this.dateFilterMode = 'dateRange';
-        },
-        setEndDatePreset(preset) {
-            if (preset === 'clear') {
-                this.endDate = '';
-                this.endDatePreset = '';
-            } else {
-                this.endDatePreset = preset;
-                const offset = this.getEndDateOffset();
-                if (offset !== null) {
-                    const date = new Date();
-                    date.setDate(date.getDate() + offset);
-                    this.endDate = toISODateString(date);
-                }
-            }
-            this.dateFilterMode = 'dateRange';
-        },
-        getStartDateOffset() {
-            return START_DATE_OFFSETS[this.startDatePreset] ?? null;
-        },
-        getEndDateOffset() {
-            return END_DATE_OFFSETS[this.endDatePreset] ?? null;
-        },
-        getDatePickerCardClasses(cardDateFilterMode) {
-            const isActive = cardDateFilterMode === this.dateFilterMode;
-            const hasValues = (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) || 
-                            (this.dateFilterMode === 'dateRange' && this.startDate && this.endDate);
+        toggleAfterMode() {
+            const oldMode = this.afterMode;
+            const oldValue = this.afterValue;
             
-            return {
-                card: true,
-                green: isActive && hasValues,
-                white: !isActive || (isActive && !hasValues),
-                clickable: !isActive
-            };
+            // Toggle mode
+            this.afterMode = oldMode === 'date' ? 'offset' : 'date';
+            
+            // Convert value to new mode
+            if (oldValue !== '' && oldValue != null) {
+                if (oldMode === 'offset' && !isNaN(Number(oldValue))) {
+                    // Converting from offset to date
+                    const offset = Number(oldValue);
+                    const date = new Date();
+                    date.setDate(date.getDate() + offset);
+                    this.afterValue = toISODateString(date);
+                } else if (oldMode === 'date' && typeof oldValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(oldValue)) {
+                    // Converting from date to offset
+                    const targetDate = parseDate(oldValue);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    targetDate.setHours(0, 0, 0, 0);
+                    const diffMs = targetDate.getTime() - today.getTime();
+                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                    this.afterValue = diffDays;
+                } else {
+                    // Invalid value, clear it
+                    this.afterValue = '';
+                }
+            } else {
+                // No value to convert
+                this.afterValue = '';
+            }
         },
+        toggleBeforeMode() {
+            const oldMode = this.beforeMode;
+            const oldValue = this.beforeValue;
+            
+            // Toggle mode
+            this.beforeMode = oldMode === 'date' ? 'offset' : 'date';
+            
+            // Convert value to new mode
+            if (oldValue !== '' && oldValue != null) {
+                if (oldMode === 'offset' && !isNaN(Number(oldValue))) {
+                    // Converting from offset to date
+                    const offset = Number(oldValue);
+                    const date = new Date();
+                    date.setDate(date.getDate() + offset);
+                    this.beforeValue = toISODateString(date);
+                } else if (oldMode === 'date' && typeof oldValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(oldValue)) {
+                    // Converting from date to offset
+                    const targetDate = parseDate(oldValue);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    targetDate.setHours(0, 0, 0, 0);
+                    const diffMs = targetDate.getTime() - today.getTime();
+                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                    this.beforeValue = diffDays;
+                } else {
+                    // Invalid value, clear it
+                    this.beforeValue = '';
+                }
+            } else {
+                // No value to convert
+                this.beforeValue = '';
+            }
+        },
+
         handleScheduleFilterSelection() {
             // When a saved search is selected, load it
             if (this.selectedSavedSearchIndex === null) {
@@ -618,59 +588,38 @@ export const ScheduleAdvancedFilter = {
             
             // Parse and load the saved search dateFilters
             if (search.dateFilters && search.dateFilters.length > 0) {
-                const firstFilter = search.dateFilters[0];
+                // Look for "after" and "before" filters
+                const afterFilter = search.dateFilters.find(f => f.type === 'after');
+                const beforeFilter = search.dateFilters.find(f => f.type === 'before');
                 
-                // Check if it's an overlap identifier
-                if (typeof firstFilter.value === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(firstFilter.value) && isNaN(Number(firstFilter.value))) {
-                    // Overlap mode
-                    this.overlapShowIdentifier = firstFilter.value;
-                    this.dateFilterMode = 'overlap';
-                    
-                    // Extract year from identifier
-                    const parts = firstFilter.value.split(' ');
-                    const yearMatch = parts.find(part => /^\d{4}$/.test(part));
-                    if (yearMatch) {
-                        this.overlapShowYearFilter = yearMatch;
+                // Handle "after" filter
+                if (afterFilter) {
+                    this.afterColumn = afterFilter.column || 'Show Date';
+                    const value = afterFilter.value;
+                    if (typeof value === 'number') {
+                        // It's an offset
+                        this.afterMode = 'offset';
+                        this.afterValue = value;
+                    } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        // It's an explicit date
+                        this.afterMode = 'date';
+                        this.afterValue = value;
                     }
-                } else {
-                    // Date range mode
-                    const sameColumnFilters = search.dateFilters.filter(f => f.column === firstFilter.column);
-                    const afterFilter = sameColumnFilters.find(f => f.type === 'after');
-                    const beforeFilter = sameColumnFilters.find(f => f.type === 'before');
-                    
-                    // Handle "after" filter as start date
-                    if (afterFilter) {
-                        const value = afterFilter.value;
-                        if (typeof value === 'number') {
-                            // It's an offset
-                            this.startDatePreset = OFFSET_TO_START_PRESET[value] || '';
-                            if (this.startDatePreset) {
-                                this.setStartDatePreset(this.startDatePreset);
-                            }
-                        } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                            // It's an explicit date
-                            this.startDate = value;
-                            this.startDatePreset = '';
-                        }
+                }
+                
+                // Handle "before" filter
+                if (beforeFilter) {
+                    this.beforeColumn = beforeFilter.column || 'Show Date';
+                    const value = beforeFilter.value;
+                    if (typeof value === 'number') {
+                        // It's an offset
+                        this.beforeMode = 'offset';
+                        this.beforeValue = value;
+                    } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        // It's an explicit date
+                        this.beforeMode = 'date';
+                        this.beforeValue = value;
                     }
-                    
-                    // Handle "before" filter as end date
-                    if (beforeFilter) {
-                        const value = beforeFilter.value;
-                        if (typeof value === 'number') {
-                            // It's an offset
-                            this.endDatePreset = OFFSET_TO_END_PRESET[value] || '';
-                            if (this.endDatePreset) {
-                                this.setEndDatePreset(this.endDatePreset);
-                            }
-                        } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                            // It's an explicit date
-                            this.endDate = value;
-                            this.endDatePreset = '';
-                        }
-                    }
-                    
-                    this.dateFilterMode = 'dateRange';
                 }
             }
             
@@ -684,8 +633,8 @@ export const ScheduleAdvancedFilter = {
                 }));
                 this.nextFilterId = search.textFilters.length + 1;
             } else {
-                this.textFilters = [{ id: 1, column: '', values: [''], type: 'contains' }];
-                this.nextFilterId = 2;
+                this.textFilters = [];
+                this.nextFilterId = 1;
             }
             
             // Note: Don't call saveFiltersToURL here - let user click Apply Filters to update URL
@@ -701,54 +650,33 @@ export const ScheduleAdvancedFilter = {
             }
             
             try {
-                // Build dateFilters array from UI state (reuse logic from saveFiltersToURL)
+                // Build dateFilters array from UI state
                 const dateFilters = [];
                 
-                if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                    // For overlap mode, create two filters
+                // Add "after" filter
+                if (this.afterValue !== '' && this.afterColumn) {
+                    let value = this.afterValue;
+                    if (this.afterMode === 'offset') {
+                        value = Number(value);
+                    }
                     dateFilters.push({
-                        column: 'Return',
-                        value: this.overlapShowIdentifier,
+                        column: this.afterColumn,
+                        value: value,
                         type: 'after'
                     });
+                }
+                
+                // Add "before" filter
+                if (this.beforeValue !== '' && this.beforeColumn) {
+                    let value = this.beforeValue;
+                    if (this.beforeMode === 'offset') {
+                        value = Number(value);
+                    }
                     dateFilters.push({
-                        column: 'Ship',
-                        value: this.overlapShowIdentifier,
+                        column: this.beforeColumn,
+                        value: value,
                         type: 'before'
                     });
-                } else if (this.dateFilterMode === 'dateRange') {
-                    let startValue = null;
-                    let endValue = null;
-                    
-                    const startOffset = START_DATE_OFFSETS[this.startDatePreset] ?? null;
-                    if (startOffset !== null) {
-                        startValue = startOffset;
-                    } else if (this.startDate) {
-                        startValue = this.startDate;
-                    }
-                    
-                    const endOffset = END_DATE_OFFSETS[this.endDatePreset] ?? null;
-                    if (endOffset !== null) {
-                        endValue = endOffset;
-                    } else if (this.endDate) {
-                        endValue = this.endDate;
-                    }
-                    
-                    if (startValue !== null && startValue !== '') {
-                        dateFilters.push({
-                            column: 'Show Date',
-                            value: startValue,
-                            type: 'after'
-                        });
-                    }
-                    
-                    if (endValue !== null && endValue !== '') {
-                        dateFilters.push({
-                            column: 'Show Date',
-                            value: endValue,
-                            type: 'before'
-                        });
-                    }
                 }
                 
                 const searchData = {
@@ -819,11 +747,12 @@ export const ScheduleAdvancedFilter = {
             // Create a modal component for saving the search
             const SaveSearchComponent = {
                 props: {
-                    startDate: String,
-                    endDate: String,
-                    startDateOffset: Number,
-                    endDateOffset: Number,
-                    overlapShowIdentifier: String,
+                    afterColumn: String,
+                    afterMode: String,
+                    afterValue: [String, Number],
+                    beforeColumn: String,
+                    beforeMode: String,
+                    beforeValue: [String, Number],
                     textFilters: Array,
                     savedSearchesStore: Object,
                     ScheduleAdvancedFilter: Object
@@ -853,50 +782,30 @@ export const ScheduleAdvancedFilter = {
                             // Build dateFilters array
                             const dateFilters = [];
                             
-                            if (this.overlapShowIdentifier) {
-                                // Overlap mode - create two filters to find overlapping shows
+                            // Add "after" filter
+                            if (this.afterValue !== '' && this.afterColumn) {
+                                let value = this.afterValue;
+                                if (this.afterMode === 'offset') {
+                                    value = Number(value);
+                                }
                                 dateFilters.push({
-                                    column: 'Return',
-                                    value: this.overlapShowIdentifier,
+                                    column: this.afterColumn,
+                                    value: value,
                                     type: 'after'
                                 });
+                            }
+                            
+                            // Add "before" filter
+                            if (this.beforeValue !== '' && this.beforeColumn) {
+                                let value = this.beforeValue;
+                                if (this.beforeMode === 'offset') {
+                                    value = Number(value);
+                                }
                                 dateFilters.push({
-                                    column: 'Ship',
-                                    value: this.overlapShowIdentifier,
+                                    column: this.beforeColumn,
+                                    value: value,
                                     type: 'before'
                                 });
-                            } else {
-                                // Date range mode
-                                let startValue = null;
-                                let endValue = null;
-                                
-                                if (this.startDateOffset !== null) {
-                                    startValue = this.startDateOffset;
-                                } else if (this.startDate) {
-                                    startValue = this.startDate;
-                                }
-                                
-                                if (this.endDateOffset !== null) {
-                                    endValue = this.endDateOffset;
-                                } else if (this.endDate) {
-                                    endValue = this.endDate;
-                                }
-                                
-                                if (startValue !== null && startValue !== '') {
-                                    dateFilters.push({
-                                        column: 'Show Date',
-                                        value: startValue,
-                                        type: 'after'
-                                    });
-                                }
-                                
-                                if (endValue !== null && endValue !== '') {
-                                    dateFilters.push({
-                                        column: 'Show Date',
-                                        value: endValue,
-                                        type: 'before'
-                                    });
-                                }
                             }
                             
                             const searchData = {
@@ -959,11 +868,12 @@ export const ScheduleAdvancedFilter = {
             // Open the modal
             this.$modal.custom(SaveSearchComponent, {
                 // Pass current filter state as props
-                startDate: this.startDate,
-                endDate: this.endDate,
-                startDateOffset: this.getStartDateOffset(),
-                endDateOffset: this.getEndDateOffset(),
-                overlapShowIdentifier: this.overlapShowIdentifier,
+                afterColumn: this.afterColumn,
+                afterMode: this.afterMode,
+                afterValue: this.afterValue,
+                beforeColumn: this.beforeColumn,
+                beforeMode: this.beforeMode,
+                beforeValue: this.beforeValue,
                 textFilters: this.textFilters,
                 savedSearchesStore: this.savedSearchesStore,
                 ScheduleAdvancedFilter: this
@@ -975,66 +885,30 @@ export const ScheduleAdvancedFilter = {
             let startDate = null;
             let endDate = null;
             
-            if (this.dateFilterMode === 'overlap' && this.overlapShowIdentifier) {
-                // For overlap mode, create two filters to find overlapping shows
+            // Add "after" filter
+            if (this.afterValue !== '' && this.afterColumn) {
+                let value = this.afterValue;
+                if (this.afterMode === 'offset') {
+                    value = Number(value);
+                }
                 dateFilters.push({
-                    column: 'Return',
-                    value: this.overlapShowIdentifier,
+                    column: this.afterColumn,
+                    value: value,
                     type: 'after'
                 });
+            }
+            
+            // Add "before" filter
+            if (this.beforeValue !== '' && this.beforeColumn) {
+                let value = this.beforeValue;
+                if (this.beforeMode === 'offset') {
+                    value = Number(value);
+                }
                 dateFilters.push({
-                    column: 'Ship',
-                    value: this.overlapShowIdentifier,
+                    column: this.beforeColumn,
+                    value: value,
                     type: 'before'
                 });
-                // Resolve the actual date window for non-schedule consumers
-                try {
-                    const [ship, ret] = await Promise.all([
-                        Requests.getProjectShipDate(this.overlapShowIdentifier),
-                        Requests.getProjectReturnDate(this.overlapShowIdentifier)
-                    ]);
-                    startDate = ship || null;
-                    endDate   = ret  || null;
-                    // Write the resolved dates into the URL so syncWithURL can recover them
-                    if (startDate && endDate) {
-                        this.updateURL({ dateFilters, startDate, endDate });
-                    }
-                } catch (error) {
-                    console.warn('[ScheduleAdvancedFilter] Failed to resolve overlap date window:', error);
-                }
-            } else if (this.dateFilterMode === 'dateRange') {
-                let startValue = null;
-                let endValue = null;
-                
-                const startOffset = START_DATE_OFFSETS[this.startDatePreset] ?? null;
-                if (startOffset !== null) {
-                    startValue = startOffset;
-                } else if (this.startDate) {
-                    startValue = this.startDate;
-                }
-                
-                const endOffset = END_DATE_OFFSETS[this.endDatePreset] ?? null;
-                if (endOffset !== null) {
-                    endValue = endOffset;
-                } else if (this.endDate) {
-                    endValue = this.endDate;
-                }
-                
-                if (startValue !== null && startValue !== '') {
-                    dateFilters.push({
-                        column: 'Show Date',
-                        value: startValue,
-                        type: 'after'
-                    });
-                }
-                
-                if (endValue !== null && endValue !== '') {
-                    dateFilters.push({
-                        column: 'Show Date',
-                        value: endValue,
-                        type: 'before'
-                    });
-                }
             }
             
             // Build search data in the same format as ScheduleFilterSelect
@@ -1057,128 +931,105 @@ export const ScheduleAdvancedFilter = {
         }
     },
     template: html`
-        <!-- Date Range Filters -->
-        <div class="cards-grid two">
-            <!-- Date Range Card -->
-            <div 
-                :class="getDatePickerCardClasses('dateRange')"
-                @click="dateFilterMode = 'dateRange'"
-            >
-                <div class="content-header">
-                    <h5>Filter By Date Range</h5>
-                    <small v-if="dateFilterMode === 'dateRange'" style="display: block; color: var(--color-green);">
-                        Active filter
-                    </small>
-                </div>
-                <div :class="dateFilterMode === 'dateRange' ? 'content' : 'content hide-when-narrow'">
-                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span>Start Date:</span>
-                        <div class="button-bar">
-                            <select 
-                                v-model="startDatePreset"
-                                @change="setStartDatePreset(startDatePreset)"
-                                @focus="dateFilterMode = 'dateRange'"
-                            >
-                                <option value="">Manual Entry</option>
-                                <option value="today">Today</option>
-                                <option value="monthAgo">A Month Ago</option>
-                                <option value="yearAgo">A Year Ago</option>
-                            </select>
-                            <input 
-                                type="date" 
-                                v-model="startDate" 
-                                placeholder="YYYY-MM-DD"
-                                @focus="dateFilterMode = 'dateRange'; startDatePreset = ''"
-                                :disabled="!!startDatePreset"
-                                style="flex: 1;"
-                            />
-                        </div>
-                    </label>
-                    
-                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span>End Date:</span>
-                        <div class="button-bar">
-                            <select 
-                                v-model="endDatePreset"
-                                @change="setEndDatePreset(endDatePreset)"
-                                @focus="dateFilterMode = 'dateRange'"
-                            >
-                                <option value="">Manual Entry</option>
-                                <option value="today">Today</option>
-                                <option value="inMonth">In a Month</option>
-                                <option value="inYear">In a Year</option>
-                            </select>
-                            <input 
-                                type="date" 
-                                v-model="endDate"
-                                placeholder="YYYY-MM-DD"
-                                @focus="dateFilterMode = 'dateRange'; endDatePreset = ''"
-                                :disabled="!!endDatePreset"
-                                style="flex: 1;"
-                            />
-                        </div>
-                    </label>
+        <!-- Loading state while columns are loading -->
+        <div v-if="isLoadingColumns" class="loading-message">
+            <img src="assets/loading.gif" alt="..."/>
+            <p>Loading schedule data...</p>
+        </div>
+        
+        <template v-else>
+        <!-- Date Filter: After -->
+        <div 
+            :class="'card' + (afterValue !== '' ? ' green' : ' white')"
+            style="display: flex; flex-direction: column; gap: var(--padding-md);"
+        >
+            <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
+                <span style="width: 80px;">Start Date:</span>
+                <select 
+                    v-model="afterColumn"
+                    :disabled="isLoadingColumns"
+                >
+                    <!-- <option value="">Select column...</option> -->
+                    <option 
+                        v-for="col in dateColumns" 
+                        :key="col" 
+                        :value="col"
+                    >
+                        {{ col }}
+                    </option>
+                </select>
+                <span>is after {{afterMode === 'offset' ? 'days from today:' : 'a specific date:'}}</span>
+                <div class="button-bar" style="flex-grow: 1;">
+                    <!-- <div v-if="afterMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
+                    <input 
+                        v-if="afterMode === 'offset'"
+                        type="number" 
+                        v-model.number="afterValue" 
+                        placeholder="Days offset (e.g., -30, 0, 365)"
+                        style="flex-grow: 1;"
+                    />
+                    <button 
+                        @click="toggleAfterMode"
+                        class="white"
+                        style="flex-grow: 1; text-align: center; white-space: nowrap;"
+                    >
+                        {{ afterCalculatedDate ? afterCalculatedDate : 'enter offset' }}
+                    </button>
+                    <input 
+                        v-if="afterMode === 'date'"
+                        type="date" 
+                        v-model="afterValue" 
+                        placeholder="YYYY-MM-DD"
+                        style="flex-grow: 1;"
+                    />
                 </div>
             </div>
-            
-            <!-- Overlap Show Card -->
-            <div 
-                :class="getDatePickerCardClasses('overlap')"
-                @click="dateFilterMode = 'overlap'"
-            >
-                <div class="content-header">
-                    <h5>Filter By Show Overlap</h5>
-                    <small v-if="isLoadingShows" style="display: block; color: var(--color-text-light);">
-                        Loading shows...
-                    </small>
-                    <small v-else-if="dateFilterMode === 'overlap'" style="display: block; color: var(--color-green);">
-                        Active filter
-                    </small>
-                </div>
-                <LoadingBarComponent
-                    key="date-range"
-                    :is-loading="isLoadingShows"
-                />
-                <div :class="dateFilterMode === 'overlap' ? 'content' : 'content hide-when-narrow'">
-                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span>Filter Shows by Year:</span>
-                        <select 
-                            v-model="overlapShowYearFilter" 
-                            style="width: 100%;"
-                            @focus="dateFilterMode = 'overlap'"
-                            @change="overlapShowIdentifier = ''"
-                        >
-                            <option value="upcoming">Upcoming Shows</option>
-                            <option 
-                                v-for="year in availableYears" 
-                                :key="year" 
-                                :value="year"
-                            >
-                                {{ year }}
-                            </option>
-                        </select>
-                    </label>
-                    
-                    <label style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span>Overlaps with Show: ({{ filteredShows.length }} available)</span>
-                        <select 
-                            v-model="overlapShowIdentifier" 
-                            style="width: 100%;"
-                            :disabled="isLoadingShows || filteredShows.length === 0"
-                            @focus="dateFilterMode = 'overlap'"
-                        >
-                            <option value="">
-                                {{ isLoadingShows ? 'Loading...' : (filteredShows.length === 0 ? 'No shows available' : 'Select a show...') }}
-                            </option>
-                            <option 
-                                v-for="show in filteredShows" 
-                                :key="show.identifier" 
-                                :value="show.identifier"
-                            >
-                                {{ show.display }}
-                            </option>
-                        </select>
-                    </label>
+        </div>
+        
+        <!-- Date Filter: Before -->
+        <div 
+            :class="'card' + (beforeValue !== '' ? ' green' : ' white')"
+            style="display: flex; flex-direction: column; gap: var(--padding-md);"
+        >
+            <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
+                <span style="width: 80px;">End Date:</span>
+                <select 
+                    v-model="beforeColumn"
+                    :disabled="isLoadingColumns"
+                >
+                    <!-- <option value="">Select column...</option> -->
+                    <option 
+                        v-for="col in dateColumns" 
+                        :key="col" 
+                        :value="col"
+                    >
+                        {{ col }}
+                    </option>
+                </select>
+                <span>is before {{beforeMode === 'offset' ? 'days from today:' : 'a specific date:'}}</span>
+                <div class="button-bar" style="flex-grow: 1;">
+                    <!-- <div v-if="beforeMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
+                    <input 
+                        v-if="beforeMode === 'offset'"
+                        type="number" 
+                        v-model.number="beforeValue" 
+                        placeholder="Days offset (e.g., -30, 0, 365)"
+                        style="flex-grow: 1;"
+                    />
+                    <button
+                        @click="toggleBeforeMode"
+                        class="white"
+                        style="flex-grow: 1; text-align: center; white-space: nowrap;"
+                    >
+                        {{ beforeCalculatedDate ? beforeCalculatedDate : 'enter offset' }}
+                    </button>
+                    <input 
+                        v-if="beforeMode === 'date'"
+                        type="date" 
+                        v-model="beforeValue" 
+                        placeholder="YYYY-MM-DD"
+                        style="flex-grow: 1;"
+                    />
                 </div>
             </div>
         </div>
@@ -1196,7 +1047,7 @@ export const ScheduleAdvancedFilter = {
                 style="display: flex; flex-direction: column; gap: var(--padding-md);"
             >
                 <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
-                    <span>Column Filter:</span>
+                    <span style="width: 80px;">Text Filter:</span>
                     <select 
                         v-model="filter.column"
                     >
@@ -1246,26 +1097,22 @@ export const ScheduleAdvancedFilter = {
                     <button 
                         @click="removeTextFilter(filter.id)"
                         class="button-symbol red"
-                        :disabled="textFilters.length === 1"
-                        :title="textFilters.length === 1 ? 'At least one filter required' : 'Remove this filter'"
+                        title="Remove this filter"
                     >
                         🗙
                     </button>
                 </div>
-                
-                
             </div>
-            <transition name="expand">
-                <button 
-                    v-if="textFilters.length > 0 && textFilters.every(filter => filter.column && filter.values.some(v => v.trim()))"
-                    @click="addTextFilter" 
-                    class="card white"
-                    style="width: 100%;"
-                    :disabled="isLoadingColumns"
-                >
-                    Add Another Text Filter
-                </button>
-            </transition>
+            
+            <button 
+                v-if="textFilters.length === 0 || textFilters.every(filter => filter.column && filter.values.some(v => v.trim()))"
+                @click="addTextFilter" 
+                class="card white"
+                style="width: 100%; flex-grow: 0;"
+                :disabled="isLoadingColumns"
+            >
+                {{ textFilters.length === 0 ? 'Add a Text Filter' : 'Add Another Text Filter' }}
+            </button>
         </slot>
 
         <!-- Action Buttons -->
@@ -1289,13 +1136,15 @@ export const ScheduleAdvancedFilter = {
             <!-- Conditional buttons based on whether a saved search is selected -->
             <button 
                 v-if="selectedSavedSearchIndex === null"
-                @click="saveSearch" 
+                @click="saveSearch"
+                :disabled="!isFormValid"
             >
                 Save This Filter
             </button>
             <button 
                 v-else
-                @click="updateSavedSearch" 
+                @click="updateSavedSearch"
+                :disabled="!isFormValid"
             >
                 Update Saved Filter
             </button>
@@ -1308,9 +1157,10 @@ export const ScheduleAdvancedFilter = {
             
         </div>
         <div class="button-bar">
-            <button @click="saveFiltersToURL" class="green">Apply Filters</button>
+            <button @click="saveFiltersToURL" class="green" :disabled="!isFormValid">Apply Filters</button>
             <button @click="clearAllFilters" class="white">Clear Filters</button>
         </div>
+        </template>
     `
 };
 
@@ -1839,11 +1689,12 @@ export const ScheduleFilterSelect = {
             // Open the advanced search component in a modal
             this.$modal.custom(ScheduleAdvancedFilter, {
                 containerPath: this.containerPath,
+                modalClass: 'page-menu',
                 navigateToPath: this.navigateToPath,
                 onSearchSelected: (searchData) => {
                     this.$emit('search-selected', searchData);
                 }
-            }, 'Advanced Schedule Filtering', { size: 'large' });
+            }, 'Advanced Schedule Filtering', { size: 'large'});
         }
     },
     template: html`

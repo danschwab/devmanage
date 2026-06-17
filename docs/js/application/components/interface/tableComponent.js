@@ -2868,6 +2868,15 @@ export const TableComponent = {
                 event.preventDefault();
             }
             
+            // Capture snapshot before reverting (so revert can be undone)
+            if (this.appContext?.currentPath) {
+                const routeKey = this.appContext.currentPath.split('?')[0];
+                undoRegistry.capture(this.data, routeKey, {
+                    type: 'cell-revert',
+                    cellInfo: { rowIndex, colIndex }
+                });
+            }
+            
             const column = this.columns[colIndex];
             const originalValue = this.originalData[rowIndex]?.[column.key];
             
