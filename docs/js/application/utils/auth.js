@@ -303,6 +303,8 @@ export class Auth {
 
             //console.warn(`[Auth] Authentication check failed for ${context}`);
             authPromptShowing = true;
+            // Remove proactive interaction handler so it doesn't interfere with modal interactions
+            this._removeProactiveInteractionHandler();
             const manager = await getModalManager();
 
             return new Promise((resolve) => {
@@ -456,6 +458,8 @@ export class Auth {
 
         const handler = () => {
             this._removeProactiveInteractionHandler();
+            // Don't attempt refresh if auth modal is already showing
+            if (authPromptShowing) return;
             GoogleSheetsAuth.silentRefresh().then(success => {
                 if (success) {
                     console.log('[Auth] Proactive token renewal succeeded');
