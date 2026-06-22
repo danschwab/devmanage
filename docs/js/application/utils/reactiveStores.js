@@ -344,6 +344,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         autoSaved: false, // True if this store has been auto-saved or loaded from auto-save
         lastAutoSaveHash: null, // Hash of data when last auto-saved, to prevent redundant saves
         loadedBackupKey: null, // Original backup key used for restore (may differ from current key)
+        needsReload: false, // True when store was cleared by logout — reloadErrorStores() will reload after login
         
         // Computed property to check if data has been modified
         get isModified() {
@@ -410,7 +411,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.analysisMessage = '';
         },
         async load(message = 'Loading data...', skipAnalysis = false) {
-            //this.reset();
+            this.needsReload = false; // Clear flag set by clearAllReactiveStores
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
                 // Initialize with empty array to allow dynamic property addition
@@ -1679,11 +1680,14 @@ export function createAnalysisConfig(apiFunction, resultKey, label, sourceColumn
  * during token expiry will recover automatically.
  */
 export function reloadErrorStores() {
-    Object.values(reactiveStoreRegistry).forEach(store => {
-        if (store.error && !store.isLoading && !store.isSaving) {
-            store.handleInvalidation();
-        }
-    });
+    const storesToReload = Object.values(reactiveStoreRegistry).filter(
+        store => (store.error || store.needsReload) && !store.isLoading && !store.isSaving
+    );
+    storesToReload.forEach(store => store.handleInvalidation());
+    // Restart auto-save timer if any stores are reloading (it was stopped during logout)
+    if (storesToReload.length > 0) {
+        startAutoSaveTimer();
+    }
 }
 
 /**
@@ -1734,12 +1738,28 @@ export async function clearAllReactiveStores(options = {}) {
         //console.log('[ReactiveStore] Step 3: Skipping save (skipSave=true)');
     }
     
-    // Step 4: Remove all reactive stores from registry
-    //console.log('[ReactiveStore] Step 4: Clearing all stores from registry');
-    Object.keys(reactiveStoreRegistry).forEach(key => {
-        delete reactiveStoreRegistry[key];
+    // Step 4: Reset all stores in place and mark them for reload, keeping them in the registry.
+    // Components hold direct object references to these stores; deleting registry entries makes
+    // those references stale and prevents reloadErrorStores() from reloading them after re-login.
+    Object.values(reactiveStoreRegistry).forEach(store => {
+        store.data.splice(0, store.data.length);
+        store.originalData.splice(0, store.originalData.length);
+        store.isLoading = false;
+        store.loadingMessage = '';
+        store.error = null;
+        store.isAnalyzing = false;
+        store.isReloadingMainData = false;
+        store.isSaving = false;
+        store.externalConflict = false;
+        store.lockConflictOwner = null;
+        store.analysisProgress = 0;
+        store.analysisMessage = '';
+        store.autoSaved = false;
+        store.lastAutoSaveHash = null;
+        store.loadedBackupKey = null;
+        store.needsReload = true;
     });
-    
-    //console.log(`[ReactiveStore] Cleanup complete - cleared ${storeCount} store(s) from registry`);
+
+    //console.log(`[ReactiveStore] Cleanup complete - reset ${storeCount} store(s) in registry`);
 }
 
