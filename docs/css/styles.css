@@ -224,7 +224,7 @@ div#app-content > div.empty-message {
     grid-row: span 2;
 }
 
-.container.dashboard-card .content {
+.container.dashboard-card > .content {
     flex: 1;
     /*overflow: auto;*/
 }
@@ -406,7 +406,7 @@ div#app-content > div.empty-message {
 
 
 
-.card>.content {
+.card > .content {
     padding: var(--padding-md);
 }
 
@@ -645,24 +645,22 @@ button.card {
 
 
 
-.page-menu .content {
+.page-menu > .content {
     min-width: var(--page-width-small);
     height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
 }
-.small-menu .content {
+.small-menu > .content {
     max-width: var(--page-width-card);
 }
-.reading-menu .content {
+.reading-menu > .content {
     display: flex;
     flex-direction: column;
     gap: var(--padding-lg);
     padding: var(--padding-lg);
 }
-.event-detail {
-    width: min(90vw, var(--page-width-large));
-}
-.event-detail .content {
+.event-detail > .content {
     padding: var(--padding-md);
+    min-width: min(90vw, var(--page-width-large));
 }
 
 
@@ -1201,6 +1199,10 @@ tr.is-group:hover .group-toggle {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--padding-md);
+}
+.details-grid label {
+    color: var(--color-text-light);
+    line-height: 1.2rem;
 }
 
 .detail-item {

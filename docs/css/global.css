@@ -63,9 +63,7 @@ input[type="submit"], input[type="button"], select, button {
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out;
 }
 label {
-    color: var(--color-text-light);
-    line-height: 1.2rem;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
 }
 
 
@@ -80,6 +78,7 @@ html, body {
     letter-spacing: -0.5px;
 }
 .font-black {font-family: "Arial Black", sans-serif; font-weight: 800;}
+.font-small {font-size: 0.75rem; font-weight: 600;}
 
 p,
 h1,
@@ -406,25 +405,12 @@ table.green th, td.green th, th.green, td.green {
 }
 
 /* Form styling for modals and inputs */
-.form-group {
-    margin-bottom: 1rem;
-}
-
 .form-group label {
+    z-index: 10;
+    /* background-color: var(--background-color); */
+    /* position: absolute;
+    transform: translate(0, -90%); */
     display: block;
-    margin-bottom: 0.25rem;
-    font-weight: bold;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background-color: var(--background-color);
-    color: var(--color-text);
 }
 
 .form-group input.error {

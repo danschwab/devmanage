@@ -206,7 +206,7 @@ export const ScheduleAdvancedFilter = {
         // Calculated date for After filter
         afterCalculatedDate() {
             if (this.afterMode === 'date') {
-                return 'No Offset';
+                return 'Offset Mode';
             } else if (this.afterMode === 'offset' && this.afterValue !== '' && !isNaN(Number(this.afterValue))) {
                 const offset = Number(this.afterValue);
                 const date = new Date();
@@ -218,7 +218,7 @@ export const ScheduleAdvancedFilter = {
         // Calculated date for Before filter
         beforeCalculatedDate() {
             if (this.beforeMode === 'date') {
-                return 'No Offset';
+                return 'Offset Mode';
             } else if (this.beforeMode === 'offset' && this.beforeValue !== '' && !isNaN(Number(this.beforeValue))) {
                 const offset = Number(this.beforeValue);
                 const date = new Date();
@@ -497,6 +497,10 @@ export const ScheduleAdvancedFilter = {
                 // Just update the current value, don't add new fields
                 filter.values[valueIndex] = value;
             }
+        },
+        addValue(filter) {
+            // Add a new empty value field
+            filter.values.push('');
         },
         removeValue(filter, valueIndex) {
             if (filter.values.length > 1) {
@@ -938,228 +942,270 @@ export const ScheduleAdvancedFilter = {
         </div>
         
         <template v-else>
-        <!-- Date Filter: After -->
-        <div 
-            :class="'card' + (afterValue !== '' ? ' green' : ' white')"
-            style="display: flex; flex-direction: column; gap: var(--padding-md);"
-        >
-            <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
-                <span style="width: 80px;">Start Date:</span>
-                <select 
-                    v-model="afterColumn"
-                    :disabled="isLoadingColumns"
-                >
-                    <!-- <option value="">Select column...</option> -->
-                    <option 
-                        v-for="col in dateColumns" 
-                        :key="col" 
-                        :value="col"
-                    >
-                        {{ col }}
-                    </option>
-                </select>
-                <span>is after {{afterMode === 'offset' ? 'days from today:' : 'a specific date:'}}</span>
-                <div class="button-bar" style="flex-grow: 1;">
-                    <!-- <div v-if="afterMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
-                    <input 
-                        v-if="afterMode === 'offset'"
-                        type="number" 
-                        v-model.number="afterValue" 
-                        placeholder="Days offset (e.g., -30, 0, 365)"
-                        style="flex-grow: 1;"
-                    />
-                    <button 
-                        @click="toggleAfterMode"
-                        class="white"
-                        style="flex-grow: 1; text-align: center; white-space: nowrap;"
-                    >
-                        {{ afterCalculatedDate ? afterCalculatedDate : 'enter offset' }}
-                    </button>
-                    <input 
-                        v-if="afterMode === 'date'"
-                        type="date" 
-                        v-model="afterValue" 
-                        placeholder="YYYY-MM-DD"
-                        style="flex-grow: 1;"
-                    />
-                </div>
+            <!-- Apply Buttons -->
+            <div class="button-bar">
+                <button @click="saveFiltersToURL" class="green" :disabled="!isFormValid">Apply Filter</button>
+                <button @click="clearAllFilters" class="white">Clear Filter</button>
             </div>
-        </div>
-        
-        <!-- Date Filter: Before -->
-        <div 
-            :class="'card' + (beforeValue !== '' ? ' green' : ' white')"
-            style="display: flex; flex-direction: column; gap: var(--padding-md);"
-        >
-            <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
-                <span style="width: 80px;">End Date:</span>
-                <select 
-                    v-model="beforeColumn"
-                    :disabled="isLoadingColumns"
-                >
-                    <!-- <option value="">Select column...</option> -->
-                    <option 
-                        v-for="col in dateColumns" 
-                        :key="col" 
-                        :value="col"
-                    >
-                        {{ col }}
-                    </option>
-                </select>
-                <span>is before {{beforeMode === 'offset' ? 'days from today:' : 'a specific date:'}}</span>
-                <div class="button-bar" style="flex-grow: 1;">
-                    <!-- <div v-if="beforeMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
-                    <input 
-                        v-if="beforeMode === 'offset'"
-                        type="number" 
-                        v-model.number="beforeValue" 
-                        placeholder="Days offset (e.g., -30, 0, 365)"
-                        style="flex-grow: 1;"
-                    />
-                    <button
-                        @click="toggleBeforeMode"
-                        class="white"
-                        style="flex-grow: 1; text-align: center; white-space: nowrap;"
-                    >
-                        {{ beforeCalculatedDate ? beforeCalculatedDate : 'enter offset' }}
-                    </button>
-                    <input 
-                        v-if="beforeMode === 'date'"
-                        type="date" 
-                        v-model="beforeValue" 
-                        placeholder="YYYY-MM-DD"
-                        style="flex-grow: 1;"
-                    />
-                </div>
-            </div>
-        </div>
-
-        <!-- Text Search Filters -->
-        <div v-if="isLoadingColumns" class="card white">
-            Loading columns...
-        </div>
-        
-        <slot v-else>
+            
+            
+            <!-- Date Filter: After -->
             <div 
-                v-for="filter in textFilters" 
-                :key="filter.id"
-                :class="'card' + (filter.values.some(v => v.trim()) ? ' green' : ' white')"
+                :class="'card' + (afterValue !== '' ? ' green' : ' white')"
                 style="display: flex; flex-direction: column; gap: var(--padding-md);"
             >
                 <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
-                    <span style="width: 80px;">Text Filter:</span>
-                    <select 
-                        v-model="filter.column"
-                    >
-                        <option value="">Select column...</option>
-                        <option 
-                            v-for="col in availableColumns" 
-                            :key="col" 
-                            :value="col"
+                    <span style="width: 80px;">Start Date:</span>
+                    
+                    <div class="form-group">
+                        <label>Column</label>
+                        <select 
+                            v-model="afterColumn"
+                            :disabled="isLoadingColumns"
                         >
-                            {{ col }}
-                        </option>
-                    </select>
-                
-                    <select 
-                        v-model="filter.type"
-                        :disabled="!filter.column"
-                        :class="{ 'hide-when-narrow': !filter.column }"
-                        style="min-width: 120px; width: unset;"
-                    >
-                        <option value="contains">Contains</option>
-                        <option value="excludes">Excludes</option>
-                    </select>
-                    <!-- Multiple value inputs -->
-                    <div 
-                        v-for="(value, valueIndex) in filter.values" 
-                        :key="valueIndex"
-                        class="input-container"
-                        style="min-width: 120px;"
-                    >
-                        <input 
-                            type="text" 
-                            :value="value"
-                            @input="handleValueInput(filter, valueIndex, $event)"
-                            :placeholder="filter.column ? (valueIndex === 0 ? 'Search text...' : 'Additional value...') : 'Select column first'"
-                            :disabled="!filter.column"
-                        />
-                        <button 
-                            v-if="filter.values.length > 1 && value.trim()"
-                            @click="removeValue(filter, valueIndex)"
-                            class="column-button"
-                            title="Remove this value"
-                        >
-                            ✕
-                        </button>
+                            <!-- <option value="">Select column...</option> -->
+                            <option 
+                                v-for="col in dateColumns" 
+                                :key="col" 
+                                :value="col"
+                            >
+                                {{ col }}
+                            </option>
+                        </select>
                     </div>
-                    <div class="spacer"></div>
-                    <button 
-                        @click="removeTextFilter(filter.id)"
-                        class="button-symbol red"
-                        title="Remove this filter"
-                    >
-                        🗙
-                    </button>
+
+                    <span style="width: 180px; text-align: right;">is after {{afterMode === 'offset' ? 'an offset date:' : 'a specific date:'}}</span>
+                    
+                    <div class="form-group" style="flex-grow: 1;">
+                        <label>{{ afterMode === 'offset' ? 'Days offset from today' : 'Chosen date' }}</label>
+                        <div class="button-bar" style="flex-grow: 1;">
+                            <!-- <div v-if="afterMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
+                            <input 
+                                v-if="afterMode === 'offset'"
+                                type="number" 
+                                v-model.number="afterValue" 
+                                placeholder="Days offset..."
+                                style="flex-grow: 1;"
+                            />
+                            <input 
+                                v-if="afterMode === 'date'"
+                                type="date" 
+                                v-model="afterValue" 
+                                placeholder="YYYY-MM-DD"
+                                style="flex-grow: 1;"
+                            />
+                            <button 
+                                @click="toggleAfterMode"
+                                style="flex-grow: 1; text-align: center; white-space: nowrap;"
+                            >
+                                {{ afterCalculatedDate ? afterCalculatedDate : 'enter offset' }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <button 
-                v-if="textFilters.length === 0 || textFilters.every(filter => filter.column && filter.values.some(v => v.trim()))"
-                @click="addTextFilter" 
-                class="card white"
-                style="width: 100%; flex-grow: 0;"
-                :disabled="isLoadingColumns"
+            <!-- Date Filter: Before -->
+            <div 
+                :class="'card' + (beforeValue !== '' ? ' green' : ' white')"
+                style="display: flex; flex-direction: column; gap: var(--padding-md);"
             >
-                {{ textFilters.length === 0 ? 'Add a Text Filter' : 'Add Another Text Filter' }}
-            </button>
-        </slot>
+                <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
+                    <span style="width: 80px;">End Date:</span>
+                    
+                    <div class="form-group">
+                        <label>Column</label>
+                        <select 
+                            v-model="beforeColumn"
+                            :disabled="isLoadingColumns"
+                        >
+                            <!-- <option value="">Select column...</option> -->
+                            <option 
+                                v-for="col in dateColumns" 
+                                :key="col" 
+                                :value="col"
+                            >
+                                {{ col }}
+                            </option>
+                        </select>
+                    </div>
 
-        <!-- Action Buttons -->
-        <div class="button-bar">
-            <!-- Saved Search Dropdown -->
-            <select 
-                v-model="selectedSavedSearchIndex"
-                @change="handleScheduleFilterSelection"
-                style="flex: auto;"
-            >
-                <option :value="null">{{ selectedSavedSearchIndex === null ? 'Unsaved Filter' : 'New Filter' }}</option>
-                <option 
-                    v-for="(search, index) in savedSearches" 
-                    :key="index" 
-                    :value="index"
+                    <span style="width: 180px; text-align: right;">is before {{beforeMode === 'offset' ? 'an offset date:' : 'a specific date:'}}</span>
+                    
+                    <div class="form-group" style="flex-grow: 1;">
+                        <label>{{ beforeMode === 'offset' ? 'Days offset from today' : 'Chosen date' }}</label>
+                        <div class="button-bar" style="flex-grow: 1;">
+                            <!-- <div v-if="beforeMode === 'offset'" class="card gray" style="white-space: nowrap;">days from today:</div> -->
+                            <input 
+                                v-if="beforeMode === 'offset'"
+                                type="number" 
+                                v-model.number="beforeValue" 
+                                placeholder="Days offset..."
+                                style="flex-grow: 1;"
+                            />
+                            <input 
+                                v-if="beforeMode === 'date'"
+                                type="date" 
+                                v-model="beforeValue" 
+                                placeholder="YYYY-MM-DD"
+                                style="flex-grow: 1;"
+                            />
+                            <button
+                                @click="toggleBeforeMode"
+                                style="flex-grow: 1; text-align: center; white-space: nowrap;"
+                            >
+                                {{ beforeCalculatedDate ? beforeCalculatedDate : 'enter offset' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            <!-- Text Search Filters -->
+            <div v-if="isLoadingColumns" class="card white">
+                Loading columns...
+            </div>
+            
+            <slot v-else>
+                <div 
+                    v-for="filter in textFilters" 
+                    :key="filter.id"
+                    :class="'card' + (filter.values.some(v => v.trim()) ? ' green' : ' white')"
+                    style="display: flex; flex-direction: column; gap: var(--padding-md);"
                 >
-                    {{ search.name }}
-                </option>
-            </select>
+                    <div style="display: flex; flex-wrap: wrap; gap: var(--padding-md); align-items: center;">
+                        <span style="width: 80px;">Text Filter:</span>
+                        
+                        <div class="form-group">
+                            <label>Column</label>
+                            <select 
+                                v-model="filter.column"
+                            >
+                                <option value="">Select...</option>
+                                <option 
+                                    v-for="col in availableColumns" 
+                                    :key="col" 
+                                    :value="col"
+                                >
+                                    {{ col }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div :class="['form-group', { 'hide-when-narrow': !filter.column }]">
+                            <label>Operation</label>
+                            <select 
+                                v-model="filter.type"
+                                :disabled="!filter.column"
+                                style="min-width: 120px; width: unset;"
+                            >
+                                <option value="contains">Contains</option>
+                                <option value="excludes">Excludes</option>
+                            </select>
+                        </div>
+                        <!-- Multiple value inputs -->
+                        
+                        <div :class="['form-group', { 'hide-when-narrow': !filter.column }]">
+                            <label>Value{{ filter.values.length > 1 ? (filter.type === 'contains' ? ' or additional values' : ' and additional values') : '' }}</label>
+                            <div class="button-bar">
+                                <div 
+                                    v-for="(value, valueIndex) in filter.values" 
+                                    :key="valueIndex"
+                                    class="input-container"
+                                    style="min-width: 120px;"
+                                >
+                                    <input 
+                                        type="text" 
+                                        :value="value"
+                                        @input="handleValueInput(filter, valueIndex, $event)"
+                                        :placeholder="(valueIndex === 0 ? 'Text...' : filter.type === 'contains' ? 'Or...' : 'And...')"
+                                        :disabled="!filter.column"
+                                    />
+                                    <button 
+                                        v-if="filter.values.length > 1"
+                                        @click="removeValue(filter, valueIndex)"
+                                        class="column-button"
+                                        title="Remove this value"
+                                    >
+                                        ✕
+                                    </button>
+                                    <button 
+                                        v-if="valueIndex === filter.values.length - 1 && value.trim()"
+                                        @click="addValue(filter)"
+                                        class="column-button"
+                                        title="Add another value"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="spacer"></div>
+                        <button 
+                            @click="removeTextFilter(filter.id)"
+                            class="button-symbol red"
+                            title="Remove this filter"
+                        >
+                            🗙
+                        </button>
+                    </div>
+                </div>
+                
+                <button 
+                    v-if="textFilters.length === 0 || textFilters.every(filter => filter.column && filter.values.some(v => v.trim()))"
+                    @click="addTextFilter" 
+                    class="card white"
+                    style="width: 100%; flex-grow: 0;"
+                    :disabled="isLoadingColumns"
+                >
+                    {{ textFilters.length === 0 ? 'Add a Text Filter' : 'Add Another Text Filter' }}
+                </button>
+            </slot>
+    
             
-            <!-- Conditional buttons based on whether a saved search is selected -->
-            <button 
-                v-if="selectedSavedSearchIndex === null"
-                @click="saveSearch"
-                :disabled="!isFormValid"
-            >
-                Save This Filter
-            </button>
-            <button 
-                v-else
-                @click="updateSavedSearch"
-                :disabled="!isFormValid"
-            >
-                Update Saved Filter
-            </button>
-            <button 
-                :disabled="selectedSavedSearchIndex == null"
-                @click="deleteSavedSearch"
-            >
-                Delete Saved Filter
-            </button>
-            
-        </div>
-        <div class="button-bar">
-            <button @click="saveFiltersToURL" class="green" :disabled="!isFormValid">Apply Filters</button>
-            <button @click="clearAllFilters" class="white">Clear Filters</button>
-        </div>
+            <!-- Action Buttons -->
+            <h4>Saved Filter Options:</h4>
+            <div class="button-bar">
+                <!-- Saved Search Dropdown -->
+                <select 
+                    v-model="selectedSavedSearchIndex"
+                    @change="handleScheduleFilterSelection"
+                    style="flex: auto;"
+                >
+                    <option :value="null">{{ selectedSavedSearchIndex === null ? 'Unsaved Filter' : 'New Filter' }}</option>
+                    <option 
+                        v-for="(search, index) in savedSearches" 
+                        :key="index" 
+                        :value="index"
+                    >
+                        {{ search.name }}
+                    </option>
+                </select>
+                
+                <!-- Conditional buttons based on whether a saved search is selected -->
+                <button 
+                    v-if="selectedSavedSearchIndex === null"
+                    @click="saveSearch"
+                    :disabled="!isFormValid"
+                >
+                    Save This Filter
+                </button>
+                <button 
+                    v-else
+                    @click="updateSavedSearch"
+                    :disabled="!isFormValid"
+                >
+                    Update Saved Filter
+                </button>
+                <button 
+                    :disabled="selectedSavedSearchIndex == null"
+                    @click="deleteSavedSearch"
+                >
+                    Delete Saved Filter
+                </button>
+            </div>
+
         </template>
     `
 };
