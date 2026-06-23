@@ -47,8 +47,8 @@ class applicationUtils_uncached {
         {
             name: 'Upcoming',
             dateFilters: [
-                { column: 'Date', value: 0, type: 'after' },  // Today
-                { column: 'Date', value: 30, type: 'before' } // 30 days in the future
+                { column: 'Date', value: 0, type: 'after' }//,  // Today
+                // { column: 'Date', value: 60, type: 'before' } // 60 days in the future
             ],
             textFilters: []
         }
@@ -864,6 +864,96 @@ class applicationUtils_uncached {
         clearTimeout(_thumbnailFlushTimer);
         _thumbnailFlushTimer = setTimeout(_flushThumbnailWrites, 2000);
     }
+
+    /**
+     * Get or create a short link for a given path
+     * Checks if the path already has a short code, otherwise creates one
+     * @param {string} path - The full path to shorten
+     * @returns {Promise<string>} The short code (e.g., "1gx")
+     */
+    static async getShortLink(path) {
+        // Ensure Links tab exists
+        const allTabs = await Database.getTabs('CACHE');
+        const linksTab = allTabs.find(t => t.title === 'Links');
+        
+        if (!linksTab) {
+            // Create Links tab with headers
+            await Database.createTab('CACHE', null, 'Links');
+            await Database.setData(
+                'CACHE',
+                'Links',
+                [['Path', 'ShortCode', 'Created']],
+                null,
+                { skipMetadata: true }
+            );
+        }
+        
+        // Get existing links
+        const links = await Database.getData('CACHE', 'Links', {
+            Path: 'Path',
+            ShortCode: 'ShortCode',
+            Created: 'Created'
+        });
+        
+        // Check if path already exists
+        const existing = links.find(link => link.Path === path);
+        if (existing && existing.ShortCode) {
+            return existing.ShortCode;
+        }
+        
+        // Generate new short code (base-36)
+        const maxCode = links.reduce((max, link) => {
+            if (!link.ShortCode) return max;
+            try {
+                const num = parseInt(link.ShortCode, 36);
+                return Math.max(max, num);
+            } catch {
+                return max;
+            }
+        }, 0);
+        
+        const newShortCode = (maxCode + 1).toString(36);
+        
+        // Add new link
+        links.push({
+            Path: path,
+            ShortCode: newShortCode,
+            Created: new Date().toISOString()
+        });
+        
+        // Save back to sheet
+        await Database.setData('CACHE', 'Links', links, {
+            Path: 'Path',
+            ShortCode: 'ShortCode',
+            Created: 'Created'
+        }, { skipMetadata: true });
+        
+        return newShortCode;
+    }
+
+    /**
+     * Expand a short code back to its full path
+     * @param {string} shortCode - The short code to expand (e.g., "1gx")
+     * @returns {Promise<string|null>} The full path, or null if not found
+     */
+    static async expandShortLink(shortCode) {
+        try {
+            const linksTab = await Database.findTabByName('CACHE', 'Links');
+            if (!linksTab) return null;
+            
+            const links = await Database.getData('CACHE', 'Links', {
+                Path: 'Path',
+                ShortCode: 'ShortCode',
+                Created: 'Created'
+            });
+            
+            const link = links.find(l => l.ShortCode === shortCode);
+            return link ? link.Path : null;
+        } catch (error) {
+            console.error('[ApplicationUtils] Error expanding short link:', error);
+            return null;
+        }
+    }
 }
 
 // ─── Thumbnail batch-write state ─────────────────────────────────────────────
@@ -913,8 +1003,8 @@ async function _flushThumbnailWrites() {
 export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
-    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps', 'storeThumbnailRecord'], // Mutation methods
-    ['getThumbnailRecord'], // Infinite cache methods
+    ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps', 'storeThumbnailRecord', 'getShortLink', 'expandShortLink'], // Mutation methods
+    ['getThumbnailRecord', 'expandShortLink'], // Infinite cache methods
     { 'getSheetLock': 10000, 'getLocksData': 10000 } // Custom cache durations (10 seconds for getSheetLock and getLocksData)
 );
 

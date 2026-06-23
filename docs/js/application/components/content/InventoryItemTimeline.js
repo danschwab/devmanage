@@ -138,8 +138,9 @@ export const InventoryItemTimeline = {
             let endDate   = searchData?.endDate   ?? null;
 
             if ((!startDate || !endDate) && searchData?.dateFilters?.length) {
-                const afterFilter  = searchData.dateFilters.find(f => f.column === 'Date' && f.type === 'after');
-                const beforeFilter = searchData.dateFilters.find(f => f.column === 'Date' && f.type === 'before');
+                // Find any 'after' and 'before' filters regardless of column (inventory timeline doesn't care about columns)
+                const afterFilter  = searchData.dateFilters.find(f => f.type === 'after');
+                const beforeFilter = searchData.dateFilters.find(f => f.type === 'before');
                 if (!startDate && afterFilter)  startDate = offsetToISO(afterFilter.value);
                 if (!endDate   && beforeFilter) endDate   = offsetToISO(beforeFilter.value);
             }

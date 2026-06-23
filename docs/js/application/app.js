@@ -144,7 +144,8 @@ const App = {
             }, { immediate: true, deep: true });
             
             // Apply current URL state if user is already authenticated
-            const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
+            // Use resolvePathFromURL to expand short hashes since we're authenticated
+            const currentUrl = await NavigationRegistry.urlRouter.resolvePathFromURL();
             if (currentUrl && currentUrl !== 'dashboard') {
                 await NavigationRegistry.handleNavigateToPath({ 
                     targetPath: currentUrl, 
@@ -173,8 +174,8 @@ const App = {
                     }, { immediate: true, deep: true });
                 }
                 
-                // Apply current URL when user logs in
-                const currentUrl = NavigationRegistry.urlRouter.getCurrentURLPath();
+                // Apply current URL when user logs in — resolve short hashes now that we are authenticated
+                const currentUrl = await NavigationRegistry.urlRouter.resolvePathFromURL();
                 if (currentUrl && currentUrl !== 'dashboard') {
                     await NavigationRegistry.handleNavigateToPath({ 
                         targetPath: currentUrl, 

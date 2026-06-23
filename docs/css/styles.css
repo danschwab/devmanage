@@ -288,7 +288,8 @@ div#app-content > div.empty-message {
 .content-header:has(+ .content-footer),
 .content-header:has(+ .content-header),
 .sticky-header-wrapper:has(+ .content-footer) .content-header,
-.sticky-header-wrapper:has(+ .table-wrapper) .content-header {
+.sticky-header-wrapper:has(+ .table-wrapper) .content-header,
+.calendar-sticky-top .content-header {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: none;
 }

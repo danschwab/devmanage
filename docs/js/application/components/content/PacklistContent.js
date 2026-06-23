@@ -271,7 +271,6 @@ export const PacklistMenuComponent = {
                                         :include-years="true"
                                         :start-year="2023"
                                         :show-advanced-button="false"
-                                        default-search="Upcoming"
                                         @search-selected="handleSearchSelected"
                                     />
                                 </div>
@@ -986,7 +985,6 @@ export const PacklistContent = {
                             :domain="'production_schedule'"
                             :include-years="true"
                             :start-year="2023"
-                            :default-search="String(new Date().getFullYear())"
                             :allow-show-all="true"
                             :container-path="containerPath"
                             :navigate-to-path="navigateToPath"

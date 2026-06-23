@@ -592,6 +592,12 @@ export class FakeGoogleSheetsService {
             'Notes': [
                 ['Path', 'Note', 'Color', 'Size', 'EditHistory']
             ],
+            'Links': [
+                ['Path', 'ShortCode', 'Created'],
+                ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
+            ]
+        },
+        'DATA': {
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
                 ['ABCAM', '', ''],
@@ -891,7 +897,8 @@ export class FakeGoogleSheetsService {
             { title: 'Locks', sheetId: 1 },
             { title: 'Clients', sheetId: 2 },
             { title: 'Shows', sheetId: 3 },
-            { title: 'Notes', sheetId: 4 }
+            { title: 'Notes', sheetId: 4 },
+            { title: 'Links', sheetId: 5 },
         ]
     };
 

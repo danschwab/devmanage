@@ -381,13 +381,13 @@ export const CalendarComponent = {
                             :disabled="isLoading"
                         >{{ isLoading ? 'Loading...' : 'Refresh' }}</button>
                     </div>
+                    <LoadingBarComponent
+                        :is-loading="isLoading"
+                        :is-analyzing="isAnalyzing"
+                        :percent-complete="loadingProgress"
+                        class="embedded"
+                    />
                 </div>
-                <LoadingBarComponent
-                    :is-loading="isLoading"
-                    :is-analyzing="isAnalyzing"
-                    :percent-complete="loadingProgress"
-                    class="embedded"
-                />
                 <div v-if="!isEmpty && calendarWeeks.length > 0" class="calendar-dow-header">
                     <div v-for="name in dayNames" :key="name" class="calendar-dow-cell">{{ name }}</div>
                 </div>

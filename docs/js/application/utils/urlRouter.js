@@ -2,6 +2,10 @@
  * URL Router - Synchronizes application navigation with browser URLs
  * Uses hash-based routing for compatibility with static hosting
  */
+
+import { ApplicationUtils } from '../../data_management/index.js';
+import { authState } from '../utils/auth.js';
+
 export class URLRouter {
     constructor(navigationRegistry, appContext) {
         this.navigationRegistry = navigationRegistry;
@@ -24,6 +28,46 @@ export class URLRouter {
     }
 
     /**
+     * Check if a hash is a short hash (starts with "go:")
+     */
+    static isShortHash(hash) {
+        return typeof hash === 'string' && hash.startsWith('go:');
+    }
+
+    /**
+     * Extract short code from hash (removes "go:" prefix)
+     */
+    static extractShortCode(hash) {
+        if (!URLRouter.isShortHash(hash)) {
+            return null;
+        }
+        return hash.slice(3); // Remove "go:" prefix
+    }
+
+    /**
+     * Create a short hash URL from a path (async - calls ApplicationUtils)
+     * @param {string} path - The full path to shorten
+     * @returns {Promise<string>} The short hash format (e.g., "go:1gx")
+     */
+    static async createShortHash(path) {
+        const shortCode = await ApplicationUtils.getShortLink(path);
+        return `go:${shortCode}`;
+    }
+
+    /**
+     * Decode a short hash back to the original path (async - calls ApplicationUtils)
+     * @param {string} shortHash - The short hash to decode (e.g., "go:1gx")
+     * @returns {Promise<string|null>} The full path, or null if not found
+     */
+    static async decodeShortHash(shortHash) {
+        const shortCode = URLRouter.extractShortCode(shortHash);
+        if (!shortCode) {
+            return null;
+        }
+        return await ApplicationUtils.expandShortLink(shortCode);
+    }
+
+    /**
      * Initialize URL routing system
      */
     initialize() {
@@ -35,7 +79,8 @@ export class URLRouter {
     }
 
     /**
-     * Get current URL path (decoded)
+     * Get current URL path (sync, no short hash expansion).
+     * Safe to call before authentication.
      */
     getCurrentURLPath() {
         const hash = window.location.hash.slice(1); // Remove #
@@ -43,10 +88,46 @@ export class URLRouter {
     }
 
     /**
+     * Check if a path is an unresolved short hash.
+     */
+    isShortPath(path) {
+        return URLRouter.isShortHash(path);
+    }
+
+    /**
+     * Resolve the current URL path, expanding short hashes if present.
+     * Must only be called after authentication.
+     * @returns {Promise<string|null>} The full path, or null if short hash could not be resolved.
+     */
+    async resolvePathFromURL() {
+        const hash = window.location.hash.slice(1); // Remove #
+
+        // Don't try to expand short hashes if not authenticated
+        if (URLRouter.isShortHash(hash)) {
+            if (!authState.isAuthenticated) {
+                //console.warn('[URLRouter] Cannot resolve short hash - not authenticated');
+                return null;
+            }
+            
+            const decodedPath = await URLRouter.decodeShortHash(hash);
+            if (decodedPath) {
+                // Replace the short hash in the URL with the full path silently
+                const encodedPath = this.encodePath(decodedPath);
+                history.replaceState({ path: decodedPath }, '', `#${encodedPath}`);
+                return decodedPath;
+            }
+            // Short code not found in Links table
+            return null;
+        }
+
+        return this.decodePath(hash);
+    }
+
+    /**
      * Handle browser back/forward buttons
      */
     async handlePopState(event) {
-        const path = this.getCurrentURLPath();
+        const path = await this.resolvePathFromURL();
         if (path) {
             // Let NavigationSystem handle the actual navigation, mark as browser navigation
             await this.navigationRegistry.handleNavigateToPath({ 

@@ -294,6 +294,7 @@ export const InventoryItemReport = {
                 :loading-message="loadingMessage"
                 :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
                 :show-refresh="true"
+                :show-search="true"
                 :empty-message="emptyMessage"
                 @event-click="navigateToItemPage"
                 @refresh="handleRefresh"

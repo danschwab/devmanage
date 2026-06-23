@@ -1,5 +1,6 @@
 import { html, BreadcrumbComponent, NavigationRegistry } from '../../index.js';
 import { PageNoteComponent } from './pageNoteComponent.js';
+import { URLRouter } from '../../utils/urlRouter.js';
 
 // Container component functionality
 export const ContainerComponent = {
@@ -114,6 +115,44 @@ export const ContainerComponent = {
                 title: this.title
             });
         },
+        async shareContainer() {
+            // Construct the full URL
+            const fullUrl = `${window.location.origin}${window.location.pathname}#${this.containerPath}`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(fullUrl).then(() => {
+                // Show modal with the link
+                this.$modal.confirm(
+                    `Link copied to clipboard\n\nSend to anyone with a topshelfexhibits.com email\n\n${fullUrl}`,
+                    () => {
+                        // Ok button - just close the modal
+                    },
+                    async () => {
+                        // Shorten Link button
+                        try {
+                            const shortHash = await URLRouter.createShortHash(this.containerPath);
+                            const shortUrl = `${window.location.origin}${window.location.pathname}#${shortHash}`;
+                            
+                            // Copy shortened URL to clipboard
+                            await navigator.clipboard.writeText(shortUrl);
+                            this.$modal.alert(
+                                `Shortened link copied to clipboard\n\nSend to anyone with a topshelfexhibits.com email\n\n${shortUrl}`,
+                                'Shortened Link'
+                            );
+                        } catch (err) {
+                            console.error('Failed to create or copy shortened link:', err);
+                            this.$modal.alert('Failed to create shortened link', 'Error');
+                        }
+                    },
+                    'Share Link',
+                    'Ok',
+                    'Shorten Link'
+                );
+            }).catch(err => {
+                console.error('Failed to copy link:', err);
+                this.$modal.alert('Failed to copy link to clipboard', 'Error');
+            });
+        },
         handleWheel() {
             // Only set isScrolling if container is clipping content
             const container = this.$el;
@@ -162,10 +201,16 @@ export const ContainerComponent = {
                             title="Expand to page">
                         <span class="material-symbols-outlined">expand_content</span>
                     </button>
-                    <button v-if="!cardStyle" 
+                    <button v-if="containerPath && !cardStyle"
+                            class="button-symbol white"
+                            @click="shareContainer"
+                            title="Share Page Link">
+                        <span class="material-symbols-outlined">share</span>
+                    </button>
+                    <!-- <button v-if="!cardStyle" 
                             class="button-symbol white" 
                             @click="closeContainer" 
-                            title="Close">🗙</button>
+                            title="Close">🗙</button> -->
                 </div>
             </div>
             

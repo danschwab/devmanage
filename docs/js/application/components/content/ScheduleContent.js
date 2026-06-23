@@ -175,7 +175,6 @@ export const ScheduleContent = {
                                 :start-year="2023"
                                 :navigate-to-path="navigateToPath"
                                 :show-advanced-button="true"
-                                default-search="Upcoming"
                                 @search-selected="handleSearchSelected"
                             />
                             <CalendarLayoutToggle

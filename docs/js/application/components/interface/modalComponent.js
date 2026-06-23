@@ -118,11 +118,11 @@ export class ModalManager {
         return this._create(title, autoClose ? AutoCloseComponent : null, { 
             message, 
             autoClose, 
-            modalClass: 'reading-menu' 
+            modalClass: 'reading-menu small-menu' 
         });
     }
 
-    confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null, modalClass = 'reading-menu') {
+    confirm(message, onConfirm, onCancel = null, title = 'Confirm', confirmText = null, cancelText = null, modalClass = 'reading-menu small-menu') {
         return this._create(title, ConfirmButtonsComponent, { 
             message, 
             onConfirm, 

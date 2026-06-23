@@ -1,12 +1,12 @@
 ## Ask Ben
 
-!!! simplify and update schedule filtering settings (make the interface provide a handful of super-simple clear options)
-!!! simplify controls on reports page and add the
+!!! migrate everyones saved searches to the new standard "Show Date" is replaced with "Date"
+!!! simplify controls on reports page and add the min num to url params
 !!! print view for reports page
-!!! share button on pages
 !! dims at the beginning of item descriptions for all items
 !! stack show buttons in overlapping show-lists
 ! add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?
+! allow selecting shows for overlap
 
 automation rules (MAYBE NOT RIGHT NOW...)
 
