@@ -1681,6 +1681,7 @@ export const TableComponent = {
         // Watch for changes to originalData prop and recompare dirty state
         originalData: {
             handler() {
+                if (!this.hasEditableColumns) return;
                 this.$nextTick(() => {
                     this.compareAllCellsDirty();
                 });
@@ -1693,6 +1694,7 @@ export const TableComponent = {
         },
         data: {
             handler() {
+                if (!this.hasEditableColumns) return;
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
                     this.compareAllCellsDirty();
@@ -1702,6 +1704,7 @@ export const TableComponent = {
             flush: 'post' // Ensure DOM updates happen after data changes
         },
         isLoading(val) {
+            if (!this.hasEditableColumns) return;
             // When loading state changes, update cells and compare dirty
             this.$nextTick(() => {
                 this.updateAllEditableCells();
@@ -1714,6 +1717,7 @@ export const TableComponent = {
             });
         },
         draggable() {
+            if (!this.hasEditableColumns) return;
             this.$nextTick(() => {
                 this.updateAllEditableCells();
                 this.compareAllCellsDirty();
@@ -2819,6 +2823,7 @@ export const TableComponent = {
             return column.font ? 'font-' + column.font : '';
         },
         handleCellEdit(rowIndex, colIndex, value) {
+            if (!this.hasEditableColumns) return;
             const now = Date.now();
             const timeSinceLastEdit = this.lastEditTimestamp ? now - this.lastEditTimestamp : Infinity;
             
@@ -2862,6 +2867,7 @@ export const TableComponent = {
             this.checkDirtyCells();
         },
         revertCellToOriginal(rowIndex, colIndex, event) {
+            if (!this.hasEditableColumns) return;
             // Stop propagation to prevent cell focus
             if (event) {
                 event.stopPropagation();
@@ -2949,6 +2955,7 @@ export const TableComponent = {
         },
         compareAllCellsDirty() {
             // Compare all cells in data vs originalData and update dirtyCells
+            if (!this.hasEditableColumns) return;
             this.dirtyCells = {};
             if (!Array.isArray(this.data) || !Array.isArray(this.originalData)) return;
             this.data.forEach((row, rowIndex) => {
@@ -4539,7 +4546,7 @@ export const TableComponent = {
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
                                         ></div>
-                                        <span class="column-button-hint">
+                                        <span v-if="column.editable" class="column-button-hint">
                                             {{ originalData[idx]?.[column.key] || '(empty)' }}
                                         </span>
                                         <button
