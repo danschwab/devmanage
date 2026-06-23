@@ -699,6 +699,83 @@ class productionUtils_uncached {
     }
 
     /**
+     * Get all shows deduplicated with their earliest ship and latest return dates.
+     * Used to populate the show overlap selector modal.
+     * Deduplicates by show name (using abbreviation matching) + year, ignoring client differences.
+     * @param {Object} deps
+     * @param {Object|null} filter - Optional filter parameters with { dateFilters, textFilters }
+     * @returns {Promise<Array<{show, year, shipDate, returnDate}>>}
+     */
+    static async getDeduplicatedShowDates(deps, filter = null) {
+        // Split filter into parameters (dateFilters) and searchParams (textFilters)
+        const filterParams = filter?.dateFilters ? { dateFilters: filter.dateFilters } : null;
+        const searchParams = filter?.textFilters || null;
+        
+        // Get filtered production schedule data
+        const data = await deps.call(ProductionUtils.getOverlappingShows, filterParams, searchParams);
+
+        // Load reference data for show name normalization
+        const referenceData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+
+        // Group by normalized show name + year (ignoring client), taking earliest ship and latest return
+        const showMap = new Map();
+
+        for (const row of data) {
+            // Normalize show name using fuzzy matching against the show index
+            const rawShowName = String(row.Show || '').trim();
+            if (!rawShowName) continue; // Skip rows without show name
+
+            let canonicalShowName = rawShowName;
+            try {
+                const matched = GetTopFuzzyMatch(
+                    rawShowName,
+                    referenceData.shows.names,
+                    referenceData.shows.abbrs,
+                    2.5
+                );
+                if (matched) canonicalShowName = matched;
+            } catch (e) {
+                // Use raw name if fuzzy match fails
+            }
+
+            // Create key from canonical show name + year (NOT client)
+            const year = row.Year || '';
+            const key = `${canonicalShowName}|${year}`;
+            
+            const ship = _calculateShipDate(row);
+            const ret = _calculateReturnDate(row, ship);
+
+            if (!showMap.has(key)) {
+                showMap.set(key, {
+                    show: canonicalShowName,
+                    year: year,
+                    shipDate: ship ? toISODateString(ship) : null,
+                    returnDate: ret ? toISODateString(ret) : null
+                });
+            } else {
+                // Update existing entry with earlier ship or later return dates
+                const existing = showMap.get(key);
+                if (ship) {
+                    const existingShip = existing.shipDate ? new Date(existing.shipDate + 'T12:00:00') : null;
+                    if (!existingShip || ship < existingShip) existing.shipDate = toISODateString(ship);
+                }
+                if (ret) {
+                    const existingRet = existing.returnDate ? new Date(existing.returnDate + 'T12:00:00') : null;
+                    if (!existingRet || ret > existingRet) existing.returnDate = toISODateString(ret);
+                }
+            }
+        }
+
+        // Sort: soonest ship date first, then by year desc for undated shows
+        return Array.from(showMap.values()).sort((a, b) => {
+            if (a.shipDate && b.shipDate) return a.shipDate < b.shipDate ? -1 : 1;
+            if (a.shipDate) return -1;
+            if (b.shipDate) return 1;
+            return (b.year || 0) > (a.year || 0) ? 1 : -1;
+        });
+    }
+
+    /**
      * Direction 2: Packlist → Schedule.
      * Find schedule row(s) matching a packlist tab title.
      * Parses the year from the title to year-filter the schedule before matching,

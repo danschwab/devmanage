@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority, TableComponent } from '../../index.js';
 
 // Shared utility: Match URL search data to a saved search
 function matchUrlToSavedSearch(savedSearches, urlSearchData) {
@@ -666,6 +666,163 @@ export const ScheduleAdvancedFilter = {
             } else {
                 this.$emit('search-selected', searchData);
             }
+        },
+
+        // --- Preset methods ---
+        applyUpcomingPreset() {
+            // Find a saved search named "Upcoming" and apply it
+            const upcomingSearch = (this.savedSearchesStore?.data || []).find(
+                s => s.name && s.name.toLowerCase() === 'upcoming'
+            );
+            if (upcomingSearch) {
+                this.loadDateFilters(upcomingSearch.dateFilters);
+                if (upcomingSearch.textFilters && upcomingSearch.textFilters.length > 0) {
+                    this.textFilters = upcomingSearch.textFilters.map((f, i) => ({
+                        id: i + 1,
+                        column: f.column,
+                        values: normalizeValues(f),
+                        type: f.type || 'contains'
+                    }));
+                    this.nextFilterId = upcomingSearch.textFilters.length + 1;
+                } else {
+                    this.textFilters = [];
+                    this.nextFilterId = 1;
+                }
+            } else {
+                // Fallback: no saved "Upcoming" — apply a sensible default (today onward)
+                const today = toISODateString(new Date());
+                this.loadDateFilters([{ column: 'Date', value: today, type: 'after' }]);
+                this.textFilters = [];
+                this.nextFilterId = 1;
+            }
+            this.saveFiltersToURL();
+        },
+
+        applyThisYearPreset() {
+            const year = new Date().getFullYear();
+            this.loadDateFilters([
+                { column: 'Date', value: `${year}-01-01`, type: 'after' },
+                { column: 'Date', value: `${year}-12-31`, type: 'before' }
+            ]);
+            this.textFilters = [];
+            this.nextFilterId = 1;
+            this.saveFiltersToURL();
+        },
+
+        openShowOverlapModal() {
+            const self = this;
+
+            const ShowOverlapModalComponent = {
+                components: { TableComponent, ScheduleFilterSelect },
+                inject: ['$modal', 'appContext'],
+                data() {
+                    return {
+                        showsStore: null,
+                        searchFilter: null
+                    };
+                },
+                computed: {
+                    allShows() {
+                        return this.showsStore?.data || [];
+                    },
+                    isLoading() {
+                        return this.showsStore?.isLoading || false;
+                    },
+                    tableData() {
+                        // Data is already filtered at the store level via searchFilter watcher
+                        return this.allShows;
+                    },
+                    columns() {
+                        return [
+                            { key: 'show', label: 'Show', sortable: true },
+                            { key: 'shipDate', label: 'Ship Date', sortable: true, format: 'date' },
+                            { key: 'returnDate', label: 'Return Date', sortable: true, format: 'date' },
+                            { key: '_action', label: '', width: 90, sortable: false }
+                        ];
+                    }
+                },
+                async mounted() {
+                    this.showsStore = getReactiveStore(
+                        Requests.getDeduplicatedShowDates,
+                        null,
+                        [null], // Initial filter is null (all shows)
+                        null
+                    );
+                    await this.showsStore.load('Loading shows...');
+                },
+                watch: {
+                    searchFilter: {
+                        async handler(newFilter) {
+                            // Reload the store with new filter parameters
+                            const filterParam = newFilter ? {
+                                dateFilters: newFilter.dateFilters,
+                                textFilters: newFilter.textFilters
+                            } : null;
+                            
+                            this.showsStore = getReactiveStore(
+                                Requests.getDeduplicatedShowDates,
+                                null,
+                                [filterParam],
+                                null
+                            );
+                            await this.showsStore.load('Loading shows...');
+                        },
+                        deep: true
+                    }
+                },
+                methods: {
+                    handleSearchSelected(searchData) {
+                        this.searchFilter = searchData;
+                    },
+                    selectShow(show) {
+                        if (!show.shipDate && !show.returnDate) return;
+                        const filters = [];
+                        if (show.shipDate) {
+                            filters.push({ column: 'Expected Return Date', value: show.shipDate, type: 'after' });
+                        }
+                        if (show.returnDate) {
+                            filters.push({ column: 'Ship', value: show.returnDate, type: 'before' });
+                        }
+                        self.loadDateFilters(filters);
+                        self.textFilters = [];
+                        self.nextFilterId = 1;
+                        self.saveFiltersToURL();
+                        this.$emit('close-modal');
+                    }
+                },
+                template: html`
+                    <TableComponent
+                        :data="tableData"
+                        :columns="columns"
+                        :isLoading="isLoading"
+                        :showSearch="true"
+                        emptyMessage="No shows found."
+                        loadingMessage="Loading shows..."
+                    >
+                        <template #header-area>
+                            <ScheduleFilterSelect
+                                :containerPath="null"
+                                :includeYears="true"
+                                :startYear="2023"
+                                :showAdvancedButton="false"
+                                @search-selected="handleSearchSelected"
+                            />
+                        </template>
+                        <template #cell-extra="{ row, column }">
+                            <button
+                                v-if="column.key === '_action'"
+                                @click="selectShow(row)"
+                                :disabled="!row.shipDate && !row.returnDate"
+                                class="green"
+                            >
+                                Select
+                            </button>
+                        </template>
+                    </TableComponent>
+                `
+            };
+
+            this.$modal.custom(ShowOverlapModalComponent, {}, 'Select Show for Overlap', { size: 'large' });
         }
     },
     template: html`
@@ -836,11 +993,15 @@ export const ScheduleAdvancedFilter = {
                 <button @click="addTextFilter" class="white" :disabled="isLoadingColumns">
                     + Text Filter
                 </button>
+                <!-- <button @click="" class="button-symbol white" :disabled="isLoadingColumns">
+                    +
+                </button> -->
             </div>
 
             <div class="spacer"></div>
 
-            <!-- Action Buttons -->
+            <!-- Saved Filter Options -->
+
             <h3>Saved Filter Options:</h3>
             <div class="button-bar">
                 <!-- Saved Search Dropdown -->
@@ -880,6 +1041,14 @@ export const ScheduleAdvancedFilter = {
                 >
                     Delete Saved Filter
                 </button>
+            </div>
+
+            <!-- Simple Presets -->
+            <h3>Presets:</h3>
+            <div class="button-bar">
+                <button @click="applyUpcomingPreset" :disabled="isLoadingColumns">Upcoming</button>
+                <button @click="applyThisYearPreset" :disabled="isLoadingColumns">This Year</button>
+                <button @click="openShowOverlapModal" :disabled="isLoadingColumns">Show Overlap</button>
             </div>
 
     `
@@ -1009,7 +1178,7 @@ export const ScheduleFilterSelect = {
         },
         defaultSearch: {
             type: String,
-            default: null
+            default: 'Upcoming'
         },
         allowShowAll: {
             type: Boolean,
@@ -1436,7 +1605,7 @@ export const ScheduleFilterSelect = {
         >
             <option value="" v-if="isLoading">Loading...</option>
             <option value="" v-else-if="availableOptions.length === 0">No options available</option>
-            <option value="" v-else-if="!defaultSearch">Select...</option>
+            <!-- <option value="" v-else-if="!defaultSearch">Select...</option> -->
             <option 
                 v-for="option in availableOptions" 
                 :key="option.value" 

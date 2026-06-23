@@ -535,6 +535,18 @@ class Requests_uncached {
     }
 
     /**
+     * Get all shows deduplicated with their earliest ship and latest return dates.
+     * Used to populate the show overlap selector modal.
+     * Deduplicates by show name (using abbreviation matching) + year, ignoring client differences.
+     * @param {Object} deps
+     * @param {Object|null} filter - Optional filter parameters with { dateFilters, textFilters }
+     * @returns {Promise<Array<{show, year, shipDate, returnDate}>>}
+     */
+    static async getDeduplicatedShowDates(deps, filter = null) {
+        return await deps.call(ProductionUtils.getDeduplicatedShowDates, filter);
+    }
+
+    /**
      * Compute Identifier from client, year, and show data
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} showName - The name of the show
