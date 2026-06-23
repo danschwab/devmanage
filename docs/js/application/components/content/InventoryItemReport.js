@@ -251,8 +251,8 @@ export const InventoryItemReport = {
             const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = (row.startDate || row.endDate)
                 ? [
-                    ...(row.startDate ? [{ column: 'Show Date', value: row.startDate, type: 'after'  }] : []),
-                    ...(row.endDate   ? [{ column: 'Show Date', value: row.endDate,   type: 'before' }] : [])
+                    ...(row.startDate ? [{ column: 'Date', value: row.startDate, type: 'after'  }] : []),
+                    ...(row.endDate   ? [{ column: 'Date', value: row.endDate,   type: 'before' }] : [])
                   ]
                 : null;
             const finalPath = dateFilters

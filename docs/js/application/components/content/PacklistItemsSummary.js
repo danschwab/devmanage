@@ -158,8 +158,8 @@ export const PacklistItemsSummary = {
             const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = (this.projectShipDate && this.projectReturnDate)
                 ? [
-                    { column: 'Show Date', value: this.projectShipDate,  type: 'after'  },
-                    { column: 'Show Date', value: this.projectReturnDate, type: 'before' }
+                    { column: 'Date', value: this.projectShipDate,  type: 'after'  },
+                    { column: 'Date', value: this.projectReturnDate, type: 'before' }
                   ]
                 : null;
             const finalPath = dateFilters

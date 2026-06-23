@@ -203,8 +203,8 @@ export const PacklistMenuComponent = {
                             // Handle year selection - use dateFilters array
                             this.filter = { 
                                 dateFilters: searchData.dateFilters || [
-                                    { column: 'Show Date', value: searchData.startDate, type: 'after' },
-                                    { column: 'Show Date', value: searchData.endDate, type: 'before' }
+                                    { column: 'Date', value: searchData.startDate, type: 'after' },
+                                    { column: 'Date', value: searchData.endDate, type: 'before' }
                                 ]
                             };
                         } else {
@@ -716,8 +716,8 @@ export const PacklistContent = {
             if (searchData.type === 'year') {
                 // Handle year selection - use dateFilters array
                 filter.dateFilters = searchData.dateFilters || [
-                    { column: 'Show Date', value: searchData.startDate, type: 'after' },
-                    { column: 'Show Date', value: searchData.endDate, type: 'before' }
+                    { column: 'Date', value: searchData.startDate, type: 'after' },
+                    { column: 'Date', value: searchData.endDate, type: 'before' }
                 ];
             } else {
                 // Handle saved search - use dateFilters array

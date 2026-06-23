@@ -47,8 +47,8 @@ class applicationUtils_uncached {
         {
             name: 'Upcoming',
             dateFilters: [
-                { column: 'Show Date', value: 0, type: 'after' },  // Today
-                { column: 'Show Date', value: 30, type: 'before' } // 30 days in the future
+                { column: 'Date', value: 0, type: 'after' },  // Today
+                { column: 'Date', value: 30, type: 'before' } // 30 days in the future
             ],
             textFilters: []
         }

@@ -1181,8 +1181,8 @@ export const PacklistTable = {
                 ]);
                 if (shipDate && returnDate) {
                     dateFilters = [
-                        { column: 'Show Date', value: shipDate,  type: 'after'  },
-                        { column: 'Show Date', value: returnDate, type: 'before' }
+                        { column: 'Date', value: shipDate,  type: 'after'  },
+                        { column: 'Date', value: returnDate, type: 'before' }
                     ];
                 }
             } catch (_) {}

@@ -169,12 +169,12 @@ export const ScheduleAdvancedFilter = {
         // Date-formatted columns only
         dateColumns() {
             if (!this.scheduleData || this.scheduleData.length === 0) {
-                return ['Show Date']; // Default
+                return ['Date']; // Default
             }
             
             // Find columns that are date-related based on column name keywords
             // Uses same logic as ScheduleTable.js isDateColumn method
-            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 's.', 'time'];
+            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 'time', 'return'];
             const firstRow = this.scheduleData[0];
             
             const dateColumns = Object.keys(firstRow)
@@ -186,9 +186,9 @@ export const ScheduleAdvancedFilter = {
                 })
                 .sort();
             
-            // Always ensure 'Show Date' is included
-            if (!dateColumns.includes('Show Date')) {
-                dateColumns.unshift('Show Date');
+            // Always ensure 'Date' is included
+            if (!dateColumns.includes('Date')) {
+                dateColumns.unshift('Date');
             }
             
             return dateColumns;
@@ -398,7 +398,7 @@ export const ScheduleAdvancedFilter = {
             this.dateFilters.push({
                 id: this.nextDateFilterId++,
                 type: 'after',
-                column: 'Show Date',
+                column: 'Date',
                 mode: 'date',
                 value: ''
             });
@@ -455,7 +455,7 @@ export const ScheduleAdvancedFilter = {
             this.dateFilters = (rawDateFilters || []).map(f => ({
                 id: this.nextDateFilterId++,
                 type: f.type || 'after',
-                column: f.column || 'Show Date',
+                column: f.column || 'Date',
                 mode: typeof f.value === 'number' ? 'offset' : 'date',
                 value: f.value ?? ''
             }));
@@ -1220,8 +1220,8 @@ export const ScheduleFilterSelect = {
                     startDate: `${year}-01-01`,
                     endDate: `${year}-12-31`,
                     dateFilters: [
-                        { column: 'Show Date', value: `${year}-01-01`, type: 'after' },
-                        { column: 'Show Date', value: `${year}-12-31`, type: 'before' }
+                        { column: 'Date', value: `${year}-01-01`, type: 'after' },
+                        { column: 'Date', value: `${year}-12-31`, type: 'before' }
                     ]
                 };
                 this.$emit('search-selected', searchData);
@@ -1344,10 +1344,10 @@ export const ScheduleFilterSelect = {
                 return;
             }
             
-            // Try to match year selection (2 date filters on Show Date column with year start/end)
+            // Try to match year selection (2 date filters on Date column with year start/end)
             if (this.includeYears && filter.dateFilters.length === 2 && !filter.textFilters.length) {
-                const afterFilter = filter.dateFilters.find(f => f.type === 'after' && f.column === 'Show Date');
-                const beforeFilter = filter.dateFilters.find(f => f.type === 'before' && f.column === 'Show Date');
+                const afterFilter = filter.dateFilters.find(f => f.type === 'after' && f.column === 'Date');
+                const beforeFilter = filter.dateFilters.find(f => f.type === 'before' && f.column === 'Date');
                 
                 if (afterFilter && beforeFilter) {
                     const afterMatch = String(afterFilter.value).match(/^(\d{4})-01-01$/);

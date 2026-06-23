@@ -15,21 +15,21 @@
 
 ### Problem
 
-The date range display card in the advanced filter button bar shows question marks (`?`) instead of actual dates when using non-standard date columns (anything other than 'Show Date').
+The date range display card in the advanced filter button bar shows question marks (`?`) instead of actual dates when using non-standard date columns (anything other than 'Date').
 
 ### Root Cause
 
-Both `computeDisplayDates()` and `resolveWindowDates()` functions are hardcoded to ONLY look for filters with `column === 'Show Date'`:
+Both `computeDisplayDates()` and `resolveWindowDates()` functions are hardcoded to ONLY look for filters with `column === 'Date'`:
 
 ```javascript
 // Line 1317-1324
 function computeDisplayDates(dateFilters) {
   if (!dateFilters?.length) return { startDate: null, endDate: null };
   const afterFilter = dateFilters.find(
-    (f) => f.type === "after" && f.column === "Show Date",
+    (f) => f.type === "after" && f.column === "Date",
   );
   const beforeFilter = dateFilters.find(
-    (f) => f.type === "before" && f.column === "Show Date",
+    (f) => f.type === "before" && f.column === "Date",
   );
   return {
     startDate: offsetToISO(afterFilter?.value) ?? null,
@@ -41,10 +41,10 @@ function computeDisplayDates(dateFilters) {
 function resolveWindowDates(dateFilters) {
   if (!dateFilters?.length) return { startDate: null, endDate: null };
   const afterFilter = dateFilters.find(
-    (f) => f.type === "after" && f.column === "Show Date",
+    (f) => f.type === "after" && f.column === "Date",
   );
   const beforeFilter = dateFilters.find(
-    (f) => f.type === "before" && f.column === "Show Date",
+    (f) => f.type === "before" && f.column === "Date",
   );
   const toDateStr = (v) =>
     v != null && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
@@ -79,7 +79,7 @@ These functions need to:
 
 ### Problem
 
-When date filters specify a column other than 'Show Date', 'Ship', or 'Return', the filtering logic fails completely and returns NO results.
+When date filters specify a column other than 'Date', 'Ship', or 'Return', the filtering logic fails completely and returns NO results.
 
 ### Root Cause
 
@@ -93,11 +93,11 @@ const getRowDate = (row, column) => {
   } else if (column === "Return") {
     const ship = _calculateShipDate(row);
     return _calculateReturnDate(row, ship);
-  } else if (column === "Show Date") {
-    // Try to get show date from S. Start field
+  } else if (column === "Date") {
+    // Try to get date from S. Start field
     let showDate = parseDate(row["S. Start"], true, row.Year);
 
-    // If show date not available, try other date fields to infer it
+    // If date not available, try other date fields to infer it
     if (!showDate) {
       const ship = _calculateShipDate(row);
       if (ship) {
@@ -181,7 +181,7 @@ if (sStart && ship >= sStart) {
 **Return Date Year Correction:**
 
 ```javascript
-// If return is before show dates, move return to next year
+// If return is before dates, move return to next year
 // (handles Jan return for Dec show)
 if (sEnd && ret <= sEnd) {
   const retNextYear = new Date(ret);
@@ -210,8 +210,8 @@ The `getRowDate()` function needs to be enhanced to:
      } else if (column === "Return") {
        const ship = _calculateShipDate(row);
        return _calculateReturnDate(row, ship);
-     } else if (column === "Show Date") {
-       // ... existing Show Date logic ...
+     } else if (column === "Date") {
+       // ... existing Date logic ...
      }
 
      // NEW: Generic date column handling
@@ -273,7 +273,7 @@ The `getRowDate()` function needs to be enhanced to:
 
 - **Lines:** 1244-1316
 - **Method:** `resolveFromParams()`
-- **Issue:** ❌ Only displays dates for 'Show Date' column filters
+- **Issue:** ❌ Only displays dates for 'Date' column filters
 
 #### **ScheduleFilterSelect Component**
 
@@ -342,11 +342,11 @@ const getRowDate = (row, column) => {
   } else if (column === "Return") {
     const ship = _calculateShipDate(row);
     return _calculateReturnDate(row, ship);
-  } else if (column === "Show Date") {
-    // Try to get show date from S. Start field
+  } else if (column === "Date") {
+    // Try to get date from S. Start field
     let showDate = parseDate(row["S. Start"], true, row.Year);
 
-    // If show date not available, try other date fields to infer it
+    // If date not available, try other date fields to infer it
     if (!showDate) {
       const ship = _calculateShipDate(row);
       if (ship) {

@@ -342,7 +342,7 @@ export const ScheduleTableComponent = {
             }
         },
         isDateColumn(key) {
-            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 's.', 'time'];
+            const dateKeywords = ['date', 'start', 'end', 'ship', 'due', 'deadline', 'created', 'updated', 'modified', 'time', 'return'];
             return dateKeywords.some(keyword => key.includes(keyword));
         },
         isNumberColumn(key) {

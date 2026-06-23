@@ -190,7 +190,7 @@ export const ShowInventoryReport = {
             }
 
             // Mirror InventoryItemTimeline: read top-level resolved dates first, then fall back
-            // to dateFilters. ScheduleFilterSelect resolves 'Show Date' column filters into
+            // to dateFilters. ScheduleFilterSelect resolves 'Date' column filters into
             // top-level startDate/endDate; Ship-column filters must be resolved here manually.
             let resolvedStart = searchData?.startDate ?? null;
             let resolvedEnd   = searchData?.endDate   ?? null;
@@ -319,8 +319,8 @@ export const ShowInventoryReport = {
             const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = this.referenceDate
                 ? [
-                    { column: 'Show Date', value: this.referenceDate, type: 'after' },
-                    ...(this.endDate ? [{ column: 'Show Date', value: this.endDate, type: 'before' }] : [])
+                    { column: 'Date', value: this.referenceDate, type: 'after' },
+                    ...(this.endDate ? [{ column: 'Date', value: this.endDate, type: 'before' }] : [])
                   ]
                 : null;
             const finalPath = dateFilters

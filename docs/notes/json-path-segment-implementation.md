@@ -27,7 +27,7 @@ http://domain.com/docs/#schedule?scheduleFilter=%7B%22dateFilter%22%3A%220%2C30%
 
 ## Example URLs
 
-### Schedule Page - Year Filter (by Show Date)
+### Schedule Page - Year Filter (by Date)
 
 ```
 #schedule?{"dateFilter":"2024-01-01,2024-12-31","byShowDate":true}
@@ -121,7 +121,7 @@ this.navigateToPath(path);
 ```javascript
 // Get parameters from current path
 const params = NavigationRegistry.getNavigationParameters(
-  this.appContext.currentPath
+  this.appContext.currentPath,
 );
 // Returns: { dateFilter: "2024-01-01,2024-12-31", byShowDate: true }
 

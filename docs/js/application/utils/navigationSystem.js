@@ -151,7 +151,7 @@ export const NavigationRegistry = {
 
     /**
      * Parse path with parameters (supports JSON path segments)
-     * @param {string} path - The path with potential JSON parameters (e.g., 'schedule?DCol1=Show Date&DVal1=0&DType1=after')
+     * @param {string} path - The path with potential JSON parameters (e.g., 'schedule?DCol1=Date&DVal1=0&DType1=after')
      * @returns {Object} Object with path, parameters, and route information
      */
     parsePath(path) {

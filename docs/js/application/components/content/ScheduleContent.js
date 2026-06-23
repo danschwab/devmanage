@@ -123,8 +123,8 @@ export const ScheduleContent = {
                 // Handle year selection - use dateFilters array
                 this.filter = { 
                     dateFilters: searchData.dateFilters || [
-                        { column: 'Show Date', value: searchData.startDate, type: 'after' },
-                        { column: 'Show Date', value: searchData.endDate, type: 'before' }
+                        { column: 'Date', value: searchData.startDate, type: 'after' },
+                        { column: 'Date', value: searchData.endDate, type: 'before' }
                     ]
                 };
             } else {

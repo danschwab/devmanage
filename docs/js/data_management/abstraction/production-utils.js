@@ -72,18 +72,22 @@ class productionUtils_uncached {
         //console.log('[production-utils] Processing date filters:', dateFilters);
 
         // Helper to get date from row based on column.
-        // Handles calculated columns (Ship, Return, Show Date) and any raw date column via parseDate.
-        const getRowDate = (row, column) => {
+        // Handles calculated columns (Ship, Return, Date) and any raw date column via parseDate.
+        // filterType ('after'|'before') controls which boundary fallback is used when a
+        // generic column is empty or unparseable — maximising recall over precision:
+        //   'before' → ship date  (earliest the show could be relevant)
+        //   'after'  → return date (latest  the show could be relevant)
+        const getRowDate = (row, column, filterType) => {
             if (column === 'Ship') {
                 return _calculateShipDate(row);
             } else if (column === 'Return') {
                 const ship = _calculateShipDate(row);
                 return _calculateReturnDate(row, ship);
-            } else if (column === 'Show Date') {
-                // Try to get show date from S. Start field
+            } else if (column === 'Date') {
+                // Try to get date from S. Start field
                 let showDate = parseDate(row['S. Start'], true, row.Year);
                 
-                // If show date not available, try other date fields to infer it
+                // If date not available, try other date fields to infer it
                 if (!showDate) {
                     const ship = _calculateShipDate(row);
                     if (ship) {
@@ -93,12 +97,24 @@ class productionUtils_uncached {
                 }
                 return showDate;
             }
-            // Generic: parse any raw date column with Year context for correct year boundaries
+            
+            // Generic date column: parse with Year context for year-boundary corrections.
             const rawValue = row[column];
             if (rawValue) {
-                return parseDate(rawValue, true, row.Year) ?? null;
+                const parsed = parseDate(rawValue, true, row.Year);
+                if (parsed) return parsed;
             }
-            return null;
+            
+            // Column is empty or unparseable — fall back to a show boundary estimate
+            // so rows without this field are not silently excluded.
+            if (filterType === 'before') {
+                // For "before" searches use ship date: the earliest the show is relevant
+                return _calculateShipDate(row);
+            }
+            // For "after" searches (including unknown type) use return date:
+            // the latest the show is relevant
+            const ship = _calculateShipDate(row);
+            return _calculateReturnDate(row, ship);
         };
 
         // Helper to resolve filter value to a date
@@ -132,7 +148,7 @@ class productionUtils_uncached {
                 } else if (filter.column === 'Ship' && filter.type === 'before') {
                     return ret;
                 }
-                return getRowDate(row, filter.column);
+                return getRowDate(row, filter.column, filter.type);
             }
             
             return null;
@@ -166,7 +182,7 @@ class productionUtils_uncached {
 
             // Apply all date filters (AND logic - must pass all)
             return dateFilters.every(filter => {
-                const rowDate = getRowDate(row, filter.column);
+                const rowDate = getRowDate(row, filter.column, filter.type);
                 if (!rowDate) {
                     return false; // If we can't get the date, filter out the row
                 }
@@ -1156,7 +1172,7 @@ function _calculateReturnDate(row, shipDate = null) {
     let ret = parseDate(row['Expected Return Date'], true, year);
     if (ret) {
         // Validate: return date should be after show end (or show start if no end)
-        // If return is before show dates and both are in the same year,
+        // If return is before dates and both are in the same year,
         // check if moving return to next year makes more sense
         const sEnd = parseDate(row['S. End'], true, year) || parseDate(row['S. Start'], true, year);
         if (sEnd && ret <= sEnd) {

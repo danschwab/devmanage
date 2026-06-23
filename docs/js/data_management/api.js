@@ -1024,8 +1024,8 @@ class Requests_uncached {
         const dateFilters = Array.isArray(filter?.dateFilters) ? filter.dateFilters : [];
         const getFilterDate = (column, type) => offsetToISO(dateFilters.find(f => f.column === column && f.type === type)?.value);
 
-        let reportStart = getFilterDate('Show Date', 'after') || getFilterDate('Ship', 'after') || null;
-        let reportEnd = getFilterDate('Show Date', 'before') || getFilterDate('Ship', 'before') || null;
+        let reportStart = getFilterDate('Date', 'after') || getFilterDate('Ship', 'after') || null;
+        let reportEnd = getFilterDate('Date', 'before') || getFilterDate('Ship', 'before') || null;
 
         const shipDates = resolvedShows.map(show => show.shipDate).filter(Boolean).sort();
         const returnDates = resolvedShows.map(show => show.returnDate).filter(Boolean).sort();
