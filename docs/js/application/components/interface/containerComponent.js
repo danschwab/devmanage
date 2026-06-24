@@ -130,14 +130,20 @@ export const ContainerComponent = {
                     async () => {
                         // Shorten Link button
                         try {
+                            this.$modal.alert('Creating shortened link...', 'Please wait');
+                            
                             const shortHash = await URLRouter.createShortHash(this.containerPath);
                             const shortUrl = `${window.location.origin}${window.location.pathname}#${shortHash}`;
                             
                             // Copy shortened URL to clipboard
                             await navigator.clipboard.writeText(shortUrl);
-                            this.$modal.alert(
+                            this.$modal.confirm(
                                 `Shortened link copied to clipboard\n\nSend to anyone with a topshelfexhibits.com email\n\n${shortUrl}`,
-                                'Shortened Link'
+                                () => {
+                                    // Ok button - just close the modal
+                                },
+                                undefined,
+                                'Share Link'
                             );
                         } catch (err) {
                             console.error('Failed to create or copy shortened link:', err);
