@@ -1,88 +1,80 @@
-## Ask Ben
-
-!!! migrate everyones saved searches to the new standard "Show Date" is replaced with "Date"
 !!! simplify controls on reports page and add the min num to url params
 !!! print view for reports page
-!! dims at the beginning of item descriptions for all items
 !! stack show buttons in overlapping show-lists
-! add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?
-! allow selecting shows for overlap
+!! allow tables to be omitted from inventorying and vis on inventory page: Additions (hidden and no quantities)
+!! allow alerts to be supressed for categories in a default "System Settings" container on the dashboard and CACHING tab
 
-automation rules (MAYBE NOT RIGHT NOW...)
-
-- coffin crate 10' pile in, (sometimes furniture?)
-- some things have designated crates, some more than one config of crate and are split out on occasion, or split out when less than crate is sent
-- often if sending one, we will send on a skid
-
-furniture not inv?
-allow tables to be omitted from inventorying
-
-- communication tool??
-
-- Inventory Extras (Misc tab usage, easy additions, how to do this)
-- Nomenclature
-  TTOP/TBASE/TV/AV numbering
-  SHLF vs SHELF, CNTR vs COUNTER, CAB vs CABINET, etc
-- doubles, as and bs
-  should we keep them as separate items knowing they won't inventory check? Or should we consolidate them and just track overall quantity?
-  A variant tracking system would allow for better tracking (NOT NOW)
-- descriptions in the software, what descriptions are useful
-- Copy paste?
-- How can I make crating better?
+- dims at the beginning of item descriptions for all items
+- add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?
 
 ## Important Deployment Notes
 
 - Allow and request email feedback from users
 - Bundle changes into updates, carefully log changes made, and send out a release email before making the updates
+- Make sure any changes to user data or database structure are backwards compatible or allow users to migrate on first use
 
 ## Important System Notes
 
-whenever possible, rely on the caching system instead of data from live tables.
-Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
-We must always query the inventory by date for analytics, but we must never pass the date into a reactiveStore save or load call. This causes auto-save mismatch, etc.
-
-Inventory Handling:
-Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING
-Special logic to support finding items: HARDWARE
-In standard descriptions: Power strips? Cables? Keyboards and mice? Remotes? Antennas?
-Consolidated tracked: BEAMATRIX PANELS & HARDWARE
-Extra tracking: ELECTRONICS, MONITORS
-Will come in uninventoried: Client or new items shown in booth, Decorative Items
-Rules: Typical Client Items, Tools and Supplies, Tech Accessories
-?: Monitor arms? Remotes and power strips?
+- whenever possible, rely on the caching system instead of data from live tables.
+- Google drive rate-limits queries, making it difficult to realtime-check tons of stuff -> this impacts the ability to open multiple tabs at once
+- We must always query the inventory by date for analytics, but we must never pass the date into a reactiveStore save or load call. This causes auto-save mismatch, etc.
 
 ## Feature ideas
 
-- add new rows at end of packlist (client items, tools, etc)
-- add a row following an item for typical inclusions (carpet + pad, monitor + cabling, etc)
-- track unique items (electronics with serial numbers, passwords, locations)
-- checklists for each item? Define checklists for items somehow? Checklists with username requirements? User table? Checklists with linked data entry fields?
+Primary Use Cases
+
+- [x] We can have pack lists generated from Inventor
+- [x] We can know if there are item shortages as pack lists are generated
+- [x] If we add bematrix stuff to pack lists, we can also check inventory qty of them
+- [ ] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved (needs approval system)
+- [x] We can get an inventory report of item quantities throughout the year
+- [x] All of our data is available and easy to update on the go
+      We can migrate all our checklists and schedule management to this system
+
+Packlist improvements conversations
+
+- Nomenclature (!!!TALK ABOUT THIS SOON!!!)
+  TTOP/TBASE/TV/AV numbering
+  SHLF vs SHELF, CNTR vs COUNTER, CAB vs CABINET, etc
+- Copy paste? (!!!TALK ABOUT THIS SOON!!!)
+- automation rules (MAYBE NOT RIGHT NOW... per conversation w ben)
+  Rules: Typical Client Items, Tools and Supplies, Tech Accessories
+  auto add new rows at end of packlist (client items, tools, etc)
+  add a row following an item for typical inclusions (carpet + pad, monitor + cabling, etc)
+- Crating from Ben:
+  coffin crate 10' pile in, (sometimes furniture?)
+  some things have designated crates, some more than one config of crate and are split out on occasion, or split out when less than crate is sent
+  often if sending one, we will send on a skid
+- doubles, As and Bs, and variant tracking
+  should we keep them as separate items knowing they won't inventory check? Or should we consolidate them and just track overall quantity?
+  A variant tracking system would allow for better tracking (NOT NOW per conversation w ben)
+  (electronics with serial numbers, passwords, locations)
+- Inventory Handling:
+  Standard: FURNITURE, CABINETS, HANGING SIGNS, COUNTERTOPS, SHELVES, LIGHTBOXES, LIGHTING
+  Special logic to support finding items: HARDWARE
+  !!! In standard descriptions: Power strips? Cables? Keyboards and mice? Remotes? Antennas?
+  Consolidated tracked: BEAMATRIX PANELS & HARDWARE
+  (?) Extra tracking: ELECTRONICS, MONITORS
+  (?) Monitor arms? Remotes and power strips?
+  Will come in uninventoried: Client or new items shown in booth, Decorative Items
+
+Other Features
+
 - show what pdfs are exported for each project or on workzone
 - Add "Advanced Views" that allows custom columns, column styling based on rules, etc? Should this be hardcoded?
-- change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.
-- allow analysis to intelligently slow or pause itself and notify user for slow connection states.
-- implement notes or message-center or chatroom for page endpoints that can allow basic communication between users
-
-## Primary Use Cases
-
-- [80%] We can have pack lists generated from Inventor
-- [100] We can know if there are item shortages as pack lists are generated
-- [100] If we add bematrix stuff to pack lists, we can also check inventory qty of them
-- [50%] If we auto generate packlists from concept models, we can get an early alert of possible inventory issues as those shows are approved (needs approval system)
-- [50%] We can get an inventory report of item quantities throughout the year
-- [ 0%] We can migrate all our checklists and schedule management to this system
-- [60%] All of our data is available and easy to update on the go
 
 ## TO DO
 
 **chores**
 
 - [ ] unify the styling of cards and buttons
+- [ ] change style system so that color variables are set via classes on components, and those variables set the "--color-\*" variables per component instead of globally.
 - [x] make table headers accessible when scrolling, on hover over the sticky header?
 - [ ] reports column headers percentage based and dynamically abbreviate
 - [ ] basic schedule table needs to have return and show date columns visible
 - [ ] basic schedule table needs to allow wide table
-- [ ] packlist interface somehow show "was previously" during edits
+- [ ] test no internet mode
+- [x] packlist interface somehow show "was previously" during edits
 - [x] Inject the sheet ids and the api-key via github soas not to expose them
 - [x] remove hamburger buttons that do nothing
 - [x] packlist print titleblock??
@@ -99,13 +91,13 @@ Rules: Typical Client Items, Tools and Supplies, Tech Accessories
 - [x] make external clicks clear checkboxes
 - [x] icons still don't show for dan
 - [?] for some reason, changes still arent loading into inventory when I leave and go back... my unsaved changes go away
-- [x] !!!! Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
+- [x] Inv Reports table: item#, startdate, enddate, minqty, overlapping shows with that item
 - [x] reverse packlist pin/unpin view, and add the "show pinned packlists" tooltip to the item
 - [x] remove drag into bottom to delete.
 - [x] collapsed groups mess up drop targets
 - [x] don't highlight fields in basic tables...
 - [x] add tooltip "3 rows copied..."
-- [x] garbage can icon for deletion!!!!
+- [x] garbage can icon for deletion
 - [x] fix thumbnail access
 - [x] add additions inventory table
 - [x] packlist inventory overlap alerts showing wrong info. Probably due to reformatted abstraction code.
@@ -135,16 +127,16 @@ Rules: Typical Client Items, Tools and Supplies, Tech Accessories
 - [x] nonexistant packlists throw no access error when viewed, and fail to save. They should be savable from this view, or throw a 404 error.
 - [x] date columns are not always presenting as dates, especially the ship date, in searches
 - [x] if there are duplicate shows on the production schedule, they are duplicated in reports
-- [x] packlist item shortage alerts are still broken!!!!!!
-- [?] !!! thumbnails not showing for dan
-- [?] !!! inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
+- [x] packlist item shortage alerts are still broken
+- [?] thumbnails not showing for dan
+- [?] inventory table first edits are not shown as table-dirty after first nav away and back. Same for second/third edits if all done in quick sequence. Probably lock and flicker-prevention related.
 - [x] fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
-- [ ] !!! fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
+- [x] fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
+- [x] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
 - [ ] allow pasting even if only a single column of data is copied
 - [ ] ui for paste
-- [ ] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
 - [ ] allow "maintenance mode" activated that locks all editing
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
@@ -168,10 +160,10 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] !!! allow pack list export from project manager
 - [?] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
 - [?] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
-- [ ] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
+- [?] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
 - [ ] !!! fix CABINET item numbers in inventor
 - [ ] !!! fix FURNITURE item numbers in inventor
-- [ ] !!! fix HANGING SIGN item numbers in inventor
+- [?] !!! fix HANGING SIGN item numbers in inventor
 - [ ] !!! fix duplication of bematrix VELCRO PANELS
 - [ ] !!! fix 45 degree curved panels
 - [ ] !!! verify panel and hardware and other possible edge-cases
@@ -190,14 +182,14 @@ inventory updates
 - [x] force all inventory changes to have a "change date" that is separate from the edit history date, and update the table to show future changes (force reference date input) in additional rows following the main item row
 - [x] force projects to query the inventory by date
 - [x] allow uploading new item thumbnails
-- [ ] optimize thumbnails: app data sheet needs to have a table of thumbnail locations that is loaded and checked before calling the function that gets thumbnail folder contents
-- [ ] optimize thumbnails: invalidate this cache only when new thumbnails are added, or a thumbnail change occurrs
-- [ ] ! update LIGHTBOXES
+- [x] optimize thumbnails: app data sheet needs to have a table of thumbnail locations that is loaded and checked before calling the function that gets thumbnail folder contents
+- [x] optimize thumbnails: invalidate this cache only when new thumbnails are added, or a thumbnail change occurrs
+- [x] update LIGHTBOXES
+- [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
 - [ ] ! add all FURNITURE
 - [ ] ! add all LIGHTING
 - [ ] track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
-- [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
-- [ ] allow attaching a change dates to a project
+- [ ] allow attaching a change dates to a project??? for instance, if we are selling a chair to a client, or if a chair broke at a show, or we are aquiring a chair for a show
 - [ ] create a history modification utility for viewing changes over time and changing their values if necessary
       allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
@@ -213,16 +205,21 @@ Architecture Improvements !!! offline mode
 - [x] reactiveStore efficiency: stack, prioritize, and batch api calls from reactiveStores to ensure application data is available first without hitting rate limits
 - [x] log out needs to skip database operations if the token is already expired
 - [x] locking and edit rules to prevent simultaneous edits: 'is editing' flag for packlists and inventories that locks other users out.
-- [?] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
+- [x] impliment edithistory for packlists (complete for inventory, not complete for multilayer packlist data)
 - [x] add info source to metadata history to track inventor / app update location for packlists
 - [x] improve error handling and user notifications for failed auth and failed permissions
-- [ ] !!!!! out of network offline mode handling for auth and data access. Allow reactiveStores and all caching to freeze as infinite when offline. Disable all mutation functions. Notify users of offline status and limitations.
+- [x] notes on page endpoints for user communication
+- [?] out of network offline mode handling for auth and data access. Allow reactiveStores and all caching to freeze as infinite when offline. Disable all mutation functions. Notify users of offline status and limitations.
+- [?] remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
+- [ ] consider moving "Reports" to its own endpoint that includes all reports and analytics settings.
+- [ ] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
+- [ ] we probably need to allow multiple identical dashboard endpoints to be added with different views if we do the inventory category mode thing.
+      allow analysis to intelligently slow or pause itself and notify user for slow connection states.
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
-      remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
 
 show management system
 
@@ -237,22 +234,14 @@ show management system
 - [ ] ! add "views" system to show different columns and layouts for different purposes
 - [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
 - [ ] ! we may need a workzone integration
-- [ ] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
-- [ ] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type), and boolean flags (future)
-- [ ] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
-- [ ] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
+- [x] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
+- [x] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type)
+- [x] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
+- [x] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
+- [ ] advanced search add and configure boolean flag columns (shown as checkboxes) and filter option
 - [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
-      express checklist columns as checkboxes
       allow user to access show searches as pages and pin to dashboard
-      analyze and show the rough number and complexity of shows throughout the year
-
-dropbox / workzone / sql integrations
-
-- [ ] dropbox service account and auth sync
-- [ ] identify and show versions/dates of output files
-- [ ] allow opening link to dropbox pdfs
-- [ ] microsoft server or google workspace integration?
-- [ ] migrate thumbnails to shared folder in microsoft server? and allow uploading new thumbnails to dropbox???
+      analyze and show the rough number and complexity of shows throughout the year and provide work estimate reporting
 
 Pack Lists in Web
 
@@ -276,13 +265,20 @@ Pack Lists in Web
 - [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [x] cut and paste between packlist functionality
 - [ ] ! enable actions bubbles for crates selections
-- [ ] ! automations interface, packlist rules
+- [ ] ! automations interface, packlist rules (see suggestions at top of notes)
 - [ ] allow user to configure automations
 - [ ] automatic packlist rule suggestion jobs run in the background?
 - [ ] description change recommendations for common or similar items that checks or aggregates history potentially?
 - [ ] automations automatically allow for quick addition of typical client or show items
       create a more advanced filtering component for tables that includes multi-select, ranges, and text search and integrates with urlparams similar to the advanced search select
       allow adding items to inventory through packlist via simple interface (use item as description, extract quantity if exists, user choose category, auto add and save)
+
+dropbox / workzone / sql integrations
+
+- [ ] dropbox service account and auth sync
+- [ ] identify and show versions/dates of output files
+- [ ] allow opening link to dropbox or workzone pdfs
+- [ ] microsoft server or google workspace integration?
 
 checklist, reports, and notes system
 
@@ -303,8 +299,9 @@ analysis of pack list against current inventory
 - [x] low stock warnings
 - [x] description updates
 - [x] using inventory/reports endpoint, and loading the saved searches into the table, build a report table
-- [x] make url param updates correctly propegate into components, and fix report url generation
+- [x] make url param updates correctly propagate into components, and fix report url generation
 - [x] allow report text filtering
-- [ ] allow showing quantity errors in a special schedule view, or always run this as an analysis step in schedule view. This needs to not explode computers. May need analysis caching first.
+- [x] allow showing quantity errors in a special schedule view, or always run this as an analysis step in schedule view. This needs to not explode computers. May need analysis caching first.
+- [ ] run configured upcoming inventory shortage report automatically on main inventory page and show warnings in items and categories
       increase the filtering options in reports
       link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)

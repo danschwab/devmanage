@@ -4,7 +4,7 @@ Do not make extra markdown files or documentation files unless requested. For Ex
 The artificial intelligence accessing these instructions is a language model that is optimized to tailor it's responses to human-readable instructions.
 Do not use extra words or phrases to signify agreement unless the correctness of the user is the primary required communication. For example, never say: "You're absolutely correct!" or "I can see the issue!"
 
-This application is in development and is not yet used in production. We are working on a development branch.
+This application is now live with actual users. We are working on a development branch, but we need to consider backwards compatibility of data structures, or admin-initiated one-time migration plans.
 Simplicity and modularity are prioritized. Removing unused code is prioritised. Adding new systems should only be done if absolutely necessary.
 If possible, always work within the existing application structure and patterns.
 
