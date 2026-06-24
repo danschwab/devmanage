@@ -347,7 +347,10 @@ class CacheManager {
                     promiseReject = reject;
                 });
                 
-                // Store the promise IMMEDIATELY before any async work starts (atomic)
+                // Store the promise IMMEDIATELY before any async work starts (atomic).
+                // Attach a no-op catch so the stored promise never triggers an unhandled
+                // rejection warning — callers receive the error via the re-thrown exception.
+                pendingPromise.catch(() => {});
                 CacheManager.pendingCalls.set(cacheKey, pendingPromise);
                 
                 // Now execute the actual async work

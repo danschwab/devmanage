@@ -133,11 +133,10 @@ Other Features
 - [x] fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [x] fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
 - [x] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
+- [ ] !!! Allow pasting even if only a single column of data is copied
+- [ ] !!! ui for paste
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
-- [ ] allow pasting even if only a single column of data is copied
-- [ ] ui for paste
-- [ ] allow "maintenance mode" activated that locks all editing
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
 - [ ] redundancy and overcomplexity in navigation still must be reduced
@@ -217,6 +216,7 @@ Architecture Improvements !!! offline mode
 - [ ] consider moving "Reports" to its own endpoint that includes all reports and analytics settings.
 - [ ] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
 - [ ] we probably need to allow multiple identical dashboard endpoints to be added with different views if we do the inventory category mode thing.
+- [ ] allow "maintenance mode" activated that locks all editing
       allow analysis to intelligently slow or pause itself and notify user for slow connection states.
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.

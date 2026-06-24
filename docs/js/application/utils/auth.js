@@ -57,6 +57,7 @@ export class Auth {
     static _proactiveInteractionHandler = null;
     static async initialize() {
         Auth._startNetworkMonitoring();
+        Auth._registerPermissionErrorHandler();
         // Sync initial state in case page loaded while offline
         networkState.isOffline = !navigator.onLine;
         authState.isOffline = !navigator.onLine;
@@ -411,6 +412,23 @@ export class Auth {
             authState.isOffline = false;
             // Reload any stores that errored during the outage
             reloadErrorStores();
+        });
+    }
+
+    /**
+     * Register a handler with PriorityQueue that triggers re-authentication when a
+     * 401/403 API error is detected. The PriorityQueue debounces this to one call per
+     * 5-second window, so a burst of permission errors only shows one modal.
+     */
+    static _registerPermissionErrorHandler() {
+        import('./priorityQueue.js').then(({ PriorityQueue }) => {
+            PriorityQueue.setPermissionErrorHandler(async () => {
+                // Don't pile on if a modal is already showing or we're already authenticated
+                if (authPromptShowing) return;
+                const isAuthenticated = await GoogleSheetsAuth.checkAuth();
+                if (isAuthenticated) return;
+                await Auth.checkAuthWithPrompt({ context: 'permission error' });
+            });
         });
     }
 

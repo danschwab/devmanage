@@ -48,8 +48,22 @@ class PriorityQueueManager {
         this.isProcessing = false;
         this.processingIntervalId = null;
         this.isDisabled = false; // Permanently disabled during logout
+
+        // Optional callback invoked when a permission error (401/403) is detected.
+        // Registered by Auth to trigger re-authentication. Debounced internally.
+        this._permissionErrorHandler = null;
+        this._permissionErrorCooldown = false;
         
         //console.log(`[PriorityQueue] Initialized with ${this.cpuCount} CPU cores, max concurrent: ${this.maxConcurrent}`);
+    }
+
+    /**
+     * Register a handler that is called when a 401/403 API error is detected.
+     * The handler is debounced — only the first error within a 5-second window triggers it.
+     * @param {Function} handler - async () => void
+     */
+    setPermissionErrorHandler(handler) {
+        this._permissionErrorHandler = handler;
     }
     
     /**
@@ -277,6 +291,15 @@ class PriorityQueueManager {
             this.stats.byPriority[entry.priority].errors++;
             
             console.error(`[PriorityQueue] Error in priority ${entry.priority} call:`, error, entry.metadata);
+
+            // Detect permission errors (401/403) and notify Auth so it can prompt re-authentication.
+            // Debounced: only the first error in a 5-second window triggers the handler.
+            const status = error?.status;
+            if ((status === 401 || status === 403) && this._permissionErrorHandler && !this._permissionErrorCooldown) {
+                this._permissionErrorCooldown = true;
+                setTimeout(() => { this._permissionErrorCooldown = false; }, 5000);
+                this._permissionErrorHandler();
+            }
         } finally {
             this.activeCount--;
         }
