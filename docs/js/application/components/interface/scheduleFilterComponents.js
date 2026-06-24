@@ -796,6 +796,8 @@ export const ScheduleAdvancedFilter = {
                         :columns="columns"
                         :isLoading="isLoading"
                         :showSearch="true"
+                        :showRefresh="false"
+                        defaultSortColumn="show"
                         emptyMessage="No shows found."
                         loadingMessage="Loading shows..."
                     >
@@ -804,6 +806,7 @@ export const ScheduleAdvancedFilter = {
                                 :containerPath="null"
                                 :includeYears="true"
                                 :startYear="2023"
+                                :default-search="String(new Date().getFullYear())"
                                 :showAdvancedButton="false"
                                 @search-selected="handleSearchSelected"
                             />
@@ -822,7 +825,7 @@ export const ScheduleAdvancedFilter = {
                 `
             };
 
-            this.$modal.custom(ShowOverlapModalComponent, {}, 'Select Show for Overlap', { size: 'large' });
+            this.$modal.custom(ShowOverlapModalComponent, {modalClass: 'page-menu'}, 'Select Show for Overlap', { size: 'large' });
         }
     },
     template: html`
