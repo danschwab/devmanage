@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache, normalizeHeaderName } from '../index.js';
 
 /** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
 function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -162,10 +162,12 @@ class packListUtils_uncached {
         // Fetch the raw sheet data (2D array)
         const sheetData = await deps.call(Database.getData, 'PACK_LISTS', resolvedIdentifier, null);
         if (!sheetData || sheetData.length < 2) return [];
-        // Extract headers from row 1 (index 0)
-        const headerRow = sheetData[0] || [];
-        const normalizedItemStartHeader = String(itemColumnsStart ?? '').trim();
-        const itemStartIndex = headerRow.findIndex(header => String(header ?? '').trim() === normalizedItemStartHeader);
+        // Extract headers from row 1 (index 0) and normalize them
+        const headerRow = Array.isArray(sheetData[0]) 
+            ? sheetData[0].map(h => normalizeHeaderName(h))
+            : [];
+        const normalizedItemStartHeader = normalizeHeaderName(itemColumnsStart);
+        const itemStartIndex = headerRow.findIndex(header => header === normalizedItemStartHeader);
         if (itemStartIndex === -1) {
             throw new Error(`Header "${itemColumnsStart}" not found in the header row.`);
         }
@@ -174,17 +176,15 @@ class packListUtils_uncached {
         
         // Find metadata columns - they should be at the end of the header row
         // Support both old format (MetaData/EditHistory in item section) and new format (at the end)
-        const metadataIndex = headerRow.findIndex(header => String(header ?? '').trim() === 'MetaData');
-        const editHistoryIndex = headerRow.findIndex(header => String(header ?? '').trim() === 'EditHistory');
+        const metadataIndex = headerRow.findIndex(header => header === 'MetaData');
+        const editHistoryIndex = headerRow.findIndex(header => header === 'EditHistory');
         
         // Filter out MetaData and EditHistory from headers (will be attached to objects as properties)
         const filteredMainHeaders = mainHeaders.filter(h => {
-            const normalizedHeader = String(h ?? '').trim();
-            return normalizedHeader !== 'MetaData' && normalizedHeader !== 'EditHistory';
+            return h !== 'MetaData' && h !== 'EditHistory';
         });
         const filteredItemHeaders = itemHeaders.filter(h => {
-            const normalizedHeader = String(h ?? '').trim();
-            return normalizedHeader !== 'MetaData' && normalizedHeader !== 'EditHistory';
+            return h !== 'MetaData' && h !== 'EditHistory';
         });
         
         const crates = [];

@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -148,12 +148,12 @@ class Requests_uncached {
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tableId - Table identifier
      * @param {string} tabName - Tab name
-     * @returns {Promise<Array<string>>} - Array of column headers
+     * @returns {Promise<Array<string>>} - Array of column headers (normalized)
      */
     static async getHeaders(deps, tableId, tabName) {
         const rawData = await deps.call(Database.getData, tableId, tabName);
         if (Array.isArray(rawData) && rawData.length > 0 && Array.isArray(rawData[0])) {
-            return rawData[0]; // First row contains headers
+            return rawData[0].map(h => normalizeHeaderName(h)); // Normalize headers
         }
         return [];
     }

@@ -1,5 +1,6 @@
 import { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
 import { SheetSql } from './sheetSql.js';
+import { normalizeHeaderName } from '../data_management/utils/helpers.js';
 
 export class GoogleSheetsService {
 
@@ -261,7 +262,10 @@ export class GoogleSheetsService {
     static transformSheetData(rawData, mapping, sheetName = null) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
         
-        const headers = Array.isArray(rawData[0]) ? rawData[0] : [];
+        // Normalize headers to remove carriage returns and extra whitespace from Google Sheets
+        const headers = Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h))
+            : [];
         if (headers.length === 0) {
             console.error('GoogleSheetsService.transformSheetData: headers is not an array or empty', headers, rawData);
             return [];
@@ -269,8 +273,8 @@ export class GoogleSheetsService {
         const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
-            const normalizedHeaderName = String(headerName ?? '').trim();
-            const idx = headers.findIndex(h => String(h ?? '').trim() === normalizedHeaderName);
+            const normalizedHeaderName = normalizeHeaderName(headerName);
+            const idx = headers.findIndex(h => h === normalizedHeaderName);
             if (idx === -1) {
                 console.warn(`GoogleSheetsService.transformSheetData: header '${headerName}' not found in sheet headers`, headers);
             }

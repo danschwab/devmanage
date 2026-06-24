@@ -92,6 +92,19 @@ export function toUSDateString(date) {
 }
 
 /**
+ * Normalizes a header name by removing carriage returns, newlines, and extra whitespace.
+ * Google Sheets headers may contain line breaks that need to be stripped for matching.
+ * @param {string} headerName - The raw header name from Google Sheets
+ * @returns {string} Normalized header name
+ */
+export function normalizeHeaderName(headerName) {
+    return String(headerName ?? '')
+        .replace(/[\r\n]+/g, ' ')  // Replace carriage returns and newlines with spaces
+        .replace(/\s+/g, ' ')       // Collapse multiple spaces into one
+        .trim();                     // Remove leading/trailing whitespace
+}
+
+/**
  * Returns today's date as a YYYY-MM-DD string using the local calendar date.
  * @returns {string}
  */

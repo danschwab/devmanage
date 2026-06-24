@@ -5,6 +5,7 @@
 
 import { SheetSql } from './sheetSql.js';
 import { BaseTokenManager } from './GoogleSheetsAuth.js';
+import { normalizeHeaderName } from '../data_management/utils/helpers.js';
 
 // Environment detection utility
 export function isLocalhost() {
@@ -119,12 +120,15 @@ export class FakeGoogleSheetsService {
     static transformSheetData(rawData, mapping, sheetName = null) {
         if (!rawData || rawData.length < 2 || !mapping) return [];
         
-        const headers = rawData[0];
+        // Normalize headers to remove carriage returns and extra whitespace
+        const headers = Array.isArray(rawData[0])
+            ? rawData[0].map(h => normalizeHeaderName(h))
+            : [];
         const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
-            const normalizedHeaderName = String(headerName ?? '').trim();
-            const idx = headers.findIndex(h => String(h ?? '').trim() === normalizedHeaderName);
+            const normalizedHeaderName = normalizeHeaderName(headerName);
+            const idx = headers.findIndex(h => h === normalizedHeaderName);
             if (idx !== -1) headerIdxMap[key] = idx;
         });
         return rows.map(row => {
@@ -266,7 +270,7 @@ export class FakeGoogleSheetsService {
                 ['1', '', '', '', '', '', '', '', '', '', '', '']
             ],
             'ATSC 2025 NAB': [
-                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop\nnotes', 'EditHistory', 'MetaData'],
                 ['1', 'Skid', '72', '32', '48', '800', '', '', '', '', '', ''],
                 ['', '', '', '', '', '', '', '', '(1) straight-section reception counter', 'Sintra logo- last CES 2025', '{"h":[{"u":"cadbot","t":17309064100,"s":"cad","c":[{"n":"Description","o":"(1) straight-section reception counter (one of two sections). Test lighting"}]},{"u":"dan","t":17309064000,"s":"web","c":[{"n":"Description","o":"(1) straight-section reception counter (one of two sections)"}]}]}', ''],
                 ['', '', '', '', '', '', '', '', 'Client junk', '', '', ''],
@@ -475,7 +479,7 @@ export class FakeGoogleSheetsService {
             ],
             // Test pack list with new item code formats
             'TEST 2025 ENHANCED': [
-                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop\nnotes', 'EditHistory', 'MetaData'],
                 ['1', 'Crate', '72', '48', '48', '400', '', '', '', '', '', ''],
                 ['', '', '', '', '', '', '', '', '(2) TABLE-001 Conference tables', 'Standard items', '', ''],
                 ['', '', '', '', '', '', '', '', '(5) CHAIR-002 Lounge chairs', '', '', ''],
@@ -505,7 +509,8 @@ export class FakeGoogleSheetsService {
         },
         'PROD_SCHED': {
             'Production Schedule': [
-                ['Show', 'Client', 'Year', 'Identifier', 'City', 'Size', 'Booth#', 'S. Start', 'S. End', 'Ship', 'Ship BKD', 'O/B BKD', 'MHA Done', 'Expected Return Date', 'Recieved', 'GC', 'Sup', 'Sup Badge Req.', 'Pack List', 'PL to OPS', 'SOW Sent', 'SOW Ret', 'Elev', 'Panels', 'Setups', 'ER to OPG', 'GD DUE', 'GP DUE', '3rd Party Auth', 'I&D', 'S/U to Elite', 'MH', 'Elec', 'Elec and Net dwg sent', 'H/S', 'H/S dwg sent', 'Net', 'Oth', 'EAC', 'COI', 'DWG (H/S-ELEC) TO SHOW BY', 'S/U IN SHOP'],
+                // Headers with embedded carriage returns to simulate real Google Sheets data quality issues
+                ['Show', 'Client', 'Year', 'Identifier', 'City', 'Size', 'Booth#', 'S. Start', 'S. End', 'Ship', 'Ship BKD', 'O/B\nBKD', 'MHA Done', 'Expected\nReturn Date', 'Recieved', 'GC', 'Sup', 'Sup Badge\nReq.', 'Pack List', 'PL to OPS', 'SOW Sent', 'SOW Ret', 'Elev', 'Panels', 'Setups', 'ER to OPG', 'GD DUE', 'GP DUE', '3rd Party Auth', 'I&D', 'S/U to\nElite', 'MH', 'Elec', 'Elec and Net\ndwg sent', 'H/S', 'H/S dwg sent', 'Net', 'Oth', 'EAC', 'COI', 'DWG (H/S-ELEC)\nTO SHOW BY', 'S/U IN SHOP'],
                 ['SHOT Show', 'Allen Arms', '2025', 'ALLEN ARMS 2025 SHOT', 'Las Vegas, NV', '10x40 & 10x10', '75323 & 75324', '21-Jan', '24-Jan', '1/13/2025', 'X', 'X', 'X', '', '2/3', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', 'in', '1/10', 'X', 'X', '', 'X', 'X', '', '', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['SHOT Show', 'MOJO', '2025', 'MOJO 2025 SHOT', 'Las Vegas, NV', '30x30', '10518', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', '', 'X', '', '', 'X', '', '', '10-Dec', ''],
                 ['SHOT Show', 'Gearfire', '2025', 'GEARFIRE 2025 SHOT', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],

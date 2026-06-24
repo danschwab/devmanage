@@ -1,4 +1,4 @@
-import { Database, wrapMethods, invalidateCache, stampDataChange } from '../index.js';
+import { Database, wrapMethods, invalidateCache, stampDataChange, normalizeHeaderName } from '../index.js';
 import { setTimestampWriter, startCacheTimestampPoller } from '../utils/caching.js';
 
 // Dynamically import GoogleSheetsAuth based on environment
@@ -734,7 +734,10 @@ class applicationUtils_uncached {
             }
             
             // First row contains headers: ["Database", "user1@example.com", "user2@example.com", ...]
-            const headers = rawData[0] || [];
+            // Normalize headers to handle embedded carriage returns
+            const headers = Array.isArray(rawData[0])
+                ? rawData[0].map(h => normalizeHeaderName(h))
+                : [];
             const lockKeys = [];
             const users = headers.slice(1); // Skip "Database" column
             const locks = [];

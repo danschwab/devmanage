@@ -1,4 +1,4 @@
-import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch } from '../index.js';
+import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName } from '../index.js';
 
 /**
  * Utility functions for production schedule operations
@@ -20,10 +20,12 @@ class productionUtils_uncached {
             return {};
         }
         
-        // Get headers from the first row of the 2D array
-        const headers = rawData[0];
+        // Get headers from the first row of the 2D array and normalize them
+        const headers = Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h))
+            : [];
         
-        if (!Array.isArray(headers)) {
+        if (!Array.isArray(headers) || headers.length === 0) {
             //console.log('[production-utils] Invalid data structure, expected array of headers');
             return {};
         }
@@ -502,8 +504,10 @@ class productionUtils_uncached {
 
         const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
-        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h)) 
+            : [];
+        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
 
         if (abbrColIndex === -1 || !rowResult.rowNumber) {
             throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
@@ -568,8 +572,10 @@ class productionUtils_uncached {
 
         const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
-        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h)) 
+            : [];
+        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
 
         if (abbrColIndex === -1 || !rowResult.rowNumber) {
             throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
@@ -624,8 +630,10 @@ class productionUtils_uncached {
 
         const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
-        const abbrColIndex = headers.findIndex((header) => String(header || '').trim() === 'Abbreviations');
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h)) 
+            : [];
+        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
 
         if (abbrColIndex === -1 || !rowResult.rowNumber) {
             throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
@@ -1551,9 +1559,11 @@ async function _appendMissingReferenceRows(tabName, names) {
 
 async function _findOrCreateReferenceRow(tabName, name) {
     const rawData = await Database.getData('CACHE', tabName);
-    const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) ? rawData[0] : [];
+    const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
+        ? rawData[0].map(h => normalizeHeaderName(h)) 
+        : [];
     const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
-    const nameColIndex = headers.findIndex((header) => String(header || '').trim() === nameColumn);
+    const nameColIndex = headers.findIndex((header) => header === nameColumn);
 
     if (nameColIndex === -1) {
         throw new Error(`[production-utils] Missing ${nameColumn} column in CACHE/${tabName}`);
