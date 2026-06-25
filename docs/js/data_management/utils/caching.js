@@ -83,7 +83,13 @@ class CacheManager {
 
         // Check expiration
         if (entry.expire && entry.expire < Date.now()) {
-            CacheManager.invalidate(key); // Invalidate the cache entry before deletion
+            // Silently remove the expired entry without firing the CacheInvalidationBus.
+            // Calling invalidate() here would emit bus events that trigger reactive store
+            // reloads — during auth transitions this causes cascading 403 failures.
+            // Natural TTL expiry should return CACHE_MISS and let the next access re-populate;
+            // only explicit mutation-driven invalidations (stampDataChange / invalidateCache)
+            // should fire the bus so stores know actual data has changed.
+            CacheManager.cache.delete(key);
             return CacheManager.CACHE_MISS;
         }
         
@@ -97,8 +103,9 @@ class CacheManager {
      * @param {number} expirationMs - Expiration time in milliseconds (defaults to DEFAULT_CACHE_EXPIRATION_MS)
      */
     static set(key, value, expirationMs = DEFAULT_CACHE_EXPIRATION_MS) {
-        // Skip caching undefined, empty results, or booleans
+        // Skip caching null, undefined, empty results, or booleans
         if (
+            value === null ||
             value === undefined ||
             (Array.isArray(value) && value.length === 0) ||
             (typeof value === 'object' && value !== null && Object.keys(value).length === 0) ||

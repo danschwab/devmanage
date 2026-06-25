@@ -208,35 +208,39 @@ class productionUtils_uncached {
 
         //console.log(`[production-utils] Filtered ${data.length} shows to ${filtered.length} matching date filters`);
         
-        // Normalize all date columns to ensure correct years before returning
-        // This fixes user data entry errors (e.g., Dec ship dates for Jan shows)
-        filtered.forEach(row => {
+        // Normalize all date columns to ensure correct years before returning.
+        // This fixes user data entry errors (e.g., Dec ship dates for Jan shows).
+        // NOTE: work on shallow copies — the source objects live in the Database.getData cache
+        // and mutating them would corrupt dates for every subsequent cache hit.
+        return filtered.map(row => {
+            const normalizedRow = { ...row };
+
             // Normalize Ship date using validation logic
-            const correctedShip = _calculateShipDate(row);
+            const correctedShip = _calculateShipDate(normalizedRow);
             if (correctedShip) {
-                row.Ship = toUSDateString(correctedShip);
+                normalizedRow.Ship = toUSDateString(correctedShip);
             }
             
             // Normalize S. Start date
-            const sStart = parseDate(row['S. Start'], true, row.Year);
+            const sStart = parseDate(normalizedRow['S. Start'], true, normalizedRow.Year);
             if (sStart) {
-                row['S. Start'] = toUSDateString(sStart);
+                normalizedRow['S. Start'] = toUSDateString(sStart);
             }
             
             // Normalize S. End date
-            const sEnd = parseDate(row['S. End'], true, row.Year);
+            const sEnd = parseDate(normalizedRow['S. End'], true, normalizedRow.Year);
             if (sEnd) {
-                row['S. End'] = toUSDateString(sEnd);
+                normalizedRow['S. End'] = toUSDateString(sEnd);
             }
             
             // Normalize Expected Return Date using validation logic
-            const correctedReturn = _calculateReturnDate(row, correctedShip);
-            if (correctedReturn && row['Expected Return Date']) {
-                row['Expected Return Date'] = toUSDateString(correctedReturn);
+            const correctedReturn = _calculateReturnDate(normalizedRow, correctedShip);
+            if (correctedReturn && normalizedRow['Expected Return Date']) {
+                normalizedRow['Expected Return Date'] = toUSDateString(correctedReturn);
             }
+
+            return normalizedRow;
         });
-        
-        return filtered;
     }
     
     

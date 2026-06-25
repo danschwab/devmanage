@@ -981,6 +981,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // starting another load would be redundant. Analysis (isAnalyzing=true) is explicitly allowed
             // so external changes are detected even when a large packlist is still being analyzed.
             if (this.isSaving || this.isReloadingMainData) return;
+            // needsReload=true means clearAllReactiveStores() has run (logout). The PriorityQueue is
+            // disabled at this point and would return null, which would clear needsReload and leave the
+            // store permanently empty with no error for reloadErrorStores() to catch after re-login.
+            if (this.needsReload) return;
             // While offline, skip background reloads — the network call will fail and the cache is
             // already frozen. Stores with errors are reloaded automatically by reloadErrorStores()
             // when connectivity is restored.
@@ -1683,7 +1687,12 @@ export function reloadErrorStores() {
     const storesToReload = Object.values(reactiveStoreRegistry).filter(
         store => (store.error || store.needsReload) && !store.isLoading && !store.isSaving
     );
-    storesToReload.forEach(store => store.handleInvalidation());
+    storesToReload.forEach(store => {
+        // Clear the flag before calling handleInvalidation — the flag guard in that method
+        // exists to block bus-driven invalidations during logout, not intentional reloads.
+        store.needsReload = false;
+        store.handleInvalidation();
+    });
     // Restart auto-save timer if any stores are reloading (it was stopped during logout)
     if (storesToReload.length > 0) {
         startAutoSaveTimer();

@@ -117,6 +117,10 @@ export class Auth {
             const { PriorityQueue } = await import('./priorityQueue.js');
             PriorityQueue.enable();
             
+            // Clear stale cache entries so stores reload with fresh data after any auth
+            // interruption (avoids serving offset-resolved date results from before expiry)
+            clearCache();
+
             // Reload any stores that failed during the previous token expiry
             reloadErrorStores();
 
@@ -321,6 +325,9 @@ export class Auth {
                             //console.log(`[Auth] Attempting silent refresh for ${context}...`);
                             const refreshed = await GoogleSheetsAuth.silentRefresh();
                             if (refreshed) {
+                                // Clear stale cache before reloading so date-sensitive
+                                // queries re-run against today's date
+                                clearCache();
                                 reloadErrorStores();
                                 //console.log(`[Auth] Silent refresh succeeded for ${context}`);
                                 resolve(true);
