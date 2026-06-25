@@ -26,7 +26,7 @@ export const OverlappingShowsModal = {
                 <button v-for="showId in shows"
                         :key="showId"
                         @click="navigateToShow(showId)"
-                        class="card white">
+                        class="white">
                     {{ showId }}
                 </button>
             </div>

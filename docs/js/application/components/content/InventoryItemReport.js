@@ -54,7 +54,7 @@ export const InventoryItemReport = {
                     sortable: true,
                     cellClass: (value) => getAutoColorClass(value)
                 },
-                { key: 'overlappingShows', label: 'Overlapping Shows', sortable: false }
+                { key: 'overlappingShows', label: 'Overlapping Shows', sortable: false, columnClass: 'gray' }
             ];
         },
 
@@ -368,7 +368,7 @@ export const InventoryItemReport = {
         },
 
         openOverlappingShowsModal(shows) {
-            this.$modal.custom(OverlappingShowsModal, { shows }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
+            this.$modal.custom(OverlappingShowsModal, { shows, modalClass: 'hamburger-menu small-menu' }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
         }
     },
     mounted() {
@@ -503,7 +503,7 @@ export const InventoryItemReport = {
                         <slot v-if="!Array.isArray(row.overlappingShows) || row.overlappingShows.length === 0">
                             —
                         </slot>
-                        <slot v-else-if="row.overlappingShows.length <= 3" class="overlapping-shows-buttons">
+                        <slot v-else-if="row.overlappingShows.length <= 2" class="overlapping-shows-buttons">
                             <button v-for="showId in row.overlappingShows"
                                     :key="showId"
                                     @click="navigateToPath && navigateToPath('packlist/' + showId)"
@@ -513,7 +513,7 @@ export const InventoryItemReport = {
                         </slot>
                         <slot v-else>
                             <button @click="openOverlappingShowsModal(row.overlappingShows)" 
-                                    class="card white">
+                                    class="card white font-black">
                                 {{ row.overlappingShows.length }} shows
                             </button>
                         </slot>
