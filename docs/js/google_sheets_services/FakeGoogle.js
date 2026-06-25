@@ -584,7 +584,7 @@ export class FakeGoogleSheetsService {
         'CACHE': {
             'UserData_test_example_com': [
                 ['ID', 'Value'],
-                ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"inventory/categories","classes":"tall"},{"path":"packlist","classes":"wide"}]']
+                ['dashboard_containers', '[{"path":"schedule","classes":"wide"},{"path":"inventory","classes":"tall"},{"path":"packlist","classes":"wide"}]']
             ],
             'Caching': [
                 ['Key', 'Timestamp']

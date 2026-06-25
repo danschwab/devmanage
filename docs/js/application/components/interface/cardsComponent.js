@@ -35,6 +35,10 @@ export const CardsComponent = {
     components: { LoadingBarComponent, ViewChangeComponent },
     inject: ['appContext'],
     props: {
+        theme: {
+            type: String,
+            default: 'gray'
+        },
         items: {
             type: Array,
             required: true,
@@ -65,10 +69,6 @@ export const CardsComponent = {
         emptyMessage: {
             type: String,
             default: 'No items available'
-        },
-        defaultCardClass: {
-            type: String,
-            default: 'gray'
         },
         showHeader: {
             type: Boolean,
@@ -419,12 +419,12 @@ export const CardsComponent = {
             <template v-if="showHeader">
             <div ref="stickySpacerEl" class="sticky-header-spacer" :style="{ height: stickyActive ? stickySpacerHeight + 'px' : '0' }"></div>
             <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', top: stickyTop + 'px', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { paddingBottom: 'var(--padding-md)' }">
-            <div key="content-header" class="content-header">
+            <div key="content-header" :class="['content-header', theme]">
                 <slot 
                     name="header-area" 
                 ></slot>
                 <div class="spacer"></div>
-                <div v-if="showRefresh || showSearch || showSort" class="button-bar">
+                <div v-if="showRefresh || showSearch || showSort || (viewModes && containerPath && navigateToPath)" class="button-bar">
                     <div v-if="showSearch" class="input-container">
                         <input
                             type="text"
@@ -478,7 +478,7 @@ export const CardsComponent = {
                 <div
                     v-for="(item, idx) in visibleCards"
                     :key="(item.id || item.sheetId || item.title) + '_' + idx"
-                    :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx) }, item.cardClass || defaultCardClass]"
+                    :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx) }, item.cardClass || theme]"
                     @click="handleCardClick(item)"
                     @keydown="handleKeyDown($event, item)"
                     :title="item.title"

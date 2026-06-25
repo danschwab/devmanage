@@ -1188,7 +1188,7 @@ export const PacklistTable = {
             } catch (_) {}
 
             const basePath = tabName
-                ? `inventory/categories/${tabName.toLowerCase()}/${itemNumber}`
+                ? `inventory/${tabName.toLowerCase()}/${itemNumber}`
                 : `packlist/${this.tabName}/details?searchTerm=${encodeURIComponent(itemNumber)}`;
 
             const finalPath = (tabName && dateFilters)

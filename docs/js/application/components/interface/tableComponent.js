@@ -1557,7 +1557,7 @@ export const TableComponent = {
         },
         syncSearchWithUrl: {
             type: Boolean,
-            default: false
+            default: true
         },
         containerPath: {
             type: String,

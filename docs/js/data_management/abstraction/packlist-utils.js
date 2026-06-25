@@ -13,7 +13,7 @@ class packListUtils_uncached {
      * @param {string} text - Text to search for item information
      * @returns {Promise<Object>} Object with {quantity: number, itemNumber: string|null, description: string}
      */
-    static async extractItemFromText(deps, text, itemCategoryFilter = undefined) {
+    static async extractItemFromText(deps, text, ctgFilter = undefined) {
         if (!text || typeof text !== 'string') {
             return {
                 quantity: 1,
@@ -32,8 +32,8 @@ class packListUtils_uncached {
             const tabName = await deps.call(InventoryUtils.getTabNameForItem, itemNumber);
             
             // Only return the item if its prefix exists in the inventory index
-            // and matches the optional array itemCategoryFilter (case insensitive)
-            if (tabName && (!itemCategoryFilter || itemCategoryFilter.some(cat => cat.toUpperCase() === tabName.toUpperCase()))) {
+            // and matches the optional array ctgFilter (case insensitive)
+            if (tabName && (!ctgFilter || ctgFilter.some(cat => cat.toUpperCase() === tabName.toUpperCase()))) {
                 if (tabName === 'HARDWARE') {
                     return await deps.call(PackListUtils.extractHardwareFromText, text);
                 } else {
@@ -52,7 +52,7 @@ class packListUtils_uncached {
             }
         }
         
-        if (itemCategoryFilter && itemCategoryFilter.includes('HARDWARE')) {
+        if (ctgFilter && ctgFilter.includes('HARDWARE')) {
             // No item found in text, attempt a hardware search
             const hardwareResult = await deps.call(PackListUtils.extractHardwareFromText, text);
             if (hardwareResult.itemNumber) {
@@ -275,7 +275,7 @@ class packListUtils_uncached {
      * @param {string} projectIdentifier - The project identifier
      * @returns {Promise<object>} Map of itemId to quantity
      */
-    static async extractItems(deps, projectIdentifier, itemCategoryFilter = undefined) {
+    static async extractItems(deps, projectIdentifier, ctgFilter = undefined) {
         // Get pack list content (array of crate objects with Items arrays)
         const crates = await deps.call(PackListUtils.getContent, projectIdentifier, "Pack");
 
@@ -293,7 +293,7 @@ class packListUtils_uncached {
                     for (const [key, cell] of Object.entries(itemObj)) {
                         if (key === 'EditHistory' || key === 'MetaData') continue;
                         if (!cell) continue;
-                        const extracted = await deps.call(PackListUtils.extractItemFromText, cell, itemCategoryFilter);
+                        const extracted = await deps.call(PackListUtils.extractItemFromText, cell, ctgFilter);
                         if (extracted.itemNumber) {
                             itemMap[extracted.itemNumber] = (itemMap[extracted.itemNumber] || 0) + extracted.quantity;
                         }
@@ -311,10 +311,10 @@ class packListUtils_uncached {
      * This is the preferred method for all analysis functions that need the full item set for a show.
      * @param {Object} deps
      * @param {string} projectIdentifier - Project identifier
-     * @param {string|undefined} itemCategoryFilter - Optional item category filter
+     * @param {string|undefined} ctgFilter - Optional item category filter
      * @returns {Promise<Object>} Aggregated item map { itemId: totalQuantity }
      */
-    static async extractAllItemsForShow(deps, projectIdentifier, itemCategoryFilter = undefined) {
+    static async extractAllItemsForShow(deps, projectIdentifier, ctgFilter = undefined) {
         const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const validTabs = allTabs.filter(tab => tab.title !== '_TEMPLATE' && !tab.title.startsWith('_'));
         const matchingTabs = await deps.call(ProductionUtils.findAllPackListTabsForShow, projectIdentifier, validTabs);
@@ -323,7 +323,7 @@ class packListUtils_uncached {
 
         const itemMap = {};
         for (const tab of matchingTabs) {
-            const tabItems = await deps.call(PackListUtils.extractItems, tab.title, itemCategoryFilter);
+            const tabItems = await deps.call(PackListUtils.extractItems, tab.title, ctgFilter);
             for (const [itemId, qty] of Object.entries(tabItems)) {
                 itemMap[itemId] = (itemMap[itemId] || 0) + qty;
             }
@@ -770,14 +770,14 @@ class packListUtils_uncached {
      * @param {Array<string>} projectIdentifiers - Array of project identifiers to extract items from
      * @returns {Promise<Array>} Array of items with quantities per show and total
      */
-    static async extractItemsFromMultipleShows(deps, projectIdentifiers, itemCategoryFilter = undefined, includeEmptyShows = true) {
+    static async extractItemsFromMultipleShows(deps, projectIdentifiers, ctgFilter = undefined, includeEmptyShows = true) {
         const allItemsMap = {};
         const processedShows = [];
         
         // Extract items from each show
         for (const projectId of projectIdentifiers) {
             try {
-                const itemsMap = await deps.call(PackListUtils.extractAllItemsForShow, projectId, itemCategoryFilter);
+                const itemsMap = await deps.call(PackListUtils.extractAllItemsForShow, projectId, ctgFilter);
                 
                 // Aggregate all unique items
                 for (const [itemId, quantity] of Object.entries(itemsMap)) {

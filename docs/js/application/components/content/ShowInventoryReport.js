@@ -9,7 +9,7 @@ export const ShowInventoryReport = {
     components: { TableComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
     inject: ['$modal', 'appContext'],
     props: {
-        containerPath: { type: String, default: 'inventory/reports/show-usage' },
+        containerPath: { type: String, default: 'reports/show-usage' },
         navigateToPath: Function
     },
     data() {
@@ -17,7 +17,7 @@ export const ShowInventoryReport = {
             reportStore: null,
             referenceDate: null, // ISO date derived from the active schedule filter (start)
             endDate: null, // ISO date derived from the active schedule filter (end)
-            itemCategoryFilter: null, // Optional filter for item categories (string or null)
+            ctgFilter: null, // Optional filter for item categories (string or null)
             searchFilter: null, // Schedule filter parameters
             searchParams: null, // Text search parameters
             includeEmptyShows: true, // Include shows with no packlist or no matching items
@@ -46,6 +46,7 @@ export const ShowInventoryReport = {
             const baseColumns = [
                 { 
                     key: 'image', 
+                    labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
                     sortable: false
@@ -140,7 +141,7 @@ export const ShowInventoryReport = {
         emptyMessage() {
             // Check if a search has been performed by looking at URL parameters
             const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/show-usage',
+                this.containerPath || 'reports/show-usage',
                 this.appContext?.currentPath
             );
             const hasSearchParams = params && (params.dateFilters || params.textFilters || params.view);
@@ -151,12 +152,12 @@ export const ShowInventoryReport = {
             }
             
             // If the store loaded but found no data and no category filter is active, the schedule filter yielded no results
-            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.showIdentifiers.length === 0 && !this.itemCategoryFilter) {
+            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.showIdentifiers.length === 0 && !this.ctgFilter) {
                 return 'No packlists found for the selected search criteria';
             }
             
             // If the store loaded but found no items and a category filter is active, the category has no items
-            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0 && this.itemCategoryFilter) {
+            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0 && this.ctgFilter) {
                 return 'No items were found in this category.';
             }
             
@@ -234,7 +235,7 @@ export const ShowInventoryReport = {
             //console.log('[ShowInventoryReport] initializeReportStore called', {
             //    searchFilter: this.searchFilter,
             //    searchParams: this.searchParams,
-            //    itemCategoryFilter: this.itemCategoryFilter
+            //    ctgFilter: this.ctgFilter
             //});
             
             if (!this.searchFilter && !this.searchParams) {
@@ -291,7 +292,7 @@ export const ShowInventoryReport = {
             this.reportStore = getReactiveStore(
                 Requests.getMultipleShowsItemsSummary,
                 null,
-                [this.searchFilter, this.searchParams, this.itemCategoryFilter, this.includeEmptyShows],
+                [this.searchFilter, this.searchParams, this.ctgFilter, this.includeEmptyShows],
                 analysisConfig,
                 true // Auto-load
             );
@@ -316,7 +317,7 @@ export const ShowInventoryReport = {
 
         navigateToItemPage(row) {
             if (!row.tabName || !row.itemId) return;
-            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const basePath = `inventory/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = this.referenceDate
                 ? [
                     { column: 'Date', value: this.referenceDate, type: 'after' },
@@ -334,12 +335,12 @@ export const ShowInventoryReport = {
             //console.log('[ShowInventoryReport] Current state:', {
             //     searchFilter: this.searchFilter,
             //     searchParams: this.searchParams,
-            //     itemCategoryFilter: this.itemCategoryFilter,
+            //     ctgFilter: this.ctgFilter,
             //     hasReportStore: !!this.reportStore
             // });
             
             // Update filter and reinitialize store
-            this.itemCategoryFilter = categoryName;
+            this.ctgFilter = categoryName;
             //console.log('[ShowInventoryReport] Calling initializeReportStore()');
             this.initializeReportStore();
         }
@@ -352,7 +353,7 @@ export const ShowInventoryReport = {
         
         // Get URL parameters to check what should be initialized
         const params = NavigationRegistry.getParametersForContainer(
-            this.containerPath || 'inventory/reports/show-usage',
+            this.containerPath || 'reports/show-usage',
             this.appContext?.currentPath
         );
         
@@ -371,7 +372,7 @@ export const ShowInventoryReport = {
                 :hide-columns="['tabName']"
                 :show-search="true"
                 :sync-search-with-url="true"
-                :container-path="containerPath || 'inventory/reports/show-usage'"
+                :container-path="containerPath || 'reports/show-usage'"
                 :navigate-to-path="navigateToPath"
                 :hide-rows-on-search="false"
                 :readonly="true"
@@ -386,13 +387,13 @@ export const ShowInventoryReport = {
                 <template #header-area>
                     <div class="button-bar">
                         <ScheduleFilterSelect
-                            :container-path="containerPath || 'inventory/reports/show-usage'"
+                            :container-path="containerPath || 'reports/show-usage'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter
-                            :container-path="containerPath || 'inventory/reports/show-usage'"
+                            :container-path="containerPath || 'reports/show-usage'"
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />

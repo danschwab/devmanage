@@ -489,20 +489,6 @@ export const ViewChangeComponent = {
             const currentIndex = this.viewModes.indexOf(this.currentViewMode);
             const nextIndex = (currentIndex + 1) % this.viewModes.length;
             return this.viewModes[nextIndex];
-        },
-        togglePath() {
-            if (!this.nextViewMode) return this.containerPath;
-            
-            const cleanPath = this.containerPath.split('?')[0];
-            const params = { ...NavigationRegistry.getNavigationParameters(this.containerPath) };
-            
-            if (this.nextViewMode.paramValue === null || this.nextViewMode.paramValue === undefined) {
-                delete params[this.nextViewMode.paramName];
-            } else {
-                params[this.nextViewMode.paramName] = this.nextViewMode.paramValue;
-            }
-            
-            return NavigationRegistry.buildPath(cleanPath, params);
         }
     },
     methods: {
@@ -512,10 +498,23 @@ export const ViewChangeComponent = {
             const cleanPath = this.containerPath.split('?')[0];
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
+            // Build new params object with the toggled parameter
+            // Use null/undefined to signal removal, which buildPathWithCurrentParams will handle
+            const newParams = {
+                [this.nextViewMode.paramName]: this.nextViewMode.paramValue
+            };
+            
+            // Use buildPathWithCurrentParams to merge params AND clear cache when params are removed
+            const togglePath = NavigationRegistry.buildPathWithCurrentParams(
+                cleanPath,
+                this.appContext?.currentPath,
+                newParams
+            );
+            
             if (isOnDashboard) {
-                NavigationRegistry.dashboardRegistry.updatePath(cleanPath, this.togglePath);
+                NavigationRegistry.dashboardRegistry.updatePath(cleanPath, togglePath);
             } else {
-                this.navigateToPath(this.togglePath);
+                this.navigateToPath(togglePath);
             }
         }
     },

@@ -51,8 +51,8 @@ nav img {
 }
 nav #navbar {
     display: flex;
-    padding: 0 var(--padding-lg);
-    gap: var(--padding-lg);
+    padding: 0 var(--padding-md);
+    gap: var(--padding-md);
     justify-content: flex-start;
     align-items: center;
     width: 100%;
@@ -662,6 +662,9 @@ button.card {
 .event-detail > .content {
     padding: var(--padding-md);
     min-width: min(90vw, var(--page-width-large));
+}
+.hamburger-menu >.content {
+     min-width: var(--page-width-card);
 }
 
 
@@ -2107,6 +2110,30 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
     button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notification {
         display: none;
         opacity: 0;
+    }
+    
+    /* Render table cell buttons as plain text in print */
+    td button, th button {
+        display: inline !important;
+        opacity: 1 !important;
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        color: black !important;
+        font-size: 10pt !important;
+        text-decoration: none !important;
+        cursor: default !important;
+        font-weight: normal !important;
+    }
+    
+    /* Hide entire details column and details rows */
+    th.details-header,
+    td.details-cell,
+    td button.details-toggle,
+    tr.details-row-container {
+        display: none !important;
     }
 
     body,

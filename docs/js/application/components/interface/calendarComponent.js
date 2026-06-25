@@ -16,7 +16,7 @@ export const CalendarComponent = {
         title: { type: String, default: '' },
         emptyMessage: { type: String, default: 'No events to display.' },
         showSearch: { type: Boolean, default: false },
-        parentSearchValue: { type: String, default: '' },
+        syncSearchWithUrl: { type: Boolean, default: false },
         showRefresh: { type: Boolean, default: false },
         eventStartColumn: { type: String, required: true },
         eventEndColumn: { type: String, required: true },
@@ -32,8 +32,10 @@ export const CalendarComponent = {
     setup(props) {
         const search = useSearch({
             formatValue: null,
-            syncWithUrl: false,
-            navigationRegistry: NavigationRegistry
+            syncWithUrl: props.syncSearchWithUrl,
+            navigationRegistry: NavigationRegistry,
+            containerPath: props.containerPath,
+            appContext: Vue.inject('appContext')
         });
         return { search };
     },
@@ -184,9 +186,8 @@ export const CalendarComponent = {
         }
     },
     mounted() {
-        if (this.parentSearchValue) {
-            this.search.searchValue.value = this.parentSearchValue;
-        }
+        this.search.initializeFromUrl();
+        this.search.setupUrlWatcher();
         this._stickyHeader = useStickyHeader({
             getStickyEl: () => this.$el?.querySelector('.calendar-sticky-top'),
             getSpacerEl: () => this.$el?.querySelector('.calendar-sticky-spacer'),
@@ -212,13 +213,6 @@ export const CalendarComponent = {
     },
     beforeUnmount() {
         this._stickyHeader?.teardown();
-    },
-    watch: {
-        parentSearchValue(val) {
-            if (val !== this.search.searchValue.value) {
-                this.search.searchValue.value = val || '';
-            }
-        }
     },
     methods: {
         _getWeekStart(date, weekStartDay) {

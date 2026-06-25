@@ -48,9 +48,7 @@ export const InventoryMenuComponent = {
             
             // Navigation items
             items.push(
-                { label: 'Inventory Overview', action: 'navigateHome' },
-                { label: 'Categories', action: 'navigateCategories' },
-                { label: 'Reports', action: 'navigateReports' }
+                { label: 'Inventory Shortage Report', action: 'navigateReports' }
             );
             
             return items;
@@ -72,35 +70,14 @@ export const InventoryMenuComponent = {
         },
         async handleAction(action) {
             switch (action) {
-                case 'navigateHome':
+                case 'navigateReports':
                     if (this.navigateToPath) {
-                        this.navigateToPath('inventory');
+                        this.navigateToPath('reports/item-shortages');
                         this.$emit('close-modal');
                     }
                     break;
                 case 'removeLock':
                     await this.handleRemoveLock();
-                    break;
-                case 'navigateCategories':
-                    if (this.navigateToPath) {
-                        this.navigateToPath('inventory/categories');
-                        this.$emit('close-modal');
-                    }
-                    break;
-                case 'navigateReports':
-                    if (this.navigateToPath) {
-                        // If on a specific category, pass it as a filter
-                        if (this.tabTitle) {
-                            const reportsPath = NavigationRegistry.buildPath(
-                                'inventory/reports',
-                                { itemCategoryFilter: this.tabTitle }
-                            );
-                            this.navigateToPath(reportsPath);
-                        } else {
-                            this.navigateToPath('inventory/reports');
-                        }
-                        this.$emit('close-modal');
-                    }
                     break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
@@ -191,7 +168,11 @@ export const InventoryContent = {
     data() {
         return {
             categoriesStore: null, // Reactive store for inventory categories
-            autoSavedCategories: new Set() // Track which categories have auto-saved data
+            autoSavedCategories: new Set(), // Track which categories have auto-saved data
+            viewModes: [
+                { paramName: 'view', paramValue: 'categories', symbol: 'grid_view', title: 'Switch to categories view' },
+                { paramName: 'view', paramValue: null, symbol: 'table', title: 'Switch to inventory overview' }
+            ]
         };
     },
     computed: {
@@ -254,17 +235,30 @@ export const InventoryContent = {
         },
         // Get current category name from path for specific category views
         currentCategoryName() {
-            if (this.cleanContainerPath.startsWith('inventory/categories/')) {
-                const categorySlug = this.cleanContainerPath.replace('inventory/categories/', '');
-                const match = this.categoryList.find(c => {
-                    return c.title.toLowerCase() === categorySlug.toLowerCase();
-                });
-                return match ? match.originalTitle : categorySlug.toUpperCase();
+            if (this.cleanContainerPath.startsWith('inventory/')) {
+                const parts = this.cleanContainerPath.split('/');
+                if (parts.length >= 2) {
+                    const categorySlug = parts[1];
+                    const match = this.categoryList.find(c => {
+                        return c.title.toLowerCase() === categorySlug.toLowerCase();
+                    });
+                    return match ? match.originalTitle : categorySlug.toUpperCase();
+                }
             }
             return '';
         },
         isLoadingCategories() {
             return this.categoriesStore?.isLoading || false;
+        },
+        isCategoriesView() {
+            // New path shape for category landing is inventory?{"view":"categories"}
+            if (this.cleanContainerPath === 'inventory') {
+                const params = NavigationRegistry.getNavigationParameters(this.containerPath);
+                return params.view === 'categories';
+            }
+
+            // Backward compatibility for previously saved paths
+            return this.cleanContainerPath === 'inventory/categories';
         },
         authIsAuthenticated() {
             return authState.isAuthenticated;
@@ -338,7 +332,10 @@ export const InventoryContent = {
             );
         },
         handleCategorySelect(categoryTitle) {
-            this.navigateToPath('inventory/categories/' + categoryTitle.toLowerCase());
+            this.navigateToPath('inventory/' + categoryTitle.toLowerCase());
+        },
+        navigateToCategoriesView() {
+            this.navigateToPath(NavigationRegistry.buildPath('inventory', { view: 'categories' }));
         },
         async handleRefresh() {
             //console.log('InventoryContent: Refresh requested');
@@ -362,26 +359,7 @@ export const InventoryContent = {
 
         // Register inventory navigation routes
         NavigationRegistry.registerNavigation('inventory', {
-            routes: {
-                categories: {
-                    displayName: 'Categories',
-                    dashboardTitle: 'Inventory Categories',
-                    icon: 'category',
-                    children: {
-                        timeline: {
-                            displayName: 'Item Timeline',
-                            icon: 'timeline',
-                            children: {}
-                        }
-                    }
-                },
-                reports: {
-                    displayName: 'Reports',
-                    dashboardTitle: 'Inventory Reports',
-                    icon: 'assessment',
-                    children: {}
-                }
-            }
+            routes: {}
         });
 
         // Register hamburger menu for inventory
@@ -416,16 +394,18 @@ export const InventoryContent = {
     template: html `
         <slot>
             <!-- Main Inventory View -->
-            <slot v-if="cleanContainerPath === 'inventory'">
+            <slot v-if="cleanContainerPath === 'inventory' && !isCategoriesView">
                 <inventory-overview-table
                     :container-path="containerPath"
+                    :view-modes="viewModes"
                     @navigate-to-path="navigateToPath"
                 />
             </slot>
             
             <!-- Categories View -->
             <cards-grid
-                v-else-if="cleanContainerPath === 'inventory/categories'"
+                v-else-if="isCategoriesView"
+                theme="purple"
                 :items="categoryList"
                 :sort-columns="[{ key: 'title', label: 'Category', type: 'string', sortable: true }]"
                 default-sort-column="title"
@@ -433,11 +413,16 @@ export const InventoryContent = {
                 :is-loading="isLoadingCategories"
                 loading-message="Loading..."
                 empty-message="No categories available"
+                show-search="true"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+                :show-header="true"
+                :view-modes="viewModes"
             />
             
-            <!-- Item Timeline Subpage: inventory/categories/<cat>/<item#> -->
+            <!-- Item Timeline Subpage: inventory/<cat>/<item#> -->
             <inventory-item-timeline
-                v-else-if="containerPath.startsWith('inventory/categories/') && cleanContainerPath.split('/').length >= 4"
+                v-else-if="containerPath.startsWith('inventory/') && cleanContainerPath.split('/').length >= 3"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />
@@ -445,37 +430,11 @@ export const InventoryContent = {
             <!-- Specific Category View -->
             <inventory-table
                 ref="inventoryTable"
-                v-else-if="containerPath.startsWith('inventory/categories/') && currentCategoryName"
+                v-else-if="containerPath.startsWith('inventory/') && currentCategoryName"
                 :container-path="containerPath"
                 :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                 :tab-title="currentCategoryName"
             ></inventory-table>
-
-            <!-- Reports Landing -->
-            <cards-grid
-                v-else-if="cleanContainerPath === 'inventory/reports'"
-                :items="[
-                    { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.', cardClass: 'purple' },
-                    { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.', cardClass: 'purple' }
-                ]"
-                :on-item-click="card => navigateToPath('inventory/reports/' + card.toLowerCase().replace(/\s+/g, '-'))"
-                container-path="inventory/reports"
-                :navigate-to-path="navigateToPath"
-            />
-
-            <!-- Show Inventory Report View -->
-            <show-inventory-report
-                v-else-if="cleanContainerPath === 'inventory/reports/show-usage'"
-                :container-path="containerPath"
-                :navigate-to-path="navigateToPath"
-            />
-
-            <!-- Item-centric Inventory Report View -->
-            <inventory-item-report
-                v-else-if="cleanContainerPath === 'inventory/reports/item-shortages'"
-                :container-path="containerPath"
-                :navigate-to-path="navigateToPath"
-            />
         </slot>
     `
 };

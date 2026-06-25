@@ -1020,16 +1020,15 @@ export const InventoryTableComponent = {
         },
 
         handleReportsClick() {
-            if (this.appContext?.navigateToPath) {
-                const path = this.tabTitle 
-                    ? NavigationRegistry.buildPath('inventory/reports', { itemCategoryFilter: this.tabTitle })
-                    : 'inventory/reports';
-                this.appContext.navigateToPath(path);
-            }
+            // Navigation to reports has been moved to primary navigation
+            const path = this.tabTitle
+                    ? NavigationRegistry.buildPath('reports/show-usage', { ctgFilter: this.tabTitle })
+                    : 'reports/show-usage';
+            this.appContext.navigateToPath(path);
         },
         navigateToItemPage(row) {
             if (!row.itemNumber || !this.tabTitle) return;
-            const path = `inventory/categories/${this.tabTitle.toLowerCase()}/${row.itemNumber}`;
+            const path = `inventory/${this.tabTitle.toLowerCase()}/${row.itemNumber}`;
             if (this.appContext?.navigateToPath) {
                 this.appContext.navigateToPath(path);
             }
@@ -1069,10 +1068,7 @@ export const InventoryTableComponent = {
                 @on-save="handleSave"
             >
                 <template #header-area>
-                    <div class="button-bar">
-                        <button @click="appContext.navigateToPath('inventory/categories')" class="purple">Categories</button>
-                        <button @click="handleReportsClick" class="purple">Reports</button>
-                    </div>
+                    <div class="button-bar" style="display: none;"></div>
                 </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <ItemImageComponent 

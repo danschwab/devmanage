@@ -1,4 +1,4 @@
-import { html, TableComponent, CalendarComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, offsetToISO, getAutoColorClass } from '../../index.js';
+import { html, TableComponent, CalendarComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, offsetToISO, getAutoColorClass, OverlappingShowsModal } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -7,7 +7,7 @@ import { normalizeFilterValues } from '../../../data_management/utils/helpers.js
  *   item# | description | startDate | endDate | Inv Qty | Min Qty | Overlapping Shows
  */
 export const InventoryItemReport = {
-    components: { TableComponent, CalendarComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
+    components: { TableComponent, CalendarComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, OverlappingShowsModal },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -17,16 +17,17 @@ export const InventoryItemReport = {
         return {
             reportStore: null,
             referenceDate: null,
-            itemCategoryFilter: null,
+            ctgFilter: null,
             searchFilter: null,
             searchParams: null,
             error: null,
             endDate: null,
-            minQtyThreshold: 1,
+            qtyFilter: 1,
             hasPerformedInitialSync: false,
+            isPrinting: false,
             viewModes: [
-                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
-                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Switch to table view' }
             ],
             NavigationRegistry
         };
@@ -36,6 +37,7 @@ export const InventoryItemReport = {
             return [
                 {
                     key: 'image',
+                    labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
                     sortable: false
@@ -72,7 +74,7 @@ export const InventoryItemReport = {
                 }))
                 .filter(row => {
                     if (row.minQty === null || row.minQty === undefined) return true;
-                    return row.minQty < this.minQtyThreshold;
+                    return row.minQty < this.qtyFilter;
                 });
         },
 
@@ -81,7 +83,7 @@ export const InventoryItemReport = {
         },
 
         isCalendarView() {
-            return NavigationRegistry.getNavigationParameters(this.containerPath || 'inventory/reports/item-shortages').layout === 'calendar';
+            return NavigationRegistry.getNavigationParameters(this.containerPath || 'reports/item-shortages').layout === 'calendar';
         },
 
         calendarColumns() {
@@ -108,7 +110,7 @@ export const InventoryItemReport = {
 
         emptyMessage() {
             const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/item-shortages',
+                this.containerPath || 'reports/item-shortages',
                 this.appContext?.currentPath
             );
             const hasSearchParams = params && (params.dateFilters || params.textFilters || params.view);
@@ -116,7 +118,7 @@ export const InventoryItemReport = {
             if (hasSearchParams && !this.reportStore && !this.isLoading) {
                 return 'No packlists found for the selected search criteria';
             }
-            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0 && this.itemCategoryFilter) {
+            if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0 && this.ctgFilter) {
                 return 'No items were found in this category.';
             }
             if (this.reportStore && !this.isLoading && !this.isAnalyzing && this.tableData.length === 0) {
@@ -134,11 +136,11 @@ export const InventoryItemReport = {
                 
                 // Get params for both paths
                 const newParams = NavigationRegistry.getParametersForContainer(
-                    this.containerPath || 'inventory/reports/item-shortages',
+                    this.containerPath || 'reports/item-shortages',
                     newPath
                 );
                 const oldParams = NavigationRegistry.getParametersForContainer(
-                    this.containerPath || 'inventory/reports/item-shortages',
+                    this.containerPath || 'reports/item-shortages',
                     oldPath
                 );
                 
@@ -253,7 +255,7 @@ export const InventoryItemReport = {
             this.reportStore = getReactiveStore(
                 Requests.getMultipleShowsItemsSummary,
                 null,
-                [this.searchFilter, this.searchParams, this.itemCategoryFilter, false],
+                [this.searchFilter, this.searchParams, this.ctgFilter, false],
                 analysisConfig,
                 true
             );
@@ -278,7 +280,7 @@ export const InventoryItemReport = {
 
         navigateToItemPage(row) {
             if (!row.tabName || !row.itemId) return;
-            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const basePath = `inventory/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = (row.startDate || row.endDate)
                 ? [
                     ...(row.startDate ? [{ column: 'Date', value: row.startDate, type: 'after'  }] : []),
@@ -292,7 +294,7 @@ export const InventoryItemReport = {
         },
 
         handleCategorySelected(categoryName) {
-            this.itemCategoryFilter = categoryName || null;
+            this.ctgFilter = categoryName || null;
             if (this.searchFilter || this.searchParams) {
                 this.initializeReportStore();
             }
@@ -301,21 +303,21 @@ export const InventoryItemReport = {
         handleMinThresholdChange(event) {
             const value = parseInt(event.target.value, 10);
             if (!isNaN(value)) {
-                this.minQtyThreshold = value;
+                this.qtyFilter = value;
                 this.updateURL(value);
             }
         },
 
         updateURL(threshold) {
-            const cleanPath = (this.containerPath || 'inventory/reports/item-shortages').split('?')[0];
+            const cleanPath = (this.containerPath || 'reports/item-shortages').split('?')[0];
             const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
             
-            // Build new path with minQtyThreshold parameter
+            // Build new path with qtyFilter parameter
             const newPath = NavigationRegistry.buildPathWithCurrentParams(
                 cleanPath,
                 this.appContext?.currentPath,
                 {
-                    minQtyThreshold: threshold !== 1 ? threshold : undefined // undefined removes the parameter when it's the default
+                    qtyFilter: threshold !== 1 ? threshold : undefined // undefined removes the parameter when it's the default
                 }
             );
             
@@ -332,22 +334,46 @@ export const InventoryItemReport = {
 
         syncWithURL() {
             const params = NavigationRegistry.getParametersForContainer(
-                this.containerPath || 'inventory/reports/item-shortages',
+                this.containerPath || 'reports/item-shortages',
                 this.appContext?.currentPath
             );
             
-            // Get minQtyThreshold from URL params (default to 1 if not present)
-            const thresholdFromUrl = params?.minQtyThreshold !== undefined ? parseInt(params.minQtyThreshold, 10) : 1;
+            // Get qtyFilter from URL params (default to 1 if not present)
+            const thresholdFromUrl = params?.qtyFilter !== undefined ? parseInt(params.qtyFilter, 10) : 1;
             
             // Update threshold value
             if (!isNaN(thresholdFromUrl)) {
-                this.minQtyThreshold = thresholdFromUrl;
+                this.qtyFilter = thresholdFromUrl;
             }
+        },
+
+        async handlePrint() {
+            // If not on the item shortage report page, navigate to it first
+            if (this.navigateToPath) {
+                this.navigateToPath(this.containerPath || 'reports/item-shortages');
+            }
+
+            this.isPrinting = true;
+
+            // Wait for DOM update
+            await this.$nextTick();
+            
+            // Print
+            window.print();
+            
+            // Restore state after printing
+            setTimeout(() => {
+                this.isPrinting = false;
+            }, 100);
+        },
+
+        openOverlappingShowsModal(shows) {
+            this.$modal.custom(OverlappingShowsModal, { shows }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
         }
     },
     mounted() {
         const params = NavigationRegistry.getParametersForContainer(
-            this.containerPath || 'inventory/reports/item-shortages',
+            this.containerPath || 'reports/item-shortages',
             this.appContext?.currentPath
         );
         //console.log('[InventoryItemReport] Initial URL parameters:', params);
@@ -359,6 +385,13 @@ export const InventoryItemReport = {
     },
     template: html`
         <div>
+            <!-- Print-only Header -->
+            <div class="print-header">
+                <img src="assets/logo.png" alt="Top Shelf Exhibits Logo" class="print-logo" />
+                <h1>Item Shortage Report</h1>
+                <span class="page-number"></span>
+            </div>
+
             <div v-if="error" class="card red">
                 <p>{{ error }}</p>
             </div>
@@ -376,8 +409,9 @@ export const InventoryItemReport = {
                 :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
                 :show-refresh="true"
                 :show-search="true"
+                :sync-search-with-url="true"
                 :empty-message="emptyMessage"
-                :container-path="containerPath || 'inventory/reports/item-shortages'"
+                :container-path="containerPath || 'reports/item-shortages'"
                 :navigate-to-path="navigateToPath"
                 :view-modes="viewModes"
                 @event-click="navigateToItemPage"
@@ -386,18 +420,21 @@ export const InventoryItemReport = {
                 <template #header-area>
                     <div class="button-bar">
                         <ScheduleFilterSelect
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />
+                        <input type="number" :title="'Show items with less than ' + qtyFilter + ' remaining'" :value="qtyFilter" @change="handleMinThresholdChange" style="width:60px" />
+                        <button @click="handlePrint" :disabled="isLoading || isAnalyzing" class="button-symbol white" title="Print Item Shortage Report">
+                            <span class="material-symbols-outlined">print</span>
+                        </button>
                     </div>
-                    <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" :value="minQtyThreshold" @change="handleMinThresholdChange" style="width:60px" />
                 </template>
             </CalendarComponent>
 
@@ -408,7 +445,7 @@ export const InventoryItemReport = {
                 :hide-columns="['tabName']"
                 :show-search="true"
                 :sync-search-with-url="true"
-                :container-path="containerPath || 'inventory/reports/item-shortages'"
+                :container-path="containerPath || 'reports/item-shortages'"
                 :navigate-to-path="navigateToPath"
                 :view-modes="viewModes"
                 :hide-rows-on-search="false"
@@ -425,18 +462,21 @@ export const InventoryItemReport = {
                 <template #header-area>
                     <div class="button-bar">
                         <ScheduleFilterSelect
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
+                            :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />
+                        <input type="number" :title="'Show items with less than ' + qtyFilter + ' remaining'" :value="qtyFilter" @change="handleMinThresholdChange" style="width:60px" />
+                        <button @click="handlePrint" :disabled="isLoading || isAnalyzing" class="button-symbol white" title="Print Item Shortage Report">
+                            <span class="material-symbols-outlined">print</span>
+                        </button>
                     </div>
-                    <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" :value="minQtyThreshold" @change="handleMinThresholdChange" style="width:60px" />
                 </template>
 
                 <template #default="{ row, column }">
@@ -463,12 +503,18 @@ export const InventoryItemReport = {
                         <slot v-if="!Array.isArray(row.overlappingShows) || row.overlappingShows.length === 0">
                             —
                         </slot>
-                        <slot v-else class="overlapping-shows-buttons">
+                        <slot v-else-if="row.overlappingShows.length <= 3" class="overlapping-shows-buttons">
                             <button v-for="showId in row.overlappingShows"
                                     :key="showId"
                                     @click="navigateToPath && navigateToPath('packlist/' + showId)"
                                     class="card white">
                                 {{ showId }}
+                            </button>
+                        </slot>
+                        <slot v-else>
+                            <button @click="openOverlappingShowsModal(row.overlappingShows)" 
+                                    class="card white">
+                                {{ row.overlappingShows.length }} shows
                             </button>
                         </slot>
                     </slot>

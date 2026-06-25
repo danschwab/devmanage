@@ -20,13 +20,14 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent } from './components/interface/containerComponent.js';
 export { PageNoteComponent, PageNoteMenuComponent } from './components/interface/pageNoteComponent.js';
+export { OverlappingShowsModal } from './components/interface/OverlappingShowsModal.js';
 export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
 export { BannerNotifications } from './components/interface/bannerNotifications.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { CalendarComponent } from './components/interface/calendarComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
-export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } from './components/interface/scheduleFilterComponents.js';
+export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } from './components/interface/filterComponents.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
@@ -40,5 +41,6 @@ export { InventoryItemTimeline } from './components/content/InventoryItemTimelin
 export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
 export { InventoryItemReport } from './components/content/InventoryItemReport.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
-export { ScheduleAdvancedFilter } from './components/interface/scheduleFilterComponents.js';
+export { ScheduleAdvancedFilter } from './components/interface/filterComponents.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';
+export { ReportsContent } from './components/content/ReportsContent.js';

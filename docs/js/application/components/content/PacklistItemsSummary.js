@@ -1,11 +1,11 @@
-import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, InventoryCategoryFilter, Priority, invalidateCache, todayISOString } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, InventoryCategoryFilter, Priority, invalidateCache, todayISOString, OverlappingShowsModal } from '../../index.js';
 
 /**
  * Component for displaying item quantities summary with progressive analysis
  * Shows: Item ID, Quantity, Available, Remaining, Overlapping Shows
  */
 export const PacklistItemsSummary = {
-    components: { TableComponent, ItemImageComponent, InventoryCategoryFilter },
+    components: { TableComponent, ItemImageComponent, InventoryCategoryFilter, OverlappingShowsModal },
     props: {
         projectIdentifier: { type: String, required: true },
         containerPath: { type: String, default: '' },
@@ -14,7 +14,7 @@ export const PacklistItemsSummary = {
             default: () => ['Ship', 'S. Start', 'S. End', 'Expected Return Date', 'City', 'Size', 'Booth#', 'S/U IN SHOP']
         }
     },
-    inject: ['appContext'],
+    inject: ['appContext', '$modal'],
     data() {
         return {
             itemsSummaryStore: null,
@@ -155,7 +155,7 @@ export const PacklistItemsSummary = {
 
         navigateToItemPage(row) {
             if (!row.tabName || !row.itemId) return;
-            const basePath = `inventory/categories/${row.tabName.toLowerCase()}/${row.itemId}`;
+            const basePath = `inventory/${row.tabName.toLowerCase()}/${row.itemId}`;
             const dateFilters = (this.projectShipDate && this.projectReturnDate)
                 ? [
                     { column: 'Date', value: this.projectShipDate,  type: 'after'  },
@@ -196,6 +196,10 @@ export const PacklistItemsSummary = {
                 console.error('Error loading show details:', err);
                 this.showDetails = null;
             }
+        },
+
+        openOverlappingShowsModal(shows) {
+            this.$modal.custom(OverlappingShowsModal, { shows }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
         }
     },
     template: html`
@@ -257,12 +261,18 @@ export const PacklistItemsSummary = {
                         <slot v-if="!Array.isArray(row.overlappingShows) || row.overlappingShows.length === 0">
                             —
                         </slot>
-                        <slot v-else class="overlapping-shows-buttons">
+                        <slot v-else-if="row.overlappingShows.length <= 3" class="overlapping-shows-buttons">
                             <button v-for="packlistId in row.overlappingShows" 
                                     :key="packlistId"
                                     @click="appContext.navigateToPath('packlist/' + packlistId + '/details')"
                                     class="card white">
                                 {{ packlistId }}
+                            </button>
+                        </slot>
+                        <slot v-else>
+                            <button @click="openOverlappingShowsModal(row.overlappingShows)" 
+                                    class="card white">
+                                {{ row.overlappingShows.length }} shows
                             </button>
                         </slot>
                     </slot>

@@ -992,17 +992,17 @@ class Requests_uncached {
      * Finds shows matching the search criteria, then extracts items from them
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {Object|Array} filter - Schedule filter parameters (e.g., { dateFilters: [...] }) or legacy array of identifiers
-     * @param {Object|string} searchParams - Search parameters for text filters, or legacy itemCategoryFilter
-     * @param {string|undefined} itemCategoryFilter - Optional category filter (new signature) or undefined
+     * @param {Object|string} searchParams - Search parameters for text filters, or legacy ctgFilter
+     * @param {string|undefined} ctgFilter - Optional category filter (new signature) or undefined
      * @returns {Promise<Array<Object>>} Array of item objects with quantities per show
      */
-    static async getMultipleShowsItemsSummary(deps, filter = null, searchParams = null, itemCategoryFilter = undefined, includeEmptyShows = true) {
-        // Legacy signature: (deps, projectIdentifiers, itemCategoryFilter)
+    static async getMultipleShowsItemsSummary(deps, filter = null, searchParams = null, ctgFilter = undefined, includeEmptyShows = true) {
+        // Legacy signature: (deps, projectIdentifiers, ctgFilter)
         if (Array.isArray(filter)) {
             return await deps.call(PackListUtils.extractItemsFromMultipleShows, filter, searchParams);
         }
         
-        // New signature: (deps, filterParams, searchParams, itemCategoryFilter)
+        // New signature: (deps, filterParams, searchParams, ctgFilter)
         // Find all shows matching the search criteria
         const shows = await deps.call(ProductionUtils.getOverlappingShows, filter, searchParams);
         
@@ -1030,7 +1030,7 @@ class Requests_uncached {
 
         // Extract items from the identified shows
         // Convert string filter to array as extractItemsFromMultipleShows expects an array
-        const categoryFilterArray = itemCategoryFilter ? [itemCategoryFilter] : undefined;
+        const categoryFilterArray = ctgFilter ? [ctgFilter] : undefined;
         const itemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
 
         const dateFilters = Array.isArray(filter?.dateFilters) ? filter.dateFilters : [];

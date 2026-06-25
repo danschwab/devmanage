@@ -9,7 +9,7 @@
 
 ### Location
 
-- **File:** `scheduleFilterComponents.js`
+- **File:** `filterComponents.js`
 - **Component:** `ScheduleDateRangeCard`
 - **Functions:** `computeDisplayDates()`, `resolveWindowDates()`
 
@@ -251,7 +251,7 @@ The `getRowDate()` function needs to be enhanced to:
 - **Issue:** ✅ Has robust year handling in `_calculateShipDate()` and `_calculateReturnDate()`
 - **Issue:** ❌ `getRowDate()` only handles 3 specific columns
 
-### 3. **Schedule Filter Components** (`scheduleFilterComponents.js`)
+### 3. **Schedule Filter Components** (`filterComponents.js`)
 
 #### **ScheduleAdvancedFilter Component**
 
@@ -294,7 +294,7 @@ The `getRowDate()` function needs to be enhanced to:
 
 ### Phase 1: Fix Display Issue (Quick Win)
 
-**File:** `scheduleFilterComponents.js`
+**File:** `filterComponents.js`
 
 Update `computeDisplayDates()` to find ANY after/before filters:
 

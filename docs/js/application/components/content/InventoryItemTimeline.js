@@ -2,7 +2,7 @@ import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelec
 
 /**
  * Lightweight item timeline component.
- * Mountable as a subpage at inventory/categories/<category>/<item#>
+ * Mountable as a subpage at inventory/<category>/<item#>
  * or in a modal. Accepts date range via URL path params.
  *
  * URL path params used (on the container path):
@@ -27,8 +27,8 @@ export const InventoryItemTimeline = {
             resolvedItemId: null,
             itemImageUrl: null,
             viewModes: [
-                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
-                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Switch to table view' }
             ]
         };
     },
@@ -119,16 +119,16 @@ export const InventoryItemTimeline = {
     },
     methods: {
         resolveItemIdFromPath() {
-            // Path shape: inventory/categories/<category>/<item>
+            // Path shape: inventory/<category>/<item>
             if (this.itemId) {
                 this.resolvedItemId = this.itemId;
                 return;
             }
             const path = (this.containerPath || '').split('?')[0];
             const segments = path.split('/');
-            // segments[0]=inventory, [1]=categories, [2]=category, [3]=item
-            if (segments.length >= 4 && segments[1] === 'categories') {
-                this.resolvedItemId = segments[3] ? decodeURIComponent(segments[3]) : null;
+            // segments[0]=inventory, [1]=category, [2]=item
+            if (segments.length >= 3) {
+                this.resolvedItemId = segments[2] ? decodeURIComponent(segments[2]) : null;
             } else {
                 this.resolvedItemId = null;
             }

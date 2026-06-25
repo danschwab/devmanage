@@ -52,15 +52,65 @@ export const ModalComponent = {
         modalClass: { type: String, default: '' },
         message: { type: String, default: '' },
         contentClass: { type: String, default: '' },
-        componentProps: { type: Object, default: () => ({}) }
+        componentProps: { type: Object, default: () => ({}) },
+        submitAction: { type: Function, default: null }
     },
     computed: {
         formattedMessage() {
             return this.message ? this.message.replace(/\n/g, '<br>') : '';
         }
     },
+    mounted() {
+        // Add keyboard event listener when modal is visible
+        if (this.isVisible) {
+            window.addEventListener('keydown', this.handleKeyDown);
+        }
+    },
+    beforeUnmount() {
+        // Clean up keyboard event listener
+        window.removeEventListener('keydown', this.handleKeyDown);
+    },
+    watch: {
+        isVisible(newVal, oldVal) {
+            // Add/remove keyboard listener when visibility changes
+            if (newVal && !oldVal) {
+                window.addEventListener('keydown', this.handleKeyDown);
+            } else if (!newVal && oldVal) {
+                window.removeEventListener('keydown', this.handleKeyDown);
+            }
+        }
+    },
     methods: {
-        closeModal() { this.$emit('close-modal', this.modalId); }
+        closeModal() { this.$emit('close-modal', this.modalId); },
+        handleKeyDown(event) {
+            // Only handle if this modal is visible
+            if (!this.isVisible) return;
+
+            // Escape key - always consume and close modal (cancel action)
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeModal();
+            }
+
+            // Enter key - always consume to prevent triggering buttons that opened the modal
+            if (event.key === 'Enter') {
+                // Don't consume if user is typing in a textarea or input field
+                const tagName = event.target.tagName;
+                if (tagName === 'TEXTAREA' || (tagName === 'INPUT' && event.target.type !== 'button' && event.target.type !== 'submit')) {
+                    return;
+                }
+                
+                // Always prevent default and stop propagation to consume the event
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Trigger submit action if one is registered
+                if (this.submitAction) {
+                    this.submitAction();
+                }
+            }
+        }
     },
     template: html`
         <div v-if="isVisible" class="modal-overlay" @click.self="closeModal">
@@ -72,7 +122,7 @@ export const ModalComponent = {
                 <div :class="['content', contentClass]">
                     <div v-if="formattedMessage" v-html="formattedMessage"></div>
                     <component v-for="(comp, idx) in components" :is="comp" :key="idx" 
-                               v-bind="componentProps" @close-modal="closeModal"></component>
+                               v-bind="componentProps" @close-modal="closeModal" :submit-action="submitAction"></component>
                 </div>
             </div>
         </div>
@@ -92,7 +142,7 @@ export class ModalManager {
 
     _create(title, components, props) {
         // Extract modal-level props from component props
-        const { modalClass, message, contentClass, ...componentProps } = props || {};
+        const { modalClass, message, contentClass, submitAction, ...componentProps } = props || {};
         
         const modal = {
             id: `modal-${this.nextId++}`,
@@ -102,6 +152,7 @@ export class ModalManager {
             modalClass: modalClass || '',
             message: message || '',
             contentClass: contentClass || '',
+            submitAction: submitAction || null,
             componentProps
         };
         this.modals.push(modal);

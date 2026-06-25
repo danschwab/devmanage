@@ -116,7 +116,8 @@ export const ScheduleAdvancedFilter = {
     props: {
         containerPath: String,
         navigateToPath: Function,
-        onSearchSelected: Function // Callback for when used in modal
+        onSearchSelected: Function, // Callback for when used in modal
+        registerSubmitAction: Function // Callback to register submit action for keyboard Enter
     },
     data() {
         return {
@@ -218,6 +219,11 @@ export const ScheduleAdvancedFilter = {
         
         // Sync filters with URL parameters
         this.syncWithURL();
+
+        // Register the saveFiltersToURL method as the modal submit action for Enter key handling
+        if (this.registerSubmitAction) {
+            this.registerSubmitAction(this.saveFiltersToURL);
+        }
     },
     watch: {
         // Reinitialize stores when auth is restored after logout or reauth
@@ -1583,12 +1589,18 @@ export const ScheduleFilterSelect = {
         
         openAdvancedSearchModal() {
             // Open the advanced search component in a modal
-            this.$modal.custom(ScheduleAdvancedFilter, {
+            const modal = this.$modal.custom(ScheduleAdvancedFilter, {
                 containerPath: this.containerPath,
                 modalClass: 'page-menu',
                 navigateToPath: this.navigateToPath,
                 onSearchSelected: (searchData) => {
                     this.$emit('search-selected', searchData);
+                },
+                registerSubmitAction: (submitFn) => {
+                    // Allow the component to register its submit action for Enter key handling
+                    if (modal) {
+                        modal.submitAction = submitFn;
+                    }
                 }
             }, 'Advanced Schedule Filtering', { size: 'large'});
         }
@@ -1774,12 +1786,12 @@ export const InventoryCategoryFilter = {
             //     currentPath: this.appContext?.currentPath
             // });
             
-            // Build new path with itemCategoryFilter parameter
+            // Build new path with ctgFilter parameter
             const newPath = NavigationRegistry.buildPathWithCurrentParams(
                 cleanPath,
                 this.appContext?.currentPath,
                 {
-                    itemCategoryFilter: categoryName || undefined // undefined removes the parameter
+                    ctgFilter: categoryName || undefined // undefined removes the parameter
                 }
             );
             
@@ -1809,8 +1821,8 @@ export const InventoryCategoryFilter = {
             
             //console.log('[InventoryCategoryFilter] URL parameters:', params);
             
-            // Get itemCategoryFilter from URL params
-            const categoryFromUrl = params?.itemCategoryFilter || '';
+            // Get ctgFilter from URL params
+            const categoryFromUrl = params?.ctgFilter || '';
             
             //console.log('[InventoryCategoryFilter] Category from URL:', categoryFromUrl, 'hasPerformedInitialSync:', this.hasPerformedInitialSync);
             

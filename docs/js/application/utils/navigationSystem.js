@@ -44,6 +44,15 @@ export const NavigationRegistry = {
             icon: 'event',
             isMainSection: true,
             children: {}
+        },
+
+        // Reports section
+        reports: {
+            path: 'reports',
+            displayName: 'Reports',
+            icon: 'assessment',
+            isMainSection: true,
+            children: {}
         }
     },
 
@@ -132,7 +141,7 @@ export const NavigationRegistry = {
 
     /**
      * Get route configuration by path
-     * @param {string} path - The route path (e.g., 'inventory/categories')
+     * @param {string} path - The route path (e.g., 'inventory/<category>')
      * @returns {Object|null} Route configuration or null if not found
      */
     getRoute(path) {
@@ -521,6 +530,12 @@ export const NavigationRegistry = {
         // Update URL without pushState ( using replaceState to avoid history pollution)
         if (this.urlRouter) {
             this.urlRouter.updateURL(newPath, false); // false = use replaceState
+        }
+
+        // Keep app state in sync with silent URL updates for non-dashboard navigation.
+        // Without this, subsequent parameter merges can use stale currentPath and drop searchTerm.
+        if (!isOnDashboard && this.urlRouter?.appContext) {
+            this.urlRouter.appContext.currentPath = newPath;
         }
         
         // Cache parameters for this route

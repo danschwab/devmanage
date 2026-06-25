@@ -4,7 +4,7 @@ import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
 import { Auth, authState } from './index.js';
 import { NavigationRegistry } from './index.js';
-import { PacklistContent, InventoryContent, ScheduleContent} from './index.js';
+import { PacklistContent, InventoryContent, ScheduleContent, ReportsContent } from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
 import { undoRegistry } from './index.js';
 import { Requests, getReactiveStore, appSettings } from './index.js';
@@ -20,6 +20,7 @@ const App = {
         'packlist-content': PacklistContent,
         'inventory-content': InventoryContent,
         'schedule-content': ScheduleContent,
+        'reports-content': ReportsContent,
     },
     provide() {
         return {
@@ -409,6 +410,13 @@ const App = {
                                 :container-path="container.containerPath"
                                 :navigate-to-path="(path, params) => navigateToPath(path, params)">
                             </schedule-content>
+                            
+                            <!-- Reports Content -->
+                            <reports-content 
+                                v-else-if="container.type === 'reports' || container.containerPath?.startsWith('reports')"
+                                :container-path="container.containerPath"
+                                :navigate-to-path="(path, params) => navigateToPath(path, params)">
+                            </reports-content>
                         </template>
                     </app-container>
                 </template>

@@ -94,8 +94,8 @@ export const ScheduleContent = {
         return {
             filter: null,
             viewModes: [
-                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
-                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Switch to table view' }
             ]
         };
     },

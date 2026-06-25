@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache, EditHistoryUtils, todayISOString, NavigationRegistry } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -9,6 +9,10 @@ export const InventoryOverviewTableComponent = {
         containerPath: {
             type: String,
             default: 'inventory'
+        },
+        viewModes: {
+            type: Array,
+            default: () => []
         }
     },
     inject: ['$modal'],
@@ -157,6 +161,10 @@ export const InventoryOverviewTableComponent = {
                 :error="error"
                 :showRefresh="false"
                 :showSearch="true"
+                :syncSearchWithUrl="true"
+                :container-path="containerPath"
+                :navigateToPath="$emit.bind(this, 'navigate-to-path')"
+                :viewModes="viewModes"
                 :showHeader="true"
                 :showFooter="true"
                 :allowDetails="true"
@@ -167,15 +175,12 @@ export const InventoryOverviewTableComponent = {
                 @on-save="handleSave"
             >
                 <template #header-area>
-                    <div class="button-bar">
-                        <button @click="$emit('navigate-to-path', 'inventory/categories')" class="purple">Categories</button>
-                        <button @click="$emit('navigate-to-path', 'inventory/reports')" class="purple">Reports</button>
-                    </div>
+                    <div class="button-bar" style="display: none;"></div>
                 </template>
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <button 
                         v-if="column.key === 'tab'"
-                        @click="$emit('navigate-to-path', 'inventory/categories/' + row.tab.toLowerCase())"
+                        @click="$emit('navigate-to-path', 'inventory/' + row.tab.toLowerCase())"
                         class="card purple"
                     >
                         {{ formatCategoryLabel(row.tab) }}
