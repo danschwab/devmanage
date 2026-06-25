@@ -1,4 +1,4 @@
-import { html, TableComponent, CalendarComponent, CalendarLayoutToggle, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, offsetToISO, getAutoColorClass } from '../../index.js';
+import { html, TableComponent, CalendarComponent, Requests, getReactiveStore, createAnalysisConfig, NavigationRegistry, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter, Priority, invalidateCache, toISODateString, todayISOString, offsetToISO, getAutoColorClass } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 /**
@@ -7,7 +7,7 @@ import { normalizeFilterValues } from '../../../data_management/utils/helpers.js
  *   item# | description | startDate | endDate | Inv Qty | Min Qty | Overlapping Shows
  */
 export const InventoryItemReport = {
-    components: { TableComponent, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
+    components: { TableComponent, CalendarComponent, ItemImageComponent, ScheduleFilterSelect, InventoryCategoryFilter },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -23,6 +23,11 @@ export const InventoryItemReport = {
             error: null,
             endDate: null,
             minQtyThreshold: 1,
+            hasPerformedInitialSync: false,
+            viewModes: [
+                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+            ],
             NavigationRegistry
         };
     },
@@ -118,6 +123,31 @@ export const InventoryItemReport = {
                 return 'No items found for the selected search criteria.';
             }
             return 'Select a schedule filter to load shows and generate report';
+        }
+    },
+    watch: {
+        // Watch for URL parameter changes
+        'appContext.currentPath': {
+            handler(newPath, oldPath) {
+                // Skip initial load (handled by mounted)
+                if (!oldPath) return;
+                
+                // Get params for both paths
+                const newParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath || 'inventory/reports/item-shortages',
+                    newPath
+                );
+                const oldParams = NavigationRegistry.getParametersForContainer(
+                    this.containerPath || 'inventory/reports/item-shortages',
+                    oldPath
+                );
+                
+                // Skip if params haven't actually changed
+                if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
+                
+                this.syncWithURL();
+            },
+            deep: true
         }
     },
     methods: {
@@ -266,6 +296,53 @@ export const InventoryItemReport = {
             if (this.searchFilter || this.searchParams) {
                 this.initializeReportStore();
             }
+        },
+
+        handleMinThresholdChange(event) {
+            const value = parseInt(event.target.value, 10);
+            if (!isNaN(value)) {
+                this.minQtyThreshold = value;
+                this.updateURL(value);
+            }
+        },
+
+        updateURL(threshold) {
+            const cleanPath = (this.containerPath || 'inventory/reports/item-shortages').split('?')[0];
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            
+            // Build new path with minQtyThreshold parameter
+            const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                cleanPath,
+                this.appContext?.currentPath,
+                {
+                    minQtyThreshold: threshold !== 1 ? threshold : undefined // undefined removes the parameter when it's the default
+                }
+            );
+            
+            if (isOnDashboard) {
+                // Update dashboard registry with new path
+                NavigationRegistry.dashboardRegistry.updatePath(
+                    cleanPath,
+                    newPath
+                );
+            } else if (this.navigateToPath) {
+                this.navigateToPath(newPath);
+            }
+        },
+
+        syncWithURL() {
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'inventory/reports/item-shortages',
+                this.appContext?.currentPath
+            );
+            
+            // Get minQtyThreshold from URL params (default to 1 if not present)
+            const thresholdFromUrl = params?.minQtyThreshold !== undefined ? parseInt(params.minQtyThreshold, 10) : 1;
+            
+            // Update threshold value
+            if (!isNaN(thresholdFromUrl)) {
+                this.minQtyThreshold = thresholdFromUrl;
+            }
         }
     },
     mounted() {
@@ -275,6 +352,10 @@ export const InventoryItemReport = {
         );
         //console.log('[InventoryItemReport] Initial URL parameters:', params);
         //console.log('[InventoryItemReport] Waiting for child components to sync with URL...');
+        
+        // Perform initial sync with URL
+        this.hasPerformedInitialSync = true;
+        this.syncWithURL();
     },
     template: html`
         <div>
@@ -296,6 +377,9 @@ export const InventoryItemReport = {
                 :show-refresh="true"
                 :show-search="true"
                 :empty-message="emptyMessage"
+                :container-path="containerPath || 'inventory/reports/item-shortages'"
+                :navigate-to-path="navigateToPath"
+                :view-modes="viewModes"
                 @event-click="navigateToItemPage"
                 @refresh="handleRefresh"
             >
@@ -312,12 +396,8 @@ export const InventoryItemReport = {
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />
-                        <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" v-model.number="minQtyThreshold" style="width:60px" />
-                        <CalendarLayoutToggle
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
-                            :navigate-to-path="navigateToPath"
-                        />
                     </div>
+                    <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" :value="minQtyThreshold" @change="handleMinThresholdChange" style="width:60px" />
                 </template>
             </CalendarComponent>
 
@@ -330,6 +410,7 @@ export const InventoryItemReport = {
                 :sync-search-with-url="true"
                 :container-path="containerPath || 'inventory/reports/item-shortages'"
                 :navigate-to-path="navigateToPath"
+                :view-modes="viewModes"
                 :hide-rows-on-search="false"
                 :readonly="true"
                 :allowDetails="true"
@@ -354,12 +435,8 @@ export const InventoryItemReport = {
                             :navigate-to-path="navigateToPath"
                             @category-selected="handleCategorySelected"
                         />
-                        <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" v-model.number="minQtyThreshold" style="width:60px" />
-                        <CalendarLayoutToggle
-                            :container-path="containerPath || 'inventory/reports/item-shortages'"
-                            :navigate-to-path="navigateToPath"
-                        />
                     </div>
+                    <input type="number" :title="'Show items with less than ' + minQtyThreshold + ' remaining'" :value="minQtyThreshold" @change="handleMinThresholdChange" style="width:60px" />
                 </template>
 
                 <template #default="{ row, column }">

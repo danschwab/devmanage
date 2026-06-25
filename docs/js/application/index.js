@@ -13,7 +13,7 @@ export { undoRegistry, setTableRowSelectionState } from './utils/undoRegistry.js
 export { getAutoColorClass, shouldAutoColor } from './utils/autoColor.js';
 
 // Navigation components
-export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';
+export { BreadcrumbComponent, PrimaryNavComponent, ViewChangeComponent } from './components/interface/navigationComponents.js';
 export { NavigationRegistry } from './utils/navigationSystem.js';
 
 // Interface components export
@@ -24,7 +24,7 @@ export { LoadingBarComponent } from './components/interface/loadingBarComponent.
 export { BannerNotifications } from './components/interface/bannerNotifications.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
-export { CalendarComponent, CalendarLayoutToggle } from './components/interface/calendarComponent.js';
+export { CalendarComponent } from './components/interface/calendarComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
 export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } from './components/interface/scheduleFilterComponents.js';
 

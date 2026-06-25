@@ -1,4 +1,4 @@
-import { html, parseDate, toUSDateString, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
+import { html, parseDate, toUSDateString, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
@@ -1446,7 +1446,7 @@ setTableRowSelectionState(tableRowSelectionState);
 
 export const TableComponent = {
     name: 'TableComponent',
-    components: { LoadingBarComponent },
+    components: { LoadingBarComponent, ViewChangeComponent },
     inject: ['appContext', '$modal'],
     props: {
         key: {
@@ -1565,6 +1565,10 @@ export const TableComponent = {
         },
         navigateToPath: {
             type: Function,
+            default: null
+        },
+        viewModes: {
+            type: Array,
             default: null
         },
         hideRowsOnSearch: {
@@ -4373,6 +4377,12 @@ export const TableComponent = {
                         >
                             ☰
                         </button>
+                        <ViewChangeComponent
+                            v-if="viewModes && containerPath && navigateToPath"
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                            :view-modes="viewModes"
+                        />
                     </div>
                 </div>
 

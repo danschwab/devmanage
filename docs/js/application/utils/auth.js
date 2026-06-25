@@ -354,7 +354,7 @@ export class Auth {
                         resolve(false);
                     },
                     'Session Expired',
-                    'Continue',
+                    'Log In',
                     'Log Out'
                 );
 

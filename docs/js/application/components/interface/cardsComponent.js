@@ -1,4 +1,4 @@
-import { html, LoadingBarComponent, NavigationRegistry, parseDate } from '../../index.js';
+import { html, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, parseDate } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
@@ -32,7 +32,7 @@ function compareItemLikeValues(aValue, bValue) {
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
-    components: { LoadingBarComponent },
+    components: { LoadingBarComponent, ViewChangeComponent },
     inject: ['appContext'],
     props: {
         items: {
@@ -92,6 +92,10 @@ export const CardsComponent = {
         },
         navigateToPath: {
             type: Function,
+            default: null
+        },
+        viewModes: {
+            type: Array,
             default: null
         },
         hideCardsOnSearch: {
@@ -451,6 +455,12 @@ export const CardsComponent = {
                     >
                         {{ isLoading ? 'Loading...' : 'Refresh' }}
                     </button>
+                    <ViewChangeComponent
+                        v-if="viewModes && containerPath && navigateToPath"
+                        :container-path="containerPath"
+                        :navigate-to-path="navigateToPath"
+                        :view-modes="viewModes"
+                    />
                 </div>
                 <!-- Loading/Analysis Progress Indicator -->
                 <LoadingBarComponent

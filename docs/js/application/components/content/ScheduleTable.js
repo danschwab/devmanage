@@ -26,6 +26,18 @@ export const ScheduleTableComponent = {
         calendarView: {
             type: Boolean,
             default: false
+        },
+        containerPath: {
+            type: String,
+            default: ''
+        },
+        navigateToPath: {
+            type: Function,
+            default: null
+        },
+        viewModes: {
+            type: Array,
+            default: null
         }
     },
     inject: ['$modal'],
@@ -831,6 +843,9 @@ export const ScheduleTableComponent = {
             eventStartColumn="S. Start"
             eventEndColumn="S. End"
             weekStart="sunday"
+            :container-path="containerPath"
+            :navigate-to-path="navigateToPath"
+            :view-modes="viewModes"
             yearColumn="Year"
             showSearch="true"
             :chip-actions="chipActionsProvider"
@@ -858,6 +873,9 @@ export const ScheduleTableComponent = {
             :showSearch="true"
             :hideRowsOnSearch="hideRowsOnSearch"
             :allowDetails="true"
+            :container-path="containerPath"
+            :navigate-to-path="navigateToPath"
+            :view-modes="viewModes"
             @refresh="handleRefresh"
         >
             <template #header-area>

@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, todayISOString, offsetToISO, CalendarComponent, CalendarLayoutToggle, ItemImageComponent, getAutoColorClass } from '../../index.js';
+import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, todayISOString, offsetToISO, CalendarComponent, ItemImageComponent, getAutoColorClass } from '../../index.js';
 
 /**
  * Lightweight item timeline component.
@@ -10,7 +10,7 @@ import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelec
  *   endDate    YYYY-MM-DD
  */
 export const InventoryItemTimeline = {
-    components: { TableComponent, ScheduleFilterSelect, CalendarComponent, CalendarLayoutToggle, ItemImageComponent },
+    components: { TableComponent, ScheduleFilterSelect, CalendarComponent, ItemImageComponent },
     inject: ['$modal', 'appContext'],
     props: {
         containerPath: { type: String, default: '' },
@@ -25,7 +25,11 @@ export const InventoryItemTimeline = {
             filterStartDate: null,
             filterEndDate: null,
             resolvedItemId: null,
-            itemImageUrl: null
+            itemImageUrl: null,
+            viewModes: [
+                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+            ]
         };
     },
     computed: {
@@ -220,6 +224,9 @@ export const InventoryItemTimeline = {
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
                 :error="timelineStore?.error ?? null"
                 :empty-message="filterStartDate && filterEndDate ? 'No inventory usage found in this date range. Try expanding the date filters.' : 'This item has no inventory changes. Set a date filter to see usage data.'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+                :view-modes="viewModes"
                 @event-click="handleCalendarEventClick"
             >
                 <template #header-area>
@@ -229,11 +236,6 @@ export const InventoryItemTimeline = {
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleScheduleSearch"
-                        />
-                        <CalendarLayoutToggle
-                            v-if="navigateToPath"
-                            :container-path="containerPath"
-                            :navigate-to-path="navigateToPath"
                         />
                     </div>
                 </template>
@@ -249,6 +251,9 @@ export const InventoryItemTimeline = {
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
                 :error="timelineStore?.error ?? null"
                 :empty-message="filterStartDate && filterEndDate ? 'No inventory usage found in this date range. Try expanding the date filters.' : 'This item has no inventory changes. Set a date filter to see usage data.'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+                :view-modes="viewModes"
             >
                 <template #header-area>
                     <div class="button-bar">
@@ -257,11 +262,6 @@ export const InventoryItemTimeline = {
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
                             @search-selected="handleScheduleSearch"
-                        />
-                        <CalendarLayoutToggle
-                            v-if="navigateToPath"
-                            :container-path="containerPath"
-                            :navigate-to-path="navigateToPath"
                         />
                     </div>
                 </template>

@@ -437,3 +437,96 @@ export const DashboardToggleComponent = {
         </div>
     `
 };
+
+/**
+ * ViewChangeComponent: A flexible component for switching between different view modes
+ * 
+ * Props:
+ * - containerPath: The path of the container using this component
+ * - navigateToPath: Function to navigate to a new path
+ * - viewModes: Array of view mode objects with structure:
+ *   [
+ *     { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Table view' },
+ *     { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Calendar view' }
+ *   ]
+ *   Where:
+ *   - paramName: The URL parameter name to update
+ *   - paramValue: The value to set (null/undefined removes the parameter)
+ *   - symbol: Material symbol icon name to display
+ *   - title: Tooltip text for the button
+ */
+export const ViewChangeComponent = {
+    name: 'ViewChangeComponent',
+    inject: ['appContext'],
+    props: {
+        containerPath: { type: String, required: true },
+        navigateToPath: { type: Function, required: true },
+        viewModes: { type: Array, required: true }
+    },
+    computed: {
+        currentViewMode() {
+            if (!this.viewModes || this.viewModes.length === 0) return null;
+            
+            const params = NavigationRegistry.getNavigationParameters(this.containerPath);
+            
+            // Find the current view mode by matching the param value
+            for (const mode of this.viewModes) {
+                const currentValue = params[mode.paramName];
+                if (mode.paramValue === null || mode.paramValue === undefined) {
+                    // This mode represents "no parameter set"
+                    if (!currentValue) return mode;
+                } else if (currentValue === mode.paramValue) {
+                    return mode;
+                }
+            }
+            
+            // Default to first mode if no match
+            return this.viewModes[0];
+        },
+        nextViewMode() {
+            if (!this.viewModes || this.viewModes.length === 0) return null;
+            
+            const currentIndex = this.viewModes.indexOf(this.currentViewMode);
+            const nextIndex = (currentIndex + 1) % this.viewModes.length;
+            return this.viewModes[nextIndex];
+        },
+        togglePath() {
+            if (!this.nextViewMode) return this.containerPath;
+            
+            const cleanPath = this.containerPath.split('?')[0];
+            const params = { ...NavigationRegistry.getNavigationParameters(this.containerPath) };
+            
+            if (this.nextViewMode.paramValue === null || this.nextViewMode.paramValue === undefined) {
+                delete params[this.nextViewMode.paramName];
+            } else {
+                params[this.nextViewMode.paramName] = this.nextViewMode.paramValue;
+            }
+            
+            return NavigationRegistry.buildPath(cleanPath, params);
+        }
+    },
+    methods: {
+        toggle() {
+            if (!this.nextViewMode) return;
+            
+            const cleanPath = this.containerPath.split('?')[0];
+            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
+            
+            if (isOnDashboard) {
+                NavigationRegistry.dashboardRegistry.updatePath(cleanPath, this.togglePath);
+            } else {
+                this.navigateToPath(this.togglePath);
+            }
+        }
+    },
+    template: html`
+        <button
+            v-if="nextViewMode"
+            class="white button-symbol"
+            :title="nextViewMode.title || 'Switch view'"
+            @click="toggle()"
+        >
+            <span class="material-symbols-outlined">{{ nextViewMode.symbol }}</span>
+        </button>
+    `
+};

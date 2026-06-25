@@ -1,4 +1,4 @@
-import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect, CalendarLayoutToggle } from '../../index.js';
+import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 // Schedule Hamburger Menu Component
@@ -58,8 +58,7 @@ export const ScheduleMenuComponent = {
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
-        ScheduleFilterSelect,
-        CalendarLayoutToggle
+        ScheduleFilterSelect
     },
     inject: ['$modal'],
     props: {
@@ -93,7 +92,11 @@ export const ScheduleContent = {
     },
     data() {
         return {
-            filter: null
+            filter: null,
+            viewModes: [
+                { paramName: 'layout', paramValue: null, symbol: 'calendar_month', title: 'Switch to calendar view' },
+                { paramName: 'layout', paramValue: 'calendar', symbol: 'table', title: 'Switch to table view' }
+            ]
         };
     },
 
@@ -165,6 +168,9 @@ export const ScheduleContent = {
                     :filter="dateFilter"
                     :search-params="tableSearchParams"
                     :calendar-view="isCalendarView"
+                    :container-path="containerPath"
+                    :navigate-to-path="navigateToPath"
+                    :view-modes="viewModes"
                     @navigate-to-path="navigateToPath"
                 >
                     <template #header-area>
@@ -176,10 +182,6 @@ export const ScheduleContent = {
                                 :navigate-to-path="navigateToPath"
                                 :show-advanced-button="true"
                                 @search-selected="handleSearchSelected"
-                            />
-                            <CalendarLayoutToggle
-                                :container-path="containerPath"
-                                :navigate-to-path="navigateToPath"
                             />
                         </div>
                     </template>

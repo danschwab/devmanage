@@ -1,56 +1,10 @@
-import { html, parseDate, LoadingBarComponent, NavigationRegistry } from '../../index.js';
+import { html, parseDate, LoadingBarComponent, ViewChangeComponent, NavigationRegistry } from '../../index.js';
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
-export const CalendarLayoutToggle = {
-    name: 'CalendarLayoutToggle',
-    inject: ['appContext'],
-    props: {
-        containerPath: { type: String, required: true },
-        navigateToPath: { type: Function, required: true }
-    },
-    computed: {
-        isCalendarView() {
-            const params = NavigationRegistry.getNavigationParameters(this.containerPath);
-            return params.layout === 'calendar';
-        },
-        togglePath() {
-            const cleanPath = this.containerPath.split('?')[0];
-            const params = { ...NavigationRegistry.getNavigationParameters(this.containerPath) };
-            if (this.isCalendarView) {
-                delete params.layout;
-            } else {
-                params.layout = 'calendar';
-            }
-            return NavigationRegistry.buildPath(cleanPath, params);
-        }
-    },
-    methods: {
-        toggle() {
-            const cleanPath = this.containerPath.split('?')[0];
-            const isOnDashboard = this.appContext?.currentPath?.split('?')[0].split('/')[0] === 'dashboard';
-            if (isOnDashboard) {
-                NavigationRegistry.dashboardRegistry.updatePath(cleanPath, this.togglePath);
-            } else {
-                this.navigateToPath(this.togglePath);
-            }
-        }
-    },
-    template: html`
-        <button
-            class="white button-symbol"
-            :title="isCalendarView ? 'Switch to table view' : 'Switch to calendar view'"
-            @click="toggle()"
-        >
-            <span class="material-symbols-outlined">{{ isCalendarView ? 'table' : 'calendar_month' }}</span>
-            <!--{{ isCalendarView ? 'Table' : 'Calendar' }}-->
-        </button>
-    `
-};
-
 export const CalendarComponent = {
     name: 'CalendarComponent',
-    components: { LoadingBarComponent },
+    components: { LoadingBarComponent, ViewChangeComponent },
     props: {
         data: { type: Array, default: () => [] },
         columns: { type: Array, default: () => [] },
@@ -69,7 +23,10 @@ export const CalendarComponent = {
         weekStart: { type: String, default: 'sunday' },
         yearColumn: { type: String, default: null },
         chipActions: { type: Function, default: null },
-        chipColorClass: { type: Function, default: null }
+        chipColorClass: { type: Function, default: null },
+        containerPath: { type: String, default: '' },
+        navigateToPath: { type: Function, default: null },
+        viewModes: { type: Array, default: null }
     },
     emits: ['refresh', 'event-click'],
     setup(props) {
@@ -380,6 +337,12 @@ export const CalendarComponent = {
                             @click="handleRefresh"
                             :disabled="isLoading"
                         >{{ isLoading ? 'Loading...' : 'Refresh' }}</button>
+                        <ViewChangeComponent
+                            v-if="viewModes && containerPath && navigateToPath"
+                            :container-path="containerPath"
+                            :navigate-to-path="navigateToPath"
+                            :view-modes="viewModes"
+                        />
                     </div>
                     <LoadingBarComponent
                         :is-loading="isLoading"

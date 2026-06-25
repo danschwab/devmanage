@@ -3,6 +3,7 @@
 !! stack show buttons in overlapping show-lists
 !! allow tables to be omitted from inventorying and vis on inventory page: Additions (hidden and no quantities)
 !! allow alerts to be supressed for categories in a default "System Settings" container on the dashboard and CACHING tab
+! "views" for tables and reports allowing colum customization
 
 - dims at the beginning of item descriptions for all items
 - add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?

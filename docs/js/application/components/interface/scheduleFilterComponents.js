@@ -1149,8 +1149,10 @@ export const ScheduleDateRangeCard = {
     },
     template: html`
         <template v-if="dateRangeDisplay">
-            <div class="card gray hide-when-narrow" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">{{ dateRangeDisplay }}</div>
-            <div class="card clickable gray show-when-narrow" @click="showDateRangeModal">⋯</div>
+            <div class="card gray" @click="showDateRangeModal" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">
+                <span class="hide-when-narrow">{{ dateRangeDisplay }}</span>
+                <span class="show-when-narrow">↔</span>
+            </div>
         </template>
     `
 };
