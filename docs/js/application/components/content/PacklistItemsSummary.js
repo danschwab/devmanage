@@ -62,6 +62,14 @@ export const PacklistItemsSummary = {
             }
             
             return data;
+        },
+
+        currentSearchText() {
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || ('packlist/' + this.projectIdentifier + '/details'),
+                this.appContext?.currentPath
+            );
+            return params?.searchText || '';
         }
     },
     watch: {
@@ -200,6 +208,15 @@ export const PacklistItemsSummary = {
 
         openOverlappingShowsModal(shows) {
             this.$modal.custom(OverlappingShowsModal, { shows, modalClass: 'hamburger-menu small-menu'}, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
+        },
+
+        showsMatchSearch(shows) {
+            if (!this.currentSearchText || !this.currentSearchText.trim() || !Array.isArray(shows)) {
+                return false;
+            }
+            const searchWords = this.currentSearchText.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
+            const showsText = shows.join(' ').toLowerCase();
+            return searchWords.some(word => showsText.includes(word));
         }
     },
     template: html`
@@ -270,8 +287,9 @@ export const PacklistItemsSummary = {
                             </button>
                         </slot>
                         <slot v-else>
+                            <span style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;">{{ row.overlappingShows.join(' ') }}</span>
                             <button @click="openOverlappingShowsModal(row.overlappingShows)" 
-                                    class="card white font-black">
+                                    :class="['card', 'white', 'font-black', showsMatchSearch(row.overlappingShows) ? 'search-highlight' : '']">
                                 {{ row.overlappingShows.length }} shows
                             </button>
                         </slot>

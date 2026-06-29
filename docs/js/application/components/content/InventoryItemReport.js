@@ -125,6 +125,14 @@ export const InventoryItemReport = {
                 return 'No items found for the selected search criteria.';
             }
             return 'Select a schedule filter to load shows and generate report';
+        },
+
+        currentSearchText() {
+            const params = NavigationRegistry.getParametersForContainer(
+                this.containerPath || 'reports/item-shortages',
+                this.appContext?.currentPath
+            );
+            return params?.searchText || '';
         }
     },
     watch: {
@@ -369,6 +377,15 @@ export const InventoryItemReport = {
 
         openOverlappingShowsModal(shows) {
             this.$modal.custom(OverlappingShowsModal, { shows, modalClass: 'hamburger-menu small-menu' }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
+        },
+
+        showsMatchSearch(shows) {
+            if (!this.currentSearchText || !this.currentSearchText.trim() || !Array.isArray(shows)) {
+                return false;
+            }
+            const searchWords = this.currentSearchText.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
+            const showsText = shows.join(' ').toLowerCase();
+            return searchWords.some(word => showsText.includes(word));
         }
     },
     mounted() {
@@ -512,8 +529,9 @@ export const InventoryItemReport = {
                             </button>
                         </slot>
                         <slot v-else>
+                            <span style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;">{{ row.overlappingShows.join(' ') }}</span>
                             <button @click="openOverlappingShowsModal(row.overlappingShows)" 
-                                    class="card white font-black">
+                                    :class="['card', 'white', 'font-black', showsMatchSearch(row.overlappingShows) ? 'search-highlight' : '']">
                                 {{ row.overlappingShows.length }} shows
                             </button>
                         </slot>

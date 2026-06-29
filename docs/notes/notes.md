@@ -1,6 +1,6 @@
-!!! simplify controls on reports page and add the min num to url params
-!!! print view for reports page
-!! stack show buttons in overlapping show-lists
+!!! rebuild date matching logic from scratch
+!!! rebuild name matching logic from scratch
+!!! simplify controls on reports page
 !! allow tables to be omitted from inventorying and vis on inventory page: Additions (hidden and no quantities)
 !! allow alerts to be supressed for categories in a default "System Settings" container on the dashboard and CACHING tab
 ! "views" for tables and reports allowing colum customization

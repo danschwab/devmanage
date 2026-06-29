@@ -1318,6 +1318,13 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
     background-color: var(--color-yellow-bg-transparent) !important;
 }
 
+/* Highlight for collapsed overlapping shows button when search matches */
+button.search-highlight {
+    background-color: var(--color-yellow-bg-transparent) !important;
+    border: 2px solid var(--color-yellow) !important;
+    box-shadow: 0 0 4px var(--color-yellow) !important;
+}
+
 /*.dirty::after {
     content: "edited";
     display: inline-block;
