@@ -758,7 +758,7 @@ th, td {
     /*min-width: 30px;*/
     min-height: 30px;
     max-width: 300px; /* Set maximum width for cells */
-    white-space: normal; /* Allow text wrapping */
+    white-space: pre-wrap; /* Allow text wrapping */
     word-wrap: break-word; /* Break long words if needed */
     /*overflow: hidden;*/
 }
@@ -889,8 +889,8 @@ tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hov
     position: absolute;
     pointer-events: none;
     top:0;
-    background: var(--color-red-bg-transparent);
-    outline: 1px solid var(--color-red-bg);
+    background: var(--color-red-bg);
+    outline: 1px solid var(--color-red);
     border-radius: var(--radius-md);
     z-index: 9;
 }
@@ -1718,7 +1718,7 @@ button.search-highlight {
 }
 
 .packlist-crates > tbody > tr > td {
-    border-bottom: 3px double var(--color-border);
+    border-bottom: 8px double var(--color-border);
 }
 .packlist-crates:not(.editing) table tr:first-child td {
     border-top: none;

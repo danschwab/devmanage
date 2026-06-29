@@ -1,3 +1,11 @@
+new crate, nav away, nav back, no new items list
+lightbox fabric separate
+bookmark feature??? for quickly returning to things? or "Open Windows" sidebar?
+carriage returns in cells
+other complex things in cells
+
+bematrix autohide in edit view
+
 !!! rebuild date matching logic from scratch
 !!! rebuild name matching logic from scratch
 !!! simplify controls on reports page

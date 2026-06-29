@@ -1297,6 +1297,7 @@ export const PacklistTable = {
                     :data="mainTableData"
                     :originalData="originalData"
                     :columns="mainColumns"
+                    :rowKey="'Piece #'"
                     :title="tabName"
                     theme="packlist-table"
                     :showRefresh="!editMode"
@@ -1417,7 +1418,7 @@ export const PacklistTable = {
                                     handleInnerTableDirty(isDirty, rowIndex);
                                 }"
                                 @row-options="handleRowOptions"
-                                class="table-fixed mark-dirty"
+                                class="table-fixed"
                             >
                                 <!-- Cell-extra slot for alerts (proper location for warnings/notifications) -->
                                 <template #cell-extra="{ row: itemRow, column: itemColumn, isGroupMembersHidden, showGroup }">

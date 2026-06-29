@@ -1529,6 +1529,10 @@ export const TableComponent = {
             type: Array,
             required: true
         },
+        rowKey: {
+            type: String,
+            default: null
+        },
         hamburgerMenuComponent: {
             type: Object,
             default: null
@@ -1990,6 +1994,17 @@ export const TableComponent = {
         hideSet() {
             // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
             return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', 'MetaData', ...(this.hiddenColumns || [])]);
+        },
+        originalDataByKey() {
+            if (!this.rowKey || !Array.isArray(this.originalData)) return null;
+            const map = new Map();
+            this.originalData.forEach(row => {
+                const keyVal = row?.[this.rowKey];
+                if (keyVal !== undefined && keyVal !== null && keyVal !== '') {
+                    map.set(String(keyVal), row);
+                }
+            });
+            return map;
         },
         mainTableColumns() {
             // find columns marked with a colspan property and eliminate the extra columns following them
@@ -2870,6 +2885,16 @@ export const TableComponent = {
             }
             this.checkDirtyCells();
         },
+        getOriginalDataForRow(row, idx) {
+            if (this.rowKey && this.originalDataByKey) {
+                const keyVal = row?.[this.rowKey];
+                if (keyVal !== undefined && keyVal !== null && keyVal !== '') {
+                    return this.originalDataByKey.get(String(keyVal));
+                }
+                return undefined;
+            }
+            return this.originalData?.[idx];
+        },
         revertCellToOriginal(rowIndex, colIndex, event) {
             if (!this.hasEditableColumns) return;
             // Stop propagation to prevent cell focus
@@ -2888,7 +2913,8 @@ export const TableComponent = {
             }
             
             const column = this.columns[colIndex];
-            const originalValue = this.originalData[rowIndex]?.[column.key];
+            const originalRow = this.getOriginalDataForRow(this.data[rowIndex], rowIndex);
+            const originalValue = originalRow?.[column.key];
             
             // Update the data
             if (this.data[rowIndex]) {
@@ -4529,12 +4555,12 @@ export const TableComponent = {
                                             :row="row"
                                             :column="column">
                                             <span 
-                                                v-if="dirtyCells[idx] && dirtyCells[idx][colIndex]"
+                                                v-if="dirtyCells[idx] && dirtyCells[idx][colIndex] && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
                                                 class="original-value clickable" 
-                                                :title="'Click to revert to: ' + formatCellValue(originalData[idx]?.[column.key], column)"
+                                                :title="'Click to revert to: ' + formatCellValue(getOriginalDataForRow(row, idx)?.[column.key], column)"
                                                 @click="revertCellToOriginal(idx, colIndex, $event)"
                                             >
-                                                {{ formatCellValue(originalData[idx]?.[column.key], column) }} →
+                                                {{ formatCellValue(getOriginalDataForRow(row, idx)?.[column.key], column) }} →
                                             </span>
                                             <input
                                                 type="number"
@@ -4556,11 +4582,11 @@ export const TableComponent = {
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
                                         ></div>
-                                        <span v-if="column.editable" class="column-button-hint">
-                                            {{ originalData[idx]?.[column.key] || '(empty)' }}
+                                        <span v-if="column.editable && getOriginalDataForRow(row, idx) !== undefined" class="column-button-hint">
+                                            {{ getOriginalDataForRow(row, idx)?.[column.key] || '(empty)' }}
                                         </span>
                                         <button
-                                            v-if="column.editable && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number'"
+                                            v-if="column.editable && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number' && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
                                             @click="revertCellToOriginal(idx, colIndex, $event)"
                                             title="Revert to original value"
                                             class="column-button red">
