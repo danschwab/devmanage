@@ -100,11 +100,30 @@ class productionUtils_uncached {
                 return showDate;
             }
             
-            // Generic date column: parse with Year context for year-boundary corrections.
+            // Generic date column: parse with Year context, then apply year-boundary
+            // correction if the date is more than 9 months from the show's start date.
             const rawValue = row[column];
             if (rawValue) {
-                const parsed = parseDate(rawValue, true, row.Year);
-                if (parsed) return parsed;
+                let parsed = parseDate(rawValue, true, row.Year);
+                if (parsed) {
+                    const sStart = parseDate(row['S. Start'], true, row.Year);
+                    if (sStart) {
+                        const diffMs = parsed - sStart;
+                        const NINE_MONTHS_MS = 9 * 30 * 24 * 60 * 60 * 1000;
+                        if (diffMs > NINE_MONTHS_MS) {
+                            // Date is more than 9 months after show start — move back a year
+                            const corrected = new Date(parsed);
+                            corrected.setFullYear(corrected.getFullYear() - 1);
+                            parsed = corrected;
+                        } else if (diffMs < -NINE_MONTHS_MS) {
+                            // Date is more than 9 months before show start — move forward a year
+                            const corrected = new Date(parsed);
+                            corrected.setFullYear(corrected.getFullYear() + 1);
+                            parsed = corrected;
+                        }
+                    }
+                    return parsed;
+                }
             }
             
             // Column is empty or unparseable — fall back to a show boundary estimate
@@ -167,18 +186,25 @@ class productionUtils_uncached {
             return [];
         }
 
-        const years = validDates.map(d => d.getFullYear());
-        const minYear = Math.min(...years);
-        const maxYear = Math.max(...years);
-        const yearsToCheck = [];
-        for (let y = minYear; y <= maxYear; y++) {
-            yearsToCheck.push(y);
-        }
+        // Derive year bounds from filter directions so open-ended filters work correctly.
+        // 'after' filters only constrain the lower bound; 'before' filters only constrain the
+        // upper bound. A single 'after 2026' filter must include 2027, 2028, etc., and a
+        // single 'before 2025' filter must include 2024, 2023, etc.
+        let minYear = -Infinity;
+        let maxYear = Infinity;
+        dateFilters.forEach((filter, i) => {
+            const fd = filterDates[i];
+            if (!fd) return;
+            const y = fd.getFullYear();
+            if (filter.type === 'after' && y > minYear) minYear = y;
+            else if (filter.type === 'before' && y < maxYear) maxYear = y;
+        });
 
         // Filter data
         const filtered = data.filter(row => {
-            // Year optimization
-            if (!row.Year || !yearsToCheck.includes(parseInt(row.Year))) {
+            // Year optimization: quickly exclude rows outside the plausible year range
+            const rowYear = parseInt(row.Year);
+            if (!row.Year || (minYear !== -Infinity && rowYear < minYear) || (maxYear !== Infinity && rowYear > maxYear)) {
                 return false;
             }
 
@@ -895,10 +921,21 @@ class productionUtils_uncached {
      */
     static async findPacklistTabsForScheduleRow(deps, scheduleRow, tabs) {
         if (!scheduleRow || !Array.isArray(tabs)) return [];
-        const identifier = scheduleRow.Identifier ||
-            await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
-        if (!identifier) return [];
-        return deps.call(ProductionUtils.findAllPackListTabsForShow, identifier, tabs);
+
+        // Try the stored Identifier first (fast path for normal shows).
+        // If it matches nothing, fall back to computeIdentifier — the stored value
+        // may be stale or may omit the client name when the client is not in the index.
+        const storedIdentifier = scheduleRow.Identifier;
+        if (storedIdentifier) {
+            const results = await deps.call(ProductionUtils.findAllPackListTabsForShow, storedIdentifier, tabs);
+            if (results.length > 0) return results;
+        }
+
+        const computedIdentifier = await deps.call(
+            ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year
+        );
+        if (!computedIdentifier) return [];
+        return deps.call(ProductionUtils.findAllPackListTabsForShow, computedIdentifier, tabs);
     }
 
 
@@ -1193,8 +1230,9 @@ function _calculateShipDate(row) {
         // If ship is after show start and both are in the same year,
         // check if moving ship to previous year makes more sense
         const sStart = parseDate(row['S. Start'], true, year);
-        if (sStart && ship >= sStart) {
-            // Ship is on or after show start - likely a year boundary issue
+        const NINE_MONTHS_MS = 9 * 30 * 24 * 60 * 60 * 1000;
+        if (sStart && ship >= sStart && (ship - sStart) > NINE_MONTHS_MS) {
+            // Ship is more than 9 months after show start — likely a year boundary issue
             // Move ship to previous year
             const shipPrevYear = new Date(ship);
             shipPrevYear.setFullYear(ship.getFullYear() - 1);
@@ -1264,8 +1302,9 @@ function _calculateReturnDate(row, shipDate = null) {
         // If return is before dates and both are in the same year,
         // check if moving return to next year makes more sense
         const sEnd = parseDate(row['S. End'], true, year) || parseDate(row['S. Start'], true, year);
-        if (sEnd && ret <= sEnd) {
-            // Return is on or before show - likely a year boundary issue
+        const NINE_MONTHS_MS = 9 * 30 * 24 * 60 * 60 * 1000;
+        if (sEnd && ret <= sEnd && (sEnd - ret) > NINE_MONTHS_MS) {
+            // Return is more than 9 months before show end — likely a year boundary issue
             // Move return to next year
             const retNextYear = new Date(ret);
             retNextYear.setFullYear(ret.getFullYear() + 1);

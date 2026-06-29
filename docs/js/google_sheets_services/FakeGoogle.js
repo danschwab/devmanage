@@ -407,6 +407,14 @@ export class FakeGoogleSheetsService {
                 ['2', 'Box', '36', '36', '36', '200', '', '', '', '', '', ''],
                 ['', '', '', '', '', '', '', '', '(4) LIGHT-055 LED Light Panels', 'Booth lighting', '', '']
             ],
+            'TEST CLIENT 2025 HIMSS': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '72', '48', '48', '600', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(3) TABLE-001 Standard Tables', 'Main booth display', '', ''],
+                ['', '', '', '', '', '', '', '', '(6) CHAIR-102 Executive Chairs', 'Meeting area', '', ''],
+                ['2', 'Box', '36', '36', '36', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) LIGHT-055 LED Light Panels', 'Booth lighting', '', '']
+            ],
             'AUSTAL 2026 SNA': [
                 ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
                 ['1', 'Crate', '96', '48', '48', '800', '', '', '', '', '', ''],
@@ -548,6 +556,10 @@ export class FakeGoogleSheetsService {
                 // Test case: QGenda has TWO booths at HIMSS (duplicate schedule entries with same Show/Client/Year)
                 ,['HIMSS','QGenda','2025','QGENDA 2025 HIMSS', 'Las Vegas, NV','20x30','1234','9/7','9/10','9/2/2025','X','X','X','','9/15/2025','Freeman','Brian','','X','X','X','X','','','','9/1/2025','','8/1','8/20','','X','','X','X','X','X','n/a','n/a','X','X','']
                 ,['HIMSS','QGenda','2025','QGENDA 2025 HIMSS', 'Las Vegas, NV','10x20','5678','9/7','9/10','9/2/2025','X','X','X','','9/15/2025','Freeman','Brian','','X','X','X','X','','','','9/1/2025','','8/1','8/20','','X','','X','X','X','X','n/a','n/a','X','X','']
+                // Test case: "Test Client" is intentionally absent from the client index.
+                // Identifier column is left blank so computeIdentifier is used, which falls back
+                // to the raw client name — matching the packlist tab "TEST CLIENT 2025 HIMSS".
+                ,['HIMSS', 'Test Client', '2025', '', 'Las Vegas, NV', '10x10', '5223', '4-Sep', '6-Sep', '9/2/2025', 'X', 'X', 'X', '', '10/11', 'Freeman', 'Brian', '', 'X', 'X', 'X', '', '', 'X', 'X', '', '2/1', '2/20', 'X', 'X', '', 'X', 'X', 'X', 'X', 'X', 'X', '', 'X', '', '', '']
                 // Test case: Austal cross-year matching (should prefer 2026 over 2023 despite similar names)
                 ,['Workboat','Austal','2023','AUSTAL 2023 WORKBOAT', 'New Orleans, LA','10x10','123','12/5','12/8','11/28/2023','X','X','X','','12/15/2023','Freeman','Top Shelf','','X','X','X','X','','','','11/25/2023','','11/1','11/20','','X','','X','X','','','n/a','n/a','X','X','']
                 ,['Surface Navy','Austal USA','2026','AUSTAL USA 2026 SURFACE NAVY', 'San Diego, CA','20x30','789','5/15','5/18','5/8/2026','X','X','X','','5/25/2026','Freeman','Top Shelf','','X','X','X','X','','','','5/1/2026','','4/15','5/5','','X','','X','X','X','X','n/a','n/a','X','X','']
@@ -600,9 +612,7 @@ export class FakeGoogleSheetsService {
             'Links': [
                 ['Path', 'ShortCode', 'Created'],
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
-            ]
-        },
-        'DATA': {
+            ],
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
                 ['ABCAM', '', ''],
@@ -883,13 +893,14 @@ export class FakeGoogleSheetsService {
             { title: 'HARDWARE', sheetId: 10 }
         ],
         'PACK_LISTS': [
-            { title: '_TEMPLATE', sheetId: 1 },
-            { title: 'ATSC 2025 NAB', sheetId: 2 },
-            { title: 'TULIP 2025 NRF', sheetId: 3 },
-            { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 4 },
-            { title: 'LOCKHEED MARTIN 2025 NGAUS VIP LOUNGE', sheetId: 5 },
-            { title: 'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM', sheetId: 6 },
-            { title: 'QGENDA 2025 HIMSS', sheetId: 7 },
+            { title: '_TEMPLATE', sheetId: 0 },
+            { title: 'ATSC 2025 NAB', sheetId: 1 },
+            { title: 'TULIP 2025 NRF', sheetId: 2 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS', sheetId: 3 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS VIP LOUNGE', sheetId: 4 },
+            { title: 'LOCKHEED MARTIN 2025 NGAUS MEETING ROOM', sheetId: 5 },
+            { title: 'QGENDA 2025 HIMSS', sheetId: 6 },
+            { title: 'TEST CLIENT 2025 HIMSS', sheetId: 7 },
             { title: 'AUSTAL 2026 SNA', sheetId: 8 },
             { title: 'GEARFIRE 2025 SHOT', sheetId: 9 },
             { title: 'TEST 2025 ENHANCED', sheetId: 10 }
@@ -900,10 +911,10 @@ export class FakeGoogleSheetsService {
         'CACHE': [
             { title: 'UserData_test_example_com', sheetId: 0 },
             { title: 'Locks', sheetId: 1 },
-            { title: 'Clients', sheetId: 2 },
-            { title: 'Shows', sheetId: 3 },
-            { title: 'Notes', sheetId: 4 },
-            { title: 'Links', sheetId: 5 },
+            { title: 'Notes', sheetId: 2 },
+            { title: 'Links', sheetId: 3 },
+            { title: 'Clients', sheetId: 4 },
+            { title: 'Shows', sheetId: 5 }
         ]
     };
 
