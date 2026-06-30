@@ -1,3 +1,4 @@
+feature that allows me to force clients to hard refresh on load
 new crate, nav away, nav back, no new items list
 lightbox fabric separate
 bookmark feature??? for quickly returning to things? or "Open Windows" sidebar?

@@ -1386,6 +1386,7 @@ export const PacklistTable = {
                                 v-if="row.Items"
                                 :data="row.Items"
                                 :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
+                                :rowKey="'AppData._rowId'"
                                 :columns="itemHeaders.map(label => ({ 
                                     key: label, 
                                     label, 

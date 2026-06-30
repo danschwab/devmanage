@@ -1999,7 +1999,7 @@ export const TableComponent = {
             if (!this.rowKey || !Array.isArray(this.originalData)) return null;
             const map = new Map();
             this.originalData.forEach(row => {
-                const keyVal = row?.[this.rowKey];
+                const keyVal = this._getRowKeyValue(row);
                 if (keyVal !== undefined && keyVal !== null && keyVal !== '') {
                     map.set(String(keyVal), row);
                 }
@@ -2885,9 +2885,13 @@ export const TableComponent = {
             }
             this.checkDirtyCells();
         },
+        _getRowKeyValue(row) {
+            if (!this.rowKey || !row) return undefined;
+            return this.rowKey.split('.').reduce((obj, key) => obj?.[key], row);
+        },
         getOriginalDataForRow(row, idx) {
             if (this.rowKey && this.originalDataByKey) {
-                const keyVal = row?.[this.rowKey];
+                const keyVal = this._getRowKeyValue(row);
                 if (keyVal !== undefined && keyVal !== null && keyVal !== '') {
                     return this.originalDataByKey.get(String(keyVal));
                 }

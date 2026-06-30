@@ -267,10 +267,14 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         if (!Array.isArray(arr)) return arr;
         return arr.map(obj => {
             if (obj && typeof obj === 'object') {
+                // Preserve the stable row ID across AppData resets
+                const existingRowId = obj.AppData?._rowId;
                 // Always create fresh AppData if forceFresh is true (e.g., on refresh to clear stale data)
                 if (forceFresh || !('AppData' in obj) || typeof obj.AppData !== 'object' || obj.AppData === null) {
                     obj['AppData'] = {};
                 }
+                // Restore or assign a stable runtime row ID (never persisted, used for move-tracking)
+                obj.AppData._rowId = existingRowId || Math.random().toString(36).slice(2, 10);
                 
                 // Initialize analysis target columns and AppData result keys if they don't exist
                 if (analysisConfig && Array.isArray(analysisConfig)) {
@@ -434,6 +438,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 );
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
+                // Pre-assign stable row IDs to all rows (and nested rows) before splitting into
+                // data and originalData. Both calls deepClone dataToSet, so both get the same IDs.
+                appDataInit(dataToSet, false);
                 this.setOriginalData(dataToSet);
                 this.setData(dataToSet);
                 
@@ -575,6 +582,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 if (!('AppData' in row) || typeof row.AppData !== 'object' || row.AppData === null) {
                     row['AppData'] = {};
                 }
+                if (!row.AppData._rowId) {
+                    row.AppData._rowId = Math.random().toString(36).slice(2, 10);
+                }
                 // Initialize fields to empty string if fieldNames provided
                 if (Array.isArray(fieldNames)) {
                     row = initializeRowFields(row, fieldNames);
@@ -598,6 +608,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 if (row && typeof row === 'object') {
                     if (!('AppData' in row) || typeof row.AppData !== 'object' || row.AppData === null) {
                         row['AppData'] = {};
+                    }
+                    if (!row.AppData._rowId) {
+                        row.AppData._rowId = Math.random().toString(36).slice(2, 10);
                     }
                     // Initialize fields to empty string if fieldNames provided
                     if (Array.isArray(fieldNames)) {

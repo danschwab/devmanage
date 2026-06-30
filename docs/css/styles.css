@@ -1717,8 +1717,11 @@ button.search-highlight {
     .calendar-year-label { flex-basis: 100%; }
 }
 
-.packlist-crates > tbody > tr > td {
-    border-bottom: 8px double var(--color-border);
+.packlist-crates > tbody > tr:not(:last-child) > td:not(.row-drag-handle) {
+    border-bottom: var(--padding-sm) solid var(--color-border);
+}
+.packlist-crates.editing>tbody>tr:not(:last-child)>td:not(.row-drag-handle) {
+    border-bottom: var(--padding-md) double var(--color-border);
 }
 .packlist-crates:not(.editing) table tr:first-child td {
     border-top: none;
@@ -1726,9 +1729,9 @@ button.search-highlight {
 
 .packlist-crates:not(.editing) table tr:last-child td {
     border-bottom: none;
-}
-.packlist-crates td:has(.table-edit-textarea) {
-    padding: 0;
+} 
+.packlist-crates td:has(.table-edit-textarea), .packlist-crates td:has(.empty-message) {
+    padding: var(--padding-sm);
 }
 .packlist-crates td .table-edit-textarea {
     padding: var(--padding-sm);
@@ -2189,8 +2192,15 @@ button.search-highlight {
         border-spacing: 0 !important;
         width: 100%;
     }
-    .packlist-crates > tbody > tr > td {
+    .packlist-crates > tbody > tr:not(:last-child) > td {
         border-bottom: 4pt solid var(--color-border) !important;
+    }
+    .packlist-crates table tr:first-child td {
+        border-top: none;
+    }
+
+    .packlist-crates table tr:last-child td {
+        border-bottom: none;
     }
     .items-table tr {
         page-break-inside: avoid;
