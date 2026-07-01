@@ -226,9 +226,10 @@ export function searchFilter(data, searchParams) {
         const passesExcludeFilters = excludeFilters.length === 0 || 
             excludeFilters.every(f => applyMatchType(item[f.key], f.searchValue, f.type));
         
-        // For other filters: Item passes if it matches ANY filter (OR logic)
+        // For other filters: item must match ALL filters (AND logic across columns;
+        // OR logic across multiple values within a single filter is handled in applyMatchType)
         const passesOtherFilters = otherFilters.length === 0 || 
-            otherFilters.some(f => applyMatchType(item[f.key], f.searchValue, f.type));
+            otherFilters.every(f => applyMatchType(item[f.key], f.searchValue, f.type));
         
         // Item must pass both filter groups
         return passesExcludeFilters && passesOtherFilters;
