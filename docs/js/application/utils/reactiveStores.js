@@ -452,6 +452,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     await this.runConfiguredAnalysis();
                 }
             } catch (err) {
+                const isAuthError = err?.status === 401 || err?.result?.error?.code === 401 || err?.result?.error?.status === 'UNAUTHENTICATED';
+                if (isAuthError) {
+                    Auth.checkAuthWithPrompt({ context: 'data load' });
+                }
                 this.setError(err.message || 'Failed to load data');
                 // Initialize with empty arrays to allow dynamic property addition
                 this.setOriginalData([]);
@@ -505,6 +509,11 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 
                 return result;
             } catch (err) {
+                const isAuthError = err?.status === 401 || err?.result?.error?.code === 401 || err?.result?.error?.status === 'UNAUTHENTICATED';
+                if (isAuthError) {
+                    Auth.checkAuthWithPrompt({ context: 'data save' });
+                    return false;
+                }
                 const lockMatch = err?.message?.match(/locked by (.+)$/i);
                 if (lockMatch) {
                     this.lockConflictOwner = lockMatch[1];

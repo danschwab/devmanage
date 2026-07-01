@@ -75,6 +75,7 @@ export class GoogleSheetsService {
                 const isAuthError = err && (
                     err.status === 401 ||
                     (err.result?.error?.code === 401) ||
+                    err.result?.error?.status === 'UNAUTHENTICATED' ||
                     err.result?.error?.status === 'PERMISSION_DENIED' ||
                     err.result?.error?.message?.toLowerCase().includes('insufficient authentication') ||
                     err.result?.error?.message?.toLowerCase().includes('insufficient auth')
