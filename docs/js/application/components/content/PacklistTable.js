@@ -293,9 +293,6 @@ export const PacklistTable = {
             // Handle both boolean true and string "true" from URL parameters
             return params?.edit === true || params?.edit === 'true';
         },
-        hideGroupMembersInViewMode() {
-            return !this.editMode;
-        },
         hamburgerMenuComponent() {
             return {
                 components: PacklistTableMenuComponent,
@@ -1316,7 +1313,7 @@ export const PacklistTable = {
                     :loading-message="loadingMessage"
                     :drag-id="'packlist-crates'"
                     :drag-label="'Crates'"
-                    :hide-group-members="hideGroupMembersInViewMode"
+                    :hide-group-members="true"
                     :hamburgerMenuComponent="hamburgerMenuComponent"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
@@ -1399,7 +1396,7 @@ export const PacklistTable = {
                                 :draggable="editMode"
                                 :newRow="editMode"
                                 :allowDropOnto="editMode"
-                                :hide-group-members="hideGroupMembersInViewMode"
+                                :hide-group-members="true"
                                 :group-visibility-override="itemGroupVisibilityOverride"
                                 :showFooter="false"
                                 :showHeader="false"
