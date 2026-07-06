@@ -165,13 +165,9 @@ class database_uncached {
             if (file && file.id) {
                 const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
                 if (blobUrl) {
-                    // Generate thumbnail and store to CACHE sheet (fire-and-forget)
-                    // database_uncached._generateThumbnailDataUrl(blobUrl).then(thumbnailDataUrl => {
-                    //     if (thumbnailDataUrl) {
-                    //         ApplicationUtils.storeThumbnailRecord(itemNumberStr, file.id, thumbnailDataUrl)
-                    //             .catch(err => console.warn('[icons] Failed to store thumbnail record:', err));
-                    //     }
-                    // });
+                    // Store file reference to CACHE sheet (fire-and-forget, without blob URL generation)
+                    ApplicationUtils.storeThumbnailRecord(itemNumberStr, file.id, null)
+                        .catch(err => console.warn('[icons] Failed to store thumbnail record:', err));
                     return blobUrl;
                 }
             }
@@ -238,14 +234,11 @@ class database_uncached {
             { namespace: 'database', methodName: 'getItemImageUrl', args: [itemNumberStr] }
         ], true);
 
-        // Fetch full blob, generate 32×32 thumbnail, store to CACHE sheet
+        // Fetch blob and store file reference to CACHE sheet (without blob URL generation)
         const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
         if (blobUrl) {
-            // const thumbnailDataUrl = await database_uncached._generateThumbnailDataUrl(blobUrl);
-            // if (thumbnailDataUrl) {
-            //     ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, thumbnailDataUrl)
-            //         .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
-            // }
+            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, null)
+                .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
             return blobUrl;
         }
         return null;

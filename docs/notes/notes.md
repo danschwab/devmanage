@@ -2,16 +2,11 @@ feature that allows me to force clients to hard refresh on load
 new crate, nav away, nav back, no new items list
 lightbox fabric separate
 bookmark feature??? for quickly returning to things? or "Open Windows" sidebar?
-carriage returns in cells
-other complex things in cells
 
-bematrix autohide in edit view
-
+!!! Caching priority queue or allow nonessential processes to pause, and/or ensure that we don't use all threads at once
 !!! rebuild date matching logic from scratch
 !!! rebuild name matching logic from scratch
 !!! simplify controls on reports page
-!! allow tables to be omitted from inventorying and vis on inventory page: Additions (hidden and no quantities)
-!! allow alerts to be supressed for categories in a default "System Settings" container on the dashboard and CACHING tab
 ! "views" for tables and reports allowing colum customization
 
 - dims at the beginning of item descriptions for all items
@@ -143,8 +138,8 @@ Other Features
 - [x] fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [x] fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
 - [x] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
-- [ ] !!! Allow pasting even if only a single column of data is copied
-- [ ] !!! ui for paste
+- [x] !!! Allow pasting even if only a single column of data is copied
+- [x] !!! ui for paste
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
@@ -170,7 +165,7 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [?] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
 - [?] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
 - [?] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
-- [ ] !!! fix CABINET item numbers in inventor
+- [?] !!! fix CABINET item numbers in inventor
 - [ ] !!! fix FURNITURE item numbers in inventor
 - [?] !!! fix HANGING SIGN item numbers in inventor
 - [ ] !!! fix duplication of bematrix VELCRO PANELS
@@ -220,13 +215,13 @@ Architecture Improvements !!! offline mode
 - [x] notes on page endpoints for user communication
 - [?] out of network offline mode handling for auth and data access. Allow reactiveStores and all caching to freeze as infinite when offline. Disable all mutation functions. Notify users of offline status and limitations.
 - [?] remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
+- [x] consider moving "Reports" to its own endpoint that includes all reports and analytics settings.
+- [x] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
-- [ ] consider moving "Reports" to its own endpoint that includes all reports and analytics settings.
-- [ ] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
 - [ ] we probably need to allow multiple identical dashboard endpoints to be added with different views if we do the inventory category mode thing.
-- [ ] allow "maintenance mode" activated that locks all editing
+- [ ] allow "maintenance mode" activated that locks all editing, OR simply allow the system to force clients to refresh
       allow analysis to intelligently slow or pause itself and notify user for slow connection states.
       allow unused reactiveStores to self-clean to save memory after a period of inactivity
       CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
@@ -238,18 +233,19 @@ show management system
 - [x] default schedule ship date as analytics step
 - [x] text-match needs to have a dropdown to determine type of match (includes, excludes, etc.)
 - [x] allow text field omission in advanced search (ex: return results that do not have a certain client name, or location, etc)
-- [x] !!! move indexes to app data and start using live table for information
-- [x] !!! detection and addition of new shows into index
+- [x] move indexes to app data and start using live table for information
+- [x] detection and addition of new shows into index
 - [x] calendar view of shows
-- [ ] ! add "views" system to show different columns and layouts for different purposes
-- [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
-- [ ] ! we may need a workzone integration
 - [x] advanced search needs to filter columns available to search types by data type. Data types need to be more strictly defined in the show data system
 - [x] advanced search should allow user to filter based on type: by date, text-match, show overlap (special type)
 - [x] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
 - [x] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
+- [ ] ! add "views" system to show different columns and layouts for different purposes
+- [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
+- [ ] ! we may need a workzone integration
 - [ ] advanced search add and configure boolean flag columns (shown as checkboxes) and filter option
 - [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
+
       allow user to access show searches as pages and pin to dashboard
       analyze and show the rough number and complexity of shows throughout the year and provide work estimate reporting
 
@@ -274,6 +270,11 @@ Pack Lists in Web
 - [x] allow group closing and hiding in actions bubbles and default to this
 - [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [x] cut and paste between packlist functionality
+- [ ] !!!!detection of unattached packlists and user notification
+- [ ] !!! when pasting in from external source, naturally find drop columns at time of paste, and add the just-pasted rows to the selection set
+- [ ] !!! add "add to new crate" as item selection button
+- [ ] !!! add "move to existing crate" as item selection button
+- [ ] !!! add "move rows" as bubble action
 - [ ] ! enable actions bubbles for crates selections
 - [ ] ! automations interface, packlist rules (see suggestions at top of notes)
 - [ ] allow user to configure automations
