@@ -850,6 +850,14 @@ class Requests_uncached {
             return null;
         }
         
+        // Skip alert generation for items with suppressAnalysis set
+        // const prefix = itemNumber.split('-')[0];
+        // const indexData = await deps.call(Requests.getInventoryIndexData);
+        // const isSuppressed = indexData?.some(row => row.prefix === prefix && row.metadata?.suppressAnalysis === 'true');
+        // if (isSuppressed) {
+        //     return null;
+        // }
+        
         // Get comparison result from business logic layer
         const result = await deps.call(PackListUtils.checkDescriptionMatch, itemNumber, description);
         
@@ -1289,6 +1297,14 @@ class Requests_uncached {
         const itemNumber = item['Extracted Item'];
         
         if (!itemNumber || !currentProjectId) {
+            return null;
+        }
+        
+        // Skip alert generation for items with suppressAnalysis set
+        const prefix = itemNumber.split('-')[0];
+        const indexData = await deps.call(Requests.getInventoryIndexData);
+        const isSuppressed = indexData?.some(row => row.prefix === prefix && row.metadata?.suppressAnalysis === 'true');
+        if (isSuppressed) {
             return null;
         }
         

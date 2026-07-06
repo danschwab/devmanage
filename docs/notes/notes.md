@@ -192,12 +192,12 @@ inventory updates
 - [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
 - [ ] ! add all FURNITURE
 - [ ] ! add all LIGHTING
-- [ ] track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
 - [ ] allow attaching a change dates to a project??? for instance, if we are selling a chair to a client, or if a chair broke at a show, or we are aquiring a chair for a show
 - [ ] create a history modification utility for viewing changes over time and changing their values if necessary
-      allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
       item status interface to locate items and update item status
       We could integrate a repair schedule and other things into this system for a complete inventory management system
+      allow assigning and tracking items with unique ids. ex: cradlepoint routers with individual serial numbers, passwords, and location info attached in inventory and tracked separately
+      track crate information to further streamline pack list generation (Crate UI similar to packlists? Allow Ben to manage crates, and analysis search/suggest typical crates when editing a packlist?)
 
 Architecture Improvements !!! offline mode
 
