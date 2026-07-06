@@ -2,29 +2,6 @@ import { html, parseDate, toUSDateString, LoadingBarComponent, ViewChangeCompone
 import { useSearch } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
-// Component for the external clipboard paste modal.
-// Shows row count, optional table selector, and Paste/Cancel buttons.
-const ExternalPasteComponent = {
-    props: {
-        rowCount: Number,
-        onConfirm: Function,
-        onCancel: Function
-    },
-    methods: {
-        select(dragId) { this.onConfirm?.(dragId); this.$emit('close-modal'); }
-    },
-    template: html`
-        <div>
-            <p>Select target for {{ rowCount }} copied row(s):</p>
-            <div class="button-bar" style="flex-wrap: wrap;">
-                <button v-for="opt in dragIdOptions" :key="opt.dragId"
-                    class="blue"
-                    @click="select(opt.dragId)">{{ opt.label }}</button>
-            </div>
-        </div>
-    `
-};
-
 function normalizeItemSortWords(value) {
     return String(value)
         .toLowerCase()
@@ -100,8 +77,6 @@ export const tableRowSelectionState = Vue.reactive({
     _appClipboardContent: null,           // last TSV string written to OS clipboard by this app
     _lastSeenExternalContent: null,       // last external clipboard string shown to the user
     externalPasteActive: false,           // mutex: only one table handles a given external paste event
-    clipboardReadPermission: null,        // null | 'granted' | 'prompt' | 'denied' — clipboard-read permission state
-    clipboardPromptDismissed: false,      // true after the user clicks X on the permission banner this session
 
     // Cache parsed row metadata by row reference and raw MetaData string
     _metaParseCache: new WeakMap(),
@@ -111,36 +86,7 @@ export const tableRowSelectionState = Vue.reactive({
         this.currentRouteKey = routeKey;
     },
 
-    // Check clipboard-read permission state without triggering a browser prompt.
-    // Subscribes to future permission changes via onchange.
-    async checkClipboardPermission() {
-        try {
-            const perm = await navigator.permissions.query({ name: 'clipboard-read' });
-            this.clipboardReadPermission = perm.state;
-            perm.onchange = () => { this.clipboardReadPermission = perm.state; };
-        } catch (_e) {
-            this.clipboardReadPermission = 'denied';
-        }
-    },
 
-    // Request clipboard-read permission via a real readText() call.
-    // MUST be called from a user-gesture handler (click, keypress, etc.).
-    // Returns the clipboard text if granted, or null if denied.
-    async requestClipboardPermission() {
-        try {
-            const text = await navigator.clipboard.readText();
-            this.clipboardReadPermission = 'granted';
-            return text;
-        } catch (_e) {
-            try {
-                const perm = await navigator.permissions.query({ name: 'clipboard-read' });
-                this.clipboardReadPermission = perm.state;
-            } catch (_e2) {
-                this.clipboardReadPermission = 'denied';
-            }
-            return null;
-        }
-    },
 
     // --- Clipboard helpers ---
 
@@ -1444,6 +1390,13 @@ export const tableRowSelectionState = Vue.reactive({
 // Register selection state with undo system
 setTableRowSelectionState(tableRowSelectionState);
 
+// Track the last known cursor position globally at all times so external paste can
+// resolve a target table even when triggered by keyboard (no clientX/Y on the event).
+document.addEventListener('mousemove', (e) => {
+    tableRowSelectionState.mouseX = e.clientX;
+    tableRowSelectionState.mouseY = e.clientY;
+}, { passive: true });
+
 export const TableComponent = {
     name: 'TableComponent',
     components: { LoadingBarComponent, ViewChangeComponent },
@@ -1782,19 +1735,7 @@ export const TableComponent = {
             tableRowSelectionState._version;
             return tableRowSelectionState.findingDropTargets;
         },
-        // True when this is the first-mounted draggable table and the user has not yet decided
-        // whether to grant clipboard-read permission. Shows the in-app permission request prompt.
-        showClipboardPermissionPrompt() {
-            tableRowSelectionState._version;
-            if (!this.draggable) return false;
-            if (tableRowSelectionState.clipboardReadPermission !== 'prompt') return false;
-            if (tableRowSelectionState.clipboardPromptDismissed) return false;
-            // Show the prompt only on the first registered table across all drag groups.
-            for (const instances of tableRowSelectionState.activeTables.values()) {
-                return instances[0] === this;
-            }
-            return false;
-        },
+
         selectedRowCount() {
             // Access _version to create reactive dependency
             tableRowSelectionState._version;
@@ -2141,20 +2082,11 @@ export const TableComponent = {
         // Listen for keyboard shortcuts (Escape, Delete)
         document.addEventListener('keydown', this.handleEscapeKey);
 
-        // Register draggable tables and set up external clipboard detection
+        // Register draggable tables for external paste handling
         if (this.draggable) {
             tableRowSelectionState.registerTable(this.dragId, this);
             this._handleExternalPaste = this._handleExternalPaste.bind(this);
-            this._handleVisibilityChange = this._handleVisibilityChange.bind(this);
             document.addEventListener('paste', this._handleExternalPaste);
-            document.addEventListener('visibilitychange', this._handleVisibilityChange);
-            window.addEventListener('focus', this._handleVisibilityChange);
-            // Non-intrusively check clipboard-read permission on first draggable mount.
-            if (tableRowSelectionState.clipboardReadPermission === null) {
-                tableRowSelectionState.checkClipboardPermission();
-            }
-            // Check existing clipboard content on mount (e.g. user already copied from Excel)
-            this.$nextTick(() => this._readAndProcessExternalClipboard());
         }
         
         // Set up sticky header positioning (only for tables with showHeader enabled)
@@ -2216,14 +2148,10 @@ export const TableComponent = {
         document.removeEventListener('click', this.handleOutsideClick);
         document.removeEventListener('keydown', this.handleEscapeKey);
 
-        // Deregister from external clipboard system
+        // Deregister from external paste system
         if (this.draggable) {
             tableRowSelectionState.unregisterTable(this.dragId, this);
             if (this._handleExternalPaste) document.removeEventListener('paste', this._handleExternalPaste);
-            if (this._handleVisibilityChange) {
-                document.removeEventListener('visibilitychange', this._handleVisibilityChange);
-                window.removeEventListener('focus', this._handleVisibilityChange);
-            }
         }
 
         // Clean up any active click state
@@ -2378,17 +2306,7 @@ export const TableComponent = {
             if (isBetween || isOnto) this.completeClipboardAtCurrentTarget();
         },
 
-        // Request clipboard-read permission via a user gesture. Must be bound to a click handler.
-        // If the clipboard already contains usable data, process it immediately after grant.
-        async requestClipboardPermission() {
-            const text = await tableRowSelectionState.requestClipboardPermission();
-            if (text) this._processExternalClipboardText(text);
-        },
 
-        dismissClipboardPermissionPrompt() {
-            tableRowSelectionState.clipboardPromptDismissed = true;
-            tableRowSelectionState._version++;
-        },
 
         handleDeleteSelected() {
             // Toggle deletion state for all selected rows
@@ -2976,6 +2894,30 @@ export const TableComponent = {
             if (editableEl && typeof editableEl.focus === 'function') {
                 editableEl.focus({ preventScroll: true });
             }
+        },
+        handleCellPaste(rowIndex, colIndex, event) {
+            const text = event.clipboardData?.getData('text/plain') || '';
+            if (!text) return;
+
+            // If the pasted content has tabs (multi-column) or newlines (multi-row), defer entirely
+            // to the row paste system. Blur the cell first to ensure it updates properly.
+            // _handleExternalPaste fires on the same event and will handle this data.
+            if (text.includes('\t') || text.includes('\n')) {
+                event.preventDefault();
+                // Blur the cell so its content updates and doesn't retain stale data from before insertion
+                event.target?.blur();
+                return;
+            }
+
+            // Single-row single-column: allow paste but strip all HTML by inserting as plain text only.
+            event.preventDefault();
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount) return;
+            selection.deleteFromDocument();
+            selection.getRangeAt(0).insertNode(document.createTextNode(text));
+            selection.collapseToEnd();
+            // Trigger the input handler so data and dirty state stay in sync.
+            this.handleCellEdit(rowIndex, colIndex, event.target.textContent);
         },
         handleCellBlur(rowIndex, colIndex, event) {
             // Clear flags when cell loses focus (enables new snapshot on next focus+edit)
@@ -3908,6 +3850,11 @@ export const TableComponent = {
             
             // Handle clearing selections when clicking outside selected rows
             if (tableRowSelectionState.getTotalSelectionCount() > 0) {
+                // Don't clear if a cut, copy, or drag operation is currently active
+                if (tableRowSelectionState.clipboardMode !== null || tableRowSelectionState.findingDropTargets) {
+                    return; // Skip clearing - operation in progress
+                }
+                
                 // Don't clear if multiselect or drag just finished (within 100ms) - check global state
                 const timeSinceMultiSelect = tableRowSelectionState.lastMultiSelectEndTime 
                     ? Date.now() - tableRowSelectionState.lastMultiSelectEndTime 
@@ -3982,16 +3929,17 @@ export const TableComponent = {
         },
 
         // Handle the browser paste event — fires on Ctrl+V from any context.
-        // Handle the paste event. If a compatible table is under the cursor, paste directly to the
-        // top of it without showing the modal. If no compatible table is under the cursor, fall back
-        // to the table-selection modal. Multiple draggable tables each register this listener;
-        // externalPasteActive acts as a mutex so only the first handler to claim the event runs.
+        // Multiple draggable tables each register this listener; externalPasteActive acts as a
+        // mutex so only the first handler to claim the event runs.
+        // When a contenteditable cell is focused, the paste event fires on that element but
+        // still bubbles; for multi-column TSV we intercept here so rows are inserted rather
+        // than the raw text being dumped into the focused cell.
         _handleExternalPaste(event) {
             if (tableRowSelectionState.clipboardMode) return;
             if (tableRowSelectionState.externalPasteActive) return;
 
             const text = event.clipboardData?.getData('text/plain') || '';
-            if (!text || !text.includes('\t')) return;
+            if (!text || (!text.includes('\t') && !text.includes('\n'))) return;
 
             const lines = text.trim().split('\n');
             const rows = lines
@@ -4000,87 +3948,41 @@ export const TableComponent = {
             if (rows.length === 0) return;
             const colCount = rows[0].length;
 
-            // Find the innermost .dynamic-table element currently under the cursor.
-            // querySelectorAll returns elements in document order; the last match is the deepest.
-            const hoveredTables = document.querySelectorAll('.dynamic-table:hover');
-            const hoveredEl = hoveredTables.length > 0 ? hoveredTables[hoveredTables.length - 1] : null;
+            // Use event coordinates when available; fall back to the globally-tracked position.
+            const mouseX = event.clientX || tableRowSelectionState.mouseX;
+            const mouseY = event.clientY || tableRowSelectionState.mouseY;
 
-            if (hoveredEl) {
-                for (const [dragId, instances] of tableRowSelectionState.activeTables) {
-                    const inst = instances[0];
-                    if (!inst || inst.$el !== hoveredEl) continue;
-                    const cols = inst.pasteableColumns;
-                    // Element matched but column count is incompatible — skip direct paste,
-                    // fall through to modal so the user can see what happened.
-                    if (cols.length < colCount) break;
+            const target = this._resolveExternalPasteTarget(rows, colCount, mouseX, mouseY);
+            if (!target) return;
 
-                    // Compatible table found — drop at the top with no modal.
-                    // Claim the mutex; release asynchronously after all paste listeners have run.
-                    tableRowSelectionState.externalPasteActive = true;
-                    Promise.resolve().then(() => { tableRowSelectionState.externalPasteActive = false; });
+            // If a cell is focused and this is single-column data, let the cell handle it.
+            const focusedEditable = document.activeElement?.isContentEditable
+                ? document.activeElement
+                : null;
+            if (focusedEditable && colCount === 1) return;
 
-                    const items = rows.map(cells => {
-                        // Build from an existing row's structure so keys like Items, Piece #,
-                        // MetaData, etc. are preserved, preventing header-derivation loss.
-                        const templateRow = inst.data.find(r => r != null) || null;
-                        const row = {};
-                        if (templateRow) {
-                            Object.keys(templateRow).forEach(key => {
-                                if (key === 'Items') {
-                                    row.Items = [];
-                                } else if (key !== 'AppData') {
-                                    row[key] = '';
-                                }
-                            });
-                        }
-                        cols.forEach((col, i) => {
-                            row[col.key] = i < cells.length ? cells[i].trim() : '';
-                        });
-                        return { clone: row, original: null };
-                    });
+            event.preventDefault();
+            tableRowSelectionState._lastSeenExternalContent = text;
+            tableRowSelectionState.externalPasteActive = true;
+            Promise.resolve().then(() => { tableRowSelectionState.externalPasteActive = false; });
 
-                    event.preventDefault();
-                    tableRowSelectionState._lastSeenExternalContent = text;
-                    tableRowSelectionState.loadExternalClipboard(items, dragId);
-                    tableRowSelectionState.dragTargetArray = inst.data;
-                    tableRowSelectionState.completeClipboard({ type: 'header' });
-                    return;
-                }
-            }
-
-            // No compatible table under cursor — fall back to the selection modal.
-            this._processExternalClipboardText(text);
+            tableRowSelectionState.loadExternalClipboard(target.items, target.dragId);
+            tableRowSelectionState.dragTargetArray = target.inst.data;
+            tableRowSelectionState.completeClipboard(target.dropTarget);
         },
 
         // Handle tab-visibility change or window focus — re-checks the clipboard when the app regains focus.
-        _handleVisibilityChange() {
-            if (document.visibilityState === 'visible') this._readAndProcessExternalClipboard();
-        },
 
-        // Attempt a permission-gated passive clipboard read and process the result.
-        async _readAndProcessExternalClipboard() {
-            if (tableRowSelectionState.clipboardMode) return;
-            if (tableRowSelectionState.externalPasteActive) return;
-            if (tableRowSelectionState.clipboardReadPermission !== 'granted') return;
-            try {
-                const text = await navigator.clipboard.readText();
-                if (text === tableRowSelectionState._lastSeenExternalContent) return;
-                this._processExternalClipboardText(text);
-            } catch (_e) {
-                // Permission revoked since last check — update the stored state.
-                tableRowSelectionState.clipboardReadPermission = 'prompt';
-            }
-        },
 
-        // Core external clipboard logic: parse TSV, find compatible tables, show modal.
-        // Returns true when it decides to show the paste modal (caller can preventDefault).
+        // Core external clipboard logic: parse TSV and paste into the best table at cursor position.
+        // Accepts both tab-separated (multi-column) and newline-separated (multi-row, even single-column) data.
+        // Returns true when it successfully resolves a paste target and executes the paste.
         _processExternalClipboardText(text) {
-            if (!text || !text.includes('\t')) return false;
+            if (!text || (!text.includes('\t') && !text.includes('\n'))) return false;
             if (tableRowSelectionState.clipboardMode) return false;
             if (text === tableRowSelectionState._appClipboardContent) return false;
             if (tableRowSelectionState.externalPasteActive) return false;
 
-            // Parse rows and determine column count.
             const lines = text.trim().split('\n');
             const rows = lines
                 .map(line => line.split('\t'))
@@ -4088,31 +3990,57 @@ export const TableComponent = {
             if (rows.length === 0) return false;
             const colCount = rows[0].length;
 
-            // Find draggable tables whose editable columns can absorb the incoming data.
-            const compatibleOptions = [];
-            for (const [dragId, instances] of tableRowSelectionState.activeTables) {
-                const inst = instances[0];
-                if (!inst) continue;
-                const cols = inst.pasteableColumns;
-                if (cols.length >= colCount) {
-                    compatibleOptions.push({
-                        dragId,
-                        label: inst.dragLabel || dragId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-                        pasteableColumns: cols,
-                        inst
-                    });
-                }
-            }
-            if (compatibleOptions.length === 0) return false;
+            const mouseX = tableRowSelectionState.mouseX;
+            const mouseY = tableRowSelectionState.mouseY;
+            const target = this._resolveExternalPasteTarget(rows, colCount, mouseX, mouseY);
+            if (!target) return false;
 
-            // Mark as seen and claim the mutex before proceeding.
             tableRowSelectionState._lastSeenExternalContent = text;
             tableRowSelectionState.externalPasteActive = true;
+            Promise.resolve().then(() => { tableRowSelectionState.externalPasteActive = false; });
 
-            const buildItems = (option) => rows.map(cells => {
-                // Build from an existing row's structure so keys like Items, Piece #,
-                // MetaData, etc. are preserved, preventing header-derivation loss.
-                const templateRow = option.inst.data.find(r => r != null) || null;
+            tableRowSelectionState.loadExternalClipboard(target.items, target.dragId);
+            tableRowSelectionState.dragTargetArray = target.inst.data;
+            tableRowSelectionState.completeClipboard(target.dropTarget);
+            return true;
+        },
+
+        // Find the best compatible table under the cursor and compute the insertion position.
+        // Selects the deepest-nested compatible table (e.g. an item table inside a crate table).
+        // Returns { inst, items, dropTarget, dragId } or null if no valid target exists.
+        _resolveExternalPasteTarget(rows, colCount, mouseX, mouseY) {
+            if (mouseX == null || mouseY == null) return null;
+
+            // Collect compatible table instances whose bounding rect contains the cursor.
+            // Iterate through all instances for each dragId (not just the first) so nested tables
+            // like item tables within different crates are all considered.
+            const candidates = [];
+            for (const [dragId, instances] of tableRowSelectionState.activeTables) {
+                for (const inst of instances) {
+                    if (!inst || !inst.$el) continue;
+                    const cols = inst.pasteableColumns;
+                    if (cols.length < colCount) continue;
+
+                    const rect = inst.$el.getBoundingClientRect();
+                    if (mouseX < rect.left || mouseX > rect.right || mouseY < rect.top || mouseY > rect.bottom) continue;
+                    candidates.push({ dragId, inst, cols });
+                }
+            }
+
+            if (candidates.length === 0) return null;
+
+            // Pick the deepest-nested candidate: the one whose $el is contained within another.
+            const chosen = candidates.reduce((deepest, candidate) => {
+                if (!deepest) return candidate;
+                if (deepest.inst.$el.contains(candidate.inst.$el)) return candidate;
+                return deepest;
+            });
+
+            const dropTarget = this._computeExternalDropTarget(chosen.inst, mouseX, mouseY);
+
+            // Build paste items from the TSV rows using the target table's row structure.
+            const items = rows.map(cells => {
+                const templateRow = chosen.inst.data.find(r => r != null) || null;
                 const row = {};
                 if (templateRow) {
                     Object.keys(templateRow).forEach(key => {
@@ -4123,43 +4051,92 @@ export const TableComponent = {
                         }
                     });
                 }
-                option.pasteableColumns.forEach((col, i) => {
+                chosen.cols.forEach((col, i) => {
                     row[col.key] = i < cells.length ? cells[i].trim() : '';
                 });
                 return { clone: row, original: null };
             });
 
-            // If only one table can receive the data, skip the modal and go straight to
-            // clipboard mode. This eliminates one required Ctrl+V press for the common case.
-            if (compatibleOptions.length === 1) {
-                Promise.resolve().then(() => { tableRowSelectionState.externalPasteActive = false; });
-                tableRowSelectionState.loadExternalClipboard(
-                    buildItems(compatibleOptions[0]),
-                    compatibleOptions[0].dragId
-                );
-                return true;
+            return { inst: chosen.inst, items, dropTarget, dragId: chosen.dragId };
+        },
+
+        // Compute a drop target for external paste at (mouseX, mouseY) within inst's table.
+        // Mirrors findDropTargetAtCursor without side effects. Returns a dropTarget object
+        // compatible with completeClipboard: { type: 'header' } or { type: 'between', targetIndex, visualTargetIndex }.
+        _computeExternalDropTarget(inst, mouseX, mouseY) {
+            const dragId = inst.dragId;
+            const tableEl = inst.$el.querySelector(
+                dragId ? `table.${dragId}:not(.sticky-header)` : 'table:not(.sticky-header)'
+            );
+            if (!tableEl) return { type: 'header' };
+
+            const tableRect = tableEl.getBoundingClientRect();
+            if (mouseY < tableRect.top || mouseY > tableRect.bottom) return { type: 'header' };
+
+            const thead = tableEl.querySelector('thead');
+            if (thead) {
+                const theadRect = thead.getBoundingClientRect();
+                if (mouseY >= theadRect.top && mouseY <= theadRect.bottom) return { type: 'header' };
             }
 
-            const onConfirm = (selectedDragId) => {
-                tableRowSelectionState.externalPasteActive = false;
-                const option = compatibleOptions.find(o => o.dragId === selectedDragId);
-                if (!option) return;
-                tableRowSelectionState.loadExternalClipboard(buildItems(option), selectedDragId);
-            };
+            const tbody = tableEl.querySelector('tbody');
+            if (!tbody) return { type: 'header' };
 
-            const onCancel = () => {
-                tableRowSelectionState.externalPasteActive = false;
-            };
+            const dataRows = tbody.querySelectorAll(':scope > tr[data-visible-idx]');
+            if (dataRows.length === 0) {
+                return { type: 'between', targetIndex: 0, visualTargetIndex: 0 };
+            }
 
-            modalManager.custom(ExternalPasteComponent, {
-                rowCount: rows.length,
-                dragIdOptions: compatibleOptions.map(o => ({ dragId: o.dragId, label: o.label })),
-                onConfirm,
-                onCancel,
-                modalClass: 'small-menu'
-            }, 'Paste from External Clipboard');
+            for (let i = 0; i < dataRows.length; i++) {
+                const row = dataRows[i];
+                const rowRect = row.getBoundingClientRect();
+                if (mouseY < rowRect.top || mouseY > rowRect.bottom) continue;
 
-            return true;
+                const visibleIdx = parseInt(row.getAttribute('data-visible-idx'), 10);
+                const isAbove = mouseY < rowRect.top + rowRect.height / 2;
+
+                let targetIndex, visualTargetIndex;
+                if (isAbove) {
+                    visualTargetIndex = visibleIdx;
+                    if (visibleIdx === 0) {
+                        targetIndex = 0;
+                    } else {
+                        const prevVisible = inst.visibleRows[visibleIdx - 1];
+                        if (prevVisible) {
+                            const prevMeta = tableRowSelectionState._getRowMetadata(prevVisible.row);
+                            const prevGrouping = prevMeta?.grouping;
+                            if (prevGrouping?.isGroupMaster && inst.isGroupMembersHiddenById(prevGrouping.groupId)) {
+                                const children = tableRowSelectionState._getGroupChildren(prevVisible.idx, inst.data);
+                                targetIndex = prevVisible.idx + children.length + 1;
+                            } else {
+                                targetIndex = prevVisible.idx + 1;
+                            }
+                        } else {
+                            targetIndex = 0;
+                        }
+                    }
+                } else {
+                    visualTargetIndex = visibleIdx + 1;
+                    const curVisible = inst.visibleRows[visibleIdx];
+                    if (curVisible) {
+                        const curMeta = tableRowSelectionState._getRowMetadata(curVisible.row);
+                        const curGrouping = curMeta?.grouping;
+                        if (curGrouping?.isGroupMaster && inst.isGroupMembersHiddenById(curGrouping.groupId)) {
+                            const children = tableRowSelectionState._getGroupChildren(curVisible.idx, inst.data);
+                            targetIndex = curVisible.idx + children.length + 1;
+                        } else {
+                            targetIndex = curVisible.idx + 1;
+                        }
+                    } else {
+                        targetIndex = inst.data.length;
+                    }
+                }
+
+                return { type: 'between', targetIndex, visualTargetIndex };
+            }
+
+            // Cursor is in tbody but below all rows — append at end.
+            return { type: 'between', targetIndex: inst.data.length, visualTargetIndex: inst.visibleRows.length };
         },
 
         handleEscapeKey(event) {
@@ -4307,16 +4284,6 @@ export const TableComponent = {
             <!-- Error State -->
             <div key="error-state" v-if="error" class="content-header red">
                 <span>Error: {{ error }}</span>
-            </div>
-
-            <!-- Clipboard Permission Request Banner -->
-            <div v-if="showClipboardPermissionPrompt" class="content-header">
-                <span>Allow clipboard access to auto-detect copied data.</span>
-                <div class="spacer"></div>
-                <div class="button-bar">
-                    <button @click="requestClipboardPermission" class="green">Enable</button>
-                    <button @click="dismissClipboardPermissionPrompt" class="button-symbol white" title="Dismiss">🗙</button>
-                </div>
             </div>
 
             <!-- Spacer: holds layout space when sticky wrapper becomes fixed -->
@@ -4582,6 +4549,7 @@ export const TableComponent = {
                                             @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
                                             @focus="handleCellFocus(idx, colIndex, $event)"
                                             @blur="handleCellBlur(idx, colIndex, $event)"
+                                            @paste="handleCellPaste(idx, colIndex, $event)"
                                             class="table-edit-textarea"
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
