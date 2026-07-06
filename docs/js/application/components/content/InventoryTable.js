@@ -620,13 +620,14 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
-            lockNamespace: 'INVENTORY'
+            lockNamespace: 'INVENTORY',
+            tabMetaFlags: { hideQuantity: false, hideItemNumber: false }
         };
     },
     computed: {
         columns() {
             // Dynamically set columns' editable property based on allowEdit
-            return [
+            const cols = [
                 { 
                     key: 'image', 
                     labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
@@ -670,6 +671,12 @@ export const InventoryTableComponent = {
                     sortable: false
                 }
             ];
+            // Apply column filters based on metadata flags
+            return cols.filter(c => {
+                if (this.tabMetaFlags.hideQuantity && c.key === 'quantity') return false;
+                if (this.tabMetaFlags.hideItemNumber && c.key === 'itemNumber') return false;
+                return true;
+            });
         },
         tableData() {
             return this.inventoryTableStore ? this.inventoryTableStore.data : [];
@@ -736,6 +743,18 @@ export const InventoryTableComponent = {
         }
     },
     async mounted() {
+        // Load index metadata to derive column visibility flags for this tab
+        if (this.tabTitle) {
+            Requests.getInventoryIndexData().then(indexData => {
+                if (!Array.isArray(indexData)) return;
+                const tabPrefixes = indexData.filter(row => row.tab === this.tabTitle);
+                if (tabPrefixes.length > 0) {
+                    const allDescOnly = tabPrefixes.every(row => row.metadata?.addDescriptionOnly === 'true');
+                    this.tabMetaFlags = { hideQuantity: allDescOnly, hideItemNumber: allDescOnly };
+                }
+            }).catch(() => {});
+        }
+
         // Create analysis config for image URLs
         const analysisConfig = [
             createAnalysisConfig(

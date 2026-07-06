@@ -3,6 +3,12 @@ import { Database, ProductionUtils, PackListUtils, wrapMethods, parseDate, toISO
 /** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
 function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
+/** Parse a MetaData JSON string from the inventory INDEX into an object */
+function _parseMetadata(str) {
+    if (!str) return {};
+    try { return JSON.parse(str); } catch { return {}; }
+}
+
 /**
  * Utility functions for inventory operations
  */
@@ -15,9 +21,27 @@ class inventoryUtils_uncached {
         edithistory: 'EditHistory'
     };
 
+    static INDEX_MAPPING = {
+        prefix: 'PREFIX',
+        tab: 'INVENTORY',
+        folder: 'FOLDER',
+        metadata: 'MetaData'
+    };
+
+    /**
+     * Fetch and parse the inventory INDEX with full metadata.
+     * Returns an array of { prefix, tab, folder, metadata } where metadata is parsed JSON.
+     */
+    static async getInventoryIndex(deps) {
+        const rows = await deps.call(Database.getData, 'INVENTORY', 'INDEX', inventoryUtils_uncached.INDEX_MAPPING);
+        return rows.map(row => ({
+            ...row,
+            metadata: _parseMetadata(row.metadata)
+        }));
+    }
+
     static async getTabNameForItem(deps, itemName) {
-        const indexData = await deps.call(Database.getData, 'INVENTORY', 'INDEX', { prefix: 'PREFIX', tab: 'INVENTORY' });
-        // Build prefix-to-tab mapping from transformed objects
+        const indexData = await deps.call(InventoryUtils.getInventoryIndex);
         const prefixToTab = {};
         indexData.forEach(row => {
             if (row.prefix && row.tab) {
@@ -32,16 +56,20 @@ class inventoryUtils_uncached {
             tab = prefixToTab[prefix];
         }
         
-        // If prefix lookup failed, check HARDWARE table for exact item number match
+        // If prefix lookup failed, check tabs flagged with customItemNumbers for an exact item match
         if (!tab) {
-            try {
-                const hardwareData = await deps.call(Database.getData, 'INVENTORY', 'HARDWARE', inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
-                const hardwareItem = hardwareData.find(item => item.itemNumber === itemName);
-                if (hardwareItem) {
-                    return 'HARDWARE';
+            const customTabs = [...new Set(
+                indexData
+                    .filter(row => row.metadata?.customItemNumbers === 'true')
+                    .map(row => row.tab)
+            )];
+            for (const customTab of customTabs) {
+                try {
+                    const tabData = await deps.call(Database.getData, 'INVENTORY', customTab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);
+                    if (tabData.find(item => item.itemNumber === itemName)) return customTab;
+                } catch (error) {
+                    console.error(`Error checking custom-item-number tab ${customTab}:`, error);
                 }
-            } catch (error) {
-                console.error('Error checking HARDWARE table:', error);
             }
         }
         
@@ -302,12 +330,29 @@ class inventoryUtils_uncached {
                 return {};
             }
 
+            // Build a set of prefixes that have suppressAnalysis so they can be skipped
+            const indexData = await deps.call(InventoryUtils.getInventoryIndex);
+            const suppressedPrefixes = new Set(
+                indexData
+                    .filter(row => row.metadata?.suppressAnalysis === 'true')
+                    .map(row => row.prefix)
+            );
+
+            const analyzableIds = itemIds.filter(id => {
+                const prefix = id.split('-')[0];
+                return !suppressedPrefixes.has(prefix);
+            });
+
+            if (!analyzableIds.length) {
+                return {};
+            }
+
             // Get inventory quantities as of ship date
-            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "QTY", referenceDate);
+            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, analyzableIds, "QTY", referenceDate);
             
             // Filter valid items and build result
             const result = {};
-            itemIds.forEach(itemId => {
+            analyzableIds.forEach(itemId => {
                 const qty = inventoryInfo.find(i => i.itemName === itemId)?.quantity ?? null;
                 if (qty !== null) {
                     result[itemId] = { available: qty, allocated: 0, onOrder: 0 };

@@ -170,21 +170,33 @@ export class FakeGoogleSheetsService {
     static mockData = {
         'INVENTORY': {
             'INDEX': [
-                // Enhanced INDEX with new item type mappings
-                ['PREFIX', 'INVENTORY', 'NOTES'],
-                ['CAB', 'CABINETS', ''],
-                ['HS', 'HANGING SIGNS', ''],
-                ['LB', 'LIGHTBOXES', ''],
-                ['CNTR', 'COUNTERTOPS', 'NEW'],
-                ['SHLF', 'SHELVES', 'NEW'],
-                ['STOOL', 'FURNITURE', ''],
-                ['CHAIR', 'FURNITURE', ''],
-                ['COUCH', 'FURNITURE', ''],
-                ['TABLE', 'FURNITURE', ''],
-                ['TTOP', 'FURNITURE', ''],
-                ['TBASE', 'FURNITURE', ''],
-                ['BX', 'PANELS', 'Dimensional panels'],
-                ['VU', 'PANELS', 'VUE brand panels']
+                ['PREFIX', 'INVENTORY', 'FOLDER', 'MetaData'],
+                ['CAB', 'CABINETS', '', ''],
+                ['HS', 'HANGING SIGNS', '', ''],
+                ['LB', 'LIGHTBOXES', '', ''],
+                ['CNTR', 'COUNTERTOPS', '', ''],
+                ['SHLF', 'SHELVES', '', ''],
+                ['STOOL', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['CHAIR', 'FURNITURE', 'CHAIRS', '{"suppressAnalysis":"true"}'],
+                ['COUCH', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TABLE', 'FURNITURE', 'TABLES', '{"suppressAnalysis":"true"}'],
+                ['TTOP', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['BX', 'PANELS', '', ''],
+                ['VU', 'PANELS', '', ''],
+                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","addDescriptionOnly":"true"}'],
+                ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
+            ],
+            'ADDITIONS': [
+                ['ITEM#', 'THUMBNAIL', 'QTY', 'EditHistory', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
+                ['ADD-001', '', '', '', '', '', 'Custom Branded Tablecloth', ''],
+                ['ADD-002', '', '', '', '', '', 'Hanging Banner Print', '']
+            ],
+            'HARDWARE': [
+                ['ITEM#', 'THUMBNAIL', 'QTY', 'EditHistory', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
+                ['M8x16', '', '500', '', '', '', 'M8 x 16mm bolt', ''],
+                ['M8x20', '', '300', '', '', '', 'M8 x 20mm bolt', ''],
+                ['FOOT-L', '', '100', '', '', '', 'Large leveling foot', '']
             ],
             'FURNITURE': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'EditHistory', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
@@ -890,7 +902,8 @@ export class FakeGoogleSheetsService {
             { title: 'COUNTERTOPS', sheetId: 7 },
             { title: 'SHELVES', sheetId: 8 },
             { title: 'PANELS', sheetId: 9 },
-            { title: 'HARDWARE', sheetId: 10 }
+            { title: 'HARDWARE', sheetId: 10 },
+            { title: 'ADDITIONS', sheetId: 11 }
         ],
         'PACK_LISTS': [
             { title: '_TEMPLATE', sheetId: 0 },

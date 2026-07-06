@@ -152,7 +152,8 @@ export const PacklistTable = {
             hiddenColumns: ['Pack', 'Check', 'Extracted Item', 'Extracted Qty'],
             NavigationRegistry,
             lockNamespace: 'PACK_LISTS',
-            itemGroupVisibilityOverride: null
+            itemGroupVisibilityOverride: null,
+            inventoryIndexData: null
         };
     },
     computed: {
@@ -320,6 +321,11 @@ export const PacklistTable = {
         }
     },
     async mounted() {
+        // Load inventory index metadata for use in addItemFromInventory
+        Requests.getInventoryIndexData().then(data => {
+            this.inventoryIndexData = data;
+        }).catch(() => {});
+
         // Initialize store if tabName is available
         if (this.tabName) {
             this.initializeStore();
@@ -614,7 +620,8 @@ export const PacklistTable = {
                     return {
                         inventoryStore: null,
                         referenceDate: null,
-                        error: null
+                        error: null,
+                        selectedCategory: null
                     };
                 },
                 computed: {
@@ -627,8 +634,16 @@ export const PacklistTable = {
                             { key: 'actions', label: '', width: 100, sortable: false }
                         ];
                     },
-                    inventoryData() {
+                    allInventoryData() {
                         return this.inventoryStore ? this.inventoryStore.data : [];
+                    },
+                    availableCategories() {
+                        const tabs = [...new Set(this.allInventoryData.map(item => item.tab).filter(Boolean))];
+                        return tabs.sort();
+                    },
+                    inventoryData() {
+                        if (!this.selectedCategory) return this.allInventoryData;
+                        return this.allInventoryData.filter(item => item.tab === this.selectedCategory);
                     },
                     originalData() {
                         return this.inventoryStore && Array.isArray(this.inventoryStore.originalData)
@@ -714,6 +729,10 @@ export const PacklistTable = {
                         <template #header-area>
                             <button @click="addEmpty" class="large">+ Empty Row</button>
                             <p style="margin-left: 1em;">Or add from inventory below...</p>
+                            <select :value="selectedCategory" @change="e => selectedCategory = e.target.value || null" style="margin-left: auto;">
+                                <option value="">All Categories</option>
+                                <option v-for="cat in availableCategories" :key="cat" :value="cat">{{ cat.charAt(0) + cat.slice(1).toLowerCase() }}</option>
+                            </select>
                         </template>
                         <template #default="{ row, column }">
                             <template v-if="column.key === 'image'">
@@ -763,9 +782,14 @@ export const PacklistTable = {
             
             // Populate with inventory data
             // Format: (1) ITEM# Description
+            // For prefixes with addDescriptionOnly, use just the description with no item# or stub
             const itemNumber = inventoryItem.itemNumber || '';
             const description = inventoryItem.description || '';
-            const formattedDescription = `(1) ${itemNumber} ${description}`;
+            const prefix = itemNumber.split('-')[0];
+            const prefixMeta = this.inventoryIndexData?.find(row => row.prefix === prefix)?.metadata || {};
+            const formattedDescription = prefixMeta.addDescriptionOnly === 'true'
+                ? description
+                : `(1) ${itemNumber} ${description}`;
             
             // Set the description field
             if (itemHeaders.includes('Description')) {

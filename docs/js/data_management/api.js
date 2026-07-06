@@ -791,6 +791,16 @@ class Requests_uncached {
     }
 
     /**
+     * Get the full inventory INDEX with parsed metadata.
+     * Returns an array of { prefix, tab, folder, metadata } where metadata is a parsed object.
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<Array<{prefix:string, tab:string, folder:string, metadata:Object}>>}
+     */
+    static async getInventoryIndexData(deps) {
+        return await deps.call(InventoryUtils.getInventoryIndex);
+    }
+
+    /**
      * Extract item number from text using regex
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} text - Text to search for item number
@@ -1031,7 +1041,16 @@ class Requests_uncached {
         // Extract items from the identified shows
         // Convert string filter to array as extractItemsFromMultipleShows expects an array
         const categoryFilterArray = ctgFilter ? [ctgFilter] : undefined;
-        const itemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+        const rawItemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+
+        // Filter out items whose prefix has suppressAnalysis set
+        const indexData = await deps.call(InventoryUtils.getInventoryIndex);
+        const suppressedPrefixes = new Set(
+            indexData
+                .filter(row => row.metadata?.suppressAnalysis === 'true')
+                .map(row => row.prefix)
+        );
+        const itemRows = rawItemRows.filter(row => !suppressedPrefixes.has((row.itemId || '').split('-')[0]));
 
         const dateFilters = Array.isArray(filter?.dateFilters) ? filter.dateFilters : [];
         const getFilterDate = (column, type) => offsetToISO(dateFilters.find(f => f.column === column && f.type === type)?.value);

@@ -18,6 +18,7 @@ export const InventoryOverviewTableComponent = {
     inject: ['$modal'],
     data() {
         return {
+            suppressedTabs: new Set(),
             columns: [
                 { 
                     key: 'tab', 
@@ -66,7 +67,9 @@ export const InventoryOverviewTableComponent = {
     },
     computed: {
         tableData() {
-            return this.inventoryStore?.data || [];
+            const data = this.inventoryStore?.data || [];
+            if (!this.suppressedTabs.size) return data;
+            return data.filter(item => !this.suppressedTabs.has(item.tab));
         },
         originalData() {
             return this.inventoryStore?.originalData || [];
@@ -89,6 +92,22 @@ export const InventoryOverviewTableComponent = {
     },
     methods: {
         async initializeInventoryStore() {
+            // Load index to determine which tabs should be hidden from the overview
+            Requests.getInventoryIndexData().then(indexData => {
+                if (!Array.isArray(indexData)) return;
+                const tabConfigs = new Map();
+                indexData.forEach(row => {
+                    if (!row?.tab) return;
+                    if (!tabConfigs.has(row.tab)) tabConfigs.set(row.tab, { hasAny: false, allSuppressed: true });
+                    const cfg = tabConfigs.get(row.tab);
+                    cfg.hasAny = true;
+                    if (row.metadata?.suppressAnalysis !== 'true') cfg.allSuppressed = false;
+                });
+                const suppressed = new Set();
+                tabConfigs.forEach((cfg, tab) => { if (cfg.hasAny && cfg.allSuppressed) suppressed.add(tab); });
+                this.suppressedTabs = suppressed;
+            }).catch(() => {});
+
             // Create analysis config for image URLs
             const analysisConfig = [
                 createAnalysisConfig(
