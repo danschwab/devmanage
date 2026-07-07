@@ -105,7 +105,7 @@ export const PrimaryNavComponent = {
                 onlyEssentialAnalysis: this.onlyEssentialAnalysis,
                 toggleDarkMode: this.toggleDarkMode,
                 toggleEssentialAnalysis: this.toggleEssentialAnalysis
-            }, 'Settings');
+            }, 'Application Settings');
         },
         updateAnalysisBanner() {
             const banners = this.$notify.getBanners('app') || [];
