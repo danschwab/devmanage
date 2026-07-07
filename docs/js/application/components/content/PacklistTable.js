@@ -1,4 +1,4 @@
-import { html, TableComponent, BannerNotifications, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString, getAutoColorClass } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString, getAutoColorClass } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
@@ -137,8 +137,8 @@ const RowOptionsMenuComponent = {
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
     mixins: [sheetLockMixin],
-    components: { TableComponent, BannerNotifications },
-    inject: ['$modal', 'appContext'],
+    components: { TableComponent },
+    inject: ['$modal', 'appContext', '$notify'],
     props: {
         content: { type: Object, required: false, default: () => ({}) },
         tabName: { type: String, default: '' },
@@ -320,6 +320,12 @@ export const PacklistTable = {
         }
     },
     watch: {
+        banners: {
+            handler(newBanners) {
+                this.$notify.setBanners(this.containerPath, newBanners);
+            },
+            immediate: true
+        },
         isDirty(newValue) {
             if (newValue && !this.editMode && this.tabName && !this.lockedByOther && this.lockCheckComplete) {
                 const editPath = NavigationRegistry.buildPathWithCurrentParams(
@@ -332,6 +338,9 @@ export const PacklistTable = {
 
             this.handleLockState(newValue);
         }
+    },
+    beforeUnmount() {
+        this.$notify.clearBanners(this.containerPath);
     },
     async mounted() {
         // Load inventory index metadata for use in addItemFromInventory
@@ -1321,8 +1330,7 @@ export const PacklistTable = {
                 <h1>Pack List: <strong>{{ tabName }}</strong></h1>
                 <span class="page-number"></span>
             </div>
-            
-            <BannerNotifications :banners="banners" />
+
 
 
             <!-- Main Packlist View -->

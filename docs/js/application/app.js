@@ -8,6 +8,7 @@ import { PacklistContent, InventoryContent, ScheduleContent, ReportsContent } fr
 import { hamburgerMenuRegistry } from './index.js';
 import { undoRegistry } from './index.js';
 import { Requests, getReactiveStore, appSettings } from './index.js';
+import { BannerNotifications, NotificationBubbleOverlay, notificationBus } from './index.js';
 
 const { createApp } = Vue;
 
@@ -21,13 +22,16 @@ const App = {
         'inventory-content': InventoryContent,
         'schedule-content': ScheduleContent,
         'reports-content': ReportsContent,
+        BannerNotifications,
+        NotificationBubbleOverlay,
     },
     provide() {
         return {
             appContext: this,
             appSettings: appSettings,
             hamburgerMenuRegistry: hamburgerMenuRegistry,
-            $modal: modalManager
+            $modal: modalManager,
+            $notify: notificationBus
         };
     },
     data() {
@@ -66,6 +70,31 @@ const App = {
         },
         isOffline() {
             return authState.isOffline;
+        },
+        appBanners() {
+            return [
+                {
+                    key: 'offline',
+                    color: 'orange',
+                    message: 'No network connection. Your data is preserved. Changes cannot be saved until connectivity is restored.',
+                    visible: this.isOffline,
+                    dismissible: false
+                },
+                {
+                    key: 'permissions',
+                    color: 'red',
+                    message: `Permissions Warning: ${this.permissionsWarning}`,
+                    visible: !!this.permissionsWarning,
+                    dismissible: false
+                },
+                {
+                    key: 'auth-error',
+                    color: 'red',
+                    message: `Error: ${this.authError}`,
+                    visible: !!this.authError && !this.isAuthenticated,
+                    dismissible: false
+                }
+            ];
         },
         dashboardLoading() {
             return NavigationRegistry.dashboardRegistry.isLoading;
@@ -331,19 +360,9 @@ const App = {
             </primary-nav>
 
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
-                <div v-if="permissionsWarning" class="card red auth-error-banner">
-                    <strong>Permissions Warning: </strong>{{ permissionsWarning }}
-                </div>
+                <BannerNotifications :banners="appBanners" scope="app" />
 
-                <div v-if="isOffline" class="card orange auth-error-banner">
-                    <strong>No network connection. </strong>Your data is preserved. Changes cannot be saved until connectivity is restored.
-                </div>
-                
-                <div v-if="authError && !isAuthenticated" class="empty-message" style="color: var(--color-text);">
-                    <div class="card red"><strong>Error: </strong>{{ authError }} </div>
-                </div>
-
-                <div v-else-if="!isAuthenticated" class="empty-message">
+                <div v-if="!isAuthenticated" class="empty-message">
                     please log in to view content
                 </div>
                 
@@ -447,6 +466,8 @@ const App = {
                     ></app-modal>
                 </transition-group>
             </div>
+            <!-- Global notification bubble overlay -->
+            <NotificationBubbleOverlay />
         </div>
     `
 };

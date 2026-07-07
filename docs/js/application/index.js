@@ -22,7 +22,7 @@ export { ContainerComponent } from './components/interface/containerComponent.js
 export { PageNoteComponent, PageNoteMenuComponent } from './components/interface/pageNoteComponent.js';
 export { OverlappingShowsModal } from './components/interface/OverlappingShowsModal.js';
 export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
-export { BannerNotifications } from './components/interface/bannerNotifications.js';
+export { BannerNotifications, NotificationBubbleOverlay } from './components/interface/bannerNotifications.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { CalendarComponent } from './components/interface/calendarComponent.js';
@@ -31,6 +31,7 @@ export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } 
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
+export { notificationBus } from './utils/notificationBus.js';
 
 // Content components export
 export { InventoryTableComponent, ItemImageComponent } from './components/content/InventoryTable.js';

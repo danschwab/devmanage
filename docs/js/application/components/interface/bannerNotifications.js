@@ -1,5 +1,69 @@
 import { html } from '../../index.js';
 
+
+/**
+ * NotificationBubbleOverlay — global fixed overlay showing alert bubbles for all
+ * scrolled-out notifications from all BannerNotifications instances.
+ *
+ * Rendered once at the app level. Reads from notificationBus.getAllScrolledOutBanners().
+ */
+export const NotificationBubbleOverlay = {
+    inject: ['$modal', '$notify'],
+    computed: {
+        scrolledOutBanners() {
+            return this.$notify.getAllScrolledOutBanners();
+        },
+        showOverlay() {
+            return this.scrolledOutBanners.length > 0;
+        }
+    },
+    methods: {
+        showAlertDetails(banner) {
+            this.$modal.confirm(
+                String(banner.message || ''),
+                () => {
+                    if (banner.action) {
+                        banner.action.fn();
+                    }
+                },
+                null,
+                'Alert',
+                banner.action ? banner.action.label : 'OK'
+            );
+        },
+
+        getAlertSymbol(banner) {
+            // Return a symbol based on the banner color
+            const symbols = {
+                red: '⚠',
+                orange: '⚠',
+                yellow: '⚠',
+                blue: 'ℹ',
+                green: '✓',
+                purple: '★'
+            };
+            return symbols[banner.color] || 'ℹ';
+        }
+    },
+    template: html`
+        <transition name="fade">
+            <div v-if="showOverlay" class="banner-notifications-bubble selection-action-bubble">
+                <button
+                    v-for="banner in scrolledOutBanners"
+                    :key="banner._scope + '-' + banner.key"
+                    @click="showAlertDetails(banner)"
+                    :class="['button-symbol', banner.color]"
+                    :title="banner.message"
+                >
+                    {{ getAlertSymbol(banner) }}
+                </button>
+            </div>
+        </transition>
+    `
+};
+
+
+
 /**
  * BannerNotifications — renders a stack of status banners above table content.
  *
@@ -22,11 +86,15 @@ import { html } from '../../index.js';
  *   - Intervals are never duplicated — reconciliation runs on every banners change.
  */
 export const BannerNotifications = {
-    inject: ['$modal'],
+    inject: ['$modal', '$notify'],
     props: {
         banners: {
             type: Array,
             default: () => []
+        },
+        scope: {
+            type: String,
+            default: 'default'
         }
     },
     data() {
@@ -73,9 +141,6 @@ export const BannerNotifications = {
     computed: {
         visibleBanners() {
             return this.banners.filter(b => b.visible && !this.dismissedKeys[b.key]);
-        },
-        showAlertBubbles() {
-            return this.bannersScrolledOut && this.visibleBanners.length > 0;
         }
     },
     watch: {
@@ -96,17 +161,30 @@ export const BannerNotifications = {
         visibleBanners() {
             // Re-check visibility when visible banners change
             this.$nextTick(() => this.checkBannersVisibility());
+        },
+        bannersScrolledOut(newValue) {
+            // Report scroll state to the global notification bus
+            this.$notify.setScrolledOut(this.scope, newValue, this.visibleBanners);
         }
     },
     methods: {
         checkBannersVisibility() {
-            if (!this.$el || this.visibleBanners.length === 0) {
+            // Only check if we have visible banners and a valid DOM element
+            if (!this.$el || !this.visibleBanners.length) {
                 this.bannersScrolledOut = false;
                 return;
             }
             
-            // Find the actual banner elements (not the wrapper)
-            const bannerElements = this.$el.querySelectorAll('.banner-notification');
+            // Find banner elements within this component's wrapper
+            let bannerElements = [];
+            try {
+                bannerElements = Array.from(this.$el.querySelectorAll('.banner-notification'));
+            } catch (e) {
+                // If querySelectorAll fails, reset scroll state and return
+                this.bannersScrolledOut = false;
+                return;
+            }
+            
             if (bannerElements.length === 0) {
                 this.bannersScrolledOut = false;
                 return;
@@ -122,30 +200,6 @@ export const BannerNotifications = {
 
         dismiss(key) {
             this.dismissedKeys = { ...this.dismissedKeys, [key]: true };
-        },
-
-        showAlertDetails(banner) {
-            this.$modal.confirm(
-                String(banner.message || ''),
-                () => {
-                    if (banner.action) {
-                        banner.action.fn();
-                    }
-                },
-                null,
-                'Alert',
-                banner.action ? banner.action.label : 'OK'
-            );
-        },
-
-        getAlertSymbol(banner) {
-            // Return a symbol based on the banner color
-            const symbols = {
-                red: '⚠',
-                orange: '⚠',
-                yellow: '⚠'
-            };
-            return symbols[banner.color] || 'ℹ';
         },
 
         _reconcilePolling(banners) {
@@ -174,7 +228,7 @@ export const BannerNotifications = {
         }
     },
     template: html`
-        <div>
+        <div v-if="visibleBanners.length" class="banner-notifications-container">
             <transition-group name="expand">
                 <template v-for="banner in visibleBanners" :key="banner.key">
                     <div :class="['banner-notification', 'card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: var(--padding-sm);">
@@ -206,21 +260,6 @@ export const BannerNotifications = {
                     </div>
                 </template>
             </transition-group>
-
-            <!-- Alert bubbles when scrolled out of view -->
-            <transition name="fade">
-                <div v-if="showAlertBubbles" class="selection-action-bubble" style="position: fixed; bottom: var(--padding-md); right: var(--padding-md); left: unset; z-index: 1000;">
-                    <button
-                        v-for="banner in visibleBanners"
-                        :key="banner.key"
-                        @click="showAlertDetails(banner)"
-                        :class="['button-symbol', banner.color]"
-                        :title="banner.message"
-                    >
-                        {{ getAlertSymbol(banner) }}
-                    </button>
-                </div>
-            </transition>
         </div>
     `
 };

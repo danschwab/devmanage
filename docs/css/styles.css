@@ -461,9 +461,36 @@ button.card {
     height: 100%;
 }
 
+/* Banner Notifications */
 
+.banner-notifications-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--padding-md);
+    grid-column: 1 / -1;
+    width: 100%;
+}
 
+.banner-notifications-container .card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--padding-sm);
+    width: 100%;
+}
+.dashboard .banner-notifications-container .card {
+    max-width: unset;
+}
 
+.banner-notifications-bubble.selection-action-bubble {
+    position: fixed;
+    bottom: var(--padding-lg);
+    right: var(--padding-lg);
+    left: unset;
+    transform: unset;
+    z-index: 5000;
+}
 
 
 
@@ -2117,7 +2144,7 @@ button.search-highlight {
         font-size: 10pt !important;
     }
     
-    button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notification {
+    button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notifications-container, .banner-notifications-bubble {
         display: none;
         opacity: 0;
     }

@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, BannerNotifications, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, Auth, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, Auth, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
@@ -595,10 +595,9 @@ export const InventoryTableComponent = {
     mixins: [sheetLockMixin],
     components: {
         TableComponent,
-        BannerNotifications,
         ItemImageComponent
     },
-    inject: ['appContext', '$modal'],
+    inject: ['appContext', '$modal', '$notify'],
     props: {
         containerPath: {
             type: String,
@@ -803,9 +802,18 @@ export const InventoryTableComponent = {
         await this.checkLockStatus();
     },
     watch: {
+        banners: {
+            handler(newBanners) {
+                this.$notify.setBanners(this.containerPath, newBanners);
+            },
+            immediate: true
+        },
         isDirty(newValue) {
             this.handleLockState(newValue);
         }
+    },
+    beforeUnmount() {
+        this.$notify.clearBanners(this.containerPath);
     },
     methods: {
         onForeignLockWhileClean() {
@@ -1068,8 +1076,6 @@ export const InventoryTableComponent = {
     },
     template: html `
         <slot>
-            <BannerNotifications :banners="banners" />
-
             <TableComponent
                 ref="tableComponent"
                 theme="purple"

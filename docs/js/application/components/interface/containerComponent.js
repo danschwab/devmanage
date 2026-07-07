@@ -1,4 +1,4 @@
-import { html, BreadcrumbComponent, NavigationRegistry } from '../../index.js';
+import { html, BreadcrumbComponent, NavigationRegistry, BannerNotifications } from '../../index.js';
 import { PageNoteComponent } from './pageNoteComponent.js';
 import { URLRouter } from '../../utils/urlRouter.js';
 
@@ -6,7 +6,8 @@ import { URLRouter } from '../../utils/urlRouter.js';
 export const ContainerComponent = {
     components: {
         BreadcrumbComponent,
-        PageNoteComponent
+        PageNoteComponent,
+        BannerNotifications
     },
     props: {
         containerId: {
@@ -43,7 +44,7 @@ export const ContainerComponent = {
             default: false
         }
     },
-    inject: ['hamburgerMenuRegistry', '$modal'],
+    inject: ['hamburgerMenuRegistry', '$modal', '$notify'],
     provide() {
         return {
             // Provide navigation parameters to child components
@@ -84,6 +85,9 @@ export const ContainerComponent = {
         // Get navigation parameters from NavigationRegistry
         navigationParameters() {
             return NavigationRegistry.getNavigationParameters(this.containerPath);
+        },
+        containerBanners() {
+            return this.$notify.getBanners(this.containerPath);
         }
     },
     methods: {
@@ -222,6 +226,7 @@ export const ContainerComponent = {
             
             <div class="content">
                 <PageNoteComponent v-if="containerPath" :container-path="containerPath" />
+                <BannerNotifications :banners="containerBanners" :scope="containerPath" />
                 <div v-if="isLoading" class="loading-message" style="text-align:center; padding:2rem;">
                     <img src="assets/loading.gif" alt="..."/>
                     <p>Loading data...</p>
