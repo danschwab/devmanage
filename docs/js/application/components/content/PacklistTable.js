@@ -3,12 +3,10 @@ import { ItemImageComponent } from './InventoryTable.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 // Packlist Table Hamburger Menu Component
-const PacklistTableMenuComponent = {
+export const PacklistTableMenuComponent = {
+    name: 'PacklistTableMenuComponent',
     props: {
-        clearAllAlertsCallback: Function,
-        refreshCallback: Function,
-        showAllGroupsCallback: Function,
-        hideAllGroupsCallback: Function
+        getTableRef: { type: Function, required: false }
     },
     inject: ['$modal'],
     computed: {
@@ -23,28 +21,31 @@ const PacklistTableMenuComponent = {
     },
     methods: {
         handleAction(action) {
+            const table = this.getTableRef?.();
             switch (action) {
                 case 'refresh':
-                    if (this.refreshCallback) {
-                        this.refreshCallback();
+                    if (table?.handleRefresh) {
+                        table.handleRefresh();
                     }
                     this.$emit('close-modal');
                     break;
                 case 'clearAllAlerts':
-                    if (this.clearAllAlertsCallback) {
-                        this.clearAllAlertsCallback();
+                    if (table?.clearAllAlerts) {
+                        table.clearAllAlerts();
                     }
                     this.$emit('close-modal');
                     break;
                 case 'showAllGroups':
-                    if (this.showAllGroupsCallback) {
-                        this.showAllGroupsCallback();
+                    if (table) {
+                        table.itemGroupVisibilityOverride = 'open';
+                        table.$nextTick(() => { table.itemGroupVisibilityOverride = null; });
                     }
                     this.$emit('close-modal');
                     break;
                 case 'hideAllGroups':
-                    if (this.hideAllGroupsCallback) {
-                        this.hideAllGroupsCallback();
+                    if (table) {
+                        table.itemGroupVisibilityOverride = 'closed';
+                        table.$nextTick(() => { table.itemGroupVisibilityOverride = null; });
                     }
                     this.$emit('close-modal');
                     break;
@@ -306,17 +307,6 @@ export const PacklistTable = {
             );
             // Handle both boolean true and string "true" from URL parameters
             return params?.edit === true || params?.edit === 'true';
-        },
-        hamburgerMenuComponent() {
-            return {
-                components: PacklistTableMenuComponent,
-                props: {
-                    clearAllAlertsCallback: () => this.clearAllAlerts(),
-                    refreshCallback: () => this.handleRefresh(),
-                    showAllGroupsCallback: () => { this.itemGroupVisibilityOverride = 'open'; this.$nextTick(() => { this.itemGroupVisibilityOverride = null; }); },
-                    hideAllGroupsCallback: () => { this.itemGroupVisibilityOverride = 'closed'; this.$nextTick(() => { this.itemGroupVisibilityOverride = null; }); }
-                }
-            };
         }
     },
     watch: {
@@ -1359,7 +1349,6 @@ export const PacklistTable = {
                     :drag-id="'packlist-crates'"
                     :drag-label="'Crates'"
                     :hide-group-members="true"
-                    :hamburgerMenuComponent="hamburgerMenuComponent"
                     @refresh="handleRefresh"
                     @cell-edit="handleCellEdit"
                     @new-row="handleAddCrate"

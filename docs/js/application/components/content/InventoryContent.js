@@ -12,62 +12,18 @@ export const InventoryMenuComponent = {
         currentView: String,
         title: String,
         refreshCallback: Function,
-        getLockInfo: Function,
         navigateToPath: Function,
         tabTitle: String
     },
     inject: ['$modal'],
-    data() {
-        return {
-            lockInfo: null,
-            isLoadingLockInfo: true,
-            isRemovingLock: false
-        };
-    },
-    async mounted() {
-        await this.fetchLockInfo();
-    },
     computed: {
-        lockOwnerUsername() {
-            if (!this.lockInfo || !this.lockInfo.user) return null;
-            const email = this.lockInfo.user;
-            return email.includes('@') ? email.split('@')[0] : email;
-        },
         menuItems() {
-            const items = [];
-            
-            // Add lock removal option if lock exists and fully loaded
-            if (!this.isLoadingLockInfo && this.lockInfo) {
-                items.push({ 
-                    label: this.isRemovingLock ? 'Removing lock...' : `Remove lock: ${this.lockOwnerUsername}`, 
-                    action: 'removeLock',
-                    class: this.isRemovingLock ? 'analyzing' : 'warning',
-                    disabled: this.isRemovingLock
-                });
-            }
-            
-            // Navigation items
-            items.push(
+            return [
                 { label: 'Inventory Shortage Report', action: 'navigateReports' }
-            );
-            
-            return items;
+            ];
         }
     },
     methods: {
-        async fetchLockInfo() {
-            this.isLoadingLockInfo = true;
-            try {
-                if (this.getLockInfo) {
-                    this.lockInfo = await this.getLockInfo();
-                    //console.log('[InventoryMenu] Fetched lock info:', this.lockInfo);
-                }
-            } catch (error) {
-                console.error('[InventoryMenu] Error fetching lock info:', error);
-            } finally {
-                this.isLoadingLockInfo = false;
-            }
-        },
         async handleAction(action) {
             switch (action) {
                 case 'navigateReports':
@@ -76,62 +32,9 @@ export const InventoryMenuComponent = {
                         this.$emit('close-modal');
                     }
                     break;
-                case 'removeLock':
-                    await this.handleRemoveLock();
-                    break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
-        },
-        async handleRemoveLock() {
-            if (!this.lockInfo) {
-                this.$modal.alert('No lock to remove.', 'Info');
-                return;
-            }
-            
-            const username = this.lockOwnerUsername;
-            const tabName = this.lockInfo.tab; // Use the actual tab name from lock info
-            
-            this.$modal.confirm(
-                `Are you sure you want to force unlock ${tabName}?\n${username} may have unsaved changes.`,
-                async () => {
-                    this.isRemovingLock = true;
-                    try {
-                        //console.log(`[InventoryContent.removeLock] About to call forceUnlockSheet for ${tabName}`);
-                        const result = await Requests.forceUnlockSheet('INVENTORY', tabName, 'User requested via hamburger menu');
-                        //console.log(`[InventoryContent.removeLock] forceUnlockSheet returned:`, result);
-                        
-                        if (result.success) {
-                            // Cache is automatically invalidated by the mutation method
-                            // Just refresh the UI to fetch fresh data
-    
-                            this.$modal.alert(
-                                `Lock removed successfully.\n\nPreviously locked by: ${username}\nAutosave entries backed up: ${result.backupCount}\nAutosave entries deleted: ${result.deletedCount}`,
-                                'Success',
-                                false
-                            );
-                            
-                            // Refresh lock info in the menu
-                            await this.fetchLockInfo();
-                            
-                            // Refresh page data and lock state via callback
-                            if (this.refreshCallback) {
-                                await this.refreshCallback();
-                            }
-                        } else {
-                            this.$modal.error(`Failed to remove lock: ${result.message}`, 'Error');
-                        }
-                    } catch (error) {
-                        console.error('[InventoryMenu] Error removing lock:', error);
-                        this.$modal.error(`Error removing lock: ${error.message}`, 'Error');
-                    } finally {
-                        this.isRemovingLock = false;
-                    }
-                },
-                () => {},
-                'Confirm Force Unlock',
-                'Force Unlock'
-            );
         }
     },
     template: html`
