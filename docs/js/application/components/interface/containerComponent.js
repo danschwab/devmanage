@@ -44,7 +44,7 @@ export const ContainerComponent = {
             default: false
         }
     },
-    inject: ['hamburgerMenuRegistry', '$modal', '$notify'],
+    inject: ['hamburgerMenuRegistry', '$modal', '$notify', 'appContext'],
     provide() {
         return {
             // Provide navigation parameters to child components
@@ -163,6 +163,38 @@ export const ContainerComponent = {
                 this.$modal.alert('Failed to copy link to clipboard', 'Error');
             });
         },
+        bookmarkContainer() {
+            // Build breadcrumb path text from segment names
+            const pathSegments = this.containerPath.split('/').filter(s => s.length > 0);
+            const pathText = pathSegments.map(segment => {
+                const name = NavigationRegistry.getDisplayName(segment);
+                return name !== 'Unknown' ? name : segment.charAt(0).toUpperCase() + segment.slice(1);
+            }).join(' / ');
+            
+            // Store reference to appContext for the action callback (stable across re-renders)
+            const appCtx = this.appContext;
+            const containerPath = this.containerPath;
+            
+            // Create a blue notification with action to navigate back to this path
+            const bannerKey = `bookmark-${Date.now()}`;
+            const bookmarkBanner = {
+                key: bannerKey,
+                color: 'blue',
+                message: `Page bookmarked: ${pathText}`,
+                visible: true,
+                dismissible: true,
+                action: {
+                    label: 'Return',
+                    fn: () => {
+                        appCtx.navigateToPath(containerPath);
+                    }
+                }
+            };
+            
+            // Push to app-level notification bus (scope: 'app')
+            const currentBanners = this.$notify.getBanners('app') || [];
+            this.$notify.setBanners('app', [...currentBanners, bookmarkBanner]);
+        },
         handleWheel() {
             // Only set isScrolling if container is clipping content
             const container = this.$el;
@@ -210,6 +242,12 @@ export const ContainerComponent = {
                             @click="expandContainer" 
                             title="Expand to page">
                         <span class="material-symbols-outlined">expand_content</span>
+                    </button>
+                    <button v-if="containerPath && containerPath.includes('/') && !cardStyle"
+                            class="button-symbol white"
+                            @click="bookmarkContainer"
+                            title="Create bookmark">
+                        <span class="material-symbols-outlined">bookmark</span>
                     </button>
                     <button v-if="containerPath && !cardStyle"
                             class="button-symbol white"

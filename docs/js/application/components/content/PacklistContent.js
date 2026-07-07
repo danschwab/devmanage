@@ -791,7 +791,7 @@ export const PacklistContent = {
             
             // Determine card styling based on lock state and unsaved changes
             // Priority: locked (white) > unsaved changes (red) > normal (gray)
-            const cardClass = isLocked ? 'white' : (hasUnsavedChanges ? 'red' : 'gray');
+            const cardClass = isLocked ? 'yellow' : (hasUnsavedChanges ? 'red' : 'gray');
             //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
             
             // Build content footer

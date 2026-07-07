@@ -713,7 +713,7 @@ export const InventoryTableComponent = {
             return [
                 {
                     key: 'lock',
-                    color: '',
+                    color: 'yellow',
                     message: this.lockedBySelf
                         ? 'You have this table open for editing on another device.'
                         : `Locked for edit by: ${this.lockOwnerDisplay}`,

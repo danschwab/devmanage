@@ -19,6 +19,14 @@ export const NotificationBubbleOverlay = {
     },
     methods: {
         showAlertDetails(banner) {
+            const dismissBanner = () => {
+                // Remove the banner from the notification bus
+                const scope = banner._scope;
+                const currentBanners = this.$notify.getBanners(scope) || [];
+                const filtered = currentBanners.filter(b => b.key !== banner.key);
+                this.$notify.setBanners(scope, filtered);
+            };
+
             this.$modal.confirm(
                 String(banner.message || ''),
                 () => {
@@ -26,23 +34,27 @@ export const NotificationBubbleOverlay = {
                         banner.action.fn();
                     }
                 },
-                null,
-                'Alert',
-                banner.action ? banner.action.label : 'OK'
+                dismissBanner,
+                'Notification',
+                banner.action ? banner.action.label : 'OK',
+                'Dismiss',
+                `reading-menu small-menu alert-modal ${banner.color}`
             );
         },
 
         getAlertSymbol(banner) {
+            // Check if this is a bookmark banner by key pattern
+            if (banner.key && banner.key.startsWith('bookmark-')) {
+                return { type: 'material', symbol: 'bookmark' };
+            }
+            
             // Return a symbol based on the banner color
             const symbols = {
-                red: '⚠',
-                orange: '⚠',
-                yellow: '⚠',
-                blue: 'ℹ',
-                green: '✓',
-                purple: '★'
+                red: { type: 'emoji', symbol: '⚠' },
+                orange: { type: 'emoji', symbol: '⚠' },
+                yellow: { type: 'emoji', symbol: '⚠' }
             };
-            return symbols[banner.color] || 'ℹ';
+            return symbols[banner.color] || { type: 'emoji', symbol: 'ℹ' };
         }
     },
     template: html`
@@ -52,10 +64,11 @@ export const NotificationBubbleOverlay = {
                     v-for="banner in scrolledOutBanners"
                     :key="banner._scope + '-' + banner.key"
                     @click="showAlertDetails(banner)"
-                    :class="['button-symbol', banner.color]"
+                    :class="['button-symbol', banner.color || 'white']"
                     :title="banner.message"
                 >
-                    {{ getAlertSymbol(banner) }}
+                    <span v-if="getAlertSymbol(banner).type === 'material'" class="material-symbols-outlined">{{ getAlertSymbol(banner).symbol }}</span>
+                    <span v-else>{{ getAlertSymbol(banner).symbol }}</span>
                 </button>
             </div>
         </transition>

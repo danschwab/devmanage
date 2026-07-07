@@ -623,29 +623,7 @@ button.card {
     width: 100%;
     text-align: center;
 }
-.close-button {
-    background-color: transparent;
-    display: block;
-    font-size: 14px;
-    color: var(--color-text-light);
-    width: 22px;
-    padding:0;
-    height: 22px;
-    line-height: 0;
-    flex-basis: 22px;
-    flex-grow: 0;
-    flex-shrink: 0;
-    box-shadow: none;
-    text-align: center;
-}
-.close-button:only-child {
-    margin-left:auto;
-}
 
-.close-button:hover {
-    background-color: var(--color-gray-bg-hover);
-    color: var(--color-text-inverted);
-}
 .modal .content {
     max-height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
     overflow: auto;
@@ -695,7 +673,7 @@ button.card {
 }
 
 
-.hamburger-menu button, .hamburger-menu .button-bar {
+.hamburger-menu > .content button, .hamburger-menu >.content .button-bar {
     margin: 0;
     margin-top: var(--padding-sm);
     max-width:100%;
@@ -928,6 +906,13 @@ tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hov
     opacity: 0;
 }
 
+/* Modal Close Buttons */
+.modal .column-button {
+    opacity: 1;
+    pointer-events: auto;
+    justify-self: flex-end;
+    position: unset;
+}
 
 
 

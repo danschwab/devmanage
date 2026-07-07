@@ -43,7 +43,8 @@ const App = {
             currentPath: 'dashboard',
             modals: [],
             currentYear: new Date().getFullYear(),
-            globalLocksStore: null // Global reactive store for ALL locks
+            globalLocksStore: null, // Global reactive store for ALL locks
+            notificationBus: notificationBus // Reference for reactivity
         };
     },
     computed: {
@@ -72,7 +73,7 @@ const App = {
             return authState.isOffline;
         },
         appBanners() {
-            return [
+            const staticBanners = [
                 {
                     key: 'offline',
                     color: 'orange',
@@ -95,6 +96,10 @@ const App = {
                     dismissible: false
                 }
             ];
+            
+            // Combine static banners with dynamic ones from the notification bus
+            const dynamicBanners = this.notificationBus.getBanners('app') || [];
+            return [...staticBanners, ...dynamicBanners];
         },
         dashboardLoading() {
             return NavigationRegistry.dashboardRegistry.isLoading;
@@ -258,6 +263,11 @@ const App = {
                 }
             });
         });
+
+        // Watch for notification bus app-level changes to force computed to recalculate
+        this.$watch(() => this.notificationBus.getBanners('app'), (newBanners) => {
+            // Just accessing it in watch forces Vue to track and recompute appBanners
+        }, { deep: true });
 
         this.appLoading = false;
     },

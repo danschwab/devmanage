@@ -213,42 +213,43 @@ button:disabled:after {
 div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)) {
     border-color: var(--color-border);
     background-color: var(--background-color);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)) {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.purple, span.purple, col.purple, tr.purple {
     border-color: var(--color-purple);
     background-color: var(--color-purple-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.red, span.red, col.red, tr.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.orange, span.orange, col.orange, tr.orange {
     border-color: var(--color-orange);
     background-color: var(--color-orange-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.yellow, span.yellow, col.yellow, tr.yellow {
     border-color: var(--color-yellow);
     background-color: var(--color-yellow-bg);
-    color: var(--color-text)
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
 }
 div.blue, span.blue, col.blue, tr.blue {
     border-color: var(--color-blue);
     background-color: var(--color-blue-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 div.green, span.green, col.green, tr.green {
     border-color: var(--color-green);
     background-color: var(--color-green-bg);
-    color: var(--color-text)
+    color: var(--color-text);
 }
 
 
@@ -278,42 +279,42 @@ div.clickable.green:hover, div.clickable.green.hovered, span.clickable.green:hov
 }
 
 
-button.white, input[type="button"].white, input[type="submit"].white, .button.white, thead.white > tr > th {
+button.white, input[type="button"].white, input[type="submit"].white, .button.white, thead.white > tr > th, .white > .modal-header {
     background-color: var(--background-color);
     color: var(--color-text-light);
     border: 1px solid var(--color-border);
 }
-button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray, thead.gray > tr > th {
+button.gray, input[type="button"].gray, input[type="submit"].gray, .button.gray, thead.gray > tr > th, .gray > .modal-header {
     background-color: var(--color-gray);
     color: var(--color-text-inverted);
     border: 1px solid var(--color-border);
 }
-button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple, thead.purple > tr > th {
+button.purple, input[type="button"].purple, input[type="submit"].purple, .button.purple, thead.purple > tr > th, .purple > .modal-header {
     background-color: var(--color-purple);
     color: var(--color-text-inverted);
     border: none;
 }
-button.red, input[type="button"].red, input[type="submit"].red, .button.red, thead.red > tr > th {
+button.red, input[type="button"].red, input[type="submit"].red, .button.red, thead.red > tr > th, .red > .modal-header {
     background-color: var(--color-red);
     color: var(--color-text-inverted);
     border: none;
 }
-button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange, thead.orange > tr > th {
+button.orange, input[type="button"].orange, input[type="submit"].orange, .button.orange, thead.orange > tr > th, .orange > .modal-header {
     background-color: var(--color-orange);
     color: var(--color-text-inverted);
     border: none;
 }
-button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow, thead.yellow > tr > th {
+button.yellow, input[type="button"].yellow, input[type="submit"].yellow, .button.yellow, thead.yellow > tr > th, .yellow > .modal-header {
     background-color: var(--color-yellow);
     color: var(--color-text);
-    border: none;
+    border: 1px solid var(--color-border);
 }
-button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue, thead.blue > tr > th {
+button.blue, input[type="button"].blue, input[type="submit"].blue, .button.blue, thead.blue > tr > th, .blue > .modal-header {
     background-color: var(--color-blue);
     color: var(--color-text-inverted);
     border: none;
 }
-button.green, input[type="button"].green, input[type="submit"].green, .button.green, thead.green > tr > th {
+button.green, input[type="button"].green, input[type="submit"].green, .button.green, thead.green > tr > th, .green > .modal-header {
     background-color: var(--color-green);
     color: var(--color-text-inverted);
     border: none;

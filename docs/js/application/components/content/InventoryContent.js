@@ -211,7 +211,7 @@ export const InventoryContent = {
                     
                     // Determine card styling based on lock state and unsaved changes
                     // Priority: locked (white) > unsaved changes (red) > normal (purple)
-                    const cardClass = isLocked ? 'button white' : (hasUnsavedChanges ? 'button red' : 'button purple');
+                    const cardClass = isLocked ? 'button yellow' : (hasUnsavedChanges ? 'button red' : 'button purple');
                     
                     // Build content footer
                     let contentFooter = undefined;
