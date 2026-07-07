@@ -276,8 +276,21 @@ export const PacklistTable = {
                 {
                     key: 'conflict',
                     color: 'red',
-                    message: 'Another session changed this data while you have unsaved edits. Save to keep your changes or refresh to discard them.',
-                    visible: this.hasExternalConflict
+                    message: 'Another session changed this data while you have unsaved edits. Save to keep your changes or discard them.',
+                    visible: this.hasExternalConflict,
+                    action: {
+                        label: 'Discard', fn: () =>
+                            this.$modal.confirm(
+                                'Are you sure you want to discard your changes?',
+                                () => {
+                                    this.packlistTableStore?.load('Reloading...');
+                                },
+                                null,
+                                'Discard Changes',
+                                'Discard',
+                                'Cancel'
+                            )
+                    }
                 }
             ];
         },

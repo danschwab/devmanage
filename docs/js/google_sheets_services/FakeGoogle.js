@@ -165,11 +165,10 @@ export class FakeGoogleSheetsService {
         'CACHE': 'fake_cache_sheet_id'
     };
 
-    // Captured once on the first Caching poll so it stays older than subsequently-refilled cache entries.
-    // This simulates a one-time external change rather than a perpetual loop.
-    static _simulatedCachingTimestamp = null;
-
     // Mock data for different sheets
+    // NOTE: CACHE/Caching tab is dynamically initialized on first access in getSheetData, not pre-defined here.
+    // This allows writeCacheTimestamp to write updated timestamps that are actually read by the poller,
+    // enabling proper testing of cache invalidation flows in localhost development.
     static mockData = {
         'INVENTORY': {
             'INDEX': [
@@ -959,17 +958,20 @@ export class FakeGoogleSheetsService {
         // Parse range to extract sheet name and cell range
         const [sheetName, cellRange] = range.split('!');
 
-        // Simulate an external session having changed PACK_LISTS data.
-        // The timestamp is captured once on first call — subsequent polls return the same value
-        // so the poller only fires once (when cache.filled < timestamp), not on every tick.
+        // Initialize Caching tab in mockData if it doesn't exist yet
+        // CRITICAL: Caching tab MUST have both columns (Key, Timestamp) populated for poller to function.
+        // Rows with missing timestamps are skipped by the invalidation logic.
         if (tableId === 'CACHE' && sheetName === 'Caching') {
-            if (!FakeGoogleSheetsService._simulatedCachingTimestamp) {
-                FakeGoogleSheetsService._simulatedCachingTimestamp = new Date().toISOString();
+            if (!this.mockData[tableId]) this.mockData[tableId] = {};
+            if (!this.mockData[tableId][sheetName]) {
+                // Initialize with headers and one simulated entry with an old timestamp
+                // so the first poll doesn't immediately fire
+                const oldTimestamp = new Date(Date.now() - 60000).toISOString(); // 1 minute ago
+                this.mockData[tableId][sheetName] = [
+                    ['Key', 'Timestamp'],
+                    ['database:getData:"PACK_LISTS","ATSC 2025 NAB"', oldTimestamp]
+                ];
             }
-            return [
-                ['Key', 'Timestamp'],
-                ['database:getData:"PACK_LISTS","ATSC 2025 NAB"', FakeGoogleSheetsService._simulatedCachingTimestamp]
-            ];
         }
 
         const sheetData = this.mockData[tableId] && this.mockData[tableId][sheetName];
@@ -1012,11 +1014,14 @@ export class FakeGoogleSheetsService {
         await this.delay(150);
 
         try {
-            // Handle range-specific updates (e.g., "Locks!B2" for single lock cells)
+            // Handle range-specific updates (e.g., "Locks!B2" for single cell, "Caching!A2:B2" for row updates)
+            // CRITICAL: Must support multi-column writes. writeCacheTimestamp uses A#:B# ranges to write
+            // both Key and Timestamp columns simultaneously. Single-column writes would break cache invalidation.
             const rangeMatch = tabName.match(/^([^!]+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
             if (rangeMatch) {
                 const [, sheetName, startCol, startRow, endCol, endRow] = rangeMatch;
-                const colIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
+                const startColIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
+                const endColIndex = endCol.charCodeAt(0) - 'A'.charCodeAt(0);
                 const rowIndex = parseInt(startRow) - 1;
                 
                 // Initialize sheet if it doesn't exist
@@ -1033,16 +1038,23 @@ export class FakeGoogleSheetsService {
                     this.mockData[tableId][sheetName].push([]);
                 }
                 
-                // Ensure column exists in row
-                while (this.mockData[tableId][sheetName][rowIndex].length <= colIndex) {
+                // Ensure columns exist in row (expand to endColIndex)
+                while (this.mockData[tableId][sheetName][rowIndex].length <= endColIndex) {
                     this.mockData[tableId][sheetName][rowIndex].push('');
                 }
                 
-                // Update the specific cell
+                // Update the cell(s) - handle both single cell and multi-column ranges
                 if (Array.isArray(updates) && updates.length > 0 && Array.isArray(updates[0])) {
-                    this.mockData[tableId][sheetName][rowIndex][colIndex] = updates[0][0];
-                    //console.log(`[FakeGoogle.setSheetData] Updated mockData['${tableId}']['${sheetName}'][${rowIndex}][${colIndex}] = ${updates[0][0]}`);
-                    //console.log(`[FakeGoogle.setSheetData] Full Locks grid now:`, JSON.stringify(this.mockData[tableId][sheetName]));
+                    for (let colOffset = 0; colOffset < updates[0].length; colOffset++) {
+                        const targetColIndex = startColIndex + colOffset;
+                        if (targetColIndex <= endColIndex) {
+                            this.mockData[tableId][sheetName][rowIndex][targetColIndex] = updates[0][colOffset];
+                        }
+                    }
+                    // Debug log for Caching tab writes
+                    if (tableId === 'CACHE' && sheetName === 'Caching') {
+                        console.log(`[FakeGoogle] Caching tab updated at row ${rowIndex + 1}:`, updates[0]);
+                    }
                 }
                 return true;
             }

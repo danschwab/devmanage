@@ -173,7 +173,35 @@ class CacheManager {
     }
     
     /**
-     * Invalidates a cache entry and all dependent entries
+     * Invalidates a cache entry and all dependent entries.
+     *
+     * ═══════════════════════════════════════════════════════════════
+     * CRITICAL — DO NOT REORDER THESE STEPS
+     *
+     * The invalidation sequence must be:
+     *   1. Delete the cache entry
+     *   2. Reverse-scan dependencies to find callers (dependents)
+     *   3. Recursively invalidate each dependent (step 2–5 for each)
+     *   4. Delete THIS key's own dependency record
+     *   5. Emit the CacheInvalidationBus event (MUST be last)
+     *
+     * Step 4 (dependencies.delete) MUST come after step 3 so that the
+     * recursive calls can still find and walk the full chain. Moving it
+     * before step 3 would silently break the cascade for every caller.
+     *
+     * Step 5 (bus emit) MUST come last so that reactive store listeners
+     * that fire synchronously on the event see a fully-cleared cache with
+     * no stale entries for any part of the chain. Emitting earlier would
+     * allow a listener to read a partially-valid cache.
+     *
+     * Dependency records are destroyed after each invalidation. They are
+     * re-registered the next time the chain is executed (on reload). Any
+     * code path that calls invalidate() but does NOT trigger a subsequent
+     * reload MUST separately repopulate the cache (e.g., via apiCall())
+     * to restore the dependency chain before the next external change
+     * can be detected.
+     * ═══════════════════════════════════════════════════════════════
+     *
      * @param {string} key - Cache key to invalidate
      * @param {Set} invalidationStack - Set of keys currently being invalidated (to prevent recursion)
      */
@@ -210,12 +238,14 @@ class CacheManager {
             CacheManager.invalidate(depKey, invalidationStack);
         }
         
-        // Clean up dependency registration
+        // Clean up dependency registration — MUST come after recursive invalidation above
+        // so that the full chain is walked before any records are removed.
         CacheManager.dependencies.delete(key);
         
         
         // Emit invalidation event for reactive stores (only for 'api' namespace)
-        // THIS MUST HAPPEN LAST to avoid incorrect cache hits during cascading invalidation
+        // THIS MUST HAPPEN LAST — all cache entries and dependency records for the entire
+        // chain must be cleared before any listener callback fires.
         // Extract namespace, methodName, and argsString from key
         // Key format: "namespace:methodName:argsString"
         // Note: argsString may contain colons (e.g., JSON with {"type":"value"})
@@ -411,6 +441,32 @@ class CacheManager {
 
 export const wrapMethods = CacheManager.wrapMethods;
 export const invalidateCache = CacheManager.invalidateCache;
+
+/**
+ * Write a "data changed" timestamp to the CACHE/Caching sheet for the given prefix.
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * CRITICAL — TIMESTAMP ORDERING CONTRACT
+ *
+ * stampDataChange must be called BEFORE the corresponding local cache
+ * entry is repopulated. The current write sequence in Database.setData
+ * is:
+ *   1. GoogleSheetsService.setSheetData  (data written to sheet)
+ *   2. stampDataChange                   (timestamp captured & written — async, fire-and-forget)
+ *   3. invalidateCache                   (local cache cleared — synchronous)
+ *   4. store.save() → apiCall()          (local cache repopulated — async)
+ *
+ * Because the timestamp value is captured at step 2 (before the cache
+ * refill at step 4), the Caching tab timestamp is always earlier than
+ * the local cache's `entry.filled`. This guarantees that the local
+ * session's own poller never spuriously re-invalidates its freshly-
+ * saved data, while other sessions (whose caches were filled before
+ * step 1) correctly detect the change.
+ *
+ * DO NOT move stampDataChange after invalidateCache or after the cache
+ * repopulation — doing so would break detection in the local session.
+ * ═══════════════════════════════════════════════════════════════
+ */
 export function stampDataChange(prefix) {
     if (CacheManager._timestampWriter) {
         CacheManager._timestampWriter(prefix);
@@ -425,6 +481,35 @@ export function clearCache() {
 export { CacheInvalidationBus };
 
 // Remote cache timestamp synchronization
+//
+// ═══════════════════════════════════════════════════════════════
+// HOW EXTERNAL CHANGE DETECTION WORKS
+//
+// When this app (or an external app) writes data, it also writes a
+// timestamp to the CACHE sheet's "Caching" tab:
+//   Key                                       | Timestamp
+//   database:getData:"INVENTORY","FURNITURE"  | 2026-07-07T12:00:00Z
+//
+// This poller reads that tab every 30 s (prod) / 10 s (localhost) and
+// compares each entry's timestamp against the local in-memory cache:
+//
+//   FOR INVALIDATION TO FIRE, ALL OF THE FOLLOWING MUST BE TRUE:
+//   1. A cache entry exists whose key STARTS WITH the Caching tab key.
+//      If no entry exists (data not loaded, or TTL already expired and
+//      not yet refilled), the poller silently skips that key.
+//   2. remoteTs (Caching tab) > entry.filled (local cache fill time).
+//      The external write timestamp must be strictly newer than when
+//      this session last loaded the data.
+//
+// EXTERNAL APP REQUIREMENTS:
+//   - Write the data to the sheet FIRST, then write the Caching tab.
+//   - The Caching tab key must exactly match the prefix format:
+//       database:getData:"<TABLE_ID>","<TAB_NAME>"
+//   - TABLE_ID values: INVENTORY, PACK_LISTS, PRODUCTION_SCHEDULE, CACHE
+//
+// DEBUGGING: On localhost, use the browser console test helper:
+//   window.__tsliTestExternalChange('database:getData:"INVENTORY","FURNITURE"')
+// ═══════════════════════════════════════════════════════════════
 let _cacheTimestampPollerInterval = null;
 let _pollerReadFn = null;
 let _pollerIntervalMs = 60 * 1000;
@@ -450,6 +535,10 @@ export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
                 if (!key || !timestamp) continue;
                 const remoteTs = new Date(timestamp).getTime();
                 if (isNaN(remoteTs)) continue;
+                // CRITICAL: Poller can only invalidate cache entries that exist in CacheManager.cache.
+                // If data hasn't been loaded yet (user never navigated to that page), the cache entry
+                // won't exist and invalidation is silently skipped. This is by design - no point
+                // invalidating data that hasn't been loaded.
                 let shouldInvalidate = false;
                 for (const [cacheKey, entry] of CacheManager.cache.entries()) {
                     if (cacheKey.startsWith(key) && entry.filled && remoteTs > entry.filled) {
@@ -478,5 +567,61 @@ export function stopCacheTimestampPoller() {
 export function restartCacheTimestampPoller() {
     if (!_cacheTimestampPollerInterval && _pollerReadFn) {
         startCacheTimestampPoller(_pollerReadFn, _pollerIntervalMs);
+    }
+}
+
+/**
+ * Run the cache-timestamp poll cycle immediately (outside of the normal interval).
+ * Reads the Caching tab, compares timestamps against in-memory cache entries,
+ * and fires CacheInvalidationBus events for any stale entries found.
+ *
+ * Usage from the browser console:
+ *   import('/docs/js/data_management/utils/caching.js').then(m => m.triggerCachePoll())
+ * Or via the TSLI test helper (available on localhost):
+ *   window.__tsliTestExternalChange('database:getData:"INVENTORY","FURNITURE"')
+ */
+export async function triggerCachePoll() {
+    if (!_pollerReadFn) {
+        console.warn('[CachePoll] No poll function configured — call startCacheTimestampPoller first.');
+        return;
+    }
+    try {
+        const entries = await _pollerReadFn();
+        if (entries === null) {
+            console.warn('[CachePoll] Auth unavailable, poll aborted.');
+            return;
+        }
+        if (!Array.isArray(entries) || entries.length === 0) {
+            console.log('[CachePoll] Caching tab is empty — no entries to check.');
+            return;
+        }
+        console.log(`[CachePoll] Found ${entries.length} entries in Caching tab:`, entries.map(e => e.key));
+        for (const { key, timestamp } of entries) {
+            if (!key || !timestamp) continue;
+            const remoteTs = new Date(timestamp).getTime();
+            if (isNaN(remoteTs)) continue;
+            let shouldInvalidate = false;
+            let matchedCacheKey = null;
+            for (const [cacheKey, entry] of CacheManager.cache.entries()) {
+                if (cacheKey.startsWith(key) && entry.filled && remoteTs > entry.filled) {
+                    shouldInvalidate = true;
+                    matchedCacheKey = cacheKey;
+                    break;
+                }
+            }
+            if (shouldInvalidate) {
+                console.log(`[CachePoll] Stale entry detected for "${key}" (matched: "${matchedCacheKey}") — invalidating.`);
+                CacheManager.invalidateByPrefix(key);
+            } else {
+                const hasEntry = [...CacheManager.cache.keys()].some(k => k.startsWith(key));
+                if (!hasEntry) {
+                    console.log(`[CachePoll] No cache entry found matching prefix "${key}" — nothing to invalidate.`);
+                } else {
+                    console.log(`[CachePoll] Cache for "${key}" is newer than remote timestamp — already up to date.`);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('[CachePoll] Poll failed:', err);
     }
 }

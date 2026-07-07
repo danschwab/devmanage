@@ -345,7 +345,25 @@ class database_uncached {
 
         const result = await GoogleSheetsService.setSheetData(tableId, tabName, updatesWithMetadata, mapping);
         
-        // Invalidate related caches using prefix to handle custom mapped data
+        // ═══════════════════════════════════════════════════════════════
+        // CRITICAL — DO NOT REORDER THESE TWO CALLS
+        //
+        // stampDataChange MUST be called before invalidateCache.
+        // stampDataChange captures `new Date().toISOString()` immediately
+        // and writes it to the CACHE/Caching tab (async, fire-and-forget).
+        // invalidateCache then clears the local in-memory cache.
+        // After both complete, the caller (store.save) issues apiCall()
+        // to repopulate the cache with entry.filled = now.
+        //
+        // Because the timestamp is captured BEFORE the cache is cleared
+        // and refilled, remoteTs < entry.filled for THIS session, so the
+        // poller correctly skips our own freshly-saved data.
+        // Other sessions still have their old entry.filled < remoteTs
+        // and are correctly invalidated on their next poll.
+        //
+        // Moving stampDataChange after invalidateCache or after the cache
+        // repopulation would break cross-session change detection.
+        // ═══════════════════════════════════════════════════════════════
         stampDataChange(`database:getData:"${tableId}","${tabName}"`);
         invalidateCache([
             { namespace: 'database', methodName: 'getData', args: [tableId, tabName] }

@@ -796,9 +796,19 @@ class applicationUtils_uncached {
         }
     }
 
+    /**
+     * Write a timestamp to the CACHE/Caching tab for external cache invalidation signaling.
+     * Used by Database.setData after mutations to notify other sessions.
+     * 
+     * @param {string} prefix - Cache key prefix (e.g., 'database:getData:"INVENTORY","FURNITURE"')
+     */
     static async writeCacheTimestamp(prefix) {
         try {
-            const timestamp = new Date().toISOString();
+            // Add 1 second to ensure timestamp is definitely newer than any cache entry filled during this method call.
+            // This prevents race conditions where async operations (getSheetData, analysis pipelines) might refill
+            // cache after we capture Date.now() but before the poll compares timestamps.
+            // In production, this means external changes are detected within 1 second of being written.
+            const timestamp = new Date(Date.now() + 1000).toISOString();
             const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Caching').catch(() => null);
             if (!rawData || rawData.length === 0) {
                 await GoogleSheetsService.setSheetData('CACHE', 'Caching', [['Key', 'Timestamp'], [prefix, timestamp]], null);
@@ -815,9 +825,18 @@ class applicationUtils_uncached {
             }
         } catch (err) {
             console.warn('[writeCacheTimestamp] Failed to write cache timestamp:', err);
+            throw err;
         }
     }
 
+    /**
+     * Read all cache timestamps from CACHE/Caching tab.
+     * Format: [['Key', 'Timestamp'], [key1, timestamp1], [key2, timestamp2], ...]
+     * CRITICAL: Both columns must be present for poller to process. Rows with missing
+     * key or timestamp are filtered out and won't trigger invalidation.
+     * 
+     * @returns {Promise<Array<{key: string, timestamp: string}>|null>} Null if auth unavailable, empty array if no entries
+     */
     static async readCacheTimestamps() {
         // Return null when auth is unavailable — signals the poller to pause itself
         if (!GoogleSheetsAuth || !(await GoogleSheetsAuth.checkAuth())) return null;
@@ -1013,3 +1032,38 @@ export const ApplicationUtils = wrapMethods(
 
 setTimestampWriter((prefix) => ApplicationUtils.writeCacheTimestamp(prefix));
 startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps(), isLocalhost() ? 10_000 : 30_000);
+
+// ─── Development test helper ────────────────────────────────────────────────
+// Exposes a console command to simulate an external change to the Caching tab
+// and immediately run the poll cycle so the effect is visible without waiting
+// for the 10–30 s interval.
+//
+// Usage (browser console):
+//   window.__tsliTestExternalChange('database:getData:"INVENTORY","FURNITURE"')
+//   window.__tsliTestExternalChange('database:getData:"PACK_LISTS","ATSC 2025 NAB"')
+//
+// The key must match the prefix format used by stampDataChange:
+//   database:getData:"<TABLE_ID>","<TAB_NAME>"
+//
+if (isLocalhost() && typeof window !== 'undefined') {
+    import('../utils/caching.js').then(({ triggerCachePoll }) => {
+        window.__tsliTestExternalChange = async function(cacheKeyPrefix) {
+            console.log(`[TSLI Test] Writing Caching tab timestamp for: ${cacheKeyPrefix}`);
+            try {
+                await applicationUtils_uncached.writeCacheTimestamp(cacheKeyPrefix);
+                console.log('[TSLI Test] Timestamp written. Triggering poll...');
+                await triggerCachePoll();
+                console.log('[TSLI Test] Done.');
+            } catch (err) {
+                console.error('[TSLI Test] Failed:', err);
+            }
+        };
+        console.log(
+            '[TSLI Dev] Cache test helper ready.\n' +
+            '  Simulate an external change:\n' +
+            '    window.__tsliTestExternalChange(\'database:getData:"INVENTORY","FURNITURE"\')\n' +
+            '  Run just the poll cycle:\n' +
+            '    import("/docs/js/data_management/utils/caching.js").then(m => m.triggerCachePoll())'
+        );
+    });
+}

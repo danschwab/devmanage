@@ -1015,6 +1015,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // The UI will show a warning banner; reload happens after the user saves or discards.
             if (this.isModified) {
                 this.externalConflict = true;
+                // CRITICAL: The invalidation cascade already deleted all cache entries and dependency
+                // records for this store's chain. Without repopulating the cache here, the poller
+                // will find no matching entry on subsequent ticks and silently skip all future
+                // external changes until the user resolves the conflict. Re-fetching now re-registers
+                // the full dependency chain so the system remains aware of further changes.
+                apiCall(...apiArgs).catch(() => {});
                 return;
             }
             await this.load('Reloading data due to invalidation...');
@@ -1599,11 +1605,29 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
 }
 
 /**
- * Setup cache invalidation listeners for a reactive store
- * @param {Object} store - The reactive store instance
- * @param {Function} apiCall - The main API call function
- * @param {Array} apiArgs - Arguments for the API call
- * @param {Array} analysisConfig - Analysis configuration
+ * Setup cache invalidation listeners for a reactive store.
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * HOW THIS CONNECTS TO THE INVALIDATION CHAIN
+ *
+ * The CacheInvalidationBus emits events only for 'api:*' namespace keys
+ * (see CacheManager.invalidate). This function subscribes to the pattern
+ * matching the store's load function (e.g. 'api:getInventoryTabData').
+ *
+ * ARGS MATCHING CONTRACT:
+ *   storeArgs = JSON.stringify(apiArgs).replace(/^\[|\]$/g, '')
+ *   This must equal the argsString embedded in the cache key that was
+ *   invalidated. The cache key is generated from the exact arguments
+ *   passed when the store called apiCall — which is apiArgs spread with
+ *   no extras. Any default parameters added INSIDE the api function are
+ *   not part of the outer key, so they do not affect this comparison.
+ *
+ * LISTENER LIFECYCLE:
+ *   Listeners are registered once when the store is first created and
+ *   are never removed. They remain active for the lifetime of the page.
+ *   A new store with the same key reuses the existing store instance
+ *   (see getReactiveStore) so listeners are not duplicated.
+ * ═══════════════════════════════════════════════════════════════
  */
 function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig) {
     // Subscribe to main API call invalidations (triggers full reload)

@@ -545,8 +545,8 @@ export const NavigationRegistry = {
             //console.log('[NavigationRegistry] Cached parameters for', cleanPath, ':', route.lastParameters);
         }
         
-        // For dashboard, also update the stored container path
-        if (isOnDashboard) {
+        // For dashboard, also update the stored container path (only if container exists on dashboard)
+        if (isOnDashboard && this.dashboardRegistry.has(cleanPath)) {
             this.dashboardRegistry.updatePath(cleanPath, newPath);
         }
         
