@@ -1486,10 +1486,6 @@ export const TableComponent = {
             type: String,
             default: null
         },
-        hamburgerMenuComponent: {
-            type: Object,
-            default: null
-        },
         hideColumns: {
             type: Array,
             default: () => []
@@ -2998,19 +2994,6 @@ export const TableComponent = {
         handleRowMove() {
             this.$emit('row-move');
         },
-        handleHamburgerMenu() {
-            // Show the hamburger menu modal directly
-            if (this.hamburgerMenuComponent) {
-                this.$modal.custom(
-                    this.hamburgerMenuComponent.components,
-                    { 
-                        ...this.hamburgerMenuComponent.props,
-                        modalClass: 'hamburger-menu'
-                    },
-                    this.title || 'Menu'
-                );
-            }
-        },
         
         handleUndo() {
             if (this.canUndo) {
@@ -4297,7 +4280,7 @@ export const TableComponent = {
                         name="header-area"
                     ></slot>
                     <div class="spacer"></div>
-                    <div v-if="showNewRowButton || showSaveButton || showRefresh || hamburgerMenuComponent || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
+                    <div v-if="showNewRowButton || showSaveButton || showRefresh || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
                         <div v-if="showSearch" class="input-container">
                             <input
                                 type="text"
@@ -4365,14 +4348,6 @@ export const TableComponent = {
                             title="Redo"
                         >
                             ⮣
-                        </button>
-                        <button
-                            v-if="hamburgerMenuComponent"
-                            @click="handleHamburgerMenu"
-                            title="More Table Options"
-                            class="button-symbol white"
-                        >
-                            ☰
                         </button>
                         <ViewChangeComponent
                             v-if="viewModes && containerPath && navigateToPath"

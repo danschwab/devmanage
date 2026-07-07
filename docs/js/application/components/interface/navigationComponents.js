@@ -1,7 +1,42 @@
 import { html, NavigationRegistry, appSettings, runNonessentialAnalysisOnAllStores } from '../../index.js';
 import { PriorityQueue } from '../../utils/priorityQueue.js';
 
+// Settings Menu Component
+const SettingsMenuComponent = {
+    inject: ['$modal', '$notify'],
+    props: {
+        darkMode: { type: Boolean, required: true },
+        onlyEssentialAnalysis: { type: Boolean, required: true },
+        toggleDarkMode: { type: Function, required: true },
+        toggleEssentialAnalysis: { type: Function, required: true }
+    },
+    emits: ['close-modal'],
+    methods: {
+        handleToggleAnalysis() {
+            this.toggleEssentialAnalysis();
+            this.$emit('close-modal');
+        },
+        handleToggleDarkMode() {
+            this.toggleDarkMode();
+            this.$emit('close-modal');
+        }
+    },
+    template: html`
+        <div class="page-menu-items">
+            <button @click="handleToggleAnalysis" 
+                    :class="['page-menu-item', { 'red': onlyEssentialAnalysis }]">
+                {{ onlyEssentialAnalysis ? 'Enable' : 'Disable' }} Advanced Analysis
+            </button>
+            <button @click="handleToggleDarkMode" 
+                    class="page-menu-item">
+                {{ darkMode ? 'Light' : 'Dark' }} Mode
+            </button>
+        </div>
+    `
+};
+
 export const PrimaryNavComponent = {
+    inject: ['$modal', '$notify'],
     props: {
         isMenuOpen: {
             type: Boolean,
@@ -63,6 +98,47 @@ export const PrimaryNavComponent = {
         }
     },
     methods: {
+        openSettingsMenu() {
+            this.$modal.custom(SettingsMenuComponent, {
+                modalClass: 'hamburger-menu small-menu',
+                darkMode: this.darkMode,
+                onlyEssentialAnalysis: this.onlyEssentialAnalysis,
+                toggleDarkMode: this.toggleDarkMode,
+                toggleEssentialAnalysis: this.toggleEssentialAnalysis
+            }, 'Settings');
+        },
+        updateAnalysisBanner() {
+            const banners = this.$notify.getBanners('app') || [];
+            const existingIndex = banners.findIndex(b => b.key === 'analysis-disabled');
+            
+            if (this.onlyEssentialAnalysis) {
+                const banner = {
+                    key: 'analysis-disabled',
+                    color: 'orange',
+                    message: 'Advanced analysis is disabled. Some features may not be available.',
+                    visible: true,
+                    dismissible: false,
+                    action: {
+                        label: 'Enable',
+                        fn: () => {
+                            this.toggleEssentialAnalysis();
+                        }
+                    }
+                };
+                
+                if (existingIndex >= 0) {
+                    banners[existingIndex] = banner;
+                } else {
+                    banners.push(banner);
+                }
+            } else {
+                if (existingIndex >= 0) {
+                    banners.splice(existingIndex, 1);
+                }
+            }
+            
+            this.$notify.setBanners('app', banners);
+        },
         toggleEssentialAnalysis() {
             const wasEssentialOnly = appSettings.onlyRunEssentialAnalysis;
             appSettings.onlyRunEssentialAnalysis = !appSettings.onlyRunEssentialAnalysis;
@@ -81,6 +157,9 @@ export const PrimaryNavComponent = {
                 //console.log('[Navigation] Enabling essential-only mode - clearing nonessential tasks');
                 PriorityQueue.clearNonessentialAnalysis();
             }
+            
+            // Update banner after toggle
+            this.updateAnalysisBanner();
         },
         toggleDarkMode() {
             this.darkMode = !this.darkMode;
@@ -120,6 +199,9 @@ export const PrimaryNavComponent = {
                 this.lastScrollTop = currentScroll;
             }
         });
+        
+        // Initialize banner state
+        this.updateAnalysisBanner();
     },
     beforeUnmount() {
         document.removeEventListener('mouseup', this.handleClickOutside);
@@ -144,15 +226,6 @@ export const PrimaryNavComponent = {
                     </template>
                     
                     <div class="button-bar">
-                        <button class="button-symbol" 
-                                @click="toggleEssentialAnalysis" 
-                                :class="{ 'red': onlyEssentialAnalysis }"
-                                :title="onlyEssentialAnalysis ? 'Running essential analysis only (click to enable all)' : 'Running all analysis (click to enable essential only)'">
-                            <span class="material-symbols-outlined">timeline</span>
-                        </button>
-                        <button class="button-symbol" @click="toggleDarkMode" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'">
-                            <span class="material-symbols-outlined">{{ darkMode ? 'light_mode' : 'dark_mode' }}</span>
-                        </button>
                         <button v-if="!isAuthenticated" 
                                 @click="$emit('login')" 
                                 :disabled="isAuthLoading"
@@ -164,6 +237,11 @@ export const PrimaryNavComponent = {
                                 :disabled="isAuthLoading"
                                 class="login-out-button">
                             {{ isAuthLoading ? 'Logging out...' : 'Logout (' + (currentUser?.name || '') + ')' }}
+                        </button>
+                        <button class="button-symbol" 
+                                @click="openSettingsMenu" 
+                                title="Settings">
+                            <span class="material-symbols-outlined">more_vert</span>
                         </button>
                     </div>
                 </span>

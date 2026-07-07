@@ -1,7 +1,6 @@
 feature that allows me to force clients to hard refresh on load
 new crate, nav away, nav back, no new items list
 lightbox fabric separate
-bookmark feature??? for quickly returning to things? or "Open Windows" sidebar?
 
 !!! Caching priority queue or allow nonessential processes to pause, and/or ensure that we don't use all threads at once
 !!! rebuild date matching logic from scratch
@@ -88,6 +87,7 @@ Other Features
 - [x] fix packlist table header alignment
 - [x] simplify and impliment more url filling and parameter saving in nav and back buttons (for instance breadcrumb nav should cache some url params)
 - [x] tableComponent finder needs: a clear all button
+- [x] bookmark feature for quickly returning to things
       clickable and highlightable (can copy contents) table cells instead of cell buttons
       allow modals to receive the arrow keys and enter button
 
