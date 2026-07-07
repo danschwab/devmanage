@@ -274,10 +274,13 @@ export class GoogleSheetsService {
         const rows = rawData.slice(1);
         const headerIdxMap = {};
         Object.entries(mapping).forEach(([key, headerName]) => {
+            // Skip _orderedHeaders metadata property (used only for reverseTransformSheetData)
+            if (key === '_orderedHeaders') return;
+            
             const normalizedHeaderName = normalizeHeaderName(headerName);
             const idx = headers.findIndex(h => h === normalizedHeaderName);
             if (idx === -1) {
-                console.warn(`GoogleSheetsService.transformSheetData: header '${headerName}' not found in sheet headers`, headers);
+                console.warn(`GoogleSheetsService.transformSheetData: header '${normalizedHeaderName}' not found in sheet headers`, headers);
             }
             if (idx !== -1) headerIdxMap[key] = idx;
         });

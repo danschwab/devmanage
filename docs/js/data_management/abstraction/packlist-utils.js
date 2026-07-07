@@ -359,6 +359,15 @@ class packListUtils_uncached {
         try {
             const originalSheetData = await Database.getData('PACK_LISTS', tabName, null);
             console.log('[PackListUtils.savePackList] original sheet data:', originalSheetData);
+            
+            // Validate that originalSheetData is a 2D array
+            if (!Array.isArray(originalSheetData) || originalSheetData.length === 0) {
+                throw new Error('Pack list data is empty or invalid');
+            }
+            if (!Array.isArray(originalSheetData[0])) {
+                throw new Error(`Pack list header row is malformed: expected array, got ${typeof originalSheetData[0]}`);
+            }
+            
             const headerRow = originalSheetData[0] || [];
 
         const itemColumnsStart = headerRow.findIndex(h => String(h ?? '').trim() === 'Pack');
