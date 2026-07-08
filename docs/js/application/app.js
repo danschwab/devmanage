@@ -44,7 +44,8 @@ const App = {
             modals: [],
             currentYear: new Date().getFullYear(),
             globalLocksStore: null, // Global reactive store for ALL locks
-            notificationBus: notificationBus // Reference for reactivity
+            notificationBus: notificationBus, // Reference for reactivity
+            updateAvailable: localStorage.getItem('updateAvailable') === 'true' // Reactive flag for update banner
         };
     },
     computed: {
@@ -99,7 +100,7 @@ const App = {
                     key: 'update-available',
                     color: 'orange',
                     message: 'The application has received updates. Please refresh to get the latest version.',
-                    visible: localStorage.getItem('updateAvailable') === 'true',
+                    visible: this.updateAvailable,
                     dismissible: false,
                     action: {
                         label: 'Refresh',
@@ -168,6 +169,12 @@ const App = {
         
         // Add keyboard shortcuts for undo/redo
         document.addEventListener('keydown', this.handleGlobalKeyDown);
+        
+        // Listen for version update notifications from the cache poller
+        window.addEventListener('updateAvailable', () => {
+            this.updateAvailable = true;
+            console.log('[App] Update available banner shown');
+        });
 
         // Pass the reactive modals array to modalManager for all modal operations
         modalManager.setReactiveModals(this.modals);
