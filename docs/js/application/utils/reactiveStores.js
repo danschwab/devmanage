@@ -1217,13 +1217,13 @@ function scheduleLruEviction() {
             }
             
             s.evict();
-            console.log(`[ReactiveStore] Evicted store (score: ${score.toFixed(4)}, ${accessCount} accesses, last: ${(timeSinceAccess / 1000).toFixed(0)}s ago, key: ${key.slice(0, 40)}...)`);
+            //console.log(`[ReactiveStore] Evicted store (score: ${score.toFixed(4)}, ${accessCount} accesses, last: ${(timeSinceAccess / 1000).toFixed(0)}s ago, key: ${key.slice(0, 40)}...)`);
             evictCount--;
         }
         
-        if (evictCount > 0) {
-            console.warn(`[ReactiveStore] Could not evict enough stores (${evictCount} remaining) - all candidates are either active or recently accessed`);
-        }
+        // if (evictCount > 0) {
+        //     console.warn(`[ReactiveStore] Could not evict enough stores (${evictCount} remaining) - all candidates are either active or recently accessed`);
+        // }
     }, 5000); // 5-second debounce to let navigation bursts settle
 }
 
@@ -1681,7 +1681,7 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         storeMetaRegistry[key] = { createdAt: now, lastAccess: now, accessCount: 1 };
 
         const totalStores = Object.keys(reactiveStoreRegistry).length;
-        console.log(`[ReactiveStore] New store created (${totalStores} total registered): ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
+        // console.log(`[ReactiveStore] New store created (${totalStores} total registered): ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
         scheduleLruEviction();
         
         // Mark as initial load and set loading state
@@ -1749,7 +1749,7 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
     // Handle evicted stores that need reloading
     const existingStore = reactiveStoreRegistry[key];
     if (existingStore && existingStore.needsReload && !existingStore.isLoading) {
-        console.log(`[ReactiveStore] Re-accessing evicted store, triggering reload: ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
+        // console.log(`[ReactiveStore] Re-accessing evicted store, triggering reload: ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
         // Trigger async reload without blocking return
         // After reload completes, check eviction again in case the reload didn't trigger cache invalidation
         // (e.g., cache was still fresh within 8-min TTL). Without this, stores can accumulate indefinitely.
