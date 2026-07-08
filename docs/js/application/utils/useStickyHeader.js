@@ -140,5 +140,10 @@ export function useStickyHeader({
         _scrollEl = null;
     }
 
-    return { setup, teardown, update: _update };
+    function reset() {
+        // Reset peak height cache when navigation occurs (allows sticky header dimensions to adjust)
+        _peakStickyHeight = 0;
+    }
+
+    return { setup, teardown, update: _update, reset };
 }

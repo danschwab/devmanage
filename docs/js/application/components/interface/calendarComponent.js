@@ -185,6 +185,20 @@ export const CalendarComponent = {
             return !this.isLoading && !this.isAnalyzing && (!this.data || this.data.length === 0);
         }
     },
+    watch: {
+        // Trigger sticky header recalculation when the current route/content changes
+        // This ensures sticky headers reposition correctly after navigation
+        'appContext.currentPath'(newPath, oldPath) {
+            if (newPath !== oldPath && this._stickyHeader) {
+                // Reset peak height cache and trigger immediate update
+                this._stickyHeader.reset();
+                this.$nextTick(() => {
+                    this._stickyHeader.update();
+                });
+            }
+        }
+    },
+    inject: ['appContext'],
     mounted() {
         this.search.initializeFromUrl();
         this.search.setupUrlWatcher();
