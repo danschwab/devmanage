@@ -1,4 +1,3 @@
-new crate, nav away, nav back, no new items list
 lightbox fabric separate
 
 !!! Caching priority queue or allow nonessential processes to pause, and/or ensure that we don't use all threads at once
@@ -146,6 +145,7 @@ Other Features
 - [ ] redundancy and overcomplexity in navigation still must be reduced
 - [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
 - [ ] there is a ton of duplicated logic in production-utils that needs to be simplified or removed
+- [ ] new crate, nav away, nav back, no new items list
 
 **Application tasks**
 
