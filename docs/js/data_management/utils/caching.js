@@ -650,7 +650,7 @@ export function setTimestampWriter(fn) {
  */
 async function checkAppVersion() {
     try {
-        const response = await fetch('/version.json');
+        const response = await fetch('./version.json');
         const versionData = await response.json();
         const currentVersion = localStorage.getItem('appVersion');
         
