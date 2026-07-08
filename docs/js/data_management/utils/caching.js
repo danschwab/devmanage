@@ -583,7 +583,7 @@ async function performCacheCleanup() {
         }
         
         if (deleted > 0) {
-            console.log(`[CacheCleanup] Removed ${deleted} expired entries (${expiredKeys.length - deleted} remain)`);
+            //console.log(`[CacheCleanup] Removed ${deleted} expired entries (${expiredKeys.length - deleted} remain)`);
         }
     } catch (error) {
         console.warn('[CacheCleanup] Cleanup failed:', error);
