@@ -1,5 +1,5 @@
 import { Database, wrapMethods, invalidateCache, stampDataChange, normalizeHeaderName } from '../index.js';
-import { setTimestampWriter, startCacheTimestampPoller } from '../utils/caching.js';
+import { setTimestampWriter, startCacheTimestampPoller, startCacheCleanup } from '../utils/caching.js';
 
 // Dynamically import GoogleSheetsAuth based on environment
 import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
@@ -1032,6 +1032,7 @@ export const ApplicationUtils = wrapMethods(
 
 setTimestampWriter((prefix) => ApplicationUtils.writeCacheTimestamp(prefix));
 startCacheTimestampPoller(() => ApplicationUtils.readCacheTimestamps(), isLocalhost() ? 10_000 : 30_000);
+startCacheCleanup(2 * 60 * 1000); // Clean up expired cache entries every 2 minutes
 
 // ─── Development test helper ────────────────────────────────────────────────
 // Exposes a console command to simulate an external change to the Caching tab

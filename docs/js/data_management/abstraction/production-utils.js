@@ -1202,7 +1202,8 @@ export const ProductionUtils = wrapMethods(
         'addReferenceName',
         'appendReferenceAbbreviation',
         'addCustomReferenceEntry'
-    ]
+    ],
+    ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods
 );
 

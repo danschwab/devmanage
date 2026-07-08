@@ -483,6 +483,42 @@ export function clearCache() {
 }
 export { CacheInvalidationBus };
 
+// Expired cache cleanup timer
+//
+// Periodically scans CacheManager.cache and removes entries whose expiration
+// timestamp has passed. This prevents memory accumulation from expired-but-
+// unaccessed entries. Cleanup happens silently without firing invalidation
+// events (same as natural expiry on get()).
+let _cacheCleanupInterval = null;
+
+export function startCacheCleanup(intervalMs = 2 * 60 * 1000) { // Default: 2 minutes
+    if (_cacheCleanupInterval) return;
+    _cacheCleanupInterval = setInterval(() => {
+        if (networkState.isOffline) return; // Keep all data while offline
+        
+        const now = Date.now();
+        let cleanedCount = 0;
+        
+        for (const [key, entry] of CacheManager.cache.entries()) {
+            if (entry.expire && entry.expire < now) {
+                CacheManager.cache.delete(key);
+                cleanedCount++;
+            }
+        }
+        
+        if (cleanedCount > 0) {
+            console.log(`[CacheCleanup] Removed ${cleanedCount} expired cache entries`);
+        }
+    }, intervalMs);
+}
+
+export function stopCacheCleanup() {
+    if (_cacheCleanupInterval) {
+        clearInterval(_cacheCleanupInterval);
+        _cacheCleanupInterval = null;
+    }
+}
+
 // Remote cache timestamp synchronization
 //
 // ═══════════════════════════════════════════════════════════════
@@ -531,6 +567,7 @@ export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
             if (entries === null) {
                 // readFn signaled auth is unavailable — pause the poller until re-auth
                 stopCacheTimestampPoller();
+                stopCacheCleanup();
                 return;
             }
             if (!Array.isArray(entries) || entries.length === 0) return;
@@ -570,6 +607,7 @@ export function stopCacheTimestampPoller() {
 export function restartCacheTimestampPoller() {
     if (!_cacheTimestampPollerInterval && _pollerReadFn) {
         startCacheTimestampPoller(_pollerReadFn, _pollerIntervalMs);
+        startCacheCleanup(2 * 60 * 1000); // Also restart cleanup timer
     }
 }
 
