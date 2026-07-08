@@ -1,12 +1,31 @@
 import { networkState } from './networkState.js';
 
 /**
+ * Cache Management System with CPU-Aware Operations
+ * 
+ * This system manages caching with automatic TTL expiry, dependency tracking,
+ * and CPU-optimized cleanup to prevent UI blocking.
+ * 
+ * Performance Optimizations:
+ * - Cleanup runs during idle time via requestIdleCallback (lowest priority)
+ * - Large invalidation cascades (>20 keys) process in batches with yields
+ * - Batches of 50 deletions at a time to prevent long synchronous operations
+ * - Respects network state (preserves cache while offline)
+ * 
+ * Priority Levels:
+ * - Explicit invalidations (saves): Immediate, synchronous (correctness required)
+ * - Small prefix invalidations (<20 keys): Synchronous
+ * - Large prefix invalidations (>=20 keys): Batched with yields
+ * - Expired entry cleanup: Idle-time async batching (lowest priority)
+ */
+
+/**
  * Default cache expiration in milliseconds.
- * Reduced from 20 min to 8 min to limit stale memory accumulation.
+ * Reduced from 20 min to 4 min to limit stale memory accumulation.
  * Dependency chains are preserved through expiry — only the cached value
  * is dropped, so invalidation still fires correctly after a refill.
  */
-const DEFAULT_CACHE_EXPIRATION_MS = 8 * 60 * 1000;
+const DEFAULT_CACHE_EXPIRATION_MS = 4 * 60 * 1000;
 
 /**
  * Lightweight event bus for cache invalidation notifications
@@ -268,7 +287,8 @@ class CacheManager {
     }
     
     /**
-     * Invalidates all cache entries that start with a given prefix
+     * Invalidates all cache entries that start with a given prefix.
+     * For large sets of keys (>20), processes in batches with yields to prevent blocking.
      * @param {string} prefix - Cache key prefix to match
      */
     static invalidateByPrefix(prefix) {
@@ -281,10 +301,33 @@ class CacheManager {
         }
         //console.log('[cache] invalidateByPrefix:', prefix, '| matched:', keysToInvalidate);
         
-        // Invalidate each matching key (this will also handle dependents)
-        for (const key of keysToInvalidate) {
-            CacheManager.invalidate(key);
+        // For small sets, invalidate synchronously (must complete before listeners fire)
+        if (keysToInvalidate.length <= 20) {
+            for (const key of keysToInvalidate) {
+                CacheManager.invalidate(key);
+            }
+            return;
         }
+        
+        // For large sets, batch invalidations with yields to prevent UI freezing
+        // This is safe because all matched keys are independent (same prefix = parallel invalidation)
+        const BATCH_SIZE = 20;
+        let processed = 0;
+        
+        const processBatch = () => {
+            const batch = keysToInvalidate.slice(processed, processed + BATCH_SIZE);
+            for (const key of batch) {
+                CacheManager.invalidate(key);
+            }
+            processed += batch.length;
+            
+            if (processed < keysToInvalidate.length) {
+                // Yield control and process next batch
+                setTimeout(processBatch, 0);
+            }
+        };
+        
+        processBatch();
     }
     
     /**
@@ -483,32 +526,76 @@ export function clearCache() {
 }
 export { CacheInvalidationBus };
 
-// Expired cache cleanup timer
+// Expired cache cleanup with CPU-aware batching
 //
-// Periodically scans CacheManager.cache and removes entries whose expiration
-// timestamp has passed. This prevents memory accumulation from expired-but-
-// unaccessed entries. Cleanup happens silently without firing invalidation
-// events (same as natural expiry on get()).
+// Uses requestIdleCallback to run cleanup during browser idle time, preventing
+// interference with user operations. Processes deletions in small batches with
+// yields to avoid blocking the main thread.
 let _cacheCleanupInterval = null;
+let _isCleanupRunning = false;
+
+/**
+ * Process cache cleanup in batches during idle time
+ * Runs as lowest-priority background work to avoid CPU contention
+ */
+async function performCacheCleanup() {
+    if (_isCleanupRunning || networkState.isOffline) return;
+    _isCleanupRunning = true;
+    
+    try {
+        const now = Date.now();
+        const expiredKeys = [];
+        
+        // Collect expired keys (fast scan, no deletions yet)
+        for (const [key, entry] of CacheManager.cache.entries()) {
+            if (entry.expire && entry.expire < now) {
+                expiredKeys.push(key);
+            }
+        }
+        
+        if (expiredKeys.length === 0) {
+            _isCleanupRunning = false;
+            return;
+        }
+        
+        // Process deletions in batches of 50 with idle-time yielding
+        const BATCH_SIZE = 50;
+        let deleted = 0;
+        
+        for (let i = 0; i < expiredKeys.length; i += BATCH_SIZE) {
+            const batch = expiredKeys.slice(i, i + BATCH_SIZE);
+            
+            // Wait for idle time before processing next batch
+            // Falls back to setTimeout if requestIdleCallback unavailable
+            await new Promise(resolve => {
+                if (typeof requestIdleCallback !== 'undefined') {
+                    requestIdleCallback(resolve, { timeout: 1000 });
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            });
+            
+            // Delete batch
+            for (const key of batch) {
+                CacheManager.cache.delete(key);
+                deleted++;
+            }
+        }
+        
+        if (deleted > 0) {
+            console.log(`[CacheCleanup] Removed ${deleted} expired entries (${expiredKeys.length - deleted} remain)`);
+        }
+    } catch (error) {
+        console.warn('[CacheCleanup] Cleanup failed:', error);
+    } finally {
+        _isCleanupRunning = false;
+    }
+}
 
 export function startCacheCleanup(intervalMs = 2 * 60 * 1000) { // Default: 2 minutes
     if (_cacheCleanupInterval) return;
     _cacheCleanupInterval = setInterval(() => {
-        if (networkState.isOffline) return; // Keep all data while offline
-        
-        const now = Date.now();
-        let cleanedCount = 0;
-        
-        for (const [key, entry] of CacheManager.cache.entries()) {
-            if (entry.expire && entry.expire < now) {
-                CacheManager.cache.delete(key);
-                cleanedCount++;
-            }
-        }
-        
-        if (cleanedCount > 0) {
-            console.log(`[CacheCleanup] Removed ${cleanedCount} expired cache entries`);
-        }
+        performCacheCleanup(); // Non-blocking async call
     }, intervalMs);
 }
 
