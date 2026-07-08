@@ -30,6 +30,9 @@ jobs:
           echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
           echo "window.ENDPOINT_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}', THUMBNAILS: '${THUMBNAILS}' };" >> docs/js/google_sheets_services/config.js
           echo "// Build timestamp: $(date -u +%Y%m%d%H%M%S)" >> docs/js/google_sheets_services/config.js
+      - name: Generate version.json with deployment timestamp
+        run: |
+          echo '{"version":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > docs/version.json
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:

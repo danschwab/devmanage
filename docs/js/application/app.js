@@ -94,6 +94,17 @@ const App = {
                     message: `Error: ${this.authError}`,
                     visible: !!this.authError && !this.isAuthenticated,
                     dismissible: false
+                },
+                {
+                    key: 'update-available',
+                    color: 'orange',
+                    message: 'The application has received updates. Please refresh to get the latest version.',
+                    visible: localStorage.getItem('updateAvailable') === 'true',
+                    dismissible: false,
+                    action: {
+                        label: 'Refresh',
+                        fn: () => window.location.reload()
+                    }
                 }
             ];
             

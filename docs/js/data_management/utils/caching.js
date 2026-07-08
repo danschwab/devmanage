@@ -644,11 +644,38 @@ export function setTimestampWriter(fn) {
     CacheManager._timestampWriter = fn;
 }
 
+/**
+ * Check for application updates by comparing local version with server version.json
+ * Stores update flag in localStorage for the app-level banner to detect.
+ */
+async function checkAppVersion() {
+    try {
+        const response = await fetch('/version.json');
+        const versionData = await response.json();
+        const currentVersion = localStorage.getItem('appVersion');
+        
+        if (currentVersion && currentVersion !== versionData.version) {
+            // Version mismatch detected - signal app to show update banner
+            localStorage.setItem('updateAvailable', 'true');
+        } else if (!currentVersion) {
+            // First load, store version
+            localStorage.setItem('appVersion', versionData.version);
+            localStorage.setItem('updateAvailable', 'false');
+        }
+    } catch (err) {
+        // Silently ignore errors (network issues, version.json not found)
+        // This won't block the cache poller
+    }
+}
+
 export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
     if (_cacheTimestampPollerInterval) return;
     _pollerReadFn = readFn;
     _pollerIntervalMs = intervalMs;
     _cacheTimestampPollerInterval = setInterval(async () => {
+        // Check for application updates
+        checkAppVersion();
+        
         try {
             const entries = await readFn();
             if (entries === null) {
