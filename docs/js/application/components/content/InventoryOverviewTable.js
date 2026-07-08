@@ -93,19 +93,20 @@ export const InventoryOverviewTableComponent = {
     methods: {
         async initializeInventoryStore() {
             // Load index to determine which tabs should be hidden from the overview
+            // Hide only tabs where all prefixes have descriptionOnly=true
             Requests.getInventoryIndexData().then(indexData => {
                 if (!Array.isArray(indexData)) return;
                 const tabConfigs = new Map();
                 indexData.forEach(row => {
                     if (!row?.tab) return;
-                    if (!tabConfigs.has(row.tab)) tabConfigs.set(row.tab, { hasAny: false, allSuppressed: true });
+                    if (!tabConfigs.has(row.tab)) tabConfigs.set(row.tab, { hasAny: false, allDescOnly: true });
                     const cfg = tabConfigs.get(row.tab);
                     cfg.hasAny = true;
-                    if (row.metadata?.suppressAnalysis !== 'true') cfg.allSuppressed = false;
+                    if (row.metadata?.descriptionOnly !== 'true') cfg.allDescOnly = false;
                 });
-                const suppressed = new Set();
-                tabConfigs.forEach((cfg, tab) => { if (cfg.hasAny && cfg.allSuppressed) suppressed.add(tab); });
-                this.suppressedTabs = suppressed;
+                const hidden = new Set();
+                tabConfigs.forEach((cfg, tab) => { if (cfg.hasAny && cfg.allDescOnly) hidden.add(tab); });
+                this.suppressedTabs = hidden;
             }).catch(() => {});
 
             // Create analysis config for image URLs

@@ -440,6 +440,7 @@ export const InventoryItemReport = {
                             :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
+                            :default-search="null"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter
@@ -482,6 +483,7 @@ export const InventoryItemReport = {
                             :container-path="containerPath || 'reports/item-shortages'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
+                            :default-search="null"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter

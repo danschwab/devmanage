@@ -794,12 +794,12 @@ export const PacklistTable = {
             
             // Populate with inventory data
             // Format: (1) ITEM# Description
-            // For prefixes with addDescriptionOnly, use just the description with no item# or stub
+            // For prefixes with descriptionOnly, use just the description with no item# or stub
             const itemNumber = inventoryItem.itemNumber || '';
             const description = inventoryItem.description || '';
             const prefix = itemNumber.split('-')[0];
             const prefixMeta = this.inventoryIndexData?.find(row => row.prefix === prefix)?.metadata || {};
-            const formattedDescription = prefixMeta.addDescriptionOnly === 'true'
+            const formattedDescription = prefixMeta.descriptionOnly === 'true'
                 ? description
                 : `(1) ${itemNumber} ${description}`;
             

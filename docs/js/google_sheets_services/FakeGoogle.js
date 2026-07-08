@@ -186,7 +186,7 @@ export class FakeGoogleSheetsService {
                 ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
                 ['BX', 'PANELS', '', ''],
                 ['VU', 'PANELS', '', ''],
-                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","addDescriptionOnly":"true"}'],
+                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","descriptionOnly":"true"}'],
                 ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
             ],
             'ADDITIONS': [

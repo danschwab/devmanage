@@ -761,7 +761,7 @@ export const InventoryTableComponent = {
                 if (!Array.isArray(indexData)) return;
                 const tabPrefixes = indexData.filter(row => row.tab === this.tabTitle);
                 if (tabPrefixes.length > 0) {
-                    const allDescOnly = tabPrefixes.every(row => row.metadata?.addDescriptionOnly === 'true');
+                    const allDescOnly = tabPrefixes.every(row => row.metadata?.descriptionOnly === 'true');
                     this.tabMetaFlags = { hideQuantity: allDescOnly, hideItemNumber: allDescOnly };
                 }
             }).catch(() => {});

@@ -1622,7 +1622,7 @@ export const ScheduleFilterSelect = {
         >
             <option value="" v-if="isLoading">Loading...</option>
             <option value="" v-else-if="availableOptions.length === 0">No options available</option>
-            <!-- <option value="" v-else-if="!defaultSearch">Select...</option> -->
+            <option value="" v-else-if="!defaultSearch">Select...</option>
             <option 
                 v-for="option in availableOptions" 
                 :key="option.value" 
