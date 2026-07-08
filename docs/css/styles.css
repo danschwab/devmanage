@@ -890,17 +890,19 @@ tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hov
 
 /* Designed to overlap the container when hovered */
 .column-button-hint {
-    display: none;
+    opacity: 0;
+    display: block;
     position: absolute;
     pointer-events: none;
     top:0;
     background: var(--color-red-bg);
     outline: 1px solid var(--color-red);
     border-radius: var(--radius-md);
+    padding: var(--padding-sm);
     z-index: 9;
 }
 .column-button-hint:has(+ .column-button:hover) {
-    display: block;
+    opacity: 1;
 }
 .table-edit-textarea:has(~ .column-button:hover) {
     opacity: 0;
@@ -1263,7 +1265,8 @@ tr.is-group:hover .group-toggle {
 .table-edit-textarea, td input[type="number"] {
     width: 100%;
     display: inline-block;
-    min-width: 40px;
+    min-width: 64px;
+    padding: var(--padding-sm);
     border:0;
     background-color: transparent;
     border-radius: calc(var(--radius-md) - 2px);
@@ -1275,7 +1278,7 @@ tr.is-group:hover .group-toggle {
 .table-cell-container:has(button:only-child) {
     display: flex;
     justify-content: space-between;
-    gap: var(--padding-md);
+    gap: var(--padding-sm);
     align-items: center;
 }
 .original-value {
@@ -1289,14 +1292,13 @@ tr.is-group:hover .group-toggle {
     cursor: pointer;
 }
 .original-value.clickable:hover {
-    background: var(--color-red);
-    color: var(--color-text-inverted);
+    background: var(--color-red-bg);
+    outline: 1px solid var(--color-red);
     opacity: 1;
 }
 
-.mark-dirty .dirty > .table-cell-container > .table-edit-textarea, .mark-dirty .dirty input[type="number"] {
+.mark-dirty .dirty {
     background-color: var(--color-red-bg-transparent);
-    outline: 2px solid var(--color-red-bg-transparent);
 }
 
 td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-cell-container > input[type="number"]) {
