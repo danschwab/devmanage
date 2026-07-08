@@ -1,9 +1,12 @@
 import { networkState } from './networkState.js';
 
 /**
- * Default cache expiration in milliseconds
+ * Default cache expiration in milliseconds.
+ * Reduced from 20 min to 8 min to limit stale memory accumulation.
+ * Dependency chains are preserved through expiry — only the cached value
+ * is dropped, so invalidation still fires correctly after a refill.
  */
-const DEFAULT_CACHE_EXPIRATION_MS = 20 * 60 * 1000;
+const DEFAULT_CACHE_EXPIRATION_MS = 8 * 60 * 1000;
 
 /**
  * Lightweight event bus for cache invalidation notifications

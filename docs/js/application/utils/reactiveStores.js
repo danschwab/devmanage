@@ -330,9 +330,17 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         return arr;
     }
 
+    // Read-only stores (saveCall === null) never need originalData: isModified is always false,
+    // saves are impossible, and no unsaved-changes guards or undo baselines apply.
+    // Skipping originalData eliminates one full deep clone of the dataset and prevents
+    // isModified from running expensive JSON comparisons on every reactive evaluation.
+    const isReadOnly = typeof saveCall !== 'function';
+
     const store = Vue.reactive({
         data: [],
-        originalData: [],
+        // For read-only stores this is kept as a plain (non-reactive) empty array.
+        // Never populated — use store.isModified (always false) to check edit state.
+        originalData: isReadOnly ? [] : [],
         isLoading: false,
         loadingMessage: '',
         error: null,
@@ -350,8 +358,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         loadedBackupKey: null, // Original backup key used for restore (may differ from current key)
         needsReload: false, // True when store was cleared by logout — reloadErrorStores() will reload after login
         
-        // Computed property to check if data has been modified
+        // Computed property to check if data has been modified.
+        // Always returns false for read-only stores (saveCall === null) — no deep clone performed.
         get isModified() {
+            if (isReadOnly) return false;
             if (!this.data || !this.originalData) return false;
             if (this.data.length === 0 && this.originalData.length === 0) return false;
             
@@ -419,7 +429,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
                 // Initialize with empty array to allow dynamic property addition
-                this.setOriginalData([]);
+                if (!isReadOnly) this.setOriginalData([]);
                 this.setData([]);
                 return;
             }
@@ -438,10 +448,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 );
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
-                // Pre-assign stable row IDs to all rows (and nested rows) before splitting into
-                // data and originalData. Both calls deepClone dataToSet, so both get the same IDs.
+                // Pre-assign stable row IDs before splitting into data and originalData.
                 appDataInit(dataToSet, false);
-                this.setOriginalData(dataToSet);
+                // Read-only stores skip originalData entirely — no second deep clone needed.
+                if (!isReadOnly) {
+                    this.setOriginalData(dataToSet);
+                }
                 this.setData(dataToSet);
                 
                 // Release lock BEFORE running analysis so analysis can proceed
@@ -458,7 +470,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 }
                 this.setError(err.message || 'Failed to load data');
                 // Initialize with empty arrays to allow dynamic property addition
-                this.setOriginalData([]);
+                if (!isReadOnly) this.setOriginalData([]);
                 this.setData([]);
             } finally {
                 this.setLoading(false, '');
@@ -1044,6 +1056,22 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.loadedBackupKey = backupInfo.key || null;
             this.autoSaved = true;
             return true;
+        },
+        /**
+         * Release this store's data arrays from memory without removing it from the registry.
+         * The store remains registered and its cache invalidation listeners stay active.
+         * On next access, needsReload=true causes the component to trigger a fresh load.
+         *
+         * Safe to call only when: !isModified && !isLoading && !isSaving && !isAnalyzing
+         * The LRU eviction sweep checks all four guards before calling this.
+         */
+        evict() {
+            this.data.splice(0, this.data.length);
+            if (!isReadOnly) this.originalData.splice(0, this.originalData.length);
+            this.isAnalyzing = false;
+            this.analysisProgress = 0;
+            this.analysisMessage = '';
+            this.needsReload = true;
         }
     });
 
@@ -1090,6 +1118,54 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
 
 // Central registry for reactive stores, keyed by apiCall.toString() + JSON.stringify(apiArgs)
 const reactiveStoreRegistry = Vue.reactive({});
+
+// LRU metadata for each registered store: lastAccess timestamp and access count.
+// Stored separately so it doesn't pollute the reactive store objects.
+const storeMetaRegistry = {};
+
+// Maximum number of simultaneously populated stores.
+// Stores exceeding this cap (sorted by oldest lastAccess) are evicted after a debounce.
+// Set high to be conservative — lower this value if memory pressure is still observed.
+const MAX_POPULATED_STORES = 10;
+
+let _lruEvictDebounceTimer = null;
+
+/**
+ * Debounced LRU sweep: called after every new store access that could push the total
+ * populated count over MAX_POPULATED_STORES. Finds eviction candidates (oldest lastAccess,
+ * not modified/loading/saving/analyzing) and evicts until count is within the threshold.
+ */
+function scheduleLruEviction() {
+    if (_lruEvictDebounceTimer) return;
+    _lruEvictDebounceTimer = setTimeout(() => {
+        _lruEvictDebounceTimer = null;
+        const allKeys = Object.keys(reactiveStoreRegistry);
+        const populated = allKeys.filter(k => {
+            const s = reactiveStoreRegistry[k];
+            return s && s.data && s.data.length > 0;
+        });
+        if (populated.length <= MAX_POPULATED_STORES) return;
+
+        // Sort by lastAccess ascending (oldest first)
+        populated.sort((a, b) => {
+            const aTime = storeMetaRegistry[a]?.lastAccess || 0;
+            const bTime = storeMetaRegistry[b]?.lastAccess || 0;
+            return aTime - bTime;
+        });
+
+        let evictCount = populated.length - MAX_POPULATED_STORES;
+        for (const key of populated) {
+            if (evictCount <= 0) break;
+            const s = reactiveStoreRegistry[key];
+            if (!s) continue;
+            // Safety guards — never evict a store with unsaved work or active operations
+            if (s.isModified || s.isLoading || s.isSaving || s.isAnalyzing) continue;
+            s.evict();
+            console.log(`[ReactiveStore] LRU evicted store (${storeMetaRegistry[key]?.accessCount || 0} accesses, last: ${new Date(storeMetaRegistry[key]?.lastAccess || 0).toISOTimeString?.() || 'unknown'}, key: ${key.slice(0, 40)}...)`);
+            evictCount--;
+        }
+    }, 2000); // 2-second debounce to let navigation bursts settle
+}
 
 // Auto-save timer for dirty stores
 let autoSaveInterval = null;
@@ -1540,6 +1616,11 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
     if (!reactiveStoreRegistry[key]) {
         const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig);
         reactiveStoreRegistry[key] = store;
+        storeMetaRegistry[key] = { lastAccess: Date.now(), accessCount: 1 };
+
+        const totalStores = Object.keys(reactiveStoreRegistry).length;
+        console.log(`[ReactiveStore] New store created (${totalStores} total registered): ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
+        scheduleLruEviction();
         
         // Mark as initial load and set loading state
         store.initialLoad = true;
@@ -1594,13 +1675,21 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
             })();
         } else {
             // Initialize with empty arrays to allow dynamic property addition
-            store.setOriginalData([]);
+            // setOriginalData is a no-op for read-only stores (saveCall === null), but check via store.isModified
+            // since isReadOnly is a closure var inside createReactiveStore — use saveCall presence here instead.
+            if (typeof saveCall === 'function') store.setOriginalData([]);
             store.setData([]);
             store.setLoading(false);
             store.initialLoad = false;
         }
     }
-    
+
+    // Update LRU metadata on every access (new store creation handled above; this covers re-access)
+    if (storeMetaRegistry[key]) {
+        storeMetaRegistry[key].lastAccess = Date.now();
+        storeMetaRegistry[key].accessCount++;
+    }
+
     return reactiveStoreRegistry[key];
 }
 
