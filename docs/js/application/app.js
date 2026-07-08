@@ -170,6 +170,21 @@ const App = {
         // Add keyboard shortcuts for undo/redo
         document.addEventListener('keydown', this.handleGlobalKeyDown);
         
+        // Initialize application version on first load
+        try {
+            const response = await fetch('./version.json');
+            const versionData = await response.json();
+            
+            // First load ever - store the version and no update available yet
+            localStorage.setItem('appVersion', versionData.version);
+            localStorage.setItem('updateAvailable', 'false');
+            this.updateAvailable = false;
+            //console.log('[App] Initialized version:', versionData.version);
+
+        } catch (err) {
+            console.warn('[App] Failed to initialize version:', err.message);
+        }
+        
         // Listen for version update notifications from the cache poller
         window.addEventListener('updateStatusChanged', (event) => {
             this.updateAvailable = event.detail.updateAvailable;

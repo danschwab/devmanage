@@ -645,40 +645,33 @@ export function setTimestampWriter(fn) {
 }
 
 /**
- * Check for application updates by comparing local version with server version.json
- * Stores update flag in localStorage for the app-level banner to detect.
+ * Check for application updates by comparing server version against stored version.
+ * The initial version is set by app.js on mount. This function runs every 60s to detect deploys.
  */
 async function checkAppVersion() {
     try {
         const response = await fetch('./version.json');
         const versionData = await response.json();
-        const currentVersion = localStorage.getItem('appVersion');
+        const storedVersion = localStorage.getItem('appVersion');
         
-        console.log('[VersionCheck] Current:', currentVersion, 'Server:', versionData.version);
+        console.log('[VersionCheck] Stored:', storedVersion, 'Server:', versionData.version);
         
         let updateStatus = 'false'; // Default: no update
         
-        if (currentVersion && currentVersion !== versionData.version) {
-            // Version mismatch detected - signal app to show update banner
+        if (storedVersion && storedVersion !== versionData.version) {
+            // Version mismatch detected - show update banner
             console.log('[VersionCheck] Update available');
             updateStatus = 'true';
-        } else if (!currentVersion) {
-            // First load, store version
-            console.log('[VersionCheck] First load, storing version');
-            localStorage.setItem('appVersion', versionData.version);
-            updateStatus = 'false';
-        } else {
-            console.log('[VersionCheck] Versions match, no update needed');
-            updateStatus = 'false';
+            // Update stored version so after refresh it will match and banner hides
+            //localStorage.setItem('appVersion', versionData.version);
         }
         
-        // Always update localStorage and dispatch event with current status
+        // Update flag and dispatch event
         localStorage.setItem('updateAvailable', updateStatus);
         window.dispatchEvent(new CustomEvent('updateStatusChanged', { detail: { updateAvailable: updateStatus === 'true' } }));
     } catch (err) {
         console.warn('[VersionCheck] Error:', err.message);
         // Silently ignore errors (network issues, version.json not found)
-        // This won't block the cache poller
     }
 }
 
