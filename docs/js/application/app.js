@@ -171,9 +171,9 @@ const App = {
         document.addEventListener('keydown', this.handleGlobalKeyDown);
         
         // Listen for version update notifications from the cache poller
-        window.addEventListener('updateAvailable', () => {
-            this.updateAvailable = true;
-            console.log('[App] Update available banner shown');
+        window.addEventListener('updateStatusChanged', (event) => {
+            this.updateAvailable = event.detail.updateAvailable;
+            console.log('[App] Update status changed:', this.updateAvailable);
         });
 
         // Pass the reactive modals array to modalManager for all modal operations

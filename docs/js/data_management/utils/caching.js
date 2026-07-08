@@ -654,20 +654,27 @@ async function checkAppVersion() {
         const versionData = await response.json();
         const currentVersion = localStorage.getItem('appVersion');
         
-        // console.log('[VersionCheck] Current:', currentVersion, 'Server:', versionData.version);
+        console.log('[VersionCheck] Current:', currentVersion, 'Server:', versionData.version);
+        
+        let updateStatus = 'false'; // Default: no update
         
         if (currentVersion && currentVersion !== versionData.version) {
             // Version mismatch detected - signal app to show update banner
             console.log('[VersionCheck] Update available');
-            localStorage.setItem('updateAvailable', 'true');
-            // Dispatch event so app can react without polling
-            window.dispatchEvent(new CustomEvent('updateAvailable'));
+            updateStatus = 'true';
         } else if (!currentVersion) {
             // First load, store version
-            // console.log('[VersionCheck] First load, storing version');
+            console.log('[VersionCheck] First load, storing version');
             localStorage.setItem('appVersion', versionData.version);
-            localStorage.setItem('updateAvailable', 'false');
+            updateStatus = 'false';
+        } else {
+            console.log('[VersionCheck] Versions match, no update needed');
+            updateStatus = 'false';
         }
+        
+        // Always update localStorage and dispatch event with current status
+        localStorage.setItem('updateAvailable', updateStatus);
+        window.dispatchEvent(new CustomEvent('updateStatusChanged', { detail: { updateAvailable: updateStatus === 'true' } }));
     } catch (err) {
         console.warn('[VersionCheck] Error:', err.message);
         // Silently ignore errors (network issues, version.json not found)
