@@ -217,14 +217,14 @@ Architecture Improvements !!! offline mode
 - [?] remove cache timeout for database access and allow these caches to work as offline functionality, saving in longterm storage and pushing if necessary when reconnected
 - [x] consider moving "Reports" to its own endpoint that includes all reports and analytics settings.
 - [x] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
+- [x] allow unused reactiveStores to self-clean to save memory after a period of inactivity
+- [x] reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
 - [ ] we probably need to allow multiple identical dashboard endpoints to be added with different views if we do the inventory category mode thing.
 - [ ] allow "maintenance mode" activated that locks all editing, OR simply allow the system to force clients to refresh
       allow analysis to intelligently slow or pause itself and notify user for slow connection states.
-      allow unused reactiveStores to self-clean to save memory after a period of inactivity
-      CONSIDER a reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
 
 show management system
 
@@ -271,7 +271,7 @@ Pack Lists in Web
 - [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [x] cut and paste between packlist functionality
 - [ ] !!!!detection of unattached packlists and user notification
-- [ ] !!! when pasting in from external source, naturally find drop columns at time of paste, and add the just-pasted rows to the selection set
+- [x] !!! when pasting in from external source, naturally find drop columns at time of paste, and add the just-pasted rows to the selection set
 - [ ] !!! add "add to new crate" as item selection button
 - [ ] !!! add "move to existing crate" as item selection button
 - [ ] !!! add "move rows" as bubble action

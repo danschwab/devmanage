@@ -27,6 +27,10 @@ export const NotificationBubbleOverlay = {
                 this.$notify.setBanners(scope, filtered);
             };
 
+            // Only show dismiss option if the banner is dismissible
+            const onCancel = banner.dismissible !== false ? dismissBanner : null;
+            const cancelText = banner.dismissible !== false ? 'Dismiss' : null;
+
             this.$modal.confirm(
                 String(banner.message || ''),
                 () => {
@@ -34,10 +38,10 @@ export const NotificationBubbleOverlay = {
                         banner.action.fn();
                     }
                 },
-                dismissBanner,
+                onCancel,
                 'Notification',
                 banner.action ? banner.action.label : 'OK',
-                'Dismiss',
+                cancelText,
                 `reading-menu small-menu alert-modal ${banner.color}`
             );
         },
