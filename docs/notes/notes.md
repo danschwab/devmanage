@@ -1,4 +1,3 @@
-feature that allows me to force clients to hard refresh on load
 new crate, nav away, nav back, no new items list
 lightbox fabric separate
 
@@ -219,6 +218,7 @@ Architecture Improvements !!! offline mode
 - [x] consider simplifying the inventory once reports is moved by adding a simple toggle for category vs all-inventory-table view and removing the categories endpoint.
 - [x] allow unused reactiveStores to self-clean to save memory after a period of inactivity
 - [x] reactive store priority that allows reactive stores to flush unused memory based on usage and importence rather than keeping all data around.
+- [x] feature that allows me to force clients to hard refresh on load
 - [ ] ! Provide tools to revert changes from history, and tools to revert based on source
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
