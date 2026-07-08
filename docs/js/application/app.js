@@ -188,7 +188,7 @@ const App = {
         // Listen for version update notifications from the cache poller
         window.addEventListener('updateStatusChanged', (event) => {
             this.updateAvailable = event.detail.updateAvailable;
-            console.log('[App] Update status changed:', this.updateAvailable);
+            //console.log('[App] Update status changed:', this.updateAvailable);
         });
 
         // Pass the reactive modals array to modalManager for all modal operations

@@ -654,13 +654,13 @@ async function checkAppVersion() {
         const versionData = await response.json();
         const storedVersion = localStorage.getItem('appVersion');
         
-        console.log('[VersionCheck] Stored:', storedVersion, 'Server:', versionData.version);
+        //console.log('[VersionCheck] Stored:', storedVersion, 'Server:', versionData.version);
         
         let updateStatus = 'false'; // Default: no update
         
         if (storedVersion && storedVersion !== versionData.version) {
             // Version mismatch detected - show update banner
-            console.log('[VersionCheck] Update available');
+            //console.log('[VersionCheck] Update available');
             updateStatus = 'true';
             // Update stored version so after refresh it will match and banner hides
             //localStorage.setItem('appVersion', versionData.version);
@@ -713,6 +713,22 @@ export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
                 }
             }
         } catch (err) {
+            // Handle authentication errors by stopping the poller
+            // The poller will restart after successful re-authentication
+            const isAuthError = err && (
+                err.status === 401 ||
+                err.status === 403 ||
+                err.result?.error?.code === 401 ||
+                err.result?.error?.code === 403 ||
+                err.result?.error?.status === 'UNAUTHENTICATED' ||
+                err.result?.error?.status === 'PERMISSION_DENIED'
+            );
+            if (isAuthError) {
+                console.warn('[CacheTimestampPoller] Authentication error detected, stopping poller:', err);
+                stopCacheTimestampPoller();
+                stopCacheCleanup();
+                return;
+            }
             console.warn('[CacheTimestampPoller] Poll failed:', err);
         }
     }, intervalMs);

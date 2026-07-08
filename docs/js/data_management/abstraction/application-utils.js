@@ -847,6 +847,17 @@ class applicationUtils_uncached {
                 .filter(row => Array.isArray(row) && row[0] && row[1])
                 .map(row => ({ key: row[0], timestamp: row[1] }));
         } catch (err) {
+            // Re-throw authentication errors so they can trigger re-authentication
+            const isAuthError = err && (
+                err.status === 401 ||
+                err.status === 403 ||
+                err.result?.error?.code === 401 ||
+                err.result?.error?.code === 403 ||
+                err.result?.error?.status === 'UNAUTHENTICATED' ||
+                err.result?.error?.status === 'PERMISSION_DENIED'
+            );
+            if (isAuthError) throw err;
+            
             console.warn('[readCacheTimestamps] Failed to read cache timestamps:', err);
             return [];
         }
