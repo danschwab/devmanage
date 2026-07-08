@@ -426,7 +426,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.analysisMessage = '';
         },
         async load(message = 'Loading data...', skipAnalysis = false) {
-            this.needsReload = false; // Clear flag set by clearAllReactiveStores
+            this.needsReload = false; // Clear flag set by eviction
             if (typeof apiCall !== 'function') {
                 this.setError('No API call provided');
                 // Initialize with empty array to allow dynamic property addition
@@ -1016,9 +1016,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // starting another load would be redundant. Analysis (isAnalyzing=true) is explicitly allowed
             // so external changes are detected even when a large packlist is still being analyzed.
             if (this.isSaving || this.isReloadingMainData) return;
-            // needsReload=true means clearAllReactiveStores() has run (logout). The PriorityQueue is
-            // disabled at this point and would return null, which would clear needsReload and leave the
-            // store permanently empty with no error for reloadErrorStores() to catch after re-login.
+            // needsReload=true means the store was evicted from memory. The store will be reloaded
+            // when next accessed via getReactiveStore(). Attempting to reload here would create
+            // a second parallel load operation.
             if (this.needsReload) return;
             // While offline, skip background reloads — the network call will fail and the cache is
             // already frozen. Stores with errors are reloaded automatically by reloadErrorStores()
@@ -1938,6 +1938,19 @@ export function runNonessentialAnalysisOnAllStores() {
     }
 }
 
+/**
+ * Clear all reactive stores and mark them for reload.
+ * 
+ * NOTE: This function is NO LONGER used for logout. Logout now performs a page refresh
+ * (window.location.reload()) which is simpler and more reliable. Components hold direct
+ * references to store objects, so deleting registry entries leaves orphaned stores that
+ * never get recreated properly.
+ * 
+ * This function remains available for testing/debugging purposes.
+ * 
+ * @param {Object} options - Configuration options
+ * @param {boolean} options.skipSave - If true, skip saving dirty stores before clearing
+ */
 export async function clearAllReactiveStores(options = {}) {
     const { skipSave = false } = options;
     

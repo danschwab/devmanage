@@ -24,8 +24,8 @@ export const authState = Vue.reactive({
 
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
-import { clearAllReactiveStores, reloadErrorStores } from './reactiveStores.js';
-import { clearCache, restartCacheTimestampPoller } from '../../data_management/utils/caching.js';
+import { reloadErrorStores } from './reactiveStores.js';
+import { restartCacheTimestampPoller } from '../../data_management/utils/caching.js';
 import { networkState } from '../../data_management/utils/networkState.js';
 
 // Import modalManager for re-authentication prompts
@@ -113,15 +113,12 @@ export class Auth {
             authState.permissionsWarning = Auth._buildPermissionsWarning();
             Auth._startProactiveRefreshTimer();
             
-            // Re-enable priority queue if it was disabled during logout
+            // Re-enable priority queue if it was disabled during token expiry
             const { PriorityQueue } = await import('./priorityQueue.js');
             PriorityQueue.enable();
-            
-            // Clear stale cache entries so stores reload with fresh data after any auth
-            // interruption (avoids serving offset-resolved date results from before expiry)
-            clearCache();
 
-            // Reload any stores that failed during the previous token expiry
+            // Reload any stores that failed during token expiry
+            // Note: After logout, page is refreshed so this only applies to token refresh scenarios
             reloadErrorStores();
 
             // Restart the cache timestamp poller if it was paused due to auth expiry
@@ -204,33 +201,16 @@ export class Auth {
             // Proceed with unconditional cleanup
             DashboardRegistry.cleanup();
             
-            // Disable priority queue to prevent restart from cache invalidations
-            const { PriorityQueue } = await import('./priorityQueue.js');
-            PriorityQueue.disable();
-            
-            // Clear all reactive stores without attempting to save (already tried above)
-            await clearAllReactiveStores({ skipSave: true });
-            clearCache();
-            
             await GoogleSheetsAuth.logout();
             
-            // Clear auth state
-            authState.isAuthenticated = false;
-            authState.user = null;
-            authState.error = null;
-            authState.isInitialized = false;
-            authState.permissionsWarning = null;
-            
-            console.log('[Auth] Logout completed successfully');
+            // Simplified logout: refresh the page instead of complex store clearing
+            // This ensures a clean slate with all components properly re-initialized
+            console.log('[Auth] Logout completed, reloading page for clean state...');
+            window.location.reload();
         } catch (error) {
-            console.error('[Auth] Logout error (non-fatal):', error);
-            // Don't set authState.error - we're logging out anyway
-            // Ensure auth state is cleared even if cleanup failed
-            authState.isAuthenticated = false;
-            authState.user = null;
-            authState.isInitialized = false;
-        } finally {
-            authState.isLoading = false;
+            console.error('[Auth] Logout error:', error);
+            // Even on error, reload to ensure clean state
+            window.location.reload();
         }
     }
 

@@ -101,7 +101,7 @@ const App = {
                     color: 'orange',
                     message: 'The application has received updates. Please refresh to get the latest version.',
                     visible: this.updateAvailable,
-                    dismissible: false,
+                    dismissible: true,
                     action: {
                         label: 'Refresh',
                         fn: () => window.location.reload()
