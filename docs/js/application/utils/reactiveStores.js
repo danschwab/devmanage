@@ -1150,10 +1150,10 @@ const storeMetaRegistry = {};
 // Maximum number of simultaneously populated stores.
 // Stores exceeding this cap (sorted by lowest access frequency) are evicted after a debounce.
 // Set high to be conservative — lower this value if memory pressure is still observed.
-const MAX_POPULATED_STORES = 10;
+const MAX_POPULATED_STORES = 15;
 
 // Recency guard: stores accessed within this window will not be evicted
-const RECENCY_GUARD_MS = 60 * 1000; // 60 seconds
+const RECENCY_GUARD_MS = 5 * 60 * 1000; // 5 minutes
 
 let _lruEvictDebounceTimer = null;
 
@@ -1188,7 +1188,7 @@ function scheduleLruEviction() {
             // Stores accessed 1 day ago ≈ 0.0001 score multiplier (heavily deprioritized)
             const timeSinceLastAccessMs = now - meta.lastAccess;
             const timeSinceLastAccessMin = timeSinceLastAccessMs / 60000;
-            const recencyFactor = Math.exp(-timeSinceLastAccessMin / 60); // Exponential decay with 60-min half-life
+            const recencyFactor = Math.exp(-timeSinceLastAccessMin / (RECENCY_GUARD_MS / 1000)); // Exponential decay with half-life equal to the recency guard
             
             // Combined score: base frequency weighted by recency
             // Old stores get aggressively deprioritized regardless of access count
@@ -1224,7 +1224,7 @@ function scheduleLruEviction() {
         if (evictCount > 0) {
             console.warn(`[ReactiveStore] Could not evict enough stores (${evictCount} remaining) - all candidates are either active or recently accessed`);
         }
-    }, 2000); // 2-second debounce to let navigation bursts settle
+    }, 5000); // 5-second debounce to let navigation bursts settle
 }
 
 // Auto-save timer for dirty stores
