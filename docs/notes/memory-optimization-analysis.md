@@ -1,6 +1,6 @@
 # Memory Optimization Analysis
 
-*(Updated with detailed feasibility findings per follow-up questions)*
+_(Updated with detailed feasibility findings per follow-up questions)_
 
 **Context:** App is running at >1000 MB memory. The primary suspects are the cache, reactive stores, and analysis pipeline. This document analyzes each memory source, lists conventional reduction strategies, evaluates each against this codebase's constraints, and ranks them by impact vs difficulty.
 
@@ -9,6 +9,7 @@
 ## Memory Sources (What's Actually Held in RAM)
 
 ### 1. `CacheManager.cache` (Map)
+
 - Every wrapped API call stores its full result, keyed by namespace + method + serialized args.
 - A single packlist tab result (e.g., "ATSC 2025 NAB") can be tens of KB of raw data.
 - Multiple tabs open simultaneously multiply this: Inventory + several pack list tabs = several cached tables in parallel.
@@ -17,6 +18,7 @@
 - **TTL is 20 minutes.** Entries stay alive for a full 20 minutes after last fill, regardless of whether the page is still open.
 
 ### 2. `reactiveStoreRegistry` (Vue.reactive Map)
+
 - Every `getReactiveStore()` call registers a store keyed by API call + args + analysis config.
 - Each store holds:
   - `store.data[]` — full deep clone of the loaded data, with `AppData` objects added to every row and nested row.
@@ -27,15 +29,18 @@
 - Multiple components opening the same data share a store (by key), so this is not multiplied by component count.
 
 ### 3. Analysis Pipeline (in-flight and results)
+
 - `runConfiguredAnalysis()` processes all rows in batches of 10 with 50ms delays.
 - All analysis results are stored inline on row objects in `store.data`. They are cleared on each reload but accumulate across all loaded rows.
 - During analysis, batch promises and intermediate data are held in the PriorityQueue's in-flight structures.
 - For a large inventory with many items, analysis results can substantially inflate each row object.
 
 ### 4. `undoRegistry` (referenced but not analyzed here)
+
 - Undo snapshots are additional deep clones of data states. Each undo step is a full or diff snapshot. Not analyzed in depth here.
 
 ### 5. `autoSave` diff/backup structures
+
 - Stored in user data (Google Sheets), not in browser memory. Minimal RAM impact.
 
 ---
@@ -65,6 +70,7 @@
 **Memory impact:** High. A fully loaded packlist with analysis data can be several MB per tab. Evicting unvisited tabs would be the single largest memory win.
 
 **Difficulty:** Medium. Requires:
+
 1. Adding `evict()` to the store: clear `data`, `originalData`, set `needsReload = true`.
 2. Adding `beforeUnmount` hooks to content components.
 3. Ensuring the reactive template handles empty data state without errors (likely already does since initial load starts empty).
@@ -143,13 +149,13 @@
 
 ## Rankings: Top Recommendations
 
-| # | Strategy | RAM Impact | Implementation Difficulty | Notes |
-|---|----------|-----------|--------------------------|-------|
-| **1** | **Store eviction on navigate-away** (B) | **High** | Medium | Single largest win. Frees store `data` + `originalData` for inactive views. Already gracefully handles empty state on remount. |
-| **2** | **Replace `originalData` with hash** (D) | **High** | Medium | Eliminates the entire second copy of every loaded dataset. Careful interaction with undo/diff system. |
-| **3** | **Reduce cache TTL for low-traffic entries** (A) | Medium | Low | Quick win. Reducing 20 min → 5 min means stale data is released faster. Pair with store eviction. |
-| **4** | **LRU eviction cap on registry** (F) | Medium | Medium | Automatic safety net — ensures the app can't hold more than N full datasets simultaneously regardless of navigation pattern. |
-| **5** | **Lazy analysis for first N rows** (G) | Low–Medium | Medium | Only relevant if tables are large (100+ rows). Reduces peak analysis-phase memory. |
+| #     | Strategy                                         | RAM Impact | Implementation Difficulty | Notes                                                                                                                          |
+| ----- | ------------------------------------------------ | ---------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | **Store eviction on navigate-away** (B)          | **High**   | Medium                    | Single largest win. Frees store `data` + `originalData` for inactive views. Already gracefully handles empty state on remount. |
+| **2** | **Replace `originalData` with hash** (D)         | **High**   | Medium                    | Eliminates the entire second copy of every loaded dataset. Careful interaction with undo/diff system.                          |
+| **3** | **Reduce cache TTL for low-traffic entries** (A) | Medium     | Low                       | Quick win. Reducing 20 min → 5 min means stale data is released faster. Pair with store eviction.                              |
+| **4** | **LRU eviction cap on registry** (F)             | Medium     | Medium                    | Automatic safety net — ensures the app can't hold more than N full datasets simultaneously regardless of navigation pattern.   |
+| **5** | **Lazy analysis for first N rows** (G)           | Low–Medium | Medium                    | Only relevant if tables are large (100+ rows). Reduces peak analysis-phase memory.                                             |
 
 ---
 
@@ -173,12 +179,13 @@
 
 The eviction decision is where care is needed:
 
-- **What counts as "in use":** A component that has `this.myStore = getReactiveStore(...)` in `mounted()` or as a computed holds a live Vue reactive dependency on `store.data`. If data is evicted while the component is mounted, Vue immediately re-renders with empty data. This is acceptable *if* the component displays a loading state when `data.length === 0 && isLoading`, which the current templates do. But it would cause a jarring blank table flash for an active view the user is looking at.
+- **What counts as "in use":** A component that has `this.myStore = getReactiveStore(...)` in `mounted()` or as a computed holds a live Vue reactive dependency on `store.data`. If data is evicted while the component is mounted, Vue immediately re-renders with empty data. This is acceptable _if_ the component displays a loading state when `data.length === 0 && isLoading`, which the current templates do. But it would cause a jarring blank table flash for an active view the user is looking at.
 - **Safe eviction criteria:** A store should only be evicted if: `!isModified && !isLoading && !isSaving && !isAnalyzing && lastAccess > threshold`. The `!isModified` guard is critical — it prevents loss of unsaved work.
 - **"Last access" vs "component mounted":** The `lastAccess` timestamp is updated when `getReactiveStore()` is called, not on every Vue reactive read. This means a component that mounts once and stays mounted won't update `lastAccess` on its own — which is actually what you want. If nobody calls `getReactiveStore()` for a store for N minutes, it's a candidate for eviction.
 - **The problem:** Components that are currently mounted and showing a store's data will have called `getReactiveStore()` once at mount. They won't call it again unless they unmount+remount. So `lastAccess` would always be near mount time, not near "last time user was looking at it." To be truly accurate, you'd need components to call a lightweight `touchStore(key)` when they become the active view (or use Vue's `onActivated` hook if keep-alive is ever added).
 
 **Recommended minimal implementation:**
+
 1. Add `lastAccess`, `accessCount` to each store entry in `getReactiveStore()`
 2. After any access, run a debounced sweep (1–2 second delay) that finds stores where `lastAccess` is older than a threshold (e.g., 10 minutes) AND all safety guards pass
 3. Evict by calling `store.evict()`: clear `data` and `originalData` in-place, set `needsReload = true`, leave all other state intact
@@ -193,6 +200,7 @@ This is safe to add without risk. The `accessCount` alone is immediately useful 
 **Current state: `originalData` is ALWAYS allocated and populated, even for read-only stores.**
 
 Confirmed read-only store calls (where `saveCall = null`):
+
 - `InventoryOverviewTable.js`: `getReactiveStore(Requests.getAllInventoryData, null, ...)`
 - `InventoryItemTimeline.js`: two stores — `getReactiveStore(Requests.getItemTimeline, null, ...)` and `getReactiveStore(Requests.getInventoryInfo, null, ...)`
 - `InventoryItemReport.js`: `getReactiveStore(Requests.getMultipleShowsItemsSummary, null, ...)`
@@ -206,6 +214,7 @@ Every one of these calls `this.setOriginalData(dataToSet)` during `load()`, prod
 **The fix is clean and low-risk:**
 
 In `createReactiveStore`, check `saveCall` at store initialization time:
+
 - If `saveCall === null`: skip `setOriginalData` in `load()`, initialize `originalData` as a non-reactive empty constant, and short-circuit `isModified` to always return `false`.
 - The `save()` method already guards with `if (typeof saveCall !== 'function')` so no save path breaks.
 - The `handleInvalidation()` method checks `isModified` before flagging conflicts — returning `false` always for read-only stores means they always reload immediately on external change, which is the correct behavior.
@@ -226,8 +235,8 @@ Here is what actually happens when a cache entry expires (from `CacheManager.get
 
 ```javascript
 if (entry.expire && entry.expire < Date.now()) {
-    CacheManager.cache.delete(key);  // ← only this
-    return CacheManager.CACHE_MISS;
+  CacheManager.cache.delete(key); // ← only this
+  return CacheManager.CACHE_MISS;
 }
 ```
 
@@ -236,6 +245,7 @@ Only `CacheManager.cache.delete(key)` is called. `CacheManager.dependencies` is 
 **What this means for the invalidation chain:**
 
 When a mutation later calls `invalidate('database:getData:...')`:
+
 1. The cascade walks `dependencies` to find who depends on that key
 2. It finds `api:getPackList(...)` — even if the cache entry for it has already expired
 3. `cache.delete('api:getPackList:...')` is called — a no-op since it's already gone
@@ -261,6 +271,7 @@ The chain is fully preserved. **The only behavioral difference between TTL expir
 **Memory pressure detection in the browser:**
 
 `performance.memory` (Chrome/Edge only) provides:
+
 - `usedJSHeapSize` — current allocated heap
 - `jsHeapSizeLimit` — maximum allowed heap (typically 2–4 GB on desktop)
 
@@ -269,6 +280,7 @@ This can serve as a pressure signal. `performance.memory` is not available in Fi
 **Feasibility of usage-based eviction for infinite caches: Medium, with meaningful caveats.**
 
 A viable design:
+
 1. Track `lastHit` timestamp on each cache entry (one timestamp per entry in `CacheManager.set()` and `CacheManager.get()`)
 2. Provide a `CacheManager.evictLRUInfinite(threshold)` function that finds infinite-cache entries (where `entry.expire === null`) sorted by `lastHit`, and evicts the least recently used ones until under threshold
 3. Call this function only when `performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit > 0.80` (or similar heuristic), which would be checked periodically

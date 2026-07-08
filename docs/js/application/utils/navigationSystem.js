@@ -352,8 +352,8 @@ export const NavigationRegistry = {
                 //console.log('[NavigationRegistry] Updated route cache after removing params:', route.lastParameters);
             }
             
-            // Update dashboard registry cache (for dashboard navigation)
-            if (this.dashboardRegistry) {
+            // Update dashboard registry cache (for dashboard navigation) - only if container exists on dashboard
+            if (this.dashboardRegistry && this.dashboardRegistry.has(cleanPath)) {
                 this.dashboardRegistry.updatePath(cleanPath, finalPath);
                 //console.log('[NavigationRegistry] Updated dashboard cache after removing params');
             }

@@ -255,7 +255,7 @@ function clearAnalysisResultsFromItem(item, config, clearTargetColumn = false) {
 }
 
 // Modular reactive store factory for any generic data, with async API calls for load and save
-export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null, priorityConfig = null) {
+export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [], analysisConfig = null, priorityConfig = null, exemptFromEviction = false) {
     // Priority configuration with defaults
     const priorities = {
         load: priorityConfig?.load !== undefined ? priorityConfig.load : Priority.LOAD,      // Default: 8
@@ -357,6 +357,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         lastAutoSaveHash: null, // Hash of data when last auto-saved, to prevent redundant saves
         loadedBackupKey: null, // Original backup key used for restore (may differ from current key)
         needsReload: false, // True when store was cleared by logout — reloadErrorStores() will reload after login
+        exemptFromEviction, // True if this is a core store that should never be evicted (e.g., dashboard userData)
         
         // Computed property to check if data has been modified.
         // Always returns false for read-only stores (saveCall === null) — no deep clone performed.
@@ -1113,27 +1114,56 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         return row;
     }
 
-    return store;
+    // Compute the store key (same as used in getReactiveStore)
+    const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
+
+    // Wrap store with Proxy to track data access
+    // When components read store.data, increment access count and update lastAccess timestamp
+    const storeProxy = new Proxy(store, {
+        get(target, property, receiver) {
+            const value = Reflect.get(target, property, receiver);
+            
+            // Track access when data property is read (not on every property access to avoid overhead)
+            if (property === 'data' && value && Array.isArray(value) && value.length > 0) {
+                const meta = storeMetaRegistry[storeKey];
+                if (meta) {
+                    meta.lastAccess = Date.now();
+                    meta.accessCount++;
+                }
+            }
+            
+            return value;
+        }
+    });
+
+    return storeProxy;
 }
 
 // Central registry for reactive stores, keyed by apiCall.toString() + JSON.stringify(apiArgs)
 const reactiveStoreRegistry = Vue.reactive({});
 
-// LRU metadata for each registered store: lastAccess timestamp and access count.
+// LRU metadata for each registered store: creation time, lastAccess timestamp, and access count.
 // Stored separately so it doesn't pollute the reactive store objects.
+// Access frequency is calculated as: accessCount / ageInMinutes
 const storeMetaRegistry = {};
 
 // Maximum number of simultaneously populated stores.
-// Stores exceeding this cap (sorted by oldest lastAccess) are evicted after a debounce.
+// Stores exceeding this cap (sorted by lowest access frequency) are evicted after a debounce.
 // Set high to be conservative — lower this value if memory pressure is still observed.
 const MAX_POPULATED_STORES = 10;
+
+// Recency guard: stores accessed within this window will not be evicted
+const RECENCY_GUARD_MS = 60 * 1000; // 60 seconds
 
 let _lruEvictDebounceTimer = null;
 
 /**
  * Debounced LRU sweep: called after every new store access that could push the total
- * populated count over MAX_POPULATED_STORES. Finds eviction candidates (oldest lastAccess,
- * not modified/loading/saving/analyzing) and evicts until count is within the threshold.
+ * populated count over MAX_POPULATED_STORES. Finds eviction candidates (lowest access frequency,
+ * not recently accessed, not modified/loading/saving/analyzing) and evicts until count is within the threshold.
+ * 
+ * Access frequency is calculated as: accessCount / ageInMinutes
+ * Higher frequency = more active store = kept longer
  */
 function scheduleLruEviction() {
     if (_lruEvictDebounceTimer) return;
@@ -1146,23 +1176,53 @@ function scheduleLruEviction() {
         });
         if (populated.length <= MAX_POPULATED_STORES) return;
 
-        // Sort by lastAccess ascending (oldest first)
-        populated.sort((a, b) => {
-            const aTime = storeMetaRegistry[a]?.lastAccess || 0;
-            const bTime = storeMetaRegistry[b]?.lastAccess || 0;
-            return aTime - bTime;
+        const now = Date.now();
+        
+        // Calculate recency-weighted frequency for each store and sort by lowest score first
+        const storesWithFrequency = populated.map(key => {
+            const meta = storeMetaRegistry[key];
+            if (!meta) return { key, score: 0, lastAccess: 0, accessCount: 0 };
+            
+            // Recency factor: exponential decay based on time since last access
+            // Half-life of 60 minutes: stores accessed 60 min ago = 0.5 score multiplier
+            // Stores accessed 1 day ago ≈ 0.0001 score multiplier (heavily deprioritized)
+            const timeSinceLastAccessMs = now - meta.lastAccess;
+            const timeSinceLastAccessMin = timeSinceLastAccessMs / 60000;
+            const recencyFactor = Math.exp(-timeSinceLastAccessMin / 60); // Exponential decay with 60-min half-life
+            
+            // Combined score: base frequency weighted by recency
+            // Old stores get aggressively deprioritized regardless of access count
+            const frequency = meta.accessCount / Math.max((timeSinceLastAccessMin + 0.1), 0.1); // accesses per minute
+            const score = frequency * recencyFactor;
+            
+            return { key, score, lastAccess: meta.lastAccess || 0, accessCount: meta.accessCount || 0 };
         });
+        
+        // Sort by score ascending (lowest score = least active = evict first)
+        storesWithFrequency.sort((a, b) => a.score - b.score);
 
         let evictCount = populated.length - MAX_POPULATED_STORES;
-        for (const key of populated) {
+        for (const { key, score, lastAccess, accessCount } of storesWithFrequency) {
             if (evictCount <= 0) break;
             const s = reactiveStoreRegistry[key];
             if (!s) continue;
-            // Safety guards — never evict a store with unsaved work or active operations
-            if (s.isModified || s.isLoading || s.isSaving || s.isAnalyzing) continue;
+            
+            // Safety guards:
+            // 1. Never evict stores marked as exempt (core stores like dashboard userData)
+            // 2. Never evict stores with unsaved work or active operations
+            // 3. Never evict stores accessed within the recency guard window (60 seconds)
+            const timeSinceAccess = now - lastAccess;
+            if (s.exemptFromEviction || s.isModified || s.isLoading || s.isSaving || s.isAnalyzing || timeSinceAccess < RECENCY_GUARD_MS) {
+                continue;
+            }
+            
             s.evict();
-            console.log(`[ReactiveStore] LRU evicted store (${storeMetaRegistry[key]?.accessCount || 0} accesses, last: ${new Date(storeMetaRegistry[key]?.lastAccess || 0).toISOTimeString?.() || 'unknown'}, key: ${key.slice(0, 40)}...)`);
+            console.log(`[ReactiveStore] Evicted store (score: ${score.toFixed(4)}, ${accessCount} accesses, last: ${(timeSinceAccess / 1000).toFixed(0)}s ago, key: ${key.slice(0, 40)}...)`);
             evictCount--;
+        }
+        
+        if (evictCount > 0) {
+            console.warn(`[ReactiveStore] Could not evict enough stores (${evictCount} remaining) - all candidates are either active or recently accessed`);
         }
     }, 2000); // 2-second debounce to let navigation bursts settle
 }
@@ -1608,15 +1668,17 @@ function extractMethodName(apiFunction) {
  * @param {Array} analysisConfig - Optional analysis configuration array
  * @param {boolean} autoLoad - Whether to automatically load data on first creation (default: true)
  * @param {Object} priorityConfig - Optional priority configuration for load/save/analysis
+ * @param {boolean} exemptFromEviction - If true, this store will never be evicted (use for critical stores like dashboard)
  * @returns {Object} The reactive store instance
  */
-export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true, priorityConfig = null) {
+export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysisConfig = null, autoLoad = true, priorityConfig = null, exemptFromEviction = false) {
     const key = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
     
     if (!reactiveStoreRegistry[key]) {
-        const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig);
+        const store = createReactiveStore(apiCall, saveCall, apiArgs, analysisConfig, priorityConfig, exemptFromEviction);
         reactiveStoreRegistry[key] = store;
-        storeMetaRegistry[key] = { lastAccess: Date.now(), accessCount: 1 };
+        const now = Date.now();
+        storeMetaRegistry[key] = { createdAt: now, lastAccess: now, accessCount: 1 };
 
         const totalStores = Object.keys(reactiveStoreRegistry).length;
         console.log(`[ReactiveStore] New store created (${totalStores} total registered): ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
@@ -1684,13 +1746,32 @@ export function getReactiveStore(apiCall, saveCall = null, apiArgs = [], analysi
         }
     }
 
+    // Handle evicted stores that need reloading
+    const existingStore = reactiveStoreRegistry[key];
+    if (existingStore && existingStore.needsReload && !existingStore.isLoading) {
+        console.log(`[ReactiveStore] Re-accessing evicted store, triggering reload: ${key.substring(0, 80)}${key.length > 80 ? '...' : ''}`);
+        // Trigger async reload without blocking return
+        // After reload completes, check eviction again in case the reload didn't trigger cache invalidation
+        // (e.g., cache was still fresh within 8-min TTL). Without this, stores can accumulate indefinitely.
+        existingStore.load('Reloading evicted store...')
+            .then(() => scheduleLruEviction())
+            .catch(err => {
+                console.warn('[ReactiveStore] Failed to reload evicted store:', err);
+                scheduleLruEviction(); // Check eviction even on reload failure
+            });
+    }
+    
     // Update LRU metadata on every access (new store creation handled above; this covers re-access)
     if (storeMetaRegistry[key]) {
         storeMetaRegistry[key].lastAccess = Date.now();
         storeMetaRegistry[key].accessCount++;
     }
+    
+    // Check eviction on every getReactiveStore access (debounced to 2 seconds)
+    // This prevents store accumulation even when reloads don't trigger cache invalidation
+    scheduleLruEviction();
 
-    return reactiveStoreRegistry[key];
+    return existingStore;
 }
 
 /**
@@ -1904,6 +1985,14 @@ export async function clearAllReactiveStores(options = {}) {
         store.needsReload = true;
     });
 
-    //console.log(`[ReactiveStore] Cleanup complete - reset ${storeCount} store(s) in registry`);
+    // Step 5: Delete all store entries from the registry
+    // This ensures a clean slate on logout. When stores are re-accessed after login,
+    // getReactiveStore() will create fresh entries with needsReload properly handled.
+    for (const key of Object.keys(reactiveStoreRegistry)) {
+        delete reactiveStoreRegistry[key];
+        delete storeMetaRegistry[key];
+    }
+
+    //console.log(`[ReactiveStore] Cleanup complete - deleted ${storeCount} store(s) from registry`);
 }
 

@@ -390,6 +390,7 @@ export const ShowInventoryReport = {
                             :container-path="containerPath || 'reports/show-usage'"
                             :navigate-to-path="navigateToPath"
                             :show-advanced-button="true"
+                            :default-search="null"
                             @search-selected="handleSearchSelected"
                         />
                         <InventoryCategoryFilter

@@ -19,11 +19,35 @@ export const DashboardRegistry = Vue.reactive({
         
         try {
             // Use existing reactive store system with custom save wrapper
+            // Mark as exempt from eviction since this is a core store needed for navigation
             this.store = getReactiveStore(
                 Requests.getUserData,
                 null, // No automatic save call - we'll handle it manually
-                [authState.user.email, 'dashboard_containers']
+                [authState.user.email, 'dashboard_containers'],
+                null, // No analysis config
+                true, // autoLoad
+                null, // No priority config
+                true  // exemptFromEviction - this is a core store
             );
+            
+            // If the store was evicted and is being reloaded, wait for it to complete
+            // This happens after logout/login when the store has needsReload=true
+            if (this.store.needsReload && this.store.isLoading) {
+                console.log('[DashboardRegistry] Store is reloading after eviction, waiting for completion...');
+                // Wait for the loading to complete
+                await new Promise(resolve => {
+                    const unwatch = Vue.watch(
+                        () => this.store.isLoading,
+                        (isLoading) => {
+                            if (!isLoading) {
+                                unwatch();
+                                resolve();
+                            }
+                        }
+                    );
+                });
+                console.log('[DashboardRegistry] Store reload complete');
+            }
             
             // Override handleInvalidation to prevent reloads during save
             const originalHandleInvalidation = this.store.handleInvalidation.bind(this.store);
