@@ -25,7 +25,7 @@ export const authState = Vue.reactive({
 // Import DashboardRegistry for cleanup on logout
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { reloadErrorStores } from './reactiveStores.js';
-import { restartCacheTimestampPoller } from '../../data_management/utils/caching.js';
+import { restartCacheTimestampPoller, clearCache } from '../../data_management/utils/caching.js';
 import { networkState } from '../../data_management/utils/networkState.js';
 
 // Import modalManager for re-authentication prompts
