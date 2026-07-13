@@ -709,7 +709,7 @@ export const PacklistTable = {
                     <div v-if="error" class="error-message">{{ error }}</div>
                     <TableComponent
                         v-else
-                        theme="purple"
+                        theme="purple hover-highlight"
                         :data="inventoryData"
                         :originalData="originalData"
                         :columns="columns"
@@ -736,11 +736,11 @@ export const PacklistTable = {
                                 <ItemImageComponent
                                     :itemNumber="row.itemNumber"
                                     :imageSize="48"
-                                    :editable="true"
+                                    :editable="false"
                                 />
                             </template>
                             <template v-else-if="column.key === 'actions'">
-                                <button @click="selectItem(row)" class="card purple">+ Add Item</button>
+                                <button @click="selectItem(row)" class="purple">+ Add Item</button>
                             </template>
                             <template v-else>
                                 {{ row[column.key] }}

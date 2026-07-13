@@ -909,7 +909,7 @@ tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hov
 }
 
 /* Modal Close Buttons */
-.modal .column-button {
+.modal-header > .column-button {
     opacity: 1;
     pointer-events: auto;
     justify-self: flex-end;

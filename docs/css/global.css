@@ -57,7 +57,7 @@
 
 /* other transitions */
 body, div, span, p, h1, h2, h3, h4, h5, h6,
-th, td, ::after, ::before,
+th, tr, td, ::after, ::before,
 input[type="submit"], input[type="button"], select, button {
     position: relative;
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out, border 0.15s ease-in-out;
@@ -210,17 +210,17 @@ button:disabled:after {
 
 /* apply colors */
 
-div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)) {
+div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)), .hover-highlight.white tr:hover {
     border-color: var(--color-border);
     background-color: var(--background-color);
     color: var(--color-text);
 }
-div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)) {
+div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)), .hover-highlight.gray tr:hover {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
     color: var(--color-text);
 }
-div.purple, span.purple, col.purple, tr.purple {
+div.purple, span.purple, col.purple, tr.purple:not(.striped:nth-child(even)), tr.purple:not(.striped:nth-child(even)), .hover-highlight.purple tr:hover {
     border-color: var(--color-purple);
     background-color: var(--color-purple-bg);
     color: var(--color-text);

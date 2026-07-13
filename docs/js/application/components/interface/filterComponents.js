@@ -799,6 +799,7 @@ export const ScheduleAdvancedFilter = {
                 template: html`
                     <TableComponent
                         :data="tableData"
+                        :theme="'gray hover-highlight'"
                         :columns="columns"
                         :isLoading="isLoading"
                         :showSearch="true"
