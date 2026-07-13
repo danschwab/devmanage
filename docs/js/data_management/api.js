@@ -752,6 +752,10 @@ class Requests_uncached {
         return await deps.call(Database.getDriveBlobUrl, fileId);
     }
 
+    static async getThumbnailBlobUrl(deps, fileId) {
+        return await deps.call(Database.getThumbnailBlobUrl, fileId);
+    }
+
     /**
      * Fetch the full-resolution image for an item as a blob URL.
      * Only call this when the user requests the full-size view.

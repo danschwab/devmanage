@@ -261,7 +261,18 @@ class database_uncached {
         if (!fileId) return null;
         return await GoogleSheetsService.getAuthenticatedImageUrl(fileId);
     }
-
+    /**
+     * Gets authenticated thumbnail URL for a Drive file.
+     * For images <= 64px, returns thumbnail to reduce bandwidth and load time.
+     * Automatically falls back to full image if thumbnail unavailable.
+     * @param {Object} deps - Dependency decorator
+     * @param {string} fileId - Google Drive file ID
+     * @returns {Promise<string|null>} Blob URL or null
+     */
+    static async getThumbnailBlobUrl(deps, fileId) {
+        if (!fileId) return null;
+        return await GoogleSheetsService.getAuthenticatedThumbnailUrl(fileId);
+    }
 
     /* MUTATION FUNCTIONS */
 
@@ -519,7 +530,7 @@ export const Database = wrapMethods(
     database_uncached, 
     'database', 
     ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
-    ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getThumbnailBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
         // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)

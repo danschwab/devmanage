@@ -419,24 +419,44 @@ const ImageUploadComponent = {
 };
 
 // Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
-// blob URLs via analysis. All ItemImageComponent instances share the same store instance.
+// both thumbnail and full blob URLs via analysis. All ItemImageComponent instances share the same store instance.
+// Marked as exempt from eviction to prevent auto-clearing, similar to the dashboard store.
 function getThumbnailStore() {
     return getReactiveStore(
         Requests.getAllThumbnailRecords,
         null,
         [],
-        [createAnalysisConfig(
-            Requests.getDriveBlobUrl,
-            'blobUrl',
-            'Loading thumbnails...',
-            ['file'],
-            [],
-            null,
-            false,
-            Priority.BACKGROUND,
-            false,
-            false
-        )]
+        [
+            // Analysis step 1: Convert file IDs to thumbnail URLs (for small images ≤64px)
+            createAnalysisConfig(
+                Requests.getThumbnailBlobUrl,
+                'thumbnailUrl',
+                'Loading thumbnails...',
+                ['file'],
+                [],
+                null,
+                false,
+                Priority.BACKGROUND,
+                false,
+                false
+            ),
+            // Analysis step 2: Convert file IDs to full blob URLs (for modal/large displays)
+            createAnalysisConfig(
+                Requests.getDriveBlobUrl,
+                'blobUrl',
+                'Loading images...',
+                ['file'],
+                [],
+                null,
+                false,
+                Priority.BACKGROUND,
+                false,
+                false
+            )
+        ],
+        true,   // autoLoad
+        null,   // priorityConfig
+        true    // exemptFromEviction - prevent auto-clearing
     );
 }
 
@@ -459,9 +479,10 @@ export const ItemImageComponent = {
     data() {
         return {
             thumbnailStore: null,
-            localImageUrl: null, // Set immediately after upload for instant feedback
-            prefixLoaded: false,
-            mainLoaded: false
+            localImageUrl: null,    // Set immediately after upload for instant feedback
+            fullImageUrl: null,     // Cached full image URL (fetched on demand)
+            cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
+            cachedPrefixUrl: null   // Last known good prefix URL to prevent flashing during reload
         };
     },
     computed: {
@@ -474,12 +495,56 @@ export const ItemImageComponent = {
             if (!prefix || prefix === this.itemNumber) return null;
             return this.thumbnailStore?.data?.find(r => r.itemNumber === prefix) || null;
         },
+        shouldUseThumbnail() {
+            return this.imageSize <= 64;
+        },
         imageUrl() {
-            return this.localImageUrl || this.record?.AppData?.blobUrl || null;
+            if (this.localImageUrl) return this.localImageUrl;
+            
+            // During loading/analyzing, preserve the cached URL to avoid flashing
+            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
+            if (isReloading && this.cachedImageUrl) {
+                return this.cachedImageUrl;
+            }
+            
+            // For small images, use thumbnail; for larger, use full image
+            let newUrl = null;
+            if (this.shouldUseThumbnail && this.record?.AppData?.thumbnailUrl) {
+                newUrl = this.record.AppData.thumbnailUrl;
+            } else {
+                newUrl = this.record?.AppData?.blobUrl || null;
+            }
+            
+            // Update cache if URL changed
+            if (newUrl && newUrl !== this.cachedImageUrl) {
+                this.cachedImageUrl = newUrl;
+            }
+            
+            return newUrl;
         },
         prefixImageUrl() {
             if (this.imageUrl) return null;
-            return this.prefixRecord?.AppData?.blobUrl || null;
+            
+            // During loading/analyzing, preserve the cached prefix URL to avoid flashing
+            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
+            if (isReloading && this.cachedPrefixUrl) {
+                return this.cachedPrefixUrl;
+            }
+            
+            // For prefix fallback, use thumbnail if small, otherwise full image
+            let newUrl = null;
+            if (this.shouldUseThumbnail && this.prefixRecord?.AppData?.thumbnailUrl) {
+                newUrl = this.prefixRecord.AppData.thumbnailUrl;
+            } else {
+                newUrl = this.prefixRecord?.AppData?.blobUrl || null;
+            }
+            
+            // Update cache if URL changed
+            if (newUrl && newUrl !== this.cachedPrefixUrl) {
+                this.cachedPrefixUrl = newUrl;
+            }
+            
+            return newUrl;
         },
         isResolved() {
             return !this.thumbnailStore?.isLoading && !this.thumbnailStore?.isAnalyzing;
@@ -491,21 +556,36 @@ export const ItemImageComponent = {
             return !!(this.imageUrl || this.prefixImageUrl);
         }
     },
-    watch: {
-        imageUrl() {
-            this.mainLoaded = false;
-        },
-        prefixImageUrl() {
-            this.prefixLoaded = false;
-        }
-    },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
+    },
+    watch: {
+        itemNumber() {
+            // Clear cached URLs when item number changes
+            this.cachedImageUrl = null;
+            this.cachedPrefixUrl = null;
+            this.fullImageUrl = null;
+        },
+        record(newRecord, oldRecord) {
+            // If the record changes (e.g., item deleted/recreated), clear cache
+            if (newRecord?.file !== oldRecord?.file) {
+                this.cachedImageUrl = null;
+                this.cachedPrefixUrl = null;
+                this.fullImageUrl = null;
+            }
+        }
     },
     methods: {
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;
+        },
+        async ensureFullImage() {
+            // If we don't have a full image URL cached, fetch it on demand
+            if (!this.fullImageUrl && this.record?.file) {
+                this.fullImageUrl = await Requests.getDriveBlobUrl(this.record.file) || null;
+            }
+            return this.fullImageUrl;
         },
         showImageModal() {
             if (this.realImageFound) {
@@ -527,29 +607,48 @@ export const ItemImageComponent = {
                 onUploadSuccess: (url) => {
                     this.clearLocalImageUrl();
                     this.localImageUrl = url;
+                    this.cachedImageUrl = url;      // Clear cache so new URL takes effect immediately
+                    this.cachedPrefixUrl = null;    // No longer need prefix
+                    this.fullImageUrl = null;       // Clear cached full image so it will refetch if needed
                 }
             }, title);
         },
-        onPrefixImageLoad() {
-            this.prefixLoaded = true;
-        },
-        onMainImageLoad() {
-            this.mainLoaded = true;
-        },
         async handleError(isMainImage) {
-            // Blob URL became stale — re-fetch directly from the stored Drive file ID
+            // Blob URL became stale — re-fetch the appropriate size (thumbnail or full)
             const fileId = this.record?.file;
             if (!fileId) return;
-            invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
-            const fresh = await Requests.getDriveBlobUrl(fileId);
-            if (fresh) {
-                this.clearLocalImageUrl();
-                this.localImageUrl = fresh;
+            
+            // Clear cache since we're intentionally refetching
+            this.cachedImageUrl = null;
+            this.cachedPrefixUrl = null;
+            
+            if (this.shouldUseThumbnail) {
+                // Thumbnail URL failed, invalidate and refetch thumbnail
+                invalidateCache([{ namespace: 'database', methodName: 'getThumbnailBlobUrl', args: [fileId] }]);
+                const fresh = await Requests.getThumbnailBlobUrl(fileId);
+                if (fresh) {
+                    this.clearLocalImageUrl();
+                    this.localImageUrl = fresh;
+                    this.cachedImageUrl = fresh;
+                }
+            } else {
+                // Full image URL failed, invalidate and refetch full image
+                invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
+                const fresh = await Requests.getDriveBlobUrl(fileId);
+                if (fresh) {
+                    this.clearLocalImageUrl();
+                    this.localImageUrl = fresh;
+                    this.cachedImageUrl = fresh;
+                    this.fullImageUrl = fresh;
+                }
             }
         }
     },
     beforeUnmount() {
         this.clearLocalImageUrl();
+        if (this.fullImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.fullImageUrl);
+        // Note: cachedImageUrl and cachedPrefixUrl are managed by the store's lifecycle,
+        // so we don't revoke them here—they'll be cleaned up when the store reloads
     },
     template: html`
         <div
@@ -558,16 +657,14 @@ export const ItemImageComponent = {
             @click="realImageFound ? showImageModal() : (editable && isResolved ? showUploadModal() : null)"
             :title="realImageFound ? 'Expand image' : (editable && isResolved ? 'Upload thumbnail' : '')"
         >
-            <!-- Placeholder layer: always present, fades out when other images load -->
+            <!-- Transition group handles all fade-in/fade-out automatically -->
             <transition-group name="longfade">
                 <img
                     v-if="prefixImageUrl"
                     :key="prefixImageUrl"
                     class="image-layer"
-                    :class="{ 'image-loaded': prefixLoaded }"
                     :src="prefixImageUrl"
                     alt="Category Image"
-                    @load="onPrefixImageLoad"
                     @error="handleError(false)"
                 />
 
@@ -575,22 +672,18 @@ export const ItemImageComponent = {
                     v-else-if="imageUrl"
                     :key="imageUrl"
                     class="image-layer"
-                    :class="{ 'image-loaded': mainLoaded }"
                     :src="imageUrl"
                     alt="Item Image"
-                    @load="onMainImageLoad"
                     @error="handleError(true)"
                 />
 
                 <img
                     v-else
-                    class="image-layer"
                     :key="'placeholder'"
-                    :class="{ 'fading-out': prefixLoaded || mainLoaded }"
+                    class="image-layer"
                     src="assets/placeholder.png"
                     alt="Placeholder"
                 />
-
             </transition-group>
         </div>
     `

@@ -1434,6 +1434,14 @@ export class FakeGoogleSheetsService {
     }
 
     /**
+     * Fake implementation of getAuthenticatedThumbnailUrl
+     * Returns same asset paths as full images (test images are already small)
+     */
+    static async getAuthenticatedThumbnailUrl(fileId) {
+        return this.getAuthenticatedImageUrl(fileId);
+    }
+
+    /**
      * Fake implementation of Google Drive file upload
      */
     static async uploadDriveFile(file, fileName, folderId) {
