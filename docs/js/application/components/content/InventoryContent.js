@@ -114,7 +114,7 @@ export const InventoryContent = {
                     
                     // Determine card styling based on lock state and unsaved changes
                     // Priority: locked (white) > unsaved changes (red) > normal (purple)
-                    const cardClass = isLocked ? 'button yellow' : (hasUnsavedChanges ? 'button red' : 'button purple');
+                    const cardClass = isLocked ? 'button yellow' : 'button purple';
                     
                     // Build content footer
                     let contentFooter = undefined;
@@ -126,12 +126,30 @@ export const InventoryContent = {
                         contentFooter = 'Unsaved changes';
                     }
                     
+                    // Build footer action buttons
+                    let footerActions = [];
+                    
+                    // Add green Save button for unsaved categories
+                    if (hasUnsavedChanges) {
+                        footerActions.push({
+                            label: 'Save',
+                            class: 'green',
+                            onClick: () => this.saveCategory(cat.title)
+                        });
+                    }
+                    
+                    // Only set footerActions if there are any actions; otherwise undefined
+                    if (footerActions.length === 0) {
+                        footerActions = undefined;
+                    }
+                    
                     return {
                         id: cat.sheetId,
                         title: categoryTitle,
                         originalTitle: cat.title, // Keep original uppercase tab name
                         cardClass: cardClass,
                         contentFooter: contentFooter,
+                        footerActions: footerActions,
                         AppData: cat.AppData // Pass through AppData for analyzing state
                     };
                 });
@@ -236,6 +254,29 @@ export const InventoryContent = {
         },
         handleCategorySelect(categoryTitle) {
             this.navigateToPath('inventory/' + categoryTitle.toLowerCase());
+        },
+        async saveCategory(categoryTitle) {
+            try {
+                // Find the reactive store for this inventory category
+                const matchingStores = findMatchingStores(
+                    Requests.getInventoryTabData,
+                    [categoryTitle, undefined, undefined, undefined]
+                );
+                if (matchingStores.length === 0) {
+                    this.$modal.alert('Category not found or no changes to save.', 'Save');
+                    return;
+                }
+                const storeMatch = matchingStores[0];
+                if (!storeMatch.isModified) {
+                    this.$modal.alert('No unsaved changes to save.', 'Save');
+                    return;
+                }
+                await storeMatch.store.save();
+                this.$modal.alert('Category saved successfully.', 'Success');
+            } catch (error) {
+                console.error('[InventoryContent] Failed to save category:', error);
+                this.$modal.error(`Failed to save category: ${error.message}`, 'Save Error');
+            }
         },
         navigateToCategoriesView() {
             this.navigateToPath(NavigationRegistry.buildPath('inventory', { view: 'categories' }));

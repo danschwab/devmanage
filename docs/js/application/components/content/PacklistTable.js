@@ -154,7 +154,8 @@ export const PacklistTable = {
             NavigationRegistry,
             lockNamespace: 'PACK_LISTS',
             itemGroupVisibilityOverride: null,
-            inventoryIndexData: null
+            inventoryIndexData: null,
+            scheduleAttachment: null
         };
     },
     computed: {
@@ -255,7 +256,7 @@ export const PacklistTable = {
             return this.packlistTableStore?.externalConflict ?? false;
         },
         banners() {
-            return [
+            const banners = [
                 {
                     key: 'error',
                     color: 'red',
@@ -294,6 +295,53 @@ export const PacklistTable = {
                     }
                 }
             ];
+            
+            // Add schedule attachment banners
+            if (this.scheduleAttachment && !this.scheduleAttachment.attached && this.scheduleAttachment.hasIdentifierParts) {
+                const clientIssue = this.scheduleAttachment.clientIssue;
+                const showIssue = this.scheduleAttachment.showIssue;
+                
+                if (clientIssue) {
+                    banners.push({
+                        key: 'client-missing',
+                        color: 'red',
+                        message: 'Client missing from production schedule index',
+                        visible: true,
+                        dismissible: true,
+                        action: {
+                            label: 'Resolve',
+                            fn: () => this.openPacklistIndexResolutionModal(this.tabName, 'client', clientIssue.rawValue)
+                        }
+                    });
+                }
+                
+                if (showIssue) {
+                    banners.push({
+                        key: 'show-missing',
+                        color: 'red',
+                        message: 'Show missing from production schedule index',
+                        visible: true,
+                        dismissible: true,
+                        action: {
+                            label: 'Resolve',
+                            fn: () => this.openPacklistIndexResolutionModal(this.tabName, 'show', showIssue.rawValue)
+                        }
+                    });
+                }
+                
+                // If both are resolved in index but still not attached (no schedule row)
+                if (!clientIssue && !showIssue) {
+                    banners.push({
+                        key: 'not-on-schedule',
+                        color: 'orange',
+                        message: 'Packlist not found on production schedule',
+                        visible: true,
+                        dismissible: true
+                    });
+                }
+            }
+            
+            return banners;
         },
         
         editMode() {
@@ -375,6 +423,18 @@ export const PacklistTable = {
                 }
             }
         }, { immediate: true });
+        
+        // Watch for store loading completion to check schedule attachment
+        this.$watch(() => this.packlistTableStore?.isLoading, async (isLoading, wasLoading) => {
+            if (wasLoading && !isLoading && this.tabName) {
+                // Store just finished loading, check schedule attachment
+                try {
+                    this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(this.tabName);
+                } catch (error) {
+                    console.error('[PacklistTable] Failed to check schedule attachment:', error);
+                }
+            }
+        });
     },
     methods: {
         onForeignLockWhileClean() {
@@ -386,6 +446,226 @@ export const PacklistTable = {
                 { edit: undefined }
             );
             this.$emit('navigate-to-path', { targetPath: viewPath, replaceHistory: true });
+        },
+        async openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, includeAllCandidates = false) {
+            try {
+                const resolutionData = await Requests.getScheduleReferenceResolutionOptions(
+                    referenceType,
+                    rawValue,
+                    includeAllCandidates
+                );
+
+                const options = resolutionData?.options || [];
+                if (options.length === 0) {
+                    this.$modal.alert('No resolution options available for this value.', 'Missing');
+                    return;
+                }
+
+                const modalTitle = includeAllCandidates
+                    ? `Select ${referenceType}`
+                    : `${referenceType === 'show' ? 'Show' : 'Client'} Missing`;
+
+                const issue = { referenceType, rawValue };
+                const self = this;
+
+                const IndexResolutionComponent = {
+                    inject: ['$modal'],
+                    props: {
+                        issue: Object,
+                        options: Array,
+                        includeAllCandidates: Boolean,
+                        onSelectOption: Function
+                    },
+                    data() {
+                        return {
+                            filterText: '',
+                            isSubmitting: false
+                        };
+                    },
+                    computed: {
+                        filteredOptions() {
+                            if (!this.includeAllCandidates || !this.filterText.trim()) {
+                                return this.options;
+                            }
+                            const search = this.filterText.trim().toLowerCase();
+                            return this.options.filter(option => {
+                                const searchableText = option.canonicalName || option.label;
+                                return searchableText.toLowerCase().includes(search);
+                            });
+                        }
+                    },
+                    methods: {
+                        async selectOption(option) {
+                            if (this.isSubmitting) return;
+                            this.isSubmitting = true;
+                            try {
+                                let result;
+                                if (this.onSelectOption) {
+                                    result = await this.onSelectOption(option);
+                                }
+                                if (!result || result.applied || result.browsedAll) {
+                                    this.$emit('close-modal');
+                                } else {
+                                    this.isSubmitting = false;
+                                }
+                            } catch (error) {
+                                this.isSubmitting = false;
+                                console.error('[IndexResolution] Error selecting option:', error);
+                            }
+                        },
+                        openCustomEntryModal() {
+                            this.$modal.custom({
+                                inject: ['$modal'],
+                                props: {
+                                    issue: Object,
+                                    onSubmit: Function
+                                },
+                                data() {
+                                    return {
+                                        customName: '',
+                                        isSubmitting: false,
+                                        errorMessage: ''
+                                    };
+                                },
+                                methods: {
+                                    async submit() {
+                                        if (!this.customName.trim()) return;
+                                        this.isSubmitting = true;
+                                        this.errorMessage = '';
+                                        try {
+                                            const result = await this.onSubmit(this.customName.trim());
+                                            if (result?.applied) {
+                                                this.$emit('close-modal');
+                                            } else if (result?.message) {
+                                                this.errorMessage = result.message;
+                                                this.isSubmitting = false;
+                                            } else {
+                                                this.isSubmitting = false;
+                                            }
+                                        } catch (error) {
+                                            this.errorMessage = error.message || 'Failed to submit custom entry';
+                                            this.isSubmitting = false;
+                                        }
+                                    }
+                                },
+                                template: html`
+                                    <div>
+                                        <p v-if="errorMessage" class="card red" style="margin-bottom: 0.5rem;">{{ errorMessage }}</p>
+                                        <div class="input-container" style="margin-bottom: 0.5rem;">
+                                            <input 
+                                                type="text" 
+                                                v-model="customName" 
+                                                :disabled="isSubmitting" 
+                                                :placeholder="'Enter new ' + issue.referenceType + ' name'" 
+                                                class="search-input" 
+                                                style="width: 100%;" 
+                                                @keyup.enter="submit" />
+                                        </div>
+                                        <button @click="submit" :disabled="!customName.trim() || isSubmitting" class="green" style="width: 100%;">{{ isSubmitting ? 'Submitting...' : 'Submit' }}</button>
+                                    </div>
+                                `
+                            }, {
+                                issue: this.issue,
+                                onSubmit: async (customName) => {
+                                    if (this.onSelectOption) {
+                                        const result = await this.onSelectOption({
+                                            actionType: 'add-custom',
+                                            canonicalName: customName,
+                                            abbreviation: this.issue.rawValue
+                                        });
+                                        if (result?.applied) { this.$emit('close-modal'); }
+                                        return result;
+                                    }
+                                    return { applied: false, message: 'Unable to submit the custom entry.' };
+                                },
+                                modalClass: 'hamburger-menu'
+                            }, `Enter custom new ${this.issue.referenceType}`);
+                        }
+                    },
+                    template: html`
+                        <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                            <div v-if="includeAllCandidates" class="input-container" style="margin-bottom: 0.5rem;">
+                                <input type="text" v-model="filterText" :disabled="isSubmitting" placeholder="Filter options..." class="search-input" style="width: 100%;" />
+                            </div>
+                            <div v-else style="margin-bottom: 1rem;">
+                                <p>A production schedule index entry was missing.</p>
+                                <p v-if="isSubmitting">Applying update...</p>
+                                <p v-else>Resolve below to prevent analytics issues:</p>
+                            </div>
+                            <ul>
+                                <li v-for="option in filteredOptions" :key="option.actionType + '-' + option.label">
+                                    <button @click="selectOption(option)" :disabled="isSubmitting" :class="option.buttonClass || 'white'" style="text-align: left;">{{ option.label }}</button>
+                                </li>
+                                <li v-if="!includeAllCandidates" style="margin-top: 0.5rem;">
+                                    <button @click="openCustomEntryModal" :disabled="isSubmitting" class="blue" style="text-align: left; width: 100%;">Enter custom new {{ issue.referenceType }}</button>
+                                </li>
+                            </ul>
+                        </div>
+                    `
+                };
+
+                this.$modal.custom(IndexResolutionComponent, {
+                    issue,
+                    options,
+                    includeAllCandidates,
+                    onSelectOption: async (option) => {
+                        return await this.applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates);
+                    },
+                    modalClass: 'hamburger-menu'
+                }, modalTitle);
+            } catch (error) {
+                console.error('[PacklistTable] Failed to open index resolution modal:', error);
+                this.$modal.error(`Failed to load resolution options: ${error.message}`, 'Index Resolution Error');
+            }
+        },
+        async applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates) {
+            try {
+                if (!option) return { applied: false };
+
+                if (option.actionType === 'browse-all') {
+                    await this.openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, true);
+                    return { applied: false, browsedAll: true };
+                }
+
+                if (option.actionType === 'add-new') {
+                    await Requests.addScheduleReferenceName(referenceType, option.canonicalName);
+                } else if (option.actionType === 'add-abbreviation') {
+                    await Requests.appendScheduleReferenceAbbreviation(referenceType, option.canonicalName, option.abbreviation);
+                } else if (option.actionType === 'add-custom') {
+                    const result = await Requests.addCustomScheduleReferenceEntry(referenceType, option.canonicalName, option.abbreviation);
+                    if (!result?.applied) {
+                        const conflictName = result?.conflict?.existingName || '';
+                        const conflictValue = result?.conflict?.value || option.canonicalName;
+                        const fieldLabel = result?.conflict?.field === 'abbreviation' ? 'abbreviation' : 'name';
+                        return {
+                            applied: false,
+                            message: `The ${fieldLabel} "${conflictValue}" already exists${conflictName ? ` on ${conflictName}` : ''}.`
+                        };
+                    }
+                    return { applied: true };
+                } else {
+                    return { applied: false };
+                }
+
+                // Invalidate caches to refresh schedule data and CACHE sheet
+                invalidateCache([
+                    { namespace: 'database', methodName: 'query', args: ['SCHEDULE', `SELECT * WHERE A != ''`] },
+                    { namespace: 'database', methodName: 'query', args: ['CACHE'] }
+                ], true);
+
+                // Reload attachment status
+                try {
+                    this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
+                } catch (error) {
+                    console.error('[PacklistTable] Failed to reload schedule attachment:', error);
+                }
+
+                return { applied: true };
+            } catch (error) {
+                console.error('[PacklistTable] Failed to apply index resolution:', error);
+                this.$modal.error(`Failed to apply resolution: ${error.message}`, 'Resolution Error');
+                return { applied: false };
+            }
         },
 
         initializeStore() {

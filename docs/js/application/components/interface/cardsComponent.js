@@ -512,8 +512,18 @@ export const CardsComponent = {
                     <div class="content" v-if="item.content">
                         <div v-html="search.highlightHtmlContent(item.content)"></div>
                     </div>
-                    <div class="content-footer" v-if="item.contentFooter">
-                        <div v-html="search.highlightHtmlContent(item.contentFooter)"></div>
+                    <div class="content-footer" v-if="item.contentFooter || (item.footerActions && item.footerActions.length)">
+                        <div v-if="item.contentFooter" v-html="search.highlightHtmlContent(item.contentFooter)"></div>
+                        <div v-if="item.footerActions && item.footerActions.length" class="button-bar">
+                            <button
+                                v-for="action in item.footerActions"
+                                :key="action.label"
+                                :class="['card', action.class || 'red']"
+                                :disabled="!action.onClick"
+                                @click.stop="action.onClick && action.onClick()"
+                                v-html="action.label"
+                            ></button>
+                        </div>
                     </div>
                 </div>
                 

@@ -911,6 +911,39 @@ class productionUtils_uncached {
     }
 
     /**
+     * Diagnose why a packlist tab is not attached to any schedule row.
+     * Returns an attachment status object for use in the packlist overview UI.
+     * - { attached: true } when a schedule row is found
+     * - { attached: false, hasIdentifierParts: false } when the title has no CLIENT YEAR SHOW structure (custom packlist)
+     * - { attached: false, hasIdentifierParts: true, clientIssue, showIssue } when the title parses but no schedule row
+     *   matches; clientIssue/showIssue are clickable-alert payloads (same shape as checkReferenceNameState) or null
+     * @param {Object} deps
+     * @param {string} identifier - Packlist tab title
+     * @returns {Promise<{attached:boolean, hasIdentifierParts:boolean, clientIssue:Object|null, showIssue:Object|null}>}
+     */
+    static async diagnosePacklistAttachment(deps, identifier) {
+        if (!identifier) return { attached: false, hasIdentifierParts: false };
+
+        const row = await deps.call(ProductionUtils.getShowDetails, identifier);
+        if (row) return { attached: true, hasIdentifierParts: true };
+
+        const parts = _parseIdentifierParts(identifier);
+        if (!parts) return { attached: false, hasIdentifierParts: false };
+
+        const [clientIssue, showIssue] = await Promise.all([
+            deps.call(ProductionUtils.checkReferenceNameState, parts.client, 'client'),
+            deps.call(ProductionUtils.checkReferenceNameState, parts.show, 'show')
+        ]);
+
+        return {
+            attached: false,
+            hasIdentifierParts: true,
+            clientIssue: clientIssue || null,
+            showIssue: showIssue || null
+        };
+    }
+
+    /**
      * Direction 1: Schedule → Packlist.
      * Find all packlist tabs (primary + suffix variants) for a schedule row.
      * Eliminates the repeated computeIdentifier + findAllPackListTabsForShow boilerplate.

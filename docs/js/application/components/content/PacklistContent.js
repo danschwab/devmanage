@@ -497,7 +497,16 @@ export const PacklistContent = {
                         ? matchingStores.some(match => match.isModified)
                         : this.autoSavedPacklists.has(tab.title);
 
-                    return hasUnsavedChanges;
+                    if (hasUnsavedChanges) return true;
+
+                    // Also include packlists that are unattached to any schedule row
+                    // (title has CLIENT YEAR SHOW structure but no matching schedule row).
+                    const attachment = tab.scheduleAttachment;
+                    if (attachment && !attachment.attached && attachment.hasIdentifierParts) {
+                        return true;
+                    }
+
+                    return false;
                 })
                 : tabs;
             
@@ -672,6 +681,14 @@ export const PacklistContent = {
                     ['title'], // Use title as the source (project identifier)
                     [],
                     'showDetails' // Store entire show row in 'showDetails' column
+                ),
+                createAnalysisConfig(
+                    Requests.getPacklistScheduleAttachment,
+                    'scheduleAttachment',
+                    'Checking schedule...',
+                    ['title'], // Use title as the source (project identifier)
+                    [],
+                    'scheduleAttachment' // Store attachment diagnosis in 'scheduleAttachment' column
                 )
             ];
             
@@ -699,10 +716,14 @@ export const PacklistContent = {
             // Check if the packlist is locked
             const isLocked = tab.lockInfo && tab.lockInfo !== null;
             //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - isLocked: ${isLocked}, hasUnsavedChanges: ${hasUnsavedChanges}`);
-            
-            // Determine card styling based on lock state and unsaved changes
-            // Priority: locked (white) > unsaved changes (red) > normal (gray)
-            const cardClass = isLocked ? 'yellow' : (hasUnsavedChanges ? 'red' : 'gray');
+
+            // Check schedule attachment state
+            const attachment = tab.scheduleAttachment;
+            const isUnattached = attachment && !attachment.attached && attachment.hasIdentifierParts;
+
+            // Determine card styling based on lock state, unsaved changes, and schedule attachment.
+            // Priority: locked (yellow) > unsaved changes (red) > unattached (orange) > normal (gray).
+            const cardClass = isLocked ? 'yellow' : (isUnattached ? 'red' : 'gray');
             //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
             
             // Build content footer
@@ -713,6 +734,47 @@ export const PacklistContent = {
                 contentFooter = `Locked for edit by: ${username}`;
             } else if (hasUnsavedChanges) {
                 contentFooter = 'Unsaved changes';
+            }
+
+            // Build footer action buttons
+            let footerActions = [];
+            
+            // Add green Save button for unsaved packlists
+            if (hasUnsavedChanges) {
+                footerActions.push({
+                    label: 'Save',
+                    class: 'green',
+                    onClick: () => this.savePacklist(tab.title)
+                });
+            }
+
+            // Add red buttons for unattached schedule packlists with missing client/show
+            if (isUnattached) {
+                const clientIssue = attachment.clientIssue;
+                const showIssue = attachment.showIssue;
+                if (clientIssue || showIssue) {
+                    if (clientIssue) {
+                        footerActions.push({
+                            label: '⚠ Client missing',
+                            class: 'red',
+                            onClick: () => this.openPacklistIndexResolutionModal(tab.title, 'client', clientIssue.rawValue)
+                        });
+                    }
+                    if (showIssue) {
+                        footerActions.push({
+                            label: '⚠ Show missing',
+                            class: 'red',
+                            onClick: () => this.openPacklistIndexResolutionModal(tab.title, 'show', showIssue.rawValue)
+                        });
+                    }
+                } else {
+                    contentFooter = 'Packlist not found on schedule';
+                }
+            }
+
+            // Only set footerActions if there are any actions; otherwise undefined
+            if (footerActions.length === 0) {
+                footerActions = undefined;
             }
             
             // Build content with ship date first, then description
@@ -742,7 +804,8 @@ export const PacklistContent = {
                 shipDate,
                 content: content,
                 cardClass: cardClass,
-                contentFooter: contentFooter
+                contentFooter: contentFooter,
+                footerActions: footerActions
             };
         },
         async resolvePacklistIdentifier(identifier) {
@@ -857,6 +920,227 @@ export const PacklistContent = {
                 this.navigateToPath('packlist');
             } else {
                 this.navigateToPath('packlist/pins');
+            }
+        },
+        async savePacklist(packlistName) {
+            try {
+                // Find the reactive store for this packlist
+                const matchingStores = findMatchingStores(
+                    Requests.getPackList,
+                    [packlistName]
+                );
+                if (matchingStores.length === 0) {
+                    this.$modal.alert('Packlist not found or no changes to save.', 'Save');
+                    return;
+                }
+                const storeMatch = matchingStores[0];
+                if (!storeMatch.isModified) {
+                    this.$modal.alert('No unsaved changes to save.', 'Save');
+                    return;
+                }
+                await storeMatch.store.save();
+                this.$modal.alert('Packlist saved successfully.', 'Success');
+            } catch (error) {
+                console.error('[PacklistContent] Failed to save packlist:', error);
+                this.$modal.error(`Failed to save packlist: ${error.message}`, 'Save Error');
+            }
+        },
+        async openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, includeAllCandidates = false) {
+            try {
+                const resolutionData = await Requests.getScheduleReferenceResolutionOptions(
+                    referenceType,
+                    rawValue,
+                    includeAllCandidates
+                );
+
+                const options = resolutionData?.options || [];
+                if (options.length === 0) {
+                    this.$modal.alert('No resolution options available for this value.', 'Missing');
+                    return;
+                }
+
+                const modalTitle = includeAllCandidates
+                    ? `Select ${referenceType}`
+                    : `${referenceType === 'show' ? 'Show' : 'Client'} Missing`;
+
+                const issue = { referenceType, rawValue };
+                const self = this;
+
+                const IndexResolutionComponent = {
+                    inject: ['$modal'],
+                    props: {
+                        issue: Object,
+                        options: Array,
+                        includeAllCandidates: Boolean,
+                        onSelectOption: Function
+                    },
+                    data() {
+                        return {
+                            filterText: '',
+                            isSubmitting: false
+                        };
+                    },
+                    computed: {
+                        filteredOptions() {
+                            if (!this.includeAllCandidates || !this.filterText.trim()) {
+                                return this.options;
+                            }
+                            const search = this.filterText.trim().toLowerCase();
+                            return this.options.filter(option => {
+                                const searchableText = option.canonicalName || option.label;
+                                return searchableText.toLowerCase().includes(search);
+                            });
+                        }
+                    },
+                    methods: {
+                        async selectOption(option) {
+                            if (this.isSubmitting) return;
+                            this.isSubmitting = true;
+                            try {
+                                let result;
+                                if (this.onSelectOption) {
+                                    result = await this.onSelectOption(option);
+                                }
+                                if (!result || result.applied || result.browsedAll) {
+                                    this.$emit('close-modal');
+                                } else {
+                                    this.isSubmitting = false;
+                                }
+                            } catch (error) {
+                                this.isSubmitting = false;
+                            }
+                        },
+                        async openCustomEntryModal() {
+                            if (this.isSubmitting) return;
+                            const CustomEntryComponent = {
+                                props: { issue: Object, onSubmit: Function },
+                                data() { return { customName: '', isSubmitting: false, errorMessage: '' }; },
+                                methods: {
+                                    async submitCustomName() {
+                                        if (this.isSubmitting) return;
+                                        const nextName = this.customName.trim();
+                                        if (!nextName) { this.errorMessage = 'Enter a name before submitting.'; return; }
+                                        this.isSubmitting = true;
+                                        this.errorMessage = '';
+                                        try {
+                                            const result = await this.onSubmit?.(nextName);
+                                            if (result?.applied) { this.$emit('close-modal'); return; }
+                                            this.errorMessage = result?.message || 'That value already exists in the index or abbreviations.';
+                                        } catch (error) {
+                                            this.errorMessage = error?.message || 'Unable to add the custom entry.';
+                                        } finally { this.isSubmitting = false; }
+                                    }
+                                },
+                                template: html`
+                                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                                        <p>Enter a custom new {{ issue.referenceType }}.</p>
+                                        <p>The new name must not already exist in the index or abbreviations.</p>
+                                        <div class="input-container" style="margin: 0.75rem 0;">
+                                            <input type="text" v-model="customName" :disabled="isSubmitting" :placeholder="'Enter custom new ' + issue.referenceType" class="search-input" style="width: 100%;" @keydown.enter.prevent="submitCustomName" />
+                                        </div>
+                                        <p v-if="errorMessage" style="color: var(--color-red, #b00020); margin-bottom: 0.75rem;">{{ errorMessage }}</p>
+                                        <div class="button-bar">
+                                            <button @click="submitCustomName" :disabled="isSubmitting || !customName.trim()" class="blue">Submit</button>
+                                            <button @click="$emit('close-modal')" :disabled="isSubmitting" class="gray">Cancel</button>
+                                        </div>
+                                    </div>
+                                `
+                            };
+                            this.$modal.custom(CustomEntryComponent, {
+                                issue: this.issue,
+                                onSubmit: async (customName) => {
+                                    if (this.onSelectOption) {
+                                        const result = await this.onSelectOption({
+                                            actionType: 'add-custom',
+                                            canonicalName: customName,
+                                            abbreviation: this.issue.rawValue
+                                        });
+                                        if (result?.applied) { this.$emit('close-modal'); }
+                                        return result;
+                                    }
+                                    return { applied: false, message: 'Unable to submit the custom entry.' };
+                                },
+                                modalClass: 'hamburger-menu'
+                            }, `Enter custom new ${this.issue.referenceType}`);
+                        }
+                    },
+                    template: html`
+                        <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                            <div v-if="includeAllCandidates" class="input-container" style="margin-bottom: 0.5rem;">
+                                <input type="text" v-model="filterText" :disabled="isSubmitting" placeholder="Filter options..." class="search-input" style="width: 100%;" />
+                            </div>
+                            <div v-else style="margin-bottom: 1rem;">
+                                <p>A production schedule index entry was missing.</p>
+                                <p v-if="isSubmitting">Applying update...</p>
+                                <p v-else>Resolve below to prevent analytics issues:</p>
+                            </div>
+                            <ul>
+                                <li v-for="option in filteredOptions" :key="option.actionType + '-' + option.label">
+                                    <button @click="selectOption(option)" :disabled="isSubmitting" :class="option.buttonClass || 'white'" style="text-align: left;">{{ option.label }}</button>
+                                </li>
+                                <li v-if="!includeAllCandidates" style="margin-top: 0.5rem;">
+                                    <button @click="openCustomEntryModal" :disabled="isSubmitting" class="blue" style="text-align: left; width: 100%;">Enter custom new {{ issue.referenceType }}</button>
+                                </li>
+                            </ul>
+                        </div>
+                    `
+                };
+
+                this.$modal.custom(IndexResolutionComponent, {
+                    issue,
+                    options,
+                    includeAllCandidates,
+                    onSelectOption: async (option) => {
+                        return await this.applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates);
+                    },
+                    modalClass: 'hamburger-menu'
+                }, modalTitle);
+            } catch (error) {
+                console.error('[PacklistContent] Failed to open index resolution modal:', error);
+                this.$modal.error(`Failed to load resolution options: ${error.message}`, 'Index Resolution Error');
+            }
+        },
+        async applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates) {
+            try {
+                if (!option) return { applied: false };
+
+                if (option.actionType === 'browse-all') {
+                    await this.openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, true);
+                    return { applied: false, browsedAll: true };
+                }
+
+                if (option.actionType === 'add-new') {
+                    await Requests.addScheduleReferenceName(referenceType, option.canonicalName);
+                } else if (option.actionType === 'add-abbreviation') {
+                    await Requests.appendScheduleReferenceAbbreviation(referenceType, option.canonicalName, option.abbreviation);
+                } else if (option.actionType === 'add-custom') {
+                    const result = await Requests.addCustomScheduleReferenceEntry(referenceType, option.canonicalName, option.abbreviation);
+                    if (!result?.applied) {
+                        const conflictName = result?.conflict?.existingName || '';
+                        const conflictValue = result?.conflict?.value || option.canonicalName;
+                        const fieldLabel = result?.conflict?.field === 'abbreviation' ? 'abbreviation' : 'name';
+                        return {
+                            applied: false,
+                            message: `The ${fieldLabel} "${conflictValue}" already exists${conflictName ? ` on ${conflictName}` : ''}.`
+                        };
+                    }
+                    return { applied: true };
+                } else {
+                    return { applied: false };
+                }
+
+                // Invalidate schedule and reference index caches so the store re-analyzes
+                invalidateCache([
+                    { namespace: 'database', methodName: 'getData', args: ['PROD_SCHED', 'Production Schedule'] },
+                    { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
+                    { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] }
+                ], true);
+
+                return { applied: true };
+            } catch (error) {
+                console.error('[PacklistContent] Failed to apply index resolution:', error);
+                this.$modal.error(`Failed to apply resolution: ${error.message}`, 'Index Resolution Error');
+                return { applied: false, message: error.message };
             }
         }
     },

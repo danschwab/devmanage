@@ -655,6 +655,17 @@ class Requests_uncached {
     }
 
     /**
+     * Diagnose whether a packlist tab title is attached to a schedule row.
+     * Returns { attached, hasIdentifierParts, clientIssue, showIssue }.
+     * @param {Object} deps
+     * @param {string} identifier - Packlist tab title
+     * @returns {Promise<Object>}
+     */
+    static async getPacklistScheduleAttachment(deps, identifier) {
+        return await deps.call(ProductionUtils.diagnosePacklistAttachment, identifier);
+    }
+
+    /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * @param {Object} deps
      * @param {string} projectIdentifier
