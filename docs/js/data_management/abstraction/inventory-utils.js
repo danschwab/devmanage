@@ -646,10 +646,8 @@ class inventoryUtils_uncached {
             startQty = runningQty;
         }
 
-        // Opening balance row — used as the forward-pass anchor
-        if (startDate) {
-            events.push({ date: startDate, event: 'Balance', note: '', change: '', quantity: startQty, _done: true });
-        }
+        // NOTE: Balance row is pushed AFTER Phase 4 so pre-window ship adjustments are
+        // captured in startQty before the anchor row is written.
 
         // ── Phase 3: Pending (scheduled) entries ──
         for (const entry of pending) {
@@ -726,15 +724,18 @@ class inventoryUtils_uncached {
                     if (shipDate) {
                         const shipDs = Math.floor(parseDate(shipDate).getTime() / 100);
                         const shipInWindow = (!startDs || shipDs >= startDs) && (!endDs || shipDs <= endDs);
-                        //console.log('[timeline] ship window check:', shipDate, '| inWindow:', shipInWindow, '| startDs:', startDs, 'shipDs:', shipDs, 'endDs:', endDs);
                         if (shipInWindow) {
                             events.push({ date: shipDate, event: 'Ships', note: identifier, change: `quantity: -${packedQty}`, quantity: null, _delta: -packedQty });
+                        } else if (startDs && shipDs < startDs) {
+                            // Show shipped before our window; its items are already out of inventory.
+                            // Deduct from opening balance so startQty reflects the actual warehouse state.
+                            startQty -= packedQty;
+                            //console.log(`[timeline] ${itemId}: pre-window ship from ${identifier} (${shipDate} < ${startDate}), adjusting opening balance by -${packedQty} → startQty=${startQty}`);
                         }
                     }
                     if (returnDate) {
                         const retDs = Math.floor(parseDate(returnDate).getTime() / 100);
                         const retInWindow = (!startDs || retDs >= startDs) && (!endDs || retDs <= endDs);
-                        //console.log('[timeline] return window check:', returnDate, '| inWindow:', retInWindow);
                         if (retInWindow) {
                             events.push({ date: returnDate, event: 'Returns', note: identifier, change: `quantity: +${packedQty}`, quantity: null, _delta: packedQty });
                         }
@@ -743,6 +744,11 @@ class inventoryUtils_uncached {
             } catch (err) {
                 console.error('[timeline] error in show events phase:', err);
             }
+        }
+
+        // Opening balance row — pushed after Phase 4 so pre-window ship adjustments are included.
+        if (startDate) {
+            events.push({ date: startDate, event: 'Balance', note: '', change: '', quantity: startQty, _done: true });
         }
 
         // ── Phase 5: Sort ──
@@ -846,7 +852,9 @@ class inventoryUtils_uncached {
         }
         const events = await deps.call(InventoryUtils.getItemTimeline, itemId, startDate, effectiveEnd);
         const quantities = events.map(e => e.quantity).filter(q => q !== null && q !== undefined && !isNaN(q));
-        return quantities.length > 0 ? Math.min(...quantities) : null;
+        const result = quantities.length > 0 ? Math.min(...quantities) : null;
+        //console.log(`[minQty] ${itemId} [${startDate} → ${effectiveEnd}]: min=${result} (from ${quantities.length} qty points)`);
+        return result;
     }
 
     /**

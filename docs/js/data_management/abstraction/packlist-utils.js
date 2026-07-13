@@ -770,6 +770,7 @@ class packListUtils_uncached {
         // Compute window end once; minimum quantity is sourced directly from timeline-based
         // logic in InventoryUtils.getItemMinQuantityInRange (which delegates to getItemTimeline).
         const returnDate = await deps.call(ProductionUtils.getProjectReturnDate, currentProjectId);
+        //console.log(`[remaining] ${itemId} for ${currentProjectId}: window [${referenceDate} → ${returnDate}]`);
         return await deps.call(InventoryUtils.getItemMinQuantityInRange, itemId, referenceDate, returnDate);
     }
 
