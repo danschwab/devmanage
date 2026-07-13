@@ -10,5 +10,5 @@ export { PackListUtils } from './abstraction/packlist-utils.js';
 export { ProductionUtils } from './abstraction/production-utils.js';
 
 // Utility classes
-export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, searchFilter, GetTopFuzzyMatch, GetParagraphMatchRating, normalizeHeaderName } from './utils/helpers.js';
+export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, searchFilter, GetTopFuzzyMatch, GetParagraphMatchRating, normalizeHeaderName, sanitizeTabName } from './utils/helpers.js';
 export { EditHistoryUtils } from './utils/metadata-utils.js';

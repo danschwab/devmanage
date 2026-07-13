@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -90,9 +90,12 @@ class Requests_uncached {
      * @returns {Promise<boolean>} - Success status
      */
     static async createNewTab(tableId, templateName, newTabName) {
+        const sanitizedName = sanitizeTabName(newTabName);
+        if (!sanitizedName) throw new Error('Tab name cannot be empty after sanitization');
+        
         const templateTab = await Database.findTabByName(tableId, templateName);
         if (!templateTab) throw new Error(`Template tab "${templateName}" not found`);
-        await Database.createTab(tableId, templateTab, newTabName);
+        await Database.createTab(tableId, templateTab, sanitizedName);
         return true;
     }
     

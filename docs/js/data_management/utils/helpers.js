@@ -105,6 +105,22 @@ export function normalizeHeaderName(headerName) {
 }
 
 /**
+ * Sanitizes a tab name by removing characters that would break Google Sheets or interface display.
+ * Removes: /, \, ?, *, [, ], and other problematic characters.
+ * Keeps alphanumeric, spaces, hyphens, and underscores for fuzzy matching to work.
+ * @param {string} tabName - The tab name to sanitize
+ * @returns {string} - The sanitized tab name
+ */
+export function sanitizeTabName(tabName) {
+    if (!tabName || typeof tabName !== 'string') return '';
+    
+    return tabName
+        .replace(/[\/\\?*\[\]'"]/g, '')  // Remove problematic characters
+        .replace(/\s+/g, ' ')             // Collapse multiple spaces
+        .trim();                          // Remove leading/trailing whitespace
+}
+
+/**
  * Returns today's date as a YYYY-MM-DD string using the local calendar date.
  * @returns {string}
  */
