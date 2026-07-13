@@ -265,17 +265,6 @@ export const ShowInventoryReport = {
                     [this.referenceDate],
                     'available'
                 ),
-                // Get item image URL
-                createAnalysisConfig(
-                    Requests.getItemImageUrl,
-                    'imageUrl',
-                    'Loading item images...',
-                    ['itemId'],
-                    [],
-                    null, // Store in AppData, not a column
-                    false,
-                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
-                ),
                 // get item description as of the report's start date
                 createAnalysisConfig(
                     Requests.getItemDescription,
@@ -406,7 +395,6 @@ export const ShowInventoryReport = {
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
-                            :imageUrl="row.AppData && row.AppData.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">

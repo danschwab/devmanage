@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, Auth, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 
 /**
@@ -418,17 +418,30 @@ const ImageUploadComponent = {
     `
 };
 
-// Image component for displaying item thumbnails
-// Image URL should be provided via analysis step in reactive store.
-// imageUrl === null  → analysis not yet complete (pending)
-// imageUrl === ''    → analysis complete, no image found
-// imageUrl = string  → analysis complete, image found
+// Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
+// blob URLs via analysis. All ItemImageComponent instances share the same store instance.
+function getThumbnailStore() {
+    return getReactiveStore(
+        Requests.getAllThumbnailRecords,
+        null,
+        [],
+        [createAnalysisConfig(
+            Requests.getDriveBlobUrl,
+            'blobUrl',
+            'Loading thumbnails...',
+            ['file'],
+            [],
+            null,
+            false,
+            Priority.BACKGROUND,
+            false,
+            false
+        )]
+    );
+}
+
 export const ItemImageComponent = {
     props: {
-        imageUrl: {
-            // null = pending, '' = confirmed missing, string = found
-            default: null
-        },
         itemNumber: {
             type: String,
             default: ''
@@ -445,78 +458,59 @@ export const ItemImageComponent = {
     inject: ['$modal'],
     data() {
         return {
-            localImageUrl: null,
-            prefixImageUrl: null,   // Quick-load from prefix entry already in the Thumbnails table
-            isPrefixResolved: false // true once loadPrefixImage has completed (found or not)
+            thumbnailStore: null,
+            localImageUrl: null, // Set immediately after upload for instant feedback
+            prefixLoaded: false,
+            mainLoaded: false
         };
+    },
+    computed: {
+        record() {
+            return this.thumbnailStore?.data?.find(r => r.itemNumber === this.itemNumber) || null;
+        },
+        prefixRecord() {
+            if (!this.itemNumber) return null;
+            const prefix = this.itemNumber.split(/[\s\-_]+/)[0];
+            if (!prefix || prefix === this.itemNumber) return null;
+            return this.thumbnailStore?.data?.find(r => r.itemNumber === prefix) || null;
+        },
+        imageUrl() {
+            return this.localImageUrl || this.record?.AppData?.blobUrl || null;
+        },
+        prefixImageUrl() {
+            if (this.imageUrl) return null;
+            return this.prefixRecord?.AppData?.blobUrl || null;
+        },
+        isResolved() {
+            return !this.thumbnailStore?.isLoading && !this.thumbnailStore?.isAnalyzing;
+        },
+        realImageFound() {
+            return !!this.imageUrl;
+        },
+        imageFound() {
+            return !!(this.imageUrl || this.prefixImageUrl);
+        }
     },
     watch: {
         imageUrl() {
-            this.hasAttemptedRecovery = false;
-            this.clearLocalImageUrl();
+            this.mainLoaded = false;
         },
-        itemNumber(newVal) {
-            this.hasAttemptedRecovery = false;
-            this.clearLocalImageUrl();
-            this.prefixImageUrl = null;
-            this.isPrefixResolved = false;
-            this.loadPrefixImage(newVal);
+        prefixImageUrl() {
+            this.prefixLoaded = false;
         }
     },
-    computed: {
-        // True once both analysis and prefix lookup have each settled
-        isResolved() {
-            return this.imageUrl !== null && this.isPrefixResolved;
-        },
-        displayUrl() {
-            return this.localImageUrl || this.imageUrl || this.prefixImageUrl || 'assets/placeholder.png';
-        },
-        // True only when displaying the real image for this item (not a prefix stand-in)
-        realImageFound() {
-            const url = this.localImageUrl || this.imageUrl;
-            return !!(url && url !== 'assets/placeholder.png');
-        },
-        // True when at least something other than the grey placeholder is showing
-        imageFound() {
-            return this.displayUrl !== 'assets/placeholder.png';
-        },
-        isShowingPrefixOnly() {
-            return !this.realImageFound && !!this.prefixImageUrl;
-        }
-    },
-    async mounted() {
-        this.loadPrefixImage(this.itemNumber);
+    mounted() {
+        this.thumbnailStore = getThumbnailStore();
     },
     methods: {
-        async loadPrefixImage(itemNumber) {
-            try {
-                if (!itemNumber) return;
-                const separators = /[\s\-_]+/;
-                const parts = itemNumber.split(separators);
-                if (parts.length < 2 || !parts[0] || parts[0] === itemNumber) return;
-                const prefix = parts[0];
-                const record = await Requests.getThumbnailRecord(prefix);
-                if (record && record.file) {
-                    if (!this.realImageFound) {
-                        this.prefixImageUrl = await Requests.getItemImageBlobUrl(prefix);
-                    }
-                }
-            } catch {
-                // Non-fatal: prefix lookup failure just means no placeholder
-            } finally {
-                this.isPrefixResolved = true;
-            }
-        },
         clearLocalImageUrl() {
-            if (this.localImageUrl && this.localImageUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(this.localImageUrl);
-            }
+            if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;
         },
         showImageModal() {
             if (this.realImageFound) {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
-                    thumbnailUrl: this.displayUrl,
+                    thumbnailUrl: this.imageUrl,
                     itemNumber: this.itemNumber,
                     modalClass: 'reading-menu',
                     onReplace: (this.editable && this.itemNumber) ? () => this.showUploadModal() : null
@@ -529,42 +523,28 @@ export const ItemImageComponent = {
             const title = this.realImageFound ? 'Replace Thumbnail' : 'Add Thumbnail';
             this.$modal.custom(ImageUploadComponent, {
                 itemNumber: this.itemNumber,
-                mode
+                mode,
+                onUploadSuccess: (url) => {
+                    this.clearLocalImageUrl();
+                    this.localImageUrl = url;
+                }
             }, title);
         },
-        async handleError() {
-            console.warn(`[icons] Browser failed to load image for "${this.itemNumber}": ${this.displayUrl}`);
-            console.warn('[icons] If the URL looks correct, the file may not be shared with the authenticated user, or the lh3.googleusercontent.com CDN requires a valid Google session.');
-
-            if (!this.itemNumber || this.isRecoveringImage || this.hasAttemptedRecovery) {
-                return;
-            }
-
-            this.isRecoveringImage = true;
-            this.hasAttemptedRecovery = true;
-
-            try {
-                const isAuthenticated = await Auth.checkAuth();
-                if (!isAuthenticated) {
-                    return;
-                }
-
-                const refreshedThumbnailUrl = await Requests.getItemImageUrl(this.itemNumber);
-                if (refreshedThumbnailUrl) {
-                    this.clearLocalImageUrl();
-                    this.localImageUrl = refreshedThumbnailUrl;
-                    return;
-                }
-
-                const refreshedBlobUrl = await Requests.getItemImageBlobUrl(this.itemNumber);
-                if (refreshedBlobUrl) {
-                    this.clearLocalImageUrl();
-                    this.localImageUrl = refreshedBlobUrl;
-                }
-            } catch (error) {
-                console.warn('[icons] Failed to refresh image URL after load error:', error);
-            } finally {
-                this.isRecoveringImage = false;
+        onPrefixImageLoad() {
+            this.prefixLoaded = true;
+        },
+        onMainImageLoad() {
+            this.mainLoaded = true;
+        },
+        async handleError(isMainImage) {
+            // Blob URL became stale — re-fetch directly from the stored Drive file ID
+            const fileId = this.record?.file;
+            if (!fileId) return;
+            invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
+            const fresh = await Requests.getDriveBlobUrl(fileId);
+            if (fresh) {
+                this.clearLocalImageUrl();
+                this.localImageUrl = fresh;
             }
         }
     },
@@ -574,17 +554,44 @@ export const ItemImageComponent = {
     template: html`
         <div
             :class="['item-image-container', { 'image-missing': editable && !imageFound && isResolved }]"
-            :style="{ width: imageSize + 'px', height: imageSize + 'px' }"
+            :style="{ width: imageSize + 'px', height: imageSize + 'px', cursor: (realImageFound || (editable && isResolved)) ? 'pointer' : 'default', position: 'relative' }"
+            @click="realImageFound ? showImageModal() : (editable && isResolved ? showUploadModal() : null)"
+            :title="realImageFound ? 'Expand image' : (editable && isResolved ? 'Upload thumbnail' : '')"
         >
-            <img
-                :key="displayUrl"
-                :src="displayUrl"
-                alt="Item Image"
-                :title="realImageFound ? 'Expand image' : (editable && isResolved ? 'Upload thumbnail' : '')"
-                :style="(realImageFound || (editable && isResolved)) ? 'cursor: pointer;' : ''"
-                @click="realImageFound ? showImageModal() : (editable && isResolved ? showUploadModal() : null)"
-                @error="handleError"
-            />
+            <!-- Placeholder layer: always present, fades out when other images load -->
+            <transition-group name="longfade">
+                <img
+                    v-if="prefixImageUrl"
+                    :key="prefixImageUrl"
+                    class="image-layer"
+                    :class="{ 'image-loaded': prefixLoaded }"
+                    :src="prefixImageUrl"
+                    alt="Category Image"
+                    @load="onPrefixImageLoad"
+                    @error="handleError(false)"
+                />
+
+                <img
+                    v-else-if="imageUrl"
+                    :key="imageUrl"
+                    class="image-layer"
+                    :class="{ 'image-loaded': mainLoaded }"
+                    :src="imageUrl"
+                    alt="Item Image"
+                    @load="onMainImageLoad"
+                    @error="handleError(true)"
+                />
+
+                <img
+                    v-else
+                    class="image-layer"
+                    :key="'placeholder'"
+                    :class="{ 'fading-out': prefixLoaded || mainLoaded }"
+                    src="assets/placeholder.png"
+                    alt="Placeholder"
+                />
+
+            </transition-group>
         </div>
     `
 };
@@ -767,28 +774,11 @@ export const InventoryTableComponent = {
             }).catch(() => {});
         }
 
-        // Create analysis config for image URLs
-        const analysisConfig = [
-            createAnalysisConfig(
-                Requests.getItemImageUrl,
-                'imageUrl',
-                'Loading item images...',
-                ['itemNumber'],
-                [],
-                null, // Store in AppData, not a column
-                false,
-                Priority.BACKGROUND, // Images are visual enhancements, lowest priority
-                false,
-                false // nonessential
-            )
-        ];
-        
         // Defensive: always set up the store before using it
         this.inventoryTableStore = getReactiveStore(
             Requests.getInventoryTabData,
             Requests.saveInventoryTabData,
-            [this.tabTitle, undefined, undefined, undefined], // No filters needed - search is handled in UI
-            analysisConfig
+            [this.tabTitle, undefined, undefined, undefined] // No filters needed - search is handled in UI
         );
         
         // Apply any pending changes that are due today or earlier
@@ -1112,7 +1102,6 @@ export const InventoryTableComponent = {
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :itemNumber="row.itemNumber"
-                        :imageUrl="row.AppData && row.AppData.imageUrl"
                         :editable="true"
                     />
                     <button

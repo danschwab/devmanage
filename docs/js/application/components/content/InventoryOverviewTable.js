@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, ItemImageComponent, Priority, invalidateCache, EditHistoryUtils, todayISOString, NavigationRegistry } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, ItemImageComponent, invalidateCache, EditHistoryUtils, todayISOString, NavigationRegistry } from '../../index.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -84,7 +84,7 @@ export const InventoryOverviewTableComponent = {
             return this.inventoryStore?.error || null;
         },
         loadingMessage() {
-            return this.isAnalyzing ? this.inventoryStore?.analyzingMessage : this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
+            return this.isAnalyzing ? this.inventoryStore?.analysisMessage : this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
         }
     },
     async mounted() {
@@ -109,29 +109,12 @@ export const InventoryOverviewTableComponent = {
                 this.suppressedTabs = hidden;
             }).catch(() => {});
 
-            // Create analysis config for image URLs
-            const analysisConfig = [
-                createAnalysisConfig(
-                    Requests.getItemImageUrl,
-                    'imageUrl',
-                    'Loading item images...',
-                    ['itemNumber'],
-                    [],
-                    null, // Store in AppData, not a column
-                    false,
-                    Priority.BACKGROUND, // Images are visual enhancements, lowest priority
-                    false,
-                    false // nonessential
-                )
-            ];
-            
             // Initialize reactive store using the new API method
             // Note: autoLoad is true by default, so data will load automatically
             this.inventoryStore = getReactiveStore(
                 Requests.getAllInventoryData,
                 null, // No save function (read-only)
-                [todayISOString()], // Apply pending changes as of today
-                analysisConfig
+                [todayISOString()] // Apply pending changes as of today
             );
             
             // Don't call load() here - autoLoad=true handles it automatically
@@ -209,7 +192,6 @@ export const InventoryOverviewTableComponent = {
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
-                        :imageUrl="row.AppData?.imageUrl"
                     />
                 </template>
                 <template #row-details="{ row }">

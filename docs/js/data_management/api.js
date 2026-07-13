@@ -740,18 +740,16 @@ class Requests_uncached {
         return await deps.call(ProductionUtils.normalizeEndDate, rowData);
     }
 
-    /**
-     * Get item image URL from Google Drive
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} itemNumber - The item number to search for
-     * @returns {Promise<string|null>} Direct image URL or null if not found
-     */
-    static async getItemImageUrl(deps, itemNumber) {
-        return await deps.call(Database.getItemImageUrl, itemNumber);
-    }
-
     static async getThumbnailRecord(deps, itemNumber) {
         return await deps.call(ApplicationUtils.getThumbnailRecord, itemNumber);
+    }
+
+    static async getAllThumbnailRecords(deps) {
+        return await deps.call(ApplicationUtils.getAllThumbnailRecords);
+    }
+
+    static async getDriveBlobUrl(deps, fileId) {
+        return await deps.call(Database.getDriveBlobUrl, fileId);
     }
 
     /**
@@ -778,6 +776,21 @@ class Requests_uncached {
      */
     static async uploadItemImage(file, itemNumber) {
         return await Database.uploadItemImage(file, itemNumber);
+    }
+
+    /**
+     * Store a thumbnail record in the Thumbnails tab.
+     * 
+     * MUTATION METHOD - Excluded from caching
+     * Does NOT accept deps parameter or use deps.call()
+     *
+     * @param {string} itemNumber - Item number
+     * @param {string} fileId - Google Drive file ID
+     * @param {string|null} blobDataUrl - Optional blob data URL
+     * @returns {Promise<void>}
+     */
+    static async storeThumbnailRecord(itemNumber, fileId, blobDataUrl) {
+        return await ApplicationUtils.storeThumbnailRecord(itemNumber, fileId, blobDataUrl);
     }
 
     /**
@@ -1469,7 +1482,7 @@ export const Requests = wrapMethods(
     'api', 
     [
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
-        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage',
+        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',

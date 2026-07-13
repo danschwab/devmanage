@@ -627,6 +627,15 @@ export class FakeGoogleSheetsService {
                 ['Path', 'ShortCode', 'Created'],
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
             ],
+            'Thumbnails': [
+                ['ItemNumber', 'File', 'Blob'],
+                ['BX', 'file_id_bx_prefix'],
+                ['CHAIR', 'file_id_chair_prefix'],
+                ['CHAIR-001', 'file_id_chair_001'],
+                ['CHAIR-002', 'file_id_chair_002'],
+                ['TABLE', 'file_id_table_prefix'],
+                ['TABLE-001', 'file_id_table_001']
+            ],
             'Clients': [
                 ['Clients', 'Abbreviations', 'Notes'],
                 ['ABCAM', '', ''],
@@ -929,7 +938,8 @@ export class FakeGoogleSheetsService {
             { title: 'Notes', sheetId: 2 },
             { title: 'Links', sheetId: 3 },
             { title: 'Clients', sheetId: 4 },
-            { title: 'Shows', sheetId: 5 }
+            { title: 'Shows', sheetId: 5 },
+            { title: 'Thumbnails', sheetId: 6 }
         ]
     };
 
@@ -1353,22 +1363,33 @@ export class FakeGoogleSheetsService {
     static async searchDriveFileInFolder(fileName, folderId) {
         await this.delay(200); // Simulate API delay
         
-        // Create fake image URLs for common item numbers for testing
-        const mockImages = {
-            'CHAIR-001.jpg': 'assets/logo.png',
-            'CHAIR-002.jpg': 'assets/logo.png',
-            'CHAIR-003.jpg': 'assets/logo.png',
-            'TABLE-001.jpg': 'assets/logo.png',
-            'TABLE-002.jpg': 'assets/logo.png',
-            'TABLE-003.jpg': 'assets/logo.png'
+        // Map item numbers to file IDs and images for testing
+        const mockFiles = {
+            'BX.png': { id: 'file_id_bx_prefix', image: 'assets/logobkp.png' },
+            'CHAIR.jpg': { id: 'file_id_chair_prefix', image: 'assets/logobkp.png' },
+            'CHAIR.jpeg': { id: 'file_id_chair_prefix', image: 'assets/logobkp.png' },
+            'CHAIR.png': { id: 'file_id_chair_prefix', image: 'assets/logobkp.png' },
+            'CHAIR-001.jpg': { id: 'file_id_chair_001', image: 'assets/logoWbkp.png' },
+            'CHAIR-001.jpeg': { id: 'file_id_chair_001', image: 'assets/logoWbkp.png' },
+            'CHAIR-001.png': { id: 'file_id_chair_001', image: 'assets/logoWbkp.png' },
+            'CHAIR-002.jpg': { id: 'file_id_chair_002', image: 'assets/logo2.png' },
+            'CHAIR-002.jpeg': { id: 'file_id_chair_002', image: 'assets/logo2.png' },
+            'CHAIR-002.png': { id: 'file_id_chair_002', image: 'assets/logo2.png' },
+            'TABLE.jpg': { id: 'file_id_table_prefix', image: 'assets/logoWbkp.png' },
+            'TABLE.jpeg': { id: 'file_id_table_prefix', image: 'assets/logoWbkp.png' },
+            'TABLE.png': { id: 'file_id_table_prefix', image: 'assets/logoWbkp.png' },
+            'TABLE-001.jpg': { id: 'file_id_table_001', image: 'assets/logobkp.png' },
+            'TABLE-001.jpeg': { id: 'file_id_table_001', image: 'assets/logobkp.png' },
+            'TABLE-001.png': { id: 'file_id_table_001', image: 'assets/logobkp.png' }
         };
         
-        if (mockImages[fileName]) {
+        if (mockFiles[fileName]) {
+            const { id, image } = mockFiles[fileName];
             return {
-                id: `fake_id_${fileName.replace('.', '_')}`,
+                id,
                 name: fileName,
                 webViewLink: `https://drive.google.com/fake/${fileName}`,
-                thumbnailLink: mockImages[fileName]
+                thumbnailLink: image
             };
         }
         
@@ -1384,11 +1405,32 @@ export class FakeGoogleSheetsService {
     }
 
     /**
-     * Fake implementation of fetching an authenticated image blob URL
+     * Fake implementation of fetching an authenticated image blob URL from a file ID.
+     * Maps fake file IDs to test images. For dynamically uploaded files, returns a test image.
      */
     static async getAuthenticatedImageUrl(fileId) {
         await this.delay(50);
-        return fileId ? 'assets/logo.png' : null;
+        
+        // Map predefined file IDs to test image paths
+        const fileMap = {
+            'file_id_bx_prefix': 'assets/logobkp.png',
+            'file_id_chair_prefix': 'assets/logobkp.png',
+            'file_id_chair_001': 'assets/logoWbkp.png',
+            'file_id_chair_002': 'assets/logo2.png',
+            'file_id_table_prefix': 'assets/logoWbkp.png',
+            'file_id_table_001': 'assets/logobkp.png'
+        };
+        
+        if (fileId && fileMap[fileId]) {
+            return fileMap[fileId];
+        }
+        
+        // For dynamically uploaded files (fake_uploaded_*), return a default test image
+        if (fileId && fileId.startsWith('fake_uploaded_')) {
+            return 'assets/logo.png';
+        }
+        
+        return null;
     }
 
     /**

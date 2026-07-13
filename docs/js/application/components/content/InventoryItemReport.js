@@ -245,18 +245,6 @@ export const InventoryItemReport = {
                     Priority.BACKGROUND,
                     undefined,
                     false
-                ),
-                createAnalysisConfig(
-                    Requests.getItemImageUrl,
-                    'imageUrl',
-                    'Loading item images...',
-                    ['itemId'],
-                    [],
-                    null,
-                    false,
-                    Priority.BACKGROUND,
-                    undefined,
-                    false
                 )
             ];
 
@@ -503,7 +491,6 @@ export const InventoryItemReport = {
                         <ItemImageComponent
                             :imageSize="48"
                             :itemNumber="row.itemId"
-                            :imageUrl="row.AppData && row.AppData.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">

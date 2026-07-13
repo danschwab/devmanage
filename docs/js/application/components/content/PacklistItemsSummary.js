@@ -132,16 +132,6 @@ export const PacklistItemsSummary = {
                     ['itemId'],
                     [this.projectShipDate, this.projectReturnDate],
                     'remaining'
-                ),
-                createAnalysisConfig(
-                    Requests.getItemImageUrl,
-                    'imageUrl',
-                    'Loading item images...',
-                    ['itemId'], // Extract itemId from row
-                    [],
-                    null, // Store in AppData, not a column
-                    false,
-                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
                 )
             ];
 
@@ -262,7 +252,6 @@ export const PacklistItemsSummary = {
                         <ItemImageComponent 
                             :imageSize="48"
                             :itemNumber="row.itemId"
-                            :imageUrl="row.AppData && row.AppData.imageUrl"
                         />
                     </slot>
                     <slot v-else-if="column.key === 'itemId'">

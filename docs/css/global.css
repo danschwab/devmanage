@@ -13,7 +13,7 @@
 
 .longfade-enter-active,
 .longfade-leave-active {
-    transition: opacity 0.5s ease-in-out;
+    transition: opacity .6s ease-in-out;
 }
 
 .longfade-enter-from,
@@ -23,7 +23,7 @@
 
 .longfade-enter-active,
 .longfade-leave-active {
-    transition: opacity 0.5s ease-in-out !important;
+    transition: opacity .6s ease-in-out !important;
 }
 
 

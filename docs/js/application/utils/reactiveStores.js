@@ -73,6 +73,15 @@ export const appSettings = Vue.reactive({
  *   2. If main reload is active, analysis is skipped (will run after reload)
  *   3. Otherwise, specific analysis step is cleared and re-run
  * - This prevents analysis from running on empty/stale data during reload
+ * 
+ * Preemptive Eviction Optimization:
+ * - On cache invalidation, before reloading, check store's priority score
+ * - If score is in bottom 30% of all active stores (low priority):
+ *   1. Evict the store instead of reloading it
+ *   2. Saves API call and CPU for data that would be evicted soon anyway
+ *   3. Store will reload if actually accessed again (lazy loading)
+ * - Never preemptively evicts: exempt stores, modified stores, or when under capacity
+ * - This optimization reduces unnecessary network/CPU usage during invalidation cascades
  */
 
 /**
@@ -1036,6 +1045,17 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 apiCall(...apiArgs).catch(() => {});
                 return;
             }
+            
+            // Preemptive eviction optimization: Before reloading, check if this store's
+            // priority score is low enough that it will likely be evicted soon anyway.
+            // If so, evict now instead of wasting an API call and CPU on a reload.
+            const storeKey = generateStoreKey(apiCall, saveCall, apiArgs, analysisConfig);
+            if (shouldPreemptivelyEvict(storeKey, this)) {
+                console.log(`[ReactiveStore] Preemptively evicting low-priority store on invalidation: ${storeKey.slice(0, 60)}...`);
+                this.evict();
+                return;
+            }
+            
             await this.load('Reloading data due to invalidation...');
         },
         /**
@@ -1144,18 +1164,89 @@ const reactiveStoreRegistry = Vue.reactive({});
 
 // LRU metadata for each registered store: creation time, lastAccess timestamp, and access count.
 // Stored separately so it doesn't pollute the reactive store objects.
-// Access frequency is calculated as: accessCount / ageInMinutes
+// Score is calculated as: (accessCount / ageInMinutes) × exp(-timeSinceLastAccess / recencyGuard)
 const storeMetaRegistry = {};
 
 // Maximum number of simultaneously populated stores.
-// Stores exceeding this cap (sorted by lowest access frequency) are evicted after a debounce.
-// Set high to be conservative — lower this value if memory pressure is still observed.
+// Stores exceeding this cap (sorted by lowest score) are evicted after a debounce.
+// Also used for preemptive eviction: when at 80% capacity, invalidated stores in the
+// bottom 30% by score are evicted instead of reloaded (saves API calls).
 const MAX_POPULATED_STORES = 15;
 
 // Recency guard: stores accessed within this window will not be evicted
 const RECENCY_GUARD_MS = 5 * 60 * 1000; // 5 minutes
 
 let _lruEvictDebounceTimer = null;
+
+/**
+ * Calculate priority score for a store based on recency and access frequency.
+ * Higher score = more valuable = less likely to evict.
+ * 
+ * @param {string} key - Store key in the registry
+ * @returns {number} Priority score (0 if metadata not found)
+ */
+function calculateStoreScore(key) {
+    const meta = storeMetaRegistry[key];
+    if (!meta) return 0;
+    
+    const now = Date.now();
+    const timeSinceLastAccessMs = now - meta.lastAccess;
+    const timeSinceLastAccessMin = timeSinceLastAccessMs / 60000;
+    
+    // Exponential decay: stores accessed recently get higher scores
+    const recencyFactor = Math.exp(-timeSinceLastAccessMin / (RECENCY_GUARD_MS / 1000));
+    
+    // Frequency: accesses per minute
+    const frequency = meta.accessCount / Math.max((timeSinceLastAccessMin + 0.1), 0.1);
+    
+    // Combined score
+    return frequency * recencyFactor;
+}
+
+/**
+ * Check if a store should be preemptively evicted instead of reloaded on invalidation.
+ * Compares the store's score against other populated stores.
+ * 
+ * Strategy: If this store's score is in the bottom 30% of all active stores,
+ * evict it instead of reloading. This saves API calls and CPU for data that
+ * will likely be evicted soon anyway.
+ * 
+ * @param {string} key - Store key in the registry
+ * @param {Object} store - The reactive store object
+ * @returns {boolean} True if store should be evicted instead of reloaded
+ */
+function shouldPreemptivelyEvict(key, store) {
+    // Never preemptively evict core stores or stores with unsaved changes
+    if (store.exemptFromEviction || store.isModified) {
+        return false;
+    }
+    
+    // Get all populated stores and their scores
+    const allKeys = Object.keys(reactiveStoreRegistry);
+    const populated = allKeys.filter(k => {
+        const s = reactiveStoreRegistry[k];
+        return s && s.data && s.data.length > 0;
+    });
+    
+    // If we're not near the limit, don't preemptively evict
+    if (populated.length < MAX_POPULATED_STORES * 0.8) {
+        return false;
+    }
+    
+    // Calculate scores for all populated stores
+    const scores = populated.map(k => calculateStoreScore(k)).filter(score => score > 0);
+    if (scores.length === 0) return false;
+    
+    // Sort scores to find the 30th percentile threshold
+    scores.sort((a, b) => a - b);
+    const threshold = scores[Math.floor(scores.length * 0.3)];
+    
+    // Calculate this store's score
+    const thisScore = calculateStoreScore(key);
+    
+    // If this store's score is below the 30th percentile, evict it
+    return thisScore <= threshold;
+}
 
 /**
  * Debounced LRU sweep: called after every new store access that could push the total
@@ -1180,22 +1271,14 @@ function scheduleLruEviction() {
         
         // Calculate recency-weighted frequency for each store and sort by lowest score first
         const storesWithFrequency = populated.map(key => {
+            const score = calculateStoreScore(key);
             const meta = storeMetaRegistry[key];
-            if (!meta) return { key, score: 0, lastAccess: 0, accessCount: 0 };
-            
-            // Recency factor: exponential decay based on time since last access
-            // Half-life of 60 minutes: stores accessed 60 min ago = 0.5 score multiplier
-            // Stores accessed 1 day ago ≈ 0.0001 score multiplier (heavily deprioritized)
-            const timeSinceLastAccessMs = now - meta.lastAccess;
-            const timeSinceLastAccessMin = timeSinceLastAccessMs / 60000;
-            const recencyFactor = Math.exp(-timeSinceLastAccessMin / (RECENCY_GUARD_MS / 1000)); // Exponential decay with half-life equal to the recency guard
-            
-            // Combined score: base frequency weighted by recency
-            // Old stores get aggressively deprioritized regardless of access count
-            const frequency = meta.accessCount / Math.max((timeSinceLastAccessMin + 0.1), 0.1); // accesses per minute
-            const score = frequency * recencyFactor;
-            
-            return { key, score, lastAccess: meta.lastAccess || 0, accessCount: meta.accessCount || 0 };
+            return { 
+                key, 
+                score, 
+                lastAccess: meta?.lastAccess || 0, 
+                accessCount: meta?.accessCount || 0 
+            };
         });
         
         // Sort by score ascending (lowest score = least active = evict first)

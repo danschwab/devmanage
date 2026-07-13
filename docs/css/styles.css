@@ -1241,12 +1241,25 @@ tr.is-group:hover .group-toggle {
     justify-content: center;
     align-items: center;
     border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
 }
 
 .item-image-container img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+}
+
+/* Image layer styles for fade transitions */
+.item-image-container .image-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: opacity 0.4s ease-in-out;
 }
 
 .item-image-container.image-missing::after {

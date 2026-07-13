@@ -25,7 +25,6 @@ export const InventoryItemTimeline = {
             filterStartDate: null,
             filterEndDate: null,
             resolvedItemId: null,
-            itemImageUrl: null,
             viewModes: [
                 { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Switch to calendar view' },
                 { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Switch to table view' }
@@ -107,13 +106,8 @@ export const InventoryItemTimeline = {
         },
         resolvedItemId: {
             immediate: true,
-            async handler(newItemId) {
-                if (!newItemId) {
-                    this.itemImageUrl = null;
-                    return;
-                }
-                // Fetch image URL directly, not through reactive store
-                this.itemImageUrl = await Requests.getItemImageUrl(newItemId);
+            handler() {
+                this.resolveItemIdFromPath();
             }
         }
     },
@@ -192,7 +186,6 @@ export const InventoryItemTimeline = {
                 <div style="display: flex; gap: var(--padding-md); align-items: flex-start;">
                     <ItemImageComponent
                         :itemNumber="resolvedItemId"
-                        :imageUrl="itemImageUrl"
                         :imageSize="96"
                         :editable="true"
                     />

@@ -1,10 +1,28 @@
-lightbox fabric separate
-
 !!! Caching priority queue or allow nonessential processes to pause, and/or ensure that we don't use all threads at once
 !!! rebuild date matching logic from scratch
 !!! rebuild name matching logic from scratch
 !!! simplify controls on reports page
+!! Ben is not seeing the icons for category fallbacks... Probably just eliminate the fallback or do it manually in the table.
 ! "views" for tables and reports allowing colum customization
+
+for some reason updating things didnt bump my inventory
+somehow set reports stores to NOT autoreload unless active, instead they should get removed.
+analysis did a doubletake and failed when creating a new empty show....
+optional highlight row for "add item" table and "choose show" overlap filter
+ADD ITEM TABLE HAS BROKEN COLUMN BUTTONS IN THE FIND BOX
+
+quantity analysis ran on live data???? when saving inventory that relates to the packlist, the live data was used for alert gen.
+quantity analysis of lightbox failed in packlists and item page - the earlier show was correct. show overlap was correct.
+
+unattached packlists
+
+Example of lightbox additions:
+lightbox
+backliner for
+base plates
+lb graphic
+tv supports
+box buildout for tv
 
 - dims at the beginning of item descriptions for all items
 - add and configure default crate types, ben often goes back and changes multiple times! un-alert items??? un-listed items?

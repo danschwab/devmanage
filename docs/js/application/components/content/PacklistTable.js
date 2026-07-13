@@ -679,28 +679,13 @@ export const PacklistTable = {
                         try {
                             this.error = null;
                             
-                            // Create analysis config for image URLs
-                            const analysisConfig = [
-                                createAnalysisConfig(
-                                    Requests.getItemImageUrl,
-                                    'imageUrl',
-                                    'Loading item images...',
-                                    ['itemNumber'],
-                                    [],
-                                    null, // Store in AppData, not a column
-                                    false,
-                                    Priority.BACKGROUND // Images are visual enhancements, lowest priority
-                                )
-                            ];
-                            
                             // Initialize reactive store using the new API method
                             // Note: autoLoad is true by default, so data will load automatically
                             // Don't set isLoading to false - let the computed property track store.isLoading
                             this.inventoryStore = getReactiveStore(
                                 Requests.getAllInventoryData,
                                 null, // No save function (read-only)
-                                [this.referenceDate || todayISOString()], // Apply pending changes as of reference date
-                                analysisConfig
+                                [this.referenceDate || todayISOString()] // Apply pending changes as of reference date
                             );
                         } catch (error) {
                             console.error('Failed to load inventory data:', error);
@@ -749,7 +734,6 @@ export const PacklistTable = {
                         <template #default="{ row, column }">
                             <template v-if="column.key === 'image'">
                                 <ItemImageComponent
-                                    :imageUrl="row.AppData?.imageUrl"
                                     :itemNumber="row.itemNumber"
                                     :imageSize="48"
                                     :editable="true"

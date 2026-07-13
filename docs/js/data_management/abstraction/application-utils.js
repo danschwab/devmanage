@@ -887,6 +887,17 @@ class applicationUtils_uncached {
     }
 
     /**
+     * Load the entire Thumbnails table from the CACHE sheet.
+     * Used by the shared thumbnail reactive store to load all records at once.
+     * Invalidated whenever a thumbnail write flushes.
+     */
+    static async getAllThumbnailRecords(deps) {
+        const allTabs = await Database.getTabs('CACHE');
+        if (!allTabs.some(t => t.title === 'Thumbnails')) return [];
+        return await Database.getData('CACHE', 'Thumbnails', _THUMBNAILS_MAPPING);
+    }
+
+    /**
      * Queue a thumbnail record to be written to the Thumbnails tab.
      * Writes are batched and flushed 2 s after the last call to avoid concurrent
      * read-modify-write races when many items are loaded simultaneously.
@@ -1024,6 +1035,8 @@ async function _flushThumbnailWrites() {
         for (const itemNumber of pending.keys()) {
             invalidateCache([{ namespace: 'app_utils', methodName: 'getThumbnailRecord', args: [itemNumber] }]);
         }
+        // Invalidate the full-table cache so the thumbnail store reloads with the new records.
+        invalidateCache([{ namespace: 'app_utils', methodName: 'getAllThumbnailRecords', args: [] }]);
         // Broadcast to other sessions via the cross-session timestamp poller so they
         // invalidate their own getThumbnailRecord entries and re-read the updated sheet.
         stampDataChange('app_utils:getThumbnailRecord');
