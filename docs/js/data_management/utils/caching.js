@@ -84,6 +84,11 @@ class CacheManager {
     static pendingCalls = new Map(); // Maps cache keys to pending promises to prevent duplicate concurrent calls
     static CACHE_MISS = Symbol('CACHE_MISS');
     static _timestampWriter = null;
+    // Tracks the last time each key was populated, regardless of TTL expiry.
+    // The main cache entry is deleted silently on TTL expiry without firing the bus;
+    // filledAt persists so the poller can still detect remote changes after the cache
+    // entry is gone. Cleared only on explicit invalidation (not on TTL expiry).
+    static filledAt = new Map();
     
     /**
      * Gets a value from cache with expiration check
@@ -136,11 +141,13 @@ class CacheManager {
             return;
         }
         
+        const now = Date.now();
         CacheManager.cache.set(key, {
             value,
-            expire: expirationMs ? Date.now() + expirationMs : null,
-            filled: Date.now()
+            expire: expirationMs ? now + expirationMs : null,
+            filled: now
         });
+        CacheManager.filledAt.set(key, now);
     }
     
     /**
@@ -239,8 +246,9 @@ class CacheManager {
         // Add this key to the invalidation stack
         invalidationStack.add(key);
         
-        // Remove the cache entry
+        // Remove the cache entry and its fill-time record
         CacheManager.cache.delete(key);
+        CacheManager.filledAt.delete(key);
         
         // Also clean up any pending calls for this key DO NOT CLEAR PENDING CALLS HERE
         //if (CacheManager.pendingCalls.has(key)) {
@@ -292,10 +300,20 @@ class CacheManager {
      * @param {string} prefix - Cache key prefix to match
      */
     static invalidateByPrefix(prefix) {
-        // Find all cache keys that start with the prefix
+        // Collect keys from both the live cache and filledAt.
+        // filledAt may contain keys whose cache entry has already expired (silently removed
+        // on TTL), but whose dependency records are still intact. Calling invalidate() on
+        // those keys still walks the dependency chain and fires the bus for api:* dependents.
         const keysToInvalidate = [];
+        const seen = new Set();
         for (const key of CacheManager.cache.keys()) {
             if (key.startsWith(prefix)) {
+                keysToInvalidate.push(key);
+                seen.add(key);
+            }
+        }
+        for (const key of CacheManager.filledAt.keys()) {
+            if (key.startsWith(prefix) && !seen.has(key)) {
                 keysToInvalidate.push(key);
             }
         }
@@ -523,6 +541,7 @@ export function clearCache() {
     if (networkState.isOffline) return;
     CacheManager.cache.clear();
     CacheManager.pendingCalls.clear();
+    CacheManager.filledAt.clear();
 }
 export { CacheInvalidationBus };
 
@@ -707,6 +726,17 @@ export function startCacheTimestampPoller(readFn, intervalMs = 60 * 1000) {
                         break;
                     }
                 }
+                // Fallback: if no live cache entry exists (TTL expired and entry was silently
+                // removed), check filledAt which persists beyond TTL expiry. This prevents the
+                // poller from going blind to external changes after the 4-minute cache TTL.
+                if (!shouldInvalidate) {
+                    for (const [filledKey, filledTs] of CacheManager.filledAt.entries()) {
+                        if (filledKey.startsWith(key) && remoteTs > filledTs) {
+                            shouldInvalidate = true;
+                            break;
+                        }
+                    }
+                }
                 if (shouldInvalidate) {
                     //console.log('[CacheTimestampPoller] Remote change detected for', key, '- invalidating');
                     CacheManager.invalidateByPrefix(key);
@@ -787,11 +817,22 @@ export async function triggerCachePoll() {
                     break;
                 }
             }
+            // Fallback: check filledAt when live cache entry is absent (TTL expired)
+            if (!shouldInvalidate) {
+                for (const [filledKey, filledTs] of CacheManager.filledAt.entries()) {
+                    if (filledKey.startsWith(key) && remoteTs > filledTs) {
+                        shouldInvalidate = true;
+                        matchedCacheKey = `(filledAt) ${filledKey}`;
+                        break;
+                    }
+                }
+            }
             if (shouldInvalidate) {
                 console.log(`[CachePoll] Stale entry detected for "${key}" (matched: "${matchedCacheKey}") — invalidating.`);
                 CacheManager.invalidateByPrefix(key);
             } else {
-                const hasEntry = [...CacheManager.cache.keys()].some(k => k.startsWith(key));
+                const hasEntry = [...CacheManager.cache.keys()].some(k => k.startsWith(key)) ||
+                                 [...CacheManager.filledAt.keys()].some(k => k.startsWith(key));
                 if (!hasEntry) {
                     console.log(`[CachePoll] No cache entry found matching prefix "${key}" — nothing to invalidate.`);
                 } else {

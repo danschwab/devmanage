@@ -9,7 +9,6 @@ for some reason updating things didnt bump my inventory
 somehow set reports stores to NOT autoreload unless active, instead they should get removed.
 analysis did a doubletake and failed when creating a new empty show....
 optional highlight row for "add item" table and "choose show" overlap filter
-ADD ITEM TABLE HAS BROKEN COLUMN BUTTONS IN THE FIND BOX
 
 quantity analysis ran on live data???? when saving inventory that relates to the packlist, the live data was used for alert gen.
 quantity analysis of lightbox failed in packlists and item page - the earlier show was correct. show overlap was correct.
