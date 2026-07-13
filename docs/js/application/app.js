@@ -85,9 +85,13 @@ const App = {
                 {
                     key: 'permissions',
                     color: 'red',
-                    message: `Permissions Warning: ${this.permissionsWarning}`,
+                    message: `Login Issue: ${this.permissionsWarning}`,
                     visible: !!this.permissionsWarning,
-                    dismissible: false
+                    dismissible: false,
+                    action: {
+                        label: 'Log Out',
+                        fn: () => this.logout()
+                    }
                 },
                 {
                     key: 'auth-error',

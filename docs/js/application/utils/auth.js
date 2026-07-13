@@ -384,7 +384,7 @@ export class Auth {
         const missing = GoogleSheetsAuth.getMissingScopes();
         if (missing.length === 0) return null;
         const names = missing.map(s => s.split('/').pop()).join(', ');
-        return `Missing required permissions: ${names}. Some features may not work correctly. Log out and back in making sure to grant all requested permissions.`;
+        return `Please log out and back in making sure to grant all requested permissions in the popup: ${names}.`;
     }
 
     static _startNetworkMonitoring() {
@@ -523,37 +523,44 @@ export class Auth {
         };
 
         const attempt = () => new Promise((resolve, reject) => {
-            let authAttemptPromise = null;
+            let authCompleted = false;
 
-            warningTimer = setTimeout(async () => {
-                const waitedForAuthentication = await Auth._waitForPendingAuthentication({
-                    excludePromises: [authAttemptPromise]
-                });
-                if (waitedForAuthentication) {
-                    const isAuthenticated = await Auth.checkAuth();
-                    if (isAuthenticated) {
-                        return;
-                    }
+            warningTimer = setTimeout(() => {
+                // If auth hasn't completed after 4 seconds, show warning modal
+                if (!authCompleted) {
+                    warningModal = manager.confirm(
+                        "A Google sign-in popup should be visible.",
+                        () => {
+                            // User clicked "Retry Login"
+                            warningModal = null;
+                            clearWarning();
+                            attempt().then(resolve).catch(reject);
+                        },
+                        () => {
+                            // User clicked "Cancel" - clean up and reject
+                            authCompleted = true;
+                            clearWarning();
+                            reject(new Error('Login canceled'));
+                        },
+                        'Sign In',
+                        'Retry Login',
+                        'Cancel'
+                    );
                 }
-
-                warningModal = manager.confirm(
-                    "A Google sign-in popup should be visible.",
-                    () => {
-                        warningModal = null;
-                        clearWarning();
-                        attempt().then(resolve).catch(reject);
-                    },
-                    () => reject(new Error('Login canceled')),
-                    'Sign In',
-                    'Retry Login',
-                    'Cancel'
-                );
             }, 4000);
 
-            authAttemptPromise = GoogleSheetsAuth.authenticate();
+            const authAttemptPromise = GoogleSheetsAuth.authenticate();
             authAttemptPromise
-                .then((result) => { clearWarning(); resolve(result); })
-                .catch((err) => { clearWarning(); reject(err); });
+                .then((result) => { 
+                    authCompleted = true;
+                    clearWarning(); 
+                    resolve(result); 
+                })
+                .catch((err) => { 
+                    authCompleted = true;
+                    clearWarning(); 
+                    reject(err); 
+                });
         });
 
         return attempt();
