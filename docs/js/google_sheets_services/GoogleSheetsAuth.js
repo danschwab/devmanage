@@ -40,6 +40,7 @@ export class BaseTokenManager {
 export class GoogleSheetsAuth {
     static userEmail = null;
     static _authenticatePromise = null;
+    static _cancelAuthentication = null;
     static _silentRefreshPromise = null;
 
     static _tokenCoversRequiredScopes(token) {
@@ -130,13 +131,17 @@ export class GoogleSheetsAuth {
     }
 
     static async authenticate() {
-        if (this._authenticatePromise) {
-            return this._authenticatePromise;
+        // If there's already an in-flight authentication attempt, cancel it immediately
+        // and start fresh. This allows users to retry without waiting for timeout.
+        if (this._authenticatePromise && this._cancelAuthentication) {
+            console.log('[GoogleSheetsAuth.authenticate] Canceling in-flight authentication attempt');
+            this._cancelAuthentication();
         }
 
         this._authenticatePromise = this._authenticateInternal()
             .finally(() => {
                 this._authenticatePromise = null;
+                this._cancelAuthentication = null;
             });
 
         return this._authenticatePromise;
@@ -155,7 +160,21 @@ export class GoogleSheetsAuth {
             });
 
             return new Promise((resolve, reject) => {
+                let callbackCalled = false;
+                
+                // Store cancel function so it can be called if a new auth attempt starts
+                this._cancelAuthentication = () => {
+                    if (!callbackCalled) {
+                        callbackCalled = true;
+                        console.log('[GoogleSheetsAuth] Authentication cancelled by new attempt');
+                        reject(new Error('Authentication cancelled'));
+                    }
+                };
+                
+
                 tokenClient.callback = async (resp) => {
+                    callbackCalled = true;
+                    
                     if (resp.error !== undefined) {
                         console.error('[GoogleSheetsAuth.authenticate] AUTH_FAILED: Authentication error:', resp);
                         reject(resp);
@@ -192,6 +211,7 @@ export class GoogleSheetsAuth {
                         login_hint: storedEmail || undefined
                     });
                 } catch (error) {
+                    callbackCalled = true;
                     console.error('Token request error:', error);
                     reject(error);
                 }
