@@ -170,7 +170,6 @@ export class GoogleSheetsAuth {
                         reject(new Error('Authentication cancelled'));
                     }
                 };
-                
 
                 tokenClient.callback = async (resp) => {
                     callbackCalled = true;

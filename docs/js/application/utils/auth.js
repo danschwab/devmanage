@@ -52,6 +52,7 @@ let testModeEmail = null;
  */
 export class Auth {
     static _loginPromise = null;
+    static _cancelLogin = null;
     static _proactiveRefreshTimer = null;
     static _sessionExpiryTimer = null;
     static _proactiveInteractionHandler = null;
@@ -84,13 +85,16 @@ export class Auth {
     }
 
     static async login() {
-        if (this._loginPromise) {
-            return this._loginPromise;
+        // Cancel any previous login attempt to ensure fresh start
+        if (this._loginPromise && this._cancelLogin) {
+            console.log('[Auth.login] Canceling previous login attempt');
+            this._cancelLogin();
         }
 
         this._loginPromise = this._loginInternal()
             .finally(() => {
                 this._loginPromise = null;
+                this._cancelLogin = null;
             });
 
         return this._loginPromise;
@@ -517,6 +521,7 @@ export class Auth {
         let warningModal = null;
         let warningTimer = null;
         let dismissalChecker = null;
+        let authCompleted = false;
 
         const clearWarning = () => {
             clearTimeout(warningTimer);
@@ -527,82 +532,81 @@ export class Auth {
             }
         };
 
-        const attempt = async () => {
-            // Wait for any pending authentication to complete before starting fresh
-            // This ensures "Retry Login" actually retries instead of waiting for a blocked/stale popup
-            if (GoogleSheetsAuth._authenticatePromise) {
-                try {
-                    await GoogleSheetsAuth._authenticatePromise;
-                } catch (e) {
-                    // Ignore - we're about to try again
-                }
+        // Store cancel function so login() can cancel this entire flow
+        this._cancelLogin = () => {
+            if (!authCompleted) {
+                authCompleted = true;
+                clearWarning();
+                console.log('[Auth] Login flow cancelled by new attempt');
             }
+        };
 
-            return new Promise((resolve, reject) => {
-                let authCompleted = false;
-                let modalDismissed = false;
+        return new Promise((resolve, reject) => {
+            let modalDismissed = false;
 
-                warningTimer = setTimeout(() => {
-                    // If auth hasn't completed after 4 seconds, show warning modal
-                    if (!authCompleted) {
-                        warningModal = manager.confirm(
-                            "A Google sign-in popup should be visible.",
-                            async () => {
-                                // User clicked "Retry Login"
-                                modalDismissed = true;
-                                warningModal = null;
-                                clearWarning();
-                                try {
-                                    const result = await attempt();
-                                    resolve(result);
-                                } catch (err) {
-                                    reject(err);
+            warningTimer = setTimeout(() => {
+                // If auth hasn't completed after 4 seconds, show warning modal
+                if (!authCompleted) {
+                    warningModal = manager.confirm(
+                        "A Google sign-in popup should be visible.",
+                        async () => {
+                            // User clicked "Retry Login"
+                            modalDismissed = true;
+                            clearWarning();
+                            
+                            // Start a completely fresh login attempt
+                            try {
+                                const result = await Auth.login();
+                                if (result) {
+                                    resolve(true);
+                                } else {
+                                    reject(new Error('Login failed'));
                                 }
-                            },
-                            () => {
-                                // User clicked "Cancel" - clean up and reject
-                                modalDismissed = true;
+                            } catch (err) {
+                                reject(err);
+                            }
+                        },
+                        () => {
+                            // User clicked "Cancel" - clean up and reject
+                            modalDismissed = true;
+                            authCompleted = true;
+                            clearWarning();
+                            reject(new Error('Login canceled'));
+                        },
+                        'Sign In',
+                        'Retry Login',
+                        'Cancel'
+                    );
+
+                    // Watch for modal dismissal via X button, Escape, or clicking outside
+                    dismissalChecker = setInterval(() => {
+                        if (warningModal && !manager.modals.find(m => m.id === warningModal.id)) {
+                            clearInterval(dismissalChecker);
+                            dismissalChecker = null;
+                            if (!modalDismissed) {
+                                // Modal was dismissed without clicking a button - treat as cancel
                                 authCompleted = true;
                                 clearWarning();
                                 reject(new Error('Login canceled'));
-                            },
-                            'Sign In',
-                            'Retry Login',
-                            'Cancel'
-                        );
-
-                        // Watch for modal dismissal via X button, Escape, or clicking outside
-                        dismissalChecker = setInterval(() => {
-                            if (warningModal && !manager.modals.find(m => m.id === warningModal.id)) {
-                                clearInterval(dismissalChecker);
-                                dismissalChecker = null;
-                                if (!modalDismissed) {
-                                    // Modal was dismissed without clicking a button - treat as cancel
-                                    authCompleted = true;
-                                    clearWarning();
-                                    reject(new Error('Login canceled'));
-                                }
                             }
-                        }, 100);
-                    }
-                }, 4000);
+                        }
+                    }, 100);
+                }
+            }, 4000);
 
-                const authAttemptPromise = GoogleSheetsAuth.authenticate();
-                authAttemptPromise
-                    .then((result) => { 
-                        authCompleted = true;
-                        clearWarning(); 
-                        resolve(result); 
-                    })
-                    .catch((err) => { 
-                        authCompleted = true;
-                        clearWarning(); 
-                        reject(err); 
-                    });
-            });
-        };
-
-        return attempt();
+            const authAttemptPromise = GoogleSheetsAuth.authenticate();
+            authAttemptPromise
+                .then((result) => { 
+                    authCompleted = true;
+                    clearWarning(); 
+                    resolve(result); 
+                })
+                .catch((err) => { 
+                    authCompleted = true;
+                    clearWarning(); 
+                    reject(err); 
+                });
+        });
     }
 }
 
