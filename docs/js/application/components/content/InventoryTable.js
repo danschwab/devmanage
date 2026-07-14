@@ -419,28 +419,16 @@ const ImageUploadComponent = {
 };
 
 // Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
-// both thumbnail and full blob URLs via analysis. All ItemImageComponent instances share the same store instance.
+// blob URLs via analysis. All ItemImageComponent instances share the same store instance.
 // Marked as exempt from eviction to prevent auto-clearing, similar to the dashboard store.
+// Lazy loading ensures images are only fetched when they scroll into view.
 function getThumbnailStore() {
     return getReactiveStore(
         Requests.getAllThumbnailRecords,
         null,
         [],
         [
-            // Analysis step 1: Convert file IDs to thumbnail URLs (for small images ≤64px)
-            createAnalysisConfig(
-                Requests.getThumbnailBlobUrl,
-                'thumbnailUrl',
-                'Loading thumbnails...',
-                ['file'],
-                [],
-                null,
-                false,
-                Priority.BACKGROUND,
-                false,
-                false
-            ),
-            // Analysis step 2: Convert file IDs to full blob URLs (for modal/large displays)
+            // Single analysis step: Convert file IDs to full blob URLs
             createAnalysisConfig(
                 Requests.getDriveBlobUrl,
                 'blobUrl',
@@ -480,9 +468,10 @@ export const ItemImageComponent = {
         return {
             thumbnailStore: null,
             localImageUrl: null,    // Set immediately after upload for instant feedback
-            fullImageUrl: null,     // Cached full image URL (fetched on demand)
             cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
-            cachedPrefixUrl: null   // Last known good prefix URL to prevent flashing during reload
+            cachedPrefixUrl: null,  // Last known good prefix URL to prevent flashing during reload
+            isVisible: false,       // Lazy loading: only load images when visible
+            observer: null          // Intersection Observer for lazy loading
         };
     },
     computed: {
@@ -495,11 +484,11 @@ export const ItemImageComponent = {
             if (!prefix || prefix === this.itemNumber) return null;
             return this.thumbnailStore?.data?.find(r => r.itemNumber === prefix) || null;
         },
-        shouldUseThumbnail() {
-            return this.imageSize <= 64;
-        },
         imageUrl() {
             if (this.localImageUrl) return this.localImageUrl;
+            
+            // Lazy loading: don't fetch images until visible
+            if (!this.isVisible) return null;
             
             // During loading/analyzing, preserve the cached URL to avoid flashing
             const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
@@ -507,13 +496,8 @@ export const ItemImageComponent = {
                 return this.cachedImageUrl;
             }
             
-            // For small images, use thumbnail; for larger, use full image
-            let newUrl = null;
-            if (this.shouldUseThumbnail && this.record?.AppData?.thumbnailUrl) {
-                newUrl = this.record.AppData.thumbnailUrl;
-            } else {
-                newUrl = this.record?.AppData?.blobUrl || null;
-            }
+            // Use full image URL
+            let newUrl = this.record?.AppData?.blobUrl || null;
             
             // Update cache if URL changed
             if (newUrl && newUrl !== this.cachedImageUrl) {
@@ -525,19 +509,17 @@ export const ItemImageComponent = {
         prefixImageUrl() {
             if (this.imageUrl) return null;
             
+            // Lazy loading: don't fetch images until visible
+            if (!this.isVisible) return null;
+            
             // During loading/analyzing, preserve the cached prefix URL to avoid flashing
             const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
             if (isReloading && this.cachedPrefixUrl) {
                 return this.cachedPrefixUrl;
             }
             
-            // For prefix fallback, use thumbnail if small, otherwise full image
-            let newUrl = null;
-            if (this.shouldUseThumbnail && this.prefixRecord?.AppData?.thumbnailUrl) {
-                newUrl = this.prefixRecord.AppData.thumbnailUrl;
-            } else {
-                newUrl = this.prefixRecord?.AppData?.blobUrl || null;
-            }
+            // Use full image URL
+            let newUrl = this.prefixRecord?.AppData?.blobUrl || null;
             
             // Update cache if URL changed
             if (newUrl && newUrl !== this.cachedPrefixUrl) {
@@ -558,20 +540,50 @@ export const ItemImageComponent = {
     },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
+        
+        // Set up lazy loading with Intersection Observer
+        // Only load images when they're visible in the viewport
+        this.observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        this.isVisible = true;
+                        // Once visible, we can stop observing
+                        if (this.observer) {
+                            this.observer.disconnect();
+                        }
+                    }
+                });
+            },
+            {
+                // Start loading slightly before the element is visible (100px buffer)
+                rootMargin: '100px',
+                threshold: 0
+            }
+        );
+        
+        // Observe the container element
+        if (this.$el) {
+            this.observer.observe(this.$el);
+        }
     },
     watch: {
         itemNumber() {
             // Clear cached URLs when item number changes
             this.cachedImageUrl = null;
             this.cachedPrefixUrl = null;
-            this.fullImageUrl = null;
+            
+            // Reset visibility for lazy loading if component is reused
+            this.isVisible = false;
+            if (this.observer && this.$el) {
+                this.observer.observe(this.$el);
+            }
         },
         record(newRecord, oldRecord) {
             // If the record changes (e.g., item deleted/recreated), clear cache
             if (newRecord?.file !== oldRecord?.file) {
                 this.cachedImageUrl = null;
                 this.cachedPrefixUrl = null;
-                this.fullImageUrl = null;
             }
         }
     },
@@ -579,13 +591,6 @@ export const ItemImageComponent = {
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;
-        },
-        async ensureFullImage() {
-            // If we don't have a full image URL cached, fetch it on demand
-            if (!this.fullImageUrl && this.record?.file) {
-                this.fullImageUrl = await Requests.getDriveBlobUrl(this.record.file) || null;
-            }
-            return this.fullImageUrl;
         },
         showImageModal() {
             if (this.realImageFound) {
@@ -607,14 +612,14 @@ export const ItemImageComponent = {
                 onUploadSuccess: (url) => {
                     this.clearLocalImageUrl();
                     this.localImageUrl = url;
-                    this.cachedImageUrl = url;      // Clear cache so new URL takes effect immediately
+                    this.cachedImageUrl = url;      // Update cache so new URL shows immediately
                     this.cachedPrefixUrl = null;    // No longer need prefix
-                    this.fullImageUrl = null;       // Clear cached full image so it will refetch if needed
+                    this.isVisible = true;          // Ensure uploaded image shows immediately
                 }
             }, title);
         },
         async handleError(isMainImage) {
-            // Blob URL became stale — re-fetch the appropriate size (thumbnail or full)
+            // Blob URL became stale — re-fetch from the stored Drive file ID
             const fileId = this.record?.file;
             if (!fileId) return;
             
@@ -622,31 +627,24 @@ export const ItemImageComponent = {
             this.cachedImageUrl = null;
             this.cachedPrefixUrl = null;
             
-            if (this.shouldUseThumbnail) {
-                // Thumbnail URL failed, invalidate and refetch thumbnail
-                invalidateCache([{ namespace: 'database', methodName: 'getThumbnailBlobUrl', args: [fileId] }]);
-                const fresh = await Requests.getThumbnailBlobUrl(fileId);
-                if (fresh) {
-                    this.clearLocalImageUrl();
-                    this.localImageUrl = fresh;
-                    this.cachedImageUrl = fresh;
-                }
-            } else {
-                // Full image URL failed, invalidate and refetch full image
-                invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
-                const fresh = await Requests.getDriveBlobUrl(fileId);
-                if (fresh) {
-                    this.clearLocalImageUrl();
-                    this.localImageUrl = fresh;
-                    this.cachedImageUrl = fresh;
-                    this.fullImageUrl = fresh;
-                }
+            // Invalidate and refetch full image
+            invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
+            const fresh = await Requests.getDriveBlobUrl(fileId);
+            if (fresh) {
+                this.clearLocalImageUrl();
+                this.localImageUrl = fresh;
+                this.cachedImageUrl = fresh;
             }
         }
     },
     beforeUnmount() {
+        // Clean up Intersection Observer
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+        }
+        
         this.clearLocalImageUrl();
-        if (this.fullImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.fullImageUrl);
         // Note: cachedImageUrl and cachedPrefixUrl are managed by the store's lifecycle,
         // so we don't revoke them here—they'll be cleaned up when the store reloads
     },
@@ -665,7 +663,6 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="prefixImageUrl"
                     alt="Category Image"
-                    loading="lazy"
                     @error="handleError(false)"
                 />
 
@@ -675,7 +672,6 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="imageUrl"
                     alt="Item Image"
-                    loading="lazy"
                     @error="handleError(true)"
                 />
 
@@ -685,7 +681,6 @@ export const ItemImageComponent = {
                     class="image-layer"
                     src="assets/placeholder.png"
                     alt="Placeholder"
-                    loading="lazy"
                 />
             </transition-group>
         </div>

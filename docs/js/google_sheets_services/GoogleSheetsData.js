@@ -727,17 +727,6 @@ export class GoogleSheetsService {
         }
     }
 
-    /**
-     * Gets a thumbnail-sized image URL for a Drive file.
-     * Note: Google's thumbnailLink CDN (lh3.googleusercontent.com) does not support
-     * CORS headers, so fetching it as a blob is not possible. Falls back to the
-     * full authenticated Drive download via googleapis.com, which supports CORS.
-     * @param {string} fileId - Google Drive file ID
-     * @returns {Promise<string|null>} Blob URL or null
-     */
-    static async getAuthenticatedThumbnailUrl(fileId) {
-        return await this.getAuthenticatedImageUrl(fileId);
-    }
 
     /**
      * Upload a file to Google Drive using multipart upload
