@@ -1295,10 +1295,11 @@ export const ScheduleFilterSelect = {
         // Perform initial sync after reactive data is fully initialized (only if containerPath exists)
         this.hasPerformedInitialSync = true;
         if (this.containerPath) {
-            this.syncWithURL();
+            // On initial mount, use replaceHistory to avoid creating history entries for default filters
+            this.syncWithURL(true);
         } else if (this.defaultSearch) {
-            // In standalone mode, apply default search if provided
-            this.applyDefaultSearch();
+            // In standalone mode, apply default search if provided (replaceHistory=true for initial)
+            this.applyDefaultSearch(true);
         }
     },
     methods: {
@@ -1383,7 +1384,7 @@ export const ScheduleFilterSelect = {
             this.applyOption(option);
         },
         
-        applyOption(option) {
+        applyOption(option, replaceHistory = false) {
             this.lastNonCustomValue = option.value;
 
             if (option.type === 'show-all') {
@@ -1392,7 +1393,7 @@ export const ScheduleFilterSelect = {
                     view: 'all',
                     dateFilters: undefined, // Clear date filters for show-all
                     textFilters: undefined  // Clear text filters for show-all
-                });
+                }, replaceHistory);
             } else if (option.type === 'year') {
                 const year = parseInt(option.value);
                 const searchData = {
@@ -1410,7 +1411,7 @@ export const ScheduleFilterSelect = {
                     view: undefined, // Clear show-all view parameter
                     dateFilters: searchData.dateFilters,
                     textFilters: undefined // Explicitly clear text filters for year selection
-                });
+                }, replaceHistory);
             } else if (option.type === 'search') {
                 const cleanDateFilters = cleanFilters(option.searchData.dateFilters) || [];
                 const { startDate, endDate } = computeDisplayDates(cleanDateFilters);
@@ -1423,11 +1424,11 @@ export const ScheduleFilterSelect = {
                     endDate
                 };
                 this.$emit('search-selected', searchData);
-                this.updateURLFromSearch(option.searchData);
+                this.updateURLFromSearch(option.searchData, replaceHistory);
             }
         },
         
-        updateURL(params) {
+        updateURL(params, replaceHistory = false) {
             // Skip URL updates if no containerPath (standalone mode in modal)
             if (!this.containerPath) return;
             
@@ -1448,11 +1449,13 @@ export const ScheduleFilterSelect = {
                     newPath
                 );
             } else if (this.navigateToPath) {
-                this.navigateToPath(newPath);
+                // Pass replaceHistory flag through to navigation system
+                // to control history behavior (true = replace current entry, false = push new entry)
+                this.navigateToPath({ targetPath: newPath, replaceHistory });
             }
         },
         
-        updateURLFromSearch(searchData) {
+        updateURLFromSearch(searchData, replaceHistory = false) {
             if (!searchData) return;
             
             const params = {
@@ -1467,10 +1470,10 @@ export const ScheduleFilterSelect = {
                 params.textFilters = undefined; // Explicitly clear text filters if search has none
             }
             
-            this.updateURL(params);
+            this.updateURL(params, replaceHistory);
         },
         
-        applyDefaultSearch() {
+        applyDefaultSearch(replaceHistory = false) {
             if (!this.defaultSearch) return;
             
             // Convert defaultSearch to string for comparison since year values are stored as strings
@@ -1485,13 +1488,13 @@ export const ScheduleFilterSelect = {
             }
             
             this.selectedValue = option.value;
-            this.applyOption(option);
+            this.applyOption(option, replaceHistory);
         },
         
-        syncWithURL() {
+        syncWithURL(replaceHistory = false) {
             // Skip URL sync if no containerPath (standalone mode in modal)
             if (!this.containerPath) {
-                this.defaultSearch && this.applyDefaultSearch();
+                this.defaultSearch && this.applyDefaultSearch(replaceHistory);
                 return;
             }
             
@@ -1501,7 +1504,7 @@ export const ScheduleFilterSelect = {
             );
             
             if (Object.keys(params).length === 0) {
-                this.defaultSearch && this.applyDefaultSearch();
+                this.defaultSearch && this.applyDefaultSearch(replaceHistory);
                 return;
             }
             
@@ -1513,7 +1516,7 @@ export const ScheduleFilterSelect = {
 
             // Only non-filter params present (e.g. just layout) — don't change filter state
             if (!filter.dateFilters.length && !filter.textFilters.length && !filter.view) {
-                this.defaultSearch && this.applyDefaultSearch();
+                this.defaultSearch && this.applyDefaultSearch(replaceHistory);
                 return;
             }
             
@@ -1548,6 +1551,7 @@ export const ScheduleFilterSelect = {
                                 endDate: `${year}-12-31`,
                                 dateFilters: filter.dateFilters
                             });
+                            // Don't replace history on year-from-URL sync
                             return;
                         }
                     }
