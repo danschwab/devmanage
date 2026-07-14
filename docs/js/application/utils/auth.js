@@ -548,7 +548,7 @@ export class Auth {
                 // If auth hasn't completed after 4 seconds, show warning modal
                 if (!authCompleted) {
                     warningModal = manager.confirm(
-                        "A Google sign-in popup should be visible.",
+                        "A Google sign-in popup should be visible. \n \n If you don't see it, please check your browser's popup blocker settings and try again.",
                         async () => {
                             // User clicked "Retry Login"
                             modalDismissed = true;
