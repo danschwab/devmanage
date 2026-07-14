@@ -665,6 +665,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="prefixImageUrl"
                     alt="Category Image"
+                    loading="lazy"
                     @error="handleError(false)"
                 />
 
@@ -674,6 +675,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="imageUrl"
                     alt="Item Image"
+                    loading="lazy"
                     @error="handleError(true)"
                 />
 
@@ -683,6 +685,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     src="assets/placeholder.png"
                     alt="Placeholder"
+                    loading="lazy"
                 />
             </transition-group>
         </div>

@@ -729,48 +729,14 @@ export class GoogleSheetsService {
 
     /**
      * Gets a thumbnail-sized image URL for a Drive file.
-     * Attempts to fetch file metadata to get the thumbnailLink first,
-     * falls back to full image if thumbnail unavailable.
+     * Note: Google's thumbnailLink CDN (lh3.googleusercontent.com) does not support
+     * CORS headers, so fetching it as a blob is not possible. Falls back to the
+     * full authenticated Drive download via googleapis.com, which supports CORS.
      * @param {string} fileId - Google Drive file ID
      * @returns {Promise<string|null>} Blob URL or null
      */
     static async getAuthenticatedThumbnailUrl(fileId) {
-        try {
-            const token = gapi.client.getToken();
-            if (!token || !token.access_token) {
-                console.warn('[icons] getAuthenticatedThumbnailUrl: no token available');
-                return null;
-            }
-            
-            // First try to get the file's thumbnailLink via metadata
-            try {
-                const metadataResponse = await fetch(
-                    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=thumbnailLink&supportsAllDrives=true`,
-                    { headers: { Authorization: `Bearer ${token.access_token}` } }
-                );
-                if (metadataResponse.ok) {
-                    const metadata = await metadataResponse.json();
-                    if (metadata.thumbnailLink) {
-                        // thumbnailLink doesn't include auth, so fetch it as an authenticated blob
-                        const thumbnailResponse = await fetch(metadata.thumbnailLink, {
-                            headers: { Authorization: `Bearer ${token.access_token}` }
-                        });
-                        if (thumbnailResponse.ok) {
-                            const blob = await thumbnailResponse.blob();
-                            return URL.createObjectURL(blob);
-                        }
-                    }
-                }
-            } catch (e) {
-                // Silently continue to fallback
-            }
-            
-            // Fallback: return full image
-            return await this.getAuthenticatedImageUrl(fileId);
-        } catch (error) {
-            console.error('[icons] getAuthenticatedThumbnailUrl error:', error);
-            return null;
-        }
+        return await this.getAuthenticatedImageUrl(fileId);
     }
 
     /**
