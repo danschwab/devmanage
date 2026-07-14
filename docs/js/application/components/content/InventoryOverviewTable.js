@@ -39,20 +39,20 @@ export const InventoryOverviewTableComponent = {
                     type: 'item',
                     sortable: true
                 },
-                { 
-                    key: 'description', 
-                    label: 'Description',
-                    editable: false,
-                    details: true,
-                    sortable: true
-                },
-                { 
-                    key: 'notes', 
-                    label: 'Notes',
-                    editable: false,
-                    details: true,
-                    sortable: false
-                },
+                // { 
+                //     key: 'description', 
+                //     label: 'Description',
+                //     editable: false,
+                //     details: true,
+                //     sortable: true
+                // },
+                // { 
+                //     key: 'notes', 
+                //     label: 'Notes',
+                //     editable: false,
+                //     details: true,
+                //     sortable: false
+                // },
                 { 
                     key: 'quantity', 
                     label: 'Qty',
@@ -60,6 +60,13 @@ export const InventoryOverviewTableComponent = {
                     editable: false,
                     autoColor: false,
                     sortable: true
+                },
+                {
+                    key: '_navigate',
+                    labelHtml: '<span class="material-symbols-outlined">calendar_month</span>',
+                    label: '',
+                    width: 36,
+                    sortable: false
                 }
             ],
             inventoryStore: null, // Reactive store for aggregated inventory
@@ -147,6 +154,12 @@ export const InventoryOverviewTableComponent = {
 
         formatPendingDate(deciseconds) {
             return new Date(deciseconds * 100).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        },
+
+        navigateToItemTimeline(row) {
+            if (!row.itemNumber || !row.tab) return;
+            const path = `inventory/${row.tab.toLowerCase()}/${row.itemNumber}`;
+            this.$emit('navigate-to-path', path);
         }
     },
     template: html `
@@ -170,7 +183,7 @@ export const InventoryOverviewTableComponent = {
                 :viewModes="viewModes"
                 :showHeader="true"
                 :showFooter="true"
-                :allowDetails="true"
+                :allowDetails="false"
                 emptyMessage="No inventory items found across all categories"
                 :loading-message="loadingMessage"
                 @refresh="handleRefresh"
@@ -188,13 +201,19 @@ export const InventoryOverviewTableComponent = {
                     >
                         {{ formatCategoryLabel(row.tab) }}
                     </button>
+                    <button
+                        v-else-if="column.key === '_navigate'"
+                        class="button-symbol purple"
+                        @click.stop="navigateToItemTimeline(row)"
+                        title="View item timeline"
+                    >☷</button>
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
                     />
                 </template>
-                <template #row-details="{ row }">
+                <!-- <template #row-details="{ row }">
                     <div v-if="getPendingEntries(row).length > 0" class="pending-changes-section">
                         <div
                             v-for="(entry, i) in getPendingEntries(row)"
@@ -217,7 +236,7 @@ export const InventoryOverviewTableComponent = {
                             </div>
                         </div>
                     </div>
-                </template>
+                </template> -->
             </TableComponent>
         </slot>
     `

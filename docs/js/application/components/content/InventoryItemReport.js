@@ -43,7 +43,7 @@ export const InventoryItemReport = {
                     sortable: false
                 },
                 { key: 'itemId', label: 'Item#', type: 'item', sortable: true },
-                { key: 'description', label: 'Description', details: true, sortable: true },
+                // { key: 'description', label: 'Description', details: true, sortable: true },
                 { key: 'startDate', label: 'Start', format: 'date', sortable: true },
                 { key: 'endDate', label: 'End', format: 'date', sortable: true },
                 { key: 'inventoryQty', label: 'Inv Qty', format: 'number', sortable: true },
@@ -531,7 +531,7 @@ export const InventoryItemReport = {
                 :view-modes="viewModes"
                 :hide-rows-on-search="false"
                 :readonly="true"
-                :allowDetails="true"
+                :allowDetails="false"
                 :show-search="true"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
