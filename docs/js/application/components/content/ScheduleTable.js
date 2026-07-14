@@ -129,7 +129,7 @@ export const ScheduleTableComponent = {
             return this.scheduleTableStore ? this.scheduleTableStore.isAnalyzing : false;
         },
         analysisProgress() {
-            return this.scheduleTableStore ? this.scheduleTableStore.analysisProgress : 0;
+            return this.scheduleTableStore ? this.scheduleTableStore.analysisProgress : -1;
         },
         tableTitle() {
             const fmtVal = (v) => {

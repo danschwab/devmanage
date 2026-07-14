@@ -39,20 +39,20 @@ export const InventoryOverviewTableComponent = {
                     type: 'item',
                     sortable: true
                 },
-                // { 
-                //     key: 'description', 
-                //     label: 'Description',
-                //     editable: false,
-                //     details: true,
-                //     sortable: true
-                // },
-                // { 
-                //     key: 'notes', 
-                //     label: 'Notes',
-                //     editable: false,
-                //     details: true,
-                //     sortable: false
-                // },
+                { 
+                    key: 'description', 
+                    label: 'Description',
+                    editable: false,
+                    details: true,
+                    sortable: true
+                },
+                { 
+                    key: 'notes', 
+                    label: 'Notes',
+                    editable: false,
+                    details: true,
+                    sortable: false
+                },
                 { 
                     key: 'quantity', 
                     label: 'Qty',
@@ -60,13 +60,6 @@ export const InventoryOverviewTableComponent = {
                     editable: false,
                     autoColor: false,
                     sortable: true
-                },
-                {
-                    key: '_navigate',
-                    labelHtml: '<span class="material-symbols-outlined">calendar_month</span>',
-                    label: '',
-                    width: 36,
-                    sortable: false
                 }
             ],
             inventoryStore: null, // Reactive store for aggregated inventory
@@ -158,8 +151,26 @@ export const InventoryOverviewTableComponent = {
 
         navigateToItemTimeline(row) {
             if (!row.itemNumber || !row.tab) return;
-            const path = `inventory/${row.tab.toLowerCase()}/${row.itemNumber}`;
-            this.$emit('navigate-to-path', path);
+            const basePath = `inventory/${row.tab.toLowerCase()}/${row.itemNumber}`;
+            // Preserve searchTerm from current path
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.containerPath
+            );
+            const newPath = NavigationRegistry.buildPath(basePath, { searchTerm: currentParams.searchTerm });
+            this.$emit('navigate-to-path', newPath);
+        },
+
+        handleCategoryClick(row) {
+            if (!row.tab) return;
+            // Preserve searchTerm from current path
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.containerPath
+            );
+            const basePath = `inventory/${row.tab.toLowerCase()}`;
+            const newPath = NavigationRegistry.buildPath(basePath, { searchTerm: currentParams.searchTerm });
+            this.$emit('navigate-to-path', newPath);
         }
     },
     template: html `
@@ -183,7 +194,7 @@ export const InventoryOverviewTableComponent = {
                 :viewModes="viewModes"
                 :showHeader="true"
                 :showFooter="true"
-                :allowDetails="false"
+                :allowDetails="true"
                 emptyMessage="No inventory items found across all categories"
                 :loading-message="loadingMessage"
                 @refresh="handleRefresh"
@@ -196,22 +207,23 @@ export const InventoryOverviewTableComponent = {
                 <template #default="{ row, column, rowIndex, cellRowIndex, cellColIndex }">
                     <button 
                         v-if="column.key === 'tab'"
-                        @click="$emit('navigate-to-path', 'inventory/' + row.tab.toLowerCase())"
+                        @click="handleCategoryClick(row)"
                         class="card purple"
                     >
                         {{ formatCategoryLabel(row.tab) }}
                     </button>
-                    <button
-                        v-else-if="column.key === '_navigate'"
-                        class="button-symbol purple"
-                        @click.stop="navigateToItemTimeline(row)"
-                        title="View item timeline"
-                    >☷</button>
                     <ItemImageComponent 
                         v-if="column.key === 'image'"
                         :imageSize="32"
                         :itemNumber="row.itemNumber"
                     />
+                </template>
+                <template #details-cell="{ row, hasSearchMatch }">
+                    <button 
+                        @click.stop="navigateToItemTimeline(row)"
+                        title="View item timeline"
+                        :class="['button-symbol', 'purple', { 'search-match': hasSearchMatch }]"
+                    >☷</button>
                 </template>
                 <!-- <template #row-details="{ row }">
                     <div v-if="getPendingEntries(row).length > 0" class="pending-changes-section">

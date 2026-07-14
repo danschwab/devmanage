@@ -210,20 +210,47 @@ export const CardsComponent = {
                 
                 filteredData = filteredData.filter(row => {
                     if (!row) return false;
+                    
+                    // Clear any previous matched hidden fields
+                    delete row._matchedHiddenFields;
+                    
                     // Search in title, content, and contentFooter fields
-                    const fields = [
+                    const visibleFields = [
                         row.title,
                         row.content,
                         row.contentFooter
                     ];
                     
-                    // All search words must match somewhere in the fields (AND logic)
-                    return searchWords.every(word =>
-                        fields.some(field =>
+                    // All search words must match somewhere in the visible fields (AND logic)
+                    const visibleMatch = searchWords.every(word =>
+                        visibleFields.some(field =>
                             // Skip null/undefined to prevent matching "undefined" or "null" strings
                             field != null && String(field).toLowerCase().includes(word.toLowerCase())
                         )
                     );
+                    
+                    if (visibleMatch) return true;
+                    
+                    // Search hidden fields if no visible match
+                    if (Array.isArray(row.hiddenSearchData) && row.hiddenSearchData.length > 0) {
+                        const hiddenMatch = searchWords.every(word =>
+                            row.hiddenSearchData.some(item =>
+                                item.value != null && String(item.value).toLowerCase().includes(word.toLowerCase())
+                            )
+                        );
+                        
+                        if (hiddenMatch) {
+                            // Mark which hidden fields matched (for display)
+                            row._matchedHiddenFields = row.hiddenSearchData.filter(item =>
+                                searchWords.some(word =>
+                                    String(item.value || '').toLowerCase().includes(word.toLowerCase())
+                                )
+                            );
+                            return true;
+                        }
+                    }
+                    
+                    return false;
                 });
             }
 
@@ -512,6 +539,13 @@ export const CardsComponent = {
                     <div class="content" v-if="item.content">
                         <div v-html="search.highlightHtmlContent(item.content)"></div>
                     </div>
+                    <!-- Show matched hidden fields when search is active and search term is > 3 chars -->
+                    <div v-if="search.hasActiveSearch.value && search.searchValue.value.length > 3 && item._matchedHiddenFields && item._matchedHiddenFields.length > 0" class="content hidden-matches">
+                        <div v-for="field in item._matchedHiddenFields" :key="field.fieldName + '_' + field.value" class="match-indicator">
+                            <strong>{{ field.fieldName }}:</strong> 
+                            <span v-html="search.highlightRawText(field.value)"></span>
+                        </div>
+                    </div>
                     <div class="content-footer" v-if="item.contentFooter || (item.footerActions && item.footerActions.length)">
                         <div v-if="item.contentFooter" v-html="search.highlightHtmlContent(item.contentFooter)"></div>
                         <div v-if="item.footerActions && item.footerActions.length" class="button-bar">
@@ -532,6 +566,7 @@ export const CardsComponent = {
                     @click="search.clearSearch"
                     style="align-self: flex-start;"
                     title="Clear filter"
+                    class="yellow"
                 >
                     🗙 Clear filter
                 </button>

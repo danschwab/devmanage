@@ -723,7 +723,7 @@ export const PacklistContent = {
 
             // Determine card styling based on lock state, unsaved changes, and schedule attachment.
             // Priority: locked (yellow) > unsaved changes (red) > unattached (orange) > normal (gray).
-            const cardClass = isLocked ? 'yellow' : (isUnattached ? 'red' : 'gray');
+            const cardClass = isUnattached ? 'red' : 'gray';
             //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
             
             // Build content footer

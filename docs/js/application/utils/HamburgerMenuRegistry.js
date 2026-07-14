@@ -36,7 +36,7 @@ const LockRemovalMenuComponent = {
             return {
                 label: this.isRemovingLock ? 'Removing lock...' : `Remove lock: ${this.lockOwnerUsername}`,
                 action: 'removeLock',
-                class: this.isRemovingLock ? 'analyzing' : 'yellow',
+                class: this.isRemovingLock ? 'analyzing' : 'white',
                 disabled: this.isRemovingLock
             };
         }

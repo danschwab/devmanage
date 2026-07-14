@@ -358,7 +358,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         isSaving: false, // True only during the save operation (used to suppress false conflict detection from the save cascade)
         externalConflict: false, // True when an external session mutated this data while we have unsaved changes
         lockConflictOwner: null, // Set when a save is blocked by a competing lock
-        analysisProgress: 0,
+        analysisProgress: -1,
         analysisMessage: '',
         analysisConfig,
         initialLoad: false, // True if this is the first load of the store
@@ -431,7 +431,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.loadingMessage = '';
             this.error = null;
             this.isAnalyzing = false;
-            this.analysisProgress = 0;
+            this.analysisProgress = -1;
             this.analysisMessage = '';
         },
         async load(message = 'Loading data...', skipAnalysis = false) {
@@ -732,7 +732,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             } = options;
 
             this.isAnalyzing = true;
-            this.analysisProgress = 0;
+            this.analysisProgress = -1;
             this.analysisMessage = 'Starting analysis...';
 
             try {
@@ -2073,7 +2073,7 @@ export async function clearAllReactiveStores(options = {}) {
         store.isSaving = false;
         store.externalConflict = false;
         store.lockConflictOwner = null;
-        store.analysisProgress = 0;
+        store.analysisProgress = -1;
         store.analysisMessage = '';
         store.autoSaved = false;
         store.lastAutoSaveHash = null;

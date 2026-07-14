@@ -893,11 +893,75 @@ class inventoryUtils_uncached {
         });
     }
 
+    /**
+     * Get hidden search data (item numbers, descriptions, notes) for a category.
+     * Used for card grid searching. Low-priority, optional analysis step.
+     * @param {Object} deps - Dependencies object
+     * @param {string} categoryTitle - Category/tab name (uppercase)
+     * @returns {Promise<Array>} Array of { fieldName, value } objects
+     */
+    static async getHiddenSearchDataForCategory(deps, categoryTitle) {
+        if (!categoryTitle) return [];
+        
+        try {
+            // Fetch inventory data for this category
+            const itemData = await deps.call(
+                InventoryUtils.getInventoryTabData,
+                categoryTitle,
+                inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING
+            );
+            
+            if (!Array.isArray(itemData) || itemData.length === 0) {
+                return [];
+            }
+            
+            // Extract searchable fields from all items
+            const hiddenFields = [];
+            const seenValues = new Set(); // Deduplicate identical values
+            
+            itemData.forEach(item => {
+                // Add item number if present and unique
+                if (item.itemNumber && !seenValues.has(`itemNumber:${item.itemNumber}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Item#', 
+                        value: item.itemNumber 
+                    });
+                    seenValues.add(`itemNumber:${item.itemNumber}`);
+                }
+                
+                // Add description if present and unique
+                if (item.description && !seenValues.has(`description:${item.description}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Description', 
+                        value: item.description 
+                    });
+                    seenValues.add(`description:${item.description}`);
+                }
+                
+                // Add notes if present and unique
+                if (item.notes && !seenValues.has(`notes:${item.notes}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Notes', 
+                        value: item.notes 
+                    });
+                    seenValues.add(`notes:${item.notes}`);
+                }
+            });
+            
+            return hiddenFields;
+        } catch (error) {
+            // Silently fail - this is low priority and optional
+            console.warn(`[InventoryUtils] Failed to load hidden search data for ${categoryTitle}:`, error);
+            return [];
+        }
+    }
+
 }
 
 export const InventoryUtils = wrapMethods(inventoryUtils_uncached, 'inventory_utils', [
     'saveInventoryTabData',
     'checkAndApplyPendingChanges',
     'savePendingChangeEntry',
-    'deletePendingChangeEntry'
+    'deletePendingChangeEntry',
+    'getHiddenSearchDataForCategory'
 ]);

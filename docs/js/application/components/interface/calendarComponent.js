@@ -328,6 +328,7 @@ export const CalendarComponent = {
                             <input
                                 type="text"
                                 v-model="search.searchValue.value"
+                                @focus="search.handleFocus"
                                 @blur="search.handleBlur"
                                 @keydown.esc="search.clearSearch"
                                 placeholder="Find..."

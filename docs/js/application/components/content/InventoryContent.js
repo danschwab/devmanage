@@ -15,17 +15,52 @@ export const InventoryMenuComponent = {
         navigateToPath: Function,
         tabTitle: String
     },
-    inject: ['$modal'],
+    inject: ['$modal', 'appContext'],
     computed: {
+        hasSearchTerm() {
+            // Get current path and check for searchTerm
+            const currentCleanPath = (this.appContext?.currentPath || '').split('?')[0];
+            const params = NavigationRegistry.getParametersForContainer(
+                currentCleanPath,
+                this.appContext?.currentPath
+            );
+            return params.searchTerm && params.searchTerm.trim().length > 0;
+        },
         menuItems() {
-            return [
-                { label: 'Inventory Shortage Report', action: 'navigateReports' }
-            ];
+            const items = [];
+            
+            // Add clear filter if searchTerm is present
+            if (this.hasSearchTerm) {
+                items.push({ 
+                    label: 'Clear Filter', 
+                    action: 'clearFilter',
+                    class: 'yellow'
+                });
+            }
+            
+            items.push({ label: 'Inventory Shortage Report', action: 'navigateReports' });
+            
+            return items;
         }
     },
     methods: {
         async handleAction(action) {
             switch (action) {
+                case 'clearFilter':
+                    if (this.navigateToPath) {
+                        // Get the current clean path from appContext
+                        const currentCleanPath = (this.appContext?.currentPath || '').split('?')[0];
+                        // Remove searchTerm but keep other params
+                        const newParams = { searchTerm: undefined };
+                        const newPath = NavigationRegistry.buildPathWithCurrentParams(
+                            currentCleanPath,
+                            this.appContext?.currentPath,
+                            newParams
+                        );
+                        this.navigateToPath(newPath);
+                        this.$emit('close-modal');
+                    }
+                    break;
                 case 'navigateReports':
                     if (this.navigateToPath) {
                         this.navigateToPath('reports/item-shortages');
@@ -114,7 +149,7 @@ export const InventoryContent = {
                     
                     // Determine card styling based on lock state and unsaved changes
                     // Priority: locked (white) > unsaved changes (red) > normal (purple)
-                    const cardClass = isLocked ? 'button yellow' : 'button purple';
+                    const cardClass = 'button purple';
                     
                     // Build content footer
                     let contentFooter = undefined;
@@ -150,7 +185,8 @@ export const InventoryContent = {
                         cardClass: cardClass,
                         contentFooter: contentFooter,
                         footerActions: footerActions,
-                        AppData: cat.AppData // Pass through AppData for analyzing state
+                        AppData: cat.AppData, // Pass through AppData for analyzing state
+                        hiddenSearchData: cat._hiddenSearchData || [] // Hidden search fields for item#, description, notes
                     };
                 });
         },
@@ -243,6 +279,15 @@ export const InventoryContent = {
                     ['title'],
                     [authState.user?.email],
                     'lockInfo'
+                ),
+                createAnalysisConfig(
+                    Requests.getInventoryHiddenSearchData,
+                    '_hiddenSearchData',
+                    'Indexing searchable fields...',
+                    [],  // Pass entire category object; function extracts title
+                    [],
+                    '_hiddenSearchData',
+                    { priority: 'low', optional: true }
                 )
             ];
             this.categoriesStore = getReactiveStore(
@@ -253,7 +298,16 @@ export const InventoryContent = {
             );
         },
         handleCategorySelect(categoryTitle) {
-            this.navigateToPath('inventory/' + categoryTitle.toLowerCase());
+            // Preserve searchTerm when navigating to category
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.containerPath
+            );
+            const newPath = NavigationRegistry.buildPath(
+                'inventory/' + categoryTitle.toLowerCase(),
+                { searchTerm: currentParams.searchTerm }
+            );
+            this.navigateToPath(newPath);
         },
         async saveCategory(categoryTitle) {
             try {
@@ -355,9 +409,12 @@ export const InventoryContent = {
                 default-sort-column="title"
                 :on-item-click="handleCategorySelect"
                 :is-loading="isLoadingCategories"
+                :is-analyzing="categoriesStore?.isAnalyzing"
+                :analysis-progress="categoriesStore?.analysisProgress"
                 loading-message="Loading..."
                 empty-message="No categories available"
                 show-search="true"
+                :sync-search-with-url="true"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
                 :show-header="true"

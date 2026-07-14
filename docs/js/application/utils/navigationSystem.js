@@ -444,6 +444,28 @@ export const NavigationRegistry = {
         // Parse the target path to get the clean path
         let pathInfo = this.parsePath(targetPath);
         
+        // Check if targetPath had explicit parameters (indicated by ? in the original path).
+        // This distinguishes between: "path with explicit params" vs "path with no params specified".
+        // When params are explicitly provided but then filtered to empty (e.g., searchTerm removed),
+        // we should NOT auto-preserve searchTerm.
+        const hadExplicitParams = targetPath.includes('?');
+        
+        // Special handling for inventory routes: preserve searchTerm from current path
+        // ONLY if no explicit parameters were provided to this navigation call
+        if (!hadExplicitParams && (!pathInfo.hasParameters || !pathInfo.parameters.searchTerm)) {
+            const currentPathInfo = this.parsePath(appContext.currentPath || '');
+            const isNavigatingToInventory = pathInfo.path.startsWith('inventory');
+            const isComingFromInventory = currentPathInfo.path.startsWith('inventory');
+            
+            // If navigating within inventory space and current path has searchTerm, preserve it
+            if (isNavigatingToInventory && isComingFromInventory && currentPathInfo.parameters.searchTerm) {
+                pathInfo.parameters.searchTerm = currentPathInfo.parameters.searchTerm;
+                pathInfo.hasParameters = true;
+                targetPath = this.buildPath(pathInfo.path, pathInfo.parameters);
+                pathInfo = this.parsePath(targetPath); // Re-parse with updated params
+            }
+        }
+        
         // Apply cached parameters if no explicit parameters provided
         if (!pathInfo.hasParameters) {
             const route = this.getRoute(pathInfo.path);

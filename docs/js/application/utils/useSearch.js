@@ -299,10 +299,45 @@ export function useSearch(options = {}) {
 
     /**
      * Handle search input blur event
+     * Defers URL sync to allow navigation to complete, then checks if still in same section
      */
     function handleBlur() {
         if (!syncWithUrl || _clearingSearch.value) return;
-        updateUrlParameter(searchValue.value);
+        
+        // Capture the current path at blur time
+        const pathAtBlur = appContext?.currentPath;
+        if (!pathAtBlur) return;
+        
+        // Extract top-level section from path (e.g., "/inventory/furniture" → "inventory")
+        const getTopLevelSection = (path) => {
+            const cleanPath = path.split('?')[0]; // Remove query params
+            const segments = cleanPath.split('/').filter(s => s.length > 0);
+            return segments[0] || '';
+        };
+        
+        const sectionAtBlur = getTopLevelSection(pathAtBlur);
+        
+        // Defer URL update asynchronously to allow navigation to complete
+        setTimeout(() => {
+            const currentPath = appContext?.currentPath;
+            if (!currentPath) return;
+            
+            const currentSection = getTopLevelSection(currentPath);
+            
+            // Only sync if we're still in the same top-level section
+            if (currentSection === sectionAtBlur && navigationRegistry) {
+                // Update parameters on the CURRENT path, not the original containerPath
+                const currentBasePath = currentPath.split('?')[0];
+                navigationRegistry.updatePathParametersSilently(
+                    currentBasePath,
+                    currentPath,
+                    {
+                        searchTerm: (searchValue.value && searchValue.value.trim()) ? searchValue.value : undefined
+                    }
+                );
+            }
+            // If we've navigated to a different section, skip the sync
+        }, 100); // Brief pause to ensure navigation completes
     }
 
     /**

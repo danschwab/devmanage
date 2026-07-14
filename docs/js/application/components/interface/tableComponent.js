@@ -4578,13 +4578,22 @@ export const TableComponent = {
                                     </div>
                                 </td>
                                 <td v-if="allowDetails && !forceDetails" class="details-cell">
-                                    <button 
-                                        @click="toggleRowDetails(idx)"
-                                        title="Toggle Details"
-                                        :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
+                                    <slot 
+                                        name="details-cell"
+                                        :row="row" 
+                                        :rowIndex="idx"
+                                        :isExpanded="isRowExpanded(idx)"
+                                        :hasSearchMatch="hasDetailsSearchMatch(row)"
+                                        :toggleDetails="() => toggleRowDetails(idx)"
                                     >
-                                        {{ isRowExpanded(idx) ? '🗙' : '☷' }}
-                                    </button>
+                                        <button 
+                                            @click="toggleRowDetails(idx)"
+                                            title="Toggle Details"
+                                            :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
+                                        >
+                                            {{ isRowExpanded(idx) ? '🗙' : '☷' }}
+                                        </button>
+                                    </slot>
                                 </td>
                             </tr>
                             

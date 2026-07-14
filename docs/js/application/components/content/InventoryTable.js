@@ -811,7 +811,7 @@ export const InventoryTableComponent = {
             return [
                 {
                     key: 'lock',
-                    color: 'yellow',
+                    color: '',
                     message: this.lockedBySelf
                         ? 'You have this table open for editing on another device.'
                         : `Locked for edit by: ${this.lockOwnerDisplay}`,
@@ -1149,9 +1149,15 @@ export const InventoryTableComponent = {
         },
         navigateToItemPage(row) {
             if (!row.itemNumber || !this.tabTitle) return;
-            const path = `inventory/${this.tabTitle.toLowerCase()}/${row.itemNumber}`;
+            const basePath = `inventory/${this.tabTitle.toLowerCase()}/${row.itemNumber}`;
+            // Preserve searchTerm from current path
+            const currentParams = NavigationRegistry.getParametersForContainer(
+                this.containerPath,
+                this.appContext?.currentPath
+            );
+            const newPath = NavigationRegistry.buildPath(basePath, { searchTerm: currentParams.searchTerm });
             if (this.appContext?.navigateToPath) {
-                this.appContext.navigateToPath(path);
+                this.appContext.navigateToPath(newPath);
             }
         }
     },

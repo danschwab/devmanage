@@ -1329,11 +1329,14 @@ td:hover:has(.table-cell-container > .table-edit-textarea), td:hover:has(.table-
     outline: solid 2px var(--color-blue-bg-hover);
 } */
 
-/* Search highlighting for editable table cells */
+/* Search highlighting */
 .search-match:not(:has(.search-match)):not(:has(button)):not(:has(input)),
-.search-match button,
 .search-match .table-edit-textarea,
-.search-match input,
+.search-match input {
+    background-color: var(--color-yellow-bg-transparent) !important;
+}
+.search-match button,
+button.search-match,
 .search-match .card {
     background-color: var(--color-yellow-bg-transparent) !important;
     color: var(--color-text) !important;
@@ -1429,11 +1432,11 @@ button.search-highlight {
     position: absolute;
     content: "";
     inset: 0;
-    background: linear-gradient(90deg,
+    /* background: linear-gradient(90deg,
             transparent,
             var(--color-gray),
             transparent);
-    animation: loading-bar-slide 2s infinite linear;
+    animation: loading-bar-slide 2s infinite linear; */
 }
 
 .loading-bar-fill.progress-determinate {

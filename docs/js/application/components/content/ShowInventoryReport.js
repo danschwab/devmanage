@@ -356,6 +356,7 @@ export const ShowInventoryReport = {
             </div>
 
             <TableComponent
+                theme="blue"
                 :data="tableData"
                 :columns="tableColumns"
                 :hide-columns="['tabName']"

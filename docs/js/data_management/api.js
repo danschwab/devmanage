@@ -425,6 +425,75 @@ class Requests_uncached {
     }
     
     /**
+     * Get hidden search data for inventory category cards.
+     * Extracts item numbers, descriptions, and notes for searchable card content.
+     * This is marked as low-priority, optional analysis that runs asynchronously.
+     * 
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string|Object} tabNameOrCategory - The inventory category tab name or category object
+     * @returns {Promise<Array<Object>>} Array of {fieldName, value} objects for searchable fields
+     */
+    static async getInventoryHiddenSearchData(deps, tabNameOrCategory) {
+        try {
+            // Handle both string (direct tab name) and object (category with title property) inputs
+            const tabName = typeof tabNameOrCategory === 'string' 
+                ? tabNameOrCategory 
+                : tabNameOrCategory?.title;
+            
+            if (!tabName) {
+                console.warn('[Requests.getInventoryHiddenSearchData] Missing tab name');
+                return [];
+            }
+            
+            // Fetch inventory data for this category
+            const itemData = await deps.call(InventoryUtils.getInventoryTabData, tabName, undefined, undefined, undefined);
+            
+            if (!Array.isArray(itemData) || itemData.length === 0) {
+                return [];
+            }
+            
+            // Extract searchable fields from all items
+            const hiddenFields = [];
+            const seenValues = new Set(); // Deduplicate identical values
+            
+            itemData.forEach(item => {
+                // Add item number if present and unique
+                if (item.itemNumber && !seenValues.has(`itemNumber:${item.itemNumber}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Item#', 
+                        value: item.itemNumber 
+                    });
+                    seenValues.add(`itemNumber:${item.itemNumber}`);
+                }
+                
+                // Add description if present and unique
+                if (item.description && !seenValues.has(`description:${item.description}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Description', 
+                        value: item.description 
+                    });
+                    seenValues.add(`description:${item.description}`);
+                }
+                
+                // Add notes if present and unique
+                if (item.notes && !seenValues.has(`notes:${item.notes}`)) {
+                    hiddenFields.push({ 
+                        fieldName: 'Notes', 
+                        value: item.notes 
+                    });
+                    seenValues.add(`notes:${item.notes}`);
+                }
+            });
+            
+            return hiddenFields;
+        } catch (error) {
+            // Silently fail - this is low priority and optional
+            console.warn(`[Requests.getInventoryHiddenSearchData] Failed for ${tabName}:`, error);
+            return [];
+        }
+    }
+    
+    /**
      * Get mapped inventory tab data (with default mapping and optional filters).
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} tabOrItemName - Tab name or item name to resolve tab

@@ -477,6 +477,7 @@ export const InventoryItemReport = {
 
             <CalendarComponent
                 v-if="isCalendarView"
+                theme="blue"
                 :data="calendarData"
                 :columns="calendarColumns"
                 event-start-column="calendarStart"
@@ -520,6 +521,7 @@ export const InventoryItemReport = {
 
             <TableComponent
                 v-else
+                theme="blue"
                 :data="tableData"
                 :columns="tableColumns"
                 :hide-columns="['tabName']"

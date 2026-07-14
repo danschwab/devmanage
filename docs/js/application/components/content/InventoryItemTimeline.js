@@ -1,4 +1,5 @@
 import { html, Requests, NavigationRegistry, TableComponent, ScheduleFilterSelect, getReactiveStore, toISODateString, todayISOString, offsetToISO, CalendarComponent, ItemImageComponent, getAutoColorClass } from '../../index.js';
+import { useSearch } from '../../utils/useSearch.js';
 
 /**
  * Lightweight item timeline component.
@@ -19,6 +20,21 @@ export const InventoryItemTimeline = {
         itemId: { type: String, default: null },
         startDate: { type: String, default: null },
         endDate: { type: String, default: null }
+    },
+    setup(props) {
+        // Initialize search composable
+        const search = useSearch({
+            formatValue: null,
+            syncWithUrl: true,
+            navigationRegistry: NavigationRegistry,
+            containerPath: props.containerPath,
+            appContext: Vue.inject('appContext')
+        });
+
+        // Return search properties and methods to be available in component
+        return {
+            search
+        };
     },
     data() {
         return {
@@ -163,10 +179,20 @@ export const InventoryItemTimeline = {
             };
             const title = [row.event, row.note].filter(Boolean).join(' — ') || 'Event Details';
             this.$modal.custom(DetailModalComponent, { row, columns: this.columns }, title);
+        },
+        hasSearchMatch(value) {
+            if (!this.search.hasActiveSearch.value || !value) return false;
+            const stringValue = String(value).toLowerCase();
+            return this.search.searchWords.value.some(word => 
+                stringValue.includes(word.toLowerCase())
+            );
         }
     },
     mounted() {
         this.resolveItemIdFromPath();
+        // Initialize search from URL and setup watcher
+        this.search.initializeFromUrl();
+        this.search.setupUrlWatcher();
     },
     template: html`
         <!-- Loading state while resolving identifier -->
@@ -192,12 +218,12 @@ export const InventoryItemTimeline = {
                     <div class="details-grid" style="flex: 1; grid-template-columns: repeat(2, 1fr); align-content: start;">
                         <div class="detail-item">
                             <label>Item#:</label>
-                            <span>{{ resolvedItemId }}</span>
+                            <span :class="{ 'search-match': hasSearchMatch(resolvedItemId) }">{{ resolvedItemId }}</span>
                         </div>
                         <template v-if="itemInfoEntries">
                             <div v-for="[key, value] in itemInfoEntries" :key="key" class="detail-item">
                                 <label>{{ key.charAt(0).toUpperCase() + key.slice(1) }}:</label>
-                                <span>{{ value != null && value !== '' ? value : '—' }}</span>
+                                <span :class="{ 'search-match': hasSearchMatch(value) }">{{ value != null && value !== '' ? value : '—' }}</span>
                             </div>
                         </template>
                         <template v-else>
@@ -208,6 +234,7 @@ export const InventoryItemTimeline = {
             </div>
             <CalendarComponent
                 v-if="isCalendarView"
+                theme="purple"
                 :data="calendarData"
                 :columns="columns"
                 event-start-column="calendarStart"
@@ -235,10 +262,12 @@ export const InventoryItemTimeline = {
             </CalendarComponent>
             <TableComponent
                 v-else
+                theme="purple"
                 :data="timelineStore?.data ?? []"
                 :columns="columns"
                 :readonly="true"
                 :show-search="false"
+                :hide-rows-on-search="false"
                 :show-refresh="false"
                 :is-loading="timelineStore?.isLoading ?? false"
                 :loading-message="timelineStore?.loadingMessage || 'Loading timeline...'"
