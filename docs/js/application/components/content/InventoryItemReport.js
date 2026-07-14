@@ -67,7 +67,7 @@ export const InventoryItemReport = {
         },
 
         tableData() {
-            return (this.reportStore?.data || [])
+            const rawData = (this.reportStore?.data || [])
                 .map(row => ({
                     ...row,
                     overlappingShows: row.shows ? Object.keys(row.shows).filter(k => (row.shows[k] || 0) > 0) : []
@@ -76,6 +76,71 @@ export const InventoryItemReport = {
                     if (row.minQty === null || row.minQty === undefined) return true;
                     return row.minQty < this.qtyFilter;
                 });
+
+            // Group items by itemId to find items with multiple shortage periods
+            const itemGroups = new Map();
+            for (const row of rawData) {
+                if (!itemGroups.has(row.itemId)) {
+                    itemGroups.set(row.itemId, []);
+                }
+                itemGroups.get(row.itemId).push(row);
+            }
+
+            const result = [];
+            for (const [itemId, rows] of itemGroups) {
+                if (rows.length === 1) {
+                    // Single shortage period - no grouping needed
+                    result.push(rows[0]);
+                } else {
+                    // Multiple shortage periods - create group master and members
+                    const groupId = `shortage-${itemId}-${Date.now()}`;
+                    
+                    // Calculate summary values for the group master
+                    const allDates = rows
+                        .flatMap(r => [r.startDate, r.endDate].filter(d => d))
+                        .sort();
+                    const overallStart = allDates[0] || null;
+                    const overallEnd = allDates[allDates.length - 1] || null;
+                    const lowestMinQty = Math.min(...rows.map(r => r.minQty ?? Infinity));
+                    
+                    // Combine all shows from all periods (union of all show keys)
+                    const combinedShows = {};
+                    rows.forEach(r => {
+                        if (r.shows) {
+                            Object.entries(r.shows).forEach(([showId, qty]) => {
+                                if (qty > 0) {
+                                    combinedShows[showId] = qty;
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Calculate overlapping shows from combined shows
+                    const allOverlappingShows = Object.keys(combinedShows);
+
+                    // Create group master row
+                    const masterRow = {
+                        ...rows[0], // Use first row as template
+                        startDate: overallStart,
+                        endDate: overallEnd,
+                        minQty: lowestMinQty === Infinity ? null : lowestMinQty,
+                        shows: combinedShows,
+                        overlappingShows: allOverlappingShows,
+                        MetaData: JSON.stringify({ grouping: { groupId, isGroupMaster: true } })
+                    };
+                    result.push(masterRow);
+
+                    // Add original rows as group members
+                    rows.forEach(row => {
+                        result.push({
+                            ...row,
+                            MetaData: JSON.stringify({ grouping: { groupId, isGroupMaster: false } })
+                        });
+                    });
+                }
+            }
+
+            return result;
         },
 
         loadingMessage() {
@@ -96,7 +161,16 @@ export const InventoryItemReport = {
 
         calendarData() {
             return this.tableData
-                .filter(row => row.startDate)
+                .filter(row => {
+                    if (!row.startDate) return false;
+                    // In calendar view, show group members but not group masters
+                    // to display individual shortage periods on the timeline
+                    try {
+                        const meta = JSON.parse(row.MetaData || '{}');
+                        if (meta.grouping?.isGroupMaster) return false;
+                    } catch (e) {}
+                    return true;
+                })
                 .map(row => ({
                     ...row,
                     calendarStart: row.startDate,
@@ -449,6 +523,7 @@ export const InventoryItemReport = {
                 :data="tableData"
                 :columns="tableColumns"
                 :hide-columns="['tabName']"
+                :hide-group-members="false"
                 :show-search="true"
                 :sync-search-with-url="true"
                 :container-path="containerPath || 'reports/item-shortages'"
