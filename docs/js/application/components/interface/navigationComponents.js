@@ -247,7 +247,8 @@ export const PrimaryNavComponent = {
                 </span>
                 
                 <button class="nav-toggle button-symbol white" @click="$emit('toggle-menu')">
-                    {{ isMenuOpen ? '🗙' : '≡' }}
+                    <span v-if="isMenuOpen" class="material-symbols-outlined">close</span>    
+                    <slot v-else>☰</slot>
                 </button>
             </nav>
         </header>

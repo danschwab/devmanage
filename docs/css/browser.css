@@ -34,7 +34,7 @@ div#app-content::-webkit-scrollbar-thumb {
 /* Specific CSS rules for Firefox go here */
 @-moz-document url-prefix() {
     /* firefox doesn't center text for some odd reason. Looks bad in symbol buttons. */
-    .button-symbol {
+    /* .button-symbol {
         padding-bottom: 1px;
-    }
+    } */
 }

@@ -478,9 +478,9 @@ export const CardsComponent = {
                             v-if="search.searchValue.value"
                             @mousedown="search.clearSearch"
                             class="column-button"
-                            title="Clear search"
+                            title="Clear filter"
                         >
-                            🗙
+                            <span class="material-symbols-outlined">backspace</span>
                         </button>
                     </div>
                     <select v-if="showSort && sortableColumns.length > 0" v-model="selectedSortKey" @change="handleSortSelectionChange" class="search-input" title="Sort cards">
@@ -561,15 +561,20 @@ export const CardsComponent = {
                     </div>
                 </div>
                 
-                <button
-                    v-if="search.hasActiveSearch.value"
-                    @click="search.clearSearch"
-                    style="align-self: flex-start;"
-                    title="Clear filter"
-                    class="yellow"
-                >
-                    🗙 Clear filter
-                </button>
+                <!--show a message "showing x of y cards-->
+                <div v-if="search.hasActiveSearch.value && visibleCards.length !== items.length" class="card" style="align-self: start; height: auto; gap:var(--padding-md);">
+                    <p>
+                        Showing {{ visibleCards.length }} of {{ items.length }} cards.
+                    </p>
+                    <button
+                        @click="search.clearSearch"
+                        title="Clear filter"
+                        class="yellow"
+                    >
+                        Show all
+                    </button>
+                </div>
+
             </div>
 
             

@@ -914,8 +914,8 @@ tr:hover + .column-button.between-rows, .column-button.between-rows:has(+ tr:hov
 .modal-header > .column-button {
     opacity: 1;
     pointer-events: auto;
-    justify-self: flex-end;
     position: unset;
+    flex-grow: 0;
 }
 
 
@@ -1817,7 +1817,7 @@ button.search-highlight {
         box-sizing: border-box;
     }
     nav:has(#navbar a) .nav-toggle {
-        display: block;
+        display: grid;
     }
     
     /* Hide navigation items by default on mobile */

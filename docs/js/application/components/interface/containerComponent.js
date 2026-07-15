@@ -258,7 +258,7 @@ export const ContainerComponent = {
                     <!-- <button v-if="!cardStyle" 
                             class="button-symbol white" 
                             @click="closeContainer" 
-                            title="Close">🗙</button> -->
+                            title="Close"><span class="material-symbols-outlined">close</span></button> -->
                 </div>
             </div>
             

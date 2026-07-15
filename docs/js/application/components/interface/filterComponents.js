@@ -901,7 +901,7 @@ export const ScheduleAdvancedFilter = {
                         class="button-symbol white"
                         title="Remove this filter"
                     >
-                        🗙
+                        <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
@@ -984,7 +984,7 @@ export const ScheduleAdvancedFilter = {
                         class="button-symbol white"
                         title="Remove this filter"
                     >
-                        🗙
+                        <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
             </transition-group>

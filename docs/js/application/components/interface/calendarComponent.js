@@ -338,8 +338,8 @@ export const CalendarComponent = {
                                 v-if="search.searchValue.value"
                                 @mousedown="search.clearSearch"
                                 class="column-button"
-                                title="Clear search"
-                            >🗙</button>
+                                title="Clear filter"
+                            ><span class="material-symbols-outlined">backspace</span></button>
                         </div>
                         <button
                             v-if="showRefresh"

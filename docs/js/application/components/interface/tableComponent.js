@@ -4251,7 +4251,7 @@ export const TableComponent = {
             <transition name="fade">
                 <div v-if="shouldShowSelectionBubble" :selectedCount="selectedRowCount" class="selection-action-bubble" :style="selectionBubbleStyle">
                     <template v-if="isInClipboardMode">
-                        <button @click="cancelClipboard" class="button-symbol white" title="Cancel (Esc)">🗙</button>
+                        <button @click="cancelClipboard" class="button-symbol white" title="Cancel (Esc)"><span class="material-symbols-outlined">close</span></button>
                     </template>
                     <template v-else>
                         <button v-if="newRow && hasConsecutiveSelection" @click="handleAddRowAbove" class="button-symbol white" title="Add Row Above">+</button>
@@ -4305,9 +4305,9 @@ export const TableComponent = {
                                 v-if="search.searchValue.value"
                                 @mousedown="search.clearSearch"
                                 class="column-button"
-                                title="Clear search"
+                                title="Clear filter"
                             >
-                                🗙
+                                <span class="material-symbols-outlined">backspace</span>
                             </button>
                             <button
                                 v-if="showSearch && hideRowsOnSearch"
@@ -4415,7 +4415,7 @@ export const TableComponent = {
                                         class="column-button"
                                         title="Hide this column"
                                     >
-                                        🗙
+                                        <span class="material-symbols-outlined">close</span>
                                     </button>
                                 </div>
                             </th>
@@ -4463,7 +4463,7 @@ export const TableComponent = {
                                         class="column-button"
                                         title="Hide this column"
                                     >
-                                        🗙
+                                        <span class="material-symbols-outlined">close</span>
                                     </button>
                                 </div>
                             </th>
@@ -4591,7 +4591,8 @@ export const TableComponent = {
                                             title="Toggle Details"
                                             :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                         >
-                                            {{ isRowExpanded(idx) ? '🗙' : '☷' }}
+                                            <span v-if="isRowExpanded(idx)" class="material-symbols-outlined">close</span>    
+                                            <slot v-else>☷</slot>
                                         </button>
                                     </slot>
                                 </td>
@@ -4691,11 +4692,11 @@ export const TableComponent = {
                 <button
                     v-if="activeSearchValue && hideRowsOnSearchLocal"
                     @click="search.clearSearch"
-                    class="card"
+                    class="card yellow"
                     style="width: auto;"
                     title="Clear filter"
                 >
-                    🗙 Clear filter
+                    Show all
                 </button>
                 
                 

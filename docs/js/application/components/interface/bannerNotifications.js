@@ -259,7 +259,7 @@ export const BannerNotifications = {
                                 @click="dismiss(banner.key)"
                                 title="Dismiss"
                                 :class="['button-symbol', banner.color]"
-                            >🗙</button>
+                            ><span class="material-symbols-outlined">close</span></button>
                         </div>
                         <slot v-else>
                             <button
@@ -272,7 +272,7 @@ export const BannerNotifications = {
                                 @click="dismiss(banner.key)"
                                 title="Dismiss"
                                 :class="['button-symbol', banner.color]"
-                            >🗙</button>
+                            ><span class="material-symbols-outlined">close</span></button>
                         </slot>
                     </div>
                 </template>
