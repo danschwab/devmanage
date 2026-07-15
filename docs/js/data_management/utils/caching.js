@@ -570,6 +570,57 @@ export function clearCache() {
 }
 export { CacheInvalidationBus };
 
+/**
+ * Event bus for function progress notifications.
+ * Allows long-running API functions to emit progress updates to subscribers
+ * (e.g., reactive stores showing a loading message) using the same topic
+ * convention as CacheInvalidationBus: 'namespace:methodName'.
+ *
+ * Usage in an API function:
+ *   ProgressBus.emit('api:myMethod', { current: 5, total: 120, message: 'Processing 5 of 120...' });
+ *
+ * The reactive store's load() subscribes automatically for the function it calls.
+ */
+class ProgressBus {
+    static listeners = new Map();
+
+    /**
+     * Subscribe to progress events for a topic
+     * @param {string} topic - 'namespace:methodName'
+     * @param {Function} callback - ({ current, total, message }) => void
+     */
+    static on(topic, callback) {
+        if (!ProgressBus.listeners.has(topic)) {
+            ProgressBus.listeners.set(topic, []);
+        }
+        ProgressBus.listeners.get(topic).push(callback);
+    }
+
+    /**
+     * Unsubscribe from a topic
+     * @param {string} topic
+     * @param {Function} callback
+     */
+    static off(topic, callback) {
+        const callbacks = ProgressBus.listeners.get(topic);
+        if (!callbacks) return;
+        const idx = callbacks.indexOf(callback);
+        if (idx !== -1) callbacks.splice(idx, 1);
+    }
+
+    /**
+     * Emit a progress event
+     * @param {string} topic - 'namespace:methodName'
+     * @param {{ current: number, total: number, message: string }} data
+     */
+    static emit(topic, data) {
+        const callbacks = ProgressBus.listeners.get(topic) || [];
+        callbacks.forEach(cb => cb(data));
+    }
+}
+
+export { ProgressBus };
+
 // Expired cache cleanup with CPU-aware batching
 //
 // Uses requestIdleCallback to run cleanup during browser idle time, preventing

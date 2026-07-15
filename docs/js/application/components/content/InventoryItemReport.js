@@ -144,7 +144,15 @@ export const InventoryItemReport = {
         },
 
         loadingMessage() {
+            if (this.reportStore?.isAnalyzing) return this.reportStore.analysisMessage || 'Analyzing...';
             return this.reportStore?.loadingMessage || 'Loading...';
+        },
+
+        loadingProgress() {
+            if (!this.reportStore) return -1;
+            if (this.isLoading) return this.reportStore.loadingProgress ?? -1;
+            if (this.isAnalyzing) return this.reportStore.analysisProgress;
+            return -1;
         },
 
         isCalendarView() {
@@ -486,7 +494,7 @@ export const InventoryItemReport = {
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
                 :loading-message="loadingMessage"
-                :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
+                :loading-progress="loadingProgress"
                 :show-refresh="true"
                 :show-search="true"
                 :sync-search-with-url="true"
@@ -538,7 +546,7 @@ export const InventoryItemReport = {
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
                 :loading-message="loadingMessage"
-                :loading-progress="reportStore && isAnalyzing ? reportStore.analysisProgress : -1"
+                :loading-progress="loadingProgress"
                 :empty-message="emptyMessage"
                 @refresh="handleRefresh"
             >

@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName, mapWithConcurrency } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName, mapWithConcurrency, ProgressBus } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -516,12 +516,26 @@ class Requests_uncached {
         const tabs = await deps.call(Requests.getAvailableTabs, 'INVENTORY');
         const inventoryTabs = tabs;
         
+        ProgressBus.emit('api:getAllInventoryData', {
+            current: 0,
+            total: inventoryTabs.length,
+            message: `Loading inventory tabs...`
+        });
+        
         const allData = [];
         
         // Load data from each tab
+        let tabIdx = 0;
         for (const tab of inventoryTabs) {
+            tabIdx++;
             try {
                 const tabData = await deps.call(InventoryUtils.getInventoryTabData, tab.title, undefined, undefined, referenceDate);
+                
+                ProgressBus.emit('api:getAllInventoryData', {
+                    current: tabIdx,
+                    total: inventoryTabs.length,
+                    message: `Loading inventory... ${tabIdx} of ${inventoryTabs.length} tabs`
+                });
                 
                 // Add tab information to each item
                 if (Array.isArray(tabData)) {
@@ -1138,6 +1152,14 @@ class Requests_uncached {
                     shipDate: shipDate || null,
                     returnDate: returnDate || shipDate || null
                 };
+            },
+            8,
+            ({ processed, total }) => {
+                ProgressBus.emit('api:getMultipleShowsItemsSummary', {
+                    current: processed,
+                    total,
+                    message: `Step 1/3: Getting schedule data...`
+                });
             }
         )).filter(Boolean);
 
@@ -1146,7 +1168,15 @@ class Requests_uncached {
         // Extract items from the identified shows
         // Convert string filter to array as extractItemsFromMultipleShows expects an array
         const categoryFilterArray = ctgFilter ? [ctgFilter] : undefined;
-        const rawItemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+        // Relay sub-function progress onto this function's topic so the loading indicator updates
+        const _onExtractProgress = (data) => ProgressBus.emit('api:getMultipleShowsItemsSummary', data);
+        ProgressBus.on('packlist:extractItemsFromMultipleShows', _onExtractProgress);
+        let rawItemRows;
+        try {
+            rawItemRows = await deps.call(PackListUtils.extractItemsFromMultipleShows, projectIdentifiers, categoryFilterArray, includeEmptyShows);
+        } finally {
+            ProgressBus.off('packlist:extractItemsFromMultipleShows', _onExtractProgress);
+        }
 
         // Filter out items whose prefix has suppressAnalysis set
         const indexData = await deps.call(InventoryUtils.getInventoryIndex);
@@ -1217,6 +1247,11 @@ class Requests_uncached {
         for (const row of itemRows) {
             if (_shortageRowIdx++ > 0 && _shortageRowIdx % 5 === 0) {
                 await new Promise(r => setTimeout(r, 0));
+                ProgressBus.emit('api:getMultipleShowsItemsSummary', {
+                    current: _shortageRowIdx,
+                    total: itemRows.length,
+                    message: `Step 3/3: Building report...`
+                });
             }
             const timeline = await deps.call(InventoryUtils.getItemTimeline, row.itemId, reportStart, reportEnd);
 

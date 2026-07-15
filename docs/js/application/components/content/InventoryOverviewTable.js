@@ -92,6 +92,13 @@ export const InventoryOverviewTableComponent = {
         },
         loadingMessage() {
             return this.isAnalyzing ? this.inventoryStore?.analysisMessage : this.inventoryStore?.loadingMessage || 'Loading all inventory data...';
+        },
+
+        loadingProgress() {
+            if (!this.inventoryStore) return -1;
+            if (this.isLoading) return this.inventoryStore.loadingProgress ?? -1;
+            if (this.isAnalyzing) return this.inventoryStore.analysisProgress;
+            return -1;
         }
     },
     async mounted() {
@@ -207,6 +214,7 @@ export const InventoryOverviewTableComponent = {
                 :allowDetails="true"
                 emptyMessage="No inventory items found across all categories"
                 :loading-message="loadingMessage"
+                :loading-progress="loadingProgress"
                 @refresh="handleRefresh"
                 @cell-edit="handleCellEdit"
                 @on-save="handleSave"

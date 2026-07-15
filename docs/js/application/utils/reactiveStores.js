@@ -1,4 +1,4 @@
-import { CacheInvalidationBus, Requests, authState, Auth } from '../index.js';
+import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
 
 // Re-export Priority for component use
@@ -352,6 +352,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         originalData: isReadOnly ? [] : [],
         isLoading: false,
         loadingMessage: '',
+        loadingProgress: -1, // 0-100 when a long-running load emits progress; -1 = indeterminate
         error: null,
         isAnalyzing: false,
         isReloadingMainData: false, // Lock to prevent analysis during main data reload
@@ -422,6 +423,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
         setLoading(isLoading, message = '') {
             this.isLoading = isLoading;
             this.loadingMessage = message;
+            if (!isLoading) this.loadingProgress = -1;
         },
         reset() {
             // Clear arrays in place to preserve references for undo system
@@ -429,6 +431,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             this.originalData.splice(0, this.originalData.length);
             this.isLoading = false;
             this.loadingMessage = '';
+            this.loadingProgress = -1;
             this.error = null;
             this.isAnalyzing = false;
             this.analysisProgress = -1;
@@ -444,10 +447,26 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 return;
             }
             this.setLoading(true, message);
+            this.loadingProgress = -1;
             this.isReloadingMainData = true; // Lock to prevent analysis during reload
             this.externalConflict = false;
             this.lockConflictOwner = null;
             this.setError(null);
+
+            // Subscribe to progress events emitted by the API function for this load
+            const progressTopic = apiCall._namespace && apiCall._methodName
+                ? `${apiCall._namespace}:${apiCall._methodName}`
+                : null;
+            const onProgress = progressTopic ? ({ current, total, message: msg }) => {
+                if (msg) this.loadingMessage = msg;
+                if (total > 0 && current !== undefined) {
+                    this.loadingProgress = Math.round((current / total) * 100);
+                }
+            } : null;
+            if (progressTopic && onProgress) {
+                ProgressBus.on(progressTopic, onProgress);
+            }
+
             try {
                 // Use priority queue for load operations (high priority)
                 const result = await PriorityQueue.enqueue(
@@ -483,6 +502,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 if (!isReadOnly) this.setOriginalData([]);
                 this.setData([]);
             } finally {
+                if (progressTopic && onProgress) {
+                    ProgressBus.off(progressTopic, onProgress);
+                }
                 this.setLoading(false, '');
                 // Ensure lock is released even if analysis fails
                 this.isReloadingMainData = false;

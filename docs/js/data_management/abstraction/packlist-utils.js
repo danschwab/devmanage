@@ -1,4 +1,4 @@
-import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache, normalizeHeaderName } from '../index.js';
+import { Database, InventoryUtils, ProductionUtils, wrapMethods, GetParagraphMatchRating, todayISOString, parseDate, toISODateString, EditHistoryUtils, ApplicationUtils, invalidateCache, normalizeHeaderName, ProgressBus } from '../index.js';
 
 /** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
 function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -785,7 +785,17 @@ class packListUtils_uncached {
         const processedShows = [];
         
         // Extract items from each show
+        let _showIdx = 0;
         for (const projectId of projectIdentifiers) {
+            _showIdx++;
+            // Emit progress every 5 shows and on the last one
+            if (_showIdx % 5 === 0 || _showIdx === projectIdentifiers.length) {
+                ProgressBus.emit('packlist:extractItemsFromMultipleShows', {
+                    current: _showIdx,
+                    total: projectIdentifiers.length,
+                    message: `Loading pack list items from multiple shows: ${_showIdx} of ${projectIdentifiers.length}...`
+                });
+            }
             try {
                 const itemsMap = await deps.call(PackListUtils.extractAllItemsForShow, projectId, ctgFilter);
                 
