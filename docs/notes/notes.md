@@ -3,7 +3,7 @@
 !!! rebuild name matching logic from scratch
 !!! simplify controls on reports page
 !! Ben is not seeing the icons for category fallbacks... Probably just eliminate the fallback or do it manually in the table.
-! "views" for tables and reports allowing colum customization
+! "views" for tables and reports allowing column customization
 
 for some reason updating things didnt bump my inventory
 somehow set reports stores to NOT autoreload unless active, instead they should get removed.
