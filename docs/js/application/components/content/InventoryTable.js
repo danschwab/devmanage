@@ -420,53 +420,49 @@ const ImageUploadComponent = {
 
 // Mini global queue that throttles how many images can be decoding/rendering at once.
 // Chrome and Edge block the main thread when decoding multiple image blobs simultaneously.
-// Centralized IntersectionObserver watches all image elements and batches visibility changes.
-// Only MAX_CONCURRENT images are allowed to become visible (and start decoding) at a time.
+// IntersectionObserver can fire many callbacks at once during a scroll — this queue
+// ensures only MAX_CONCURRENT images actually become visible (and start decoding) at a time.
 const ImageRenderQueue = {
-    pending: [],
+    pending: [],        // Array of { fn, el } objects
     active: 0,
     MAX_CONCURRENT: 3,
-    observer: null,
-    managed: new WeakMap(), // el → {component, fn}
+    observer: null,     // Centralized IntersectionObserver
+    managed: new WeakMap(), // el → fn mapping
 
-    // Initialize the shared IntersectionObserver (lazy — created on first use)
-    _initObserver() {
-        if (this.observer) return;
-        this.observer = new IntersectionObserver(
-            (entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const info = this.managed.get(entry.target);
-                        if (info) {
-                            this.enqueue(entry.target, info.fn);
-                        }
-                    }
-                });
-            },
-            {
-                rootMargin: '100px',
-                threshold: 0
-            }
-        );
-    },
-
-    // Attach a component's container element to the shared observer
     attachComponent(el, fn) {
-        this._initObserver();
-        this.managed.set(el, { fn });
+        if (!this.observer) {
+            this.observer = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const managedFn = this.managed.get(entry.target);
+                            if (managedFn) {
+                                this.enqueue(managedFn, entry.target);
+                            }
+                        }
+                    });
+                },
+                {
+                    rootMargin: '100px',
+                    threshold: 0
+                }
+            );
+        }
+        this.managed.set(el, fn);
         this.observer.observe(el);
     },
 
-    // Detach a component's container element
     detachComponent(el) {
-        this.managed.delete(el);
         if (this.observer) {
             this.observer.unobserve(el);
         }
+        this.managed.delete(el);
+        // Remove from pending queue if present
+        this.pending = this.pending.filter(item => item.el !== el);
     },
 
-    enqueue(el, fn) {
-        this.pending.push({ el, fn });
+    enqueue(fn, el) {
+        this.pending.push({ fn, el });
         this._flush();
     },
 
@@ -481,23 +477,20 @@ const ImageRenderQueue = {
     },
 
     _flush() {
+        // Sort pending by y-position for natural top-to-bottom loading
+        if (this.pending.length > 1) {
+            this.pending.sort((a, b) => {
+                const rectA = a.el?.getBoundingClientRect();
+                const rectB = b.el?.getBoundingClientRect();
+                if (!rectA || !rectB) return 0;
+                return rectA.top - rectB.top;
+            });
+        }
+        
         while (this.active < this.MAX_CONCURRENT && this.pending.length > 0) {
             this.active++;
-            
-            // Find the topmost element by y-position for cleaner top-to-bottom rendering
-            let minIndex = 0;
-            let minY = this.pending[0].el.getBoundingClientRect().top;
-            
-            for (let i = 1; i < this.pending.length; i++) {
-                const y = this.pending[i].el.getBoundingClientRect().top;
-                if (y < minY) {
-                    minY = y;
-                    minIndex = i;
-                }
-            }
-            
-            const { fn } = this.pending.splice(minIndex, 1)[0];
-            fn();
+            const item = this.pending.shift();
+            item.fn();
         }
     }
 };
@@ -626,11 +619,9 @@ export const ItemImageComponent = {
     mounted() {
         this.thumbnailStore = getThumbnailStore();
         
-        // Register with the centralized ImageRenderQueue's observer.
-        // The queue will call this callback when this component scrolls into view.
-        // This avoids creating 100+ individual IntersectionObservers — just one shared one.
-        const fn = () => {
-            this._queueFn = null;
+        // Define the callback that will be invoked when the queue processes this component.
+        // The centralized observer handles intersection detection and enqueueing.
+        this._queueFn = () => {
             this._holdsSlot = true;
             this.isVisible = true;
             // If no image URL will render (no record yet), release the slot
@@ -641,10 +632,10 @@ export const ItemImageComponent = {
                 }
             });
         };
-        this._queueFn = fn;
         
+        // Attach to centralized observer
         if (this.$el) {
-            ImageRenderQueue.attachComponent(this.$el, fn);
+            ImageRenderQueue.attachComponent(this.$el, this._queueFn);
         }
     },
     watch: {
@@ -652,7 +643,6 @@ export const ItemImageComponent = {
             // Cancel any pending queue entry and release any held slot
             if (this._queueFn) {
                 ImageRenderQueue.cancel(this._queueFn);
-                this._queueFn = null;
             }
             this._releaseSlot();
             
@@ -660,9 +650,10 @@ export const ItemImageComponent = {
             this.cachedPrefixUrl = null;
             this.isVisible = false;
             
-            // Re-observe for lazy loading
-            if (this.observer && this.$el) {
-                this.observer.observe(this.$el);
+            // Detach and reattach to re-observe for lazy loading
+            if (this.$el) {
+                ImageRenderQueue.detachComponent(this.$el);
+                ImageRenderQueue.attachComponent(this.$el, this._queueFn);
             }
         },
         record(newRecord, oldRecord) {
@@ -737,17 +728,13 @@ export const ItemImageComponent = {
         }
     },
     beforeUnmount() {
-        // Cancel any pending queue entry and release any held slot
-        if (this._queueFn) {
-            ImageRenderQueue.cancel(this._queueFn);
-            this._queueFn = null;
-        }
-        this._releaseSlot();
-        
         // Detach from centralized observer
         if (this.$el) {
             ImageRenderQueue.detachComponent(this.$el);
         }
+        
+        // Release any held slot
+        this._releaseSlot();
         
         this.clearLocalImageUrl();
     },
