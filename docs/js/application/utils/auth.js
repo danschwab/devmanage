@@ -313,6 +313,10 @@ export class Auth {
                                 // queries re-run against today's date
                                 clearCache();
                                 reloadErrorStores();
+                                
+                                // Restart the cache timestamp poller if it was stopped due to auth expiry
+                                restartCacheTimestampPoller();
+                                
                                 //console.log(`[Auth] Silent refresh succeeded for ${context}`);
                                 resolve(true);
                                 return;
@@ -473,6 +477,8 @@ export class Auth {
                 if (success) {
                     console.log('[Auth] Proactive token renewal succeeded');
                     this._startProactiveRefreshTimer();
+                    // Restart the cache timestamp poller if it was stopped due to auth expiry
+                    restartCacheTimestampPoller();
                 }
                 // If failed, natural expiry flow (checkAuthWithPrompt) handles re-login
             });
