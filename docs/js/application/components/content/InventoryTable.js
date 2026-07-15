@@ -663,6 +663,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="prefixImageUrl"
                     alt="Category Image"
+                    decoding="async"
                     @error="handleError(false)"
                 />
 
@@ -672,6 +673,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     :src="imageUrl"
                     alt="Item Image"
+                    decoding="async"
                     @error="handleError(true)"
                 />
 
@@ -681,6 +683,7 @@ export const ItemImageComponent = {
                     class="image-layer"
                     src="assets/placeholder.png"
                     alt="Placeholder"
+                    decoding="async"
                 />
             </transition-group>
         </div>
