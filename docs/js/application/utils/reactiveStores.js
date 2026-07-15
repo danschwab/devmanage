@@ -457,15 +457,34 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             const progressTopic = apiCall._namespace && apiCall._methodName
                 ? `${apiCall._namespace}:${apiCall._methodName}`
                 : null;
+            // Track original loading message to restore after rate limit clears
+            let originalMessage = message;
+            
             const onProgress = progressTopic ? ({ current, total, message: msg }) => {
-                if (msg) this.loadingMessage = msg;
+                if (msg) {
+                    this.loadingMessage = msg;
+                    originalMessage = msg; // Track the latest non-rate-limit message
+                }
                 if (total > 0 && current !== undefined) {
                     this.loadingProgress = Math.round((current / total) * 100);
                 }
             } : null;
+            
+            // System-level rate limit listener (all stores listen to this)
+            const onRateLimit = ({ message: msg }) => {
+                if (msg) {
+                    this.loadingMessage = msg;
+                    this.loadingProgress = -1; // Indeterminate during rate limit
+                } else {
+                    // Rate limit cleared, restore original message
+                    this.loadingMessage = originalMessage;
+                }
+            };
+            
             if (progressTopic && onProgress) {
                 ProgressBus.on(progressTopic, onProgress);
             }
+            ProgressBus.on('system:rateLimit', onRateLimit);
 
             try {
                 // Use priority queue for load operations (high priority)
@@ -505,6 +524,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 if (progressTopic && onProgress) {
                     ProgressBus.off(progressTopic, onProgress);
                 }
+                ProgressBus.off('system:rateLimit', onRateLimit);
                 this.setLoading(false, '');
                 // Ensure lock is released even if analysis fails
                 this.isReloadingMainData = false;

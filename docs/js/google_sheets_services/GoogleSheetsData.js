@@ -1,6 +1,7 @@
 import { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
 import { SheetSql } from './sheetSql.js';
 import { normalizeHeaderName } from '../data_management/utils/helpers.js';
+import { ProgressBus } from '../data_management/utils/caching.js';
 
 export class GoogleSheetsService {
 
@@ -109,8 +110,24 @@ export class GoogleSheetsService {
                         throw err;
                     }
                     
-                    //console.warn(`[GoogleSheetsService] Rate limit hit (attempt ${consecutiveRateLimits}/${rateLimitMaxRetries}), waiting ${rateLimitDelay}ms before retry...`);
-                    await new Promise(res => setTimeout(res, rateLimitDelay));
+                    // Emit countdown updates on system-level topic so all loading indicators show it
+                    const delaySeconds = Math.ceil(rateLimitDelay / 1000);
+                    for (let remaining = delaySeconds; remaining > 0; remaining--) {
+                        ProgressBus.emit('system:rateLimit', {
+                            current: delaySeconds - remaining,
+                            total: delaySeconds,
+                            message: `Waiting on Google resources... ${remaining}s`
+                        });
+                        await new Promise(res => setTimeout(res, 1000));
+                    }
+                    
+                    // Clear the rate limit message
+                    ProgressBus.emit('system:rateLimit', {
+                        current: delaySeconds,
+                        total: delaySeconds,
+                        message: null
+                    });
+                    
                     continue; // Retry without incrementing main attempt counter
                 }
                 
