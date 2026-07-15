@@ -150,7 +150,6 @@ export const CardsComponent = {
     data() {
         return {
             stickyActive: false,
-            stickyTop: 0,
             stickyLeft: 0,
             stickyWidth: 0,
             stickySpacerHeight: 0,
@@ -273,11 +272,18 @@ export const CardsComponent = {
         }
     },
     watch: {
-        // Trigger sticky header recalculation when the current route/content changes
-        // This ensures sticky headers reposition correctly after navigation
+        // Trigger sticky header recalculation when parameters change on the same route
+        // (parameter-only changes don't cause component remount, unlike full route changes)
         'appContext.currentPath'(newPath, oldPath) {
-            if (newPath !== oldPath && this._stickyHeader) {
-                // Reset peak height cache and trigger immediate update
+            if (!newPath || !oldPath || newPath === oldPath) return;
+            
+            // Extract base path (without query params) for both old and new
+            const oldBasePath = oldPath.split('?')[0];
+            const newBasePath = newPath.split('?')[0];
+            
+            // Only update if it's a parameter-only change on the same base route
+            // Full route changes cause component remount, so skip those
+            if (oldBasePath === newBasePath && this._stickyHeader) {
                 this._stickyHeader.reset();
                 this.$nextTick(() => {
                     this._stickyHeader.update();
@@ -299,14 +305,13 @@ export const CardsComponent = {
                 this.$refs.stickySpacerEl?.closest('.container'),
             ].filter(Boolean),
             getIsActive: () => this.stickyActive,
-            onActivate: (navBottom) => {
+            onActivate: () => {
                 const wrapper = this.$refs.stickyWrapperEl;
                 if (!this.stickyActive) {
                     this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
                 }
                 const rect = wrapper ? wrapper.getBoundingClientRect() : null;
                 this.stickyActive = true;
-                this.stickyTop = navBottom;
                 this.stickyLeft = rect ? rect.left : 0;
                 this.stickyWidth = rect ? rect.width : 0;
             },
@@ -314,7 +319,12 @@ export const CardsComponent = {
                 this.stickyActive = false;
             },
         });
-        this._stickyHeader.setup();
+        // Use requestAnimationFrame to ensure layout measurements are accurate after all DOM updates
+        this.$nextTick(() => {
+            requestAnimationFrame(() => {
+                if (this._stickyHeader) this._stickyHeader.setup();
+            });
+        });
     },
     beforeUnmount() {
         this._stickyHeader?.teardown();
@@ -458,7 +468,7 @@ export const CardsComponent = {
             <div style="width: 100%;">
             <template v-if="showHeader">
             <div ref="stickySpacerEl" class="sticky-header-spacer" :style="{ height: stickyActive ? stickySpacerHeight + 'px' : '0' }"></div>
-            <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', top: stickyTop + 'px', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { paddingBottom: 'var(--padding-md)' }">
+            <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { paddingBottom: 'var(--padding-md)' }">
             <div key="content-header" :class="['content-header', theme]">
                 <slot 
                     name="header-area" 

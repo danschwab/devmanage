@@ -1624,7 +1624,6 @@ export const TableComponent = {
             hiddenColumns: [], // Reactive property for dynamically hiding columns (internal use only)
             showStickyHeader: false, // Controls visibility of sticky header clone
             stickyActive: false, // Controls fixed positioning of sticky wrapper
-            stickyTop: 0,
             stickyLeft: 0,
             stickyWidth: 0,
             stickySpacerHeight: 0, // Measured height of wrapper before clone is added
@@ -1722,11 +1721,18 @@ export const TableComponent = {
                 this.clearDropTarget();
             }
         },
-        // Trigger sticky header recalculation when the current route/content changes
-        // This ensures sticky headers reposition correctly after navigation
+        // Trigger sticky header recalculation when parameters change on the same route
+        // (parameter-only changes don't cause component remount, unlike full route changes)
         'appContext.currentPath'(newPath, oldPath) {
-            if (newPath !== oldPath && this._stickyHeader) {
-                // Reset peak height cache and trigger immediate update
+            if (!newPath || !oldPath || newPath === oldPath) return;
+            
+            // Extract base path (without query params) for both old and new
+            const oldBasePath = oldPath.split('?')[0];
+            const newBasePath = newPath.split('?')[0];
+            
+            // Only update if it's a parameter-only change on the same base route
+            // Full route changes cause component remount, so skip those
+            if (oldBasePath === newBasePath && this._stickyHeader) {
                 this._stickyHeader.reset();
                 this.$nextTick(() => {
                     this._stickyHeader.update();
@@ -2098,6 +2104,7 @@ export const TableComponent = {
         
         // Set up sticky header positioning (only for tables with showHeader enabled)
         // Nested tables with showHeader=false don't need sticky headers
+        // Use requestAnimationFrame to ensure layout has been calculated before measuring
         if (this.showHeader) {
             this._stickyHeader = useStickyHeader({
                 getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
@@ -2115,7 +2122,7 @@ export const TableComponent = {
                     const tableWrapper = this.$el?.querySelector('.table-wrapper');
                     return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
                 },
-                onActivate: (navBottom) => {
+                onActivate: () => {
                     // Measure spacer height only on first activation (before thead clone is added)
                     if (!this.stickyActive) {
                         const wrapper = this.$el?.querySelector('.sticky-header-wrapper');
@@ -2127,12 +2134,11 @@ export const TableComponent = {
                         this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
                             .map(th => th.getBoundingClientRect().width);
                     }
-                    // Update position
+                    // Update position (left and width only; top uses CSS variable --navbar-height)
                     const tableWrapper = this.$el?.querySelector('.table-wrapper');
                     const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
                     this.stickyActive = true;
                     this.showStickyHeader = true;
-                    this.stickyTop = navBottom;
                     this.stickyLeft = rect ? rect.left : 0;
                     this.stickyWidth = rect ? rect.width : 0;
                 },
@@ -2141,7 +2147,12 @@ export const TableComponent = {
                     this.showStickyHeader = false;
                 },
             });
-            this._stickyHeader.setup();
+            // Use requestAnimationFrame to ensure layout measurements are accurate after all DOM updates
+            this.$nextTick(() => {
+                requestAnimationFrame(() => {
+                    if (this._stickyHeader) this._stickyHeader.setup();
+                });
+            });
         }
 
         // Mobile: collapse thead column buttons on scroll
@@ -4284,7 +4295,7 @@ export const TableComponent = {
             <div class="sticky-header-spacer" :style="{ height: stickyActive ? stickySpacerHeight + 'px' : '0' }" aria-hidden="true"></div>
 
             <!-- Sticky wrapper: content-header + loading bar + thead clone (all fixed together when sticky) -->
-            <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', top: stickyTop + 'px', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : {}">
+            <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : {}">
 
                 <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
                     <slot 

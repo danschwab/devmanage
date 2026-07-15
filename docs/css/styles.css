@@ -727,7 +727,9 @@ button.card {
 }
 
 .sticky-header-wrapper[style*="position: fixed"] {
+    top: var(--navbar-height);
     box-shadow: 0 4px 8px var(--color-shadow);
+    transition: top 0.2s ease;
 }
 
 .sticky-header-wrapper table.sticky-header {
@@ -1529,6 +1531,7 @@ button.search-highlight {
 }
 
 .calendar-sticky-top[style*="position: fixed"] {
+    top: var(--navbar-height);
     box-shadow: 0 4px 8px var(--color-shadow);
 }
 
@@ -1821,6 +1824,9 @@ button.search-highlight {
     }
     
     /* Hide navigation items by default on mobile */
+    body:has(nav.hidden) {
+        --navbar-height: 0;
+    }
     nav.hidden {
         max-height: 0;
     }

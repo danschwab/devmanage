@@ -29,6 +29,10 @@
  *   container-bottom threshold doesn't shrink when a clone/child is removed, which
  *   would otherwise cause rapid activate/deactivate cycling at the data boundary.
  *
+ * CSS OFFSET — navbar height is read from CSS variable --navbar-height and used for
+ *   all positioning calculations. The sticky-header-wrapper element uses this same
+ *   variable for its `top` property in CSS, ensuring consistency.
+ *
  * @param {Object}   options
  * @param {Function} options.getStickyEl    () => the element to make sticky (used for height/top measurement)
  * @param {Function} [options.getAnchorEl]  () => stable reference element whose top is used for the activation
@@ -41,7 +45,7 @@
  *                                               both the data boundary and the dashboard card boundary).
  * @param {Function} options.getIsActive    () => boolean — is the sticky currently active?
  * @param {Function} [options.canActivate]  () => boolean — optional extra prerequisite (e.g. horizontal scroll check)
- * @param {Function} options.onActivate     (navBottom: number) => void — called every scroll tick while sticky
+ * @param {Function} options.onActivate     () => void — called every scroll tick while sticky
  * @param {Function} options.onDeactivate   () => void — called every scroll tick while not sticky
  */
 export function useStickyHeader({
@@ -62,12 +66,21 @@ export function useStickyHeader({
     // check fails → deactivate again…). Caching the maximum seen height keeps the threshold stable.
     let _peakStickyHeight = 0;
 
+    function _getNavbarHeightPx() {
+        // Extract navbar height from CSS variable (e.g., "80px" -> 80)
+        const root = document.documentElement;
+        const computed = getComputedStyle(root);
+        const heightStr = computed.getPropertyValue('--navbar-height').trim();
+        const heightPx = parseInt(heightStr, 10);
+        return isNaN(heightPx) ? 0 : heightPx;
+    }
+
     function _update() {
         const stickyEl = getStickyEl?.();
         if (!stickyEl) return;
 
-        const navbar = document.querySelector('#navbar');
-        const navBottom = navbar ? navbar.getBoundingClientRect().bottom : 0;
+        // Get navbar height from CSS variable (always at top: 0)
+        const navHeightPx = _getNavbarHeightPx();
 
         // Determine "flow top" for the activation check.
         // Prefer a stable anchor element whose position is invariant with respect to sticky state
@@ -97,12 +110,12 @@ export function useStickyHeader({
             ? containerResult
             : (containerResult ? [containerResult] : []);
 
-        let shouldActivate = flowTop <= navBottom;
+        let shouldActivate = flowTop <= navHeightPx;
 
         if (shouldActivate) {
             for (const el of containerEls) {
                 const rect = el?.getBoundingClientRect();
-                if (rect && rect.bottom - navBottom < stickyHeight) {
+                if (rect && rect.bottom - navHeightPx < stickyHeight) {
                     shouldActivate = false;
                     break;
                 }
@@ -115,7 +128,7 @@ export function useStickyHeader({
         }
 
         if (shouldActivate) {
-            onActivate(navBottom);
+            onActivate();
         } else {
             onDeactivate();
         }
@@ -128,7 +141,19 @@ export function useStickyHeader({
         _fn = () => _update();
         _scrollEl.addEventListener('scroll', _fn, { passive: true });
         window.addEventListener('resize', _fn, { passive: true });
+        
+        // Initial update in current tick
         _update();
+        
+        // On mobile/touch devices or when elements might not be fully laid out yet,
+        // schedule a secondary update after a brief delay to ensure accurate measurements.
+        // This helps catch cases where getBoundingClientRect() returns incorrect values
+        // before the browser has completed layout calculations.
+        if (window.matchMedia('(max-width: 768px)').matches || 
+            (window.innerHeight < 600 && window.innerWidth < 600)) {
+            // Small delay for mobile to allow layout to settle
+            setTimeout(() => _update(), 100);
+        }
     }
 
     function teardown() {
