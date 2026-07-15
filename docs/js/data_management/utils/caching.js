@@ -89,6 +89,12 @@ class CacheManager {
     // filledAt persists so the poller can still detect remote changes after the cache
     // entry is gone. Cleared only on explicit invalidation (not on TTL expiry).
     static filledAt = new Map();
+    // ── Frontend cooperative yield scheduler ──────────────────────────────────
+    // NOTE: Only needed while the abstraction layer runs on the browser main thread.
+    // Remove _yieldCallCount, _lastYieldTime, and _maybeYield() when refactoring
+    // to a real backend API — server-side execution has no event loop to protect.
+    static _yieldCallCount = 0;
+    static _lastYieldTime = 0;
     
     /**
      * Gets a value from cache with expiration check
@@ -149,7 +155,23 @@ class CacheManager {
         });
         CacheManager.filledAt.set(key, now);
     }
-    
+
+    /**
+     * Yields to the browser event loop if the current call chain has been running too long.
+     * Prevents deeply nested deps.call() chains from flooding microtask queues and locking the UI.
+     * NOTE: Only needed while the abstraction layer runs on the browser main thread.
+     * Remove this method and its call site when refactoring to a real backend API.
+     */
+    static async _maybeYield() {
+        // Only check every 64 invocations to keep per-call overhead negligible.
+        if (++CacheManager._yieldCallCount % 64 !== 0) return;
+        const now = Date.now();
+        if (now - CacheManager._lastYieldTime > 8) {
+            CacheManager._lastYieldTime = now;
+            await new Promise(r => setTimeout(r, 0));
+        }
+    }
+
     /**
      * Creates a dependency decorator that explicitly tracks function calls as dependencies
      * @param {string} callerKey - Cache key of the calling function
@@ -164,7 +186,10 @@ class CacheManager {
              * @returns {Promise} - Function result
              */
             call: async (wrappedFunction, ...args) => {
-                
+                // Cooperative yield — prevents long nested call chains from blocking the event loop.
+                // NOTE: Only needed while the abstraction layer runs on the browser main thread.
+                await CacheManager._maybeYield();
+
                 // Generate the cache key for the called function
                 const calledKey = CacheManager.generateCacheKey(wrappedFunction._namespace, wrappedFunction._methodName, args);
 

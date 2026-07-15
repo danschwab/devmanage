@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName, mapWithConcurrency } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -1120,8 +1120,9 @@ class Requests_uncached {
         // Find all shows matching the search criteria
         const shows = await deps.call(ProductionUtils.getOverlappingShows, filter, searchParams);
         
-        const resolvedShows = (await Promise.all(
-            shows.map(async (showRow) => {
+        const resolvedShows = (await mapWithConcurrency(
+            shows,
+            async (showRow) => {
                 const identifier = showRow.Identifier || await deps.call(
                     ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, parseInt(showRow.Year)
                 );
@@ -1137,7 +1138,7 @@ class Requests_uncached {
                     shipDate: shipDate || null,
                     returnDate: returnDate || shipDate || null
                 };
-            })
+            }
         )).filter(Boolean);
 
         const projectIdentifiers = resolvedShows.map(show => show.identifier);
@@ -1201,16 +1202,22 @@ class Requests_uncached {
         };
 
         if (includeEmptyShows) {
-            return await Promise.all(itemRows.map(async (row) => ({
+            return await mapWithConcurrency(itemRows, async (row) => ({
                 ...row,
                 startDate: reportStart || null,
                 endDate: reportEnd || null,
                 minQty: await deps.call(InventoryUtils.getItemMinQuantityInRange, row.itemId, reportStart, reportEnd)
-            })));
+            }));
         }
 
         const shortageRows = [];
+        // NOTE: Explicit yield every 5 items — only needed while the abstraction layer runs on
+        // the browser main thread. Remove when refactoring to a real backend API.
+        let _shortageRowIdx = 0;
         for (const row of itemRows) {
+            if (_shortageRowIdx++ > 0 && _shortageRowIdx % 5 === 0) {
+                await new Promise(r => setTimeout(r, 0));
+            }
             const timeline = await deps.call(InventoryUtils.getItemTimeline, row.itemId, reportStart, reportEnd);
 
             if (!Array.isArray(timeline) || timeline.length === 0) {

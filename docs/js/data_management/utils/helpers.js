@@ -252,7 +252,35 @@ export function searchFilter(data, searchParams) {
     });
 }
 
-
+/**
+ * Map over an array with bounded concurrency, yielding between batches.
+ * Use in place of Promise.all(array.map(...)) when the input length is
+ * variable or driven by user filters (shows, items), to avoid flooding the
+ * microtask queue and locking the browser's main thread.
+ *
+ * NOTE: Concurrency management here is only relevant while the abstraction
+ * layer runs on the browser main thread. If/when this layer is refactored to
+ * a real backend API, this helper (and its callers) can be removed.
+ *
+ * @param {Array} items - The array to process
+ * @param {Function} asyncFn - Async function called with (item, index)
+ * @param {number} concurrency - Max parallel tasks per batch (default 8)
+ * @returns {Promise<Array>} Results in original array order
+ */
+export async function mapWithConcurrency(items, asyncFn, concurrency = 8) {
+    const results = new Array(items.length);
+    for (let i = 0; i < items.length; i += concurrency) {
+        const chunk = items.slice(i, i + concurrency);
+        const chunkResults = await Promise.all(chunk.map((item, j) => asyncFn(item, i + j)));
+        for (let j = 0; j < chunkResults.length; j++) {
+            results[i + j] = chunkResults[j];
+        }
+        if (i + concurrency < items.length) {
+            await new Promise(r => setTimeout(r, 0));
+        }
+    }
+    return results;
+}
 
 
 class FuzzyMatcher {
