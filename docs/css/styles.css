@@ -1263,7 +1263,6 @@ tr.is-group:hover .group-toggle {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    will-change: opacity; /* Promote to compositing layer to avoid main-thread repaint on decode */
 }
 
 .item-image-container.image-missing::after {

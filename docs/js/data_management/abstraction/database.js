@@ -112,29 +112,6 @@ class database_uncached {
     }
 
     /**
-     * Resize a blob URL to a 32×32 data URL using canvas.
-     * Returns null on failure (e.g. non-browser environment or load error).
-     * @private
-     */
-    static _generateThumbnailDataUrl(blobUrl) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const MAX = 64; // Max thumbnail dimension
-                const scale = Math.min(MAX / img.width, MAX / img.height, 1);
-                const w = Math.max(1, Math.round(img.width * scale));
-                const h = Math.max(1, Math.round(img.height * scale));
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/png'));
-            };
-            img.onerror = () => resolve(null);
-            img.src = blobUrl;
-        });
-    }
-    /**
      * Upload an image for an item to the Drive thumbnails folder.
      * Replaces any existing image files for that item number.
      * MUTATION — not cached.

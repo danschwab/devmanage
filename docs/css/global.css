@@ -5,25 +5,17 @@
 .fade-enter-from, .fade-leave-to {
     opacity: 0;
 }
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.15s ease-in-out !important;
-}
 
 
 .longfade-enter-active,
 .longfade-leave-active {
     transition: opacity .6s ease-in-out;
+    will-change: opacity;
 }
 
 .longfade-enter-from,
 .longfade-leave-to {
     opacity: 0;
-}
-
-.longfade-enter-active,
-.longfade-leave-active {
-    transition: opacity .6s ease-in-out !important;
 }
 
 
