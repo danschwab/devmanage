@@ -422,13 +422,17 @@ const ImageUploadComponent = {
 // Chrome and Edge block the main thread when decoding multiple image blobs simultaneously.
 // IntersectionObserver can fire many callbacks at once during a scroll — this queue
 // ensures only MAX_CONCURRENT images actually become visible (and start decoding) at a time.
+// Items are sorted by Y position so top-of-viewport images decode first.
 const ImageRenderQueue = {
     pending: [],
     active: 0,
     MAX_CONCURRENT: 3,
 
-    enqueue(fn) {
-        this.pending.push(fn);
+    enqueue(fn, yPosition = 0) {
+        // Store both the function and its Y position for sorting
+        this.pending.push({ fn, y: yPosition });
+        // Sort by Y position (ascending — top of page first)
+        this.pending.sort((a, b) => a.y - b.y);
         this._flush();
     },
 
@@ -437,18 +441,57 @@ const ImageRenderQueue = {
         this._flush();
     },
 
-    cancel(fn) {
-        const i = this.pending.indexOf(fn);
+    cancel(targetFn) {
+        const i = this.pending.findIndex(item => item.fn === targetFn);
         if (i !== -1) this.pending.splice(i, 1);
     },
 
     _flush() {
         while (this.active < this.MAX_CONCURRENT && this.pending.length > 0) {
             this.active++;
-            this.pending.shift()();
+            const item = this.pending.shift();
+            item.fn();
         }
     }
 };
+
+// Factory that creates a shared IntersectionObserver for an entire table component.
+// Each large table creates one of these and provides it to all descendant ItemImageComponents,
+// replacing hundreds of individual observers with a single one.
+// Components without a parent manager fall back to creating their own observer.
+export function createVisibilityManager() {
+    const callbacks = new Map(); // element → callback
+    const observer = new IntersectionObserver(
+        (entries) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const cb = callbacks.get(entry.target);
+                if (cb) {
+                    callbacks.delete(entry.target);
+                    observer.unobserve(entry.target);
+                    cb();
+                }
+            });
+        },
+        { rootMargin: '100px', threshold: 0 }
+    );
+    return {
+        register(el, callback) {
+            callbacks.set(el, callback);
+            observer.observe(el);
+        },
+        unregister(el) {
+            if (callbacks.has(el)) {
+                callbacks.delete(el);
+                observer.unobserve(el);
+            }
+        },
+        destroy() {
+            observer.disconnect();
+            callbacks.clear();
+        }
+    };
+}
 
 // Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
 // blob URLs via analysis. All ItemImageComponent instances share the same store instance.
@@ -495,7 +538,11 @@ export const ItemImageComponent = {
             default: false
         }
     },
-    inject: ['$modal'],
+    inject: {
+        $modal: '$modal',
+        // Optionally injected by large table parents — replaces per-component IntersectionObserver
+        _tableVisibility: { from: '_tableVisibility', default: null }
+    },
     data() {
         return {
             thumbnailStore: null,
@@ -503,7 +550,7 @@ export const ItemImageComponent = {
             cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
             cachedPrefixUrl: null,  // Last known good prefix URL to prevent flashing during reload
             isVisible: false,       // Lazy loading: true once image is allowed to render
-            observer: null,         // Intersection Observer for lazy loading
+            observer: null,         // Per-component IntersectionObserver (used when no parent manager)
             _queueFn: null,         // Pending queue callback reference (for cancellation)
             _holdsSlot: false       // Whether this component holds an active queue slot
         };
@@ -574,41 +621,7 @@ export const ItemImageComponent = {
     },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
-        
-        // Set up lazy loading with Intersection Observer.
-        // Instead of setting isVisible directly, enqueue through ImageRenderQueue
-        // so only MAX_CONCURRENT images decode at a time.
-        this.observer = new IntersectionObserver(
-            (entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        this.observer.disconnect();
-                        const fn = () => {
-                            this._queueFn = null;
-                            this._holdsSlot = true;
-                            this.isVisible = true;
-                            // If no image URL will render (no record yet), release the slot
-                            // immediately so the queue doesn't stall waiting for a load event.
-                            this.$nextTick(() => {
-                                if (!this.imageUrl && !this.prefixImageUrl) {
-                                    this._releaseSlot();
-                                }
-                            });
-                        };
-                        this._queueFn = fn;
-                        ImageRenderQueue.enqueue(fn);
-                    }
-                });
-            },
-            {
-                rootMargin: '100px',
-                threshold: 0
-            }
-        );
-        
-        if (this.$el) {
-            this.observer.observe(this.$el);
-        }
+        this._setupVisibility();
     },
     watch: {
         itemNumber() {
@@ -618,15 +631,20 @@ export const ItemImageComponent = {
                 this._queueFn = null;
             }
             this._releaseSlot();
+
+            // Unregister from visibility system
+            if (this._tableVisibility) {
+                this._tableVisibility.unregister(this.$el);
+            } else if (this.observer) {
+                this.observer.disconnect();
+            }
             
             this.cachedImageUrl = null;
             this.cachedPrefixUrl = null;
             this.isVisible = false;
             
-            // Re-observe for lazy loading
-            if (this.observer && this.$el) {
-                this.observer.observe(this.$el);
-            }
+            // Re-register for the new item number
+            this._setupVisibility();
         },
         record(newRecord, oldRecord) {
             // If the record changes (e.g., item deleted/recreated), clear cache
@@ -637,6 +655,42 @@ export const ItemImageComponent = {
         }
     },
     methods: {
+        _setupVisibility() {
+            const onVisible = () => {
+                const fn = () => {
+                    this._queueFn = null;
+                    this._holdsSlot = true;
+                    this.isVisible = true;
+                    this.$nextTick(() => {
+                        if (!this.imageUrl && !this.prefixImageUrl) {
+                            this._releaseSlot();
+                        }
+                    });
+                };
+                this._queueFn = fn;
+                const yPosition = this.$el ? this.$el.getBoundingClientRect().top : 0;
+                ImageRenderQueue.enqueue(fn, yPosition);
+            };
+
+            if (this._tableVisibility) {
+                // Delegate to the parent table's shared observer
+                this._tableVisibility.register(this.$el, onVisible);
+            } else {
+                // Fallback: per-component observer for components outside large tables
+                this.observer = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                this.observer.disconnect();
+                                onVisible();
+                            }
+                        });
+                    },
+                    { rootMargin: '100px', threshold: 0 }
+                );
+                this.observer.observe(this.$el);
+            }
+        },
         _releaseSlot() {
             if (this._holdsSlot) {
                 this._holdsSlot = false;
@@ -700,14 +754,15 @@ export const ItemImageComponent = {
         }
     },
     beforeUnmount() {
-        // Cancel any pending queue entry and release any held slot
         if (this._queueFn) {
             ImageRenderQueue.cancel(this._queueFn);
             this._queueFn = null;
         }
         this._releaseSlot();
-        
-        if (this.observer) {
+
+        if (this._tableVisibility) {
+            this._tableVisibility.unregister(this.$el);
+        } else if (this.observer) {
             this.observer.disconnect();
             this.observer = null;
         }
@@ -767,6 +822,11 @@ export const InventoryTableComponent = {
         ItemImageComponent
     },
     inject: ['appContext', '$modal', '$notify'],
+    provide() {
+        return {
+            _tableVisibility: this._visibilityManager
+        };
+    },
     props: {
         containerPath: {
             type: String,
@@ -789,7 +849,8 @@ export const InventoryTableComponent = {
         return {
             inventoryTableStore: null,
             lockNamespace: 'INVENTORY',
-            tabMetaFlags: { hideQuantity: false, hideItemNumber: false }
+            tabMetaFlags: { hideQuantity: false, hideItemNumber: false },
+            _visibilityManager: createVisibilityManager()
         };
     },
     computed: {
@@ -966,6 +1027,7 @@ export const InventoryTableComponent = {
     },
     beforeUnmount() {
         this.$notify.clearBanners(this.containerPath);
+        this._visibilityManager.destroy();
     },
     methods: {
         onForeignLockWhileClean() {
