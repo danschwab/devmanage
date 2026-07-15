@@ -418,6 +418,90 @@ const ImageUploadComponent = {
     `
 };
 
+// Mini global queue that throttles how many images can be decoding/rendering at once.
+// Chrome and Edge block the main thread when decoding multiple image blobs simultaneously.
+// Centralized IntersectionObserver watches all image elements and batches visibility changes.
+// Only MAX_CONCURRENT images are allowed to become visible (and start decoding) at a time.
+const ImageRenderQueue = {
+    pending: [],
+    active: 0,
+    MAX_CONCURRENT: 3,
+    observer: null,
+    managed: new WeakMap(), // el → {component, fn}
+
+    // Initialize the shared IntersectionObserver (lazy — created on first use)
+    _initObserver() {
+        if (this.observer) return;
+        this.observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const info = this.managed.get(entry.target);
+                        if (info) {
+                            this.enqueue(entry.target, info.fn);
+                        }
+                    }
+                });
+            },
+            {
+                rootMargin: '100px',
+                threshold: 0
+            }
+        );
+    },
+
+    // Attach a component's container element to the shared observer
+    attachComponent(el, fn) {
+        this._initObserver();
+        this.managed.set(el, { fn });
+        this.observer.observe(el);
+    },
+
+    // Detach a component's container element
+    detachComponent(el) {
+        this.managed.delete(el);
+        if (this.observer) {
+            this.observer.unobserve(el);
+        }
+    },
+
+    enqueue(el, fn) {
+        this.pending.push({ el, fn });
+        this._flush();
+    },
+
+    release() {
+        this.active = Math.max(0, this.active - 1);
+        this._flush();
+    },
+
+    cancel(fn) {
+        const i = this.pending.findIndex(item => item.fn === fn);
+        if (i !== -1) this.pending.splice(i, 1);
+    },
+
+    _flush() {
+        while (this.active < this.MAX_CONCURRENT && this.pending.length > 0) {
+            this.active++;
+            
+            // Find the topmost element by y-position for cleaner top-to-bottom rendering
+            let minIndex = 0;
+            let minY = this.pending[0].el.getBoundingClientRect().top;
+            
+            for (let i = 1; i < this.pending.length; i++) {
+                const y = this.pending[i].el.getBoundingClientRect().top;
+                if (y < minY) {
+                    minY = y;
+                    minIndex = i;
+                }
+            }
+            
+            const { fn } = this.pending.splice(minIndex, 1)[0];
+            fn();
+        }
+    }
+};
+
 // Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
 // blob URLs via analysis. All ItemImageComponent instances share the same store instance.
 // Marked as exempt from eviction to prevent auto-clearing, similar to the dashboard store.
@@ -470,8 +554,9 @@ export const ItemImageComponent = {
             localImageUrl: null,    // Set immediately after upload for instant feedback
             cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
             cachedPrefixUrl: null,  // Last known good prefix URL to prevent flashing during reload
-            isVisible: false,       // Lazy loading: only load images when visible
-            observer: null          // Intersection Observer for lazy loading
+            isVisible: false,       // Lazy loading: true once image is allowed to render
+            _queueFn: null,         // Pending queue callback reference (for cancellation)
+            _holdsSlot: false       // Whether this component holds an active queue slot
         };
     },
     computed: {
@@ -541,40 +626,41 @@ export const ItemImageComponent = {
     mounted() {
         this.thumbnailStore = getThumbnailStore();
         
-        // Set up lazy loading with Intersection Observer
-        // Only load images when they're visible in the viewport
-        this.observer = new IntersectionObserver(
-            (entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        this.isVisible = true;
-                        // Once visible, we can stop observing
-                        if (this.observer) {
-                            this.observer.disconnect();
-                        }
-                    }
-                });
-            },
-            {
-                // Start loading slightly before the element is visible (100px buffer)
-                rootMargin: '100px',
-                threshold: 0
-            }
-        );
+        // Register with the centralized ImageRenderQueue's observer.
+        // The queue will call this callback when this component scrolls into view.
+        // This avoids creating 100+ individual IntersectionObservers — just one shared one.
+        const fn = () => {
+            this._queueFn = null;
+            this._holdsSlot = true;
+            this.isVisible = true;
+            // If no image URL will render (no record yet), release the slot
+            // immediately so the queue doesn't stall waiting for a load event.
+            this.$nextTick(() => {
+                if (!this.imageUrl && !this.prefixImageUrl) {
+                    this._releaseSlot();
+                }
+            });
+        };
+        this._queueFn = fn;
         
-        // Observe the container element
         if (this.$el) {
-            this.observer.observe(this.$el);
+            ImageRenderQueue.attachComponent(this.$el, fn);
         }
     },
     watch: {
         itemNumber() {
-            // Clear cached URLs when item number changes
+            // Cancel any pending queue entry and release any held slot
+            if (this._queueFn) {
+                ImageRenderQueue.cancel(this._queueFn);
+                this._queueFn = null;
+            }
+            this._releaseSlot();
+            
             this.cachedImageUrl = null;
             this.cachedPrefixUrl = null;
-            
-            // Reset visibility for lazy loading if component is reused
             this.isVisible = false;
+            
+            // Re-observe for lazy loading
             if (this.observer && this.$el) {
                 this.observer.observe(this.$el);
             }
@@ -588,6 +674,16 @@ export const ItemImageComponent = {
         }
     },
     methods: {
+        _releaseSlot() {
+            if (this._holdsSlot) {
+                this._holdsSlot = false;
+                ImageRenderQueue.release();
+            }
+        },
+        onImageSettled() {
+            // Called on @load or @error — signal the queue that this slot is free
+            this._releaseSlot();
+        },
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;
@@ -619,6 +715,9 @@ export const ItemImageComponent = {
             }, title);
         },
         async handleError(isMainImage) {
+            // Release the queue slot immediately — refetch is async and shouldn't block others
+            this._releaseSlot();
+            
             // Blob URL became stale — re-fetch from the stored Drive file ID
             const fileId = this.record?.file;
             if (!fileId) return;
@@ -638,15 +737,19 @@ export const ItemImageComponent = {
         }
     },
     beforeUnmount() {
-        // Clean up Intersection Observer
-        if (this.observer) {
-            this.observer.disconnect();
-            this.observer = null;
+        // Cancel any pending queue entry and release any held slot
+        if (this._queueFn) {
+            ImageRenderQueue.cancel(this._queueFn);
+            this._queueFn = null;
+        }
+        this._releaseSlot();
+        
+        // Detach from centralized observer
+        if (this.$el) {
+            ImageRenderQueue.detachComponent(this.$el);
         }
         
         this.clearLocalImageUrl();
-        // Note: cachedImageUrl and cachedPrefixUrl are managed by the store's lifecycle,
-        // so we don't revoke them here—they'll be cleaned up when the store reloads
     },
     template: html`
         <div
@@ -664,6 +767,7 @@ export const ItemImageComponent = {
                     :src="prefixImageUrl"
                     alt="Category Image"
                     decoding="async"
+                    @load="onImageSettled"
                     @error="handleError(false)"
                 />
 
@@ -674,6 +778,7 @@ export const ItemImageComponent = {
                     :src="imageUrl"
                     alt="Item Image"
                     decoding="async"
+                    @load="onImageSettled"
                     @error="handleError(true)"
                 />
 
