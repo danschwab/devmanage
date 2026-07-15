@@ -171,24 +171,6 @@ export class FakeGoogleSheetsService {
     // enabling proper testing of cache invalidation flows in localhost development.
     static mockData = {
         'INVENTORY': {
-            'INDEX': [
-                ['PREFIX', 'INVENTORY', 'FOLDER', 'MetaData'],
-                ['CAB', 'CABINETS', '', ''],
-                ['HS', 'HANGING SIGNS', '', ''],
-                ['LB', 'LIGHTBOXES', '', ''],
-                ['CNTR', 'COUNTERTOPS', '', ''],
-                ['SHLF', 'SHELVES', '', ''],
-                ['STOOL', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['CHAIR', 'FURNITURE', 'CHAIRS', '{"suppressAnalysis":"true"}'],
-                ['COUCH', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['TABLE', 'FURNITURE', 'TABLES', '{"suppressAnalysis":"true"}'],
-                ['TTOP', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['BX', 'PANELS', '', ''],
-                ['VU', 'PANELS', '', ''],
-                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","descriptionOnly":"true"}'],
-                ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
-            ],
             'ADDITIONS': [
                 ['ITEM#', 'THUMBNAIL', 'QTY', 'EditHistory', 'MetaData', 'NOTES', 'Description', 'Packing/shop notes'],
                 ['ADD-001', '', '', '', '', '', 'Custom Branded Tablecloth', ''],
@@ -627,6 +609,24 @@ export class FakeGoogleSheetsService {
                 ['Path', 'ShortCode', 'Created'],
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
             ],
+            'Inventory': [
+                ['PREFIX', 'INVENTORY', 'FOLDER', 'MetaData'],
+                ['CAB', 'CABINETS', '', ''],
+                ['HS', 'HANGING SIGNS', '', ''],
+                ['LB', 'LIGHTBOXES', '', ''],
+                ['CNTR', 'COUNTERTOPS', '', ''],
+                ['SHLF', 'SHELVES', '', ''],
+                ['STOOL', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['CHAIR', 'FURNITURE', 'CHAIRS', '{"suppressAnalysis":"true"}'],
+                ['COUCH', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TABLE', 'FURNITURE', 'TABLES', '{"suppressAnalysis":"true"}'],
+                ['TTOP', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['BX', 'PANELS', '', ''],
+                ['VU', 'PANELS', '', ''],
+                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","descriptionOnly":"true"}'],
+                ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
+            ],
             'Thumbnails': [
                 ['ItemNumber', 'File', 'Blob'],
                 ['BX', 'file_id_bx_prefix'],
@@ -903,7 +903,6 @@ export class FakeGoogleSheetsService {
 
     static mockTabs = {
         'INVENTORY': [
-            { title: 'INDEX', sheetId: 0 },
             { title: 'FURNITURE', sheetId: 1 },
             { title: 'CABINETS', sheetId: 2 },
             { title: 'HANGING SIGNS', sheetId: 3 },
@@ -939,7 +938,8 @@ export class FakeGoogleSheetsService {
             { title: 'Links', sheetId: 3 },
             { title: 'Clients', sheetId: 4 },
             { title: 'Shows', sheetId: 5 },
-            { title: 'Thumbnails', sheetId: 6 }
+            { title: 'Thumbnails', sheetId: 6 },
+            { title: 'Inventory', sheetId: 7 }
         ]
     };
 

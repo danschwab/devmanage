@@ -33,7 +33,7 @@ class inventoryUtils_uncached {
      * Returns an array of { prefix, tab, folder, metadata } where metadata is parsed JSON.
      */
     static async getInventoryIndex(deps) {
-        const rows = await deps.call(Database.getData, 'INVENTORY', 'INDEX', inventoryUtils_uncached.INDEX_MAPPING);
+        const rows = await deps.call(Database.getData, 'CACHE', 'Inventory', inventoryUtils_uncached.INDEX_MAPPING);
         return rows.map(row => ({
             ...row,
             metadata: _parseMetadata(row.metadata)

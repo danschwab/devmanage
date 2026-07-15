@@ -506,7 +506,7 @@ class Requests_uncached {
     }
     
     /**
-     * Get all inventory data from all tabs (excluding INDEX)
+     * Get all inventory data from all tabs
      * Each item is tagged with its category tab
      * @param {Object} deps - Dependency decorator for tracking calls
      * @returns {Promise<Array<Object>>} - All inventory items with tab property
@@ -514,7 +514,7 @@ class Requests_uncached {
     static async getAllInventoryData(deps, referenceDate) {
         // Get all available tabs for INVENTORY
         const tabs = await deps.call(Requests.getAvailableTabs, 'INVENTORY');
-        const inventoryTabs = tabs.filter(tab => tab.title !== 'INDEX');
+        const inventoryTabs = tabs;
         
         const allData = [];
         
