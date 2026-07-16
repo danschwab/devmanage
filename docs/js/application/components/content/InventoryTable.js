@@ -460,7 +460,7 @@ const ImageRenderQueue = {
 // replacing hundreds of individual observers with a single one.
 // Components without a parent manager fall back to creating their own observer.
 export function createVisibilityManager() {
-    const callbacks = new Map(); // element → callback
+    const callbacks = new Map(); // element → callback(y)
     const observer = new IntersectionObserver(
         (entries) => {
             entries.forEach(entry => {
@@ -469,7 +469,9 @@ export function createVisibilityManager() {
                 if (cb) {
                     callbacks.delete(entry.target);
                     observer.unobserve(entry.target);
-                    cb();
+                    // Pass the pre-calculated y from the IO entry — avoids a
+                    // forced synchronous layout recalculation (getBoundingClientRect).
+                    cb(entry.boundingClientRect.top);
                 }
             });
         },
@@ -589,6 +591,11 @@ export const ItemImageComponent = {
         },
         prefixImageUrl() {
             if (this.imageUrl) return null;
+
+            // If this item has its own thumbnail record, never show the prefix fallback.
+            // Showing the prefix while waiting for the item's own analysis would cause a
+            // prefix→own transition (and a second blob URL load) once analysis resolves.
+            if (this.record?.file) return null;
             
             // Lazy loading: don't fetch images until visible
             if (!this.isVisible) return null;
@@ -656,7 +663,7 @@ export const ItemImageComponent = {
     },
     methods: {
         _setupVisibility() {
-            const onVisible = () => {
+            const onVisible = (yPosition = 0) => {
                 const fn = () => {
                     this._queueFn = null;
                     this._holdsSlot = true;
@@ -668,12 +675,12 @@ export const ItemImageComponent = {
                     });
                 };
                 this._queueFn = fn;
-                const yPosition = this.$el ? this.$el.getBoundingClientRect().top : 0;
                 ImageRenderQueue.enqueue(fn, yPosition);
             };
 
             if (this._tableVisibility) {
                 // Delegate to the parent table's shared observer
+                // The manager passes entry.boundingClientRect.top to avoid forced reflow.
                 this._tableVisibility.register(this.$el, onVisible);
             } else {
                 // Fallback: per-component observer for components outside large tables
@@ -682,7 +689,7 @@ export const ItemImageComponent = {
                         entries.forEach(entry => {
                             if (entry.isIntersecting) {
                                 this.observer.disconnect();
-                                onVisible();
+                                onVisible(entry.boundingClientRect.top);
                             }
                         });
                     },
