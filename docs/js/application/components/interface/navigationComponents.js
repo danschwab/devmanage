@@ -97,6 +97,19 @@ export const PrimaryNavComponent = {
             return appSettings.onlyRunEssentialAnalysis;
         }
     },
+    watch: {
+        currentPath(newPath, oldPath) {
+            // Extract base paths (without query params)
+            const getBasePath = (path) => path.split('?')[0];
+            const newBase = getBasePath(newPath);
+            const oldBase = getBasePath(oldPath);
+            
+            // If actual path changed (not just params), show the navbar
+            if (newBase !== oldBase) {
+                this.isMenuVisible = true;
+            }
+        }
+    },
     methods: {
         openSettingsMenu() {
             this.$modal.custom(SettingsMenuComponent, {

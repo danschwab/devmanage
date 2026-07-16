@@ -725,12 +725,14 @@ button.card {
 .sticky-header-wrapper {
     width: 100%;
     box-sizing: border-box;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 8px transparent;
+    transition: box-shadow 0.7s ease, top 0.2s ease;
 }
 
 .sticky-header-wrapper[style*="position: fixed"] {
     top: var(--navbar-sticky-offset);
     box-shadow: 0 4px 8px var(--color-shadow);
-    transition: top 0.2s ease;
 }
 
 .sticky-header-wrapper table.sticky-header {
@@ -1524,7 +1526,7 @@ button.search-highlight {
     width: 100%;
 }
 
-.calendar-sticky-top {
+/* .calendar-sticky-top {
     background: var(--background-color);
     width: 100%;
     box-sizing: border-box;
@@ -1533,7 +1535,7 @@ button.search-highlight {
 .calendar-sticky-top[style*="position: fixed"] {
     top: var(--navbar-height);
     box-shadow: 0 4px 8px var(--color-shadow);
-}
+} */
 
 .calendar-dow-header {
     display: grid;

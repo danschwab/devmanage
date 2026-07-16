@@ -209,7 +209,7 @@ export const CalendarComponent = {
         this.search.initializeFromUrl();
         this.search.setupUrlWatcher();
         this._stickyHeader = useStickyHeader({
-            getStickyEl: () => this.$el?.querySelector('.calendar-sticky-top'),
+            getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
             getSpacerEl: () => this.$el?.querySelector('.calendar-sticky-spacer'),
             getContainerEl: () => [
                 this.$el,
@@ -217,7 +217,7 @@ export const CalendarComponent = {
             ].filter(Boolean),
             getIsActive: () => this.stickyActive,
             onActivate: () => {
-                const stickyEl = this.$el?.querySelector('.calendar-sticky-top');
+                const stickyEl = this.$el?.querySelector('.sticky-header-wrapper');
                 const rect = this.$el?.getBoundingClientRect();
                 this.stickyHeight = stickyEl ? stickyEl.offsetHeight : 0;
                 this.stickyActive = true;
@@ -329,7 +329,7 @@ export const CalendarComponent = {
             <div class="calendar-sticky-spacer" :style="{ height: stickyActive ? stickyHeight + 'px' : '0' }" aria-hidden="true"></div>
 
             <!-- Sticky: filter header + day-of-week row -->
-            <div class="calendar-sticky-top" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '500' } : {}">
+            <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '500' } : {}">
                 <div class="content-header">
                     <slot name="header-area"></slot>
                     <div class="spacer"></div>

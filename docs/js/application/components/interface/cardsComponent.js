@@ -467,8 +467,8 @@ export const CardsComponent = {
         <slot>
             <div style="width: 100%;">
             <template v-if="showHeader">
-            <div ref="stickySpacerEl" class="sticky-header-spacer"></div>
-            <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { paddingBottom: 'var(--padding-md)' }">
+            <div ref="stickySpacerEl" class="sticky-header-spacer" :style="stickyActive ? { height: stickySpacerHeight + 'px', marginBottom: 'var(--padding-md)' } : { height: '0', marginBottom: '0' }"></div>
+            <div ref="stickyWrapperEl" class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : { marginBottom: 'var(--padding-md)' }">
             <div key="content-header" :class="['content-header', theme]">
                 <slot 
                     name="header-area" 

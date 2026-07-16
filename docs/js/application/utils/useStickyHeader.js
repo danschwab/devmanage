@@ -2,7 +2,7 @@
  * useStickyHeader — shared sticky header scroll/resize logic
  *
  * Handles scroll and resize listener lifecycle and the activation check shared
- * by TableComponent (.sticky-header-wrapper) and CalendarComponent (.calendar-sticky-top).
+ * by TableComponent (.sticky-header-wrapper) and CalendarComponent (.sticky-header-wrapper).
  *
  * CONSUMERS: tableComponent, calendarComponent, cardsComponent
  *
