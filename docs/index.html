@@ -12,6 +12,22 @@
         <meta name="google-site-verification" content="RQVP29WC9y-bnMCZw06liZbkgi3TDgWLYM5bYigVPTc" />
         <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
         <script src="js/google_sheets_services/config.js"></script>
+        
+        <!-- Initialize deployment version early to detect stale code caching -->
+        <script>
+            (async () => {
+                try {
+                    // Use cache-busting query param to ensure version.json is always fresh from server
+                    const response = await fetch('./version.json?v=' + Date.now());
+                    const versionData = await response.json();
+                    window.__deployedVersion = versionData.version;
+                    console.log('[Version] Deployed version fetched:', versionData.version);
+                } catch (err) {
+                    console.warn('[Version] Failed to fetch version.json:', err.message);
+                }
+            })();
+        </script>
+        
         <script type="module" src="js/application/app.js"></script>
     </head>
     <body>

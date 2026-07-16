@@ -45,7 +45,8 @@ const App = {
             currentYear: new Date().getFullYear(),
             globalLocksStore: null, // Global reactive store for ALL locks
             notificationBus: notificationBus, // Reference for reactivity
-            updateAvailable: localStorage.getItem('updateAvailable') === 'true' // Reactive flag for update banner
+            updateAvailable: false, // Banner shows when deployed version differs from current
+            lastKnownVersion: null // Version at time of app mount (session-scoped, no localStorage needed)
         };
     },
     computed: {
@@ -103,7 +104,7 @@ const App = {
                 {
                     key: 'update-available',
                     color: 'orange',
-                    message: 'The application has received updates. Please refresh to get the latest version.',
+                    message: 'The application has received updates. Please refresh to get the latest version. \nIf this banner persists after refreshing, try clearing your browser cache.',
                     visible: this.updateAvailable,
                     dismissible: true,
                     action: {
@@ -174,25 +175,44 @@ const App = {
         // Add keyboard shortcuts for undo/redo
         document.addEventListener('keydown', this.handleGlobalKeyDown);
         
-        // Initialize application version on first load
-        try {
-            const response = await fetch('./version.json');
-            const versionData = await response.json();
+        // Initialize version detection
+        // window.__deployedVersion is set by the version.json fetch in index.html header
+        const initializeVersionDetection = async () => {
+            // Wait for deployed version to be fetched (max 2 seconds)
+            let deployedVersion = window.__deployedVersion;
+            let attempts = 0;
+            while (!deployedVersion && attempts < 20) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                deployedVersion = window.__deployedVersion;
+                attempts++;
+            }
             
-            // First load ever - store the version and no update available yet
-            localStorage.setItem('appVersion', versionData.version);
-            localStorage.setItem('updateAvailable', 'false');
+            if (!deployedVersion) {
+                console.warn('[App] Deployed version not available, skipping version detection');
+                return;
+            }
+            
+            // Store the deployed version as the baseline for this session
+            // No update on first load (versions always match initially)
+            this.lastKnownVersion = deployedVersion;
             this.updateAvailable = false;
-            //console.log('[App] Initialized version:', versionData.version);
-
-        } catch (err) {
-            console.warn('[App] Failed to initialize version:', err.message);
-        }
+            console.log('[App] Version baseline set:', deployedVersion);
+        };
         
-        // Listen for version update notifications from the cache poller
-        window.addEventListener('updateStatusChanged', (event) => {
-            this.updateAvailable = event.detail.updateAvailable;
-            //console.log('[App] Update status changed:', this.updateAvailable);
+        await initializeVersionDetection();
+        
+        // Listen for version check results from the cache poller
+        window.addEventListener('versionCheckResult', (event) => {
+            const { deployedVersion } = event.detail;
+            if (this.lastKnownVersion && deployedVersion !== this.lastKnownVersion) {
+                // Update detected mid-session
+                // console.log('[App] Update detected - new version available');
+                this.updateAvailable = true;
+            } else if (this.updateAvailable && deployedVersion === this.lastKnownVersion) {
+                // Versions now match (user refreshed after update)
+                // console.log('[App] Versions now match, hiding banner');
+                this.updateAvailable = false;
+            }
         });
 
         // Pass the reactive modals array to modalManager for all modal operations

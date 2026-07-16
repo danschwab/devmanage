@@ -740,30 +740,23 @@ export function setTimestampWriter(fn) {
 }
 
 /**
- * Check for application updates by comparing server version against stored version.
- * The initial version is set by app.js on mount. This function runs every 60s to detect deploys.
+ * Check for application updates by fetching the deployed version.
+ * App compares against its lastKnownVersion baseline set on mount.
+ * Cache-busting query param ensures version.json is always fresh from server.
  */
 async function checkAppVersion() {
     try {
-        const response = await fetch('./version.json');
+        // Use cache-busting query param to ensure fresh version from server
+        const response = await fetch('./version.json?v=' + Date.now());
         const versionData = await response.json();
-        const storedVersion = localStorage.getItem('appVersion');
+        const deployedVersion = versionData.version;
         
-        //console.log('[VersionCheck] Stored:', storedVersion, 'Server:', versionData.version);
+        console.log('[VersionCheck] Deployed version:', deployedVersion);
         
-        let updateStatus = 'false'; // Default: no update
-        
-        if (storedVersion && storedVersion !== versionData.version) {
-            // Version mismatch detected - show update banner
-            //console.log('[VersionCheck] Update available');
-            updateStatus = 'true';
-            // Update stored version so after refresh it will match and banner hides
-            //localStorage.setItem('appVersion', versionData.version);
-        }
-        
-        // Update flag and dispatch event
-        localStorage.setItem('updateAvailable', updateStatus);
-        window.dispatchEvent(new CustomEvent('updateStatusChanged', { detail: { updateAvailable: updateStatus === 'true' } }));
+        // Dispatch event with the deployed version so app can compare against its baseline
+        window.dispatchEvent(new CustomEvent('versionCheckResult', { 
+            detail: { deployedVersion } 
+        }));
     } catch (err) {
         console.warn('[VersionCheck] Error:', err.message);
         // Silently ignore errors (network issues, version.json not found)
