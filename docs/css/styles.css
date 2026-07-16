@@ -478,6 +478,7 @@ button.card {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    text-align:left;
     gap: var(--padding-sm);
     width: 100%;
 }
@@ -614,7 +615,7 @@ button.card {
     border-bottom: 1px solid var(--color-border);
     justify-content: space-between;
     padding: var(--padding-md);
-
+    align-items: center;
     box-shadow: 0 12px 14px -18px var(--color-shadow);
 }
 .modal-header h1 {
@@ -1823,11 +1824,9 @@ button.search-highlight {
     }
     
     /* Hide navigation items by default on mobile */
-    body:has(nav.hidden) {
-        --navbar-height: 0;
-    }
     nav.hidden {
         max-height: 0;
+        pointer-events: none;
     }
     nav.open {
         max-height: 100vh;
@@ -1867,22 +1866,21 @@ button.search-highlight {
     nav.open #navbar a.active {
         color: var(--color-primary-light);
     }
-    
-    /* Mobile login prompt adjustments */
-    .login-prompt {
-        margin: 1rem;
-        padding: 2rem 1rem;
+
+
+    .modal-overlay {
+        align-items: start;
+        /* padding-top: calc(var(--padding-md) + var(--navbar-height)); */
     }
-    
-    .main-content {
-        padding: calc(var(--navbar-height) + 1rem) 0.5rem 0;
+    .modal-header .column-button {
+        min-width: 28px;
+        min-height: 28px;
     }
 
     .container.dashboard-card.wide {
         width: var(--page-width-card);
         grid-column: span 1;
     }
-
 
     .cards-grid {
         display: flex;
@@ -1892,10 +1890,6 @@ button.search-highlight {
     .cards-grid .card {
         width: 100%;
         height: auto;
-    }
-
-    .button-bar {
-        width: 100%;
     }
 
     .hide-when-narrow {

@@ -188,9 +188,27 @@ export const PrimaryNavComponent = {
         const saved = localStorage.getItem('theme');
         if (saved) document.documentElement.dataset.theme = saved;
         document.addEventListener('mouseup', this.handleClickOutside);
-        //add a listener for scroll up or down in #app-content to hide or show the navbar
-        document.querySelector('#app-content').addEventListener('scroll', () => {
-            const currentScroll = document.querySelector('#app-content').scrollTop;
+        
+        // Add a listener for scroll up or down in #app-content to hide or show the navbar.
+        // Avoid hiding if there's insufficient scrollable content (less than navbar height * 2).
+        this._scrollHandler = () => {
+            const appContent = document.querySelector('#app-content');
+            if (!appContent) return;
+            
+            // Calculate available scrollable height
+            const scrollableHeight = appContent.scrollHeight - appContent.clientHeight;
+            const navbarHeight = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue('--navbar-height')
+            );
+            const minScrollThreshold = navbarHeight * 2;
+            
+            // Don't allow hiding if there's not enough scrollable content
+            if (scrollableHeight < minScrollThreshold) {
+                this.isMenuVisible = true;
+                return;
+            }
+            
+            const currentScroll = appContent.scrollTop;
             if (currentScroll > this.lastScrollTop + 12) {
                 this.isMenuVisible = false;
                 this.lastScrollTop = currentScroll;
@@ -198,13 +216,17 @@ export const PrimaryNavComponent = {
                 this.isMenuVisible = true;
                 this.lastScrollTop = currentScroll;
             }
-        });
+        };
+        
+        document.querySelector('#app-content')?.addEventListener('scroll', this._scrollHandler, { passive: true });
         
         // Initialize banner state
         this.updateAnalysisBanner();
     },
     beforeUnmount() {
         document.removeEventListener('mouseup', this.handleClickOutside);
+        document.querySelector('#app-content')?.removeEventListener('scroll', this._scrollHandler);
+        this._scrollHandler = null;
     },
     template: html`
         <header>

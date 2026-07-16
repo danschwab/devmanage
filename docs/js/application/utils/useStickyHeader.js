@@ -29,9 +29,11 @@
  *   container-bottom threshold doesn't shrink when a clone/child is removed, which
  *   would otherwise cause rapid activate/deactivate cycling at the data boundary.
  *
- * CSS OFFSET — navbar height is read from CSS variable --navbar-height and used for
- *   all positioning calculations. The sticky-header-wrapper element uses this same
- *   variable for its `top` property in CSS, ensuring consistency.
+ * CSS OFFSET — navbar offset is determined by reading the actual navbar element's bottom position
+ *   from the DOM (getBoundingClientRect). When nav.hidden, max-height:0 collapses the navbar so
+ *   bottom≈0, allowing sticky headers to activate at viewport top. When visible, bottom equals
+ *   navbar-height (80px/50px), so sticky headers appear below it. This real-time DOM reading
+ *   prevents timing issues with CSS variable updates during scroll events.
  *
  * @param {Object}   options
  * @param {Function} options.getStickyEl    () => the element to make sticky (used for height/top measurement)
@@ -66,21 +68,32 @@ export function useStickyHeader({
     // check fails → deactivate again…). Caching the maximum seen height keeps the threshold stable.
     let _peakStickyHeight = 0;
 
-    function _getNavbarHeightPx() {
-        // Extract navbar height from CSS variable (e.g., "80px" -> 80)
-        const root = document.documentElement;
-        const computed = getComputedStyle(root);
-        const heightStr = computed.getPropertyValue('--navbar-height').trim();
-        const heightPx = parseInt(heightStr, 10);
-        return isNaN(heightPx) ? 0 : heightPx;
+    function _getNavbarOffsetPx() {
+        // Get actual navbar bottom position from the DOM to handle nav.hidden state correctly.
+        // When navbar is hidden (max-height:0), bottom will be at/near 0.
+        // When navbar is visible, bottom will be at navbar-height (80px desktop, 50px mobile).
+        // This ensures sticky headers activate at the correct scroll position in real-time.
+        const navbar = document.querySelector('header nav');
+        if (!navbar) {
+            // Fallback to CSS variable if navbar element not found
+            const root = document.documentElement;
+            const computed = getComputedStyle(root);
+            const heightStr = computed.getPropertyValue('--navbar-sticky-offset').trim();
+            const heightPx = parseFloat(heightStr);
+            return isNaN(heightPx) ? 0 : heightPx;
+        }
+        
+        const rect = navbar.getBoundingClientRect();
+        // Use bottom position, which will be 0 when hidden, navbar-height when visible
+        return Math.max(0, rect.bottom);
     }
 
     function _update() {
         const stickyEl = getStickyEl?.();
         if (!stickyEl) return;
 
-        // Get navbar height from CSS variable (always at top: 0)
-        const navHeightPx = _getNavbarHeightPx();
+        // Get navbar offset from actual DOM position — accounts for nav.hidden state in real-time
+        const navHeightPx = _getNavbarOffsetPx();
 
         // Determine "flow top" for the activation check.
         // Prefer a stable anchor element whose position is invariant with respect to sticky state

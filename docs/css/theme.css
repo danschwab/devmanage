@@ -2,6 +2,7 @@
 :root {
     /* Interface Sizes */
     --navbar-height: 80px;
+    --navbar-sticky-offset: var(--navbar-height); /* Offset for sticky headers; changes when nav hidden */
     --page-width-card: 360px;
     --page-height-card: 360px;
     --page-width-large: 1000px;
@@ -95,6 +96,7 @@
         --page-width-card: calc(100vw - 16px);
         --page-width-small: calc(100vw - 16px);
         --navbar-height: 50px;
+        --navbar-sticky-offset: var(--navbar-height);
     }
 }
 
