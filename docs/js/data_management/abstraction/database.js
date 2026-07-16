@@ -184,18 +184,12 @@ class database_uncached {
             { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [itemNumberStr] }
         ], true);
 
-        // Fetch a blob URL for immediate display and a thumbnailLink for persistent storage.
-        // thumbnailLink is a cacheable CDN URL served without auth headers — used directly
-        // as img.src on subsequent page loads without needing blob conversion.
-        const [blobUrl, thumbnailLink] = await Promise.all([
-            GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id),
-            GoogleSheetsService.getDriveFileThumbnailLink(uploaded.id)
-        ]);
-        const displayUrl = blobUrl || thumbnailLink;
-        if (displayUrl) {
-            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, thumbnailLink || null)
+        // Fetch blob and store file reference to CACHE sheet (without blob URL generation)
+        const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
+        if (blobUrl) {
+            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, null)
                 .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
-            return displayUrl;
+            return blobUrl;
         }
         return null;
     }
@@ -234,15 +228,15 @@ class database_uncached {
     }
 
     /**
-     * Fetch a Drive file's thumbnailLink (cacheable CDN URL, no auth headers needed).
-     * Used by ItemImageComponent to lazily fetch thumbnailLinks for legacy records.
+     * Fetch an authenticated blob URL directly from a Drive file ID.
+     * Used by the thumbnail store analysis step to convert stored file IDs to displayable URLs.
      * @param {Object} deps - Dependency decorator
      * @param {string} fileId - Google Drive file ID
-     * @returns {Promise<string|null>} Thumbnail URL or null
+     * @returns {Promise<string|null>} Blob URL or null
      */
-    static async getDriveThumbnailLink(deps, fileId) {
+    static async getDriveBlobUrl(deps, fileId) {
         if (!fileId) return null;
-        return await GoogleSheetsService.getDriveFileThumbnailLink(fileId);
+        return await GoogleSheetsService.getAuthenticatedImageUrl(fileId);
     }
 
     /* MUTATION FUNCTIONS */
@@ -501,7 +495,7 @@ export const Database = wrapMethods(
     database_uncached, 
     'database', 
     ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
-    ['getItemImageBlobUrl', 'getDriveThumbnailLink', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
         // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)

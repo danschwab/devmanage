@@ -418,25 +418,110 @@ const ImageUploadComponent = {
     `
 };
 
+// Mini global queue that throttles how many images can be decoding/rendering at once.
+// Chrome and Edge block the main thread when decoding multiple image blobs simultaneously.
+// IntersectionObserver can fire many callbacks at once during a scroll — this queue
+// ensures only MAX_CONCURRENT images actually become visible (and start decoding) at a time.
+// Items are sorted by Y position so top-of-viewport images decode first.
+const ImageRenderQueue = {
+    pending: [],
+    active: 0,
+    MAX_CONCURRENT: 3,
+
+    enqueue(fn, yPosition = 0) {
+        // Store both the function and its Y position for sorting
+        this.pending.push({ fn, y: yPosition });
+        // Sort by Y position (ascending — top of page first)
+        this.pending.sort((a, b) => a.y - b.y);
+        this._flush();
+    },
+
+    release() {
+        this.active = Math.max(0, this.active - 1);
+        this._flush();
+    },
+
+    cancel(targetFn) {
+        const i = this.pending.findIndex(item => item.fn === targetFn);
+        if (i !== -1) this.pending.splice(i, 1);
+    },
+
+    _flush() {
+        while (this.active < this.MAX_CONCURRENT && this.pending.length > 0) {
+            this.active++;
+            const item = this.pending.shift();
+            item.fn();
+        }
+    }
+};
+
 // Factory that creates a shared IntersectionObserver for an entire table component.
-// Kept for external compatibility — no longer used internally by ItemImageComponent.
+// Each large table creates one of these and provides it to all descendant ItemImageComponents,
+// replacing hundreds of individual observers with a single one.
+// Components without a parent manager fall back to creating their own observer.
 export function createVisibilityManager() {
-    return { register() {}, unregister() {}, destroy() {} };
+    const callbacks = new Map(); // element → callback(y)
+    const observer = new IntersectionObserver(
+        (entries) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const cb = callbacks.get(entry.target);
+                if (cb) {
+                    callbacks.delete(entry.target);
+                    observer.unobserve(entry.target);
+                    // Pass the pre-calculated y from the IO entry — avoids a
+                    // forced synchronous layout recalculation (getBoundingClientRect).
+                    cb(entry.boundingClientRect.top);
+                }
+            });
+        },
+        { rootMargin: '100px', threshold: 0 }
+    );
+    return {
+        register(el, callback) {
+            callbacks.set(el, callback);
+            observer.observe(el);
+        },
+        unregister(el) {
+            if (callbacks.has(el)) {
+                callbacks.delete(el);
+                observer.unobserve(el);
+            }
+        },
+        destroy() {
+            observer.disconnect();
+            callbacks.clear();
+        }
+    };
 }
 
-// Shared singleton thumbnail store — loads all thumbnail records from the CACHE sheet.
-// Each record's `blob` field holds a cacheable Google CDN thumbnailLink.
-// Legacy records (file set, blob null) are fetched on-demand by ItemImageComponent
-// to avoid freezing the UI during store load with hundreds of Drive API calls.
+// Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
+// blob URLs via analysis. All ItemImageComponent instances share the same store instance.
+// Marked as exempt from eviction to prevent auto-clearing, similar to the dashboard store.
+// Lazy loading ensures images are only fetched when they scroll into view.
 function getThumbnailStore() {
     return getReactiveStore(
         Requests.getAllThumbnailRecords,
         null,
         [],
-        [],  // No analysis steps — lazy fetch instead
+        [
+            // Single analysis step: Convert file IDs to full blob URLs
+            createAnalysisConfig(
+                Requests.getDriveBlobUrl,
+                'blobUrl',
+                'Loading images...',
+                ['file'],
+                [],
+                null,
+                false,
+                Priority.BACKGROUND,
+                false,
+                false
+            )
+        ],
         true,   // autoLoad
         null,   // priorityConfig
-        true    // exemptFromEviction
+        true    // exemptFromEviction - prevent auto-clearing
     );
 }
 
@@ -456,13 +541,20 @@ export const ItemImageComponent = {
         }
     },
     inject: {
-        $modal: '$modal'
+        $modal: '$modal',
+        // Optionally injected by large table parents — replaces per-component IntersectionObserver
+        _tableVisibility: { from: '_tableVisibility', default: null }
     },
     data() {
         return {
             thumbnailStore: null,
             localImageUrl: null,    // Set immediately after upload for instant feedback
-            _fetchingThumbnailLink: false  // Prevent concurrent fetch attempts for same record
+            cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
+            cachedPrefixUrl: null,  // Last known good prefix URL to prevent flashing during reload
+            isVisible: false,       // Lazy loading: true once image is allowed to render
+            observer: null,         // Per-component IntersectionObserver (used when no parent manager)
+            _queueFn: null,         // Pending queue callback reference (for cancellation)
+            _holdsSlot: false       // Whether this component holds an active queue slot
         };
     },
     computed: {
@@ -477,12 +569,52 @@ export const ItemImageComponent = {
         },
         imageUrl() {
             if (this.localImageUrl) return this.localImageUrl;
-            return this.record?.blob || null;
+            
+            // Lazy loading: don't fetch images until visible
+            if (!this.isVisible) return null;
+            
+            // During loading/analyzing, preserve the cached URL to avoid flashing
+            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
+            if (isReloading && this.cachedImageUrl) {
+                return this.cachedImageUrl;
+            }
+            
+            // Use full image URL
+            let newUrl = this.record?.AppData?.blobUrl || null;
+            
+            // Update cache if URL changed
+            if (newUrl && newUrl !== this.cachedImageUrl) {
+                this.cachedImageUrl = newUrl;
+            }
+            
+            return newUrl;
         },
         prefixImageUrl() {
             if (this.imageUrl) return null;
+
+            // If this item has its own thumbnail record, never show the prefix fallback.
+            // Showing the prefix while waiting for the item's own analysis would cause a
+            // prefix→own transition (and a second blob URL load) once analysis resolves.
             if (this.record?.file) return null;
-            return this.prefixRecord?.blob || null;
+            
+            // Lazy loading: don't fetch images until visible
+            if (!this.isVisible) return null;
+            
+            // During loading/analyzing, preserve the cached prefix URL to avoid flashing
+            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
+            if (isReloading && this.cachedPrefixUrl) {
+                return this.cachedPrefixUrl;
+            }
+            
+            // Use full image URL
+            let newUrl = this.prefixRecord?.AppData?.blobUrl || null;
+            
+            // Update cache if URL changed
+            if (newUrl && newUrl !== this.cachedPrefixUrl) {
+                this.cachedPrefixUrl = newUrl;
+            }
+            
+            return newUrl;
         },
         isResolved() {
             return !this.thumbnailStore?.isLoading && !this.thumbnailStore?.isAnalyzing;
@@ -496,36 +628,85 @@ export const ItemImageComponent = {
     },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
-        this._maybeLoadThumbnailLink();
+        this._setupVisibility();
     },
     watch: {
-        // If the record changes and now has a file but no blob, fetch the thumbnailLink
-        record: {
-            handler() {
-                this._maybeLoadThumbnailLink();
-            },
-            deep: true
+        itemNumber() {
+            // Cancel any pending queue entry and release any held slot
+            if (this._queueFn) {
+                ImageRenderQueue.cancel(this._queueFn);
+                this._queueFn = null;
+            }
+            this._releaseSlot();
+
+            // Unregister from visibility system
+            if (this._tableVisibility) {
+                this._tableVisibility.unregister(this.$el);
+            } else if (this.observer) {
+                this.observer.disconnect();
+            }
+            
+            this.cachedImageUrl = null;
+            this.cachedPrefixUrl = null;
+            this.isVisible = false;
+            
+            // Re-register for the new item number
+            this._setupVisibility();
+        },
+        record(newRecord, oldRecord) {
+            // If the record changes (e.g., item deleted/recreated), clear cache
+            if (newRecord?.file !== oldRecord?.file) {
+                this.cachedImageUrl = null;
+                this.cachedPrefixUrl = null;
+            }
         }
     },
     methods: {
-        async _maybeLoadThumbnailLink() {
-            // Skip if already fetching, no record, or blob already set
-            if (this._fetchingThumbnailLink || !this.record?.file || this.record?.blob) return;
-            
-            this._fetchingThumbnailLink = true;
-            try {
-                const link = await Requests.getDriveThumbnailLink(this.record.file);
-                if (link) {
-                    // Persist the link so it survives navigation
-                    Requests.storeThumbnailRecord(this.record.itemNumber, this.record.file, link);
-                    // Display immediately without waiting for store reload
-                    this.localImageUrl = link;
-                }
-            } catch (err) {
-                console.warn('[ItemImageComponent] Failed to fetch thumbnail link:', err);
-            } finally {
-                this._fetchingThumbnailLink = false;
+        _setupVisibility() {
+            const onVisible = (yPosition = 0) => {
+                const fn = () => {
+                    this._queueFn = null;
+                    this._holdsSlot = true;
+                    this.isVisible = true;
+                    this.$nextTick(() => {
+                        if (!this.imageUrl && !this.prefixImageUrl) {
+                            this._releaseSlot();
+                        }
+                    });
+                };
+                this._queueFn = fn;
+                ImageRenderQueue.enqueue(fn, yPosition);
+            };
+
+            if (this._tableVisibility) {
+                // Delegate to the parent table's shared observer
+                // The manager passes entry.boundingClientRect.top to avoid forced reflow.
+                this._tableVisibility.register(this.$el, onVisible);
+            } else {
+                // Fallback: per-component observer for components outside large tables
+                this.observer = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                this.observer.disconnect();
+                                onVisible(entry.boundingClientRect.top);
+                            }
+                        });
+                    },
+                    { rootMargin: '100px', threshold: 0 }
+                );
+                this.observer.observe(this.$el);
             }
+        },
+        _releaseSlot() {
+            if (this._holdsSlot) {
+                this._holdsSlot = false;
+                ImageRenderQueue.release();
+            }
+        },
+        onImageSettled() {
+            // Called on @load or @error — signal the queue that this slot is free
+            this._releaseSlot();
         },
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
@@ -551,29 +732,48 @@ export const ItemImageComponent = {
                 onUploadSuccess: (url) => {
                     this.clearLocalImageUrl();
                     this.localImageUrl = url;
+                    this.cachedImageUrl = url;      // Update cache so new URL shows immediately
+                    this.cachedPrefixUrl = null;    // No longer need prefix
+                    this.isVisible = true;          // Ensure uploaded image shows immediately
                 }
             }, title);
         },
         async handleError(isMainImage) {
-            // thumbnailLink expired — fetch a fresh one from Drive.
-            const errorRecord = isMainImage ? this.record : this.prefixRecord;
-            if (!errorRecord?.file) return;
-
-            invalidateCache([{ namespace: 'database', methodName: 'getDriveThumbnailLink', args: [errorRecord.file] }]);
-            const fresh = await Requests.getDriveThumbnailLink(errorRecord.file);
-            if (!fresh) return;
-
-            // Persist the fresh link so it survives navigation and propagates to other tabs
-            Requests.storeThumbnailRecord(errorRecord.itemNumber, errorRecord.file, fresh);
-
-            // For the main image, also set localImageUrl for immediate display before store reloads
-            if (isMainImage) {
+            // Release the queue slot immediately — refetch is async and shouldn't block others
+            this._releaseSlot();
+            
+            // Blob URL became stale — re-fetch from the stored Drive file ID
+            const fileId = this.record?.file;
+            if (!fileId) return;
+            
+            // Clear cache since we're intentionally refetching
+            this.cachedImageUrl = null;
+            this.cachedPrefixUrl = null;
+            
+            // Invalidate and refetch full image
+            invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
+            const fresh = await Requests.getDriveBlobUrl(fileId);
+            if (fresh) {
                 this.clearLocalImageUrl();
                 this.localImageUrl = fresh;
+                this.cachedImageUrl = fresh;
             }
         }
     },
     beforeUnmount() {
+        if (this._queueFn) {
+            ImageRenderQueue.cancel(this._queueFn);
+            this._queueFn = null;
+        }
+        this._releaseSlot();
+
+        if (this._tableVisibility) {
+            this._tableVisibility.unregister(this.$el);
+        } else if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+        }
+        
         this.clearLocalImageUrl();
     },
     template: html`
@@ -592,7 +792,7 @@ export const ItemImageComponent = {
                     :src="prefixImageUrl"
                     alt="Category Image"
                     decoding="async"
-                    loading="lazy"
+                    @load="onImageSettled"
                     @error="handleError(false)"
                 />
 
@@ -603,7 +803,7 @@ export const ItemImageComponent = {
                     :src="imageUrl"
                     alt="Item Image"
                     decoding="async"
-                    loading="lazy"
+                    @load="onImageSettled"
                     @error="handleError(true)"
                 />
 
@@ -629,6 +829,11 @@ export const InventoryTableComponent = {
         ItemImageComponent
     },
     inject: ['appContext', '$modal', '$notify'],
+    provide() {
+        return {
+            _tableVisibility: this._visibilityManager
+        };
+    },
     props: {
         containerPath: {
             type: String,
@@ -651,7 +856,8 @@ export const InventoryTableComponent = {
         return {
             inventoryTableStore: null,
             lockNamespace: 'INVENTORY',
-            tabMetaFlags: { hideQuantity: false, hideItemNumber: false }
+            tabMetaFlags: { hideQuantity: false, hideItemNumber: false },
+            _visibilityManager: createVisibilityManager()
         };
     },
     computed: {
@@ -828,6 +1034,7 @@ export const InventoryTableComponent = {
     },
     beforeUnmount() {
         this.$notify.clearBanners(this.containerPath);
+        this._visibilityManager.destroy();
     },
     methods: {
         onForeignLockWhileClean() {

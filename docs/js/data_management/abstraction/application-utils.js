@@ -1050,7 +1050,7 @@ export const ApplicationUtils = wrapMethods(
     applicationUtils_uncached, 
     'app_utils', 
     ['storeUserData', 'initializeDefaultSavedSearches', 'lockSheet', 'unlockSheet', 'forceUnlockSheet', 'releaseAllUserLocks', '_writeUserColumn', '_writeLockKeyRow', '_writeLockCell', '_numberToColumnLetter', '_initializeLocksSheet', 'writeCacheTimestamp', 'readCacheTimestamps', 'storeThumbnailRecord', 'getShortLink', 'expandShortLink'], // Mutation methods
-    ['getThumbnailRecord', 'expandShortLink', 'getAllThumbnailRecords'], // Infinite cache methods
+    ['getThumbnailRecord', 'expandShortLink'], // Infinite cache methods
     { 'getSheetLock': 10000, 'getLocksData': 10000 } // Custom cache durations (10 seconds for getSheetLock and getLocksData)
 );
 

@@ -845,8 +845,8 @@ class Requests_uncached {
         return await deps.call(ApplicationUtils.getAllThumbnailRecords);
     }
 
-    static async getDriveThumbnailLink(deps, fileId) {
-        return await deps.call(Database.getDriveThumbnailLink, fileId);
+    static async getDriveBlobUrl(deps, fileId) {
+        return await deps.call(Database.getDriveBlobUrl, fileId);
     }
 
     /**
