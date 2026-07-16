@@ -196,7 +196,7 @@ const App = {
             // No update on first load (versions always match initially)
             this.lastKnownVersion = deployedVersion;
             this.updateAvailable = false;
-            console.log('[App] Version baseline set:', deployedVersion);
+            // console.log('[App] Version baseline set:', deployedVersion);
         };
         
         await initializeVersionDetection();

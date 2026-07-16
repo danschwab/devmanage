@@ -21,7 +21,7 @@
                     const response = await fetch('./version.json?v=' + Date.now());
                     const versionData = await response.json();
                     window.__deployedVersion = versionData.version;
-                    console.log('[Version] Deployed version fetched:', versionData.version);
+                    // console.log('[Version] Deployed version fetched:', versionData.version);
                 } catch (err) {
                     console.warn('[Version] Failed to fetch version.json:', err.message);
                 }
