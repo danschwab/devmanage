@@ -1,4 +1,5 @@
 import { html, Requests, TableComponent, getReactiveStore, ItemImageComponent, invalidateCache, EditHistoryUtils, todayISOString, NavigationRegistry } from '../../index.js';
+import { createVisibilityManager } from './InventoryTable.js';
 
 export const InventoryOverviewTableComponent = {
     components: {
@@ -16,9 +17,15 @@ export const InventoryOverviewTableComponent = {
         }
     },
     inject: ['$modal'],
+    provide() {
+        return {
+            _tableVisibility: this._visibilityManager
+        };
+    },
     data() {
         return {
             suppressedTabs: new Set(),
+            _visibilityManager: createVisibilityManager(),
             columns: [
                 { 
                     key: 'tab', 
@@ -97,7 +104,9 @@ export const InventoryOverviewTableComponent = {
     async mounted() {
         await this.initializeInventoryStore();
     },
-
+    beforeUnmount() {
+        this._visibilityManager.destroy();
+    },
     methods: {
         async initializeInventoryStore() {
             // Load index to determine which tabs should be hidden from the overview
