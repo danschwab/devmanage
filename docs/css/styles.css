@@ -728,7 +728,7 @@ button.card {
 }
 
 .sticky-header-wrapper[style*="position: fixed"] {
-    top: var(--navbar-height);
+    top: var(--navbar-sticky-offset);
     box-shadow: 0 4px 8px var(--color-shadow);
     transition: top 0.2s ease;
 }
@@ -1824,6 +1824,9 @@ button.search-highlight {
     }
     
     /* Hide navigation items by default on mobile */
+    body:has(nav.hidden) {
+        --navbar-sticky-offset: 0;
+    }
     nav.hidden {
         max-height: 0;
         pointer-events: none;
