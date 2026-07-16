@@ -419,41 +419,9 @@ const ImageUploadComponent = {
 };
 
 // Factory that creates a shared IntersectionObserver for an entire table component.
-// Each large table creates one of these and provides it to all descendant ItemImageComponents,
-// replacing hundreds of individual observers with a single one.
-// Components without a parent manager fall back to creating their own observer.
+// Kept for external compatibility — no longer used internally by ItemImageComponent.
 export function createVisibilityManager() {
-    const callbacks = new Map(); // element → callback
-    const observer = new IntersectionObserver(
-        (entries) => {
-            entries.forEach(entry => {
-                if (!entry.isIntersecting) return;
-                const cb = callbacks.get(entry.target);
-                if (cb) {
-                    callbacks.delete(entry.target);
-                    observer.unobserve(entry.target);
-                    cb();
-                }
-            });
-        },
-        { rootMargin: '100px', threshold: 0 }
-    );
-    return {
-        register(el, callback) {
-            callbacks.set(el, callback);
-            observer.observe(el);
-        },
-        unregister(el) {
-            if (callbacks.has(el)) {
-                callbacks.delete(el);
-                observer.unobserve(el);
-            }
-        },
-        destroy() {
-            observer.disconnect();
-            callbacks.clear();
-        }
-    };
+    return { register() {}, unregister() {}, destroy() {} };
 }
 
 // Shared singleton thumbnail store — loads all thumbnail records from the CACHE sheet.
@@ -504,16 +472,12 @@ export const ItemImageComponent = {
         }
     },
     inject: {
-        $modal: '$modal',
-        // Optionally injected by large table parents — replaces per-component IntersectionObserver
-        _tableVisibility: { from: '_tableVisibility', default: null }
+        $modal: '$modal'
     },
     data() {
         return {
             thumbnailStore: null,
-            localImageUrl: null,    // Set immediately after upload for instant feedback
-            isVisible: false,       // Lazy loading: true once scrolled into view
-            observer: null          // Per-component IntersectionObserver (used when no parent manager)
+            localImageUrl: null    // Set immediately after upload for instant feedback
         };
     },
     computed: {
@@ -528,14 +492,11 @@ export const ItemImageComponent = {
         },
         imageUrl() {
             if (this.localImageUrl) return this.localImageUrl;
-            if (!this.isVisible) return null;
             return this.record?.blob || null;
         },
         prefixImageUrl() {
             if (this.imageUrl) return null;
-            // If this item has its own record, don't show the prefix fallback.
             if (this.record?.file) return null;
-            if (!this.isVisible) return null;
             return this.prefixRecord?.blob || null;
         },
         isResolved() {
@@ -550,39 +511,8 @@ export const ItemImageComponent = {
     },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
-        this._setupVisibility();
-    },
-    watch: {
-        itemNumber() {
-            if (this._tableVisibility) {
-                this._tableVisibility.unregister(this.$el);
-            } else if (this.observer) {
-                this.observer.disconnect();
-            }
-            this.isVisible = false;
-            this._setupVisibility();
-        }
     },
     methods: {
-        _setupVisibility() {
-            const onVisible = () => { this.isVisible = true; };
-            if (this._tableVisibility) {
-                this._tableVisibility.register(this.$el, onVisible);
-            } else {
-                this.observer = new IntersectionObserver(
-                    (entries) => {
-                        entries.forEach(entry => {
-                            if (entry.isIntersecting) {
-                                this.observer.disconnect();
-                                onVisible();
-                            }
-                        });
-                    },
-                    { rootMargin: '100px', threshold: 0 }
-                );
-                this.observer.observe(this.$el);
-            }
-        },
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;
@@ -607,7 +537,6 @@ export const ItemImageComponent = {
                 onUploadSuccess: (url) => {
                     this.clearLocalImageUrl();
                     this.localImageUrl = url;
-                    this.isVisible = true;
                 }
             }, title);
         },
@@ -631,12 +560,6 @@ export const ItemImageComponent = {
         }
     },
     beforeUnmount() {
-        if (this._tableVisibility) {
-            this._tableVisibility.unregister(this.$el);
-        } else if (this.observer) {
-            this.observer.disconnect();
-            this.observer = null;
-        }
         this.clearLocalImageUrl();
     },
     template: html`
@@ -655,6 +578,7 @@ export const ItemImageComponent = {
                     :src="prefixImageUrl"
                     alt="Category Image"
                     decoding="async"
+                    loading="lazy"
                     @error="handleError(false)"
                 />
 
@@ -665,6 +589,7 @@ export const ItemImageComponent = {
                     :src="imageUrl"
                     alt="Item Image"
                     decoding="async"
+                    loading="lazy"
                     @error="handleError(true)"
                 />
 
@@ -690,11 +615,6 @@ export const InventoryTableComponent = {
         ItemImageComponent
     },
     inject: ['appContext', '$modal', '$notify'],
-    provide() {
-        return {
-            _tableVisibility: this._visibilityManager
-        };
-    },
     props: {
         containerPath: {
             type: String,
@@ -717,8 +637,7 @@ export const InventoryTableComponent = {
         return {
             inventoryTableStore: null,
             lockNamespace: 'INVENTORY',
-            tabMetaFlags: { hideQuantity: false, hideItemNumber: false },
-            _visibilityManager: createVisibilityManager()
+            tabMetaFlags: { hideQuantity: false, hideItemNumber: false }
         };
     },
     computed: {
@@ -895,7 +814,6 @@ export const InventoryTableComponent = {
     },
     beforeUnmount() {
         this.$notify.clearBanners(this.containerPath);
-        this._visibilityManager.destroy();
     },
     methods: {
         onForeignLockWhileClean() {
