@@ -425,31 +425,15 @@ export function createVisibilityManager() {
 }
 
 // Shared singleton thumbnail store — loads all thumbnail records from the CACHE sheet.
-// Each record's `blob` field holds a cacheable Google CDN thumbnailLink used directly as
-// img.src. A background migration analysis fetches and persists thumbnailLinks for any
-// legacy records that only have a Drive file ID (blob = null).
+// Each record's `blob` field holds a cacheable Google CDN thumbnailLink.
+// Legacy records (file set, blob null) are fetched on-demand by ItemImageComponent
+// to avoid freezing the UI during store load with hundreds of Drive API calls.
 function getThumbnailStore() {
     return getReactiveStore(
         Requests.getAllThumbnailRecords,
         null,
         [],
-        [
-            // Migration step: for records missing a thumbnailLink (blob = null),
-            // fetch one from Drive, write it to record.blob, and persist to the CACHE sheet.
-            // Items that already have a thumbnailLink are skipped immediately (returns undefined).
-            createAnalysisConfig(
-                Requests.fetchAndPersistThumbnailLink,
-                'thumbnailLink',    // AppData key (unused — targetColumn overrides)
-                'Updating thumbnails...',
-                [],                 // no sourceColumns — passFullItem used instead
-                [],
-                'blob',             // targetColumn: write directly to record.blob
-                true,               // passFullItem
-                Priority.BACKGROUND,
-                false,
-                false               // not essential
-            )
-        ],
+        [],  // No analysis steps — lazy fetch instead
         true,   // autoLoad
         null,   // priorityConfig
         true    // exemptFromEviction
@@ -477,7 +461,8 @@ export const ItemImageComponent = {
     data() {
         return {
             thumbnailStore: null,
-            localImageUrl: null    // Set immediately after upload for instant feedback
+            localImageUrl: null,    // Set immediately after upload for instant feedback
+            _fetchingThumbnailLink: false  // Prevent concurrent fetch attempts for same record
         };
     },
     computed: {
@@ -511,8 +496,37 @@ export const ItemImageComponent = {
     },
     mounted() {
         this.thumbnailStore = getThumbnailStore();
+        this._maybeLoadThumbnailLink();
+    },
+    watch: {
+        // If the record changes and now has a file but no blob, fetch the thumbnailLink
+        record: {
+            handler() {
+                this._maybeLoadThumbnailLink();
+            },
+            deep: true
+        }
     },
     methods: {
+        async _maybeLoadThumbnailLink() {
+            // Skip if already fetching, no record, or blob already set
+            if (this._fetchingThumbnailLink || !this.record?.file || this.record?.blob) return;
+            
+            this._fetchingThumbnailLink = true;
+            try {
+                const link = await Requests.getDriveThumbnailLink(this.record.file);
+                if (link) {
+                    // Persist the link so it survives navigation
+                    Requests.storeThumbnailRecord(this.record.itemNumber, this.record.file, link);
+                    // Display immediately without waiting for store reload
+                    this.localImageUrl = link;
+                }
+            } catch (err) {
+                console.warn('[ItemImageComponent] Failed to fetch thumbnail link:', err);
+            } finally {
+                this._fetchingThumbnailLink = false;
+            }
+        },
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
             this.localImageUrl = null;

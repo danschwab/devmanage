@@ -849,10 +849,6 @@ class Requests_uncached {
         return await deps.call(Database.getDriveThumbnailLink, fileId);
     }
 
-    static async fetchAndPersistThumbnailLink(record) {
-        return await Database.fetchAndPersistThumbnailLink(record);
-    }
-
     /**
      * Fetch the full-resolution image for an item as a blob URL.
      * Only call this when the user requests the full-size view.
@@ -1611,7 +1607,7 @@ export const Requests = wrapMethods(
     'api', 
     [
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
-        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord', 'fetchAndPersistThumbnailLink',
+        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',

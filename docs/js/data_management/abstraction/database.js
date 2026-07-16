@@ -235,7 +235,7 @@ class database_uncached {
 
     /**
      * Fetch a Drive file's thumbnailLink (cacheable CDN URL, no auth headers needed).
-     * Used by the error handler to refresh expired thumbnailLinks.
+     * Used by ItemImageComponent to lazily fetch thumbnailLinks for legacy records.
      * @param {Object} deps - Dependency decorator
      * @param {string} fileId - Google Drive file ID
      * @returns {Promise<string|null>} Thumbnail URL or null
@@ -243,25 +243,6 @@ class database_uncached {
     static async getDriveThumbnailLink(deps, fileId) {
         if (!fileId) return null;
         return await GoogleSheetsService.getDriveFileThumbnailLink(fileId);
-    }
-
-    /**
-     * Migration helper: fetches and persists a thumbnailLink for records that only have a
-     * Drive file ID (blob = null). Called as the thumbnail store's analysis step.
-     * Returns undefined (preserve) for records that already have a thumbnailLink stored.
-     * MUTATION — not cached, runs as analysis step with passFullItem=true.
-     * @param {Object} record - Full thumbnail record { itemNumber, file, blob }
-     * @returns {Promise<string|null|undefined>} thumbnailLink, null, or undefined to preserve
-     */
-    static async fetchAndPersistThumbnailLink(record) {
-        if (record.blob) return undefined; // Already has a thumbnailLink — leave it
-        if (!record.file) return null;
-        const link = await GoogleSheetsService.getDriveFileThumbnailLink(record.file);
-        if (link) {
-            ApplicationUtils.storeThumbnailRecord(record.itemNumber, record.file, link)
-                .catch(() => {});
-        }
-        return link || null;
     }
 
     /* MUTATION FUNCTIONS */
@@ -519,7 +500,7 @@ class database_uncached {
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage', 'fetchAndPersistThumbnailLink'],
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
     ['getItemImageBlobUrl', 'getDriveThumbnailLink', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
