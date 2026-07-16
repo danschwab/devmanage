@@ -184,12 +184,18 @@ class database_uncached {
             { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [itemNumberStr] }
         ], true);
 
-        // Fetch blob and store file reference to CACHE sheet (without blob URL generation)
-        const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
-        if (blobUrl) {
-            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, null)
+        // Fetch a blob URL for immediate display and a thumbnailLink for persistent storage.
+        // thumbnailLink is a cacheable CDN URL served without auth headers — used directly
+        // as img.src on subsequent page loads without needing blob conversion.
+        const [blobUrl, thumbnailLink] = await Promise.all([
+            GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id),
+            GoogleSheetsService.getDriveFileThumbnailLink(uploaded.id)
+        ]);
+        const displayUrl = blobUrl || thumbnailLink;
+        if (displayUrl) {
+            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, thumbnailLink || null)
                 .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
-            return blobUrl;
+            return displayUrl;
         }
         return null;
     }
@@ -228,15 +234,34 @@ class database_uncached {
     }
 
     /**
-     * Fetch an authenticated blob URL directly from a Drive file ID.
-     * Used by the thumbnail store analysis step to convert stored file IDs to displayable URLs.
+     * Fetch a Drive file's thumbnailLink (cacheable CDN URL, no auth headers needed).
+     * Used by the error handler to refresh expired thumbnailLinks.
      * @param {Object} deps - Dependency decorator
      * @param {string} fileId - Google Drive file ID
-     * @returns {Promise<string|null>} Blob URL or null
+     * @returns {Promise<string|null>} Thumbnail URL or null
      */
-    static async getDriveBlobUrl(deps, fileId) {
+    static async getDriveThumbnailLink(deps, fileId) {
         if (!fileId) return null;
-        return await GoogleSheetsService.getAuthenticatedImageUrl(fileId);
+        return await GoogleSheetsService.getDriveFileThumbnailLink(fileId);
+    }
+
+    /**
+     * Migration helper: fetches and persists a thumbnailLink for records that only have a
+     * Drive file ID (blob = null). Called as the thumbnail store's analysis step.
+     * Returns undefined (preserve) for records that already have a thumbnailLink stored.
+     * MUTATION — not cached, runs as analysis step with passFullItem=true.
+     * @param {Object} record - Full thumbnail record { itemNumber, file, blob }
+     * @returns {Promise<string|null|undefined>} thumbnailLink, null, or undefined to preserve
+     */
+    static async fetchAndPersistThumbnailLink(record) {
+        if (record.blob) return undefined; // Already has a thumbnailLink — leave it
+        if (!record.file) return null;
+        const link = await GoogleSheetsService.getDriveFileThumbnailLink(record.file);
+        if (link) {
+            ApplicationUtils.storeThumbnailRecord(record.itemNumber, record.file, link)
+                .catch(() => {});
+        }
+        return link || null;
     }
 
     /* MUTATION FUNCTIONS */
@@ -494,8 +519,8 @@ class database_uncached {
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
-    ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage', 'fetchAndPersistThumbnailLink'],
+    ['getItemImageBlobUrl', 'getDriveThumbnailLink', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
         // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)

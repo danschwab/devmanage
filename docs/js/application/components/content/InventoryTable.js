@@ -418,49 +418,12 @@ const ImageUploadComponent = {
     `
 };
 
-// Mini global queue that throttles how many images can be decoding/rendering at once.
-// Chrome and Edge block the main thread when decoding multiple image blobs simultaneously.
-// IntersectionObserver can fire many callbacks at once during a scroll — this queue
-// ensures only MAX_CONCURRENT images actually become visible (and start decoding) at a time.
-// Items are sorted by Y position so top-of-viewport images decode first.
-const ImageRenderQueue = {
-    pending: [],
-    active: 0,
-    MAX_CONCURRENT: 3,
-
-    enqueue(fn, yPosition = 0) {
-        // Store both the function and its Y position for sorting
-        this.pending.push({ fn, y: yPosition });
-        // Sort by Y position (ascending — top of page first)
-        this.pending.sort((a, b) => a.y - b.y);
-        this._flush();
-    },
-
-    release() {
-        this.active = Math.max(0, this.active - 1);
-        this._flush();
-    },
-
-    cancel(targetFn) {
-        const i = this.pending.findIndex(item => item.fn === targetFn);
-        if (i !== -1) this.pending.splice(i, 1);
-    },
-
-    _flush() {
-        while (this.active < this.MAX_CONCURRENT && this.pending.length > 0) {
-            this.active++;
-            const item = this.pending.shift();
-            item.fn();
-        }
-    }
-};
-
 // Factory that creates a shared IntersectionObserver for an entire table component.
 // Each large table creates one of these and provides it to all descendant ItemImageComponents,
 // replacing hundreds of individual observers with a single one.
 // Components without a parent manager fall back to creating their own observer.
 export function createVisibilityManager() {
-    const callbacks = new Map(); // element → callback(y)
+    const callbacks = new Map(); // element → callback
     const observer = new IntersectionObserver(
         (entries) => {
             entries.forEach(entry => {
@@ -469,9 +432,7 @@ export function createVisibilityManager() {
                 if (cb) {
                     callbacks.delete(entry.target);
                     observer.unobserve(entry.target);
-                    // Pass the pre-calculated y from the IO entry — avoids a
-                    // forced synchronous layout recalculation (getBoundingClientRect).
-                    cb(entry.boundingClientRect.top);
+                    cb();
                 }
             });
         },
@@ -495,33 +456,35 @@ export function createVisibilityManager() {
     };
 }
 
-// Shared singleton thumbnail store — loads the full Thumbnails table once and resolves
-// blob URLs via analysis. All ItemImageComponent instances share the same store instance.
-// Marked as exempt from eviction to prevent auto-clearing, similar to the dashboard store.
-// Lazy loading ensures images are only fetched when they scroll into view.
+// Shared singleton thumbnail store — loads all thumbnail records from the CACHE sheet.
+// Each record's `blob` field holds a cacheable Google CDN thumbnailLink used directly as
+// img.src. A background migration analysis fetches and persists thumbnailLinks for any
+// legacy records that only have a Drive file ID (blob = null).
 function getThumbnailStore() {
     return getReactiveStore(
         Requests.getAllThumbnailRecords,
         null,
         [],
         [
-            // Single analysis step: Convert file IDs to full blob URLs
+            // Migration step: for records missing a thumbnailLink (blob = null),
+            // fetch one from Drive, write it to record.blob, and persist to the CACHE sheet.
+            // Items that already have a thumbnailLink are skipped immediately (returns undefined).
             createAnalysisConfig(
-                Requests.getDriveBlobUrl,
-                'blobUrl',
-                'Loading images...',
-                ['file'],
+                Requests.fetchAndPersistThumbnailLink,
+                'thumbnailLink',    // AppData key (unused — targetColumn overrides)
+                'Updating thumbnails...',
+                [],                 // no sourceColumns — passFullItem used instead
                 [],
-                null,
-                false,
+                'blob',             // targetColumn: write directly to record.blob
+                true,               // passFullItem
                 Priority.BACKGROUND,
                 false,
-                false
+                false               // not essential
             )
         ],
         true,   // autoLoad
         null,   // priorityConfig
-        true    // exemptFromEviction - prevent auto-clearing
+        true    // exemptFromEviction
     );
 }
 
@@ -549,12 +512,8 @@ export const ItemImageComponent = {
         return {
             thumbnailStore: null,
             localImageUrl: null,    // Set immediately after upload for instant feedback
-            cachedImageUrl: null,   // Last known good image URL to prevent flashing during reload
-            cachedPrefixUrl: null,  // Last known good prefix URL to prevent flashing during reload
-            isVisible: false,       // Lazy loading: true once image is allowed to render
-            observer: null,         // Per-component IntersectionObserver (used when no parent manager)
-            _queueFn: null,         // Pending queue callback reference (for cancellation)
-            _holdsSlot: false       // Whether this component holds an active queue slot
+            isVisible: false,       // Lazy loading: true once scrolled into view
+            observer: null          // Per-component IntersectionObserver (used when no parent manager)
         };
     },
     computed: {
@@ -569,52 +528,15 @@ export const ItemImageComponent = {
         },
         imageUrl() {
             if (this.localImageUrl) return this.localImageUrl;
-            
-            // Lazy loading: don't fetch images until visible
             if (!this.isVisible) return null;
-            
-            // During loading/analyzing, preserve the cached URL to avoid flashing
-            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
-            if (isReloading && this.cachedImageUrl) {
-                return this.cachedImageUrl;
-            }
-            
-            // Use full image URL
-            let newUrl = this.record?.AppData?.blobUrl || null;
-            
-            // Update cache if URL changed
-            if (newUrl && newUrl !== this.cachedImageUrl) {
-                this.cachedImageUrl = newUrl;
-            }
-            
-            return newUrl;
+            return this.record?.blob || null;
         },
         prefixImageUrl() {
             if (this.imageUrl) return null;
-
-            // If this item has its own thumbnail record, never show the prefix fallback.
-            // Showing the prefix while waiting for the item's own analysis would cause a
-            // prefix→own transition (and a second blob URL load) once analysis resolves.
+            // If this item has its own record, don't show the prefix fallback.
             if (this.record?.file) return null;
-            
-            // Lazy loading: don't fetch images until visible
             if (!this.isVisible) return null;
-            
-            // During loading/analyzing, preserve the cached prefix URL to avoid flashing
-            const isReloading = this.thumbnailStore?.isLoading || this.thumbnailStore?.isAnalyzing;
-            if (isReloading && this.cachedPrefixUrl) {
-                return this.cachedPrefixUrl;
-            }
-            
-            // Use full image URL
-            let newUrl = this.prefixRecord?.AppData?.blobUrl || null;
-            
-            // Update cache if URL changed
-            if (newUrl && newUrl !== this.cachedPrefixUrl) {
-                this.cachedPrefixUrl = newUrl;
-            }
-            
-            return newUrl;
+            return this.prefixRecord?.blob || null;
         },
         isResolved() {
             return !this.thumbnailStore?.isLoading && !this.thumbnailStore?.isAnalyzing;
@@ -632,64 +554,27 @@ export const ItemImageComponent = {
     },
     watch: {
         itemNumber() {
-            // Cancel any pending queue entry and release any held slot
-            if (this._queueFn) {
-                ImageRenderQueue.cancel(this._queueFn);
-                this._queueFn = null;
-            }
-            this._releaseSlot();
-
-            // Unregister from visibility system
             if (this._tableVisibility) {
                 this._tableVisibility.unregister(this.$el);
             } else if (this.observer) {
                 this.observer.disconnect();
             }
-            
-            this.cachedImageUrl = null;
-            this.cachedPrefixUrl = null;
             this.isVisible = false;
-            
-            // Re-register for the new item number
             this._setupVisibility();
-        },
-        record(newRecord, oldRecord) {
-            // If the record changes (e.g., item deleted/recreated), clear cache
-            if (newRecord?.file !== oldRecord?.file) {
-                this.cachedImageUrl = null;
-                this.cachedPrefixUrl = null;
-            }
         }
     },
     methods: {
         _setupVisibility() {
-            const onVisible = (yPosition = 0) => {
-                const fn = () => {
-                    this._queueFn = null;
-                    this._holdsSlot = true;
-                    this.isVisible = true;
-                    this.$nextTick(() => {
-                        if (!this.imageUrl && !this.prefixImageUrl) {
-                            this._releaseSlot();
-                        }
-                    });
-                };
-                this._queueFn = fn;
-                ImageRenderQueue.enqueue(fn, yPosition);
-            };
-
+            const onVisible = () => { this.isVisible = true; };
             if (this._tableVisibility) {
-                // Delegate to the parent table's shared observer
-                // The manager passes entry.boundingClientRect.top to avoid forced reflow.
                 this._tableVisibility.register(this.$el, onVisible);
             } else {
-                // Fallback: per-component observer for components outside large tables
                 this.observer = new IntersectionObserver(
                     (entries) => {
                         entries.forEach(entry => {
                             if (entry.isIntersecting) {
                                 this.observer.disconnect();
-                                onVisible(entry.boundingClientRect.top);
+                                onVisible();
                             }
                         });
                     },
@@ -697,16 +582,6 @@ export const ItemImageComponent = {
                 );
                 this.observer.observe(this.$el);
             }
-        },
-        _releaseSlot() {
-            if (this._holdsSlot) {
-                this._holdsSlot = false;
-                ImageRenderQueue.release();
-            }
-        },
-        onImageSettled() {
-            // Called on @load or @error — signal the queue that this slot is free
-            this._releaseSlot();
         },
         clearLocalImageUrl() {
             if (this.localImageUrl?.startsWith('blob:')) URL.revokeObjectURL(this.localImageUrl);
@@ -732,48 +607,36 @@ export const ItemImageComponent = {
                 onUploadSuccess: (url) => {
                     this.clearLocalImageUrl();
                     this.localImageUrl = url;
-                    this.cachedImageUrl = url;      // Update cache so new URL shows immediately
-                    this.cachedPrefixUrl = null;    // No longer need prefix
-                    this.isVisible = true;          // Ensure uploaded image shows immediately
+                    this.isVisible = true;
                 }
             }, title);
         },
         async handleError(isMainImage) {
-            // Release the queue slot immediately — refetch is async and shouldn't block others
-            this._releaseSlot();
-            
-            // Blob URL became stale — re-fetch from the stored Drive file ID
-            const fileId = this.record?.file;
-            if (!fileId) return;
-            
-            // Clear cache since we're intentionally refetching
-            this.cachedImageUrl = null;
-            this.cachedPrefixUrl = null;
-            
-            // Invalidate and refetch full image
-            invalidateCache([{ namespace: 'database', methodName: 'getDriveBlobUrl', args: [fileId] }]);
-            const fresh = await Requests.getDriveBlobUrl(fileId);
-            if (fresh) {
+            // thumbnailLink expired — fetch a fresh one from Drive.
+            const errorRecord = isMainImage ? this.record : this.prefixRecord;
+            if (!errorRecord?.file) return;
+
+            invalidateCache([{ namespace: 'database', methodName: 'getDriveThumbnailLink', args: [errorRecord.file] }]);
+            const fresh = await Requests.getDriveThumbnailLink(errorRecord.file);
+            if (!fresh) return;
+
+            // Persist the fresh link so it survives navigation and propagates to other tabs
+            Requests.storeThumbnailRecord(errorRecord.itemNumber, errorRecord.file, fresh);
+
+            // For the main image, also set localImageUrl for immediate display before store reloads
+            if (isMainImage) {
                 this.clearLocalImageUrl();
                 this.localImageUrl = fresh;
-                this.cachedImageUrl = fresh;
             }
         }
     },
     beforeUnmount() {
-        if (this._queueFn) {
-            ImageRenderQueue.cancel(this._queueFn);
-            this._queueFn = null;
-        }
-        this._releaseSlot();
-
         if (this._tableVisibility) {
             this._tableVisibility.unregister(this.$el);
         } else if (this.observer) {
             this.observer.disconnect();
             this.observer = null;
         }
-        
         this.clearLocalImageUrl();
     },
     template: html`
@@ -792,7 +655,6 @@ export const ItemImageComponent = {
                     :src="prefixImageUrl"
                     alt="Category Image"
                     decoding="async"
-                    @load="onImageSettled"
                     @error="handleError(false)"
                 />
 
@@ -803,7 +665,6 @@ export const ItemImageComponent = {
                     :src="imageUrl"
                     alt="Item Image"
                     decoding="async"
-                    @load="onImageSettled"
                     @error="handleError(true)"
                 />
 

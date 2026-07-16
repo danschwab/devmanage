@@ -249,7 +249,7 @@ export const BannerNotifications = {
             <transition-group name="expand">
                 <template v-for="banner in visibleBanners" :key="banner.key">
                     <div :class="['banner-notification', 'card', banner.color]" style="display: flex; align-items: center; justify-content: space-between; gap: var(--padding-sm);">
-                        <span>{{ banner.message }}</span>
+                        <span style="white-space: pre-wrap; overflow-wrap: break-word;">{{ banner.message }}</span>
                         <div v-if="banner.action && banner.dismissible !== false" class="button-bar">
                             <button
                                 @click="banner.action.fn()"

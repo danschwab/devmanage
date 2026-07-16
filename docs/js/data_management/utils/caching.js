@@ -751,7 +751,7 @@ async function checkAppVersion() {
         const versionData = await response.json();
         const deployedVersion = versionData.version;
         
-        console.log('[VersionCheck] Deployed version:', deployedVersion);
+        // console.log('[VersionCheck] Deployed version:', deployedVersion);
         
         // Dispatch event with the deployed version so app can compare against its baseline
         window.dispatchEvent(new CustomEvent('versionCheckResult', { 

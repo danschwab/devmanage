@@ -845,8 +845,12 @@ class Requests_uncached {
         return await deps.call(ApplicationUtils.getAllThumbnailRecords);
     }
 
-    static async getDriveBlobUrl(deps, fileId) {
-        return await deps.call(Database.getDriveBlobUrl, fileId);
+    static async getDriveThumbnailLink(deps, fileId) {
+        return await deps.call(Database.getDriveThumbnailLink, fileId);
+    }
+
+    static async fetchAndPersistThumbnailLink(record) {
+        return await Database.fetchAndPersistThumbnailLink(record);
     }
 
     /**
@@ -1607,7 +1611,7 @@ export const Requests = wrapMethods(
     'api', 
     [
         'saveData', 'createNewTab', 'showTabs', 'hideTabs',
-        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord',
+        'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord', 'fetchAndPersistThumbnailLink',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
