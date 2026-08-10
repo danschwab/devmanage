@@ -8,6 +8,10 @@ export class GoogleSheetsService {
     // Rate limit testing flag
     static _simulateRateLimit = false;
     
+    // Rate limit countdown guards - prevent multiple timers from running concurrently
+    static _rateLimitCountdownActive = false;
+    static _rateLimitCountdownPromise = null;
+    
     /**
      * Throws a simulated 429 rate limit error matching the real Google Sheets API response
      * @private
@@ -110,23 +114,43 @@ export class GoogleSheetsService {
                         throw err;
                     }
                     
-                    // Emit countdown updates on system-level topic so all loading indicators show it
-                    const delaySeconds = Math.ceil(rateLimitDelay / 1000);
-                    for (let remaining = delaySeconds; remaining > 0; remaining--) {
-                        ProgressBus.emit('system:rateLimit', {
-                            current: delaySeconds - remaining,
-                            total: delaySeconds,
-                            message: `Waiting on Google resources... ${remaining}s`
-                        });
-                        await new Promise(res => setTimeout(res, 1000));
+                    // Guard against multiple concurrent rate limit countdowns
+                    // If a countdown is already running, just wait for it to finish
+                    if (GoogleSheetsService._rateLimitCountdownActive) {
+                        // Another call is already showing the countdown - just wait for it
+                        await GoogleSheetsService._rateLimitCountdownPromise;
+                    } else {
+                        // This is the first call to hit rate limit - run the countdown
+                        GoogleSheetsService._rateLimitCountdownActive = true;
+                        GoogleSheetsService._rateLimitCountdownPromise = (async () => {
+                            try {
+                                // Emit countdown updates on system-level topic so all loading indicators show it
+                                const delaySeconds = Math.ceil(rateLimitDelay / 1000);
+                                for (let remaining = delaySeconds; remaining > 0; remaining--) {
+                                    ProgressBus.emit('system:rateLimit', {
+                                        current: delaySeconds - remaining,
+                                        total: delaySeconds,
+                                        message: `Waiting on Google resources... ${remaining}s`
+                                    });
+                                    await new Promise(res => setTimeout(res, 1000));
+                                }
+                                
+                                // Clear the rate limit message
+                                ProgressBus.emit('system:rateLimit', {
+                                    current: delaySeconds,
+                                    total: delaySeconds,
+                                    message: null
+                                });
+                            } finally {
+                                // Release the guard so future rate limits can run their own countdown
+                                GoogleSheetsService._rateLimitCountdownActive = false;
+                                GoogleSheetsService._rateLimitCountdownPromise = null;
+                            }
+                        })();
+                        
+                        // Wait for the countdown to finish before retrying
+                        await GoogleSheetsService._rateLimitCountdownPromise;
                     }
-                    
-                    // Clear the rate limit message
-                    ProgressBus.emit('system:rateLimit', {
-                        current: delaySeconds,
-                        total: delaySeconds,
-                        message: null
-                    });
                     
                     continue; // Retry without incrementing main attempt counter
                 }
