@@ -52,8 +52,10 @@ class packListUtils_uncached {
             }
         }
         
-        if (ctgFilter && ctgFilter.includes('HARDWARE')) {
-            // No item found in text, attempt a hardware search
+        if (!ctgFilter || ctgFilter.includes('HARDWARE')) {
+            // No item found via prefix match — fall back to scanning tabs with customItemNumbers.
+            // This handles hardware-style item numbers that don't follow the LETTERS-NUMBERS pattern
+            // (e.g. "901 00 030 MKII", "VUE-V2C-LP", "HH BOLTHOG 1-4 20 x 2.5").
             const hardwareResult = await deps.call(PackListUtils.extractHardwareFromText, text);
             if (hardwareResult.itemNumber) {
                 return hardwareResult;
