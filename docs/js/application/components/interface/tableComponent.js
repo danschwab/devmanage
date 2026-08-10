@@ -4302,7 +4302,7 @@ export const TableComponent = {
                         name="header-area"
                     ></slot>
                     <div class="spacer"></div>
-                    <div v-if="showNewRowButton || showSaveButton || showRefresh || showSearch" :class="{'button-bar': showNewRowButton || showSaveButton || showRefresh || showSearch}">
+                    <div v-if="showNewRowButton || showSaveButton || showRefresh || showSearch || viewModes" class="button-bar">
                         <div v-if="showSearch" class="input-container">
                             <input
                                 type="text"

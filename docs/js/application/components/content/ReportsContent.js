@@ -51,8 +51,8 @@ export const ReportsContent = {
                     dashboardTitle: 'Item Shortages Report'
                 },
                 'index-mismatches': {
-                    displayName: 'Index Mismatch',
-                    dashboardTitle: 'Index Mismatch Report'
+                    displayName: 'Index Mismatches',
+                    dashboardTitle: 'Index Mismatches Report'
                 }
             }
         });

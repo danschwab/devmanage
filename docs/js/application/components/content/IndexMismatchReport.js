@@ -36,8 +36,7 @@ export const IndexMismatchReport = {
             if (!this.reportStore?.data) return [];
             return this.reportStore.data.map(row => ({
                 ...row,
-                typeLabel: row.referenceType === 'client' ? 'Client' : 'Show',
-                sourcesSummary: row.sources.map(s => `[${s.sourceType}] ${s.identifier}`).join(', ')
+                typeLabel: row.referenceType === 'client' ? 'Client' : 'Show'
             }));
         },
         emptyMessage() {
@@ -202,6 +201,11 @@ export const IndexMismatchReport = {
                     >
                         ✕
                     </button>
+                </div>
+                <div v-else-if="column.key === 'sourcesSummary'" style="line-height: 1.6;">
+                    <div v-for="(source, idx) in row.sources" :key="idx">
+                        [{{ source.sourceType }}] {{ source.identifier }}
+                    </div>
                 </div>
                 <span v-else>{{ row[column.key] !== null && row[column.key] !== undefined ? row[column.key] : '—' }}</span>
             </template>

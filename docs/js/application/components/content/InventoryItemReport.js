@@ -78,8 +78,14 @@ export const InventoryItemReport = {
                 });
 
             // Group items by itemId to find items with multiple shortage periods
+            // Only group items that have actual shortage periods (startDate is not null)
             const itemGroups = new Map();
             for (const row of rawData) {
+                // Skip grouping for rows without shortage periods (no startDate)
+                if (!row.startDate) {
+                    continue; // These rows won't appear in calendar view anyway
+                }
+                
                 if (!itemGroups.has(row.itemId)) {
                     itemGroups.set(row.itemId, []);
                 }
@@ -87,6 +93,15 @@ export const InventoryItemReport = {
             }
 
             const result = [];
+            
+            // Add ungrouped rows (those without startDate)
+            for (const row of rawData) {
+                if (!row.startDate) {
+                    result.push(row);
+                }
+            }
+            
+            // Add grouped rows
             for (const [itemId, rows] of itemGroups) {
                 if (rows.length === 1) {
                     // Single shortage period - no grouping needed
@@ -130,11 +145,19 @@ export const InventoryItemReport = {
                     };
                     result.push(masterRow);
 
-                    // Add original rows as group members
+                    // Add original rows as group members, preserving any existing metadata
                     rows.forEach(row => {
+                        let existingMeta = {};
+                        try {
+                            existingMeta = JSON.parse(row.MetaData || '{}');
+                        } catch (e) {}
+                        
                         result.push({
                             ...row,
-                            MetaData: JSON.stringify({ grouping: { groupId, isGroupMaster: false } })
+                            MetaData: JSON.stringify({
+                                ...existingMeta,
+                                grouping: { groupId, isGroupMaster: false }
+                            })
                         });
                     });
                 }
@@ -168,11 +191,32 @@ export const InventoryItemReport = {
         },
 
         calendarData() {
-            return this.tableData
+            // Get all rows including those without dates
+            const allRows = this.tableData;
+            
+            // Find report date range from rows that have dates
+            let reportStart = null;
+            let reportEnd = null;
+            
+            for (const row of allRows) {
+                if (row.startDate) {
+                    if (!reportStart || row.startDate < reportStart) {
+                        reportStart = row.startDate;
+                    }
+                    if (!reportEnd || (row.endDate && row.endDate > reportEnd)) {
+                        reportEnd = row.endDate || row.startDate;
+                    }
+                }
+            }
+            
+            // Ensure we have end date if we have start date
+            if (reportStart && !reportEnd) {
+                reportEnd = reportStart;
+            }
+            
+            return allRows
                 .filter(row => {
-                    if (!row.startDate) return false;
-                    // In calendar view, show group members but not group masters
-                    // to display individual shortage periods on the timeline
+                    // In calendar view, hide group masters but show group members and single items
                     try {
                         const meta = JSON.parse(row.MetaData || '{}');
                         if (meta.grouping?.isGroupMaster) return false;
@@ -181,8 +225,8 @@ export const InventoryItemReport = {
                 })
                 .map(row => ({
                     ...row,
-                    calendarStart: row.startDate,
-                    calendarEnd: row.endDate || row.startDate
+                    calendarStart: row.startDate || reportStart,
+                    calendarEnd: row.endDate || row.startDate || reportEnd
                 }));
         },
 

@@ -61,7 +61,7 @@ label {
 
 /* Main interface defaults */
 
-html, body {
+:root {
     font-family: Arial, sans-serif;
 }
 .font-narrow {

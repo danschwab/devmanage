@@ -541,6 +541,7 @@ button.card {
 
 .button-bar .button-symbol {
     height: auto;
+    min-height: 28px;
 }
 .material-icons-outlined, .material-symbols-outlined {
     font-size: 12pt;
