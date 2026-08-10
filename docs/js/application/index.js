@@ -41,6 +41,8 @@ export { InventoryContent, InventoryMenuComponent } from './components/content/I
 export { InventoryItemTimeline } from './components/content/InventoryItemTimeline.js';
 export { ShowInventoryReport } from './components/content/ShowInventoryReport.js';
 export { InventoryItemReport } from './components/content/InventoryItemReport.js';
+export { IndexMismatchReport } from './components/content/IndexMismatchReport.js';
+export { IndexResolutionComponent } from './components/interface/IndexResolutionModal.js';
 export { ScheduleTableComponent } from './components/content/ScheduleTable.js';
 export { ScheduleAdvancedFilter } from './components/interface/filterComponents.js';
 export { ScheduleContent, ScheduleMenuComponent } from './components/content/ScheduleContent.js';

@@ -1150,6 +1150,74 @@ class productionUtils_uncached {
 
     
     /**
+     * Aggregate all client/show name mismatches from the production schedule and all
+     * packlist tabs. Deduplicates by rawValue + referenceType so that the same missing
+     * name found in multiple sources is represented once with a merged sources list.
+     * @param {Object} deps
+     * @returns {Promise<Array<{rawValue:string, referenceType:'client'|'show', status:string, bestMatch:string|null, sources:Array<{sourceType:'schedule'|'packlist', identifier:string}>}>>}
+     */
+    static async getMissingIndexReferences(deps) {
+        const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+        const scheduleRows = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
+
+        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const packlistTabs = allTabs.filter(tab => tab.title && !tab.title.startsWith('_'));
+
+        const issueMap = new Map(); // key: `${rawValue}::${referenceType}`
+
+        const addToMap = (issue, source) => {
+            const key = `${issue.rawValue}::${issue.referenceType}`;
+            if (!issueMap.has(key)) {
+                issueMap.set(key, {
+                    rawValue: issue.rawValue,
+                    referenceType: issue.referenceType,
+                    status: issue.status,
+                    bestMatch: issue.bestMatch || null,
+                    sources: []
+                });
+            }
+            const entry = issueMap.get(key);
+            const isDuplicate = entry.sources.some(
+                s => s.sourceType === source.sourceType && s.identifier === source.identifier
+            );
+            if (!isDuplicate) {
+                entry.sources.push(source);
+            }
+        };
+
+        const scheduleResults = await Promise.all(
+            scheduleRows.map(row => Promise.all([
+                deps.call(ProductionUtils.checkReferenceNameState, row.Client || '', 'client'),
+                deps.call(ProductionUtils.checkReferenceNameState, row.Show || '', 'show')
+            ]).then(([clientIssue, showIssue]) => ({ row, clientIssue, showIssue })))
+        );
+
+        for (const { row, clientIssue, showIssue } of scheduleResults) {
+            const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
+            if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
+            if (showIssue) addToMap(showIssue, { sourceType: 'schedule', identifier });
+        }
+
+        const packlistResults = await Promise.all(
+            packlistTabs.map(tab =>
+                deps.call(ProductionUtils.diagnosePacklistAttachment, tab.title)
+                    .then(attachment => ({ tab, attachment }))
+            )
+        );
+
+        for (const { tab, attachment } of packlistResults) {
+            if (!attachment || attachment.attached || !attachment.hasIdentifierParts) continue;
+            if (attachment.clientIssue) addToMap(attachment.clientIssue, { sourceType: 'packlist', identifier: tab.title });
+            if (attachment.showIssue) addToMap(attachment.showIssue, { sourceType: 'packlist', identifier: tab.title });
+        }
+
+        return Array.from(issueMap.values()).sort((a, b) => {
+            if (a.referenceType !== b.referenceType) return a.referenceType === 'client' ? -1 : 1;
+            return a.rawValue.localeCompare(b.rawValue);
+        }).map(entry => ({ ...entry, resolution: '' }));
+    }
+
+    /**
      * Find the matching packlist tab for an identifier string.
      * Tries in order: exact → case-insensitive → normalized (strip non-alphanumeric, uppercase).
      * This is the single source of truth for packlist tab resolution.

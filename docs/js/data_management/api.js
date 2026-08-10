@@ -749,6 +749,16 @@ class Requests_uncached {
     }
 
     /**
+     * Aggregate all client/show name mismatches from the production schedule and all
+     * packlist tabs. Deduplicates records with the same rawValue + referenceType.
+     * @param {Object} deps
+     * @returns {Promise<Array<{rawValue:string, referenceType:string, status:string, bestMatch:string|null, sources:Array}>>}
+     */
+    static async getIndexMismatches(deps) {
+        return await deps.call(ProductionUtils.getMissingIndexReferences);
+    }
+
+    /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * @param {Object} deps
      * @param {string} projectIdentifier

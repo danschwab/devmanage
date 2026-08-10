@@ -315,6 +315,17 @@ export const BreadcrumbComponent = {
             showHoverPath: false
         };
     },
+    mounted() {
+        // Watch the NavigationRegistry version ref for changes
+        // When routes are registered, routeRegistrationVersion increments and triggers re-render
+        this.$watch(
+            () => NavigationRegistry.routeRegistrationVersion.value,
+            () => {
+                // Vue automatically re-evaluates pathSegmentsWithNames computed property
+                // because it accesses routeRegistrationVersion
+            }
+        );
+    },
     computed: {
         // Extract clean path without query parameters for breadcrumb display
         cleanPath() {
@@ -326,15 +337,16 @@ export const BreadcrumbComponent = {
             return this.cleanPath.split('/').filter(segment => segment.length > 0);
         },
         pathSegmentsWithNames() {
+            // Dependency on routeRegistrationVersion.value ensures re-evaluation when routes register
+            const _versionDependency = NavigationRegistry.routeRegistrationVersion.value;
+            
             if (!this.pathSegments.length) return [];
             
             return this.pathSegments.map((segment, index) => {
-                // Build the cumulative path up to this segment
                 const cumulativePath = this.pathSegments.slice(0, index + 1).join('/');
-                
                 return {
                     id: segment,
-                    name: this.getSegmentName(segment),
+                    name: this.getSegmentName(cumulativePath),
                     index: index,
                     path: cumulativePath
                 };

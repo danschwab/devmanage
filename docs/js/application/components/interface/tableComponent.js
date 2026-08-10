@@ -4537,6 +4537,16 @@ export const TableComponent = {
                                                 @input="handleCellEdit(idx, colIndex, $event.target.value)"
                                             />
                                         </slot>
+                                        <!-- Externally editable (tracked for dirty but not directly editable) -->
+                                        <slot
+                                            v-else-if="column.editable && column.format === 'external-edit'"
+                                            :row="row"
+                                            :column="column"
+                                            :rowIndex="idx"
+                                            :cellRowIndex="idx"
+                                            :cellColIndex="colIndex">
+                                            <span v-html="highlightSearchText(row[column.key], column)"></span>
+                                        </slot>
                                         <!-- Editable text div -->
                                         <div
                                             v-else-if="column.editable"
@@ -4551,11 +4561,11 @@ export const TableComponent = {
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
                                         ></div>
-                                        <span v-if="column.editable && getOriginalDataForRow(row, idx) !== undefined" class="column-button-hint">
+                                        <span v-if="column.editable && column.format !== 'external-edit' && getOriginalDataForRow(row, idx) !== undefined" class="column-button-hint">
                                             {{ getOriginalDataForRow(row, idx)?.[column.key] || '(empty)' }}
                                         </span>
                                         <button
-                                            v-if="column.editable && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number' && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
+                                            v-if="column.editable && column.format !== 'external-edit' && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number' && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
                                             @click="revertCellToOriginal(idx, colIndex, $event)"
                                             title="Revert to original value"
                                             class="column-button red">

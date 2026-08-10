@@ -108,7 +108,6 @@
         --background-color-transparent: #181a1bd4;
         --color-text: #b4b4b4;
         --color-text-light: #bbb;
-        --color-text-muted: #bbb;
         --color-text-inverted: #111;
 
         --color-gray: #666;
@@ -174,7 +173,6 @@ html[data-theme="dark"] {
     --background-color-transparent: #181a1bd4;
     --color-text: #b4b4b4;
     --color-text-light: #bbb;
-    --color-text-muted: #bbb;
     --color-text-inverted: #111;
 
     --color-gray: #666;
@@ -238,7 +236,6 @@ html[data-theme="light"] {
     --background-color-transparent: #ffffffaa;
     --color-text: #333;
     --color-text-light: #666;
-    --color-text-muted: #888;
     --color-text-inverted: #fff;
 
     --color-gray: #aaa;

@@ -4,6 +4,9 @@ import { URLRouter } from './urlRouter.js';
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { parseSearchParameters } from '../../data_management/utils/helpers.js';
 
+// Vue is available globally, destructure ref from it
+const { ref } = Vue;
+
 export const NavigationRegistry = {
     /**
      * Main navigation structure - initialized with only main sections
@@ -62,6 +65,10 @@ export const NavigationRegistry = {
     // URL Router integration
     urlRouter: null,
 
+    // Track route registration changes for reactivity using Vue ref
+    // This is a ref so Vue components can properly track changes
+    routeRegistrationVersion: ref(0),
+
     /**
      * Initialize dashboard registry
      */
@@ -96,6 +103,9 @@ export const NavigationRegistry = {
             Object.entries(navigationConfig.routes).forEach(([routeKey, routeConfig]) => {
                 this.addDynamicRoute(section, routeKey, routeConfig);
             });
+            
+            // Increment version to notify watchers of route registration
+            this.routeRegistrationVersion.value++;
         }
     },
 
@@ -369,7 +379,6 @@ export const NavigationRegistry = {
      * @returns {string} Display name or dashboard title
      */
     getDisplayName(path, preferDashboardTitle = false) {
-        // Strip query parameters before processing
         const cleanPath = path.split('?')[0];
         const route = this.getRoute(cleanPath);
         if (route) {
@@ -416,6 +425,9 @@ export const NavigationRegistry = {
                     ...routeConfig
                 };
             }
+            
+            // Increment version to notify watchers of route registration
+            this.routeRegistrationVersion.value++;
         }
     },
 
