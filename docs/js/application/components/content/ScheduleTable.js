@@ -215,24 +215,24 @@ export const ScheduleTableComponent = {
                     Requests.checkScheduleReferenceState,
                     'clientIndexIssue',
                     'Checking client index health...',
-                    'Client',
+                    ['Client', 'Show', 'Year'],
                     ['client'],
                     null,
                     false,
                     Priority.ANALYSIS,
-                    false,
+                    true, // extractColumnsAsObject
                     false // nonessential
                 ),
                 createAnalysisConfig(
                     Requests.checkScheduleReferenceState,
                     'showIndexIssue',
                     'Checking show index health...',
-                    'Show',
+                    ['Show', 'Client', 'Year'],
                     ['show'],
                     null,
                     false,
                     Priority.ANALYSIS,
-                    false,
+                    true, // extractColumnsAsObject
                     false // nonessential
                 ),
                 // Normalize ship dates to always include year
@@ -530,6 +530,9 @@ export const ScheduleTableComponent = {
                     includeAllCandidates
                 );
 
+                const sourceIdentifier = row?.Identifier ||
+                    await Requests.computeIdentifier(row?.Show, row?.Client, row?.Year);
+
                 const options = resolutionData?.options || [];
                 if (options.length === 0) {
                     this.$modal.alert('No resolution options available for this value.', 'Missing');
@@ -544,6 +547,23 @@ export const ScheduleTableComponent = {
                     issue,
                     options,
                     includeAllCandidates,
+                    sources: sourceIdentifier ? [{ sourceType: 'schedule', identifier: sourceIdentifier }] : [],
+                    onFetchOverrideTargets: async (sourceType) => {
+                        if (sourceType === 'packlist') {
+                            return await Requests.getAllScheduleIdentifiers();
+                        }
+                        return await Requests.getUnattachedPacklistTabNames();
+                    },
+                    onAddOverride: async (scheduleId, packlistId) => {
+                        await Requests.addNameOverride(scheduleId, packlistId);
+                        // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results
+                        invalidateCache([
+                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                            { namespace: 'production_utils' }
+                        ], true);
+                        await this.handleRefresh();
+                        return { applied: true };
+                    },
                     onSelectOption: async (option) => {
                         return await this.applyIndexResolutionOption(option, row, issue);
                     },

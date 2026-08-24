@@ -605,6 +605,9 @@ export class FakeGoogleSheetsService {
             'Notes': [
                 ['Path', 'Note', 'Color', 'Size', 'EditHistory']
             ],
+            'NameOverrides': [
+                ['Schedule', 'Packlist']
+            ],
             'Links': [
                 ['Path', 'ShortCode', 'Created'],
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
@@ -939,7 +942,8 @@ export class FakeGoogleSheetsService {
             { title: 'Clients', sheetId: 4 },
             { title: 'Shows', sheetId: 5 },
             { title: 'Thumbnails', sheetId: 6 },
-            { title: 'Inventory', sheetId: 7 }
+            { title: 'Inventory', sheetId: 7 },
+            { title: 'NameOverrides', sheetId: 8 }
         ]
     };
 

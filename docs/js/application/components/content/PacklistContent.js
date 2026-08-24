@@ -3,6 +3,7 @@ import { normalizeFilterValues } from '../../../data_management/utils/helpers.js
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 import { ScheduleTableComponent } from './ScheduleTable.js';
 import { PacklistTableMenuComponent } from './PacklistTable.js';
+import { IndexResolutionComponent as SharedIndexResolutionComponent } from '../interface/IndexResolutionModal.js';
 
 export const PacklistMenuComponent = {
     props: {
@@ -1086,10 +1087,30 @@ export const PacklistContent = {
                     `
                 };
 
-                this.$modal.custom(IndexResolutionComponent, {
+                this.$modal.custom(SharedIndexResolutionComponent, {
                     issue,
                     options,
                     includeAllCandidates,
+                    sources: packlistTitle ? [{ sourceType: 'packlist', identifier: packlistTitle }] : [],
+                    onFetchOverrideTargets: async (sourceType) => {
+                        if (sourceType === 'packlist') {
+                            return await Requests.getAllScheduleIdentifiers();
+                        }
+                        return await Requests.getUnattachedPacklistTabNames();
+                    },
+                    onAddOverride: async (scheduleId, packlistId) => {
+                        await Requests.addNameOverride(scheduleId, packlistId);
+                        // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results
+                        invalidateCache([
+                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                            { namespace: 'production_utils' }
+                        ], true);
+                        // Reload the packlists to update attachment status and clear alerts
+                        if (this.packlistsStore) {
+                            await this.packlistsStore.load();
+                        }
+                        return { applied: true };
+                    },
                     onSelectOption: async (option) => {
                         return await this.applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates);
                     },

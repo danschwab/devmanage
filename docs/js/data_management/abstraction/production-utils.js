@@ -346,12 +346,35 @@ class productionUtils_uncached {
     /**
      * Analyze whether a schedule row value is healthy against the index.
      * Returns a clickable alert payload for unresolved entries; returns null when healthy.
+     * If scheduleRow is provided, checks NameOverrides first to suppress alerts for overridden entries.
      * @param {Object} deps
      * @param {string} rawName
      * @param {'client'|'show'} referenceType
+     * @param {Object} [scheduleRow] - Optional row with Client, Show, Year for override checking
      * @returns {Promise<Object|null>}
      */
-    static async checkReferenceNameState(deps, rawName, referenceType = 'client') {
+    static async checkReferenceNameState(deps, rawName, referenceType = 'client', scheduleRow = null) {
+        // If we have schedule row context, check for overrides first
+        // Check both schedule and packlist fields since identifiers should match
+        if (scheduleRow && scheduleRow.Client && scheduleRow.Show && scheduleRow.Year) {
+            const overrides = await deps.call(ProductionUtils.getNameOverrides);
+            const identifier = await deps.call(ProductionUtils.computeIdentifier, 
+                scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
+            
+            if (identifier) {
+                const identNorm = _normalizeIndexName(identifier);
+                // Check if this schedule entry has any override (link or ignore)
+                // Check both fields to handle ignore from either schedule or packlist side
+                const hasOverride = overrides.some(o => 
+                    (o.schedule && _normalizeIndexName(o.schedule) === identNorm) ||
+                    (o.packlist && _normalizeIndexName(o.packlist) === identNorm)
+                );
+                
+                // If override exists, suppress the alert
+                if (hasOverride) return null;
+            }
+        }
+        
         const kind = referenceType === 'show' ? 'show' : 'client';
         const rawValue = _normalizeIndexName(rawName);
 
@@ -828,6 +851,33 @@ class productionUtils_uncached {
     static async findScheduleRowsForPacklist(deps, packlistTitle, scheduleData = null) {
         if (!packlistTitle) return [];
 
+        // Check NameOverrides first — explicit mappings bypass all fuzzy logic
+        // Check both packlist field AND schedule field (identifiers should match)
+        const overrides = await deps.call(ProductionUtils.getNameOverrides);
+        const titleNorm = _normalizeIndexName(packlistTitle);
+        const override = overrides.find(o => 
+            (o.packlist && _normalizeIndexName(o.packlist) === titleNorm) ||
+            (o.schedule && _normalizeIndexName(o.schedule) === titleNorm)
+        );
+        if (override) {
+            // If found via schedule field only, treat as ignored (no explicit link)
+            if (!override.packlist && override.schedule) return []; // Permanently ignored
+            if (!override.schedule) return []; // Permanently ignored
+            // Load schedule data to find the overridden row
+            let overrideData = scheduleData;
+            if (!overrideData) {
+                const overrideMapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+                overrideData = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', overrideMapping);
+            }
+            const schedNorm = _normalizeIndexName(override.schedule);
+            for (const row of overrideData) {
+                if (!row.Show || !row.Client || !row.Year) continue;
+                const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+                if (computed && _normalizeIndexName(computed) === schedNorm) return [row];
+            }
+            return [];
+        }
+
         // Load schedule data if not provided
         let data = scheduleData;
         if (!data) {
@@ -924,6 +974,16 @@ class productionUtils_uncached {
     static async diagnosePacklistAttachment(deps, identifier) {
         if (!identifier) return { attached: false, hasIdentifierParts: false };
 
+        // Check NameOverrides first — any entry means the packlist is explicitly resolved
+        // Check both packlist field AND schedule field (identifiers should match)
+        const overrides = await deps.call(ProductionUtils.getNameOverrides);
+        const identNorm = _normalizeIndexName(identifier);
+        const override = overrides.find(o => 
+            (o.packlist && _normalizeIndexName(o.packlist) === identNorm) ||
+            (o.schedule && _normalizeIndexName(o.schedule) === identNorm)
+        );
+        if (override) return { attached: true, hasIdentifierParts: true };
+
         const row = await deps.call(ProductionUtils.getShowDetails, identifier);
         if (row) return { attached: true, hasIdentifierParts: true };
 
@@ -954,6 +1014,26 @@ class productionUtils_uncached {
      */
     static async findPacklistTabsForScheduleRow(deps, scheduleRow, tabs) {
         if (!scheduleRow || !Array.isArray(tabs)) return [];
+
+        // Check NameOverrides first — explicit mappings bypass all fuzzy logic
+        // Check both schedule field AND packlist field (identifiers should match)
+        const overrides = await deps.call(ProductionUtils.getNameOverrides);
+        const computedForOverride = scheduleRow.Identifier ||
+            await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
+        if (computedForOverride) {
+            const identNorm = _normalizeIndexName(computedForOverride);
+            const override = overrides.find(o => 
+                (o.schedule && _normalizeIndexName(o.schedule) === identNorm) ||
+                (o.packlist && _normalizeIndexName(o.packlist) === identNorm)
+            );
+            if (override !== undefined) {
+                // If found via packlist field only, treat as ignored (no explicit link)
+                if (!override.schedule && override.packlist) return []; // Permanently ignored
+                if (!override.packlist) return []; // Permanently ignored
+                const matchedTab = tabs.find(t => _normalizeIndexName(t.title) === _normalizeIndexName(override.packlist));
+                return matchedTab ? [matchedTab] : [];
+            }
+        }
 
         // Try the stored Identifier first (fast path for normal shows).
         // If it matches nothing, fall back to computeIdentifier — the stored value
@@ -1163,6 +1243,9 @@ class productionUtils_uncached {
         const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const packlistTabs = allTabs.filter(tab => tab.title && !tab.title.startsWith('_'));
 
+        // Load overrides once — used to skip rows that are explicitly resolved
+        const overrides = await deps.call(ProductionUtils.getNameOverrides);
+
         const issueMap = new Map(); // key: `${rawValue}::${referenceType}`
 
         const addToMap = (issue, source) => {
@@ -1187,13 +1270,20 @@ class productionUtils_uncached {
 
         const scheduleResults = await Promise.all(
             scheduleRows.map(row => Promise.all([
-                deps.call(ProductionUtils.checkReferenceNameState, row.Client || '', 'client'),
-                deps.call(ProductionUtils.checkReferenceNameState, row.Show || '', 'show')
-            ]).then(([clientIssue, showIssue]) => ({ row, clientIssue, showIssue })))
+                deps.call(ProductionUtils.checkReferenceNameState, row.Client || '', 'client', row),
+                deps.call(ProductionUtils.checkReferenceNameState, row.Show || '', 'show', row),
+                deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year)
+            ]).then(([clientIssue, showIssue, computedId]) => ({ row, clientIssue, showIssue, computedId })))
         );
 
-        for (const { row, clientIssue, showIssue } of scheduleResults) {
+        for (const { row, clientIssue, showIssue, computedId } of scheduleResults) {
             const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
+            // Skip rows that have been explicitly overridden (check both schedule and packlist fields)
+            const hasOverride = computedId && overrides.some(
+                o => (o.schedule && _normalizeIndexName(o.schedule) === _normalizeIndexName(computedId)) ||
+                     (o.packlist && _normalizeIndexName(o.packlist) === _normalizeIndexName(computedId))
+            );
+            if (hasOverride) continue;
             if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
             if (showIssue) addToMap(showIssue, { sourceType: 'schedule', identifier });
         }
@@ -1254,6 +1344,96 @@ class productionUtils_uncached {
      * @param {Array<{title:string}>} tabs - Available packlist tabs (pre-filtered)
      * @returns {Promise<Array<{title:string}>>} All matching tabs; empty array if none found
      */
+    /**
+     * Read all name override mappings from CACHE/NameOverrides.
+     * Returns empty array if the tab does not exist yet.
+     * @param {Object} deps
+     * @returns {Promise<Array<{schedule:string, packlist:string}>>}
+     */
+    static async getNameOverrides(deps) {
+        try {
+            const data = await deps.call(Database.getData, 'CACHE', 'NameOverrides', { schedule: 'Schedule', packlist: 'Packlist' });
+            if (!Array.isArray(data)) return [];
+            return data.map(r => ({
+                schedule: String(r.schedule || '').trim(),
+                packlist: String(r.packlist || '').trim()
+            }));
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /**
+     * Append a new row to CACHE/NameOverrides linking a schedule identifier to a packlist tab.
+     * Pass an empty string for either side to create a "permanently ignore" entry.
+     * Mutation — uncached.
+     * @param {string} scheduleId - Computed schedule identifier (or '' to ignore)
+     * @param {string} packlistId - Packlist tab name (or '' to ignore)
+     * @returns {Promise<void>}
+     */
+    static async addNameOverride(scheduleId, packlistId) {
+        await Database.appendSheetRow('CACHE', 'NameOverrides', [
+            String(scheduleId || '').trim(),
+            String(packlistId || '').trim()
+        ]);
+    }
+
+    /**
+     * Get all computed schedule identifiers, sorted alphabetically.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getAllScheduleIdentifiers(deps) {
+        const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+        const scheduleRows = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
+        const identifiers = new Map();
+        for (const row of scheduleRows) {
+            if (!row.Show || !row.Client || !row.Year) continue;
+            const identifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+            if (identifier) identifiers.set(identifier, true);
+        }
+        return Array.from(identifiers.keys()).sort();
+    }
+
+    /**
+     * Get all non-template packlist tab names, sorted alphabetically.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getAllPacklistTabNames(deps) {
+        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        return allTabs
+            .filter(tab => tab.title && !tab.title.startsWith('_'))
+            .map(tab => tab.title)
+            .sort();
+    }
+
+    /**
+     * Get all non-template packlist tab names that are NOT currently attached to any schedule row.
+     * Filters out packlists that have overrides or successfully match to schedule rows.
+     * Used for override modals to prevent overriding existing valid matches.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getUnattachedPacklistTabNames(deps) {
+        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+        const nonTemplateTabs = allTabs.filter(tab => tab.title && !tab.title.startsWith('_'));
+        
+        // Check attachment status for each packlist
+        const attachmentResults = await Promise.all(
+            nonTemplateTabs.map(tab =>
+                deps.call(ProductionUtils.diagnosePacklistAttachment, tab.title)
+                    .then(attachment => ({ title: tab.title, attached: attachment.attached }))
+            )
+        );
+        
+        // Return only unattached packlists, sorted
+        return attachmentResults
+            .filter(result => !result.attached)
+            .map(result => result.title)
+            .sort();
+    }
+
     static async findAllPackListTabsForShow(deps, identifier, tabs) {
         if (!identifier || !Array.isArray(tabs)) return [];
 
@@ -1302,7 +1482,8 @@ export const ProductionUtils = wrapMethods(
         'updateReferenceAbbreviation',
         'addReferenceName',
         'appendReferenceAbbreviation',
-        'addCustomReferenceEntry'
+        'addCustomReferenceEntry',
+        'addNameOverride'
     ],
     ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods

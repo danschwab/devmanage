@@ -1446,6 +1446,10 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
+        showUndoRedo: {
+            type: Boolean,
+            default: true
+        },
         emptyMessage: {
             type: String,
             default: 'No data available'
@@ -4354,7 +4358,7 @@ export const TableComponent = {
                             {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
                         </button>
                         <button
-                            v-if="hasEditableColumns"
+                            v-if="hasEditableColumns && showUndoRedo"
                             @click="handleUndo"
                             :disabled="!canUndo"
                             class="button-symbol white"
@@ -4363,7 +4367,7 @@ export const TableComponent = {
                             ⮢
                         </button>
                         <button
-                            v-if="hasEditableColumns"
+                            v-if="hasEditableColumns && showUndoRedo"
                             @click="handleRedo"
                             :disabled="!canRedo"
                             class="button-symbol white"

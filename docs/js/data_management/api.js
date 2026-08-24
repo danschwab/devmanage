@@ -647,13 +647,26 @@ class Requests_uncached {
     /**
      * Analyze a schedule row's client/show value against reference index data.
      * Returns a clickable alert object when attention is needed, otherwise null.
+     * Now supports checking for NameOverrides to suppress alerts when overrides exist.
      * @param {Object} deps
-     * @param {string} rawName
+     * @param {string|Object} rawNameOrRow - Raw name string (legacy) or row object with Client/Show/Year
      * @param {'client'|'show'} referenceType
      * @returns {Promise<Object|null>}
      */
-    static async checkScheduleReferenceState(deps, rawName, referenceType) {
-        return await deps.call(ProductionUtils.checkReferenceNameState, rawName, referenceType);
+    static async checkScheduleReferenceState(deps, rawNameOrRow, referenceType) {
+        // Support both legacy (string) and new (object) signatures
+        const isRowObject = typeof rawNameOrRow === 'object' && rawNameOrRow !== null;
+        
+        if (isRowObject) {
+            // New signature: pass full row data for override checking
+            return await deps.call(ProductionUtils.checkReferenceNameState, 
+                rawNameOrRow[referenceType === 'client' ? 'Client' : 'Show'], 
+                referenceType, 
+                rawNameOrRow);
+        } else {
+            // Legacy signature: just the raw name
+            return await deps.call(ProductionUtils.checkReferenceNameState, rawNameOrRow, referenceType);
+        }
     }
 
     /**
@@ -759,6 +772,55 @@ class Requests_uncached {
     }
 
     /**
+     * Get all NameOverride mappings from CACHE/NameOverrides.
+     * @param {Object} deps
+     * @returns {Promise<Array<{schedule:string, packlist:string}>>}
+     */
+    static async getNameOverrides(deps) {
+        return await deps.call(ProductionUtils.getNameOverrides);
+    }
+
+    /**
+     * Append a NameOverride row linking a schedule identifier to a packlist tab.
+     * Pass empty string for either side to permanently ignore that entry.
+     * Mutation — uncached.
+     * @param {string} scheduleId
+     * @param {string} packlistId
+     */
+    static async addNameOverride(scheduleId, packlistId) {
+        return await ProductionUtils.addNameOverride(scheduleId, packlistId);
+    }
+
+    /**
+     * Get all computed schedule identifiers, sorted alphabetically.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getAllScheduleIdentifiers(deps) {
+        return await deps.call(ProductionUtils.getAllScheduleIdentifiers);
+    }
+
+    /**
+     * Get all non-template packlist tab names, sorted alphabetically.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getAllPacklistTabNames(deps) {
+        return await deps.call(ProductionUtils.getAllPacklistTabNames);
+    }
+
+    /**
+     * Get all non-template packlist tab names that are NOT currently attached to any schedule row.
+     * Filters out packlists that have overrides or successfully match to schedule rows.
+     * Used for override modals to prevent overriding existing valid matches.
+     * @param {Object} deps
+     * @returns {Promise<string[]>}
+     */
+    static async getUnattachedPacklistTabNames(deps) {
+        return await deps.call(ProductionUtils.getUnattachedPacklistTabNames);
+    }
+
+    /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * @param {Object} deps
      * @param {string} projectIdentifier
@@ -807,10 +869,21 @@ class Requests_uncached {
     static async checkPacklistExists(deps, rowData) {
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, rowData, availableTabs);
+        
+        // If a matching tab was found, use its actual title as the identifier
+        // This ensures overrides navigate to the correct packlist tab
+        if (matchingTabs.length > 0) {
+            return {
+                exists: true,
+                identifier: matchingTabs[0].title
+            };
+        }
+        
+        // No match found - return the computed identifier for "Create Packlist" button
         const identifier = rowData.Identifier ||
             await deps.call(ProductionUtils.computeIdentifier, rowData.Show, rowData.Client, rowData.Year);
         return {
-            exists: matchingTabs.length > 0,
+            exists: false,
             identifier
         };
     }
@@ -1623,6 +1696,7 @@ export const Requests = wrapMethods(
         'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
         'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
         'addCustomScheduleReferenceEntry',
+        'addNameOverride',
         'savePageNotes'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods

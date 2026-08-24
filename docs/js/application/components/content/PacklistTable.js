@@ -473,6 +473,27 @@ export const PacklistTable = {
                     issue,
                     options,
                     includeAllCandidates,
+                    sources: packlistTitle ? [{ sourceType: 'packlist', identifier: packlistTitle }] : [],
+                    onFetchOverrideTargets: async (sourceType) => {
+                        if (sourceType === 'packlist') {
+                            return await Requests.getAllScheduleIdentifiers();
+                        }
+                        return await Requests.getUnattachedPacklistTabNames();
+                    },
+                    onAddOverride: async (scheduleId, packlistId) => {
+                        await Requests.addNameOverride(scheduleId, packlistId);
+                        // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results
+                        invalidateCache([
+                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                            { namespace: 'production_utils' }
+                        ], true);
+                        try {
+                            this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
+                        } catch (error) {
+                            console.error('[PacklistTable] Failed to reload schedule attachment after override:', error);
+                        }
+                        return { applied: true };
+                    },
                     onSelectOption: async (option) => {
                         return await this.applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates);
                     },
