@@ -182,8 +182,8 @@ div#app-content > div.empty-message {
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: var(--page-width-large);
-    /* flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2); */
-    min-height: -webkit-fill-available;
+    flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 3);
+    /* height: -webkit-fill-available; */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
