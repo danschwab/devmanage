@@ -330,8 +330,21 @@ export const PacklistTable = {
                     });
                 }
                 
-                // If both are resolved in index but still not attached (no schedule row)
-                if (!clientIssue && !showIssue) {
+                // If suffix variant found, prompt user to confirm the link
+                const suggestedMatch = this.scheduleAttachment.suggestedMatch;
+                if (suggestedMatch) {
+                    banners.push({
+                        key: 'suggested-match',
+                        color: 'orange',
+                        message: `Possible schedule match: "${suggestedMatch}"`,
+                        visible: true,
+                        dismissible: true,
+                        action: {
+                            label: 'Link',
+                            fn: () => this.openSuggestedMatchModal(this.tabName, suggestedMatch)
+                        }
+                    });
+                } else if (!clientIssue && !showIssue) {
                     banners.push({
                         key: 'not-on-schedule',
                         color: 'orange',
@@ -447,6 +460,54 @@ export const PacklistTable = {
                 { edit: undefined }
             );
             this.$emit('navigate-to-path', { targetPath: viewPath, replaceHistory: true });
+        },
+        async openSuggestedMatchModal(packlistTitle, scheduleIdentifier) {
+            const ConfirmLinkModal = {
+                inject: ['$modal'],
+                props: { packlistTitle: String, scheduleIdentifier: String, onConfirm: Function },
+                data() { return { isSubmitting: false }; },
+                methods: {
+                    async confirm() {
+                        if (this.isSubmitting) return;
+                        this.isSubmitting = true;
+                        try {
+                            await this.onConfirm();
+                            this.$emit('close-modal');
+                        } catch (e) {
+                            this.isSubmitting = false;
+                        }
+                    }
+                },
+                template: html`
+                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                        <p>This packlist appears to be a variant of a schedule entry:</p>
+                        <p><strong>{{ scheduleIdentifier }}</strong></p>
+                        <p>Link "{{ packlistTitle }}" to this schedule entry?</p>
+                        <div class="button-bar">
+                            <button @click="confirm" :disabled="isSubmitting" class="blue">Yes, Link</button>
+                            <button @click="$emit('close-modal')" :disabled="isSubmitting" class="gray">Cancel</button>
+                        </div>
+                    </div>
+                `
+            };
+
+            this.$modal.custom(ConfirmLinkModal, {
+                packlistTitle,
+                scheduleIdentifier,
+                modalClass: 'hamburger-menu',
+                onConfirm: async () => {
+                    await Requests.addNameOverride(scheduleIdentifier, packlistTitle);
+                    invalidateCache([
+                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                        { namespace: 'production_utils' }
+                    ], true);
+                    try {
+                        this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
+                    } catch (error) {
+                        console.error('[PacklistTable] Failed to reload schedule attachment after linking:', error);
+                    }
+                }
+            }, 'Link Packlist to Schedule');
         },
         async openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, includeAllCandidates = false) {
             try {

@@ -751,9 +751,21 @@ export const PacklistContent = {
 
             // Add red buttons for unattached schedule packlists with missing client/show
             if (isUnattached) {
+                const suggestedMatch = attachment.suggestedMatch;
                 const clientIssue = attachment.clientIssue;
                 const showIssue = attachment.showIssue;
-                if (clientIssue || showIssue) {
+                if (suggestedMatch) {
+                    footerActions.push({
+                        label: 'Link to schedule',
+                        class: 'gray',
+                        onClick: () => this.openLinkToScheduleModal(tab.title)
+                    });
+                    footerActions.push({
+                        label: `Link: ${suggestedMatch}`,
+                        class: 'red',
+                        onClick: () => this.openSuggestedMatchModal(tab.title, suggestedMatch)
+                    });
+                } else if (clientIssue || showIssue) {
                     if (clientIssue) {
                         footerActions.push({
                             label: '⚠ Client missing',
@@ -769,7 +781,11 @@ export const PacklistContent = {
                         });
                     }
                 } else {
-                    contentFooter = 'Packlist not found on schedule';
+                    footerActions.push({
+                        label: 'Link to schedule',
+                        class: 'red',
+                        onClick: () => this.openLinkToScheduleModal(tab.title)
+                    });
                 }
             }
 
@@ -945,6 +961,119 @@ export const PacklistContent = {
                 console.error('[PacklistContent] Failed to save packlist:', error);
                 this.$modal.error(`Failed to save packlist: ${error.message}`, 'Save Error');
             }
+        },
+        async openLinkToScheduleModal(packlistTitle) {
+            let allTargets = [];
+            try {
+                allTargets = await Requests.getAllScheduleIdentifiers();
+            } catch (e) {
+                return;
+            }
+
+            // Filter to matching year if parseable from title
+            const yearMatch = String(packlistTitle || '').match(/\b(\d{4})\b/);
+            const year = yearMatch ? yearMatch[1] : null;
+            const targets = year ? allTargets.filter(t => t.includes(year)) : allTargets;
+
+            const LinkModal = {
+                inject: ['$modal'],
+                props: { packlistTitle: String, targets: Array, onConfirm: Function },
+                data() { return { filterText: '', isSubmitting: false }; },
+                computed: {
+                    filteredTargets() {
+                        const search = this.filterText.trim().toLowerCase();
+                        if (!search) return this.targets;
+                        return this.targets.filter(t => t.toLowerCase().includes(search));
+                    }
+                },
+                methods: {
+                    async selectTarget(scheduleId) {
+                        if (this.isSubmitting) return;
+                        this.isSubmitting = true;
+                        try {
+                            await this.onConfirm(scheduleId);
+                            this.$emit('close-modal');
+                        } catch (e) {
+                            this.isSubmitting = false;
+                        }
+                    }
+                },
+                template: html`
+                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                        <div class="input-container" style="margin-bottom: 0.5rem;">
+                            <input type="text" v-model="filterText" :disabled="isSubmitting" placeholder="Search..." class="search-input" style="width: 100%;" />
+                        </div>
+                        <p v-if="!filteredTargets.length" style="color: var(--color-text-secondary);">No schedule entries found.</p>
+                        <ul>
+                            <li v-for="target in filteredTargets" :key="target">
+                                <button @click="selectTarget(target)" :disabled="isSubmitting" class="white" style="text-align: left;">{{ target }}</button>
+                            </li>
+                        </ul>
+                    </div>
+                `
+            };
+
+            this.$modal.custom(LinkModal, {
+                packlistTitle,
+                targets,
+                modalClass: 'hamburger-menu',
+                onConfirm: async (scheduleId) => {
+                    await Requests.addNameOverride(scheduleId, packlistTitle);
+                    invalidateCache([
+                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                        { namespace: 'production_utils' }
+                    ], true);
+                    if (this.packlistsStore) {
+                        await this.packlistsStore.load();
+                    }
+                }
+            }, 'Link to Schedule Entry');
+        },
+        async openSuggestedMatchModal(packlistTitle, scheduleIdentifier) {
+            const ConfirmLinkModal = {
+                inject: ['$modal'],
+                props: { packlistTitle: String, scheduleIdentifier: String, onConfirm: Function },
+                data() { return { isSubmitting: false }; },
+                methods: {
+                    async confirm() {
+                        if (this.isSubmitting) return;
+                        this.isSubmitting = true;
+                        try {
+                            await this.onConfirm();
+                            this.$emit('close-modal');
+                        } catch (e) {
+                            this.isSubmitting = false;
+                        }
+                    }
+                },
+                template: html`
+                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
+                        <p>This packlist appears to be a variant of a schedule entry:</p>
+                        <p><strong>{{ scheduleIdentifier }}</strong></p>
+                        <p>Link "{{ packlistTitle }}" to this schedule entry?</p>
+                        <div class="button-bar">
+                            <button @click="confirm" :disabled="isSubmitting" class="blue">Yes, Link</button>
+                            <button @click="$emit('close-modal')" :disabled="isSubmitting" class="gray">Cancel</button>
+                        </div>
+                    </div>
+                `
+            };
+
+            this.$modal.custom(ConfirmLinkModal, {
+                packlistTitle,
+                scheduleIdentifier,
+                modalClass: 'hamburger-menu',
+                onConfirm: async () => {
+                    await Requests.addNameOverride(scheduleIdentifier, packlistTitle);
+                    invalidateCache([
+                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
+                        { namespace: 'production_utils' }
+                    ], true);
+                    if (this.packlistsStore) {
+                        await this.packlistsStore.load();
+                    }
+                }
+            }, 'Link Packlist to Schedule');
         },
         async openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, includeAllCandidates = false) {
             try {

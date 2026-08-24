@@ -909,25 +909,66 @@ class productionUtils_uncached {
         const candidates = Array.from(scheduleMap.keys());
         if (candidates.length === 0) return [];
 
-        // Find the index of the year token so suffix stripping never removes it
-        const words = packlistTitle.trim().split(/\s+/);
-        const yearIndex = words.findIndex(w => /^\d{4}$/.test(w));
-        // Must keep at least: everything up to and including year, plus one show word
-        const minWords = yearIndex >= 0 ? yearIndex + 2 : 1;
-
-        for (let count = words.length; count >= minWords; count--) {
-            const candidate = words.slice(0, count).join(' ');
-            const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, candidate, candidates);
-            if (match) {
-                if (count < words.length) {
-                    //console.log(`[production-utils] Matched suffix variant: "${packlistTitle}" -> "${match}"`);
-                }
-                const row = scheduleMap.get(match);
-                return row ? [row] : [];
-            }
+        // Only match on the full title — suffix variants require user confirmation via override
+        const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, packlistTitle, candidates);
+        if (match) {
+            const row = scheduleMap.get(match);
+            return row ? [row] : [];
         }
 
         return [];
+    }
+
+    /**
+     * Check whether a packlist tab would match a schedule row if suffix words were stripped.
+     * Returns the matched row and its computed identifier without auto-linking.
+     * Called by diagnosePacklistAttachment to surface a suggestion for the user to confirm.
+     * @param {Object} deps
+     * @param {string} packlistTitle
+     * @param {Array} [scheduleData]
+     * @returns {Promise<{row:Object, computedIdentifier:string}|null>}
+     */
+    static async findSuffixVariantSuggestion(deps, packlistTitle, scheduleData = null) {
+        if (!packlistTitle) return null;
+
+        const words = packlistTitle.trim().split(/\s+/);
+        const yearIndex = words.findIndex(w => /^\d{4}$/.test(w));
+        const minWords = yearIndex >= 0 ? yearIndex + 2 : 1;
+        if (words.length <= minWords) return null;
+
+        let data = scheduleData;
+        if (!data) {
+            const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
+            data = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
+        }
+
+        const titleParts = _parseIdentifierParts(packlistTitle);
+        const targetYear = titleParts ? titleParts.year : null;
+        const yearData = targetYear
+            ? data.filter(row => String(parseInt(row.Year, 10)) === targetYear)
+            : data;
+        if (yearData.length === 0) return null;
+
+        const scheduleMap = new Map();
+        for (const row of yearData) {
+            if (!row.Show || !row.Client || !row.Year) continue;
+            const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+            if (computed && !scheduleMap.has(computed)) scheduleMap.set(computed, row);
+        }
+
+        const candidates = Array.from(scheduleMap.keys());
+        if (candidates.length === 0) return null;
+
+        for (let count = words.length - 1; count >= minWords; count--) {
+            const candidate = words.slice(0, count).join(' ');
+            const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, candidate, candidates);
+            if (match) {
+                const row = scheduleMap.get(match);
+                return row ? { row, computedIdentifier: match } : null;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -989,6 +1030,16 @@ class productionUtils_uncached {
 
         const parts = _parseIdentifierParts(identifier);
         if (!parts) return { attached: false, hasIdentifierParts: false };
+
+        // Check if suffix stripping would find a match — surface as suggestion for the user to confirm
+        const suggestion = await deps.call(ProductionUtils.findSuffixVariantSuggestion, identifier);
+        if (suggestion) {
+            return {
+                attached: false,
+                hasIdentifierParts: true,
+                suggestedMatch: suggestion.computedIdentifier
+            };
+        }
 
         const [clientIssue, showIssue] = await Promise.all([
             deps.call(ProductionUtils.checkReferenceNameState, parts.client, 'client'),
