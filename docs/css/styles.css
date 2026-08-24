@@ -140,6 +140,7 @@ div#app-content {
     box-sizing: content-box;
     overflow-x: hidden;
     overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
 }
 
 div#app-content.dashboard:not(:has(> div.empty-message)) {
@@ -148,8 +149,8 @@ div#app-content.dashboard:not(:has(> div.empty-message)) {
     align-items: start;
     grid-template-columns: repeat(auto-fit, var(--page-width-card));
     gap: var(--padding-lg);
-    padding-left: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px);
-    padding-right: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px);
+    /* padding-left: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px);
+    padding-right: calc((100vw - (var(--page-width-card) * 4 + var(--padding-lg) * 3))/2 - 8px); */
     width: auto;
 }
 
@@ -161,7 +162,8 @@ div#app-content > div.empty-message {
     padding: 0;
     margin: 0;
     font-style: italic;
-    flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2 - var(--padding-md));
+    /* flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2 - var(--padding-md)); */
+    height: -webkit-fill-available;
     grid-column: 1 / -1;
 }
 
@@ -180,7 +182,8 @@ div#app-content > div.empty-message {
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: var(--page-width-large);
-    flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2);
+    /* flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2); */
+    height: -webkit-fill-available;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
