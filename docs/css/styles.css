@@ -183,7 +183,7 @@ div#app-content > div.empty-message {
     width: 100%;
     max-width: var(--page-width-large);
     /* flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2); */
-    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
