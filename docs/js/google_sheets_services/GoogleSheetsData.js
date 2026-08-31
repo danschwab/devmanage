@@ -12,6 +12,13 @@ export class GoogleSheetsService {
     static _rateLimitCountdownActive = false;
     static _rateLimitCountdownPromise = null;
     
+    static _throwAuthError() {
+        const err = new Error('Authentication required');
+        err.status = 401;
+        err.result = { error: { code: 401, status: 'UNAUTHENTICATED', message: 'Authentication required' } };
+        throw err;
+    }
+
     /**
      * Throws a simulated 429 rate limit error matching the real Google Sheets API response
      * @private
@@ -203,7 +210,7 @@ export class GoogleSheetsService {
      * @returns {Promise<boolean>}
      */
     static async setSheetData(tableId, tabName, updates, mapping = null) {
-        await GoogleSheetsAuth.checkAuth();
+        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.setSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         
@@ -469,7 +476,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async hideTabs(tableId, tabs) {
-        await GoogleSheetsAuth.checkAuth();
+        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -499,7 +506,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async showTabs(tableId, tabs) {
-        await GoogleSheetsAuth.checkAuth();
+        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -530,7 +537,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async copySheetTab(tableId, sourceTab, newTabName) {
-        await GoogleSheetsAuth.checkAuth();
+        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
@@ -605,7 +612,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async createBlankTab(tableId, newTabName) {
-        await GoogleSheetsAuth.checkAuth();
+        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);

@@ -289,7 +289,8 @@ export class GoogleSheetsAuth {
                 gapi.client.setToken(savedToken);
                 return true;
             }
-            return false;
+            // Token missing or expired — attempt silent refresh before giving up
+            return await this.silentRefresh();
         }
 
         // Token exists in gapi.client — verify it's not expired
@@ -297,7 +298,8 @@ export class GoogleSheetsAuth {
         if (savedToken && BaseTokenManager.isTokenExpired(savedToken)) {
             gapi.client.setToken(null);
             BaseTokenManager.clearStoredToken();
-            return false;
+            // Attempt silent refresh before giving up
+            return await this.silentRefresh();
         }
 
         return true;
