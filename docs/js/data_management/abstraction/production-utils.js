@@ -368,35 +368,16 @@ class productionUtils_uncached {
                 scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
             
             if (identifier) {
-                const identNorm = _normalizeIndexName(identifier);
-                console.log('[checkReferenceNameState] Checking overrides for:', {
-                    identifier,
-                    identNorm,
-                    referenceType,
-                    rawName,
-                    overridesCount: overrides.length
-                });
+                const identNorm = _normalizeIndexName(identifier).toLowerCase();
                 // Check if this schedule entry has any override (link or ignore)
                 // Check both fields to handle ignore from either schedule or packlist side
+                // Use case-insensitive comparison to handle fuzzy-matched identifiers
                 const hasOverride = overrides.some(o => {
-                    const schedNorm = _normalizeIndexName(o.schedule || '');
-                    const packNorm = _normalizeIndexName(o.packlist || '');
-                    const matches = (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
-                    if (identifier.includes('Cycnly')) {
-                        console.log('[checkReferenceNameState] Cycnly override check:', {
-                            oSchedule: o.schedule,
-                            oPacklist: o.packlist,
-                            schedNorm,
-                            packNorm,
-                            identNorm,
-                            matches
-                        });
-                    }
-                    // Match if either field contains the identifier (not the ignore keyword)
-                    return matches;
+                    const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
+                    const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
+                    return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
                 });
                 
-                console.log('[checkReferenceNameState] hasOverride:', hasOverride, 'for', identifier);
                 // If override exists, suppress the alert
                 if (hasOverride) return null;
             }
@@ -880,11 +861,12 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both packlist field AND schedule field (identifiers should match)
+        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
-        const titleNorm = _normalizeIndexName(packlistTitle);
+        const titleNorm = _normalizeIndexName(packlistTitle).toLowerCase();
         const override = overrides.find(o => {
-            const schedNorm = _normalizeIndexName(o.schedule || '');
-            const packNorm = _normalizeIndexName(o.packlist || '');
+            const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
+            const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
             return (schedNorm && schedNorm === titleNorm) || (packNorm && packNorm === titleNorm);
         });
         if (override) {
@@ -1047,11 +1029,12 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — any entry means the packlist is explicitly resolved
         // Check both packlist field AND schedule field (identifiers should match)
+        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
-        const identNorm = _normalizeIndexName(identifier);
+        const identNorm = _normalizeIndexName(identifier).toLowerCase();
         const override = overrides.find(o => {
-            const schedNorm = _normalizeIndexName(o.schedule || '');
-            const packNorm = _normalizeIndexName(o.packlist || '');
+            const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
+            const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
             return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
         });
         if (override) return { attached: true, hasIdentifierParts: true };
@@ -1099,14 +1082,15 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both schedule field AND packlist field (identifiers should match)
+        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const computedForOverride = scheduleRow.Identifier ||
             await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
         if (computedForOverride) {
-            const identNorm = _normalizeIndexName(computedForOverride);
+            const identNorm = _normalizeIndexName(computedForOverride).toLowerCase();
             const override = overrides.find(o => {
-                const schedNorm = _normalizeIndexName(o.schedule || '');
-                const packNorm = _normalizeIndexName(o.packlist || '');
+                const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
+                const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
                 return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
             });
             if (override !== undefined) {
@@ -1363,23 +1347,13 @@ class productionUtils_uncached {
         for (const { row, clientIssue, showIssue, computedId } of scheduleResults) {
             const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             // Skip rows that have been explicitly overridden (check both schedule and packlist fields)
+            // Use case-insensitive comparison to handle fuzzy-matched identifiers
             const hasOverride = computedId && overrides.some(o => {
-                const identNorm = _normalizeIndexName(computedId);
-                const schedNorm = _normalizeIndexName(o.schedule || '');
-                const packNorm = _normalizeIndexName(o.packlist || '');
+                const identNorm = _normalizeIndexName(computedId).toLowerCase();
+                const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
+                const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
                 return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
             });
-            
-            if (computedId && computedId.includes('Cycnly')) {
-                console.log('[getMissingIndexReferences] Cycnly entry:', {
-                    identifier,
-                    computedId,
-                    clientIssue: clientIssue ? 'has issue' : 'null',
-                    showIssue: showIssue ? 'has issue' : 'null',
-                    hasOverride,
-                    willSkip: hasOverride ? 'YES' : 'NO'
-                });
-            }
             
             if (hasOverride) continue;
             if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
