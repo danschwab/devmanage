@@ -356,6 +356,7 @@ class productionUtils_uncached {
     static async checkReferenceNameState(deps, rawName, referenceType = 'client', scheduleRow = null) {
         // If we have schedule row context, check for overrides first
         // Check both schedule and packlist fields since identifiers should match
+        // Handle empty strings explicitly and normalize both sides for comparison
         if (scheduleRow && scheduleRow.Client && scheduleRow.Show && scheduleRow.Year) {
             const overrides = await deps.call(ProductionUtils.getNameOverrides);
             const identifier = await deps.call(ProductionUtils.computeIdentifier, 
@@ -365,10 +366,11 @@ class productionUtils_uncached {
                 const identNorm = _normalizeIndexName(identifier);
                 // Check if this schedule entry has any override (link or ignore)
                 // Check both fields to handle ignore from either schedule or packlist side
-                const hasOverride = overrides.some(o => 
-                    (o.schedule && _normalizeIndexName(o.schedule) === identNorm) ||
-                    (o.packlist && _normalizeIndexName(o.packlist) === identNorm)
-                );
+                const hasOverride = overrides.some(o => {
+                    const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
+                    const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                    return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+                });
                 
                 // If override exists, suppress the alert
                 if (hasOverride) return null;
@@ -853,12 +855,14 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both packlist field AND schedule field (identifiers should match)
+        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const titleNorm = _normalizeIndexName(packlistTitle);
-        const override = overrides.find(o => 
-            (o.packlist && _normalizeIndexName(o.packlist) === titleNorm) ||
-            (o.schedule && _normalizeIndexName(o.schedule) === titleNorm)
-        );
+        const override = overrides.find(o => {
+            const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
+            const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+            return (schedNorm && schedNorm === titleNorm) || (packNorm && packNorm === titleNorm);
+        });
         if (override) {
             // If found via schedule field only, treat as ignored (no explicit link)
             if (!override.packlist && override.schedule) return []; // Permanently ignored
@@ -1017,12 +1021,14 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — any entry means the packlist is explicitly resolved
         // Check both packlist field AND schedule field (identifiers should match)
+        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const identNorm = _normalizeIndexName(identifier);
-        const override = overrides.find(o => 
-            (o.packlist && _normalizeIndexName(o.packlist) === identNorm) ||
-            (o.schedule && _normalizeIndexName(o.schedule) === identNorm)
-        );
+        const override = overrides.find(o => {
+            const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
+            const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+            return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+        });
         if (override) return { attached: true, hasIdentifierParts: true };
 
         const row = await deps.call(ProductionUtils.getShowDetails, identifier);
@@ -1068,15 +1074,17 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both schedule field AND packlist field (identifiers should match)
+        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const computedForOverride = scheduleRow.Identifier ||
             await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
         if (computedForOverride) {
             const identNorm = _normalizeIndexName(computedForOverride);
-            const override = overrides.find(o => 
-                (o.schedule && _normalizeIndexName(o.schedule) === identNorm) ||
-                (o.packlist && _normalizeIndexName(o.packlist) === identNorm)
-            );
+            const override = overrides.find(o => {
+                const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
+                const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+            });
             if (override !== undefined) {
                 // If found via packlist field only, treat as ignored (no explicit link)
                 if (!override.schedule && override.packlist) return []; // Permanently ignored
@@ -1330,10 +1338,13 @@ class productionUtils_uncached {
         for (const { row, clientIssue, showIssue, computedId } of scheduleResults) {
             const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             // Skip rows that have been explicitly overridden (check both schedule and packlist fields)
-            const hasOverride = computedId && overrides.some(
-                o => (o.schedule && _normalizeIndexName(o.schedule) === _normalizeIndexName(computedId)) ||
-                     (o.packlist && _normalizeIndexName(o.packlist) === _normalizeIndexName(computedId))
-            );
+            // Handle empty strings explicitly and normalize both sides for comparison
+            const hasOverride = computedId && overrides.some(o => {
+                const identNorm = _normalizeIndexName(computedId);
+                const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
+                const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+            });
             if (hasOverride) continue;
             if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
             if (showIssue) addToMap(showIssue, { sourceType: 'schedule', identifier });
