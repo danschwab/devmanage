@@ -1,6 +1,12 @@
 import { html, TableComponent, Requests, getReactiveStore, invalidateCache, NavigationRegistry } from '../../index.js';
 import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
 
+/**
+ * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
+ * This must match the IGNORE_KEYWORD constant in production-utils.js.
+ */
+const IGNORE_KEYWORD = '__IGNORE__';
+
 export const IndexMismatchReport = {
     components: { TableComponent },
     inject: ['$modal', 'appContext'],
@@ -158,8 +164,8 @@ export const IndexMismatchReport = {
                         );
                         if (!originalRow) return { applied: false };
 
-                        const isIgnore = !scheduleId || !packlistId;
-                        const ignoredIdentifier = scheduleId || packlistId;
+                        const isIgnore = scheduleId === IGNORE_KEYWORD || packlistId === IGNORE_KEYWORD;
+                        const ignoredIdentifier = isIgnore ? (scheduleId === IGNORE_KEYWORD ? packlistId : scheduleId) : '';
                         const label = isIgnore
                             ? `ignore failure to resolve "${ignoredIdentifier}"`
                             : `link "${scheduleId}" to "${packlistId}"`;

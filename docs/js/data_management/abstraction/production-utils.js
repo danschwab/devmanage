@@ -1,6 +1,12 @@
 import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName } from '../index.js';
 
 /**
+ * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
+ * When an override has this keyword in one field, it means "ignore this identifier, don't link it".
+ */
+const IGNORE_KEYWORD = '__IGNORE__';
+
+/**
  * Utility functions for production schedule operations
  */
 class productionUtils_uncached {
@@ -356,7 +362,6 @@ class productionUtils_uncached {
     static async checkReferenceNameState(deps, rawName, referenceType = 'client', scheduleRow = null) {
         // If we have schedule row context, check for overrides first
         // Check both schedule and packlist fields since identifiers should match
-        // Handle empty strings explicitly and normalize both sides for comparison
         if (scheduleRow && scheduleRow.Client && scheduleRow.Show && scheduleRow.Year) {
             const overrides = await deps.call(ProductionUtils.getNameOverrides);
             const identifier = await deps.call(ProductionUtils.computeIdentifier, 
@@ -367,8 +372,9 @@ class productionUtils_uncached {
                 // Check if this schedule entry has any override (link or ignore)
                 // Check both fields to handle ignore from either schedule or packlist side
                 const hasOverride = overrides.some(o => {
-                    const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
-                    const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                    const schedNorm = _normalizeIndexName(o.schedule || '');
+                    const packNorm = _normalizeIndexName(o.packlist || '');
+                    // Match if either field contains the identifier (not the ignore keyword)
                     return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
                 });
                 
@@ -855,18 +861,19 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both packlist field AND schedule field (identifiers should match)
-        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const titleNorm = _normalizeIndexName(packlistTitle);
         const override = overrides.find(o => {
-            const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
-            const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+            const schedNorm = _normalizeIndexName(o.schedule || '');
+            const packNorm = _normalizeIndexName(o.packlist || '');
             return (schedNorm && schedNorm === titleNorm) || (packNorm && packNorm === titleNorm);
         });
         if (override) {
-            // If found via schedule field only, treat as ignored (no explicit link)
-            if (!override.packlist && override.schedule) return []; // Permanently ignored
-            if (!override.schedule) return []; // Permanently ignored
+            // If either field contains the ignore keyword, treat as permanently ignored
+            if (override.schedule === IGNORE_KEYWORD || override.packlist === IGNORE_KEYWORD) return [];
+            // If found via schedule field only (other field is ignore keyword), treat as ignored
+            if (_normalizeIndexName(override.packlist || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
+            if (_normalizeIndexName(override.schedule || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
             // Load schedule data to find the overridden row
             let overrideData = scheduleData;
             if (!overrideData) {
@@ -1021,12 +1028,11 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — any entry means the packlist is explicitly resolved
         // Check both packlist field AND schedule field (identifiers should match)
-        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const identNorm = _normalizeIndexName(identifier);
         const override = overrides.find(o => {
-            const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
-            const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+            const schedNorm = _normalizeIndexName(o.schedule || '');
+            const packNorm = _normalizeIndexName(o.packlist || '');
             return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
         });
         if (override) return { attached: true, hasIdentifierParts: true };
@@ -1074,21 +1080,21 @@ class productionUtils_uncached {
 
         // Check NameOverrides first — explicit mappings bypass all fuzzy logic
         // Check both schedule field AND packlist field (identifiers should match)
-        // Handle empty strings explicitly and normalize both sides for comparison
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const computedForOverride = scheduleRow.Identifier ||
             await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
         if (computedForOverride) {
             const identNorm = _normalizeIndexName(computedForOverride);
             const override = overrides.find(o => {
-                const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
-                const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                const schedNorm = _normalizeIndexName(o.schedule || '');
+                const packNorm = _normalizeIndexName(o.packlist || '');
                 return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
             });
             if (override !== undefined) {
-                // If found via packlist field only, treat as ignored (no explicit link)
-                if (!override.schedule && override.packlist) return []; // Permanently ignored
-                if (!override.packlist) return []; // Permanently ignored
+                // If either field contains the ignore keyword, treat as permanently ignored
+                if (override.schedule === IGNORE_KEYWORD || override.packlist === IGNORE_KEYWORD) return [];
+                if (_normalizeIndexName(override.schedule || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
+                if (_normalizeIndexName(override.packlist || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
                 const matchedTab = tabs.find(t => _normalizeIndexName(t.title) === _normalizeIndexName(override.packlist));
                 return matchedTab ? [matchedTab] : [];
             }
@@ -1338,11 +1344,10 @@ class productionUtils_uncached {
         for (const { row, clientIssue, showIssue, computedId } of scheduleResults) {
             const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             // Skip rows that have been explicitly overridden (check both schedule and packlist fields)
-            // Handle empty strings explicitly and normalize both sides for comparison
             const hasOverride = computedId && overrides.some(o => {
                 const identNorm = _normalizeIndexName(computedId);
-                const schedNorm = o.schedule ? _normalizeIndexName(o.schedule) : '';
-                const packNorm = o.packlist ? _normalizeIndexName(o.packlist) : '';
+                const schedNorm = _normalizeIndexName(o.schedule || '');
+                const packNorm = _normalizeIndexName(o.packlist || '');
                 return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
             });
             if (hasOverride) continue;
@@ -1550,7 +1555,6 @@ export const ProductionUtils = wrapMethods(
     ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods
 );
-
 
 
 

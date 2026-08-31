@@ -1,6 +1,12 @@
 import { html } from '../../index.js';
 
 /**
+ * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
+ * This must match the IGNORE_KEYWORD constant in production-utils.js.
+ */
+const IGNORE_KEYWORD = '__IGNORE__';
+
+/**
  * Shared modal component for resolving missing client/show index entries.
  * Used by ScheduleTable, PacklistTable, and IndexMismatchReport.
  *
@@ -216,8 +222,8 @@ export const IndexResolutionComponent = {
                         if (this.isSubmitting) return;
                         this.isSubmitting = true;
                         try {
-                            const scheduleId = this.sourceType === 'schedule' ? this.sourceIdentifier : '';
-                            const packlistId = this.sourceType === 'packlist' ? this.sourceIdentifier : '';
+                            const scheduleId = this.sourceType === 'schedule' ? this.sourceIdentifier : IGNORE_KEYWORD;
+                            const packlistId = this.sourceType === 'packlist' ? this.sourceIdentifier : IGNORE_KEYWORD;
                             const result = await this.onConfirm?.(scheduleId, packlistId);
                             if (result?.applied !== false) this.$emit('close-modal');
                             else this.isSubmitting = false;
