@@ -369,15 +369,34 @@ class productionUtils_uncached {
             
             if (identifier) {
                 const identNorm = _normalizeIndexName(identifier);
+                console.log('[checkReferenceNameState] Checking overrides for:', {
+                    identifier,
+                    identNorm,
+                    referenceType,
+                    rawName,
+                    overridesCount: overrides.length
+                });
                 // Check if this schedule entry has any override (link or ignore)
                 // Check both fields to handle ignore from either schedule or packlist side
                 const hasOverride = overrides.some(o => {
                     const schedNorm = _normalizeIndexName(o.schedule || '');
                     const packNorm = _normalizeIndexName(o.packlist || '');
+                    const matches = (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+                    if (identifier.includes('Cycnly')) {
+                        console.log('[checkReferenceNameState] Cycnly override check:', {
+                            oSchedule: o.schedule,
+                            oPacklist: o.packlist,
+                            schedNorm,
+                            packNorm,
+                            identNorm,
+                            matches
+                        });
+                    }
                     // Match if either field contains the identifier (not the ignore keyword)
-                    return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
+                    return matches;
                 });
                 
+                console.log('[checkReferenceNameState] hasOverride:', hasOverride, 'for', identifier);
                 // If override exists, suppress the alert
                 if (hasOverride) return null;
             }
@@ -1350,6 +1369,18 @@ class productionUtils_uncached {
                 const packNorm = _normalizeIndexName(o.packlist || '');
                 return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
             });
+            
+            if (computedId && computedId.includes('Cycnly')) {
+                console.log('[getMissingIndexReferences] Cycnly entry:', {
+                    identifier,
+                    computedId,
+                    clientIssue: clientIssue ? 'has issue' : 'null',
+                    showIssue: showIssue ? 'has issue' : 'null',
+                    hasOverride,
+                    willSkip: hasOverride ? 'YES' : 'NO'
+                });
+            }
+            
             if (hasOverride) continue;
             if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
             if (showIssue) addToMap(showIssue, { sourceType: 'schedule', identifier });
