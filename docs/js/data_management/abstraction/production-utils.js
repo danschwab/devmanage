@@ -524,31 +524,13 @@ class productionUtils_uncached {
             return { applied: false, addedRow: false, rowNumber: null, canonicalName: normalizedName, abbreviation: normalizedAbbreviation, conflict: { field: 'abbreviation', value: normalizedAbbreviation, existingName: abbrMatch.name } };
         }
 
-        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
-        const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
-            ? rawData[0].map(h => normalizeHeaderName(h)) 
-            : [];
-        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
-
-        if (abbrColIndex === -1 || !rowResult.rowNumber) {
-            throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
-        }
-
-        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
-        const existingAbbrText = String(targetRow[abbrColIndex] || '').trim();
-        const mergedAbbr = _mergeAbbreviations(existingAbbrText, normalizedAbbreviation);
-
-        if (mergedAbbr !== existingAbbrText) {
-            await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
-        }
-
+        const { added, rowNumber, abbreviations } = await productionUtils_uncached.upsertReferenceEntry(tabName, normalizedName, normalizedAbbreviation);
         return {
             applied: true,
-            addedRow: rowResult.added,
-            rowNumber: rowResult.rowNumber,
+            addedRow: added,
+            rowNumber,
             canonicalName: normalizedName,
-            abbreviation: mergedAbbr,
+            abbreviation: abbreviations,
             conflict: null
         };
     }
@@ -563,133 +545,91 @@ class productionUtils_uncached {
         const rows = Array.isArray(scheduleRows) ? scheduleRows : [];
         const uniqueClients = new Set();
         const uniqueShows = new Set();
-
-        rows.forEach((row) => {
+        rows.forEach(row => {
             const client = normalizeText(row?.Client);
             const show = normalizeText(row?.Show);
             if (client) uniqueClients.add(client);
             if (show) uniqueShows.add(show);
         });
 
-        let clientsAdded = 0;
-        for (const name of uniqueClients) {
-            const r = await findOrCreateReferenceRow('Clients', name);
-            if (r.added) clientsAdded++;
-        }
-        let showsAdded = 0;
-        for (const name of uniqueShows) {
-            const r = await findOrCreateReferenceRow('Shows', name);
-            if (r.added) showsAdded++;
-        }
+        const addMissing = async (tabName, names) => {
+            if (names.size === 0) return 0;
+            const rawData = await Database.getData('CACHE', tabName);
+            const headers = Array.isArray(rawData) && Array.isArray(rawData[0])
+                ? rawData[0].map(h => normalizeHeaderName(h)) : [];
+            const nameColIndex = headers.findIndex(h => h === tabName);
+            if (nameColIndex === -1) throw new Error(`[production-utils] Missing ${tabName} column in CACHE/${tabName}`);
+            const existing = new Set(
+                rawData.slice(1)
+                    .map(r => normalizeText(Array.isArray(r) ? r[nameColIndex] : '')?.toLowerCase())
+                    .filter(Boolean)
+            );
+            let added = 0;
+            for (const name of names) {
+                if (!existing.has(name.toLowerCase())) {
+                    const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
+                    rowValues[nameColIndex] = name;
+                    await Database.appendSheetRow('CACHE', tabName, rowValues);
+                    added++;
+                }
+            }
+            return added;
+        };
 
+        const [clientsAdded, showsAdded] = await Promise.all([
+            addMissing('Clients', uniqueClients),
+            addMissing('Shows', uniqueShows)
+        ]);
         return { clientsAdded, showsAdded };
     }
 
-    /**
-     * Upsert a specific abbreviation by editing exactly one cell in CACHE.
-     * Creates the row first when the reference value does not yet exist.
-     * @param {'Clients'|'Shows'} referenceTab - Reference tab name
-     * @param {string} name - Client/show name to locate or add
-     * @param {string} abbreviation - New abbreviation value
-     * @returns {Promise<{updated:boolean, addedRow:boolean, rowNumber:number|null}>}
-     */
-    static async updateReferenceAbbreviation(referenceTab, name, abbreviation) {
+    // Finds/creates a row; if abbreviation is given, merges it into the abbreviation cell.
+    static async upsertReferenceEntry(referenceTab, name, abbreviation = null) {
         const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
         const normalizedName = normalizeText(name);
-        if (!normalizedName) {
-            return { updated: false, addedRow: false, rowNumber: null };
+        if (!normalizedName) return { added: false, rowNumber: null, abbreviations: '' };
+
+        const rawData = await Database.getData('CACHE', tabName);
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0])
+            ? rawData[0].map(h => normalizeHeaderName(h))
+            : [];
+        const nameColIndex = headers.findIndex(h => h === tabName);
+        if (nameColIndex === -1) throw new Error(`[production-utils] Missing ${tabName} column in CACHE/${tabName}`);
+
+        let rowNumber = null;
+        let added = false;
+        for (let i = 1; i < rawData.length; i++) {
+            const existingName = normalizeText(Array.isArray(rawData[i]) ? rawData[i][nameColIndex] : '');
+            if (existingName && existingName.toLowerCase() === normalizedName.toLowerCase()) {
+                rowNumber = i + 1;
+                break;
+            }
+        }
+        if (rowNumber === null) {
+            const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
+            rowValues[nameColIndex] = normalizedName;
+            rowNumber = await Database.appendSheetRow('CACHE', tabName, rowValues);
+            added = true;
         }
 
-        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
-        const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
-            ? rawData[0].map(h => normalizeHeaderName(h)) 
-            : [];
-        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
+        const nextAbbr = normalizeText(abbreviation || '');
+        if (!nextAbbr) return { added, rowNumber, abbreviations: '' };
 
-        if (abbrColIndex === -1 || !rowResult.rowNumber) {
+        const abbrColIndex = headers.findIndex(h => h === 'Abbreviations');
+        if (abbrColIndex === -1 || !rowNumber) {
             throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
         }
 
-        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
-        const existingAbbr = String(targetRow[abbrColIndex] || '').trim();
-        const nextAbbr = String(abbreviation || '').trim();
-
-        if (existingAbbr === nextAbbr) {
-            return { updated: false, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
-        }
-
-        await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, nextAbbr);
-
-        return { updated: true, addedRow: rowResult.added, rowNumber: rowResult.rowNumber };
-    }
-
-    /**
-     * Ensure a canonical reference name exists in the index.
-     * @param {'Clients'|'Shows'} referenceTab
-     * @param {string} name
-     * @returns {Promise<{added:boolean,rowNumber:number|null}>}
-     */
-    static async addReferenceName(referenceTab, name) {
-        const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
-        const normalizedName = normalizeText(name);
-        if (!normalizedName) {
-            return { added: false, rowNumber: null };
-        }
-
-        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
-        return { added: rowResult.added, rowNumber: rowResult.rowNumber };
-    }
-
-    /**
-     * Append an abbreviation token to an existing canonical name.
-     * Preserves existing abbreviations and writes only the abbreviation cell.
-     * @param {'Clients'|'Shows'} referenceTab
-     * @param {string} name
-     * @param {string} abbreviation
-     * @returns {Promise<{updated:boolean,addedRow:boolean,rowNumber:number|null,abbreviations:string}>}
-     */
-    static async appendReferenceAbbreviation(referenceTab, name, abbreviation) {
-        const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
-        const normalizedName = normalizeText(name);
-        const nextAbbr = normalizeText(abbreviation);
-
-        if (!normalizedName || !nextAbbr) {
-            return { updated: false, addedRow: false, rowNumber: null, abbreviations: '' };
-        }
-
-        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
-        const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
-            ? rawData[0].map(h => normalizeHeaderName(h)) 
-            : [];
-        const abbrColIndex = headers.findIndex((header) => header === 'Abbreviations');
-
-        if (abbrColIndex === -1 || !rowResult.rowNumber) {
-            throw new Error(`[production-utils] Missing Abbreviations column in CACHE/${tabName}`);
-        }
-
-        const targetRow = Array.isArray(rawData[rowResult.rowNumber - 1]) ? rawData[rowResult.rowNumber - 1] : [];
-        const existingAbbrText = String(targetRow[abbrColIndex] || '').trim();
+        const existingAbbrText = added
+            ? ''
+            : String((Array.isArray(rawData[rowNumber - 1]) ? rawData[rowNumber - 1] : [])[abbrColIndex] || '').trim();
         const mergedAbbr = _mergeAbbreviations(existingAbbrText, nextAbbr);
 
-        if (mergedAbbr === existingAbbrText) {
-            return {
-                updated: false,
-                addedRow: rowResult.added,
-                rowNumber: rowResult.rowNumber,
-                abbreviations: mergedAbbr
-            };
+        if (mergedAbbr !== existingAbbrText) {
+            await Database.setCellValue('CACHE', tabName, rowNumber, abbrColIndex + 1, mergedAbbr);
         }
 
-        await Database.setCellValue('CACHE', tabName, rowResult.rowNumber, abbrColIndex + 1, mergedAbbr);
-
-        return {
-            updated: true,
-            addedRow: rowResult.added,
-            rowNumber: rowResult.rowNumber,
-            abbreviations: mergedAbbr
-        };
+        return { added, rowNumber, abbreviations: mergedAbbr };
     }
 
     /**
@@ -832,6 +772,8 @@ class productionUtils_uncached {
             const schedNorm = normalizeText(override.schedule).toLowerCase();
             for (const row of overrideData) {
                 if (!row.Show || !row.Client || !row.Year) continue;
+                const raw = normalizeText([row.Client, row.Year, row.Show].join(' ')).toLowerCase();
+                if (raw === schedNorm) return [row];
                 const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
                 if (computed && normalizeText(computed).toLowerCase() === schedNorm) return [row];
             }
@@ -1344,35 +1286,6 @@ class productionUtils_uncached {
         return results;
     }
 
-    // Finds or creates a row in a CACHE reference tab by name. Mutation — calls Database directly.
-    static async findOrCreateReferenceRow(tabName, name) {
-        const rawData = await Database.getData('CACHE', tabName);
-        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
-            ? rawData[0].map(h => normalizeHeaderName(h)) 
-            : [];
-        const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
-        const nameColIndex = headers.findIndex((header) => header === nameColumn);
-
-        if (nameColIndex === -1) {
-            throw new Error(`[production-utils] Missing ${nameColumn} column in CACHE/${tabName}`);
-        }
-
-        for (let rowIndex = 1; rowIndex < rawData.length; rowIndex += 1) {
-            const row = Array.isArray(rawData[rowIndex]) ? rawData[rowIndex] : [];
-            const existingName = normalizeText(row[nameColIndex]);
-            if (existingName && existingName.toLowerCase() === name.toLowerCase()) {
-                return { rowNumber: rowIndex + 1, added: false };
-            }
-        }
-
-        const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
-        rowValues[nameColIndex] = name;
-        const rowNumber = await Database.appendSheetRow('CACHE', tabName, rowValues);
-        return { rowNumber, added: true };
-    }
-
-
-
 }
 
 export const ProductionUtils = wrapMethods(
@@ -1380,12 +1293,9 @@ export const ProductionUtils = wrapMethods(
     'production_utils',
     [
         'ensureScheduleReferenceRows',
-        'updateReferenceAbbreviation',
-        'addReferenceName',
-        'appendReferenceAbbreviation',
+        'upsertReferenceEntry',
         'addCustomReferenceEntry',
-        'addNameOverride',
-        'findOrCreateReferenceRow'
+        'addNameOverride'
     ],
     ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods
@@ -1620,10 +1530,6 @@ function _guessAbbreviations(rawValue) {
     }
 
     return Array.from(candidates).filter(Boolean);
-}
-
-async function findOrCreateReferenceRow(tabName, name) {
-    return productionUtils_uncached.findOrCreateReferenceRow(tabName, name);
 }
 
 // Finds the first override where either field case-insensitively equals identifierLower.

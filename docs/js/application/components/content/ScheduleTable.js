@@ -530,8 +530,7 @@ export const ScheduleTableComponent = {
                     includeAllCandidates
                 );
 
-                const sourceIdentifier = row?.Identifier ||
-                    await Requests.computeIdentifier(row?.Show, row?.Client, row?.Year);
+                const sourceIdentifier = [row?.Client, row?.Year, row?.Show].filter(Boolean).join(' ');
 
                 const options = resolutionData?.options || [];
                 if (options.length === 0) {

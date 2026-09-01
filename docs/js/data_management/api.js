@@ -581,7 +581,7 @@ class Requests_uncached {
      */
     static async addScheduleReferenceName(referenceType, name) {
         const referenceTab = referenceType === 'show' ? 'Shows' : 'Clients';
-        return await ProductionUtils.addReferenceName(referenceTab, name);
+        return await ProductionUtils.upsertReferenceEntry(referenceTab, name);
     }
 
     /**
@@ -594,7 +594,7 @@ class Requests_uncached {
      */
     static async appendScheduleReferenceAbbreviation(referenceType, canonicalName, abbreviation) {
         const referenceTab = referenceType === 'show' ? 'Shows' : 'Clients';
-        return await ProductionUtils.appendReferenceAbbreviation(referenceTab, canonicalName, abbreviation);
+        return await ProductionUtils.upsertReferenceEntry(referenceTab, canonicalName, abbreviation);
     }
 
     /**
