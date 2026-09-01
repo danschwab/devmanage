@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, normalizeHeaderName, sanitizeTabName, mapWithConcurrency, ProgressBus } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -36,18 +36,6 @@ import { authState } from '../application/utils/auth.js';
 
 // Define all API methods in a single class
 class Requests_uncached {
-    /**
-     * Fetch data from a table/tab as JS objects
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} tableId - Table identifier (INVENTORY, PACK_LISTS, etc.)
-     * @param {string} tabName - Tab name
-     * @param {Object} [mapping] - Optional mapping for object keys to sheet headers
-     * @returns {Promise<Array<Object>>} - Array of JS objects
-     */
-    static async fetchData(deps, tableId, tabName, mapping = null) {
-        return await deps.call(Database.getData, tableId, tabName, mapping);
-    }
-    
     /**
      * Save JS objects to a table/tab
      * 
@@ -135,38 +123,6 @@ class Requests_uncached {
         return true;
     }
     
-    /**
-     * Find a tab by name
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} tableId - Table identifier
-     * @param {string} tabName - Name of the tab to find
-     * @returns {Promise<{title: string, sheetId: number}|null>}
-     */
-    static async findTab(deps, tableId, tabName) {
-        return await deps.call(Database.findTabByName, tableId, tabName);
-    }
-    
-    /**
-     * Get headers/schema from a sheet without loading all data
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} tableId - Table identifier
-     * @param {string} tabName - Tab name
-     * @returns {Promise<Array<string>>} - Array of column headers (normalized)
-     */
-    static async getHeaders(deps, tableId, tabName) {
-        const rawData = await deps.call(Database.getData, tableId, tabName);
-        if (Array.isArray(rawData) && rawData.length > 0 && Array.isArray(rawData[0])) {
-            return rawData[0].map(h => normalizeHeaderName(h)); // Normalize headers
-        }
-        return [];
-    }
-    
-    /**
-     * Get item headers/schema from a packlist by examining actual data
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} tabName - Packlist tab name
-     * @returns {Promise<Array<string>>} - Array of item column headers
-     */
     static async getItemHeaders(deps, tabName) {
         const packlistData = await deps.call(PackListUtils.getContent, tabName);
         if (Array.isArray(packlistData)) {
@@ -179,47 +135,6 @@ class Requests_uncached {
         }
         // Return default schema if no data found
         return;
-    }
-    
-    /**
-     * Executes a SQL-like query against sheet data
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} tableId - The table identifier
-     * @param {string} query - SQL-like query string
-     * @returns {Promise<Array<Object>>} Query results
-     */
-    static async queryData(deps, tableId, query) {
-        return await deps.call(Database.queryData, tableId, query);
-    }
-    
-    /**
-     * Extracts item quantities from a project's pack list
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} projectIdentifier - The project identifier
-     * @returns {Promise<object>} Map of itemId to quantity
-     */
-    static async getItemQuantities(deps, projectIdentifier) {
-        return await deps.call(PackListUtils.extractItems, projectIdentifier);
-    }
-    
-    /**
-     * Check quantities and availability for items in a project
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} projectIdentifier - The project identifier
-     * @returns {Promise<object>} Inventory status for all items in the project
-     */
-    static async checkAvailability(deps, projectIdentifier) {
-        return await deps.call(InventoryUtils.checkItemAvailability, projectIdentifier);
-    }
-    
-    /**
-     * Check item quantities for a project (with overlapping shows analysis)
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} projectIdentifier - The project identifier
-     * @returns {Promise<object>} Detailed inventory status for all items
-     */
-    static async checkItemQuantities(deps, projectIdentifier) {
-        return await deps.call(PackListUtils.checkItemQuantities, projectIdentifier);
     }
     
     /**
@@ -256,16 +171,6 @@ class Requests_uncached {
         const result = await deps.call(PackListUtils.getPacklists, filter);
         //console.log('[Requests.getPacklists] Returning', result.length, 'packlists');
         return result;
-    }
-    
-    /**
-     * Find projects that overlap with the given project or date range
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string|Object} parameters - Project identifier or date range parameters
-     * @returns {Promise<string[]>} Array of overlapping project identifiers
-     */
-    static async getOverlappingProjects(deps, parameters) {
-        return await deps.call(ProductionUtils.getOverlappingShows, parameters);
     }
     
     /**
@@ -400,9 +305,7 @@ class Requests_uncached {
      * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
     static async getPacklistLock(deps, tabName, currentUser = null) {
-        const result = await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName, currentUser);
-        //console.log(`[Requests.getPacklistLock] Lock result for "${tabName}":`, result);
-        return result;
+        return await deps.call(ApplicationUtils.getSheetLock, 'PACK_LISTS', tabName, currentUser);
     }
     
     /**
@@ -419,9 +322,7 @@ class Requests_uncached {
      * @returns {Promise<Object|null>} Lock details or null if not locked (or locked by current user)
      */
     static async getInventoryLock(deps, tabName, currentUser = null) {
-        const result = await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName, currentUser);
-        //console.log(`[Requests.getInventoryLock] Lock result for "${tabName}":`, result);
-        return result;
+        return await deps.call(ApplicationUtils.getSheetLock, 'INVENTORY', tabName, currentUser);
     }
     
     /**
@@ -610,17 +511,6 @@ class Requests_uncached {
     }
 
     /**
-     * Deduplicate schedule data to get unique shows (for clients with multiple booths).
-     * Use when you need unique shows for overlap/count calculations.
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Array} scheduleData - Schedule data from getProductionScheduleData
-     * @returns {Promise<Array>}
-     */
-    static async deduplicateScheduleByShow(deps, scheduleData) {
-        return await deps.call(ProductionUtils.deduplicateScheduleByShow, scheduleData);
-    }
-
-    /**
      * Get all shows deduplicated with their earliest ship and latest return dates.
      * Used to populate the show overlap selector modal.
      * Deduplicates by show name (using abbreviation matching) + year, ignoring client differences.
@@ -653,20 +543,11 @@ class Requests_uncached {
      * @param {'client'|'show'} referenceType
      * @returns {Promise<Object|null>}
      */
-    static async checkScheduleReferenceState(deps, rawNameOrRow, referenceType) {
-        // Support both legacy (string) and new (object) signatures
-        const isRowObject = typeof rawNameOrRow === 'object' && rawNameOrRow !== null;
-        
-        if (isRowObject) {
-            // New signature: pass full row data for override checking
-            return await deps.call(ProductionUtils.checkReferenceNameState, 
-                rawNameOrRow[referenceType === 'client' ? 'Client' : 'Show'], 
-                referenceType, 
-                rawNameOrRow);
-        } else {
-            // Legacy signature: just the raw name
-            return await deps.call(ProductionUtils.checkReferenceNameState, rawNameOrRow, referenceType);
-        }
+    static async checkScheduleReferenceState(deps, row, referenceType) {
+        return await deps.call(ProductionUtils.checkReferenceNameState,
+            row[referenceType === 'client' ? 'Client' : 'Show'],
+            referenceType,
+            row);
     }
 
     /**
@@ -689,18 +570,6 @@ class Requests_uncached {
      */
     static async ensureScheduleReferenceRows(scheduleRows) {
         return await ProductionUtils.ensureScheduleReferenceRows(scheduleRows);
-    }
-
-    /**
-     * Update exactly one abbreviation cell in CACHE reference tabs.
-     * Mutation — uncached.
-     * @param {'Clients'|'Shows'} referenceTab
-     * @param {string} name
-     * @param {string} abbreviation
-     * @returns {Promise<{updated:boolean, addedRow:boolean, rowNumber:number|null}>}
-     */
-    static async updateScheduleReferenceAbbreviation(referenceTab, name, abbreviation) {
-        return await ProductionUtils.updateReferenceAbbreviation(referenceTab, name, abbreviation);
     }
 
     /**
@@ -801,15 +670,6 @@ class Requests_uncached {
     }
 
     /**
-     * Get all non-template packlist tab names, sorted alphabetically.
-     * @param {Object} deps
-     * @returns {Promise<string[]>}
-     */
-    static async getAllPacklistTabNames(deps) {
-        return await deps.call(ProductionUtils.getAllPacklistTabNames);
-    }
-
-    /**
      * Get all non-template packlist tab names that are NOT currently attached to any schedule row.
      * Filters out packlists that have overrides or successfully match to schedule rows.
      * Used for override modals to prevent overriding existing valid matches.
@@ -818,6 +678,13 @@ class Requests_uncached {
      */
     static async getUnattachedPacklistTabNames(deps) {
         return await deps.call(ProductionUtils.getUnattachedPacklistTabNames);
+    }
+
+    // Returns the correct target list for override modals: schedule identifiers when linking from a packlist, unattached packlists otherwise.
+    static async getOverrideTargets(deps, sourceType) {
+        return sourceType === 'packlist'
+            ? await deps.call(ProductionUtils.getAllScheduleIdentifiers)
+            : await deps.call(ProductionUtils.getUnattachedPacklistTabNames);
     }
 
     /**
@@ -1221,7 +1088,7 @@ class Requests_uncached {
             shows,
             async (showRow) => {
                 const identifier = showRow.Identifier || await deps.call(
-                    ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, parseInt(showRow.Year)
+                    ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year
                 );
                 if (!identifier) return null;
 
@@ -1472,18 +1339,6 @@ class Requests_uncached {
     }
 
     /**
-     * Compute inventory report summary for a single item across a set of shows.
-     * Returns startDate, endDate, inventoryQty, and minQty (worst-case remaining).
-     * @param {Object} deps
-     * @param {string} itemId
-     * @param {Object} shows - Map of { showIdentifier: qty }
-     * @returns {Promise<{startDate: string|null, endDate: string|null, inventoryQty: number|null, minQty: number|null}>}
-     */
-    static async getItemReportSummary(deps, rowData) {
-        return await deps.call(InventoryUtils.getItemReportSummary, rowData);
-    }
-
-    /**
      * Get overlapping projects that use a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} currentProjectId - Current project identifier
@@ -1693,7 +1548,7 @@ export const Requests = wrapMethods(
         'saveInventoryTabData', 'savePackList', 'storeUserData', 'uploadItemImage', 'storeThumbnailRecord',
         'lockSheet', 'unlockSheet', 'forceUnlockSheet',
         'checkAndApplyPendingChanges', 'savePendingChangeEntry', 'deletePendingChangeEntry',
-        'ensureScheduleReferenceRows', 'updateScheduleReferenceAbbreviation',
+        'ensureScheduleReferenceRows',
         'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
         'addCustomScheduleReferenceEntry',
         'addNameOverride',

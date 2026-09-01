@@ -548,12 +548,7 @@ export const ScheduleTableComponent = {
                     options,
                     includeAllCandidates,
                     sources: sourceIdentifier ? [{ sourceType: 'schedule', identifier: sourceIdentifier }] : [],
-                    onFetchOverrideTargets: async (sourceType) => {
-                        if (sourceType === 'packlist') {
-                            return await Requests.getAllScheduleIdentifiers();
-                        }
-                        return await Requests.getUnattachedPacklistTabNames();
-                    },
+                    onFetchOverrideTargets: (sourceType) => Requests.getOverrideTargets(sourceType),
                     onAddOverride: async (scheduleId, packlistId) => {
                         await Requests.addNameOverride(scheduleId, packlistId);
                         // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results

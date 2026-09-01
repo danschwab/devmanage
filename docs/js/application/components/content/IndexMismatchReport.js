@@ -151,13 +151,7 @@ export const IndexMismatchReport = {
                     includeAllCandidates,
                     showDescription: false,
                     sources: row.sources || [],
-                    onFetchOverrideTargets: async (sourceType) => {
-                        if (sourceType === 'packlist') {
-                            return await Requests.getAllScheduleIdentifiers();
-                        } else {
-                            return await Requests.getUnattachedPacklistTabNames();
-                        }
-                    },
+                    onFetchOverrideTargets: (sourceType) => Requests.getOverrideTargets(sourceType),
                     onAddOverride: async (scheduleId, packlistId) => {
                         const originalRow = self.reportStore.data.find(
                             r => r.rawValue === row.rawValue && r.referenceType === row.referenceType

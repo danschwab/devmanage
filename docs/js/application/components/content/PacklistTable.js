@@ -1,7 +1,7 @@
 import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString, getAutoColorClass } from '../../index.js';
 import { ItemImageComponent } from './InventoryTable.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
-import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
+import { packlistIndexResolutionMixin } from '../interface/IndexResolutionModal.js';
 
 // Packlist Table Hamburger Menu Component
 export const PacklistTableMenuComponent = {
@@ -138,7 +138,7 @@ const RowOptionsMenuComponent = {
 
 // Use getReactiveStore for packlist table data
 export const PacklistTable = {
-    mixins: [sheetLockMixin],
+    mixins: [sheetLockMixin, packlistIndexResolutionMixin],
     components: { TableComponent },
     inject: ['$modal', 'appContext', '$notify'],
     props: {
@@ -461,160 +461,9 @@ export const PacklistTable = {
             );
             this.$emit('navigate-to-path', { targetPath: viewPath, replaceHistory: true });
         },
-        async openSuggestedMatchModal(packlistTitle, scheduleIdentifier) {
-            const ConfirmLinkModal = {
-                inject: ['$modal'],
-                props: { packlistTitle: String, scheduleIdentifier: String, onConfirm: Function },
-                data() { return { isSubmitting: false }; },
-                methods: {
-                    async confirm() {
-                        if (this.isSubmitting) return;
-                        this.isSubmitting = true;
-                        try {
-                            await this.onConfirm();
-                            this.$emit('close-modal');
-                        } catch (e) {
-                            this.isSubmitting = false;
-                        }
-                    }
-                },
-                template: html`
-                    <div :style="isSubmitting ? 'opacity: 0.7;' : ''">
-                        <p>This packlist appears to be a variant of a schedule entry:</p>
-                        <p><strong>{{ scheduleIdentifier }}</strong></p>
-                        <p>Link "{{ packlistTitle }}" to this schedule entry?</p>
-                        <div class="button-bar">
-                            <button @click="confirm" :disabled="isSubmitting" class="blue">Yes, Link</button>
-                            <button @click="$emit('close-modal')" :disabled="isSubmitting" class="gray">Cancel</button>
-                        </div>
-                    </div>
-                `
-            };
-
-            this.$modal.custom(ConfirmLinkModal, {
-                packlistTitle,
-                scheduleIdentifier,
-                modalClass: 'hamburger-menu',
-                onConfirm: async () => {
-                    await Requests.addNameOverride(scheduleIdentifier, packlistTitle);
-                    invalidateCache([
-                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                        { namespace: 'production_utils' }
-                    ], true);
-                    try {
-                        this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
-                    } catch (error) {
-                        console.error('[PacklistTable] Failed to reload schedule attachment after linking:', error);
-                    }
-                }
-            }, 'Link Packlist to Schedule');
+        async _reloadAfterPacklistAttachmentChange(packlistTitle) {
+            this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
         },
-        async openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, includeAllCandidates = false) {
-            try {
-                const resolutionData = await Requests.getScheduleReferenceResolutionOptions(
-                    referenceType,
-                    rawValue,
-                    includeAllCandidates
-                );
-
-                const options = resolutionData?.options || [];
-                if (options.length === 0) {
-                    this.$modal.alert('No resolution options available for this value.', 'Missing');
-                    return;
-                }
-
-                const modalTitle = includeAllCandidates
-                    ? `Select ${referenceType}`
-                    : `${referenceType === 'show' ? 'Show' : 'Client'} Missing`;
-
-                const issue = { referenceType, rawValue };
-                const self = this;
-
-                this.$modal.custom(IndexResolutionComponent, {
-                    issue,
-                    options,
-                    includeAllCandidates,
-                    sources: packlistTitle ? [{ sourceType: 'packlist', identifier: packlistTitle }] : [],
-                    onFetchOverrideTargets: async (sourceType) => {
-                        if (sourceType === 'packlist') {
-                            return await Requests.getAllScheduleIdentifiers();
-                        }
-                        return await Requests.getUnattachedPacklistTabNames();
-                    },
-                    onAddOverride: async (scheduleId, packlistId) => {
-                        await Requests.addNameOverride(scheduleId, packlistId);
-                        // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results
-                        invalidateCache([
-                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                            { namespace: 'production_utils' }
-                        ], true);
-                        try {
-                            this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
-                        } catch (error) {
-                            console.error('[PacklistTable] Failed to reload schedule attachment after override:', error);
-                        }
-                        return { applied: true };
-                    },
-                    onSelectOption: async (option) => {
-                        return await this.applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates);
-                    },
-                    modalClass: 'hamburger-menu'
-                }, modalTitle);
-            } catch (error) {
-                console.error('[PacklistTable] Failed to open index resolution modal:', error);
-                this.$modal.error(`Failed to load resolution options: ${error.message}`, 'Index Resolution Error');
-            }
-        },
-        async applyPacklistIndexResolution(option, issue, packlistTitle, referenceType, rawValue, includeAllCandidates) {
-            try {
-                if (!option) return { applied: false };
-
-                if (option.actionType === 'browse-all') {
-                    await this.openPacklistIndexResolutionModal(packlistTitle, referenceType, rawValue, true);
-                    return { applied: false, browsedAll: true };
-                }
-
-                if (option.actionType === 'add-new') {
-                    await Requests.addScheduleReferenceName(referenceType, option.canonicalName);
-                } else if (option.actionType === 'add-abbreviation') {
-                    await Requests.appendScheduleReferenceAbbreviation(referenceType, option.canonicalName, option.abbreviation);
-                } else if (option.actionType === 'add-custom') {
-                    const result = await Requests.addCustomScheduleReferenceEntry(referenceType, option.canonicalName, option.abbreviation);
-                    if (!result?.applied) {
-                        const conflictName = result?.conflict?.existingName || '';
-                        const conflictValue = result?.conflict?.value || option.canonicalName;
-                        const fieldLabel = result?.conflict?.field === 'abbreviation' ? 'abbreviation' : 'name';
-                        return {
-                            applied: false,
-                            message: `The ${fieldLabel} "${conflictValue}" already exists${conflictName ? ` on ${conflictName}` : ''}.`
-                        };
-                    }
-                    return { applied: true };
-                } else {
-                    return { applied: false };
-                }
-
-                // Invalidate caches to refresh schedule data and CACHE sheet
-                invalidateCache([
-                    { namespace: 'database', methodName: 'query', args: ['SCHEDULE', `SELECT * WHERE A != ''`] },
-                    { namespace: 'database', methodName: 'query', args: ['CACHE'] }
-                ], true);
-
-                // Reload attachment status
-                try {
-                    this.scheduleAttachment = await Requests.getPacklistScheduleAttachment(packlistTitle);
-                } catch (error) {
-                    console.error('[PacklistTable] Failed to reload schedule attachment:', error);
-                }
-
-                return { applied: true };
-            } catch (error) {
-                console.error('[PacklistTable] Failed to apply index resolution:', error);
-                this.$modal.error(`Failed to apply resolution: ${error.message}`, 'Resolution Error');
-                return { applied: false };
-            }
-        },
-
         initializeStore() {
             if (!this.tabName) return;
             

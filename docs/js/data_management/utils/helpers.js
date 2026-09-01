@@ -678,4 +678,13 @@ export function parseSearchParameters(params) {
     return result;
 }
 
+// Trims whitespace from any value, converting to string first.
+export function normalizeText(value) {
+    return String(value || '').trim();
+}
+
+// Produces a comparison key: uppercase, alphanumeric only. Used for matching/deduplication.
+export function normalizeMatchKey(value) {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 

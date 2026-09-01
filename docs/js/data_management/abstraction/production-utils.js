@@ -1,4 +1,4 @@
-import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName } from '../index.js';
+import { Database, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName, normalizeText, normalizeMatchKey } from '../index.js';
 
 /**
  * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
@@ -336,17 +336,15 @@ class productionUtils_uncached {
     static async computeIdentifierReferenceData(deps) {
         const clientsData = await deps.call(Database.getData, 'CACHE', 'Clients', { name: 'Clients', abbr: 'Abbreviations' });
         const showsData = await deps.call(Database.getData, 'CACHE', 'Shows', { name: 'Shows', abbr: 'Abbreviations' });
-        //console.log('[production-utils] Loaded reference data for fuzzy matching:', { clientsData, showsData });
-        return {
-            clients: {
-                names: clientsData.map(row => row.name || ''),
-                abbrs: clientsData.map(row => row.abbr || '')
-            },
-            shows: {
-                names: showsData.map(row => row.name || ''),
-                abbrs: showsData.map(row => row.abbr || '')
-            }
+        const buildRef = (data) => {
+            const names = data.map(row => row.name || '');
+            const abbrs = data.map(row => row.abbr || '');
+            const indexData = names
+                .map((name, i) => ({ name: normalizeText(name), abbreviations: _splitAbbreviations(abbrs[i] || '') }))
+                .filter(entry => entry.name);
+            return { names, abbrs, indexData };
         };
+        return { clients: buildRef(clientsData), shows: buildRef(showsData) };
     }
 
     /**
@@ -367,66 +365,48 @@ class productionUtils_uncached {
             const identifier = await deps.call(ProductionUtils.computeIdentifier, 
                 scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
             
-            if (identifier) {
-                const identNorm = _normalizeIndexName(identifier).toLowerCase();
-                // Check if this schedule entry has any override (link or ignore)
-                // Check both fields to handle ignore from either schedule or packlist side
-                // Use case-insensitive comparison to handle fuzzy-matched identifiers
-                const hasOverride = overrides.some(o => {
-                    const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
-                    const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
-                    return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
-                });
-                
-                // If override exists, suppress the alert
-                if (hasOverride) return null;
+            if (identifier && _findOverride(overrides, normalizeText(identifier).toLowerCase())) {
+                return null;
+            }
+            // Fallback: the override may have been stored using the raw (unresolved) field values
+            // when the show/client name fuzzy-matches to a different index entry.
+            const rawIdentifier = [scheduleRow.Client, scheduleRow.Year, scheduleRow.Show].filter(Boolean).join(' ');
+            if (rawIdentifier && _findOverride(overrides, normalizeText(rawIdentifier).toLowerCase())) {
+                return null;
             }
         }
         
         const kind = referenceType === 'show' ? 'show' : 'client';
-        const rawValue = _normalizeIndexName(rawName);
+        const rawValue = normalizeText(rawName);
 
         if (!rawValue) {
             return null;
         }
 
         const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
-        const ref = kind === 'show' ? refData.shows : refData.clients;
-        const indexData = ref.names
-            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
-            .filter(entry => entry.name);
-        const state = _classifyReferenceState(rawValue, indexData);
+        const indexData = (kind === 'show' ? refData.shows : refData.clients).indexData;
+        const rawNorm = normalizeMatchKey(rawValue);
 
-        // Exact matches should not render cards.
-        if (state.status === 'exact-name' || state.status === 'exact-abbreviation') {
-            return null;
+        if (!rawNorm || indexData.length === 0) {
+            return { message: '⚠', type: 'index-reference', color: 'red', clickable: true, referenceType: kind, rawValue, status: 'missing', bestMatch: null };
+        }
+        if (indexData.some(entry => normalizeMatchKey(entry.name) === rawNorm)) return null;
+        if (indexData.some(entry => Array.isArray(entry.abbreviations) && entry.abbreviations.some(abbr => normalizeMatchKey(abbr) === rawNorm))) return null;
+
+        let bestMatch = '';
+        try {
+            bestMatch = GetTopFuzzyMatch(rawValue, indexData.map(e => e.name), indexData.map(e => (e.abbreviations || []).join(', ')), 2.5);
+        } catch (e) {}
+
+        if (bestMatch) {
+            return { message: bestMatch, type: 'index-reference-resolved', color: 'gray', clickable: true, referenceType: kind, rawValue, status: 'fuzzy-pass', bestMatch };
         }
 
-        if (state.status === 'fuzzy-pass' && state.bestMatch) {
-            return {
-                message: state.bestMatch,
-                type: 'index-reference-resolved',
-                color: 'gray',
-                clickable: true,
-                referenceType: kind,
-                rawValue,
-                status: state.status,
-                bestMatch: state.bestMatch
-            };
-        }
+        const sortedCandidates = _rankReferenceCandidates(rawValue, indexData, _guessAbbreviations(rawValue));
+        const topCandidate = sortedCandidates[0];
+        const status = (sortedCandidates.length > 1 && topCandidate.score - sortedCandidates[1].score < 0.15) ? 'ambiguous' : 'missing';
 
-        const message = '⚠';
-
-        return {
-            message,
-            type: 'index-reference',
-            color: 'red',
-            clickable: true,
-            referenceType: kind,
-            rawValue,
-            status: state.status,
-            bestMatch: state.bestMatch || null
-        };
+        return { message: '⚠', type: 'index-reference', color: 'red', clickable: true, referenceType: kind, rawValue, status, bestMatch: topCandidate?.name || null };
     }
 
     /**
@@ -439,12 +419,9 @@ class productionUtils_uncached {
      */
     static async getReferenceResolutionOptions(deps, referenceType, rawValue, includeAllCandidates = false) {
         const kind = referenceType === 'show' ? 'show' : 'client';
-        const normalizedRaw = _normalizeIndexName(rawValue);
+        const normalizedRaw = normalizeText(rawValue);
         const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
-        const ref = kind === 'show' ? refData.shows : refData.clients;
-        const indexData = ref.names
-            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
-            .filter(entry => entry.name);
+        const indexData = (kind === 'show' ? refData.shows : refData.clients).indexData;
 
         if (!normalizedRaw) {
             return { referenceType: kind, rawValue: '', options: [] };
@@ -452,9 +429,10 @@ class productionUtils_uncached {
 
         const guessedAbbreviations = _guessAbbreviations(normalizedRaw);
         const candidates = _rankReferenceCandidates(normalizedRaw, indexData, guessedAbbreviations);
+        const topScore = candidates[0]?.score ?? 0;
         const topCandidates = includeAllCandidates
             ? candidates.sort((a, b) => a.name.localeCompare(b.name))
-            : _filterHighConfidenceCandidates(candidates);
+            : candidates.filter(c => c.score >= 0.9 || (c.score >= 0.5 && c.score >= topScore - 0.12));
 
         const options = [];
 
@@ -508,8 +486,8 @@ class productionUtils_uncached {
     static async addCustomReferenceEntry(referenceType, canonicalName, abbreviation) {
         const kind = referenceType === 'show' ? 'show' : 'client';
         const tabName = kind === 'show' ? 'Shows' : 'Clients';
-        const normalizedName = _normalizeIndexName(canonicalName);
-        const normalizedAbbreviation = _normalizeIndexName(abbreviation);
+        const normalizedName = normalizeText(canonicalName);
+        const normalizedAbbreviation = normalizeText(abbreviation);
 
         if (!normalizedName || !normalizedAbbreviation) {
             return {
@@ -527,43 +505,26 @@ class productionUtils_uncached {
         }
 
         const refData = await ProductionUtils.computeIdentifierReferenceData();
-        const ref = kind === 'show' ? refData.shows : refData.clients;
-        const indexData = ref.names
-            .map((name, i) => ({ name: _normalizeIndexName(name), abbreviations: _splitAbbreviations(ref.abbrs[i] || '') }))
-            .filter(entry => entry.name);
-        const nameConflict = _findReferenceConflict(normalizedName, indexData);
-        if (nameConflict) {
-            return {
-                applied: false,
-                addedRow: false,
-                rowNumber: null,
-                canonicalName: normalizedName,
-                abbreviation: normalizedAbbreviation,
-                conflict: {
-                    field: 'name',
-                    value: normalizedName,
-                    existingName: nameConflict.name
-                }
-            };
+        const indexData = (kind === 'show' ? refData.shows : refData.clients).indexData;
+        const nameNorm = normalizeMatchKey(normalizedName);
+        const nameMatch = nameNorm && (
+            indexData.find(e => normalizeMatchKey(e.name) === nameNorm) ||
+            indexData.find(e => Array.isArray(e.abbreviations) && e.abbreviations.some(a => normalizeMatchKey(a) === nameNorm))
+        );
+        if (nameMatch) {
+            return { applied: false, addedRow: false, rowNumber: null, canonicalName: normalizedName, abbreviation: normalizedAbbreviation, conflict: { field: 'name', value: normalizedName, existingName: nameMatch.name } };
         }
 
-        const abbreviationConflict = _findReferenceConflict(normalizedAbbreviation, indexData);
-        if (abbreviationConflict) {
-            return {
-                applied: false,
-                addedRow: false,
-                rowNumber: null,
-                canonicalName: normalizedName,
-                abbreviation: normalizedAbbreviation,
-                conflict: {
-                    field: 'abbreviation',
-                    value: normalizedAbbreviation,
-                    existingName: abbreviationConflict.name
-                }
-            };
+        const abbrNorm = normalizeMatchKey(normalizedAbbreviation);
+        const abbrMatch = abbrNorm && (
+            indexData.find(e => normalizeMatchKey(e.name) === abbrNorm) ||
+            indexData.find(e => Array.isArray(e.abbreviations) && e.abbreviations.some(a => normalizeMatchKey(a) === abbrNorm))
+        );
+        if (abbrMatch) {
+            return { applied: false, addedRow: false, rowNumber: null, canonicalName: normalizedName, abbreviation: normalizedAbbreviation, conflict: { field: 'abbreviation', value: normalizedAbbreviation, existingName: abbrMatch.name } };
         }
 
-        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
         const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
             ? rawData[0].map(h => normalizeHeaderName(h)) 
@@ -604,14 +565,22 @@ class productionUtils_uncached {
         const uniqueShows = new Set();
 
         rows.forEach((row) => {
-            const client = _normalizeIndexName(row?.Client);
-            const show = _normalizeIndexName(row?.Show);
+            const client = normalizeText(row?.Client);
+            const show = normalizeText(row?.Show);
             if (client) uniqueClients.add(client);
             if (show) uniqueShows.add(show);
         });
 
-        const clientsAdded = await _appendMissingReferenceRows('Clients', Array.from(uniqueClients));
-        const showsAdded = await _appendMissingReferenceRows('Shows', Array.from(uniqueShows));
+        let clientsAdded = 0;
+        for (const name of uniqueClients) {
+            const r = await findOrCreateReferenceRow('Clients', name);
+            if (r.added) clientsAdded++;
+        }
+        let showsAdded = 0;
+        for (const name of uniqueShows) {
+            const r = await findOrCreateReferenceRow('Shows', name);
+            if (r.added) showsAdded++;
+        }
 
         return { clientsAdded, showsAdded };
     }
@@ -626,12 +595,12 @@ class productionUtils_uncached {
      */
     static async updateReferenceAbbreviation(referenceTab, name, abbreviation) {
         const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
-        const normalizedName = _normalizeIndexName(name);
+        const normalizedName = normalizeText(name);
         if (!normalizedName) {
             return { updated: false, addedRow: false, rowNumber: null };
         }
 
-        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
         const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
             ? rawData[0].map(h => normalizeHeaderName(h)) 
@@ -663,12 +632,12 @@ class productionUtils_uncached {
      */
     static async addReferenceName(referenceTab, name) {
         const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
-        const normalizedName = _normalizeIndexName(name);
+        const normalizedName = normalizeText(name);
         if (!normalizedName) {
             return { added: false, rowNumber: null };
         }
 
-        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
         return { added: rowResult.added, rowNumber: rowResult.rowNumber };
     }
 
@@ -682,14 +651,14 @@ class productionUtils_uncached {
      */
     static async appendReferenceAbbreviation(referenceTab, name, abbreviation) {
         const tabName = referenceTab === 'Shows' ? 'Shows' : 'Clients';
-        const normalizedName = _normalizeIndexName(name);
-        const nextAbbr = _normalizeIndexName(abbreviation);
+        const normalizedName = normalizeText(name);
+        const nextAbbr = normalizeText(abbreviation);
 
         if (!normalizedName || !nextAbbr) {
             return { updated: false, addedRow: false, rowNumber: null, abbreviations: '' };
         }
 
-        const rowResult = await _findOrCreateReferenceRow(tabName, normalizedName);
+        const rowResult = await findOrCreateReferenceRow(tabName, normalizedName);
         const rawData = await Database.getData('CACHE', tabName);
         const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
             ? rawData[0].map(h => normalizeHeaderName(h)) 
@@ -796,16 +765,8 @@ class productionUtils_uncached {
 
             let canonicalShowName = rawShowName;
             try {
-                const matched = GetTopFuzzyMatch(
-                    rawShowName,
-                    referenceData.shows.names,
-                    referenceData.shows.abbrs,
-                    2.5
-                );
-                if (matched) canonicalShowName = matched;
-            } catch (e) {
-                // Use raw name if fuzzy match fails
-            }
+                canonicalShowName = _resolveRefPart(rawShowName, referenceData.shows.names, referenceData.shows.abbrs, 2.5);
+            } catch (e) {}
 
             // Create key from canonical show name + year (NOT client)
             const year = row.Year || '';
@@ -859,76 +820,34 @@ class productionUtils_uncached {
     static async findScheduleRowsForPacklist(deps, packlistTitle, scheduleData = null) {
         if (!packlistTitle) return [];
 
-        // Check NameOverrides first — explicit mappings bypass all fuzzy logic
-        // Check both packlist field AND schedule field (identifiers should match)
-        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
-        const titleNorm = _normalizeIndexName(packlistTitle).toLowerCase();
-        const override = overrides.find(o => {
-            const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
-            const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
-            return (schedNorm && schedNorm === titleNorm) || (packNorm && packNorm === titleNorm);
-        });
+        const override = _findOverride(overrides, normalizeText(packlistTitle).toLowerCase());
         if (override) {
-            // If either field contains the ignore keyword, treat as permanently ignored
-            if (override.schedule === IGNORE_KEYWORD || override.packlist === IGNORE_KEYWORD) return [];
-            // If found via schedule field only (other field is ignore keyword), treat as ignored
-            if (_normalizeIndexName(override.packlist || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
-            if (_normalizeIndexName(override.schedule || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
-            // Load schedule data to find the overridden row
+            if (_isIgnoreOverride(override)) return [];
             let overrideData = scheduleData;
             if (!overrideData) {
                 const overrideMapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
                 overrideData = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', overrideMapping);
             }
-            const schedNorm = _normalizeIndexName(override.schedule);
+            const schedNorm = normalizeText(override.schedule).toLowerCase();
             for (const row of overrideData) {
                 if (!row.Show || !row.Client || !row.Year) continue;
                 const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-                if (computed && _normalizeIndexName(computed) === schedNorm) return [row];
+                if (computed && normalizeText(computed).toLowerCase() === schedNorm) return [row];
             }
             return [];
         }
 
-        // Load schedule data if not provided
         let data = scheduleData;
         if (!data) {
             const mapping = await deps.call(ProductionUtils.GetMappingFromProductionSchedule);
             data = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
         }
 
-        // Parse year from the packlist title to narrow the schedule search
-        const titleParts = _parseIdentifierParts(packlistTitle);
-        const targetYear = titleParts ? titleParts.year : null;
-
-        // Year-filter schedule rows (all rows if year not parseable)
-        const yearData = targetYear
-            ? data.filter(row => String(parseInt(row.Year, 10)) === targetYear)
-            : data;
-
-        if (yearData.length === 0) return [];
-
-        // Build computed-identifier → row map for year-filtered rows; keep first for duplicate shows
-        const scheduleMap = new Map();
-        for (const row of yearData) {
-            if (!row.Show || !row.Client || !row.Year) continue;
-            const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-            if (computed && !scheduleMap.has(computed)) {
-                scheduleMap.set(computed, row);
-            }
-        }
-
-        const candidates = Array.from(scheduleMap.keys());
+        const { scheduleMap, candidates } = await _buildYearFilteredScheduleMap(deps, packlistTitle, data);
         if (candidates.length === 0) return [];
-
-        // Only match on the full title — suffix variants require user confirmation via override
         const match = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, packlistTitle, candidates);
-        if (match) {
-            const row = scheduleMap.get(match);
-            return row ? [row] : [];
-        }
-
-        return [];
+        return match ? [scheduleMap.get(match)].filter(Boolean) : [];
     }
 
     /**
@@ -954,21 +873,7 @@ class productionUtils_uncached {
             data = await deps.call(Database.getData, 'PROD_SCHED', 'Production Schedule', mapping);
         }
 
-        const titleParts = _parseIdentifierParts(packlistTitle);
-        const targetYear = titleParts ? titleParts.year : null;
-        const yearData = targetYear
-            ? data.filter(row => String(parseInt(row.Year, 10)) === targetYear)
-            : data;
-        if (yearData.length === 0) return null;
-
-        const scheduleMap = new Map();
-        for (const row of yearData) {
-            if (!row.Show || !row.Client || !row.Year) continue;
-            const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-            if (computed && !scheduleMap.has(computed)) scheduleMap.set(computed, row);
-        }
-
-        const candidates = Array.from(scheduleMap.keys());
+        const { scheduleMap, candidates } = await _buildYearFilteredScheduleMap(deps, packlistTitle, data);
         if (candidates.length === 0) return null;
 
         for (let count = words.length - 1; count >= minWords; count--) {
@@ -992,7 +897,7 @@ class productionUtils_uncached {
     static async getShowDetails(deps, identifier) {
         if (!identifier) return null;
         const rows = await deps.call(ProductionUtils.findScheduleRowsForPacklist, identifier);
-        const row = rows[0] ?? null;
+        const row = rows[0] ? { ...rows[0] } : null;
         if (!row) return null;
 
         // Normalize date columns before returning to ensure correct years
@@ -1027,17 +932,10 @@ class productionUtils_uncached {
     static async diagnosePacklistAttachment(deps, identifier) {
         if (!identifier) return { attached: false, hasIdentifierParts: false };
 
-        // Check NameOverrides first — any entry means the packlist is explicitly resolved
-        // Check both packlist field AND schedule field (identifiers should match)
-        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
-        const identNorm = _normalizeIndexName(identifier).toLowerCase();
-        const override = overrides.find(o => {
-            const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
-            const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
-            return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
-        });
-        if (override) return { attached: true, hasIdentifierParts: true };
+        if (_findOverride(overrides, normalizeText(identifier).toLowerCase())) {
+            return { attached: true, hasIdentifierParts: true };
+        }
 
         const row = await deps.call(ProductionUtils.getShowDetails, identifier);
         if (row) return { attached: true, hasIdentifierParts: true };
@@ -1080,25 +978,15 @@ class productionUtils_uncached {
     static async findPacklistTabsForScheduleRow(deps, scheduleRow, tabs) {
         if (!scheduleRow || !Array.isArray(tabs)) return [];
 
-        // Check NameOverrides first — explicit mappings bypass all fuzzy logic
-        // Check both schedule field AND packlist field (identifiers should match)
-        // Use case-insensitive comparison to handle fuzzy-matched identifiers
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
         const computedForOverride = scheduleRow.Identifier ||
             await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
         if (computedForOverride) {
-            const identNorm = _normalizeIndexName(computedForOverride).toLowerCase();
-            const override = overrides.find(o => {
-                const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
-                const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
-                return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
-            });
+            const override = _findOverride(overrides, normalizeText(computedForOverride).toLowerCase());
             if (override !== undefined) {
-                // If either field contains the ignore keyword, treat as permanently ignored
-                if (override.schedule === IGNORE_KEYWORD || override.packlist === IGNORE_KEYWORD) return [];
-                if (_normalizeIndexName(override.schedule || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
-                if (_normalizeIndexName(override.packlist || '') === _normalizeIndexName(IGNORE_KEYWORD)) return [];
-                const matchedTab = tabs.find(t => _normalizeIndexName(t.title) === _normalizeIndexName(override.packlist));
+                if (_isIgnoreOverride(override)) return [];
+                const packNorm = normalizeText(override.packlist).toLowerCase();
+                const matchedTab = tabs.find(t => normalizeText(t.title).toLowerCase() === packNorm);
                 return matchedTab ? [matchedTab] : [];
             }
         }
@@ -1156,27 +1044,15 @@ class productionUtils_uncached {
      * @returns {Promise<string|null>} Ship date in MM/DD/YYYY format or null
      */
     static async guessShipDate(deps, row) {
-        return _normalizeScheduleDate(_calculateShipDate(row), 'ship');
+        try { return toUSDateString(_calculateShipDate(row)); } catch (e) { return null; }
     }
 
-    /**
-     * Normalize show start date to include year
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Object} row - Schedule row with date fields
-     * @returns {Promise<string|null>} Start date in MM/DD/YYYY format or null
-     */
     static async normalizeStartDate(deps, row) {
-        return _normalizeScheduleDate(parseDate(row['S. Start'], true, row.Year), 'start');
+        try { return toUSDateString(parseDate(row['S. Start'], true, row.Year)); } catch (e) { return null; }
     }
 
-    /**
-     * Normalize show end date to include year
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {Object} row - Schedule row with date fields
-     * @returns {Promise<string|null>} End date in MM/DD/YYYY format or null
-     */
     static async normalizeEndDate(deps, row) {
-        return _normalizeScheduleDate(parseDate(row['S. End'], true, row.Year), 'end');
+        try { return toUSDateString(parseDate(row['S. End'], true, row.Year)); } catch (e) { return null; }
     }
 
 
@@ -1188,13 +1064,13 @@ class productionUtils_uncached {
      * @returns {string|null}
      */
     static async findBestProjectIdentifierMatch(deps, identifier, candidates = []) {
-        const rawIdentifier = _normalizeIndexName(identifier);
+        const rawIdentifier = normalizeText(identifier);
         if (!rawIdentifier || !Array.isArray(candidates) || candidates.length === 0) {
             return null;
         }
 
         const cleanCandidates = candidates
-            .map(candidate => _normalizeIndexName(candidate))
+            .map(candidate => normalizeText(candidate))
             .filter(Boolean);
 
         if (cleanCandidates.length === 0) {
@@ -1209,8 +1085,8 @@ class productionUtils_uncached {
         const caseInsensitive = cleanCandidates.find(candidate => candidate.toLowerCase() === lowerIdentifier);
         if (caseInsensitive) return caseInsensitive;
 
-        const normalizedIdentifier = _normalizeMatchText(rawIdentifier);
-        const normalizedMatch = cleanCandidates.find(candidate => _normalizeMatchText(candidate) === normalizedIdentifier);
+        const normalizedIdentifier = normalizeMatchKey(rawIdentifier);
+        const normalizedMatch = cleanCandidates.find(candidate => normalizeMatchKey(candidate) === normalizedIdentifier);
         if (normalizedMatch) return normalizedMatch;
 
         // Component-level resolution: parse year out of identifiers, resolve client/show via index
@@ -1221,33 +1097,17 @@ class productionUtils_uncached {
             if (queryParts) {
                 const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
 
-                // Resolve query parts to canonical form
-                let resolvedQueryClient = queryParts.client;
-                try {
-                    resolvedQueryClient = GetTopFuzzyMatch(queryParts.client, refData.clients.names, refData.clients.abbrs) || queryParts.client;
-                } catch (e) {}
-                let resolvedQueryShow = queryParts.show;
-                try {
-                    resolvedQueryShow = GetTopFuzzyMatch(queryParts.show, refData.shows.names, refData.shows.abbrs, 2.5) || queryParts.show;
-                } catch (e) {}
-                const resolvedQueryNormalized = _normalizeMatchText(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
+                const resolvedQueryClient = _resolveRefPart(queryParts.client, refData.clients.names, refData.clients.abbrs);
+                const resolvedQueryShow = _resolveRefPart(queryParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                const resolvedQueryNormalized = normalizeMatchKey(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
 
                 for (const candidate of cleanCandidates) {
                     const candidateParts = _parseIdentifierParts(candidate);
                     if (!candidateParts || candidateParts.year !== queryParts.year) continue;
-
-                    let resolvedClient = candidateParts.client;
-                    try {
-                        resolvedClient = GetTopFuzzyMatch(candidateParts.client, refData.clients.names, refData.clients.abbrs) || candidateParts.client;
-                    } catch (e) {}
-
-                    let resolvedShow = candidateParts.show;
-                    try {
-                        resolvedShow = GetTopFuzzyMatch(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5) || candidateParts.show;
-                    } catch (e) {}
-
+                    const resolvedClient = _resolveRefPart(candidateParts.client, refData.clients.names, refData.clients.abbrs);
+                    const resolvedShow = _resolveRefPart(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
                     const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
-                    if (_normalizeMatchText(resolvedCandidate) === resolvedQueryNormalized) return candidate;
+                    if (normalizeMatchKey(resolvedCandidate) === resolvedQueryNormalized) return candidate;
                 }
             }
         }
@@ -1255,39 +1115,32 @@ class productionUtils_uncached {
         // Fuzzy fallback with year filtering
         // IMPORTANT: Always prefer matches within the same year to avoid cross-year mismatches
         try {
+            const buildAbbrevSet = (id) => {
+                const clean = normalizeText(id);
+                if (!clean) return [];
+                const v = new Set([clean, normalizeMatchKey(clean)]);
+                _guessAbbreviations(clean).forEach(g => { if (g) { v.add(g); v.add(normalizeMatchKey(g)); } });
+                return Array.from(v).filter(Boolean);
+            };
+            const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
             const queryParts = _parseIdentifierParts(rawIdentifier);
-            
-            // If we can extract a year, prioritize same-year candidates
+
             if (queryParts) {
-                const sameYearCandidates = cleanCandidates.filter(candidate => {
-                    const candidateParts = _parseIdentifierParts(candidate);
-                    return candidateParts && candidateParts.year === queryParts.year;
+                const sameYearCandidates = cleanCandidates.filter(c => {
+                    const p = _parseIdentifierParts(c);
+                    return p && p.year === queryParts.year;
                 });
-                
-                // Try fuzzy match within same year first
                 if (sameYearCandidates.length > 0) {
-                    const abbreviationRange = sameYearCandidates.map(candidate => 
-                        _buildIdentifierAbbreviationSet(candidate).join(', ')
-                    );
-                    const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
-                    const match = GetTopFuzzyMatch(rawIdentifier, sameYearCandidates, abbreviationRange, fuzzyThreshold);
+                    const match = GetTopFuzzyMatch(rawIdentifier, sameYearCandidates, sameYearCandidates.map(c => buildAbbrevSet(c).join(', ')), fuzzyThreshold);
                     if (match) return match;
                 }
             }
-            
-            // Last resort: year-agnostic fuzzy match (log warning since this may be incorrect)
-            const abbreviationRange = cleanCandidates.map(candidate => 
-                _buildIdentifierAbbreviationSet(candidate).join(', ')
-            );
-            const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
-            const match = GetTopFuzzyMatch(rawIdentifier, cleanCandidates, abbreviationRange, fuzzyThreshold);
+
+            const match = GetTopFuzzyMatch(rawIdentifier, cleanCandidates, cleanCandidates.map(c => buildAbbrevSet(c).join(', ')), fuzzyThreshold);
             if (match) {
-                const queryParts = _parseIdentifierParts(rawIdentifier);
                 const matchParts = _parseIdentifierParts(match);
                 if (queryParts && matchParts && queryParts.year !== matchParts.year) {
-                    console.warn(
-                        `[production-utils] Cross-year fuzzy match: "${rawIdentifier}" (${queryParts.year}) -> "${match}" (${matchParts.year})`
-                    );
+                    console.warn(`[production-utils] Cross-year fuzzy match: "${rawIdentifier}" (${queryParts.year}) -> "${match}" (${matchParts.year})`);
                 }
             }
             return match;
@@ -1310,9 +1163,6 @@ class productionUtils_uncached {
 
         const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const packlistTabs = allTabs.filter(tab => tab.title && !tab.title.startsWith('_'));
-
-        // Load overrides once — used to skip rows that are explicitly resolved
-        const overrides = await deps.call(ProductionUtils.getNameOverrides);
 
         const issueMap = new Map(); // key: `${rawValue}::${referenceType}`
 
@@ -1339,23 +1189,12 @@ class productionUtils_uncached {
         const scheduleResults = await Promise.all(
             scheduleRows.map(row => Promise.all([
                 deps.call(ProductionUtils.checkReferenceNameState, row.Client || '', 'client', row),
-                deps.call(ProductionUtils.checkReferenceNameState, row.Show || '', 'show', row),
-                deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year)
-            ]).then(([clientIssue, showIssue, computedId]) => ({ row, clientIssue, showIssue, computedId })))
+                deps.call(ProductionUtils.checkReferenceNameState, row.Show || '', 'show', row)
+            ]).then(([clientIssue, showIssue]) => ({ row, clientIssue, showIssue })))
         );
 
-        for (const { row, clientIssue, showIssue, computedId } of scheduleResults) {
+        for (const { row, clientIssue, showIssue } of scheduleResults) {
             const identifier = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
-            // Skip rows that have been explicitly overridden (check both schedule and packlist fields)
-            // Use case-insensitive comparison to handle fuzzy-matched identifiers
-            const hasOverride = computedId && overrides.some(o => {
-                const identNorm = _normalizeIndexName(computedId).toLowerCase();
-                const schedNorm = _normalizeIndexName(o.schedule || '').toLowerCase();
-                const packNorm = _normalizeIndexName(o.packlist || '').toLowerCase();
-                return (schedNorm && schedNorm === identNorm) || (packNorm && packNorm === identNorm);
-            });
-            
-            if (hasOverride) continue;
             if (clientIssue) addToMap(clientIssue, { sourceType: 'schedule', identifier });
             if (showIssue) addToMap(showIssue, { sourceType: 'schedule', identifier });
         }
@@ -1388,34 +1227,10 @@ class productionUtils_uncached {
      * @returns {{title:string}|null}
      */
     static async findPackListTab(deps, identifier, tabs) {
-        if (!identifier || !Array.isArray(tabs)) return null;
-        const titleToTab = new Map();
-        const titles = [];
-
-        tabs.forEach((tab) => {
-            const title = _normalizeIndexName(tab?.title);
-            if (!title || titleToTab.has(title)) {
-                return;
-            }
-            titleToTab.set(title, tab);
-            titles.push(title);
-        });
-
-        const matchedTitle = await deps.call(ProductionUtils.findBestProjectIdentifierMatch, identifier, titles);
-        return matchedTitle ? (titleToTab.get(matchedTitle) || null) : null;
+        const results = await deps.call(ProductionUtils.findAllPackListTabsForShow, identifier, tabs);
+        return results[0] ?? null;
     }
 
-    /**
-     * Find all packlist tabs for a show, including suffix variants.
-     * A client may have multiple packlists for the same show (e.g., "LOCKHEED 2026 SNA" and
-     * "LOCKHEED 2026 SNA MEETING ROOM"). This method finds the primary match using full
-     * fuzzy/abbreviation/misspelling logic, then returns any other tabs whose title starts
-     * with that canonical primary title followed by a space.
-     * @param {Object} deps
-     * @param {string} identifier - Project identifier (may be abbreviated or misspelled)
-     * @param {Array<{title:string}>} tabs - Available packlist tabs (pre-filtered)
-     * @returns {Promise<Array<{title:string}>>} All matching tabs; empty array if none found
-     */
     /**
      * Read all name override mappings from CACHE/NameOverrides.
      * Returns empty array if the tab does not exist yet.
@@ -1468,19 +1283,6 @@ class productionUtils_uncached {
     }
 
     /**
-     * Get all non-template packlist tab names, sorted alphabetically.
-     * @param {Object} deps
-     * @returns {Promise<string[]>}
-     */
-    static async getAllPacklistTabNames(deps) {
-        const allTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-        return allTabs
-            .filter(tab => tab.title && !tab.title.startsWith('_'))
-            .map(tab => tab.title)
-            .sort();
-    }
-
-    /**
      * Get all non-template packlist tab names that are NOT currently attached to any schedule row.
      * Filters out packlists that have overrides or successfully match to schedule rows.
      * Used for override modals to prevent overriding existing valid matches.
@@ -1506,6 +1308,7 @@ class productionUtils_uncached {
             .sort();
     }
 
+    /** Finds all packlist tabs matching identifier, including suffix variants (e.g. "SNA MEETING ROOM"). */
     static async findAllPackListTabsForShow(deps, identifier, tabs) {
         if (!identifier || !Array.isArray(tabs)) return [];
 
@@ -1513,7 +1316,7 @@ class productionUtils_uncached {
         const titles = [];
 
         tabs.forEach((tab) => {
-            const title = _normalizeIndexName(tab?.title);
+            const title = normalizeText(tab?.title);
             if (!title || titleToTab.has(title)) return;
             titleToTab.set(title, tab);
             titles.push(title);
@@ -1541,6 +1344,32 @@ class productionUtils_uncached {
         return results;
     }
 
+    // Finds or creates a row in a CACHE reference tab by name. Mutation — calls Database directly.
+    static async findOrCreateReferenceRow(tabName, name) {
+        const rawData = await Database.getData('CACHE', tabName);
+        const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
+            ? rawData[0].map(h => normalizeHeaderName(h)) 
+            : [];
+        const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
+        const nameColIndex = headers.findIndex((header) => header === nameColumn);
+
+        if (nameColIndex === -1) {
+            throw new Error(`[production-utils] Missing ${nameColumn} column in CACHE/${tabName}`);
+        }
+
+        for (let rowIndex = 1; rowIndex < rawData.length; rowIndex += 1) {
+            const row = Array.isArray(rawData[rowIndex]) ? rawData[rowIndex] : [];
+            const existingName = normalizeText(row[nameColIndex]);
+            if (existingName && existingName.toLowerCase() === name.toLowerCase()) {
+                return { rowNumber: rowIndex + 1, added: false };
+            }
+        }
+
+        const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
+        rowValues[nameColIndex] = name;
+        const rowNumber = await Database.appendSheetRow('CACHE', tabName, rowValues);
+        return { rowNumber, added: true };
+    }
 
 
 
@@ -1555,7 +1384,8 @@ export const ProductionUtils = wrapMethods(
         'addReferenceName',
         'appendReferenceAbbreviation',
         'addCustomReferenceEntry',
-        'addNameOverride'
+        'addNameOverride',
+        'findOrCreateReferenceRow'
     ],
     ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods
@@ -1693,31 +1523,6 @@ function _calculateReturnDate(row, shipDate = null) {
     return null;
 }
 
-/**
- * Normalize a Date object to MM/DD/YYYY format with error handling
- * Shared helper for all schedule date normalization functions
- * @param {Date|null} date - Date object to format
- * @param {string} dateType - Type of date for error logging (e.g., 'ship', 'start', 'end')
- * @returns {string|null} Formatted date string or null
- * @private
- */
-function _normalizeScheduleDate(date, dateType) {
-    try {
-        return toUSDateString(date);
-    } catch (error) {
-        console.warn(`[production-utils] Failed to normalize ${dateType} date:`, error);
-        return null;
-    }
-}
-
-function _normalizeIndexName(value) {
-    return String(value || '').trim();
-}
-
-function _normalizeMatchText(value) {
-    return _normalizeIndexName(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
 function _splitAbbreviations(value) {
     return String(value || '')
         .split(',')
@@ -1725,125 +1530,68 @@ function _splitAbbreviations(value) {
         .filter(Boolean);
 }
 
-function _findReferenceConflict(candidate, indexData) {
-    const rawNorm = _normalizeMatchText(candidate);
-    if (!rawNorm || !Array.isArray(indexData) || indexData.length === 0) {
-        return null;
-    }
-
-    const exactName = indexData.find(entry => _normalizeMatchText(entry.name) === rawNorm);
-    if (exactName) {
-        return { type: 'exact-name', name: exactName.name };
-    }
-
-    const exactAbbreviation = indexData.find(entry =>
-        Array.isArray(entry.abbreviations) &&
-        entry.abbreviations.some(abbr => _normalizeMatchText(abbr) === rawNorm)
-    );
-    if (exactAbbreviation) {
-        return { type: 'exact-abbreviation', name: exactAbbreviation.name };
-    }
-
-    return null;
+function _parseIdentifierParts(identifier) {
+    const match = String(identifier || '').trim().match(/^(.+?)\s+(\d{4})\s+(.+)$/);
+    if (!match) return null;
+    return { client: match[1].trim(), year: match[2], show: match[3].trim() };
 }
 
 function _mergeAbbreviations(existingText, nextToken) {
     const tokens = _splitAbbreviations(existingText);
-    const normalizedTokens = new Set(tokens.map(token => _normalizeMatchText(token)));
-
-    if (!normalizedTokens.has(_normalizeMatchText(nextToken))) {
+    const normalizedTokens = new Set(tokens.map(token => normalizeMatchKey(token)));
+    if (!normalizedTokens.has(normalizeMatchKey(nextToken))) {
         tokens.push(nextToken);
     }
-
     return tokens.join(', ');
 }
 
-function _classifyReferenceState(rawValue, indexData) {
-    const rawNorm = _normalizeMatchText(rawValue);
-    if (!rawNorm || !Array.isArray(indexData) || indexData.length === 0) {
-        return { status: 'missing', bestMatch: '' };
-    }
-
-    const exactName = indexData.find(entry => _normalizeMatchText(entry.name) === rawNorm);
-    if (exactName) {
-        return { status: 'exact-name', bestMatch: exactName.name };
-    }
-
-    const exactAbbreviation = indexData.find(entry =>
-        Array.isArray(entry.abbreviations) &&
-        entry.abbreviations.some(abbr => _normalizeMatchText(abbr) === rawNorm)
-    );
-    if (exactAbbreviation) {
-        return { status: 'exact-abbreviation', bestMatch: exactAbbreviation.name };
-    }
-
-    let bestMatch = '';
-    try {
-        const names = indexData.map(entry => entry.name);
-        const abbrList = indexData.map(entry => (entry.abbreviations || []).join(', '));
-        bestMatch = GetTopFuzzyMatch(rawValue, names, abbrList, 2.5);
-    } catch (error) {
-        bestMatch = '';
-    }
-
-    if (bestMatch) {
-        return { status: 'fuzzy-pass', bestMatch };
-    }
-
-    const sortedCandidates = _rankReferenceCandidates(rawValue, indexData, _guessAbbreviations(rawValue));
-    if (sortedCandidates.length > 1 && sortedCandidates[0].score - sortedCandidates[1].score < 0.15) {
-        return { status: 'ambiguous', bestMatch: sortedCandidates[0].name };
-    }
-
-    return { status: 'missing', bestMatch: sortedCandidates[0]?.name || '' };
-}
-
 function _rankReferenceCandidates(rawValue, indexData, guessedAbbreviations = []) {
-    const rawNorm = _normalizeMatchText(rawValue);
-    const rawUpper = _normalizeIndexName(rawValue).toUpperCase();
-    const guessedSet = new Set((guessedAbbreviations || []).map(_normalizeMatchText));
+    const rawNorm = normalizeMatchKey(rawValue);
+    const rawUpper = normalizeText(rawValue).toUpperCase();
+    const guessedSet = new Set((guessedAbbreviations || []).map(normalizeMatchKey));
 
     const scored = (indexData || []).map(entry => {
-        const nameNorm = _normalizeMatchText(entry.name);
-        const abbrNorms = (entry.abbreviations || []).map(_normalizeMatchText);
-        const nameDistance = _levenshtein(rawNorm, nameNorm);
-        const maxLen = Math.max(rawNorm.length, nameNorm.length, 1);
-        const editScore = 1 - (nameDistance / maxLen);
-        const startsScore = nameNorm.startsWith(rawNorm) || rawNorm.startsWith(nameNorm) ? 0.2 : 0;
+        const nameNorm = normalizeMatchKey(entry.name);
+        const abbrNorms = (entry.abbreviations || []).map(normalizeMatchKey);
 
+        // Levenshtein edit distance between rawNorm and nameNorm
+        const s = rawNorm, t = nameNorm, m = s.length, n = t.length;
+        let nameDistance;
+        if (m === 0) { nameDistance = n; }
+        else if (n === 0) { nameDistance = m; }
+        else {
+            const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+            for (let i = 0; i <= m; i++) dp[i][0] = i;
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++)
+                for (let j = 1; j <= n; j++)
+                    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(s[i-1]===t[j-1]?0:1));
+            nameDistance = dp[m][n];
+        }
+
+        const editScore = 1 - (nameDistance / Math.max(m, n, 1));
+        const startsScore = nameNorm.startsWith(rawNorm) || rawNorm.startsWith(nameNorm) ? 0.2 : 0;
         const guessedAbbrMatch = abbrNorms.some(abbr => guessedSet.has(abbr)) ? 0.35 : 0;
         const containsRawAsAbbr = abbrNorms.includes(rawNorm) ? 0.45 : 0;
-        const tokenOverlap = _tokenOverlap(rawUpper, entry.name.toUpperCase()) * 0.25;
 
-        const score = editScore + startsScore + guessedAbbrMatch + containsRawAsAbbr + tokenOverlap;
-        let reason = 'fuzzy name similarity';
-        if (containsRawAsAbbr) reason = 'already close to existing abbreviation';
-        else if (guessedAbbrMatch) reason = 'matches guessed abbreviation pattern';
+        // Token overlap between rawUpper and entry name
+        const tLeft = new Set(rawUpper.split(/\s+/).filter(Boolean));
+        const tRight = new Set(entry.name.toUpperCase().split(/\s+/).filter(Boolean));
+        const tCommon = (tLeft.size && tRight.size) ? Array.from(tLeft).filter(tok => tRight.has(tok)).length : 0;
+        const tokenOverlap = (tLeft.size && tRight.size ? tCommon / Math.max(tLeft.size, tRight.size) : 0) * 0.25;
 
         return {
             name: entry.name,
-            score,
-            reason
+            score: editScore + startsScore + guessedAbbrMatch + containsRawAsAbbr + tokenOverlap,
+            reason: containsRawAsAbbr ? 'already close to existing abbreviation' : guessedAbbrMatch ? 'matches guessed abbreviation pattern' : 'fuzzy name similarity'
         };
     });
 
     return scored.sort((a, b) => b.score - a.score);
 }
 
-function _filterHighConfidenceCandidates(candidates) {
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-        return [];
-    }
-
-    const topScore = candidates[0].score;
-
-    return candidates.filter(candidate =>
-        candidate.score >= 0.9 || (candidate.score >= 0.5 && candidate.score >= topScore - 0.12)
-    );
-}
-
 function _guessAbbreviations(rawValue) {
-    const cleaned = _normalizeIndexName(rawValue);
+    const cleaned = normalizeText(rawValue);
     if (!cleaned) return [];
 
     const words = cleaned
@@ -1874,108 +1622,45 @@ function _guessAbbreviations(rawValue) {
     return Array.from(candidates).filter(Boolean);
 }
 
-function _parseIdentifierParts(identifier) {
-    const match = String(identifier || '').trim().match(/^(.+?)\s+(\d{4})\s+(.+)$/);
-    if (!match) return null;
-    return { client: match[1].trim(), year: match[2], show: match[3].trim() };
+async function findOrCreateReferenceRow(tabName, name) {
+    return productionUtils_uncached.findOrCreateReferenceRow(tabName, name);
 }
 
-function _buildIdentifierAbbreviationSet(identifier) {
-    const cleanIdentifier = _normalizeIndexName(identifier);
-    if (!cleanIdentifier) return [];
-
-    const variants = new Set([
-        cleanIdentifier,
-        _normalizeMatchText(cleanIdentifier)
-    ]);
-
-    _guessAbbreviations(cleanIdentifier).forEach(variant => {
-        if (variant) {
-            variants.add(variant);
-            variants.add(_normalizeMatchText(variant));
-        }
+// Finds the first override where either field case-insensitively equals identifierLower.
+function _findOverride(overrides, identifierLower) {
+    return overrides.find(o => {
+        const s = normalizeText(o.schedule || '').toLowerCase();
+        const p = normalizeText(o.packlist || '').toLowerCase();
+        return (s && s === identifierLower) || (p && p === identifierLower);
     });
-
-    return Array.from(variants).filter(Boolean);
 }
 
-function _tokenOverlap(a, b) {
-    const left = new Set(String(a || '').split(/\s+/).filter(Boolean));
-    const right = new Set(String(b || '').split(/\s+/).filter(Boolean));
-    if (left.size === 0 || right.size === 0) return 0;
-
-    let common = 0;
-    left.forEach(token => {
-        if (right.has(token)) common += 1;
-    });
-
-    return common / Math.max(left.size, right.size);
+// Returns true if the override marks either side as permanently ignored.
+function _isIgnoreOverride(override) {
+    return override.schedule === IGNORE_KEYWORD || override.packlist === IGNORE_KEYWORD;
 }
 
-function _levenshtein(a, b) {
-    const s = String(a || '');
-    const t = String(b || '');
-    const m = s.length;
-    const n = t.length;
-
-    if (m === 0) return n;
-    if (n === 0) return m;
-
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i += 1) dp[i][0] = i;
-    for (let j = 0; j <= n; j += 1) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i += 1) {
-        for (let j = 1; j <= n; j += 1) {
-            const cost = s[i - 1] === t[j - 1] ? 0 : 1;
-            dp[i][j] = Math.min(
-                dp[i - 1][j] + 1,
-                dp[i][j - 1] + 1,
-                dp[i - 1][j - 1] + cost
-            );
-        }
+// Fuzzy-resolves a ref part (client or show) against an index; returns the raw value on failure.
+function _resolveRefPart(value, names, abbrs, threshold = undefined) {
+    try {
+        return GetTopFuzzyMatch(value, names, abbrs, threshold) || value;
+    } catch (e) {
+        return value;
     }
-
-    return dp[m][n];
 }
 
-async function _appendMissingReferenceRows(tabName, names) {
-    if (!Array.isArray(names) || names.length === 0) {
-        return 0;
+// Builds a year-filtered identifier→row map from schedule data, using the year parsed from title.
+async function _buildYearFilteredScheduleMap(deps, title, scheduleData) {
+    const parts = _parseIdentifierParts(title);
+    const targetYear = parts ? parts.year : null;
+    const filtered = targetYear
+        ? scheduleData.filter(row => String(parseInt(row.Year, 10)) === targetYear)
+        : scheduleData;
+    const scheduleMap = new Map();
+    for (const row of filtered) {
+        if (!row.Show || !row.Client || !row.Year) continue;
+        const computed = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+        if (computed && !scheduleMap.has(computed)) scheduleMap.set(computed, row);
     }
-
-    let addedCount = 0;
-    for (const name of names) {
-        const result = await _findOrCreateReferenceRow(tabName, name);
-        if (result.added) {
-            addedCount += 1;
-        }
-    }
-    return addedCount;
-}
-
-async function _findOrCreateReferenceRow(tabName, name) {
-    const rawData = await Database.getData('CACHE', tabName);
-    const headers = Array.isArray(rawData) && Array.isArray(rawData[0]) 
-        ? rawData[0].map(h => normalizeHeaderName(h)) 
-        : [];
-    const nameColumn = tabName === 'Shows' ? 'Shows' : 'Clients';
-    const nameColIndex = headers.findIndex((header) => header === nameColumn);
-
-    if (nameColIndex === -1) {
-        throw new Error(`[production-utils] Missing ${nameColumn} column in CACHE/${tabName}`);
-    }
-
-    for (let rowIndex = 1; rowIndex < rawData.length; rowIndex += 1) {
-        const row = Array.isArray(rawData[rowIndex]) ? rawData[rowIndex] : [];
-        const existingName = _normalizeIndexName(row[nameColIndex]);
-        if (existingName && existingName.toLowerCase() === name.toLowerCase()) {
-            return { rowNumber: rowIndex + 1, added: false };
-        }
-    }
-
-    const rowValues = new Array(Math.max(headers.length, nameColIndex + 1)).fill('');
-    rowValues[nameColIndex] = name;
-    const rowNumber = await Database.appendSheetRow('CACHE', tabName, rowValues);
-    return { rowNumber, added: true };
+    return { scheduleMap, candidates: Array.from(scheduleMap.keys()) };
 }

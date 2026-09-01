@@ -47,8 +47,8 @@ These two directions are currently handled by a mix of one-off code, shared help
 | `computeIdentifierReferenceData(deps)`                           | `production-utils.js`                                         | Gets Clients/Shows CACHE data for fuzzy matching                                                                     |
 | `_parseIdentifierParts(identifier)`                              | `production-utils.js` (private)                               | Parses `"CLIENT YEAR SHOW"` → `{ client, year, show }`                                                               |
 | `_normalizeId(v)`                                                | `packlist-utils.js` + `inventory-utils.js` (local duplicates) | Strips non-alphanumeric, uppercases — used only for self-comparison guards                                           |
-| `_normalizeIndexName(v)`                                         | `production-utils.js` (private)                               | `String(v).trim()`                                                                                                   |
-| `_normalizeMatchText(v)`                                         | `production-utils.js` (private)                               | Uppercase + strip non-alphanumeric                                                                                   |
+| `normalizeText(v)`                                               | `production-utils.js` (private)                               | `String(v).trim()`                                                                                                   |
+| `normalizeMatchKey(v)`                                           | `production-utils.js` (private)                               | Uppercase + strip non-alphanumeric                                                                                   |
 
 ---
 
@@ -126,11 +126,11 @@ This is a thin wrapper that removes the boilerplate `computeIdentifier` call fro
 
 ### Shared private helpers to extract / consolidate
 
-| Helper                   | Change                                                                                                                                                                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_getScheduleData(deps)` | New private helper. Gets mapping + data in one call. Used by `getShowDetails` AND `getOverlappingShows` today — both re-fetch independently.                                                                                           |
-| `_parseIdentifierParts`  | Already exists. Expose usage note that `year` is a string like `"2026"`.                                                                                                                                                               |
-| `_normalizeId`           | The duplicate in `packlist-utils.js` and `inventory-utils.js` can be removed once both files call `_normalizeMatchText` from production-utils, or they can remain local — they are only used for self-comparison guards. Not blocking. |
+| Helper                   | Change                                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `_getScheduleData(deps)` | New private helper. Gets mapping + data in one call. Used by `getShowDetails` AND `getOverlappingShows` today — both re-fetch independently.                                                                                         |
+| `_parseIdentifierParts`  | Already exists. Expose usage note that `year` is a string like `"2026"`.                                                                                                                                                             |
+| `_normalizeId`           | The duplicate in `packlist-utils.js` and `inventory-utils.js` can be removed once both files call `normalizeMatchKey` from production-utils, or they can remain local — they are only used for self-comparison guards. Not blocking. |
 
 ---
 
