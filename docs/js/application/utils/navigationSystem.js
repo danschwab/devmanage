@@ -241,7 +241,7 @@ export const NavigationRegistry = {
         
         return {
             path: cleanPath,
-            fullPath: path,
+            fullPath: Object.keys(parameters).length > 0 ? path : cleanPath,
             parameters,
             route,
             hasParameters: Object.keys(parameters).length > 0
