@@ -2157,9 +2157,9 @@ button.search-highlight {
         font-size: 10pt !important;
     }
     
-    button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notifications-container, .banner-notifications-bubble {
-        display: none;
-        opacity: 0;
+    button, header, footer, .sticky-header-wrapper, .sticky-header, .content-header, .content-footer, .container:has(.print-header) .container-header, .banner-notifications-container, .banner-notifications-bubble, .column-button {
+        display: none !important;
+        opacity: 0 !important;
     }
     
     /* Render table cell buttons as plain text in print */
