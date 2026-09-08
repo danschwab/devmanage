@@ -804,6 +804,7 @@ export const ScheduleAdvancedFilter = {
                         :isLoading="isLoading"
                         :showSearch="true"
                         :showRefresh="false"
+                        :syncSearchWithUrl="false"
                         defaultSortColumn="show"
                         emptyMessage="No shows found."
                         loadingMessage="Loading shows..."

@@ -950,6 +950,26 @@ class productionUtils_uncached {
     }
 
 
+    static async getTransshipSourceForShow(deps, identifier) {
+        if (!identifier) return null;
+        const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        return overrides.find(
+            o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(identifier).toLowerCase()
+        )?.override || null;
+    }
+
+    // extractColumnsAsObject passes {Show, Client, Year} as a single object
+    static async getTransshipSourceForScheduleRow(deps, rowObj) {
+        const show = rowObj?.Show;
+        const client = rowObj?.Client;
+        const year = rowObj?.Year;
+        if (!show || !client || !year) return null;
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        if (!identifier) return null;
+        return deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+    }
+
     /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * Returns null if the project cannot be found or has no resolvable ship date.
@@ -957,8 +977,19 @@ class productionUtils_uncached {
      * @param {string} projectIdentifier
      * @returns {Promise<string|null>}
      */
-    static async getProjectShipDate(deps, projectIdentifier) {
+    // _depth guards against circular transship data (max chain length 4)
+    static async getProjectShipDate(deps, projectIdentifier, _depth = 0) {
+        if (!projectIdentifier || _depth > 4) return null;
         const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
+        if (!row) return null;
+        const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        const link = overrides.find(
+            o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
+        );
+        if (link?.override) {
+            return deps.call(ProductionUtils.getProjectShipDate, link.override, _depth + 1);
+        }
         return deps.call(ProductionUtils.getProjectShipDateFromRow, row);
     }
 
@@ -973,8 +1004,22 @@ class productionUtils_uncached {
         return toISODateString(_calculateReturnDate(row, ship));
     }
 
-    static async getProjectReturnDate(deps, projectIdentifier) {
+    static async getProjectReturnDate(deps, projectIdentifier, _depth = 0) {
+        if (!projectIdentifier || _depth > 4) return null;
         const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
+        if (!row) return null;
+        const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        const destinations = overrides.filter(
+            o => normalizeText(o.override || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
+        );
+        if (destinations.length > 0) {
+            const destReturns = await Promise.all(
+                destinations.map(d => deps.call(ProductionUtils.getProjectReturnDate, d.schedule, _depth + 1))
+            );
+            const validReturns = destReturns.filter(Boolean);
+            if (validReturns.length > 0) return validReturns.sort().reverse()[0];
+        }
         return deps.call(ProductionUtils.getProjectReturnDateFromRow, row);
     }
 
@@ -1207,6 +1252,43 @@ class productionUtils_uncached {
         ]);
     }
 
+    // Mutation — uncached. Creates or updates a transship link in CACHE/ScheduleOverrides.
+    static async setTransshipLink(destinationIdentifier, sourceIdentifier) {
+        const normDest = normalizeText(destinationIdentifier || '').toLowerCase();
+        const existing = await Database.getData('CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        const rows = Array.isArray(existing) ? [...existing] : [];
+        const entry = {
+            schedule: String(destinationIdentifier || '').trim(),
+            override: String(sourceIdentifier || '').trim()
+        };
+        const idx = rows.findIndex(o => normalizeText(o.schedule || '').toLowerCase() === normDest);
+        if (idx >= 0) {
+            rows[idx] = entry;
+        } else {
+            rows.push(entry);
+        }
+        await Database.setData('CACHE', 'ScheduleOverrides', rows,
+            { schedule: 'Schedule', override: 'Override' },
+            { skipMetadata: true });
+    }
+
+    // Mutation — uncached. Removes a transship link for the given destination show.
+    static async removeTransshipLink(destinationIdentifier) {
+        const normDest = normalizeText(destinationIdentifier || '').toLowerCase();
+        const existing = await Database.getData('CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        if (!Array.isArray(existing)) return;
+        const filtered = existing.filter(
+            o => normalizeText(o.schedule || '').toLowerCase() !== normDest
+        );
+        if (filtered.length < existing.length) {
+            await Database.setData('CACHE', 'ScheduleOverrides', filtered,
+                { schedule: 'Schedule', override: 'Override' },
+                { skipMetadata: true });
+        }
+    }
+
     /**
      * Get all computed schedule identifiers, sorted alphabetically.
      * @param {Object} deps
@@ -1295,7 +1377,9 @@ export const ProductionUtils = wrapMethods(
         'ensureScheduleReferenceRows',
         'upsertReferenceEntry',
         'addCustomReferenceEntry',
-        'addNameOverride'
+        'addNameOverride',
+        'setTransshipLink',
+        'removeTransshipLink'
     ],
     ['computeIdentifier']
     // findScheduleRowsForPacklist and findPacklistTabsForScheduleRow are cacheable read-only methods

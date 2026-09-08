@@ -583,6 +583,13 @@ class packListUtils_uncached {
                 throw new Error('Failed to get overlapping shows');
             }
 
+            // Identify transship source so its items are not counted as separate competing demand
+            const scheduleOverrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+                { schedule: 'Schedule', override: 'Override' });
+            const transshipSourceId = scheduleOverrides.find(
+                o => _normalizeId(o.schedule) === _normalizeId(projectIdentifier)
+            )?.override || null;
+
             // 5. Process overlapping shows
             const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
             for (const overlapRow of overlappingIds) {
@@ -592,6 +599,7 @@ class packListUtils_uncached {
                     await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
 
                 if (_normalizeId(otherId) === _normalizeId(projectIdentifier)) continue;
+                if (transshipSourceId && _normalizeId(otherId) === _normalizeId(transshipSourceId)) continue;
                 
                 try {
                     const otherItemMap = await deps.call(PackListUtils.extractAllItemsForShow, otherId);
@@ -732,6 +740,13 @@ class packListUtils_uncached {
         // Deduplicate to prevent listing the same show multiple times
         overlappingProjects = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingProjects);
         
+        // Identify transship source so it is not listed as conflicting demand
+        const scheduleOverrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        const transshipSourceId = scheduleOverrides.find(
+            o => _normalizeId(o.schedule) === _normalizeId(currentProjectId)
+        )?.override || null;
+
         const conflictingShows = [];
         const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         
@@ -743,6 +758,7 @@ class packListUtils_uncached {
                 await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
             
             if (_normalizeId(projectId) === _normalizeId(currentProjectId)) continue;
+            if (transshipSourceId && _normalizeId(projectId) === _normalizeId(transshipSourceId)) continue;
             
             try {
                 const projectItems = await deps.call(PackListUtils.extractAllItemsForShow, projectId);

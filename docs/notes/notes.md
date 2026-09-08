@@ -1,3 +1,6 @@
+Convo w Ben
+How he uses packlists:
+
 software being used for inventory
 being used to identify shortages
 being used to verify packlists

@@ -660,6 +660,15 @@ class Requests_uncached {
         return await ProductionUtils.addNameOverride(scheduleId, packlistId);
     }
 
+    // Mutations — uncached. Create or remove a transship link in CACHE/ScheduleOverrides.
+    static async setTransshipLink(destinationIdentifier, sourceIdentifier) {
+        return await ProductionUtils.setTransshipLink(destinationIdentifier, sourceIdentifier);
+    }
+
+    static async removeTransshipLink(destinationIdentifier) {
+        return await ProductionUtils.removeTransshipLink(destinationIdentifier);
+    }
+
     /**
      * Get all computed schedule identifiers, sorted alphabetically.
      * @param {Object} deps
@@ -693,6 +702,14 @@ class Requests_uncached {
      * @param {string} projectIdentifier
      * @returns {Promise<string|null>}
      */
+    static async getTransshipSourceForShow(deps, identifier) {
+        return await deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+    }
+
+    static async getTransshipSourceForScheduleRow(deps, rowObj) {
+        return await deps.call(ProductionUtils.getTransshipSourceForScheduleRow, rowObj);
+    }
+
     static async getProjectShipDate(deps, projectIdentifier) {
         return await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
     }
@@ -1093,8 +1110,8 @@ class Requests_uncached {
                 if (!identifier) return null;
 
                 const [shipDate, returnDate] = await Promise.all([
-                    deps.call(ProductionUtils.getProjectShipDateFromRow, showRow).catch(() => null),
-                    deps.call(ProductionUtils.getProjectReturnDateFromRow, showRow).catch(() => null)
+                    deps.call(ProductionUtils.getProjectShipDate, identifier).catch(() => null),
+                    deps.call(ProductionUtils.getProjectReturnDate, identifier).catch(() => null)
                 ]);
 
                 return {
@@ -1552,6 +1569,8 @@ export const Requests = wrapMethods(
         'addScheduleReferenceName', 'appendScheduleReferenceAbbreviation',
         'addCustomScheduleReferenceEntry',
         'addNameOverride',
+        'setTransshipLink',
+        'removeTransshipLink',
         'savePageNotes'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods

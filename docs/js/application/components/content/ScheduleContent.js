@@ -1,4 +1,5 @@
 import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect } from '../../index.js';
+import { TransshipmentModal } from '../interface/ScheduleModals.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 // Schedule Hamburger Menu Component
@@ -13,24 +14,18 @@ export const ScheduleMenuComponent = {
     inject: ['$modal'],
     computed: {
         menuItems() {
-            const items = [];
-            
-            // Placeholder items - not yet implemented
-            // items.push(
-            //     { label: 'Calendar View', action: 'showCalendarView', disabled: true },
-            //     { label: 'Chart View', action: 'showChartView', disabled: true },
-            //     { label: 'Set Current As Default', action: 'setAsDefault', disabled: true }
-            // );
-            
-            return items;
+            return [
+                { label: 'Manage Transshipments', action: 'manageTransshipments' }
+            ];
         }
     },
     methods: {
         handleAction(action) {
-            // Close the menu before action
             this.$emit('close-modal');
-
             switch (action) {
+                case 'manageTransshipments':
+                    this.$modal.custom(TransshipmentModal, { modalClass: 'page-menu' }, 'Manage Transshipments');
+                    break;
                 case 'advancedSearch':
                     if (this.navigateToPath) {
                         this.navigateToPath('schedule/advanced-search');
