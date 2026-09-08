@@ -7,8 +7,10 @@ const SettingsMenuComponent = {
     props: {
         darkMode: { type: Boolean, required: true },
         onlyEssentialAnalysis: { type: Boolean, required: true },
+        showDashboardHeaders: { type: Boolean, required: true },
         toggleDarkMode: { type: Function, required: true },
-        toggleEssentialAnalysis: { type: Function, required: true }
+        toggleEssentialAnalysis: { type: Function, required: true },
+        toggleDashboardHeaders: { type: Function, required: true }
     },
     emits: ['close-modal'],
     methods: {
@@ -18,6 +20,10 @@ const SettingsMenuComponent = {
         },
         handleToggleDarkMode() {
             this.toggleDarkMode();
+            this.$emit('close-modal');
+        },
+        handleToggleDashboardHeaders() {
+            this.toggleDashboardHeaders();
             this.$emit('close-modal');
         }
     },
@@ -30,6 +36,10 @@ const SettingsMenuComponent = {
             <button @click="handleToggleDarkMode" 
                     class="page-menu-item">
                 {{ darkMode ? 'Light' : 'Dark' }} Mode
+            </button>
+            <button @click="handleToggleDashboardHeaders" 
+                    :class="['page-menu-item', { 'red': !showDashboardHeaders }]">
+                {{ showDashboardHeaders ? 'Hide' : 'Show' }} Dashboard Headers
             </button>
         </div>
     `
@@ -95,6 +105,9 @@ export const PrimaryNavComponent = {
         },
         onlyEssentialAnalysis() {
             return appSettings.onlyRunEssentialAnalysis;
+        },
+        showDashboardHeaders() {
+            return appSettings.showDashboardHeaders;
         }
     },
     watch: {
@@ -116,8 +129,10 @@ export const PrimaryNavComponent = {
                 modalClass: 'hamburger-menu small-menu',
                 darkMode: this.darkMode,
                 onlyEssentialAnalysis: this.onlyEssentialAnalysis,
+                showDashboardHeaders: this.showDashboardHeaders,
                 toggleDarkMode: this.toggleDarkMode,
-                toggleEssentialAnalysis: this.toggleEssentialAnalysis
+                toggleEssentialAnalysis: this.toggleEssentialAnalysis,
+                toggleDashboardHeaders: this.toggleDashboardHeaders
             }, 'Application Settings');
         },
         updateAnalysisBanner() {
@@ -179,6 +194,10 @@ export const PrimaryNavComponent = {
             const theme = this.darkMode ? 'dark' : 'light';
             document.documentElement.dataset.theme = theme;
             localStorage.setItem('theme', theme);
+        },
+        toggleDashboardHeaders() {
+            appSettings.showDashboardHeaders = !appSettings.showDashboardHeaders;
+            localStorage.setItem('showDashboardHeaders', appSettings.showDashboardHeaders);
         },
         handleNavClick(item) {
             // In mobile view: if menu is closed, open it first; if open, then navigate

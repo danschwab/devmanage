@@ -1,5 +1,14 @@
+software being used for inventory
+being used to identify shortages
+being used to verify packlists
+
+!!! transshipping table - how often are these partial? (hamburger-menu add transshipment, transship table and overlap adjustment logic, packlist analysis to verify transship items, auto-identify transship candidates)
+!!! auto-packlist generation and update asynchronous from inventor throughout the process based on rules
+!!! packlist item approval checklist and packlist edit vs. item-approval mode (Add item to existing or new crate, remove, group, etc)
+!!! design queue and updating logic
+!!! production schedule workzone view???
+
 !!! rebuild date matching logic from scratch
-!!! rebuild name matching logic from scratch
 !!! simplify controls on reports page
 ! "views" for tables and reports allowing column customization
 
@@ -149,15 +158,15 @@ Other Features
 - [x] fix thumbnails again: Consider a thumbnail table? make the analysis step invalidation ignore repeat invalidations: analysis invalidation reruns need to have a delay timer built in that gets pushed out, and cancelled if main data invalidates, and don't listen for analysis invalidation during main data load
 - [x] fix thumbnails again: need reliable thumbnail cache table, thumbnails fail to load in rare cases if reauth while component unmounted? We need image urls to load reliably as an early step and not flicker into view.
 - [x] advanced schedule search needs to allow date picker to override dropdown, and dropdown auto-change if date changes
-- [x] !!! Allow pasting even if only a single column of data is copied
-- [x] !!! ui for paste
+- [x] Allow pasting even if only a single column of data is copied
+- [x] ui for paste
+- [?] redundancy and overcomplexity in navigation still must be reduced
+- [x] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
+- [?] there is a ton of duplicated logic in production-utils that needs to be simplified or removed
 - [ ] !!! I have not tested what happens if two users simultaniously trigger resolution
 - [ ] when exporting from concept, does it use curent assembly, or separately find control????? if control model exists, ask if use that
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
-- [ ] redundancy and overcomplexity in navigation still must be reduced
-- [ ] the functions that manage schedule indexing need to be reworked for simplicity and brought in line with caching mechanisms...
-- [ ] there is a ton of duplicated logic in production-utils that needs to be simplified or removed
 - [ ] new crate, nav away, nav back, no new items list
 
 **Application tasks**
@@ -169,22 +178,22 @@ HIGH PRIORITY: Export Basic Pack List from Inventor
 - [x] Open existing pack list and cross-reference before adding new parts, only adding parts that are not already present
 - [x] make sure panel and hardware part numbers come in correctly
 - [x] when consolidating HARDWARE if the vendor literally is "HARDWARE" don't set the part number to that
-- [?] !!! fix oauth token refresh so no errors are hidden, and refresh is automatic
-- [?] !!! Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
-- [?] !!! Use folder->category mapping to determine transformation necessary
-- [x] !!! Add support to automatically group items
-- [x] !!! allow pack list export from project manager
-- [?] ! fix system that checks for diff and allows updates to existing packlist instead of full overwrite
-- [?] ! allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
-- [?] !!! need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
-- [?] !!! fix CABINET item numbers in inventor
-- [ ] !!! fix FURNITURE item numbers in inventor
-- [?] !!! fix HANGING SIGN item numbers in inventor
+- [?] fix oauth token refresh so no errors are hidden, and refresh is automatic
+- [?] Map STANDARD PARTS folder locations to the spreadsheet, possibly adding new column to the google index page for this
+- [?] Use folder->category mapping to determine transformation necessary
+- [x] Add support to automatically group items
+- [x] allow pack list export from project manager
+- [?] fix system that checks for diff and allows updates to existing packlist instead of full overwrite
+- [?] allow item metadata history and change source updating from inventor, and ensure inventor doesn't auto-update an in-app change without confirmation
+- [?] need the packlist export to ensure that the abbreviations are correct linking to a show if no show found
+- [?] fix CABINET item numbers in inventor
+- [?] fix FURNITURE item numbers in inventor
+- [?] fix HANGING SIGN item numbers in inventor
 - [ ] !!! fix duplication of bematrix VELCRO PANELS
 - [ ] !!! fix 45 degree curved panels
 - [ ] !!! verify panel and hardware and other possible edge-cases
 - [ ] show notifications if the packlist was in-app changed to not match the current model for inventoried items
-      automatically add thumbnails for uninventoried items?
+- [ ] automatically add thumbnails for uninventoried items?
 
 inventory updates
 
@@ -202,7 +211,7 @@ inventory updates
 - [x] optimize thumbnails: invalidate this cache only when new thumbnails are added, or a thumbnail change occurrs
 - [x] update LIGHTBOXES
 - [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
-- [ ] ! add all FURNITURE
+- [?] add all FURNITURE
 - [ ] ! add all LIGHTING
 - [ ] allow attaching a change dates to a project??? for instance, if we are selling a chair to a client, or if a chair broke at a show, or we are aquiring a chair for a show
 - [ ] create a history modification utility for viewing changes over time and changing their values if necessary
@@ -236,7 +245,7 @@ Architecture Improvements !!! offline mode
 - [ ] save deleted information in a special table for recovery if necessary
 - [ ] allow auto-caching of analytics data
 - [ ] we probably need to allow multiple identical dashboard endpoints to be added with different views if we do the inventory category mode thing.
-- [ ] allow "maintenance mode" activated that locks all editing, OR simply allow the system to force clients to refresh
+- [x] allow "maintenance mode" activated that locks all editing, OR simply allow the system to force clients to refresh
       allow analysis to intelligently slow or pause itself and notify user for slow connection states.
 
 show management system
@@ -254,8 +263,8 @@ show management system
 - [x] think through json date searches. Possibly need to decide on normal schedule match behaviors to allow rather than all.
 - [x] date search needs to have a dropdown to determine type of match (before, after, before inclusive, after inclusive, etc.)
 - [ ] ! add "views" system to show different columns and layouts for different purposes
-- [ ] ! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
-- [ ] ! we may need a workzone integration
+- [ ] !!! we need to support packlist transshipping in schedule and doing packlist merges when transship shows overlap
+- [ ] !!! we may need a workzone integration
 - [ ] advanced search add and configure boolean flag columns (shown as checkboxes) and filter option
 - [ ] allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
 
@@ -283,8 +292,8 @@ Pack Lists in Web
 - [x] allow group closing and hiding in actions bubbles and default to this
 - [x] information source notification if source is inventor, and allow easy rollback of inventor history updates
 - [x] cut and paste between packlist functionality
-- [ ] !!!!detection of unattached packlists and user notification
-- [x] !!! when pasting in from external source, naturally find drop columns at time of paste, and add the just-pasted rows to the selection set
+- [x] detection of unattached packlists and user notification
+- [x] when pasting in from external source, naturally find drop columns at time of paste, and add the just-pasted rows to the selection set
 - [ ] !!! add "add to new crate" as item selection button
 - [ ] !!! add "move to existing crate" as item selection button
 - [ ] !!! add "move rows" as bubble action
@@ -326,6 +335,6 @@ analysis of pack list against current inventory
 - [x] make url param updates correctly propagate into components, and fix report url generation
 - [x] allow report text filtering
 - [x] allow showing quantity errors in a special schedule view, or always run this as an analysis step in schedule view. This needs to not explode computers. May need analysis caching first.
-- [ ] run configured upcoming inventory shortage report automatically on main inventory page and show warnings in items and categories
+- [ ] !!!! run configured upcoming inventory shortage report automatically on main inventory page and show warnings in items and categories
       increase the filtering options in reports
       link to quick reports from other locations (ex: advanced-search, or from inventory for upcoming shows, or from packlist details, etc)

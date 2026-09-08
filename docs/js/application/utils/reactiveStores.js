@@ -8,7 +8,8 @@ export { Priority };
  * Global application settings for reactive stores and analysis
  */
 export const appSettings = Vue.reactive({
-    onlyRunEssentialAnalysis: localStorage.getItem('essentialAnalysisOnly') === 'true' // When true, only run analysis marked as essential
+    onlyRunEssentialAnalysis: localStorage.getItem('essentialAnalysisOnly') === 'true', // When true, only run analysis marked as essential
+    showDashboardHeaders: localStorage.getItem('showDashboardHeaders') !== 'false' // When false, hide dashboard card headers (defaults to true)
 });
 
 /**

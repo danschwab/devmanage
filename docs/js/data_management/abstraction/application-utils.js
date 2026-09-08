@@ -75,66 +75,40 @@ class applicationUtils_uncached {
             serializedData = JSON.stringify(data);
         }
 
-        // Ensure tab exists (create with proper structure if not)
+        // Check if tab exists
         const allTabs = await Database.getTabs('CACHE');
         let tab = allTabs.find(t => t.title === tabName);
+        
+        // Only create tab if it doesn't exist AND we have real data to store
         if (!tab) {
-            // Don't create tab if data is null or empty (empty array/object)
             if (data === null || 
                 (Array.isArray(data) && data.length === 0) || 
                 (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0)) {
-                //console.log('Skipping tab creation for empty data, ID:', id);
-                return;
+                return; // Don't create tab for empty/null data
             }
-            
-            await Database.createTab('CACHE', null, tabName); // create blank tab, no template
-            // Initialize the tab with headers and a single data row as a 2D array
-            return await Database.setData(
-                'CACHE',
-                tabName,
-                [
-                    ['ID', 'Value'],
-                    [id, serializedData]
-                ],
-                null,
-                { skipMetadata: true } // User data doesn't need change tracking
-            );
-        } else {   
-            // Tab exists - need to read all existing data, update/add the row, then write back
-            const existingData = await Database.getData('CACHE', tabName, { ID: 'ID', Value: 'Value' });
-            
-            // Find the row with matching ID
-            const rowIndex = existingData.findIndex(row => row.ID === id);
-            
-            // If data is null, delete the entry
-            if (data === null) {
-                if (rowIndex !== -1) {
-                    // Remove the row from existingData
-                    existingData.splice(rowIndex, 1);
-                    //console.log('Deleting user data entry for ID:', id);
-                } else {
-                    // Entry doesn't exist, nothing to delete
-                    //console.log('User data entry not found for deletion, ID:', id);
-                    return;
-                }
-            } else {
-                // Normal update/insert logic
-                if (rowIndex !== -1) {
-                    // Update existing row
-                    existingData[rowIndex].Value = serializedData;
-                } else {
-                    // Add new row
-                    existingData.push({ ID: id, Value: serializedData });
-                }
-            }
-            
-            //console.log('Storing user data - writing all rows:', existingData);
-            
-            // Write back ALL rows to the sheet
-            return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' }, {
-                skipMetadata: true // User data doesn't need change tracking
-            });
+            await Database.createTab('CACHE', '_UserDataTemplate', tabName);
         }
+        
+        // Unified flow: read all data, mutate, write back
+        const existingData = await Database.getData('CACHE', tabName, { ID: 'ID', Value: 'Value' });
+        const rowIndex = existingData.findIndex(row => row.ID === id);
+        
+        // Apply mutation: delete, update, or insert
+        if (data === null) {
+            if (rowIndex !== -1) {
+                existingData.splice(rowIndex, 1);
+            }
+        } else {
+            if (rowIndex !== -1) {
+                existingData[rowIndex].Value = serializedData;
+            } else {
+                existingData.push({ ID: id, Value: serializedData });
+            }
+        }
+        
+        return await Database.setData('CACHE', tabName, existingData, { ID: 'ID', Value: 'Value' }, {
+            skipMetadata: true
+        });
     }
     
     /**

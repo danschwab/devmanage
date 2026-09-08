@@ -1,4 +1,4 @@
-import { html, BreadcrumbComponent, NavigationRegistry, BannerNotifications } from '../../index.js';
+import { html, BreadcrumbComponent, NavigationRegistry, BannerNotifications, appSettings } from '../../index.js';
 import { PageNoteComponent } from './pageNoteComponent.js';
 import { URLRouter } from '../../utils/urlRouter.js';
 
@@ -88,6 +88,18 @@ export const ContainerComponent = {
         },
         containerBanners() {
             return this.$notify.getBanners(this.containerPath);
+        },
+        isScrollingEnabled() {
+            return appSettings.enableDashboardCardScrolling;
+        },
+        shouldShowHeader() {
+            // Dashboard cards respect the header visibility setting
+            // Non-dashboard containers always show headers
+            if (this.cardStyle) {
+                return appSettings.showDashboardHeaders;
+            }
+            // Always show headers on non-dashboard pages
+            return this.containerPath || this.title || this.cardStyle;
         }
     },
     methods: {
@@ -217,8 +229,8 @@ export const ContainerComponent = {
         }
     },
     template: html `
-        <div class="container" :class="(cardStyle ? 'dashboard-card' + cardClasses : '')">
-            <div v-if="containerPath || title || cardStyle" class="container-header">
+        <div class="container" :class="(cardStyle ? 'dashboard-card' + cardClasses + (isScrollingEnabled ? ' scrolling-enabled' : '') : '')">
+            <div v-if="shouldShowHeader" class="container-header">
                 <BreadcrumbComponent
                     :container-path="containerPath"
                     :title="title"
@@ -278,7 +290,7 @@ export const ContainerComponent = {
                 </slot>
             </div>
             <transition name="longfade">
-                <div v-if="cardStyle && isScrolling" class="container-expand-overlay" @click="expandContainer">
+                <div v-if="cardStyle && isScrolling && !isScrollingEnabled" class="container-expand-overlay" @click="expandContainer">
                     <span class="material-symbols-outlined">expand_content</span>
                 </div>
             </transition>
