@@ -483,18 +483,17 @@ export const ScheduleTableComponent = {
             const source = row.AppData?.transshipSource;
             if (!source) return [];
             return [{
-                message: 'Transship',
+                message: 'ships from earlier show',
                 class: 'gray',
-                hoverMessage: `Transshipping from ${source}`,
+                hoverMessage: `No ship date — items arrive directly from: ${source}`,
                 action: () => this.handleTransshipClick(row, source)
             }];
         },
         handleTransshipClick(row, sourceId) {
             const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             this.$modal.alert(
-                `${showId}\nships directly from\n${sourceId}`,
-                'Transship',
-                false
+                `${showId} has no independent ship date.\n\nItems ship directly from the earlier show:\n${sourceId}\n\nNo warehouse trip occurs between these shows.`,
+                'Transshipment'
             );
         },
         getPacklistCards(row, columnKey) {
@@ -770,7 +769,7 @@ export const ScheduleTableComponent = {
             </template>
             <template #row-details="{ row }">
                 <div class="button-bar" style="margin-top: var(--padding-sm)">
-                    <div class="card" v-if="row.AppData?.transshipSource">transship from {{ row.AppData.transshipSource }}</div>
+                    <div class="card" v-if="row.AppData?.transshipSource">ships from: {{ row.AppData.transshipSource }}</div>
                     <button @click="openTransshipModal(row)" class="white">
                         {{ row.AppData?.transshipSource ? 'Change transshipment' : 'Set transshipment' }}
                     </button>
