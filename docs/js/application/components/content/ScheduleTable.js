@@ -588,11 +588,6 @@ export const ScheduleTableComponent = {
                     onFetchOverrideTargets: (sourceType) => Requests.getOverrideTargets(sourceType),
                     onAddOverride: async (scheduleId, packlistId) => {
                         await Requests.addNameOverride(scheduleId, packlistId);
-                        // Invalidate NameOverrides and all production_utils caches to clear old checkReferenceNameState results
-                        invalidateCache([
-                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                            { namespace: 'production_utils' }
-                        ], true);
                         await this.handleRefresh();
                         return { applied: true };
                     },

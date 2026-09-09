@@ -1,4 +1,4 @@
-import { html, TableComponent, Requests, getReactiveStore, invalidateCache, NavigationRegistry } from '../../index.js';
+import { html, TableComponent, Requests, getReactiveStore, NavigationRegistry } from '../../index.js';
 import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
 
 /**
@@ -105,13 +105,6 @@ export const IndexMismatchReport = {
                     }
                 }
             }
-            
-            invalidateCache([
-                { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
-                { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
-                { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                { namespace: 'production_utils' }
-            ], true);
             
             // Immediately reload the report to clear resolved rows
             await this.reportStore.load();

@@ -1020,10 +1020,6 @@ export const PacklistContent = {
                 modalClass: 'hamburger-menu',
                 onConfirm: async (scheduleId) => {
                     await Requests.addNameOverride(scheduleId, packlistTitle);
-                    invalidateCache([
-                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                        { namespace: 'production_utils' }
-                    ], true);
                     if (this.packlistsStore) {
                         await this.packlistsStore.load();
                     }

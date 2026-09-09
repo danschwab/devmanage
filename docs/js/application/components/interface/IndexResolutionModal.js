@@ -1,4 +1,4 @@
-import { html, Requests, invalidateCache } from '../../index.js';
+import { html, Requests } from '../../index.js';
 
 /**
  * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
@@ -360,10 +360,6 @@ export const packlistIndexResolutionMixin = {
                 modalClass: 'hamburger-menu',
                 onConfirm: async () => {
                     await Requests.addNameOverride(scheduleIdentifier, packlistTitle);
-                    invalidateCache([
-                        { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                        { namespace: 'production_utils' }
-                    ], true);
                     await this._reloadAfterPacklistAttachmentChange(packlistTitle);
                 }
             }, 'Link Packlist to Schedule');
@@ -397,10 +393,6 @@ export const packlistIndexResolutionMixin = {
                     onFetchOverrideTargets: (sourceType) => Requests.getOverrideTargets(sourceType),
                     onAddOverride: async (scheduleId, packlistId) => {
                         await Requests.addNameOverride(scheduleId, packlistId);
-                        invalidateCache([
-                            { namespace: 'database', methodName: 'getData', args: ['CACHE', 'NameOverrides'] },
-                            { namespace: 'production_utils' }
-                        ], true);
                         await this._reloadAfterPacklistAttachmentChange(packlistTitle);
                         return { applied: true };
                     },
@@ -443,11 +435,6 @@ export const packlistIndexResolutionMixin = {
                     return { applied: false };
                 }
 
-                invalidateCache([
-                    { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Clients'] },
-                    { namespace: 'database', methodName: 'getData', args: ['CACHE', 'Shows'] },
-                    { namespace: 'production_utils' }
-                ], true);
                 await this._reloadAfterPacklistAttachmentChange(packlistTitle);
                 return { applied: true };
             } catch (error) {

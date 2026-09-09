@@ -958,14 +958,14 @@ class productionUtils_uncached {
             o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(identifier).toLowerCase()
         );
         if (!link?.override) return null;
-        // Validate ordering: source must ship strictly before destination
+        // Validate ordering using show start dates (not ship dates, which are often missing/guessed)
         const [destRow, sourceRow] = await Promise.all([
             deps.call(ProductionUtils.getShowDetails, identifier),
             deps.call(ProductionUtils.getShowDetails, link.override)
         ]);
-        const destShip   = destRow   ? _calculateShipDate(destRow)   : null;
-        const sourceShip = sourceRow ? _calculateShipDate(sourceRow) : null;
-        if (destShip && sourceShip && sourceShip >= destShip) return null;
+        const destOrder   = _getShowOrderDate(destRow);
+        const sourceOrder = _getShowOrderDate(sourceRow);
+        if (destOrder && sourceOrder && sourceOrder >= destOrder) return null;
         return link.override;
     }
 
@@ -987,26 +987,11 @@ class productionUtils_uncached {
      * @param {string} projectIdentifier
      * @returns {Promise<string|null>}
      */
-    // _depth guards against circular transship data (max chain length 4)
-    static async getProjectShipDate(deps, projectIdentifier, _depth = 0) {
-        if (!projectIdentifier || _depth > 4) return null;
-        const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
-        if (!row) return null;
+    static async getProjectShipDate(deps, projectIdentifier) {
+        if (!projectIdentifier) return null;
         const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });
-        const link = overrides.find(
-            o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
-        );
-        if (link?.override) {
-            // Only follow the chain when the source's own ship date is strictly earlier
-            const sourceRow = await deps.call(ProductionUtils.getShowDetails, link.override);
-            const destOwnShip   = _calculateShipDate(row);
-            const sourceOwnShip = sourceRow ? _calculateShipDate(sourceRow) : null;
-            if (sourceOwnShip && destOwnShip && sourceOwnShip < destOwnShip) {
-                return deps.call(ProductionUtils.getProjectShipDate, link.override, _depth + 1);
-            }
-        }
-        return deps.call(ProductionUtils.getProjectShipDateFromRow, row);
+        return _resolveShipDate(deps, projectIdentifier, overrides, new Set());
     }
 
     static async getProjectShipDateFromRow(deps, row) {
@@ -1020,30 +1005,11 @@ class productionUtils_uncached {
         return toISODateString(_calculateReturnDate(row, ship));
     }
 
-    static async getProjectReturnDate(deps, projectIdentifier, _depth = 0) {
-        if (!projectIdentifier || _depth > 4) return null;
-        const row = await deps.call(ProductionUtils.getShowDetails, projectIdentifier);
-        if (!row) return null;
+    static async getProjectReturnDate(deps, projectIdentifier) {
+        if (!projectIdentifier) return null;
         const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });
-        const destinations = overrides.filter(
-            o => normalizeText(o.override || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
-        );
-        if (destinations.length > 0) {
-            const thisOwnShip = _calculateShipDate(row);
-            // Only extend the return date for destinations that ship strictly after this show
-            const validDestReturns = await Promise.all(
-                destinations.map(async d => {
-                    const destRow = await deps.call(ProductionUtils.getShowDetails, d.schedule);
-                    const destOwnShip = destRow ? _calculateShipDate(destRow) : null;
-                    if (!thisOwnShip || !destOwnShip || destOwnShip <= thisOwnShip) return null;
-                    return deps.call(ProductionUtils.getProjectReturnDate, d.schedule, _depth + 1);
-                })
-            );
-            const validReturns = validDestReturns.filter(Boolean);
-            if (validReturns.length > 0) return validReturns.sort().reverse()[0];
-        }
-        return deps.call(ProductionUtils.getProjectReturnDateFromRow, row);
+        return _resolveReturnDate(deps, projectIdentifier, overrides, new Set());
     }
 
     /**
@@ -1277,16 +1243,18 @@ class productionUtils_uncached {
 
     // Mutation — uncached. Creates or updates a transship link in CACHE/ScheduleOverrides.
     static async setTransshipLink(destinationIdentifier, sourceIdentifier) {
-        // Enforce earlier→later ordering: compare raw ship dates and swap roles if inverted
+        // Enforce earlier→later ordering using show start dates, not ship dates.
+        // Ship dates are often missing and the fallback (S.Start - 14d) can produce a
+        // guessed date that is earlier than an explicit ship date on a prior show.
         try {
             const [destRow, srcRow] = await Promise.all([
                 ProductionUtils.getShowDetails(destinationIdentifier),
                 ProductionUtils.getShowDetails(sourceIdentifier)
             ]);
             if (destRow && srcRow) {
-                const destShip = await ProductionUtils.getProjectShipDateFromRow(destRow);
-                const srcShip  = await ProductionUtils.getProjectShipDateFromRow(srcRow);
-                if (destShip && srcShip && destShip <= srcShip) {
+                const destOrder = _getShowOrderDate(destRow);
+                const srcOrder  = _getShowOrderDate(srcRow);
+                if (destOrder && srcOrder && destOrder <= srcOrder) {
                     [destinationIdentifier, sourceIdentifier] = [sourceIdentifier, destinationIdentifier];
                 }
             }
@@ -1427,6 +1395,65 @@ export const ProductionUtils = wrapMethods(
 
 
 // Helper functions not exposed via API
+
+// Returns the date used for ordering shows relative to each other.
+// S.Start is used instead of ship date because ship dates are often missing and
+// the fallback (S.Start - 14d) can land before an earlier show's explicit ship date.
+function _getShowOrderDate(row) {
+    if (!row) return null;
+    const start = parseDate(row['S. Start'], true, row.Year);
+    if (start) return start;
+    return _calculateShipDate(row); // last resort if show has no start date
+}
+
+// Resolves the effective ship date for a show, following transship chains.
+// Called by getProjectShipDate; runs under that function's deps/cache entry so
+// all deps.call dependencies are attributed to the single per-identifier cache key.
+async function _resolveShipDate(deps, identifier, overrides, visited) {
+    if (!identifier || visited.has(identifier)) return null;
+    visited.add(identifier);
+    const row = await deps.call(ProductionUtils.getShowDetails, identifier);
+    if (!row) return null;
+    const link = overrides.find(
+        o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(identifier).toLowerCase()
+    );
+    if (link?.override) {
+        const sourceRow   = await deps.call(ProductionUtils.getShowDetails, link.override);
+        const destOrder   = _getShowOrderDate(row);
+        const sourceOrder = sourceRow ? _getShowOrderDate(sourceRow) : null;
+        if (sourceOrder && destOrder && sourceOrder < destOrder) {
+            return _resolveShipDate(deps, link.override, overrides, visited);
+        }
+    }
+    return toISODateString(_calculateShipDate(row));
+}
+
+// Resolves the effective return date for a show, extending through transship destinations.
+// Called by getProjectReturnDate; same single-entry dep-tracking rationale as _resolveShipDate.
+async function _resolveReturnDate(deps, identifier, overrides, visited) {
+    if (!identifier || visited.has(identifier)) return null;
+    visited.add(identifier);
+    const row = await deps.call(ProductionUtils.getShowDetails, identifier);
+    if (!row) return null;
+    const destinations = overrides.filter(
+        o => normalizeText(o.override || '').toLowerCase() === normalizeText(identifier).toLowerCase()
+    );
+    if (destinations.length > 0) {
+        const thisOrder = _getShowOrderDate(row);
+        const destReturns = await Promise.all(
+            destinations.map(async d => {
+                const destRow   = await deps.call(ProductionUtils.getShowDetails, d.schedule);
+                const destOrder = _getShowOrderDate(destRow);
+                if (!thisOrder || !destOrder || destOrder <= thisOrder) return null;
+                return _resolveReturnDate(deps, d.schedule, overrides, visited);
+            })
+        );
+        const validReturns = destReturns.filter(Boolean);
+        if (validReturns.length > 0) return validReturns.sort().reverse()[0];
+    }
+    const ship = _calculateShipDate(row);
+    return toISODateString(_calculateReturnDate(row, ship));
+}
 
 /**
  * Calculate ship date from row data with fallbacks
