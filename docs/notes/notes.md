@@ -1,17 +1,14 @@
 software being used for inventory... slowly. Ben is updating the inventory a bit at a time.
 being used to identify shortages when doublechecking packlist info.
 being used to verify packlists by going to the packlist tab and cross-referencing data with his manual packlist
-there is a lot of data that does not get on our packlist, mostly consumables and client stuff
+there is a lot of data that does not get on our packlist, mostly consumables and client stuff.
 
 !!! alert me about projects that don't yet have files attached to them
-!!! transshipping table - how often are these partial? (hamburger-menu add transshipment, transship table and overlap adjustment logic, packlist analysis to verify transship items, auto-identify transship candidates)
+!!! design queue and updating logic
 !!! auto-packlist generation and update asynchronous from inventor throughout the process based on rules. No more busywork.
 !!! packlist item approval checklist and packlist edit vs. item-approval mode (Add item to existing or new crate, remove, group, etc)
-!!! design queue and updating logic
 !!! production schedule workzone view???
 
-!!! rebuild date matching logic from scratch
-!!! simplify controls on reports page
 ! "views" for tables and reports allowing column customization
 
 analysis did a doubletake and failed when creating a new empty show....

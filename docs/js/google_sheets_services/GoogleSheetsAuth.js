@@ -42,6 +42,8 @@ export class GoogleSheetsAuth {
     static _authenticatePromise = null;
     static _cancelAuthentication = null;
     static _silentRefreshPromise = null;
+    // Blocks automatic silent refresh after a popup failure until user explicitly re-auths
+    static _silentRefreshBlocked = false;
 
     static _tokenCoversRequiredScopes(token) {
         if (!token || !token.scope) return false;
@@ -192,6 +194,7 @@ export class GoogleSheetsAuth {
                         console.warn('[GoogleSheetsAuth.authenticate] Granted token is missing scopes (user may have declined):', missing);
                     }
                     
+                    this._silentRefreshBlocked = false;
                     BaseTokenManager.storeToken(token);
                     
                     // Store email for future reference
@@ -227,6 +230,7 @@ export class GoogleSheetsAuth {
             return this._silentRefreshPromise;
         }
 
+        if (this._silentRefreshBlocked) return false;
         if (!gapiInited || !gisInited) return false;
 
         const storedEmail = localStorage.getItem(BaseTokenManager.emailKey);
@@ -240,26 +244,30 @@ export class GoogleSheetsAuth {
                     prompt: '',
                     callback: (resp) => {
                         if (resp.error) {
+                            this._silentRefreshBlocked = true;
                             resolve(false);
                             return;
                         }
                         const token = gapi.client.getToken();
                         if (!token) {
+                            this._silentRefreshBlocked = true;
                             resolve(false);
                             return;
                         }
                         if (!this._tokenCoversRequiredScopes(token)) {
                             console.warn('[GoogleSheetsAuth.silentRefresh] Refreshed token is missing required scopes — full re-auth needed');
+                            this._silentRefreshBlocked = true;
                             resolve(false);
                             return;
                         }
                         BaseTokenManager.storeToken(token);
                         resolve(true);
                     },
-                    error_callback: () => resolve(false)
+                    error_callback: () => { this._silentRefreshBlocked = true; resolve(false); }
                 });
                 silentClient.requestAccessToken({ prompt: '' });
             } catch {
+                this._silentRefreshBlocked = true;
                 resolve(false);
             }
         }).finally(() => {
@@ -290,6 +298,7 @@ export class GoogleSheetsAuth {
                 return true;
             }
             // Token missing or expired — attempt silent refresh before giving up
+            if (this._silentRefreshBlocked) return false;
             return await this.silentRefresh();
         }
 
@@ -298,6 +307,7 @@ export class GoogleSheetsAuth {
         if (savedToken && BaseTokenManager.isTokenExpired(savedToken)) {
             gapi.client.setToken(null);
             BaseTokenManager.clearStoredToken();
+            if (this._silentRefreshBlocked) return false;
             // Attempt silent refresh before giving up
             return await this.silentRefresh();
         }
