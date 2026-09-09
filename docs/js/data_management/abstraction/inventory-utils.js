@@ -699,8 +699,6 @@ class inventoryUtils_uncached {
                 // Deduplicate to prevent double-counting items when a show has multiple booths
                 const deduplicated = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlapping);
                 const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-                const transshipOverrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
-                    { schedule: 'Schedule', override: 'Override' });
 
                 for (const showRow of deduplicated) {
                     // Use Direction-1 matching: schedule row → packlist tab(s)
@@ -709,8 +707,9 @@ class inventoryUtils_uncached {
                         showRow.Identifier ||
                         await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
 
-                    // Transship destinations are skipped — their items are part of the source show's extended window
-                    if (transshipOverrides.some(o => _normalizeId(o.schedule) === _normalizeId(identifier))) continue;
+                    // Transship destinations are skipped — validated direction ensures only later shows are destinations
+                    const transshipSource = await deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+                    if (transshipSource) continue;
 
                     let packedQty = 0;
                     try {

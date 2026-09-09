@@ -1222,6 +1222,10 @@ tr.is-group:hover .group-toggle {
     border-top: none;
     overflow: hidden;
     box-shadow: 0 4px 8px var(--color-shadow);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-md);
 }
 
 .details-grid {

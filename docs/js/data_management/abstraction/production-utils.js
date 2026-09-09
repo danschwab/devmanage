@@ -954,9 +954,19 @@ class productionUtils_uncached {
         if (!identifier) return null;
         const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });
-        return overrides.find(
+        const link = overrides.find(
             o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(identifier).toLowerCase()
-        )?.override || null;
+        );
+        if (!link?.override) return null;
+        // Validate ordering: source must ship strictly before destination
+        const [destRow, sourceRow] = await Promise.all([
+            deps.call(ProductionUtils.getShowDetails, identifier),
+            deps.call(ProductionUtils.getShowDetails, link.override)
+        ]);
+        const destShip   = destRow   ? _calculateShipDate(destRow)   : null;
+        const sourceShip = sourceRow ? _calculateShipDate(sourceRow) : null;
+        if (destShip && sourceShip && sourceShip >= destShip) return null;
+        return link.override;
     }
 
     // extractColumnsAsObject passes {Show, Client, Year} as a single object
@@ -988,7 +998,13 @@ class productionUtils_uncached {
             o => normalizeText(o.schedule || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
         );
         if (link?.override) {
-            return deps.call(ProductionUtils.getProjectShipDate, link.override, _depth + 1);
+            // Only follow the chain when the source's own ship date is strictly earlier
+            const sourceRow = await deps.call(ProductionUtils.getShowDetails, link.override);
+            const destOwnShip   = _calculateShipDate(row);
+            const sourceOwnShip = sourceRow ? _calculateShipDate(sourceRow) : null;
+            if (sourceOwnShip && destOwnShip && sourceOwnShip < destOwnShip) {
+                return deps.call(ProductionUtils.getProjectShipDate, link.override, _depth + 1);
+            }
         }
         return deps.call(ProductionUtils.getProjectShipDateFromRow, row);
     }
@@ -1014,10 +1030,17 @@ class productionUtils_uncached {
             o => normalizeText(o.override || '').toLowerCase() === normalizeText(projectIdentifier).toLowerCase()
         );
         if (destinations.length > 0) {
-            const destReturns = await Promise.all(
-                destinations.map(d => deps.call(ProductionUtils.getProjectReturnDate, d.schedule, _depth + 1))
+            const thisOwnShip = _calculateShipDate(row);
+            // Only extend the return date for destinations that ship strictly after this show
+            const validDestReturns = await Promise.all(
+                destinations.map(async d => {
+                    const destRow = await deps.call(ProductionUtils.getShowDetails, d.schedule);
+                    const destOwnShip = destRow ? _calculateShipDate(destRow) : null;
+                    if (!thisOwnShip || !destOwnShip || destOwnShip <= thisOwnShip) return null;
+                    return deps.call(ProductionUtils.getProjectReturnDate, d.schedule, _depth + 1);
+                })
             );
-            const validReturns = destReturns.filter(Boolean);
+            const validReturns = validDestReturns.filter(Boolean);
             if (validReturns.length > 0) return validReturns.sort().reverse()[0];
         }
         return deps.call(ProductionUtils.getProjectReturnDateFromRow, row);
@@ -1254,6 +1277,20 @@ class productionUtils_uncached {
 
     // Mutation — uncached. Creates or updates a transship link in CACHE/ScheduleOverrides.
     static async setTransshipLink(destinationIdentifier, sourceIdentifier) {
+        // Enforce earlier→later ordering: compare raw ship dates and swap roles if inverted
+        try {
+            const [destRow, srcRow] = await Promise.all([
+                ProductionUtils.getShowDetails(destinationIdentifier),
+                ProductionUtils.getShowDetails(sourceIdentifier)
+            ]);
+            if (destRow && srcRow) {
+                const destShip = await ProductionUtils.getProjectShipDateFromRow(destRow);
+                const srcShip  = await ProductionUtils.getProjectShipDateFromRow(srcRow);
+                if (destShip && srcShip && destShip <= srcShip) {
+                    [destinationIdentifier, sourceIdentifier] = [sourceIdentifier, destinationIdentifier];
+                }
+            }
+        } catch (_) { /* if dates can't be resolved, save as-is; read-time validation guards usage */ }
         const normDest = normalizeText(destinationIdentifier || '').toLowerCase();
         const existing = await Database.getData('CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });

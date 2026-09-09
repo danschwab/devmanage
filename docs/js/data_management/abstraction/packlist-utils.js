@@ -584,11 +584,7 @@ class packListUtils_uncached {
             }
 
             // Identify transship source so its items are not counted as separate competing demand
-            const scheduleOverrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
-                { schedule: 'Schedule', override: 'Override' });
-            const transshipSourceId = scheduleOverrides.find(
-                o => _normalizeId(o.schedule) === _normalizeId(projectIdentifier)
-            )?.override || null;
+            const transshipSourceId = await deps.call(ProductionUtils.getTransshipSourceForShow, projectIdentifier);
 
             // 5. Process overlapping shows
             const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
@@ -741,11 +737,7 @@ class packListUtils_uncached {
         overlappingProjects = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingProjects);
         
         // Identify transship source so it is not listed as conflicting demand
-        const scheduleOverrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
-            { schedule: 'Schedule', override: 'Override' });
-        const transshipSourceId = scheduleOverrides.find(
-            o => _normalizeId(o.schedule) === _normalizeId(currentProjectId)
-        )?.override || null;
+        const transshipSourceId = await deps.call(ProductionUtils.getTransshipSourceForShow, currentProjectId);
 
         const conflictingShows = [];
         const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');

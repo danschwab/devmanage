@@ -20,6 +20,9 @@ function buildSearchParams(textFilters) {
 export const TransshipmentModal = {
     components: { TableComponent, ScheduleFilterSelect },
     inject: ['$modal'],
+    props: {
+        preselectedRow: { type: Object, default: null }
+    },
     data() {
         return {
             stage: 1,
@@ -83,7 +86,11 @@ export const TransshipmentModal = {
         }
     },
     async mounted() {
-        this.reloadStage1();
+        if (this.preselectedRow) {
+            await this.selectStage1Show(this.preselectedRow);
+        } else {
+            this.reloadStage1();
+        }
     },
     watch: {
         stage1Filter: {

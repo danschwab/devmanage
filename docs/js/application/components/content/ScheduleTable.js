@@ -1,6 +1,7 @@
-import { html, Requests, parseDate, toUSDateString, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority } from '../../index.js';
+import { html, Requests, parseDate, toUSDateString, TableComponent, getReactiveStore, createAnalysisConfig, invalidateCache, Priority, runNonessentialAnalysisOnAllStores } from '../../index.js';
 import { CalendarComponent } from '../interface/calendarComponent.js';
 import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
+import { TransshipmentModal } from '../interface/ScheduleModals.js';
 
 export const ScheduleTableComponent = {
     components: {
@@ -650,6 +651,23 @@ export const ScheduleTableComponent = {
             const title = row.Show || row.Client || 'Show Details';
             this.$modal.custom(DetailModalComponent, { row, columns: detailColumns, actionCards, modalClass: 'event-detail' }, title);
         },
+        openTransshipModal(row) {
+            // Use original store row so the Ship date is present (tableData clears it for transship rows)
+            const originalRow = this.scheduleTableStore?.data?.find(r =>
+                r.Client === row.Client && String(r.Year) === String(row.Year) && r.Show === row.Show
+            ) || row;
+            this.$modal.custom(TransshipmentModal, { preselectedRow: originalRow, modalClass: 'page-menu' }, 'Set Transshipment');
+        },
+        async removeTransship(row) {
+            const identifier = await Requests.computeIdentifier(row.Show, row.Client, row.Year).catch(() => null);
+            if (!identifier) return;
+            try {
+                await Requests.removeTransshipLink(identifier);
+                runNonessentialAnalysisOnAllStores();
+            } catch (e) {
+                this.$modal.alert('Failed to remove transshipment: ' + e.message, 'Error');
+            }
+        },
         async applyIndexResolutionOption(option, row, issue) {
             try {
                 if (!option || !issue) {
@@ -754,6 +772,19 @@ export const ScheduleTableComponent = {
         >
             <template #header-area>
                 <slot name="header-area"></slot>
+            </template>
+            <template #row-details="{ row }">
+                <div class="button-bar" style="margin-top: var(--padding-sm)">
+                    <div class="card" v-if="row.AppData?.transshipSource">transship from {{ row.AppData.transshipSource }}</div>
+                    <button @click="openTransshipModal(row)" class="white">
+                        {{ row.AppData?.transshipSource ? 'Change transshipment' : 'Set transshipment' }}
+                    </button>
+                    <button
+                        v-if="row.AppData?.transshipSource"
+                        @click="removeTransship(row)"
+                        class="red button-symbol"
+                    ><span class="material-symbols-outlined">close</span></button>
+                </div>
             </template>
             <template #cell-extra="{ row, column }">
                 <!-- Add estimated ship date cards in Ship column -->
