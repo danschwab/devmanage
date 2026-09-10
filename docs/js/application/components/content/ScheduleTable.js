@@ -320,9 +320,7 @@ export const ScheduleTableComponent = {
                 'Client': 'Client',
                 'City': 'City',
                 'Location': 'Location',
-                'Ship': 'Ship Date',
-                'Production Manager': 'Production Manager',
-                'Account Manager': 'Account Manager'
+                'Ship': 'Ship Date'
             };
 
             // Use mapped label if available
@@ -378,7 +376,7 @@ export const ScheduleTableComponent = {
             return dateKeywords.some(keyword => key.includes(keyword));
         },
         isNumberColumn(key) {
-            const numberKeywords = ['count', 'quantity', 'id'];
+            const numberKeywords = ['qty', 'quantity'];
             return numberKeywords.some(keyword => key.includes(keyword)) || /^\d+$/.test(key);
         },
         isCurrencyColumn(key) {
@@ -483,17 +481,17 @@ export const ScheduleTableComponent = {
             const source = row.AppData?.transshipSource;
             if (!source) return [];
             return [{
-                message: 'ships from earlier show',
+                message: 'Transship',
                 class: 'gray',
-                hoverMessage: `No ship date — items arrive directly from: ${source}`,
+                hoverMessage: `ships from: ${source}`,
                 action: () => this.handleTransshipClick(row, source)
             }];
         },
         handleTransshipClick(row, sourceId) {
             const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             this.$modal.alert(
-                `${showId} has no independent ship date.\n\nItems ship directly from the earlier show:\n${sourceId}\n\nNo warehouse trip occurs between these shows.`,
-                'Transshipment'
+                `${showId}\nships directly from\n${sourceId}`,
+                'Transship'
             );
         },
         getPacklistCards(row, columnKey) {
