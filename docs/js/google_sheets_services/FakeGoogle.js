@@ -509,6 +509,46 @@ export class FakeGoogleSheetsService {
                 ['6', 'Crate', '60', '40', '40', '300', '', '', '', '', '', ''],
                 ['', '', '', '', '', '', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types', '', ''],
                 ['', '', '', '', '', '', '', '', 'Also includes: VU-8x39 and (3) CHAIR-002', '', '', '']
+            ],
+            // Two-show transship chain: source ships TABLE-001 qty 2 and CHAIR-002 qty 5
+            // Chain max: TABLE-001=3 (from SUMMER SHOW), CHAIR-002=5 (from SPRING EXPO)
+            'CHAINCO 2026 SPRING EXPO': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) TABLE-001 conference table', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(5) CHAIR-002 lounge chair', '', '', '']
+            ],
+            // Destination show has higher TABLE-001 qty — chain max should use this value
+            'CHAINCO 2026 SUMMER SHOW': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(3) TABLE-001 conference table', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) CHAIR-002 lounge chair', '', '', '']
+            ],
+            // Three-show chain: chain max should be STOOL-001=4 (Stage B), COUCH-001=2 (Stage B)
+            'TRICHAIN 2026 STAGE A': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) STOOL-001 bar stool', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) COUCH-001 white leather sofa', '', '', '']
+            ],
+            'TRICHAIN 2026 STAGE B': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) STOOL-001 bar stool', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) COUCH-001 white leather sofa', '', '', '']
+            ],
+            'TRICHAIN 2026 STAGE C': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(3) STOOL-001 bar stool', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) COUCH-001 white leather sofa', '', '', '']
+            ],
+            // Overlaps CHAINCO SPRING EXPO's date window — used to test conflict detection skips SUMMER SHOW (destination)
+            'OVERLAPCO 2026 OVERLAP TEST': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '100', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(1) TABLE-001 conference table', '', '', '']
             ]
         },
         'PROD_SCHED': {
@@ -570,6 +610,16 @@ export class FakeGoogleSheetsService {
                 ,['User Conference','Softwriters','2025','', 'San Diego, CA','20x30','N/A','9/15','9/17','9/2/2025','','','','','Alliance','ELITE','','X','X','X','','9/1/2025','','8/1','','','','','','','','','','']
                 ,['HR Tech','PayActiv','2025','', 'Las Vegas','10x20','6708','9/16','9/18','9/2/2025','','','','','The Expo Gp','ELITE','','','','9/1/2025','','','','','','','','','','','','','','']
                 ,['ASNE FMMS','Austal','2025','', 'San Diego, CA','10x10','','9/23','9/25','','','','','','','','X','','','','','','','','','','','','','','','','','','']
+                // --- Test data for transship chain pathways ---
+                // Two-show chain: SPRING EXPO ships first, SUMMER SHOW receives items (no Ship date)
+                ,['Spring Expo', 'ChainCo', '2026', 'CHAINCO 2026 SPRING EXPO', 'Chicago, IL', '20x20', '1500', '3/8', '3/11', '3/1/2026', 'X', 'X', 'X', '3/18/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
+                ,['Summer Show', 'ChainCo', '2026', 'CHAINCO 2026 SUMMER SHOW', 'Las Vegas, NV', '20x20', '2500', '6/1', '6/4', '', '', '', '', '6/11/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
+                // Three-show chain: STAGE A → STAGE B → STAGE C, each transshipping to the next
+                ,['Stage A', 'TriChain', '2026', 'TRICHAIN 2026 STAGE A', 'Dallas, TX', '10x20', '3500', '4/7', '4/10', '4/1/2026', 'X', 'X', 'X', '4/14/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
+                ,['Stage B', 'TriChain', '2026', 'TRICHAIN 2026 STAGE B', 'Phoenix, AZ', '10x20', '4500', '5/5', '5/8', '', '', '', '', '5/12/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
+                ,['Stage C', 'TriChain', '2026', 'TRICHAIN 2026 STAGE C', 'Denver, CO', '10x20', '5500', '6/9', '6/12', '', '', '', '', '6/16/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
+                // Overlaps SPRING EXPO's date window — conflict detection should return SPRING EXPO (chain root), not SUMMER SHOW (destination)
+                ,['Overlap Test', 'OverlapCo', '2026', 'OVERLAPCO 2026 OVERLAP TEST', 'Chicago, IL', '10x10', '6500', '3/8', '3/11', '3/3/2026', 'X', 'X', 'X', '3/18/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
                 // --- Test data for Show Date filtering: Shows with dates crossing year boundaries ---
                 // Early 2026 shows with 2025 ship dates (ship in Dec 2025, show in Jan 2026)
                 ,['CES','TechCorp','2026','TECHCORP 2026 CES', 'Las Vegas, NV','20x30','1001','1/7','1/10','12/28/2025','X','X','X','','1/15/2026','Freeman','Top Shelf','','X','X','X','X','X','X','X','','12/1','12/20','X','X','','X','X','X','X','X','','','X','X','','']
@@ -609,7 +659,12 @@ export class FakeGoogleSheetsService {
                 ['Schedule', 'Packlist']
             ],
             'ScheduleOverrides': [
-                ['Schedule', 'Override']
+                ['Schedule', 'Override'],
+                // Two-show transship chain: SPRING EXPO → SUMMER SHOW
+                ['CHAINCO 2026 SUMMER SHOW', 'CHAINCO 2026 SPRING EXPO'],
+                // Three-show transship chain: STAGE A → STAGE B → STAGE C
+                ['TRICHAIN 2026 STAGE B', 'TRICHAIN 2026 STAGE A'],
+                ['TRICHAIN 2026 STAGE C', 'TRICHAIN 2026 STAGE B']
             ],
             'Links': [
                 ['Path', 'ShortCode', 'Created'],
@@ -721,7 +776,11 @@ export class FakeGoogleSheetsService {
                 ['MEGATECH', '', 'Test client for Show Date filtering'],
                 ['PROSYSTEMS', '', 'Test client for Show Date filtering'],
                 ['AMBIGUOUSCO', '', 'Test client for ambiguous date handling'],
-                ['LATESHOWINC', '', 'Test client for ambiguous date handling']
+                ['LATESHOWINC', '', 'Test client for ambiguous date handling'],
+                // Test clients for transship chain pathway tests
+                ['CHAINCO', '', 'Test client for two-show transship chain'],
+                ['TRICHAIN', '', 'Test client for three-show transship chain'],
+                ['OVERLAPCO', '', 'Test client for transship conflict-detection']
             ],
             'Shows': [
                 ['Shows', 'Abbreviations', 'Notes'],
@@ -902,7 +961,14 @@ export class FakeGoogleSheetsService {
                 ['WON', '', ''],
                 ['WOODPRO', 'WOODPRO EXPO', ''],
                 ['WORKBOAT', '', ''],
-                ['XPONENTIAL', '', '']
+                ['XPONENTIAL', '', ''],
+                // Test shows for transship chain pathway tests
+                ['SPRING EXPO', '', 'Test: two-show chain source'],
+                ['SUMMER SHOW', '', 'Test: two-show chain destination'],
+                ['STAGE A', '', 'Test: three-show chain root'],
+                ['STAGE B', '', 'Test: three-show chain middle'],
+                ['STAGE C', '', 'Test: three-show chain end'],
+                ['OVERLAP TEST', '', 'Test: overlapping show for conflict detection']
             ]
         }
     };
@@ -932,7 +998,13 @@ export class FakeGoogleSheetsService {
             { title: 'TEST CLIENT 2025 HIMSS', sheetId: 7 },
             { title: 'AUSTAL 2026 SNA', sheetId: 8 },
             { title: 'GEARFIRE 2025 SHOT', sheetId: 9 },
-            { title: 'TEST 2025 ENHANCED', sheetId: 10 }
+            { title: 'TEST 2025 ENHANCED', sheetId: 10 },
+            { title: 'CHAINCO 2026 SPRING EXPO', sheetId: 11 },
+            { title: 'CHAINCO 2026 SUMMER SHOW', sheetId: 12 },
+            { title: 'TRICHAIN 2026 STAGE A', sheetId: 13 },
+            { title: 'TRICHAIN 2026 STAGE B', sheetId: 14 },
+            { title: 'TRICHAIN 2026 STAGE C', sheetId: 15 },
+            { title: 'OVERLAPCO 2026 OVERLAP TEST', sheetId: 16 }
         ],
         'PROD_SCHED': [
             { title: 'Production Schedule', sheetId: 0 }

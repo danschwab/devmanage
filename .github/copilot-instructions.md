@@ -89,9 +89,11 @@ A console test runner lives at `docs/js/tests/tests.js`. It runs automatically o
 Tests call `Requests.*` directly against the FakeGoogle data layer — no mocks, no test framework. Output appears in the browser console grouped by test group with ✓/✗ per test and a pass/fail summary line.
 
 ### When to add tests
+
 - Add a test group whenever you build a new cross-layer feature (e.g. transshipment, a new analysis type, a new packlist operation).
 - Add regression tests for any bug whose root cause involved more than one file.
 - Each test must assert a specific expected value derived from FakeGoogle data. Do not write tests that only assert "returns something non-null".
 
 ### When to add FakeGoogle test data
+
 When a new feature requires specific data relationships that don't already exist in FakeGoogle (e.g. a new table, a chain of linked records), add the data to `FakeGoogle.js` alongside the tests that depend on it. Document the expected values in comments at the top of the relevant test group.
