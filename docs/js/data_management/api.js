@@ -710,6 +710,14 @@ class Requests_uncached {
         return await deps.call(ProductionUtils.getTransshipSourceForScheduleRow, rowObj);
     }
 
+    static async getTransshipDestinationsForShow(deps, identifier) {
+        return await deps.call(ProductionUtils.getTransshipDestinationsForShow, identifier);
+    }
+
+    static async getTransshipDestinationsForScheduleRow(deps, rowObj) {
+        return await deps.call(ProductionUtils.getTransshipDestinationsForScheduleRow, rowObj);
+    }
+
     static async getProjectShipDate(deps, projectIdentifier) {
         return await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
     }

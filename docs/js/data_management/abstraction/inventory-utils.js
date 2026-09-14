@@ -309,97 +309,6 @@ class inventoryUtils_uncached {
 
 
     /**
-     * Check item availability for a project
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} projectIdentifier - Project identifier
-     * @returns {Promise<Object>} Item availability map
-     */
-    static async checkItemAvailability(deps, projectIdentifier) {
-        
-        try {
-            // Look up the show's ship date so inventory reflects the state at time of packing
-            const shipDate = await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
-            const referenceDate = shipDate || todayISOString();
-
-            // 1. Get pack list items (all packlists for this show, including suffix variants)
-            const itemMap = await deps.call(PackListUtils.extractAllItemsForShow, projectIdentifier);
-            const itemIds = Object.keys(itemMap);
-
-            // If no items, return empty result
-            if (!itemIds.length) {
-                return {};
-            }
-
-            // Build a set of prefixes that have suppressAnalysis so they can be skipped
-            const indexData = await deps.call(InventoryUtils.getInventoryIndex);
-            const suppressedPrefixes = new Set(
-                indexData
-                    .filter(row => row.metadata?.suppressAnalysis === 'true')
-                    .map(row => row.prefix)
-            );
-
-            const analyzableIds = itemIds.filter(id => {
-                const prefix = id.split('-')[0];
-                return !suppressedPrefixes.has(prefix);
-            });
-
-            if (!analyzableIds.length) {
-                return {};
-            }
-
-            // Get inventory quantities as of ship date
-            let inventoryInfo = await deps.call(InventoryUtils.getItemInfo, analyzableIds, "QTY", referenceDate);
-            
-            // Filter valid items and build result
-            const result = {};
-            analyzableIds.forEach(itemId => {
-                const qty = inventoryInfo.find(i => i.itemName === itemId)?.quantity ?? null;
-                if (qty !== null) {
-                    result[itemId] = { available: qty, allocated: 0, onOrder: 0 };
-                }
-            });
-
-            // Get overlapping shows
-            let overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, {
-                dateFilters: [
-                    { column: 'Return', value: projectIdentifier, type: 'after' },
-                    { column: 'Ship', value: projectIdentifier, type: 'before' }
-                ]
-            });
-            
-            // Deduplicate to prevent double-counting items when a show has multiple booths
-            overlappingIds = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingIds);
-            const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-            
-            // Process overlapping shows
-            for (const overlapRow of overlappingIds) {
-                // Use Direction-1 matching: schedule row → packlist tab(s)
-                const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, overlapRow, packlistTabs);
-                const overlapId = matchingTabs[0]?.title ||
-                    overlapRow.Identifier ||
-                    await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
-                
-                if (_normalizeId(overlapId) === _normalizeId(projectIdentifier)) continue;
-                
-                const overlapInfo = await deps.call(PackListUtils.extractAllItemsForShow, overlapId);
-                
-                for (const itemId of Object.keys(overlapInfo)) {
-                    if (!result[itemId]) continue;
-                    
-                    const allocated = result[itemId].allocated + (overlapInfo[itemId].allocated || 0);
-                    const onOrder = result[itemId].onOrder + (overlapInfo[itemId].onOrder || 0);
-                    result[itemId] = { ...result[itemId], allocated, onOrder };
-                }
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('Failed to check quantities:', error);
-            throw error;
-        }
-    }
-
-    /**
      * Get inventory description for a specific item
      * @param {Object} deps - Dependency decorator for tracking calls
      * @param {string} itemNumber - The item number to look up
@@ -698,50 +607,70 @@ class inventoryUtils_uncached {
 
                 // Deduplicate to prevent double-counting items when a show has multiple booths
                 const deduplicated = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlapping);
-                const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
 
                 for (const showRow of deduplicated) {
-                    // Use Direction-1 matching: schedule row → packlist tab(s)
-                    const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, showRow, packlistTabs);
-                    const identifier = matchingTabs[0]?.title ||
-                        showRow.Identifier ||
+                    // Canonical schedule identifier — ScheduleOverrides stores canonical ids, not packlist tab titles
+                    const scheduleId = showRow.Identifier ||
                         await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
+                    if (!scheduleId) continue;
 
                     // Transship destinations are skipped — validated direction ensures only later shows are destinations
-                    const transshipSource = await deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+                    const transshipSource = await deps.call(ProductionUtils.getTransshipSourceForShow, scheduleId);
                     if (transshipSource) continue;
 
                     let packedQty = 0;
                     try {
-                        const showItems = await deps.call(PackListUtils.extractAllItemsForShow, identifier);
-                        //console.log('[timeline] extractItems for', identifier, '→', showItems);
-                        packedQty = showItems[itemId] || 0;
+                        // extractChainItemsForIdentifier handles NameOverride resolution internally
+                        const chainItems = await deps.call(PackListUtils.extractChainItemsForIdentifier, scheduleId);
+                        packedQty = chainItems[itemId] || 0;
                         if (!packedQty) continue;
                     } catch (_) {
                         continue;
                     }
 
-                    const shipDate = await deps.call(ProductionUtils.getProjectShipDate, identifier);
-                    const returnDate = await deps.call(ProductionUtils.getProjectReturnDate, identifier);
-                    //console.log('[timeline]', identifier, '| shipDate:', shipDate, '| returnDate:', returnDate, '| window:', startDate, '→', endDate);
+                    const shipDate = await deps.call(ProductionUtils.getProjectShipDate, scheduleId);
+                    const returnDate = await deps.call(ProductionUtils.getProjectReturnDate, scheduleId);
+
+                    // Walk chain to find intermediate nodes and the final returning show
+                    const chainIds = [scheduleId];
+                    let walkCurrent = scheduleId;
+                    const walkVisited = new Set([scheduleId.toLowerCase()]);
+                    while (true) {
+                        const next = await deps.call(ProductionUtils.getTransshipDestinationsForShow, walkCurrent);
+                        if (!next || walkVisited.has(next.toLowerCase())) break;
+                        walkVisited.add(next.toLowerCase());
+                        chainIds.push(next);
+                        walkCurrent = next;
+                    }
+                    const lastId = chainIds[chainIds.length - 1];
 
                     if (shipDate) {
                         const shipDs = Math.floor(parseDate(shipDate).getTime() / 100);
                         const shipInWindow = (!startDs || shipDs >= startDs) && (!endDs || shipDs <= endDs);
                         if (shipInWindow) {
-                            events.push({ date: shipDate, event: 'Ships', note: identifier, change: `quantity: -${packedQty}`, quantity: null, _delta: -packedQty });
+                            events.push({ date: shipDate, event: 'Ships', note: scheduleId, change: `quantity: -${packedQty}`, quantity: null, _delta: -packedQty });
                         } else if (startDs && shipDs < startDs) {
-                            // Show shipped before our window; its items are already out of inventory.
-                            // Deduct from opening balance so startQty reflects the actual warehouse state.
                             startQty -= packedQty;
-                            //console.log(`[timeline] ${itemId}: pre-window ship from ${identifier} (${shipDate} < ${startDate}), adjusting opening balance by -${packedQty} → startQty=${startQty}`);
                         }
                     }
+
+                    // Transship handoff events at each intermediate node's own return date (zero-delta)
+                    for (let i = 0; i < chainIds.length - 1; i++) {
+                        const nodeRow = await deps.call(ProductionUtils.getShowDetails, chainIds[i]);
+                        const nodeRawReturn = await deps.call(ProductionUtils.getProjectReturnDateFromRow, nodeRow);
+                        if (nodeRawReturn) {
+                            const nodeRetDs = Math.floor(parseDate(nodeRawReturn).getTime() / 100);
+                            if ((!startDs || nodeRetDs >= startDs) && (!endDs || nodeRetDs <= endDs)) {
+                                events.push({ date: nodeRawReturn, event: 'Transship', note: chainIds[i + 1], change: '', quantity: null, _delta: 0 });
+                            }
+                        }
+                    }
+
                     if (returnDate) {
                         const retDs = Math.floor(parseDate(returnDate).getTime() / 100);
                         const retInWindow = (!startDs || retDs >= startDs) && (!endDs || retDs <= endDs);
                         if (retInWindow) {
-                            events.push({ date: returnDate, event: 'Returns', note: identifier, change: `quantity: +${packedQty}`, quantity: null, _delta: packedQty });
+                            events.push({ date: returnDate, event: 'Returns', note: lastId, change: `quantity: +${packedQty}`, quantity: null, _delta: packedQty });
                         }
                     }
                 }

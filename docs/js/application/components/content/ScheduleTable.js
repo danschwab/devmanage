@@ -267,6 +267,18 @@ export const ScheduleTableComponent = {
                     false  // nonessential
                 ),
                 createAnalysisConfig(
+                    Requests.getTransshipDestinationsForScheduleRow,
+                    'transshipDestination',
+                    'Checking transshipment destinations...',
+                    ['Show', 'Client', 'Year'],
+                    [],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    true, // extractColumnsAsObject
+                    false  // nonessential
+                ),
+                createAnalysisConfig(
                     Requests.checkScheduleReferenceState,
                     'clientIndexIssue',
                     'Checking client index health...',
@@ -477,21 +489,39 @@ export const ScheduleTableComponent = {
             return [];
         },
         getTransshipCards(row, columnKey) {
-            if (columnKey !== 'Ship') return [];
             const source = row.AppData?.transshipSource;
-            if (!source) return [];
-            return [{
-                message: 'Transship',
-                class: 'gray',
-                hoverMessage: `ships from: ${source}`,
-                action: () => this.handleTransshipClick(row, source)
-            }];
+            const dest   = row.AppData?.transshipDestination;
+            if (columnKey === 'Ship' && source) {
+                return [{
+                    message: 'ships from earlier show',
+                    class: 'gray',
+                    hoverMessage: `No ship date \u2014 items arrive directly from: ${source}`,
+                    action: () => this.handleTransshipClick(row, source)
+                }];
+            }
+            // Return date for source shows is extended to the destination's return date
+            if (columnKey === 'Expected Return Date' && dest) {
+                return [{
+                    message: 'return extended',
+                    class: 'gray',
+                    hoverMessage: `Items remain out until the later show ends: ${dest}`,
+                    action: () => this.handleTransshipReturnClick(row, dest)
+                }];
+            }
+            return [];
         },
         handleTransshipClick(row, sourceId) {
             const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             this.$modal.alert(
-                `${showId}\nships directly from\n${sourceId}`,
-                'Transship'
+                `${showId} has no independent ship date.\n\nItems ship directly from the earlier show:\n${sourceId}\n\nNo warehouse trip occurs between these shows.`,
+                'Transshipment'
+            );
+        },
+        handleTransshipReturnClick(row, destId) {
+            const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
+            this.$modal.alert(
+                `${showId} ships items directly to:\n${destId}\n\nThe return date is extended \u2014 items do not return to the warehouse between shows.`,
+                'Extended Return'
             );
         },
         getPacklistCards(row, columnKey) {
@@ -643,12 +673,26 @@ export const ScheduleTableComponent = {
             const title = row.Show || row.Client || 'Show Details';
             this.$modal.custom(DetailModalComponent, { row, columns: detailColumns, actionCards, modalClass: 'event-detail' }, title);
         },
-        openTransshipModal(row) {
+        openTransshipModal(row, direction = null) {
             // Use original store row so the Ship date is present (tableData clears it for transship rows)
             const originalRow = this.scheduleTableStore?.data?.find(r =>
                 r.Client === row.Client && String(r.Year) === String(row.Year) && r.Show === row.Show
             ) || row;
-            this.$modal.custom(TransshipmentModal, { preselectedRow: originalRow, modalClass: 'page-menu' }, 'Set Transshipment');
+            this.$modal.custom(TransshipmentModal, {
+                preselectedRow: originalRow,
+                preselectedDirection: direction,
+                modalClass: 'page-menu'
+            }, 'Set Transshipment');
+        },
+        async removeTransshipTo(row) {
+            const destinationId = row.AppData?.transshipDestination;
+            if (!destinationId) return;
+            try {
+                await Requests.removeTransshipLink(destinationId);
+                runNonessentialAnalysisOnAllStores();
+            } catch (e) {
+                this.$modal.alert('Failed to remove transshipment: ' + e.message, 'Error');
+            }
         },
         async removeTransship(row) {
             const identifier = await Requests.computeIdentifier(row.Show, row.Client, row.Year).catch(() => null);
@@ -767,15 +811,21 @@ export const ScheduleTableComponent = {
             </template>
             <template #row-details="{ row }">
                 <div class="button-bar" style="margin-top: var(--padding-sm)">
-                    <div class="card" v-if="row.AppData?.transshipSource">ships from: {{ row.AppData.transshipSource }}</div>
-                    <button @click="openTransshipModal(row)" class="white">
-                        {{ row.AppData?.transshipSource ? 'Change transshipment' : 'Set transshipment' }}
+                    <template v-if="row.AppData?.transshipSource">
+                        <div class="card gray" style="white-space:nowrap">ships from: {{ row.AppData.transshipSource }}</div>
+                        <button @click="removeTransship(row)" class="red button-symbol" title="Remove ships-from link"><span class="material-symbols-outlined">close</span></button>
+                    </template>
+                    <button @click="openTransshipModal(row, 'from')" class="white small">
+                        {{ row.AppData?.transshipSource ? 'Change From' : 'Set Ships From' }}
                     </button>
-                    <button
-                        v-if="row.AppData?.transshipSource"
-                        @click="removeTransship(row)"
-                        class="red button-symbol"
-                    ><span class="material-symbols-outlined">close</span></button>
+                    <span style="width:1px;background:var(--color-border);margin:0 var(--padding-sm);align-self:stretch"></span>
+                    <template v-if="row.AppData?.transshipDestination">
+                        <div class="card gray" style="white-space:nowrap">ships to: {{ row.AppData.transshipDestination }}</div>
+                        <button @click="removeTransshipTo(row)" class="red button-symbol" title="Remove ships-to link"><span class="material-symbols-outlined">close</span></button>
+                    </template>
+                    <button @click="openTransshipModal(row, 'to')" class="white small">
+                        {{ row.AppData?.transshipDestination ? 'Change To' : 'Set Ships To' }}
+                    </button>
                 </div>
             </template>
             <template #cell-extra="{ row, column }">

@@ -168,12 +168,14 @@ class productionUtils_uncached {
                     console.warn('[production-utils] No show found for identifier:', value);
                     return null;
                 }
-                const ship = _calculateShipDate(row);
-                const ret = _calculateReturnDate(row, ship);
+                // Use chain-aware dates so transship destinations use the full chain window
+                const shipIso = await deps.call(ProductionUtils.getProjectShipDate, value);
+                const retIso  = await deps.call(ProductionUtils.getProjectReturnDate, value);
                 if (filter.column === 'Return' && filter.type === 'after') {
-                    return ship;
+                    return shipIso ? parseDate(shipIso) : _calculateShipDate(row);
                 } else if (filter.column === 'Ship' && filter.type === 'before') {
-                    return ret;
+                    const rawShip = _calculateShipDate(row);
+                    return retIso ? parseDate(retIso) : _calculateReturnDate(row, rawShip);
                 }
                 return getRowDate(row, filter.column, filter.type);
             }
@@ -978,6 +980,36 @@ class productionUtils_uncached {
         const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
         if (!identifier) return null;
         return deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+    }
+
+    // Returns the first valid destination show that this show ships TO (inverse of getTransshipSourceForShow).
+    static async getTransshipDestinationsForShow(deps, identifier) {
+        if (!identifier) return null;
+        const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
+            { schedule: 'Schedule', override: 'Override' });
+        const links = overrides.filter(
+            o => normalizeText(o.override || '').toLowerCase() === normalizeText(identifier).toLowerCase()
+        );
+        if (!links.length) return null;
+        const sourceRow = await deps.call(ProductionUtils.getShowDetails, identifier);
+        const sourceOrder = _getShowOrderDate(sourceRow);
+        for (const link of links) {
+            const destRow = await deps.call(ProductionUtils.getShowDetails, link.schedule);
+            const destOrder = _getShowOrderDate(destRow);
+            if (sourceOrder && destOrder && sourceOrder < destOrder) return link.schedule;
+        }
+        return null;
+    }
+
+    // extractColumnsAsObject passes {Show, Client, Year} as a single object
+    static async getTransshipDestinationsForScheduleRow(deps, rowObj) {
+        const show = rowObj?.Show;
+        const client = rowObj?.Client;
+        const year = rowObj?.Year;
+        if (!show || !client || !year) return null;
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        if (!identifier) return null;
+        return deps.call(ProductionUtils.getTransshipDestinationsForShow, identifier);
     }
 
     /**

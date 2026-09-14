@@ -333,6 +333,38 @@ class packListUtils_uncached {
         return itemMap;
     }
 
+    // Walks the transship chain from identifier as root, returning max(qty) per item
+    // across all chain members. Accepts either a canonical schedule id or a packlist tab title.
+    static async extractChainItemsForIdentifier(deps, identifier, ctgFilter = undefined) {
+        const combined = {};
+        const visited = new Set();
+        let current = identifier;
+        while (current && !visited.has(current.toLowerCase())) {
+            visited.add(current.toLowerCase());
+            try {
+                // Resolve schedule row first — handles both canonical ids and NameOverride tab titles
+                const row = await deps.call(ProductionUtils.getShowDetails, current);
+                const tabs = await deps.call(Database.getTabs, 'PACK_LISTS');
+                const matchingTabs = row
+                    ? await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, row, tabs)
+                    : [];
+                const packlistId = matchingTabs[0]?.title || current;
+                const showItems = await deps.call(PackListUtils.extractAllItemsForShow, packlistId, ctgFilter);
+                for (const [itemId, qty] of Object.entries(showItems)) {
+                    combined[itemId] = Math.max(combined[itemId] || 0, qty);
+                }
+                // ScheduleOverrides stores canonical ids — always walk chain using canonical id
+                const canonicalId = row
+                    ? (row.Identifier || await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year))
+                    : null;
+                current = canonicalId ? await deps.call(ProductionUtils.getTransshipDestinationsForShow, canonicalId) : null;
+            } catch (_) {
+                current = null;
+            }
+        }
+        return combined;
+    }
+
     /**
      * Save pack list data to the PACK_LISTS sheet.
      * @param {Object} deps - Dependency decorator for tracking calls
@@ -509,120 +541,6 @@ class packListUtils_uncached {
         return saveResult;
     }
 
-
-
-        /**
-     * Check item quantities for a project
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} projectIdentifier - The project identifier
-     * @returns {Promise<object>} Inventory status for all items
-     */
-    static async checkItemQuantities(deps, projectIdentifier) {
-        //console.group(`Checking quantities for project: ${projectIdentifier}`);
-        try {
-            // 1. Get pack list items (all packlists for this show, including suffix variants)
-            //console.log('1. Getting pack list items...');
-            const itemMap = await deps.call(PackListUtils.extractAllItemsForShow, projectIdentifier);
-            const itemIds = Object.keys(itemMap);
-
-            // If there are no items in the pack list, return
-            if (!itemIds.length) {
-                //console.log('No items found in pack list, returning.');
-                //console.groupEnd();
-                return {};
-            }
-
-            // Look up the show's ship date so inventory reflects the state at time of packing
-            const shipDate = await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
-            const referenceDate = shipDate || todayISOString();
-
-            // 2. Get inventory quantities as of ship date
-            //console.log('2. Getting inventory quantities...');
-            let inventoryInfo;
-            try {
-                inventoryInfo = await deps.call(InventoryUtils.getItemInfo, itemIds, "quantity", referenceDate);
-            } catch (err) {
-                console.error('Error getting inventory:', err);
-                throw new Error('Failed to get inventory information');
-            }
-
-            // Remove items with no inventory quantity
-            const validItemIds = itemIds.filter(id => {
-                const inventoryObj = inventoryInfo.find(i => i.itemName === id);
-                return inventoryObj && inventoryObj.quantity !== null && inventoryObj.quantity !== undefined && inventoryObj.quantity !== '';
-            });
-
-            // 3. Initialize result with inventory and requested, and set remaining to inventory - requested
-            const result = {};
-            validItemIds.forEach(id => {
-                const inventoryObj = inventoryInfo.find(i => i.itemName === id);
-                const inventoryQty = parseInt(inventoryObj.quantity || "0", 10);
-                const projectQty = itemMap[id] || 0;
-                result[id] = {
-                    inventory: inventoryQty,
-                    requested: projectQty,
-                    overlapping: [],
-                    remaining: inventoryQty - projectQty
-                };
-            });
-
-            // 4. Get overlapping shows
-            //console.log('4. Checking for overlapping shows...');
-            let overlappingIds;
-            try {
-                overlappingIds = await deps.call(ProductionUtils.getOverlappingShows, {
-                    dateFilters: [
-                        { column: 'Return', value: projectIdentifier, type: 'after' },
-                        { column: 'Ship', value: projectIdentifier, type: 'before' }
-                    ]
-                });
-                // Deduplicate to prevent double-counting items when a show has multiple booths
-                overlappingIds = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingIds);
-            } catch (err) {
-                console.error('Error getting overlapping shows:', err);
-                throw new Error('Failed to get overlapping shows');
-            }
-
-            // Identify transship source so its items are not counted as separate competing demand
-            const transshipSourceId = await deps.call(ProductionUtils.getTransshipSourceForShow, projectIdentifier);
-
-            // 5. Process overlapping shows
-            const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
-            for (const overlapRow of overlappingIds) {
-                const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, overlapRow, packlistTabs);
-                const otherId = matchingTabs[0]?.title ||
-                    overlapRow.Identifier ||
-                    await deps.call(ProductionUtils.computeIdentifier, overlapRow.Show, overlapRow.Client, overlapRow.Year);
-
-                if (_normalizeId(otherId) === _normalizeId(projectIdentifier)) continue;
-                if (transshipSourceId && _normalizeId(otherId) === _normalizeId(transshipSourceId)) continue;
-                
-                try {
-                    const otherItemMap = await deps.call(PackListUtils.extractAllItemsForShow, otherId);
-                    Object.entries(otherItemMap).forEach(([id, qty]) => {
-                        if (result[id]) {
-                            result[id].remaining -= qty;
-                            if (!result[id].overlapping.includes(otherId)) {
-                                result[id].overlapping.push(otherId);
-                            }
-                        }
-                    });
-                } catch (e) {
-                    //console.warn(`Failed to process overlapping show ${otherId}:`, e);
-                }
-            }
-
-            //console.log('Final results:', result);
-            //console.groupEnd();
-            
-            return result;
-        } catch (error) {
-            console.error('Failed to check quantities:', error);
-            //console.groupEnd();
-            throw error;
-        }
-    }
-
     /**
      * Compare item description with inventory description
      * @param {Object} deps - Dependency decorator for tracking calls
@@ -725,6 +643,12 @@ class packListUtils_uncached {
      * @returns {Promise<Array<string>>} Array of overlapping project identifiers that use this item
      */
     static async getItemOverlappingPacklists(deps, currentProjectId, itemId) {
+        // Resolve currentProjectId to canonical schedule identifier — handles NameOverride tab titles
+        const currentRow = await deps.call(ProductionUtils.getShowDetails, currentProjectId);
+        const currentScheduleId = currentRow
+            ? (currentRow.Identifier || await deps.call(ProductionUtils.computeIdentifier, currentRow.Show, currentRow.Client, currentRow.Year))
+            : currentProjectId;
+
         // Get all overlapping projects for this project
         let overlappingProjects = await deps.call(ProductionUtils.getOverlappingShows, {
             dateFilters: [
@@ -737,25 +661,27 @@ class packListUtils_uncached {
         overlappingProjects = await deps.call(ProductionUtils.deduplicateScheduleByShow, overlappingProjects);
         
         // Identify transship source so it is not listed as conflicting demand
-        const transshipSourceId = await deps.call(ProductionUtils.getTransshipSourceForShow, currentProjectId);
+        const transshipSourceId = await deps.call(ProductionUtils.getTransshipSourceForShow, currentScheduleId);
 
         const conflictingShows = [];
-        const packlistTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         
         // Check each overlapping project to see if it uses this item
         for (const projectRow of overlappingProjects) {
-            const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, projectRow, packlistTabs);
-            const projectId = matchingTabs[0]?.title ||
-                projectRow.Identifier ||
+            // Derive canonical schedule identifier — ScheduleOverrides stores canonical ids, not tab titles
+            const scheduleProjectId = projectRow.Identifier ||
                 await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
+            if (!scheduleProjectId) continue;
             
-            if (_normalizeId(projectId) === _normalizeId(currentProjectId)) continue;
-            if (transshipSourceId && _normalizeId(projectId) === _normalizeId(transshipSourceId)) continue;
+            if (_normalizeId(scheduleProjectId) === _normalizeId(currentScheduleId)) continue;
+            if (transshipSourceId && _normalizeId(scheduleProjectId) === _normalizeId(transshipSourceId)) continue;
+            // Skip transship destinations — their items are already covered by the chain root's chain items
+            const isDestination = await deps.call(ProductionUtils.getTransshipSourceForShow, scheduleProjectId);
+            if (isDestination) continue;
             
             try {
-                const projectItems = await deps.call(PackListUtils.extractAllItemsForShow, projectId);
+                const projectItems = await deps.call(PackListUtils.extractChainItemsForIdentifier, scheduleProjectId);
                 if (projectItems[itemId] && projectItems[itemId] > 0) {
-                    conflictingShows.push(projectId);
+                    conflictingShows.push(scheduleProjectId);
                 }
             } catch (e) {
                 // Ignore projects that can't be loaded
@@ -807,7 +733,13 @@ class packListUtils_uncached {
                 });
             }
             try {
-                const itemsMap = await deps.call(PackListUtils.extractAllItemsForShow, projectId, ctgFilter);
+                // Skip transship destinations; chain roots represent their entire chain via extractChainItemsForIdentifier
+                const isDestination = await deps.call(ProductionUtils.getTransshipSourceForShow, projectId);
+                if (isDestination) {
+                    if (includeEmptyShows) processedShows.push(projectId);
+                    continue;
+                }
+                const itemsMap = await deps.call(PackListUtils.extractChainItemsForIdentifier, projectId, ctgFilter);
                 
                 // Aggregate all unique items
                 for (const [itemId, quantity] of Object.entries(itemsMap)) {

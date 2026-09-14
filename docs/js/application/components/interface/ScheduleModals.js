@@ -21,7 +21,8 @@ export const TransshipmentModal = {
     components: { TableComponent, ScheduleFilterSelect },
     inject: ['$modal'],
     props: {
-        preselectedRow: { type: Object, default: null }
+        preselectedRow: { type: Object, default: null },
+        preselectedDirection: { type: String, default: null }
     },
     data() {
         return {
@@ -31,7 +32,8 @@ export const TransshipmentModal = {
             // Stage 1
             stage1Store: null,
             stage1Filter: null,
-            stage1Links: new Map(), // rowKey -> sourceIdentifier for rows with existing links
+            stage1Links: new Map(), // rowKey -> sourceIdentifier for rows with existing from-links
+            stage1ToLinks: new Map(), // rowKey -> destinationIdentifier for rows with existing to-links
 
             // Stage 2
             selectedRow: null,
@@ -66,7 +68,8 @@ export const TransshipmentModal = {
                 { key: 'Year', label: 'Year', sortable: true },
                 { key: 'Size', label: 'Size', sortable: true },
                 { key: 'Ship', label: 'Ship', sortable: true },
-                { key: '_action', label: '', width: 90, sortable: false }
+                { key: '_actionFrom', label: 'Ships From', width: 105, sortable: false },
+                { key: '_actionTo',   label: 'Ships To',   width: 95,  sortable: false }
             ];
         },
         stage2Columns() {
@@ -87,6 +90,7 @@ export const TransshipmentModal = {
     },
     async mounted() {
         if (this.preselectedRow) {
+            if (this.preselectedDirection) this.direction = this.preselectedDirection;
             await this.selectStage1Show(this.preselectedRow);
         } else {
             this.reloadStage1();
@@ -97,18 +101,24 @@ export const TransshipmentModal = {
             handler() { this.reloadStage1(); },
             deep: true
         },
-        // After stage1Data resolves, check which rows already have transship links
+        // After stage1Data resolves, check which rows already have from or to transship links
         stage1Data: {
             async handler(rows) {
-                const map = new Map();
+                const fromMap = new Map();
+                const toMap   = new Map();
                 await Promise.all(rows.map(async row => {
                     const key = `${row.Client}|${row.Year}|${row.Show}`;
-                    const src = await Requests.getTransshipSourceForScheduleRow(
+                    const src  = await Requests.getTransshipSourceForScheduleRow(
                         { Show: row.Show, Client: row.Client, Year: row.Year }
                     ).catch(() => null);
-                    if (src) map.set(key, src);
+                    if (src)  fromMap.set(key, src);
+                    const dest = await Requests.getTransshipDestinationsForScheduleRow(
+                        { Show: row.Show, Client: row.Client, Year: row.Year }
+                    ).catch(() => null);
+                    if (dest) toMap.set(key, dest);
                 }));
-                this.stage1Links = map;
+                this.stage1Links   = fromMap;
+                this.stage1ToLinks = toMap;
             }
         },
         direction() {
@@ -233,6 +243,21 @@ export const TransshipmentModal = {
             }
         },
 
+        async removeToFromStage1(row) {
+            const key = `${row.Client}|${row.Year}|${row.Show}`;
+            // The to-link is stored as Schedule=destination, Override=this row; remove by destination id
+            const destinationId = this.stage1ToLinks.get(key);
+            if (!destinationId) return;
+            try {
+                await Requests.removeTransshipLink(destinationId);
+                this.stage1ToLinks.delete(key);
+                this.stage1ToLinks = new Map(this.stage1ToLinks);
+                runNonessentialAnalysisOnAllStores();
+            } catch (e) {
+                this.error = 'Failed to remove link: ' + e.message;
+            }
+        },
+
         async removeFromStage1(row) {
             const key = `${row.Client}|${row.Year}|${row.Show}`;
             const identifier = await Requests.computeIdentifier(row.Show, row.Client, row.Year).catch(() => null);
@@ -284,17 +309,29 @@ export const TransshipmentModal = {
                         />
                     </template>
                     <template #cell-extra="{ row, column }">
-                        <template v-if="column.key === '_action'">
+                        <template v-if="column.key === '_actionFrom'">
                             <button
                                 v-if="stage1Links.has(row.Client + '|' + row.Year + '|' + row.Show)"
                                 @click="removeFromStage1(row)"
-                                class="red"
-                            >Remove</button>
+                                class="red small"
+                            >&#x2715; From</button>
                             <button
                                 v-else
-                                @click="selectStage1Show(row)"
-                                class="green"
-                            >Select</button>
+                                @click="direction = 'from'; selectStage1Show(row)"
+                                class="green small"
+                            >+ From</button>
+                        </template>
+                        <template v-if="column.key === '_actionTo'">
+                            <button
+                                v-if="stage1ToLinks.has(row.Client + '|' + row.Year + '|' + row.Show)"
+                                @click="removeToFromStage1(row)"
+                                class="red small"
+                            >&#x2715; To</button>
+                            <button
+                                v-else
+                                @click="direction = 'to'; selectStage1Show(row)"
+                                class="green small"
+                            >+ To</button>
                         </template>
                     </template>
                 </TableComponent>
