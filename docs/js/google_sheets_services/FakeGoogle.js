@@ -19,6 +19,9 @@ export function isLocalhost() {
     );
 }
 
+let _delaysEnabled = true;
+export function setFakeDelaysEnabled(enabled) { _delaysEnabled = enabled; }
+
 export class FakeGoogleSheetsAuth {
     static userEmail = 'test@example.com';
     static isInitialized = false;
@@ -109,6 +112,7 @@ export class FakeGoogleSheetsAuth {
 
     // Utility method to simulate async delays
     static delay(ms) {
+        if (!_delaysEnabled) return Promise.resolve();
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
@@ -656,7 +660,9 @@ export class FakeGoogleSheetsService {
                 ['Path', 'Note', 'Color', 'Size', 'EditHistory']
             ],
             'NameOverrides': [
-                ['Schedule', 'Packlist']
+                ['Schedule', 'Packlist'],
+                // sentinel row: ensures non-empty result so database:getData is cached and the invalidation chain can propagate
+                ['_FAKE_OVERRIDE_SENTINEL', '_FAKE_PACK_SENTINEL']
             ],
             'ScheduleOverrides': [
                 ['Schedule', 'Override'],
@@ -1405,6 +1411,7 @@ export class FakeGoogleSheetsService {
 
     // Utility method to simulate async delays
     static delay(ms) {
+        if (!_delaysEnabled) return Promise.resolve();
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
