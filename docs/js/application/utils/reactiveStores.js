@@ -766,6 +766,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             if (!this.analysisConfig || this.isAnalyzing) {
                 return;
             }
+            this._pendingReanalysis = false;
 
             const {
                 batchSize = 10,
@@ -1055,6 +1056,10 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.analysisMessage = `Analysis failed: ${error.message}`;
             } finally {
                 this.isAnalyzing = false;
+                if (this._pendingReanalysis) {
+                    this._pendingReanalysis = false;
+                    Vue.nextTick(() => this.runConfiguredAnalysis({ skipIfAnalyzed: false }));
+                }
                 setTimeout(() => {
                     this.analysisProgress = 0;
                     this.analysisMessage = '';
@@ -1963,7 +1968,12 @@ function setupCacheInvalidationListeners(store, apiCall, apiArgs, analysisConfig
 
             // Clear all accumulated results in one pass, then run analysis once
             store.clearSpecificAnalysisResults(keysToInvalidate);
-            store.runConfiguredAnalysis({ skipIfAnalyzed: false });
+            if (store.isAnalyzing) {
+                // Analysis is mid-flight; flag a re-run for when it finishes
+                store._pendingReanalysis = true;
+            } else {
+                store.runConfiguredAnalysis({ skipIfAnalyzed: false });
+            }
         };
 
         analysisConfig.forEach((config) => {
