@@ -594,15 +594,15 @@ class inventoryUtils_uncached {
         }
 
         // ── Phase 4: Show ship / return events ──
-        if (startDate && endDate) {
+        if (startDate || endDate) {
             try {
-                // Find shows whose window overlaps [startDate, endDate]:
-                //   show ships on/before endDate  AND  show returns on/after startDate
+                // A show overlaps the window if it returns after startDate AND ships before endDate.
+                // Omit either bound when the corresponding date is not provided (open-ended window).
+                const overlapFilters = [];
+                if (endDate)   overlapFilters.push({ column: 'Ship',   value: endDate,   type: 'before' });
+                if (startDate) overlapFilters.push({ column: 'Return', value: startDate, type: 'after'  });
                 const overlapping = await deps.call(ProductionUtils.getOverlappingShows, {
-                    dateFilters: [
-                        { column: 'Ship',   value: endDate,   type: 'before' },
-                        { column: 'Return', value: startDate, type: 'after'  }
-                    ]
+                    dateFilters: overlapFilters
                 });
 
                 // Deduplicate to prevent double-counting items when a show has multiple booths
