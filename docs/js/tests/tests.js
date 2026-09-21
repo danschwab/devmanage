@@ -29,7 +29,7 @@
 
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
-import { CacheInvalidationBus } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, triggerCachePoll } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -1332,6 +1332,30 @@ test('CACHE INVALIDATION', 'appendScheduleReferenceAbbreviation fires computeIde
         throw new Error(`appendScheduleReferenceAbbreviation did not invalidate computeIdentifier; fired: ${[...fired].join(', ')}`);
     if (!fired.has('getShowDetails'))
         throw new Error(`appendScheduleReferenceAbbreviation did not invalidate getShowDetails; fired: ${[...fired].join(', ')}`);
+});
+
+test('CACHE INVALIDATION', 'remote Caching-tab timestamp for getTabs fires getPacklists via poller', async () => {
+    // warm: PackListUtils.getPacklists calls deps.call(Database.getTabs, 'PACK_LISTS'),
+    // registering database:getTabs:"PACK_LISTS" as a dependency of api:getPacklists.
+    await Requests.getPacklists({ type: 'show-all' });
+
+    // Simulate a remote write: writeCacheTimestamp adds +1s to Date.now() so the
+    // poller's (remoteTs > entry.filled) comparison is always true.
+    await ApplicationUtils.writeCacheTimestamp('database:getTabs:"PACK_LISTS"');
+
+    const fired = new Set();
+    const handler = (e) => fired.add(e.methodName);
+    CacheInvalidationBus.on('api', handler);
+    try {
+        // triggerCachePoll() runs the interval logic immediately: reads CACHE/Caching,
+        // finds the newer timestamp, and calls CacheManager.invalidateByPrefix which
+        // cascades through the dependency chain to api:getPacklists.
+        await triggerCachePoll();
+    } finally {
+        CacheInvalidationBus.off('api', handler);
+    }
+    if (!fired.has('getPacklists'))
+        throw new Error(`poller did not invalidate getPacklists; fired: ${[...fired].join(', ')}`);
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────
