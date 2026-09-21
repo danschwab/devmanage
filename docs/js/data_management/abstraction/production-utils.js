@@ -1012,6 +1012,20 @@ class productionUtils_uncached {
         return deps.call(ProductionUtils.getTransshipDestinationsForShow, identifier);
     }
 
+    // Returns the S. End of the transship source show for this row, or null if not a transship destination.
+    static async getTransshipSourceEndDateForRow(deps, rowObj) {
+        const show = rowObj?.Show;
+        const client = rowObj?.Client;
+        const year = rowObj?.Year;
+        if (!show || !client || !year) return null;
+        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        if (!identifier) return null;
+        const sourceIdentifier = await deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
+        if (!sourceIdentifier) return null;
+        const sourceRow = await deps.call(ProductionUtils.getShowDetails, sourceIdentifier);
+        return sourceRow?.['S. End'] ?? null;
+    }
+
     /**
      * Get the ship date for a project as an ISO date string (YYYY-MM-DD).
      * Returns null if the project cannot be found or has no resolvable ship date.

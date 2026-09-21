@@ -718,6 +718,10 @@ class Requests_uncached {
         return await deps.call(ProductionUtils.getTransshipDestinationsForScheduleRow, rowObj);
     }
 
+    static async getTransshipSourceEndDateForRow(deps, rowObj) {
+        return await deps.call(ProductionUtils.getTransshipSourceEndDateForRow, rowObj);
+    }
+
     static async getProjectShipDate(deps, projectIdentifier) {
         return await deps.call(ProductionUtils.getProjectShipDate, projectIdentifier);
     }

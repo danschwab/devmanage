@@ -110,10 +110,10 @@ export const ScheduleTableComponent = {
         },
         tableData() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
-            // Hide the ship date on transship rows — the effective date comes from the source show
+            // Use source show's end date as the sort/display ship date for transship rows
             return rawData.map(row => {
                 if (row.AppData?.transshipSource) {
-                    return { ...row, Ship: '' };
+                    return { ...row, Ship: row.AppData.transshipSourceEndDate ?? '' };
                 }
                 return row;
             });
@@ -254,6 +254,18 @@ export const ScheduleTableComponent = {
                     true // extractColumnsAsObject
                 ),
                 // Detect transship rows before index checks so the ship cell annotation is visible first
+                createAnalysisConfig(
+                    Requests.getTransshipSourceEndDateForRow,
+                    'transshipSourceEndDate',
+                    'Checking transshipment dates...',
+                    ['Show', 'Client', 'Year'],
+                    [],
+                    null,
+                    false,
+                    Priority.ANALYSIS,
+                    true, // extractColumnsAsObject
+                    false  // nonessential
+                ),
                 createAnalysisConfig(
                     Requests.getTransshipSourceForScheduleRow,
                     'transshipSource',
@@ -493,9 +505,9 @@ export const ScheduleTableComponent = {
             const dest   = row.AppData?.transshipDestination;
             if (columnKey === 'Ship' && source) {
                 return [{
-                    message: 'ships from earlier show',
+                    message: 'transship',
                     class: 'gray',
-                    hoverMessage: `No ship date \u2014 items arrive directly from: ${source}`,
+                    hoverMessage: `transship from: ${source}`,
                     action: () => this.handleTransshipClick(row, source)
                 }];
             }
@@ -513,14 +525,14 @@ export const ScheduleTableComponent = {
         handleTransshipClick(row, sourceId) {
             const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             this.$modal.alert(
-                `${showId} has no independent ship date.\n\nItems ship directly from the earlier show:\n${sourceId}\n\nNo warehouse trip occurs between these shows.`,
+                `${showId}\ntransships directly from:\n${sourceId}`,
                 'Transshipment'
             );
         },
         handleTransshipReturnClick(row, destId) {
             const showId = [row.Client, row.Year, row.Show].filter(Boolean).join(' ');
             this.$modal.alert(
-                `${showId} ships items directly to:\n${destId}\n\nThe return date is extended \u2014 items do not return to the warehouse between shows.`,
+                `${showId}\ntransships directly to:\n${destId}`,
                 'Extended Return'
             );
         },
