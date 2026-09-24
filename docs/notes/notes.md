@@ -3,10 +3,10 @@ being used to identify shortages when doublechecking packlist info.
 being used to verify packlists by going to the packlist tab and cross-referencing data with his manual packlist
 there is a lot of data that does not get on our packlist, mostly consumables and client stuff.
 
-!!!! transshipment nonsense, we need to normalize ship and return dates both, we should probably put a card in the return slot, and a show needs to be able to ship to and from something hypothetically, what does that do?
+!!! better "Find..." tools for nonfiltered searching with up/down navigation and a "selected" found item index, probably just a numberbox attached to the find box and some javascript to autoset this by nearest match or something, and url searchterm updating perhaps
+!!! history and last edit viewing tools
 !!! alert me about projects that don't yet have files attached to them
-!!! design queue and updating logic
-!!! auto-packlist generation and update asynchronous from inventor throughout the process based on rules. No more busywork.
+!!! design queue and updating logic <- views system to support this as a schedule view
 !!! packlist item approval checklist and packlist edit vs. item-approval mode (Add item to existing or new crate, remove, group, etc)
 !!! production schedule workzone view???
 

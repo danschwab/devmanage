@@ -646,7 +646,7 @@ class packListUtils_uncached {
         // Resolve currentProjectId to canonical schedule identifier — handles NameOverride tab titles
         const currentRow = await deps.call(ProductionUtils.getShowDetails, currentProjectId);
         const currentScheduleId = currentRow
-            ? (currentRow.Identifier || await deps.call(ProductionUtils.computeIdentifier, currentRow.Show, currentRow.Client, currentRow.Year))
+            ? await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, currentRow)
             : currentProjectId;
 
         // Get all overlapping projects for this project
@@ -668,8 +668,7 @@ class packListUtils_uncached {
         // Check each overlapping project to see if it uses this item
         for (const projectRow of overlappingProjects) {
             // Derive canonical schedule identifier — ScheduleOverrides stores canonical ids, not tab titles
-            const scheduleProjectId = projectRow.Identifier ||
-                await deps.call(ProductionUtils.computeIdentifier, projectRow.Show, projectRow.Client, projectRow.Year);
+            const scheduleProjectId = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, projectRow);
             if (!scheduleProjectId) continue;
             
             if (_normalizeId(scheduleProjectId) === _normalizeId(currentScheduleId)) continue;

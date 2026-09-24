@@ -29,7 +29,7 @@
 
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
-import { CacheInvalidationBus, ApplicationUtils, triggerCachePoll } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -700,7 +700,54 @@ test('UNKNOWN CLIENT FALLBACK', 'packlist tab for unindexed client is found by g
     if (!result) throw new Error('expected show details for TEST CLIENT 2025 HIMSS');
 });
 
-// ── Group 19: Item Quantities Summary ─────────────────────────────────────────
+// ── Group 19: Identifier Safety Regressions ──────────────────────────────────
+// These tests guard against accidental aliasing where a non-existent show identifier
+// is fuzzy-mapped onto an existing show for the same client/year (e.g. AAP -> AAO),
+// and against stale Identifier fields creating duplicate analytics keys.
+
+test('IDENTIFIER SAFETY', 'same-client/year show typo does not fuzzy-match to a different show', async () => {
+    const candidates = ['LEICA 2026 AAO', 'LEICA 2026 CNS'];
+    const result = await ProductionUtils.findBestProjectIdentifierMatch('LEICA 2026 AAP', candidates);
+    assertEqual(result, null, 'findBestProjectIdentifierMatch should reject aliasing AAP -> AAO/CNS');
+});
+
+test('IDENTIFIER SAFETY', 'getShowDetails rejects non-existent same-client/year show typo', async () => {
+    const result = await Requests.getShowDetails('CHAINCO 2026 SPRING EXPOO');
+    assertEqual(result, null, 'getShowDetails should not map SPRING EXPOO to SPRING EXPO');
+});
+
+test('IDENTIFIER SAFETY', 'checkPacklistExists ignores stale row.Identifier and uses canonical schedule id', async () => {
+    const row = {
+        Show: 'Spring Expo',
+        Client: 'ChainCo',
+        Year: '2026',
+        Identifier: 'CHAINCO 2026 SPRING EXP0'
+    };
+    const result = await Requests.checkPacklistExists(row);
+    assertEqual(result.exists, true, 'checkPacklistExists should still find canonical packlist');
+    assertEqual(result.identifier, 'CHAINCO 2026 SPRING EXPO', 'checkPacklistExists should return canonical tab title');
+});
+
+test('IDENTIFIER SAFETY', 'deduplicateScheduleByShow uses canonical identifiers, not stale Identifier fields', async () => {
+    const rows = [
+        {
+            Show: 'Spring Expo',
+            Client: 'ChainCo',
+            Year: '2026',
+            Identifier: 'CHAINCO 2026 SPRING EXPO'
+        },
+        {
+            Show: 'Spring Expo',
+            Client: 'ChainCo',
+            Year: '2026',
+            Identifier: 'CHAINCO 2026 SPRING EXPO TYPO'
+        }
+    ];
+    const deduped = await ProductionUtils.deduplicateScheduleByShow(rows);
+    assertEqual(deduped.length, 1, 'deduplicateScheduleByShow should collapse stale-identifier duplicates');
+});
+
+// ── Group 20: Item Quantities Summary ─────────────────────────────────────────
 // getItemQuantitiesSummary extracts item quantities from a single packlist tab.
 // The extractItems loop explicitly skips EditHistory and MetaData fields to prevent
 // old description values in the EditHistory JSON from being parsed as item codes.

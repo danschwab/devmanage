@@ -610,8 +610,7 @@ class inventoryUtils_uncached {
 
                 for (const showRow of deduplicated) {
                     // Canonical schedule identifier — ScheduleOverrides stores canonical ids, not packlist tab titles
-                    const scheduleId = showRow.Identifier ||
-                        await deps.call(ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year);
+                    const scheduleId = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, showRow);
                     if (!scheduleId) continue;
 
                     // Transship destinations are skipped — validated direction ensures only later shows are destinations

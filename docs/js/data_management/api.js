@@ -776,8 +776,7 @@ class Requests_uncached {
         }
         
         // No match found - return the computed identifier for "Create Packlist" button
-        const identifier = rowData.Identifier ||
-            await deps.call(ProductionUtils.computeIdentifier, rowData.Show, rowData.Client, rowData.Year);
+        const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, rowData);
         return {
             exists: false,
             identifier
@@ -1116,9 +1115,7 @@ class Requests_uncached {
         const resolvedShows = (await mapWithConcurrency(
             shows,
             async (showRow) => {
-                const identifier = showRow.Identifier || await deps.call(
-                    ProductionUtils.computeIdentifier, showRow.Show, showRow.Client, showRow.Year
-                );
+                const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, showRow);
                 if (!identifier) return null;
 
                 const [shipDate, returnDate] = await Promise.all([

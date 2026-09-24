@@ -246,8 +246,15 @@ class productionUtils_uncached {
         // This fixes user data entry errors (e.g., Dec ship dates for Jan shows).
         // NOTE: work on shallow copies — the source objects live in the Database.getData cache
         // and mutating them would corrupt dates for every subsequent cache hit.
-        return filtered.map(row => {
+        const normalizedRows = await Promise.all(filtered.map(async (row) => {
             const normalizedRow = { ...row };
+
+            // Always publish canonical identifiers derived from (Client, Year, Show)
+            // so stale/manual Identifier values cannot fork analytics keys.
+            const canonicalIdentifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, normalizedRow);
+            if (canonicalIdentifier) {
+                normalizedRow.Identifier = canonicalIdentifier;
+            }
 
             // Normalize Ship date using validation logic
             const correctedShip = _calculateShipDate(normalizedRow);
@@ -274,7 +281,44 @@ class productionUtils_uncached {
             }
 
             return normalizedRow;
-        });
+        }));
+
+        return normalizedRows;
+    }
+
+    /**
+     * Resolve a schedule row identifier to a canonical value.
+     * Canonical form is always recomputed from Show/Client/Year when available.
+     * Stored Identifier is only a fallback when row parts are incomplete.
+     * @param {Object} deps
+     * @param {Object} row
+     * @returns {Promise<string>} Canonical identifier or empty string
+     */
+    static async getCanonicalIdentifierForScheduleRow(deps, row) {
+        const storedIdentifier = normalizeText(row?.Identifier || '');
+        const show = normalizeText(row?.Show || '');
+        const client = normalizeText(row?.Client || '');
+        const year = normalizeText(row?.Year || '');
+
+        if (!show || !client || !year) {
+            return storedIdentifier || '';
+        }
+
+        const computedIdentifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        if (!computedIdentifier) {
+            return storedIdentifier || '';
+        }
+
+        if (
+            storedIdentifier &&
+            normalizeMatchKey(storedIdentifier) !== normalizeMatchKey(computedIdentifier)
+        ) {
+            console.warn(
+                `[production-utils] Ignoring stale Identifier "${storedIdentifier}"; using canonical "${computedIdentifier}"`
+            );
+        }
+
+        return computedIdentifier;
     }
     
     
@@ -651,10 +695,7 @@ class productionUtils_uncached {
         
         for (const row of scheduleData) {
             // Use existing Identifier or compute one
-            let identifier = row.Identifier;
-            if (!identifier && row.Show && row.Client && row.Year) {
-                identifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
-            }
+            const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, row);
             
             // Skip rows without valid identifier
             if (!identifier) {
@@ -923,8 +964,7 @@ class productionUtils_uncached {
         if (!scheduleRow || !Array.isArray(tabs)) return [];
 
         const overrides = await deps.call(ProductionUtils.getNameOverrides);
-        const computedForOverride = scheduleRow.Identifier ||
-            await deps.call(ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year);
+        const computedForOverride = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, scheduleRow);
         if (computedForOverride) {
             const override = _findOverride(overrides, normalizeText(computedForOverride).toLowerCase());
             if (override !== undefined) {
@@ -935,20 +975,8 @@ class productionUtils_uncached {
             }
         }
 
-        // Try the stored Identifier first (fast path for normal shows).
-        // If it matches nothing, fall back to computeIdentifier — the stored value
-        // may be stale or may omit the client name when the client is not in the index.
-        const storedIdentifier = scheduleRow.Identifier;
-        if (storedIdentifier) {
-            const results = await deps.call(ProductionUtils.findAllPackListTabsForShow, storedIdentifier, tabs);
-            if (results.length > 0) return results;
-        }
-
-        const computedIdentifier = await deps.call(
-            ProductionUtils.computeIdentifier, scheduleRow.Show, scheduleRow.Client, scheduleRow.Year
-        );
-        if (!computedIdentifier) return [];
-        return deps.call(ProductionUtils.findAllPackListTabsForShow, computedIdentifier, tabs);
+        if (!computedForOverride) return [];
+        return deps.call(ProductionUtils.findAllPackListTabsForShow, computedForOverride, tabs);
     }
 
 
@@ -1111,27 +1139,64 @@ class productionUtils_uncached {
         const normalizedMatch = cleanCandidates.find(candidate => normalizeMatchKey(candidate) === normalizedIdentifier);
         if (normalizedMatch) return normalizedMatch;
 
+        const queryParts = _parseIdentifierParts(rawIdentifier);
+        let guardAgainstShowFuzzyFallback = false;
+
         // Component-level resolution: parse year out of identifiers, resolve client/show via index
         // Both query AND candidate parts are resolved to canonical form before comparing, so
         // abbreviated tab names like "AUSTAL 2026 SNA" match canonical "AUSTAL USA 2026 SURFACE NAVY".
-        if (deps) {
-            const queryParts = _parseIdentifierParts(rawIdentifier);
-            if (queryParts) {
+        if (deps && queryParts) {
                 const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
 
                 const resolvedQueryClient = _resolveRefPart(queryParts.client, refData.clients.names, refData.clients.abbrs);
-                const resolvedQueryShow = _resolveRefPart(queryParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                const resolvedQueryShow = _resolveRefPartStrict(queryParts.show, refData.shows.names, refData.shows.abbrs);
                 const resolvedQueryNormalized = normalizeMatchKey(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
 
                 for (const candidate of cleanCandidates) {
                     const candidateParts = _parseIdentifierParts(candidate);
                     if (!candidateParts || candidateParts.year !== queryParts.year) continue;
                     const resolvedClient = _resolveRefPart(candidateParts.client, refData.clients.names, refData.clients.abbrs);
-                    const resolvedShow = _resolveRefPart(candidateParts.show, refData.shows.names, refData.shows.abbrs, 2.5);
+                    const resolvedShow = _resolveRefPartStrict(candidateParts.show, refData.shows.names, refData.shows.abbrs);
                     const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
                     if (normalizeMatchKey(resolvedCandidate) === resolvedQueryNormalized) return candidate;
                 }
+
+                // Safety guard: when client+year are already known and no exact/canonical show match
+                // exists, do NOT fuzzy-fallback the show token. This prevents accidental aliases like
+                // "... AAP" -> "... AAO" from creating fake duplicate analytics shows.
+                const resolvedQueryClientNorm = normalizeMatchKey(resolvedQueryClient);
+                const sameYearSameClientCandidates = cleanCandidates.filter((candidate) => {
+                    const candidateParts = _parseIdentifierParts(candidate);
+                    if (!candidateParts || candidateParts.year !== queryParts.year) return false;
+                    const resolvedClient = _resolveRefPart(
+                        candidateParts.client,
+                        refData.clients.names,
+                        refData.clients.abbrs
+                    );
+                    return normalizeMatchKey(resolvedClient) === resolvedQueryClientNorm;
+                });
+
+                if (sameYearSameClientCandidates.length > 0) {
+                    const resolvedQueryShowNorm = normalizeMatchKey(resolvedQueryShow);
+                    const exactShowMatches = sameYearSameClientCandidates.filter((candidate) => {
+                        const candidateParts = _parseIdentifierParts(candidate);
+                        if (!candidateParts) return false;
+                        const resolvedShow = _resolveRefPartStrict(
+                            candidateParts.show,
+                            refData.shows.names,
+                            refData.shows.abbrs
+                        );
+                        return normalizeMatchKey(resolvedShow) === resolvedQueryShowNorm;
+                    });
+
+                    if (exactShowMatches.length === 1) return exactShowMatches[0];
+                    if (exactShowMatches.length > 1) return null;
+                    guardAgainstShowFuzzyFallback = true;
+                }
             }
+
+        if (guardAgainstShowFuzzyFallback) {
+            return null;
         }
 
         // Fuzzy fallback with year filtering
@@ -1145,8 +1210,6 @@ class productionUtils_uncached {
                 return Array.from(v).filter(Boolean);
             };
             const fuzzyThreshold = rawIdentifier.length > 14 ? 3 : 2;
-            const queryParts = _parseIdentifierParts(rawIdentifier);
-
             if (queryParts) {
                 const sameYearCandidates = cleanCandidates.filter(c => {
                     const p = _parseIdentifierParts(c);
@@ -1747,6 +1810,33 @@ function _resolveRefPart(value, names, abbrs, threshold = undefined) {
     } catch (e) {
         return value;
     }
+}
+
+// Strictly resolves by exact canonical name or exact abbreviation only.
+// Does not fuzzy fallback; returns raw value when no exact index mapping exists.
+function _resolveRefPartStrict(value, names, abbrs) {
+    const raw = normalizeText(value);
+    const rawNorm = normalizeMatchKey(raw);
+    if (!rawNorm) return raw;
+
+    const safeNames = Array.isArray(names) ? names : [];
+    const safeAbbrs = Array.isArray(abbrs) ? abbrs : [];
+
+    for (let i = 0; i < safeNames.length; i++) {
+        const canonical = normalizeText(safeNames[i] || '');
+        if (!canonical) continue;
+
+        if (normalizeMatchKey(canonical) === rawNorm) {
+            return canonical;
+        }
+
+        const abbrTokens = _splitAbbreviations(safeAbbrs[i] || '');
+        if (abbrTokens.some(token => normalizeMatchKey(token) === rawNorm)) {
+            return canonical;
+        }
+    }
+
+    return raw;
 }
 
 // Builds a year-filtered identifier→row map from schedule data, using the year parsed from title.
