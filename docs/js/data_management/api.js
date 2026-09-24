@@ -1223,13 +1223,19 @@ class Requests_uncached {
         // NOTE: Explicit yield every 5 items — only needed while the abstraction layer runs on
         // the browser main thread. Remove when refactoring to a real backend API.
         let _shortageRowIdx = 0;
+        let randomQuote = loadingQuotes[Math.floor(Math.random() * loadingQuotes.length)];
+        let time = Date.now();
         for (const row of itemRows) {
             if (_shortageRowIdx++ > 0 && _shortageRowIdx % 5 === 0) {
                 await new Promise(r => setTimeout(r, 0));
+                if (Date.now() - time > 10000) {
+                    randomQuote = loadingQuotes[Math.floor(Math.random() * loadingQuotes.length)];
+                    time = Date.now();
+                }
                 ProgressBus.emit('api:getMultipleShowsItemsSummary', {
                     current: _shortageRowIdx,
                     total: itemRows.length,
-                    message: `Step 3/3: Building report...`
+                    message: `Step 3/3: Building report... ${randomQuote}`
                 });
             }
             const timeline = await deps.call(InventoryUtils.getItemTimeline, row.itemId, reportStart, reportEnd);
@@ -1588,3 +1594,22 @@ export const Requests = wrapMethods(
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
 );
+
+
+
+
+const loadingQuotes = [
+    '“Patience is bitter, but its fruit is sweet.” — Aristotle',
+    '“The two most powerful warriors are patience and time.” — Leo Tolstoy',
+    'A watched pot never boils.',
+    '“Nature does not hurry, yet everything is accomplished.” — Lao Tzu',
+    'Your patience is being converted into useful data.',
+    'Please remain calm.',
+    'Your data is taking the scenic route.',
+    'Loading… 99%. The final 1% contains the difficult bits.',
+    'The server has received your request and is now discussing it with the server.',
+    '“Any sufficiently advanced technology is indistinguishable from magic.” — Arthur C. Clarke',
+    'Please don’t refresh now. It will only make things slower.',
+    '“The answer is there, waiting for us to find it.” — Carl Sagan',
+    '“The whole is greater than the sum of its parts.” — Aristotle'
+];
