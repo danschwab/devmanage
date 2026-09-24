@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -1223,19 +1223,13 @@ class Requests_uncached {
         // NOTE: Explicit yield every 5 items — only needed while the abstraction layer runs on
         // the browser main thread. Remove when refactoring to a real backend API.
         let _shortageRowIdx = 0;
-        let randomQuote = loadingQuotes[Math.floor(Math.random() * loadingQuotes.length)];
-        let time = Date.now();
         for (const row of itemRows) {
             if (_shortageRowIdx++ > 0 && _shortageRowIdx % 5 === 0) {
                 await new Promise(r => setTimeout(r, 0));
-                if (Date.now() - time > 10000) {
-                    randomQuote = loadingQuotes[Math.floor(Math.random() * loadingQuotes.length)];
-                    time = Date.now();
-                }
                 ProgressBus.emit('api:getMultipleShowsItemsSummary', {
                     current: _shortageRowIdx,
                     total: itemRows.length,
-                    message: `Step 3/3: Building report... ${randomQuote}`
+                    message: `Step 3/3: Building report... ${getRandomLoadingQuote()}`
                 });
             }
             const timeline = await deps.call(InventoryUtils.getItemTimeline, row.itemId, reportStart, reportEnd);
@@ -1594,37 +1588,3 @@ export const Requests = wrapMethods(
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
 );
-
-
-
-
-const loadingQuotes = [
-    'Please remain calm.',
-    'We are getting there.',
-    'Feel free to grab a coffee while you wait.',
-    'Kick back and relax.',
-    'This can take some time.',
-    'Your data is taking the scenic route.',
-    'The final 1% contains the difficult bits.',
-    'A watched pot never boils.',
-    'Please don’t refresh the page.',
-    'Your patience is being converted into useful data.',
-    '“Patience is bitter, but its fruit is sweet.” — Aristotle',
-    '“The two most powerful warriors are patience and time.” — Leo Tolstoy',
-    '“Nature does not hurry, yet everything is accomplished.” — Lao Tzu',
-    '“Any sufficiently advanced technology is indistinguishable from magic.” — Arthur C. Clarke',
-    '“The answer is there, waiting for us to find it.” — Carl Sagan',
-    '“The whole is greater than the sum of its parts.” — Aristotle',
-    '“We never live; we are always in the expectation of living.” — Voltaire',
-    '“Progress is a comparative of which we have not settled the superlative.” — G. K. Chesterton',
-    '“The right question is usually more important than the right answer.” — Plato',
-    '“The best preparation for the future is the present well seen to, and the last duty done.” — George MacDonald',
-    '“To keep a lamp burning we have to keep putting oil in it.” — George MacDonald',
-    '“I myself find waiting more tiring than action.” — Winston Churchill',
-    '“It is better to do something than to do nothing while waiting to do everything.” — Winston Churchill',
-    '“Poets have been mysteriously silent on the subject of cheese.” — G.K. Chesterton',
-    '“The traveler sees what he sees. The tourist sees what he has come to see.” — G.K. Chesterton',
-    '“Hardship often prepares an ordinary person for an extraordinary destiny.” — C. S. Lewis',
-    '“Things never happen the same way twice.” — C.S. Lewis',
-    '“Still round the corner there may wait, A new road or a secret gate.” — J.R.R. Tolkien',
-];
