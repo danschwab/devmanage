@@ -216,7 +216,15 @@ export const BannerNotifications = {
         },
 
         dismiss(key) {
-            this.dismissedKeys = { ...this.dismissedKeys, [key]: true };
+            const current = this.$notify.getBanners(this.scope) || [];
+            const inBus = current.some(b => b.key === key);
+            if (inBus) {
+                // Remove from bus — triggers any watchers (e.g. localStorage save)
+                this.$notify.setBanners(this.scope, current.filter(b => b.key !== key));
+            } else {
+                // Static banner not in bus — hide locally
+                this.dismissedKeys = { ...this.dismissedKeys, [key]: true };
+            }
         },
 
         _reconcilePolling(banners) {

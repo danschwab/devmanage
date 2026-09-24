@@ -182,23 +182,52 @@ export const ContainerComponent = {
                 const name = NavigationRegistry.getDisplayName(segment);
                 return name !== 'Unknown' ? name : segment.charAt(0).toUpperCase() + segment.slice(1);
             }).join(' / ');
+
+            // Get current parameters and build full path for navigation
+            const currentParams = NavigationRegistry.getParametersForContainer(this.containerPath, this.appContext.currentPath);
+            const hasParams = Object.keys(currentParams).length > 0;
+            const bookmarkPath = hasParams
+                ? NavigationRegistry.buildPath(this.containerPath, currentParams)
+                : this.containerPath;
+
+            // Build human-readable shorthand from parameter values
+            let paramSuffix = '';
+            if (hasParams) {
+                const parts = [];
+                for (const [key, val] of Object.entries(currentParams)) {
+                    if (key === 'dateFilters' && Array.isArray(val)) {
+                        const after = val.find(f => f.type === 'after');
+                        const before = val.find(f => f.type === 'before');
+                        if (after && before) {
+                            parts.push(`${after.value}–${before.value}`);
+                        } else {
+                            val.forEach(f => f.value && parts.push(String(f.value)));
+                        }
+                    } else if (key === 'textFilters' && Array.isArray(val)) {
+                        val.forEach(f => Array.isArray(f.values) && parts.push(...f.values.map(String)));
+                    } else if (typeof val !== 'object') {
+                        parts.push(String(val));
+                    }
+                }
+                if (parts.length > 0) paramSuffix = ` (${parts.join(', ')})`;
+            }
             
             // Store reference to appContext for the action callback (stable across re-renders)
             const appCtx = this.appContext;
-            const containerPath = this.containerPath;
             
             // Create a blue notification with action to navigate back to this path
             const bannerKey = `bookmark-${Date.now()}`;
             const bookmarkBanner = {
                 key: bannerKey,
                 color: 'blue',
-                message: `Page bookmarked: ${pathText}`,
+                message: `Page bookmarked: ${pathText}${paramSuffix}`,
                 visible: true,
                 dismissible: true,
+                bookmarkTarget: bookmarkPath,
                 action: {
                     label: 'Return',
                     fn: () => {
-                        appCtx.navigateToPath(containerPath);
+                        appCtx.navigateToPath(bookmarkPath);
                     }
                 }
             };
@@ -255,7 +284,7 @@ export const ContainerComponent = {
                             title="Expand to page">
                         <span class="material-symbols-outlined">expand_content</span>
                     </button>
-                    <button v-if="containerPath && containerPath.includes('/') && !cardStyle"
+                    <button v-if="containerPath && !cardStyle"
                             class="button-symbol white"
                             @click="bookmarkContainer"
                             title="Create bookmark">

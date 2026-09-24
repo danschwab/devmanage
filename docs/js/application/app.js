@@ -251,6 +251,22 @@ const App = {
         this.$watch('isAuthenticated', async (newVal) => {
             if (newVal) {
                 NavigationRegistry.initializeDashboard();
+
+                // Restore saved bookmarks for this user
+                const savedRaw = localStorage.getItem(`bookmarks_${authState.user?.email}`);
+                if (savedRaw) {
+                    try {
+                        const saved = JSON.parse(savedRaw);
+                        const restored = saved.map(b => ({
+                            ...b,
+                            visible: true,
+                            action: { label: 'Return', fn: () => this.navigateToPath(b.bookmarkTarget) }
+                        }));
+                        this.notificationBus.setBanners('app', restored);
+                    } catch (e) {
+                        console.warn('[App] Failed to restore bookmarks:', e);
+                    }
+                }
                 
                 // Initialize global locks store on login
                 if (!this.globalLocksStore) {
@@ -324,7 +340,13 @@ const App = {
 
         // Watch for notification bus app-level changes to force computed to recalculate
         this.$watch(() => this.notificationBus.getBanners('app'), (newBanners) => {
-            // Just accessing it in watch forces Vue to track and recompute appBanners
+            // Save bookmark banners to localStorage on every change
+            if (authState.user?.email) {
+                const bookmarks = (newBanners || [])
+                    .filter(b => b.key?.startsWith('bookmark-') && b.bookmarkTarget)
+                    .map(({ key, color, message, dismissible, bookmarkTarget }) => ({ key, color, message, dismissible, bookmarkTarget }));
+                localStorage.setItem(`bookmarks_${authState.user.email}`, JSON.stringify(bookmarks));
+            }
         }, { deep: true });
 
         this.appLoading = false;
