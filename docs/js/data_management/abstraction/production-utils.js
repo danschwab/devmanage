@@ -274,10 +274,9 @@ class productionUtils_uncached {
                 normalizedRow['S. End'] = toUSDateString(sEnd);
             }
             
-            // Normalize Expected Return Date using validation logic
             const correctedReturn = _calculateReturnDate(normalizedRow, correctedShip);
-            if (correctedReturn && normalizedRow['Expected Return Date']) {
-                normalizedRow['Expected Return Date'] = toUSDateString(correctedReturn);
+            if (correctedReturn && normalizedRow['Recieved']) {
+                normalizedRow['Recieved'] = toUSDateString(correctedReturn);
             }
 
             return normalizedRow;
@@ -888,8 +887,8 @@ class productionUtils_uncached {
         if (sEnd) row['S. End'] = toUSDateString(sEnd);
 
         const correctedReturn = _calculateReturnDate(row, correctedShip);
-        if (correctedReturn && row['Expected Return Date']) {
-            row['Expected Return Date'] = toUSDateString(correctedReturn);
+        if (correctedReturn && row['Recieved']) {
+            row['Recieved'] = toUSDateString(correctedReturn);
         }
 
         return row;
@@ -1608,17 +1607,12 @@ function _calculateShipDate(row) {
 function _calculateReturnDate(row, shipDate = null) {
     const year = row.Year;
     
-    // Try explicit return date first
-    let ret = parseDate(row['Expected Return Date'], true, year);
+    // Try actual received date first
+    let ret = parseDate(row['Recieved'], true, year);
     if (ret) {
-        // Validate: return date should be after show end (or show start if no end)
-        // If return is before dates and both are in the same year,
-        // check if moving return to next year makes more sense
         const sEnd = parseDate(row['S. End'], true, year) || parseDate(row['S. Start'], true, year);
         const NINE_MONTHS_MS = 9 * 30 * 24 * 60 * 60 * 1000;
         if (sEnd && ret <= sEnd && (sEnd - ret) > NINE_MONTHS_MS) {
-            // Return is more than 9 months before show end — likely a year boundary issue
-            // Move return to next year
             const retNextYear = new Date(ret);
             retNextYear.setFullYear(ret.getFullYear() + 1);
             ret = retNextYear;
