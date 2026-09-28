@@ -711,6 +711,17 @@ test('IDENTIFIER SAFETY', 'same-client/year show typo does not fuzzy-match to a 
     assertEqual(result, null, 'findBestProjectIdentifierMatch should reject aliasing AAP -> AAO/CNS');
 });
 
+test('IDENTIFIER SAFETY', 'short show token does not fuzzy-alias AANS to AANA', async () => {
+    const candidates = ['LEICA MICROSYSTEMS 2026 AANA'];
+    const result = await ProductionUtils.findBestProjectIdentifierMatch('LEICA MICROSYSTEMS 2026 AANS', candidates);
+    assertEqual(result, null, 'findBestProjectIdentifierMatch should reject AANS -> AANA short-token alias');
+});
+
+test('IDENTIFIER SAFETY', 'computeIdentifier preserves unmatched short show token instead of fuzzy-aliasing', async () => {
+    const result = await Requests.computeIdentifier('AANS', 'Leica Microsystems', '2026');
+    assertEqual(result, 'Leica Microsystems 2026 AANS', 'computeIdentifier should keep short unmatched show token AANS');
+});
+
 test('IDENTIFIER SAFETY', 'getShowDetails rejects non-existent same-client/year show typo', async () => {
     const result = await Requests.getShowDetails('CHAINCO 2026 SPRING EXPOO');
     assertEqual(result, null, 'getShowDetails should not map SPRING EXPOO to SPRING EXPO');

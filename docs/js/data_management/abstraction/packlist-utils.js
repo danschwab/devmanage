@@ -355,7 +355,7 @@ class packListUtils_uncached {
                 }
                 // ScheduleOverrides stores canonical ids — always walk chain using canonical id
                 const canonicalId = row
-                    ? (row.Identifier || await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year))
+                    ? await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, row)
                     : null;
                 current = canonicalId ? await deps.call(ProductionUtils.getTransshipDestinationsForShow, canonicalId) : null;
             } catch (_) {

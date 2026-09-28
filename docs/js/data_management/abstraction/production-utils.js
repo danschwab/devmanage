@@ -344,30 +344,22 @@ class productionUtils_uncached {
         // Get reference data
         const referenceData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
         
-        // Fuzzy match client 
-        let clientMatch = '';
-        try {
-            clientMatch = GetTopFuzzyMatch(
-                normalizedClient,
-                referenceData.clients.names,
-                referenceData.clients.abbrs
-            );
-        } catch (e) {
-            clientMatch = normalizedClient;
-        }
+        // Resolve identifier parts through the same strict-first pathway used by
+        // schedule/packlist matching. For short tokens (< 6 chars), skip fuzzy fallback
+        // to prevent one-character aliases (e.g. AANS -> AANA).
+        const clientMatch = _resolveIndexToken(
+            normalizedClient,
+            referenceData.clients.names,
+            referenceData.clients.abbrs,
+            { allowFuzzy: true, fuzzyThreshold: 2 }
+        );
 
-        // Fuzzy match show
-        let showMatch = '';
-        try {
-            showMatch = GetTopFuzzyMatch(
-                normalizedShow,
-                referenceData.shows.names,
-                referenceData.shows.abbrs,
-                2.5
-            );
-        } catch (e) {
-            showMatch = normalizedShow;
-        }
+        const showMatch = _resolveIndexToken(
+            normalizedShow,
+            referenceData.shows.names,
+            referenceData.shows.abbrs,
+            { allowFuzzy: true, fuzzyThreshold: 2.5 }
+        );
 
         // Compose identifier
         return `${clientMatch} ${normalizedYear} ${showMatch}`.trim();
@@ -1005,7 +997,7 @@ class productionUtils_uncached {
         const client = rowObj?.Client;
         const year = rowObj?.Year;
         if (!show || !client || !year) return null;
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, rowObj);
         if (!identifier) return null;
         return deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
     }
@@ -1035,7 +1027,7 @@ class productionUtils_uncached {
         const client = rowObj?.Client;
         const year = rowObj?.Year;
         if (!show || !client || !year) return null;
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, rowObj);
         if (!identifier) return null;
         return deps.call(ProductionUtils.getTransshipDestinationsForShow, identifier);
     }
@@ -1046,7 +1038,7 @@ class productionUtils_uncached {
         const client = rowObj?.Client;
         const year = rowObj?.Year;
         if (!show || !client || !year) return null;
-        const identifier = await deps.call(ProductionUtils.computeIdentifier, show, client, year);
+        const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, rowObj);
         if (!identifier) return null;
         const sourceIdentifier = await deps.call(ProductionUtils.getTransshipSourceForShow, identifier);
         if (!sourceIdentifier) return null;
@@ -1140,62 +1132,32 @@ class productionUtils_uncached {
         if (normalizedMatch) return normalizedMatch;
 
         const queryParts = _parseIdentifierParts(rawIdentifier);
-        let guardAgainstShowFuzzyFallback = false;
 
         // Component-level resolution: parse year out of identifiers, resolve client/show via index
         // Both query AND candidate parts are resolved to canonical form before comparing, so
         // abbreviated tab names like "AUSTAL 2026 SNA" match canonical "AUSTAL USA 2026 SURFACE NAVY".
         if (deps && queryParts) {
-                const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+            const refData = await deps.call(ProductionUtils.computeIdentifierReferenceData);
+            const resolvedQueryClient = _resolveIndexToken(queryParts.client, refData.clients.names, refData.clients.abbrs, { allowFuzzy: false });
+            const resolvedQueryShow = _resolveIndexToken(queryParts.show, refData.shows.names, refData.shows.abbrs, { allowFuzzy: false });
+            const resolvedQueryNormalized = normalizeMatchKey(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
 
-                const resolvedQueryClient = _resolveRefPart(queryParts.client, refData.clients.names, refData.clients.abbrs);
-                const resolvedQueryShow = _resolveRefPartStrict(queryParts.show, refData.shows.names, refData.shows.abbrs);
-                const resolvedQueryNormalized = normalizeMatchKey(`${resolvedQueryClient} ${queryParts.year} ${resolvedQueryShow}`);
+            const sameYearCandidates = cleanCandidates.filter(candidate => {
+                const parts = _parseIdentifierParts(candidate);
+                return parts && parts.year === queryParts.year;
+            });
 
-                for (const candidate of cleanCandidates) {
-                    const candidateParts = _parseIdentifierParts(candidate);
-                    if (!candidateParts || candidateParts.year !== queryParts.year) continue;
-                    const resolvedClient = _resolveRefPart(candidateParts.client, refData.clients.names, refData.clients.abbrs);
-                    const resolvedShow = _resolveRefPartStrict(candidateParts.show, refData.shows.names, refData.shows.abbrs);
-                    const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
-                    if (normalizeMatchKey(resolvedCandidate) === resolvedQueryNormalized) return candidate;
-                }
+            const strictMatches = sameYearCandidates.filter(candidate => {
+                const candidateParts = _parseIdentifierParts(candidate);
+                if (!candidateParts) return false;
+                const resolvedClient = _resolveIndexToken(candidateParts.client, refData.clients.names, refData.clients.abbrs, { allowFuzzy: false });
+                const resolvedShow = _resolveIndexToken(candidateParts.show, refData.shows.names, refData.shows.abbrs, { allowFuzzy: false });
+                const resolvedCandidate = `${resolvedClient} ${candidateParts.year} ${resolvedShow}`.trim();
+                return normalizeMatchKey(resolvedCandidate) === resolvedQueryNormalized;
+            });
 
-                // Safety guard: when client+year are already known and no exact/canonical show match
-                // exists, do NOT fuzzy-fallback the show token. This prevents accidental aliases like
-                // "... AAP" -> "... AAO" from creating fake duplicate analytics shows.
-                const resolvedQueryClientNorm = normalizeMatchKey(resolvedQueryClient);
-                const sameYearSameClientCandidates = cleanCandidates.filter((candidate) => {
-                    const candidateParts = _parseIdentifierParts(candidate);
-                    if (!candidateParts || candidateParts.year !== queryParts.year) return false;
-                    const resolvedClient = _resolveRefPart(
-                        candidateParts.client,
-                        refData.clients.names,
-                        refData.clients.abbrs
-                    );
-                    return normalizeMatchKey(resolvedClient) === resolvedQueryClientNorm;
-                });
-
-                if (sameYearSameClientCandidates.length > 0) {
-                    const resolvedQueryShowNorm = normalizeMatchKey(resolvedQueryShow);
-                    const exactShowMatches = sameYearSameClientCandidates.filter((candidate) => {
-                        const candidateParts = _parseIdentifierParts(candidate);
-                        if (!candidateParts) return false;
-                        const resolvedShow = _resolveRefPartStrict(
-                            candidateParts.show,
-                            refData.shows.names,
-                            refData.shows.abbrs
-                        );
-                        return normalizeMatchKey(resolvedShow) === resolvedQueryShowNorm;
-                    });
-
-                    if (exactShowMatches.length === 1) return exactShowMatches[0];
-                    if (exactShowMatches.length > 1) return null;
-                    guardAgainstShowFuzzyFallback = true;
-                }
-            }
-
-        if (guardAgainstShowFuzzyFallback) {
+            if (strictMatches.length === 1) return strictMatches[0];
+            // Parsed identifiers are strict-only: if not a unique strict match, fail closed.
             return null;
         }
 
@@ -1414,7 +1376,7 @@ class productionUtils_uncached {
         const identifiers = new Map();
         for (const row of scheduleRows) {
             if (!row.Show || !row.Client || !row.Year) continue;
-            const identifier = await deps.call(ProductionUtils.computeIdentifier, row.Show, row.Client, row.Year);
+            const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, row);
             if (identifier) identifiers.set(identifier, true);
         }
         return Array.from(identifiers.keys()).sort();
@@ -1812,9 +1774,19 @@ function _resolveRefPart(value, names, abbrs, threshold = undefined) {
     }
 }
 
-// Strictly resolves by exact canonical name or exact abbreviation only.
-// Does not fuzzy fallback; returns raw value when no exact index mapping exists.
-function _resolveRefPartStrict(value, names, abbrs) {
+// Resolves a client/show token against an index.
+// Behavior:
+// 1) exact canonical/abbreviation match -> canonical
+// 2) if allowFuzzy=false -> raw
+// 3) if token is short (< shortTokenMin) -> raw
+// 4) fuzzy fallback -> best canonical match or raw
+function _resolveIndexToken(value, names, abbrs, options = {}) {
+    const {
+        allowFuzzy = true,
+        fuzzyThreshold = 2,
+        shortTokenMin = 6
+    } = options;
+
     const raw = normalizeText(value);
     const rawNorm = normalizeMatchKey(raw);
     if (!rawNorm) return raw;
@@ -1836,7 +1808,15 @@ function _resolveRefPartStrict(value, names, abbrs) {
         }
     }
 
-    return raw;
+    if (!allowFuzzy) {
+        return raw;
+    }
+
+    if (rawNorm.length < shortTokenMin) {
+        return raw;
+    }
+
+    return _resolveRefPart(raw, safeNames, safeAbbrs, fuzzyThreshold);
 }
 
 // Builds a year-filtered identifier→row map from schedule data, using the year parsed from title.
@@ -1854,3 +1834,4 @@ async function _buildYearFilteredScheduleMap(deps, title, scheduleData) {
     }
     return { scheduleMap, candidates: Array.from(scheduleMap.keys()) };
 }
+
