@@ -664,7 +664,8 @@ export const PacklistContent = {
                     [authState.user?.email], // Pass current user to filter out their own locks
                     'lockInfo' // Store lock info in 'lockInfo' column
                 ),
-                createAnalysisConfig(
+                // Skip description analysis in pinned view — it loads full content of every packlist
+                ...(!this.showPinnedOnly ? [createAnalysisConfig(
                     Requests.getPacklistDescription,
                     'description',
                     'Loading packlist details...',
@@ -675,7 +676,7 @@ export const PacklistContent = {
                     Priority.ANALYSIS,
                     false,
                     false // nonessential
-                ),
+                )] : []),
                 createAnalysisConfig(
                     Requests.getShowDetails,
                     'showDetails',
