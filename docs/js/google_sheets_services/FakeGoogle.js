@@ -975,6 +975,16 @@ export class FakeGoogleSheetsService {
                 ['STAGE B', '', 'Test: three-show chain middle'],
                 ['STAGE C', '', 'Test: three-show chain end'],
                 ['OVERLAP TEST', '', 'Test: overlapping show for conflict detection']
+            ],
+            'Preferences': [
+                ['ID', 'Name', 'Description', 'Page', 'Type', 'Value', 'EditHistory'],
+                ['ScheduleShipOffsetDaysFromShow', 'Ships Show Offset', 'default offset days from show start date for shows with missing ship dates', 'schedule*', 'integer', '14', ''],
+                ['ScheduleReturnOffsetDaysFromShow', 'Returns Show Offset', 'default offset days from show end date for shows with missing return dates', 'schedule*', 'integer', '14', ''],
+                ['ScheduleShipOffsetDaysFromInstall', 'Ships Install Offset', 'default offset days from show install date for shows with missing ship dates', 'schedule*', 'integer', '7', ''],
+                ['ScheduleReturnOffsetDaysFromDismantle', 'Returns Dismantle Offset', 'default offset days from show dismantle date for shows with missing return dates', 'schedule*', 'integer', '7', ''],
+                ['InventorySuppressCategoryAnalysis', 'Skip Quantity Analysis', 'these inventories are skipped when finding shortages', 'inventory*', 'json', '["FURNITURE","MONITORS","LIGHTING","ELECTRONICS","ADDITIONS"]', ''],
+                ['InventoryCustomItemNumbers', 'Allow Nonstandard Item#s', 'these inventories have nonstandard item numbers and can slow down the system', 'inventory*', 'json', '["HARDWARE"]', ''],
+                ['InventoryDescriptionOnly', 'Omit Quantity Column', 'list of inventories that omit the quantity column, added to packlists as descriptions only', 'inventory*', 'json', '["ADDITIONS"]', '']
             ]
         }
     };

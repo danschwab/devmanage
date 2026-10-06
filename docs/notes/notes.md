@@ -69,6 +69,8 @@ Ongoing User Conversations:
 
 **chores**
 
+- [ ] we need to unify api functions to reduce the number of wrappers, create generic passthrough functions and use in reactiveStores
+- [ ] move complex api logic into the most relevant abstraction area
 - [ ] ! bring more clarity to the advanced filter, and potentially unify with api filtering. (fix the weird options available in views that don't support them)
 - [ ] ! "views" for tables and reports allowing column customization
 - [ ] basic schedule table needs to have return and show date columns visible
