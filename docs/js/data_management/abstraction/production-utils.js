@@ -1553,7 +1553,13 @@ function _calculateShipDate(row) {
         return ship;
     }
     
-    // Fallback 1: S. Start - 14 days
+    // Fallback 1: S. Install - 7 days
+    const sInstall = parseDate(row['S. Install'], true, year);
+    if (sInstall) {
+        return new Date(sInstall.getTime() - 7 * 86400000);
+    }
+
+    // Fallback 2: S. Start - 14 days
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
         ship = new Date(sStart.getTime() - 14 * 86400000);
@@ -1573,7 +1579,7 @@ function _calculateShipDate(row) {
         return ship;
     }
     
-    // Fallback 2: S. End - 21 days
+    // Fallback 3: S. End - 21 days
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
         ship = new Date(sEnd.getTime() - 21 * 86400000);
@@ -1620,15 +1626,20 @@ function _calculateReturnDate(row, shipDate = null) {
         return ret;
     }
     
-    // Fallback 1: S. End + 14 days
+    // Fallback 1: S. Dismantle + 7 days
+    const sDismantle = parseDate(row['S. Dismantle'], true, year);
+    if (sDismantle) {
+        return new Date(sDismantle.getTime() + 7 * 86400000);
+    }
+
+    // Fallback 2: S. End + 14 days
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
         ret = new Date(sEnd.getTime() + 14 * 86400000);
-        // Return date is naturally after show end, so calculated year is correct
         return ret;
     }
     
-    // Fallback 2: S. Start + 21 days
+    // Fallback 3: S. Start + 21 days
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
         ret = new Date(sStart.getTime() + 21 * 86400000);
@@ -1636,7 +1647,7 @@ function _calculateReturnDate(row, shipDate = null) {
         return ret;
     }
     
-    // Fallback 3: Ship date + 30 days
+    // Fallback 4: Ship date + 30 days
     if (shipDate) {
         ret = new Date(shipDate.getTime() + 30 * 86400000);
         // Return date is naturally after ship date, so calculated year is correct

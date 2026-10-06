@@ -84,6 +84,7 @@ Ongoing User Conversations:
 **problems**
 
 - [ ] ! mobile view some things don't show well (arrows, button sizes for transshipments)
+- [ ] some sticky headers too high on mobile after page switch, dashboard nav issue
 - [ ] thumbnails slow on chromium
 - [ ] autosave backup is currently broken, probably because of failure to identify user tab or backup entries correctly
 - [ ] packlist print from dashboard will not print correctly if not on packlist page first
@@ -110,6 +111,7 @@ Architecture Improvements
 - [ ] !!! better "Find..." tools for nonfiltered searching with up/down navigation and a "selected" found item index, probably just a numberbox attached to the find box and some javascript to autoset this by nearest match or something, and url searchterm updating perhaps
 - [ ] !!! history and last edit viewing tools: Provide tools to revert changes from history (steal from inventory upcoming changes ui), and tools to revert based on source,history modification utility for viewing changes over time and changing their values if necessary? Inventory specific future changes updating?
 - [ ] ! test and validate offline mode
+- [ ] charts?
       allow auto-caching of analytics data
       save deleted information in a special table for recovery if necessary
       allow analysis to intelligently slow or pause itself and notify user for slow connection states.
@@ -123,6 +125,7 @@ show management system
 - [ ] !! alert me about projects that don't yet have files attached to them
 - [ ] advanced search add and configure boolean flag columns (shown as checkboxes) and filter option
 - [ ] calendar view improvements: allow views showing ship/return, maybe allow schedule overlays on other pages for context
+- [ ] alerts for new construction?
       add workzone info to table???
       allow sorting, categorization (viewable/hidden in certain domains), and organization of saved searches
       allow user to access show searches as pages and pin to dashboard
