@@ -65,7 +65,7 @@ export const TransshipmentModal = {
             return [
                 { key: 'Show', label: 'Show', sortable: true },
                 { key: 'Client', label: 'Client', sortable: true },
-                { key: 'Year', label: 'Year', sortable: true },
+                { key: 'Year', label: 'Year' },
                 { key: 'Size', label: 'Size', sortable: true },
                 { key: 'Ship', label: 'Ship', sortable: true },
                 { key: '_actionFrom', label: 'Ships From', width: 105, sortable: false },
@@ -76,7 +76,7 @@ export const TransshipmentModal = {
             return [
                 { key: 'Show', label: 'Show', sortable: true },
                 { key: 'Client', label: 'Client', sortable: true },
-                { key: 'Year', label: 'Year', sortable: true },
+                { key: 'Year', label: 'Year' },
                 { key: 'Size', label: 'Size', sortable: true },
                 { key: 'Ship', label: 'Ship', sortable: true },
                 { key: '_action', label: '', width: 90, sortable: false }
@@ -290,6 +290,7 @@ export const TransshipmentModal = {
                     :data="stage1Data"
                     :theme="'gray hover-highlight'"
                     :columns="stage1Columns"
+                    :hide-columns="['Year']"
                     :isLoading="stage1Loading"
                     :showSearch="true"
                     :showRefresh="false"
@@ -313,24 +314,24 @@ export const TransshipmentModal = {
                             <button
                                 v-if="stage1Links.has(row.Client + '|' + row.Year + '|' + row.Show)"
                                 @click="removeFromStage1(row)"
-                                class="red small"
+                                class="red"
                             >&#x2715; From</button>
                             <button
                                 v-else
                                 @click="direction = 'from'; selectStage1Show(row)"
-                                class="green small"
+                                class="green"
                             >+ From</button>
                         </template>
                         <template v-if="column.key === '_actionTo'">
                             <button
                                 v-if="stage1ToLinks.has(row.Client + '|' + row.Year + '|' + row.Show)"
                                 @click="removeToFromStage1(row)"
-                                class="red small"
+                                class="red"
                             >&#x2715; To</button>
                             <button
                                 v-else
                                 @click="direction = 'to'; selectStage1Show(row)"
-                                class="green small"
+                                class="green"
                             >+ To</button>
                         </template>
                     </template>
@@ -364,6 +365,7 @@ export const TransshipmentModal = {
                     :data="stage2Data"
                     :theme="'gray hover-highlight'"
                     :columns="stage2Columns"
+                    :hide-columns="['Year']"
                     :isLoading="stage2Loading"
                     :showSearch="false"
                     :showRefresh="false"

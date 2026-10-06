@@ -994,12 +994,13 @@ export const InventoryTableComponent = {
     async mounted() {
         // Load index metadata to derive column visibility flags for this tab
         if (this.tabTitle) {
-            Requests.getInventoryIndexData().then(indexData => {
-                if (!Array.isArray(indexData)) return;
-                const tabPrefixes = indexData.filter(row => row.tab === this.tabTitle);
-                if (tabPrefixes.length > 0) {
-                    const allDescOnly = tabPrefixes.every(row => row.metadata?.descriptionOnly === 'true');
-                    this.tabMetaFlags = { hideQuantity: allDescOnly, hideItemNumber: allDescOnly };
+            const tabTitle = this.tabTitle;
+            Requests.getPreferences().then(prefs => {
+                const descPref = prefs?.find(p => p.id === 'InventoryDescriptionOnly');
+                let descOnlyTabs = [];
+                try { descOnlyTabs = JSON.parse(descPref?.value || '[]'); } catch {}
+                if (descOnlyTabs.includes(tabTitle)) {
+                    this.tabMetaFlags = { hideQuantity: true, hideItemNumber: true };
                 }
             }).catch(() => {});
         }

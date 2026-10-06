@@ -865,11 +865,13 @@ test('INVENTORY TAB AND INDEX', 'getInventoryIndexData includes TABLE→FURNITUR
     assertEqual(entry.tab, 'FURNITURE', 'TABLE prefix maps to FURNITURE');
 });
 
-test('INVENTORY TAB AND INDEX', 'HARDWARE index entry has customItemNumbers metadata', async () => {
-    const index = await Requests.getInventoryIndexData();
-    const hw = index?.find(r => r.prefix === 'HARDWARE');
-    if (!hw) throw new Error('HARDWARE prefix not found in inventory index');
-    assertEqual(hw.metadata?.customItemNumbers, 'true', 'HARDWARE entry must have customItemNumbers=true');
+test('INVENTORY TAB AND INDEX', 'InventoryCustomItemNumbers preference contains HARDWARE', async () => {
+    const prefs = await Requests.getPreferences();
+    const pref = prefs?.find(p => p.id === 'InventoryCustomItemNumbers');
+    if (!pref) throw new Error('InventoryCustomItemNumbers preference not found');
+    let tabs = [];
+    try { tabs = JSON.parse(pref.value); } catch {}
+    assertContains(tabs, 'HARDWARE', 'InventoryCustomItemNumbers must include HARDWARE');
 });
 
 test('INVENTORY TAB AND INDEX', 'getInventoryHiddenSearchData FURNITURE includes TABLE-001 item number', async () => {
@@ -1226,7 +1228,7 @@ test('DESCRIPTION MATCH', 'unrelated description returns non-null alert', async 
 
 // ── Group 32: Inventory Level Check ──────────────────────────────────────────
 // checkInventoryLevel returns null for suppressed items and an alert for shortages.
-// FakeGoogle: TABLE prefix has suppressAnalysis=true (returns null always).
+// FURNITURE is in InventorySuppressCategoryAnalysis preference; TABLE-001 maps to FURNITURE.
 // CAB-004 during ATSC 2025 NAB window: 10 in stock, 22 needed (11 ATSC + 11 GEARFIRE same day).
 
 test('INVENTORY LEVEL CHECK', 'suppressed item prefix returns null', async () => {
@@ -1414,6 +1416,56 @@ test('CACHE INVALIDATION', 'remote Caching-tab timestamp for getTabs fires getPa
     }
     if (!fired.has('getPacklists'))
         throw new Error(`poller did not invalidate getPacklists; fired: ${[...fired].join(', ')}`);
+});
+
+// ── Group 35: Preferences ─────────────────────────────────────────────────────
+// FakeGoogle CACHE/Preferences has 7 rows:
+//   4 schedule* integer prefs (offsets 14, 14, 7, 7)
+//   3 inventory* json prefs   (suppress, customItemNumbers, descriptionOnly)
+
+test('PREFERENCES', 'getPreferences returns an array', async () => {
+    const result = await Requests.getPreferences();
+    if (!Array.isArray(result)) throw new Error(`expected array, got ${typeof result}`);
+});
+
+test('PREFERENCES', 'getPreferences returns 7 rows', async () => {
+    const result = await Requests.getPreferences();
+    assertEqual(result.length, 7, 'getPreferences row count');
+});
+
+test('PREFERENCES', 'all rows have required fields', async () => {
+    const result = await Requests.getPreferences();
+    for (const row of result) {
+        if (!row.id) throw new Error(`row missing id: ${JSON.stringify(row)}`);
+        if (!row.name) throw new Error(`row missing name: ${JSON.stringify(row)}`);
+        if (!row.type) throw new Error(`row missing type: ${JSON.stringify(row)}`);
+        if (!row.page) throw new Error(`row missing page: ${JSON.stringify(row)}`);
+    }
+});
+
+test('PREFERENCES', 'ScheduleShipOffsetDaysFromShow has value "14" and type "integer"', async () => {
+    const result = await Requests.getPreferences();
+    const pref = result.find(r => r.id === 'ScheduleShipOffsetDaysFromShow');
+    if (!pref) throw new Error('ScheduleShipOffsetDaysFromShow not found');
+    assertEqual(pref.value, '14', 'ScheduleShipOffsetDaysFromShow value');
+    assertEqual(pref.type, 'integer', 'ScheduleShipOffsetDaysFromShow type');
+});
+
+test('PREFERENCES', 'InventorySuppressCategoryAnalysis has type "json" and page "inventory*"', async () => {
+    const result = await Requests.getPreferences();
+    const pref = result.find(r => r.id === 'InventorySuppressCategoryAnalysis');
+    if (!pref) throw new Error('InventorySuppressCategoryAnalysis not found');
+    assertEqual(pref.type, 'json', 'InventorySuppressCategoryAnalysis type');
+    assertEqual(pref.page, 'inventory*', 'InventorySuppressCategoryAnalysis page');
+});
+
+test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
+    const result = await Requests.getPreferences();
+    const schedulePrefs = result.filter(r => r.id.startsWith('Schedule'));
+    if (schedulePrefs.length === 0) throw new Error('no schedule preferences found');
+    for (const p of schedulePrefs) {
+        if (p.page !== 'schedule*') throw new Error(`expected page "schedule*" for ${p.id}, got "${p.page}"`);
+    }
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────

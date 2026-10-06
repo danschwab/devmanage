@@ -38,8 +38,6 @@ export const InventoryMenuComponent = {
                 });
             }
             
-            items.push({ label: 'Inventory Shortage Report', action: 'navigateReports' });
-            
             return items;
         }
     },
@@ -58,12 +56,6 @@ export const InventoryMenuComponent = {
                             newParams
                         );
                         this.navigateToPath(newPath);
-                        this.$emit('close-modal');
-                    }
-                    break;
-                case 'navigateReports':
-                    if (this.navigateToPath) {
-                        this.navigateToPath('reports/item-shortages');
                         this.$emit('close-modal');
                     }
                     break;

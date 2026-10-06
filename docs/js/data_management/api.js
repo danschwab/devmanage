@@ -1402,11 +1402,13 @@ class Requests_uncached {
             return null;
         }
         
-        // Skip alert generation for items with suppressAnalysis set
-        const prefix = itemNumber.split('-')[0];
-        const indexData = await deps.call(Requests.getInventoryIndexData);
-        const isSuppressed = indexData?.some(row => row.prefix === prefix && row.metadata?.suppressAnalysis === 'true');
-        if (isSuppressed) {
+        // Skip alert generation for tabs in InventorySuppressCategoryAnalysis preference
+        const tab = await deps.call(InventoryUtils.getTabNameForItem, itemNumber);
+        const prefs = await deps.call(Requests.getPreferences);
+        const suppressValue = prefs?.find(p => p.id === 'InventorySuppressCategoryAnalysis')?.value || '[]';
+        let suppressedTabs = [];
+        try { suppressedTabs = JSON.parse(suppressValue); } catch {}
+        if (tab && suppressedTabs.includes(tab)) {
             return null;
         }
         
@@ -1533,17 +1535,17 @@ class Requests_uncached {
         return await deps.call(Database.getData, 'CACHE', 'Notes', { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
     }
 
-    /**
-     * Save all page notes to the CACHE Notes tab.
-     *
-     * MUTATION METHOD - Excluded from caching
-     * Does NOT accept deps parameter or use deps.call()
-     *
-     * @param {Array<{Path: string, Note: string, Color: string, Size: string, EditHistory: string}>} data
-     * @returns {Promise<boolean>}
-     */
     static async savePageNotes(data) {
         return await Database.setData('CACHE', 'Notes', data, { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
+    }
+
+    static async getPreferences(deps) {
+        return await deps.call(Database.getData, 'CACHE', 'Preferences', { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
+    }
+
+    // MUTATION METHOD — excluded from caching
+    static async savePreferences(data) {
+        return await Database.setData('CACHE', 'Preferences', data, { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
     }
 
 }
@@ -1580,7 +1582,8 @@ export const Requests = wrapMethods(
         'addNameOverride',
         'setTransshipLink',
         'removeTransshipLink',
-        'savePageNotes'
+        'savePageNotes',
+        'savePreferences'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

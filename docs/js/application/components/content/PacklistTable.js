@@ -155,7 +155,7 @@ export const PacklistTable = {
             NavigationRegistry,
             lockNamespace: 'PACK_LISTS',
             itemGroupVisibilityOverride: null,
-            inventoryIndexData: null,
+            descriptionOnlyTabs: [],
             scheduleAttachment: null
         };
     },
@@ -395,9 +395,10 @@ export const PacklistTable = {
         this.$notify.clearBanners(this.containerPath);
     },
     async mounted() {
-        // Load inventory index metadata for use in addItemFromInventory
-        Requests.getInventoryIndexData().then(data => {
-            this.inventoryIndexData = data;
+        // Load InventoryDescriptionOnly preference for use in addItemFromInventory
+        Requests.getPreferences().then(prefs => {
+            const descPref = prefs?.find(p => p.id === 'InventoryDescriptionOnly');
+            try { this.descriptionOnlyTabs = JSON.parse(descPref?.value || '[]'); } catch { this.descriptionOnlyTabs = []; }
         }).catch(() => {});
 
         // Initialize store if tabName is available
@@ -835,7 +836,7 @@ export const PacklistTable = {
             }, 'Add Item');
         },
         
-        addItemFromInventory(crateIdx, inventoryItem, position = null) {
+        async addItemFromInventory(crateIdx, inventoryItem, position = null) {
             // Capture state for undo before adding item from inventory
             const routeKey = this.appContext?.currentPath?.split('?')[0];
             if (routeKey) {
@@ -857,9 +858,8 @@ export const PacklistTable = {
             // For prefixes with descriptionOnly, use just the description with no item# or stub
             const itemNumber = inventoryItem.itemNumber || '';
             const description = inventoryItem.description || '';
-            const prefix = itemNumber.split('-')[0];
-            const prefixMeta = this.inventoryIndexData?.find(row => row.prefix === prefix)?.metadata || {};
-            const formattedDescription = prefixMeta.descriptionOnly === 'true'
+            const itemTab = await Requests.getTabNameForItem(itemNumber).catch(() => null);
+            const formattedDescription = (itemTab && this.descriptionOnlyTabs.includes(itemTab))
                 ? description
                 : `(1) ${itemNumber} ${description}`;
             

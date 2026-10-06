@@ -677,22 +677,22 @@ export class FakeGoogleSheetsService {
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
             ],
             'Inventory': [
-                ['PREFIX', 'INVENTORY', 'FOLDER', 'MetaData'],
-                ['CAB', 'CABINETS', '', ''],
-                ['HS', 'HANGING SIGNS', '', ''],
-                ['LB', 'LIGHTBOXES', '', ''],
-                ['CNTR', 'COUNTERTOPS', '', ''],
-                ['SHLF', 'SHELVES', '', ''],
-                ['STOOL', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['CHAIR', 'FURNITURE', 'CHAIRS', '{"suppressAnalysis":"true"}'],
-                ['COUCH', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['TABLE', 'FURNITURE', 'TABLES', '{"suppressAnalysis":"true"}'],
-                ['TTOP', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
-                ['BX', 'PANELS', '', ''],
-                ['VU', 'PANELS', '', ''],
-                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","descriptionOnly":"true"}'],
-                ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
+                ['PREFIX', 'INVENTORY', 'FOLDER'],
+                ['CAB', 'CABINETS', ''],
+                ['HS', 'HANGING SIGNS', ''],
+                ['LB', 'LIGHTBOXES', ''],
+                ['CNTR', 'COUNTERTOPS', ''],
+                ['SHLF', 'SHELVES', ''],
+                ['STOOL', 'FURNITURE', ''],
+                ['CHAIR', 'FURNITURE', 'CHAIRS'],
+                ['COUCH', 'FURNITURE', ''],
+                ['TABLE', 'FURNITURE', 'TABLES'],
+                ['TTOP', 'FURNITURE', ''],
+                ['TBASE', 'FURNITURE', ''],
+                ['BX', 'PANELS', ''],
+                ['VU', 'PANELS', ''],
+                ['ADD', 'ADDITIONS', ''],
+                ['HARDWARE', 'HARDWARE', 'HARDWARE']
             ],
             'Thumbnails': [
                 ['ItemNumber', 'File', 'Blob'],
@@ -1035,7 +1035,8 @@ export class FakeGoogleSheetsService {
             { title: 'Thumbnails', sheetId: 6 },
             { title: 'Inventory', sheetId: 7 },
             { title: 'NameOverrides', sheetId: 8 },
-            { title: 'ScheduleOverrides', sheetId: 9 }
+            { title: 'ScheduleOverrides', sheetId: 9 },
+            { title: 'Preferences', sheetId: 10 }
         ]
     };
 

@@ -56,13 +56,12 @@ class inventoryUtils_uncached {
             tab = prefixToTab[prefix];
         }
         
-        // If prefix lookup failed, check tabs flagged with customItemNumbers for an exact item match
+        // If prefix lookup failed, check tabs listed in InventoryCustomItemNumbers preference
         if (!tab) {
-            const customTabs = [...new Set(
-                indexData
-                    .filter(row => row.metadata?.customItemNumbers === 'true')
-                    .map(row => row.tab)
-            )];
+            const prefs = await deps.call(Database.getData, 'CACHE', 'Preferences', { id: 'ID', value: 'Value' });
+            const prefValue = prefs?.find(p => p.id === 'InventoryCustomItemNumbers')?.value || '[]';
+            let customTabs = [];
+            try { customTabs = JSON.parse(prefValue); } catch {}
             for (const customTab of customTabs) {
                 try {
                     const tabData = await deps.call(Database.getData, 'INVENTORY', customTab, inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING);

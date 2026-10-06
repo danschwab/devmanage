@@ -79,6 +79,8 @@ class productionUtils_uncached {
         const dateFilters = parameters.dateFilters;
         //console.log('[production-utils] Processing date filters:', dateFilters);
 
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+
         // Helper to get date from row based on column.
         // Handles calculated columns (Ship, Return, Date) and any raw date column via parseDate.
         // filterType ('after'|'before') controls which boundary fallback is used when a
@@ -87,17 +89,17 @@ class productionUtils_uncached {
         //   'after'  → return date (latest  the show could be relevant)
         const getRowDate = (row, column, filterType) => {
             if (column === 'Ship') {
-                return _calculateShipDate(row);
+                return _calculateShipDate(row, offsets);
             } else if (column === 'Return') {
-                const ship = _calculateShipDate(row);
-                return _calculateReturnDate(row, ship);
+                const ship = _calculateShipDate(row, offsets);
+                return _calculateReturnDate(row, ship, offsets);
             } else if (column === 'Date') {
                 // Try to get date from S. Start field
                 let showDate = parseDate(row['S. Start'], true, row.Year);
                 
                 // If date not available, try other date fields to infer it
                 if (!showDate) {
-                    const ship = _calculateShipDate(row);
+                    const ship = _calculateShipDate(row, offsets);
                     if (ship) {
                         // Typical show is ~7-14 days after ship
                         showDate = new Date(ship.getTime() + 10 * 86400000);
@@ -136,12 +138,12 @@ class productionUtils_uncached {
             // so rows without this field are not silently excluded.
             if (filterType === 'before') {
                 // For "before" searches use ship date: the earliest the show is relevant
-                return _calculateShipDate(row);
+                return _calculateShipDate(row, offsets);
             }
             // For "after" searches (including unknown type) use return date:
             // the latest the show is relevant
-            const ship = _calculateShipDate(row);
-            return _calculateReturnDate(row, ship);
+            const ship = _calculateShipDate(row, offsets);
+            return _calculateReturnDate(row, ship, offsets);
         };
 
         // Helper to resolve filter value to a date
@@ -172,10 +174,10 @@ class productionUtils_uncached {
                 const shipIso = await deps.call(ProductionUtils.getProjectShipDate, value);
                 const retIso  = await deps.call(ProductionUtils.getProjectReturnDate, value);
                 if (filter.column === 'Return' && filter.type === 'after') {
-                    return shipIso ? parseDate(shipIso) : _calculateShipDate(row);
+                    return shipIso ? parseDate(shipIso) : _calculateShipDate(row, offsets);
                 } else if (filter.column === 'Ship' && filter.type === 'before') {
-                    const rawShip = _calculateShipDate(row);
-                    return retIso ? parseDate(retIso) : _calculateReturnDate(row, rawShip);
+                    const rawShip = _calculateShipDate(row, offsets);
+                    return retIso ? parseDate(retIso) : _calculateReturnDate(row, rawShip, offsets);
                 }
                 return getRowDate(row, filter.column, filter.type);
             }
@@ -257,7 +259,7 @@ class productionUtils_uncached {
             }
 
             // Normalize Ship date using validation logic
-            const correctedShip = _calculateShipDate(normalizedRow);
+            const correctedShip = _calculateShipDate(normalizedRow, offsets);
             if (correctedShip) {
                 normalizedRow.Ship = toUSDateString(correctedShip);
             }
@@ -274,7 +276,7 @@ class productionUtils_uncached {
                 normalizedRow['S. End'] = toUSDateString(sEnd);
             }
             
-            const correctedReturn = _calculateReturnDate(normalizedRow, correctedShip);
+            const correctedReturn = _calculateReturnDate(normalizedRow, correctedShip, offsets);
             if (correctedReturn && normalizedRow['Recieved']) {
                 normalizedRow['Recieved'] = toUSDateString(correctedReturn);
             }
@@ -732,6 +734,7 @@ class productionUtils_uncached {
         // Group by normalized show name + year (ignoring client), taking earliest ship and latest return
         const showMap = new Map();
 
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
         for (const row of data) {
             // Normalize show name using fuzzy matching against the show index
             const rawShowName = String(row.Show || '').trim();
@@ -746,8 +749,8 @@ class productionUtils_uncached {
             const year = row.Year || '';
             const key = `${canonicalShowName}|${year}`;
             
-            const ship = _calculateShipDate(row);
-            const ret = _calculateReturnDate(row, ship);
+            const ship = _calculateShipDate(row, offsets);
+            const ret = _calculateReturnDate(row, ship, offsets);
 
             if (!showMap.has(key)) {
                 showMap.set(key, {
@@ -877,7 +880,8 @@ class productionUtils_uncached {
         if (!row) return null;
 
         // Normalize date columns before returning to ensure correct years
-        const correctedShip = _calculateShipDate(row);
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        const correctedShip = _calculateShipDate(row, offsets);
         if (correctedShip) row.Ship = toUSDateString(correctedShip);
 
         const sStart = parseDate(row['S. Start'], true, row.Year);
@@ -886,7 +890,7 @@ class productionUtils_uncached {
         const sEnd = parseDate(row['S. End'], true, row.Year);
         if (sEnd) row['S. End'] = toUSDateString(sEnd);
 
-        const correctedReturn = _calculateReturnDate(row, correctedShip);
+        const correctedReturn = _calculateReturnDate(row, correctedShip, offsets);
         if (correctedReturn && row['Recieved']) {
             row['Recieved'] = toUSDateString(correctedReturn);
         }
@@ -984,8 +988,9 @@ class productionUtils_uncached {
             deps.call(ProductionUtils.getShowDetails, identifier),
             deps.call(ProductionUtils.getShowDetails, link.override)
         ]);
-        const destOrder   = _getShowOrderDate(destRow);
-        const sourceOrder = _getShowOrderDate(sourceRow);
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        const destOrder   = _getShowOrderDate(destRow, offsets);
+        const sourceOrder = _getShowOrderDate(sourceRow, offsets);
         if (destOrder && sourceOrder && sourceOrder >= destOrder) return null;
         return link.override;
     }
@@ -1011,10 +1016,11 @@ class productionUtils_uncached {
         );
         if (!links.length) return null;
         const sourceRow = await deps.call(ProductionUtils.getShowDetails, identifier);
-        const sourceOrder = _getShowOrderDate(sourceRow);
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        const sourceOrder = _getShowOrderDate(sourceRow, offsets);
         for (const link of links) {
             const destRow = await deps.call(ProductionUtils.getShowDetails, link.schedule);
-            const destOrder = _getShowOrderDate(destRow);
+            const destOrder = _getShowOrderDate(destRow, offsets);
             if (sourceOrder && destOrder && sourceOrder < destOrder) return link.schedule;
         }
         return null;
@@ -1056,25 +1062,29 @@ class productionUtils_uncached {
         if (!projectIdentifier) return null;
         const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });
-        return _resolveShipDate(deps, projectIdentifier, overrides, new Set());
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        return _resolveShipDate(deps, projectIdentifier, overrides, new Set(), offsets);
     }
 
     static async getProjectShipDateFromRow(deps, row) {
         if (!row) return null;
-        return toISODateString(_calculateShipDate(row));
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        return toISODateString(_calculateShipDate(row, offsets));
     }
 
     static async getProjectReturnDateFromRow(deps, row) {
         if (!row) return null;
-        const ship = _calculateShipDate(row);
-        return toISODateString(_calculateReturnDate(row, ship));
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        const ship = _calculateShipDate(row, offsets);
+        return toISODateString(_calculateReturnDate(row, ship, offsets));
     }
 
     static async getProjectReturnDate(deps, projectIdentifier) {
         if (!projectIdentifier) return null;
         const overrides = await deps.call(Database.getData, 'CACHE', 'ScheduleOverrides',
             { schedule: 'Schedule', override: 'Override' });
-        return _resolveReturnDate(deps, projectIdentifier, overrides, new Set());
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        return _resolveReturnDate(deps, projectIdentifier, overrides, new Set(), offsets);
     }
 
     /**
@@ -1084,8 +1094,23 @@ class productionUtils_uncached {
      * @param {Object} row - Schedule row with date fields (Ship, S. Start, S. End, Year)
      * @returns {Promise<string|null>} Ship date in MM/DD/YYYY format or null
      */
+    static async getScheduleOffsets(deps) {
+        const prefs = await deps.call(Database.getData, 'CACHE', 'Preferences', { id: 'ID', value: 'Value' });
+        const parse = (id, def) => {
+            const n = parseInt(prefs?.find(p => p.id === id)?.value, 10);
+            return Number.isFinite(n) ? n : def;
+        };
+        return {
+            shipFromInstall:     parse('ScheduleShipOffsetDaysFromInstall',      7),
+            shipFromShow:        parse('ScheduleShipOffsetDaysFromShow',        14),
+            returnFromDismantle: parse('ScheduleReturnOffsetDaysFromDismantle',  7),
+            returnFromShow:      parse('ScheduleReturnOffsetDaysFromShow',      14)
+        };
+    }
+
     static async guessShipDate(deps, row) {
-        try { return toUSDateString(_calculateShipDate(row)); } catch (e) { return null; }
+        const offsets = await deps.call(ProductionUtils.getScheduleOffsets);
+        try { return toUSDateString(_calculateShipDate(row, offsets)); } catch (e) { return null; }
     }
 
     static async normalizeStartDate(deps, row) {
@@ -1469,17 +1494,17 @@ export const ProductionUtils = wrapMethods(
 // Returns the date used for ordering shows relative to each other.
 // S.Start is used instead of ship date because ship dates are often missing and
 // the fallback (S.Start - 14d) can land before an earlier show's explicit ship date.
-function _getShowOrderDate(row) {
+function _getShowOrderDate(row, offsets = {}) {
     if (!row) return null;
     const start = parseDate(row['S. Start'], true, row.Year);
     if (start) return start;
-    return _calculateShipDate(row); // last resort if show has no start date
+    return _calculateShipDate(row, offsets);
 }
 
 // Resolves the effective ship date for a show, following transship chains.
 // Called by getProjectShipDate; runs under that function's deps/cache entry so
 // all deps.call dependencies are attributed to the single per-identifier cache key.
-async function _resolveShipDate(deps, identifier, overrides, visited) {
+async function _resolveShipDate(deps, identifier, overrides, visited, offsets = {}) {
     if (!identifier || visited.has(identifier)) return null;
     visited.add(identifier);
     const row = await deps.call(ProductionUtils.getShowDetails, identifier);
@@ -1489,18 +1514,18 @@ async function _resolveShipDate(deps, identifier, overrides, visited) {
     );
     if (link?.override) {
         const sourceRow   = await deps.call(ProductionUtils.getShowDetails, link.override);
-        const destOrder   = _getShowOrderDate(row);
-        const sourceOrder = sourceRow ? _getShowOrderDate(sourceRow) : null;
+        const destOrder   = _getShowOrderDate(row, offsets);
+        const sourceOrder = sourceRow ? _getShowOrderDate(sourceRow, offsets) : null;
         if (sourceOrder && destOrder && sourceOrder < destOrder) {
-            return _resolveShipDate(deps, link.override, overrides, visited);
+            return _resolveShipDate(deps, link.override, overrides, visited, offsets);
         }
     }
-    return toISODateString(_calculateShipDate(row));
+    return toISODateString(_calculateShipDate(row, offsets));
 }
 
 // Resolves the effective return date for a show, extending through transship destinations.
 // Called by getProjectReturnDate; same single-entry dep-tracking rationale as _resolveShipDate.
-async function _resolveReturnDate(deps, identifier, overrides, visited) {
+async function _resolveReturnDate(deps, identifier, overrides, visited, offsets = {}) {
     if (!identifier || visited.has(identifier)) return null;
     visited.add(identifier);
     const row = await deps.call(ProductionUtils.getShowDetails, identifier);
@@ -1509,20 +1534,20 @@ async function _resolveReturnDate(deps, identifier, overrides, visited) {
         o => normalizeText(o.override || '').toLowerCase() === normalizeText(identifier).toLowerCase()
     );
     if (destinations.length > 0) {
-        const thisOrder = _getShowOrderDate(row);
+        const thisOrder = _getShowOrderDate(row, offsets);
         const destReturns = await Promise.all(
             destinations.map(async d => {
                 const destRow   = await deps.call(ProductionUtils.getShowDetails, d.schedule);
-                const destOrder = _getShowOrderDate(destRow);
+                const destOrder = _getShowOrderDate(destRow, offsets);
                 if (!thisOrder || !destOrder || destOrder <= thisOrder) return null;
-                return _resolveReturnDate(deps, d.schedule, overrides, visited);
+                return _resolveReturnDate(deps, d.schedule, overrides, visited, offsets);
             })
         );
         const validReturns = destReturns.filter(Boolean);
         if (validReturns.length > 0) return validReturns.sort().reverse()[0];
     }
-    const ship = _calculateShipDate(row);
-    return toISODateString(_calculateReturnDate(row, ship));
+    const ship = _calculateShipDate(row, offsets);
+    return toISODateString(_calculateReturnDate(row, ship, offsets));
 }
 
 /**
@@ -1532,8 +1557,10 @@ async function _resolveReturnDate(deps, identifier, overrides, visited) {
  * @returns {Date|null} Ship date or null
  * @private
  */
-function _calculateShipDate(row) {
+function _calculateShipDate(row, offsets = {}) {
     const year = row.Year;
+    const shipFromInstall = offsets.shipFromInstall ?? 7;
+    const shipFromShow = offsets.shipFromShow ?? 14;
     
     // Try explicit Ship date first
     let ship = parseDate(row.Ship, true, year);
@@ -1553,16 +1580,16 @@ function _calculateShipDate(row) {
         return ship;
     }
     
-    // Fallback 1: S. Install - 7 days
+    // Fallback 1: S. Install - shipFromInstall days
     const sInstall = parseDate(row['S. Install'], true, year);
     if (sInstall) {
-        return new Date(sInstall.getTime() - 7 * 86400000);
+        return new Date(sInstall.getTime() - shipFromInstall * 86400000);
     }
 
-    // Fallback 2: S. Start - 14 days
+    // Fallback 2: S. Start - shipFromShow days
     const sStart = parseDate(row['S. Start'], true, year);
     if (sStart) {
-        ship = new Date(sStart.getTime() - 14 * 86400000);
+        ship = new Date(sStart.getTime() - shipFromShow * 86400000);
         
         // Ensure ship date is before show start date
         // If forcing the year makes ship date >= show start, keep it in the previous year
@@ -1610,8 +1637,10 @@ function _calculateShipDate(row) {
  * @returns {Date|null} Return date or null
  * @private
  */
-function _calculateReturnDate(row, shipDate = null) {
+function _calculateReturnDate(row, shipDate = null, offsets = {}) {
     const year = row.Year;
+    const returnFromDismantle = offsets.returnFromDismantle ?? 7;
+    const returnFromShow = offsets.returnFromShow ?? 14;
     
     // Try actual received date first
     let ret = parseDate(row['Recieved'], true, year);
@@ -1626,16 +1655,16 @@ function _calculateReturnDate(row, shipDate = null) {
         return ret;
     }
     
-    // Fallback 1: S. Dismantle + 7 days
+    // Fallback 1: S. Dismantle + returnFromDismantle days
     const sDismantle = parseDate(row['S. Dismantle'], true, year);
     if (sDismantle) {
-        return new Date(sDismantle.getTime() + 7 * 86400000);
+        return new Date(sDismantle.getTime() + returnFromDismantle * 86400000);
     }
 
-    // Fallback 2: S. End + 14 days
+    // Fallback 2: S. End + returnFromShow days
     const sEnd = parseDate(row['S. End'], true, year);
     if (sEnd) {
-        ret = new Date(sEnd.getTime() + 14 * 86400000);
+        ret = new Date(sEnd.getTime() + returnFromShow * 86400000);
         return ret;
     }
     

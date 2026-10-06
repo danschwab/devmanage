@@ -631,7 +631,11 @@ button.card {
     text-align: center;
 }
 
-.modal .content {
+.modal > .content {
+    container-name: container-component;
+    container-type: inline-size;
+
+    min-width: var(--page-width-card);
     max-height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
     overflow: auto;
 }
@@ -676,7 +680,7 @@ button.card {
     min-width: min(90vw, var(--page-width-large));
 }
 .hamburger-menu >.content {
-     min-width: var(--page-width-card);
+     width: var(--page-width-card);
 }
 
 
@@ -1248,7 +1252,10 @@ tr.is-group:hover .group-toggle {
 }
 
 .detail-item span {
-    color: var(--color-text)
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
 }
 
 .item-image-container {

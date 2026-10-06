@@ -1,5 +1,6 @@
 import { html, DashboardToggleComponent, NavigationRegistry, Requests } from '../index.js';
 import { PageNoteMenuComponent } from '../components/interface/pageNoteComponent.js';
+import { PreferencesMenuComponent } from '../components/interface/preferencesComponent.js';
 
 const { reactive } = Vue;
 
@@ -156,6 +157,12 @@ export class HamburgerMenuRegistry {
         let components = [...menu.components];
         if (!components.includes(PageNoteMenuComponent)) {
             components.unshift(PageNoteMenuComponent);
+        }
+
+        // Automatically inject PreferencesMenuComponent after PageNoteMenuComponent
+        if (!components.includes(PreferencesMenuComponent)) {
+            const noteIdx = components.indexOf(PageNoteMenuComponent);
+            components.splice(noteIdx + 1, 0, PreferencesMenuComponent);
         }
         
         // Automatically inject LockRemovalMenuComponent if getLockInfo is provided

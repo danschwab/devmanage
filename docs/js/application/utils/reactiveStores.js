@@ -2055,6 +2055,14 @@ export function reloadErrorStores() {
  * Trigger analysis on all stores that have nonessential analysis configured
  * Used when enabling full analysis mode (onlyRunEssentialAnalysis: false -> true)
  */
+export function getPreferencesStore() {
+    return getReactiveStore(
+        Requests.getPreferences,
+        Requests.savePreferences,
+        []
+    );
+}
+
 export function runNonessentialAnalysisOnAllStores() {
     let triggeredCount = 0;
     Object.values(reactiveStoreRegistry).forEach(store => {

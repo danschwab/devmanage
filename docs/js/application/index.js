@@ -7,7 +7,7 @@ export { EditHistoryUtils } from '../data_management/utils/metadata-utils.js';
 // Utils
 export { html } from './utils/template-helpers.js';
 export { Auth, authState, getDeviceId } from './utils/auth.js';
-export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey, appSettings, runNonessentialAnalysisOnAllStores } from './utils/reactiveStores.js';
+export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey, appSettings, runNonessentialAnalysisOnAllStores, getPreferencesStore } from './utils/reactiveStores.js';
 export { Priority } from './utils/priorityQueue.js';
 export { undoRegistry, setTableRowSelectionState } from './utils/undoRegistry.js';
 export { getAutoColorClass, shouldAutoColor } from './utils/autoColor.js';
@@ -20,6 +20,7 @@ export { NavigationRegistry } from './utils/navigationSystem.js';
 export { ModalComponent, modalManager } from './components/interface/modalComponent.js';
 export { ContainerComponent } from './components/interface/containerComponent.js';
 export { PageNoteComponent, PageNoteMenuComponent } from './components/interface/pageNoteComponent.js';
+export { PreferencesMenuComponent } from './components/interface/preferencesComponent.js';
 export { OverlappingShowsModal } from './components/interface/OverlappingShowsModal.js';
 export { LoadingBarComponent } from './components/interface/loadingBarComponent.js';
 export { BannerNotifications, NotificationBubbleOverlay } from './components/interface/bannerNotifications.js';
