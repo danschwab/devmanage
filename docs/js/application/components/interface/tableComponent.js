@@ -1630,6 +1630,7 @@ export const TableComponent = {
             stickyActive: false, // Controls fixed positioning of sticky wrapper
             stickyLeft: 0,
             stickyWidth: 0,
+            stickyScrollLeft: 0, // Tracks horizontal scroll offset of table-wrapper for sticky clone alignment
             stickySpacerHeight: 0, // Measured height of wrapper before clone is added
             stickyColumnWidths: [], // Store actual column widths from original table
             hideRowsOnSearchLocal: this.hideRowsOnSearch, // Runtime toggle for hide-rows-on-search behavior
@@ -1730,18 +1731,26 @@ export const TableComponent = {
         'appContext.currentPath'(newPath, oldPath) {
             if (!newPath || !oldPath || newPath === oldPath) return;
             
-            // Extract base path (without query params) for both old and new
             const oldBasePath = oldPath.split('?')[0];
             const newBasePath = newPath.split('?')[0];
             
-            // Only update if it's a parameter-only change on the same base route
-            // Full route changes cause component remount, so skip those
-            if (oldBasePath === newBasePath && this._stickyHeader) {
+            if (!this._stickyHeader) return;
+
+            if (oldBasePath !== newBasePath) {
+                // Full route change: if component is preserved (not remounted), clear stale sticky state
+                this.stickyActive = false;
+                this.showStickyHeader = false;
+                this.stickyScrollLeft = 0;
+                this.stickyTop = 0;
                 this._stickyHeader.reset();
-                this.$nextTick(() => {
-                    this._stickyHeader.update();
-                });
+                return;
             }
+
+            // Parameter-only change on same route: recalculate
+            this._stickyHeader.reset();
+            this.$nextTick(() => {
+                this._stickyHeader.update();
+            });
         }
     },
     computed: {
@@ -2123,8 +2132,8 @@ export const TableComponent = {
                 ].filter(Boolean),
                 getIsActive: () => this.stickyActive,
                 canActivate: () => {
-                    const tableWrapper = this.$el?.querySelector('.table-wrapper');
-                    return !(tableWrapper && tableWrapper.scrollWidth > tableWrapper.clientWidth);
+                    const minHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--page-height-card')) || 360;
+                    return (this.$el?.offsetHeight ?? 0) >= minHeight;
                 },
                 onActivate: () => {
                     // Measure spacer height only on first activation (before thead clone is added)
@@ -2141,14 +2150,28 @@ export const TableComponent = {
                     // Update position (left and width only; top uses CSS variable --navbar-height)
                     const tableWrapper = this.$el?.querySelector('.table-wrapper');
                     const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
+                    const navEl = document.querySelector('header nav');
+                    this.stickyTop = navEl ? Math.max(0, navEl.getBoundingClientRect().bottom) : 0;
                     this.stickyActive = true;
                     this.showStickyHeader = true;
                     this.stickyLeft = rect ? rect.left : 0;
                     this.stickyWidth = rect ? rect.width : 0;
+                    this.stickyScrollLeft = tableWrapper?.scrollLeft ?? 0;
+                    // Lazily attach horizontal scroll listener — .table-wrapper may not exist at mounted() time
+                    if (tableWrapper && !this._tableWrapperScrollEl) {
+                        this._tableWrapperScrollEl = tableWrapper;
+                        this._tableWrapperScrollFn = () => {
+                            if (this.stickyActive) {
+                                this.stickyScrollLeft = this._tableWrapperScrollEl.scrollLeft;
+                            }
+                        };
+                        this._tableWrapperScrollEl.addEventListener('scroll', this._tableWrapperScrollFn, { passive: true });
+                    }
                 },
                 onDeactivate: () => {
                     this.stickyActive = false;
                     this.showStickyHeader = false;
+                    this.stickyScrollLeft = 0;
                 },
             });
             // Use requestAnimationFrame to ensure layout measurements are accurate after all DOM updates
@@ -2181,6 +2204,11 @@ export const TableComponent = {
         
         // Clean up sticky header scroll/resize listeners
         this._stickyHeader?.teardown();
+
+        // Clean up table-wrapper horizontal scroll listener
+        if (this._tableWrapperScrollEl && this._tableWrapperScrollFn) {
+            this._tableWrapperScrollEl.removeEventListener('scroll', this._tableWrapperScrollFn);
+        }
 
         // Clean up thead active scroll listener
         if (this._theadActiveScrollEl && this._theadActiveScrollFn) {
@@ -4394,7 +4422,7 @@ export const TableComponent = {
                 />
 
                 <!-- Sticky Header Clone (thead only, mirrors column widths) -->
-                <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }">
+                <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }" :style="stickyScrollLeft ? { transform: 'translateX(-' + stickyScrollLeft + 'px)' } : {}">
                     <colgroup>
                         <col v-if="draggable" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : { width: '20px' }" />
                         <col v-for="(column, colIdx) in visibleColumns" 

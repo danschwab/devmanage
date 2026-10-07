@@ -62,6 +62,8 @@ export function useStickyHeader({
 }) {
     let _scrollEl = null;
     let _fn = null;
+    let _navEl = null;
+    let _navTransitionFn = null;
     // Peak height cache: the sticky wrapper grows when the thead clone is added (showStickyHeader=true)
     // and shrinks when it is removed. Using the raw height for the container-bottom check causes
     // oscillation at the table bottom (deactivate → shrink → check passes → re-activate → grow →
@@ -154,6 +156,13 @@ export function useStickyHeader({
         _fn = () => _update();
         _scrollEl.addEventListener('scroll', _fn, { passive: true });
         window.addEventListener('resize', _fn, { passive: true });
+
+        // Re-evaluate sticky position after navbar height animation completes
+        _navEl = document.querySelector('header nav');
+        if (_navEl) {
+            _navTransitionFn = () => _update();
+            _navEl.addEventListener('transitionend', _navTransitionFn, { passive: true });
+        }
         
         // Initial update in current tick
         _update();
@@ -174,8 +183,13 @@ export function useStickyHeader({
             _scrollEl.removeEventListener('scroll', _fn);
             window.removeEventListener('resize', _fn);
         }
+        if (_navEl && _navTransitionFn) {
+            _navEl.removeEventListener('transitionend', _navTransitionFn);
+        }
         _fn = null;
         _scrollEl = null;
+        _navEl = null;
+        _navTransitionFn = null;
     }
 
     function reset() {
