@@ -743,7 +743,7 @@ export const ScheduleAdvancedFilter = {
                             { key: 'show', label: 'Show', sortable: true },
                             { key: 'shipDate', label: 'Ship Date', sortable: true, format: 'date' },
                             { key: 'returnDate', label: 'Return Date', sortable: true, format: 'date' },
-                            { key: '_action', label: '', width: 90, sortable: false }
+                            { key: '_action', label: '', width: 90, sortable: false, sticky: 'end' }
                         ];
                     }
                 },
@@ -825,9 +825,7 @@ export const ScheduleAdvancedFilter = {
                                 @click="selectShow(row)"
                                 :disabled="!row.shipDate && !row.returnDate"
                                 class="green"
-                            >
-                                Select
-                            </button>
+                            >Select</button>
                         </template>
                     </TableComponent>
                 `
@@ -1151,15 +1149,15 @@ export const ScheduleDateRangeCard = {
                 });
             }
         },
-        showDateRangeModal() {
-            this.$modal.alert(this.dateRangeDisplay, 'Date Range');
-        }
+        // showDateRangeModal() {
+        //     this.$modal.alert(this.dateRangeDisplay, 'Date Range');
+        // }
     },
     template: html`
         <template v-if="dateRangeDisplay">
-            <div class="card gray" @click="showDateRangeModal" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">
-                <span class="hide-when-narrow">{{ dateRangeDisplay }}</span>
-                <span class="show-when-narrow">↔</span>
+            <div class="card gray hide-when-narrow" style="white-space: nowrap; padding: var(--padding-sm) var(--padding-md);">
+                <span>{{ dateRangeDisplay }}</span>
+                <!-- <span class="show-when-narrow">↔</span> -->
             </div>
         </template>
     `

@@ -38,7 +38,8 @@ export const InventoryOverviewTableComponent = {
                     labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'I',
                     width: 1,
-                    sortable: false
+                    sortable: false,
+                    sticky: 'start'
                 },
                 { 
                     key: 'itemNumber', 

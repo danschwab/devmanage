@@ -715,6 +715,7 @@ button.card {
 .table-wrapper{
     width: 100%;
     overflow-x: auto;
+    overscroll-behavior: chain;
     /*margin-top: 1rem;*/
     /*border-radius: var(--radius-md);*/
     /*box-shadow: 0 0 0 1px #dee2e6;*/
@@ -766,8 +767,6 @@ button.card {
 }*/
 
 thead {
-    z-index: 10;
-    position: relative;
     transition: transform 0s linear;
     user-select: none;
 }
@@ -784,6 +783,7 @@ th, td {
     /*overflow: hidden;*/
 }
 th {
+    position: relative;
     background-color: var(--color-gray);
     color: var(--color-text-inverted);
     font-weight: 400;
@@ -813,7 +813,6 @@ table {
     border-collapse: collapse;
     margin: 0;
     background-color: var(--background-color);
-    overflow: hidden;
 }
 
 
@@ -854,6 +853,7 @@ td:has(img) {
 }
 .input-container {
     position: relative;
+    display: flex;
 }
 .input-container .column-button {
     margin-right: .3em;
@@ -1203,6 +1203,25 @@ tr.is-group:hover .group-toggle {
     position: relative;
 }
 
+/* Pinned (sticky) column styles */
+th.col-sticky-start, td.col-sticky-start {
+    position: sticky;
+    z-index: 1;
+    outline: 1px solid var(--color-border);
+}
+thead th.col-sticky-start, thead th.col-sticky-end {
+    z-index: 2;
+}
+th.col-sticky-end, td.col-sticky-end {
+    position: sticky;
+    z-index: 1;
+    outline: 1px solid var(--color-border);
+}
+td.col-sticky-start, td.col-sticky-end {
+    background-color: var(--background-color);
+}
+
+
 /* Table Details Styling */
 
 .details-cell {
@@ -1219,9 +1238,12 @@ tr.is-group:hover .group-toggle {
 }
 
 .details-content {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
     padding: var(--padding-md);
     background-color: var(--background-color);
-    margin: 0 0 var(--padding-md) 0;
+    margin: 0 1px var(--padding-md) 1px;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     border: 1px solid var(--color-border);
     border-top: none;
@@ -1234,10 +1256,13 @@ tr.is-group:hover .group-toggle {
 }
 
 .details-grid {
+    --details-grid-min-column-width: 200px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    flex: 1 1 0%;
+    grid-template-columns: repeat(auto-fit, minmax(var(--details-grid-min-column-width), 1fr));
     gap: var(--padding-md);
 }
+
 .details-grid label {
     color: var(--color-text-light);
     line-height: 1.2rem;

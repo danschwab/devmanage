@@ -79,7 +79,7 @@ export const TransshipmentModal = {
                 { key: 'Year', label: 'Year' },
                 { key: 'Size', label: 'Size', sortable: true },
                 { key: 'Ship', label: 'Ship', sortable: true },
-                { key: '_action', label: '', width: 90, sortable: false }
+                { key: '_action', label: '', width: 90, sortable: false, sticky: 'end' }
             ];
         },
         selectedShipISO() {

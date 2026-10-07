@@ -34,7 +34,8 @@ export const PacklistItemsSummary = {
                     labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
-                    sortable: false
+                    sortable: false,
+                    sticky: 'start'
                 },
                 { key: 'itemId', label: 'Item#', type: 'item', sortable: true},
                 { key: 'quantity', label: 'Quantity', sortable: true},

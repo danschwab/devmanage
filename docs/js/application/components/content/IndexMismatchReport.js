@@ -35,7 +35,7 @@ export const IndexMismatchReport = {
                 { key: 'typeLabel', label: 'Type', sortable: true, width: 80 },
                 { key: 'sourcesSummary', label: 'Sources', sortable: false },
                 { key: 'resolution', label: 'Resolution', sortable: false, editable: true, format: 'external-edit' },
-                { key: '_resolve', label: '', sortable: false, width: 90 }
+                { key: '_resolve', label: '', sortable: false, width: 90, sticky: 'end' }
             ];
         },
         tableData() {
@@ -230,9 +230,7 @@ export const IndexMismatchReport = {
                 <button
                     v-if="column.key === '_resolve'"
                     @click="openResolutionModal(row)"
-                >
-                    Resolve
-                </button>
+                >Resolve</button>
                 <div v-else-if="column.key === 'resolution'" style="line-height: 1.6;">
                     <template v-if="row.resolution">
                         <div v-for="(line, idx) in row.resolution.split('\n')" :key="idx">

@@ -215,7 +215,7 @@ export const InventoryItemTimeline = {
                         :imageSize="96"
                         :editable="true"
                     />
-                    <div class="details-grid" style="flex: 1; grid-template-columns: repeat(2, 1fr); align-content: start;">
+                    <div class="details-grid" style="--details-grid-min-column-width: 300px;">
                         <div class="detail-item">
                             <label>Item#:</label>
                             <span :class="{ 'search-match': hasSearchMatch(resolvedItemId) }">{{ resolvedItemId }}</span>

@@ -1633,6 +1633,8 @@ export const TableComponent = {
             stickyScrollLeft: 0, // Tracks horizontal scroll offset of table-wrapper for sticky clone alignment
             stickySpacerHeight: 0, // Measured height of wrapper before clone is added
             stickyColumnWidths: [], // Store actual column widths from original table
+            colWidths: [], // Measured th widths for sticky column offset computation
+            tableWrapperWidth: 0, // Visible width of .table-wrapper for details-content sizing
             hideRowsOnSearchLocal: this.hideRowsOnSearch, // Runtime toggle for hide-rows-on-search behavior
             theadActive: false // Mobile: tap-to-show column buttons toggle
         };
@@ -1655,6 +1657,7 @@ export const TableComponent = {
         },
         data: {
             handler() {
+                this.$nextTick(() => this._measureColWidths());
                 if (!this.hasEditableColumns) return;
                 this.$nextTick(() => {
                     this.updateAllEditableCells();
@@ -1663,6 +1666,9 @@ export const TableComponent = {
             },
             deep: true,
             flush: 'post' // Ensure DOM updates happen after data changes
+        },
+        visibleColumns() {
+            this.$nextTick(() => this._measureColWidths());
         },
         isLoading(val) {
             if (!this.hasEditableColumns) return;
@@ -1928,7 +1934,7 @@ export const TableComponent = {
             
             // Find the main data table (not the sticky header table)
             // Use .table-wrapper to ensure we get the main table, not the sticky header clone
-            const table = this.$el?.querySelector('.table-wrapper table');
+            const table = this._rootEl()?.querySelector('.table-wrapper table');
             if (!table) return { display: 'none' };
             
             const targetRow = table.querySelector(`tbody tr[data-visible-idx="${this.firstSelectedVisibleRowIndex}"]`);
@@ -1973,8 +1979,15 @@ export const TableComponent = {
             });
             return map;
         },
+        // Counteracts the clone table's translateX so sticky-end cells stay at the right edge.
+        // position:sticky is disabled inside transformed ancestors, so this must be done manually.
+        cloneDetailsStickyTransform() {
+            const totalWidth = this.stickyColumnWidths.reduce((s, w) => s + w, 0);
+            if (!totalWidth || totalWidth <= this.stickyWidth) return '';
+            const offset = Math.min(0, this.stickyWidth - totalWidth + this.stickyScrollLeft);
+            return 'translateX(' + offset + 'px)';
+        },
         mainTableColumns() {
-            // find columns marked with a colspan property and eliminate the extra columns following them
             // e.g. if column 2 has colspan: 3, then columns 3 and 4 are removed
             // This allows for dynamic column spanning in the main table view
             const columnsClipped = [];
@@ -2120,43 +2133,45 @@ export const TableComponent = {
         // Use requestAnimationFrame to ensure layout has been calculated before measuring
         if (this.showHeader) {
             this._stickyHeader = useStickyHeader({
-                getStickyEl: () => this.$el?.querySelector('.sticky-header-wrapper'),
+                getStickyEl: () => this._rootEl()?.querySelector('.sticky-header-wrapper'),
                 // .sticky-header-spacer sits in-flow at exactly the top of the content-header div
                 // and its position is invariant: when sticky is inactive the spacer is 0-height and
                 // the wrapper follows it; when sticky is active the spacer grows to the wrapper's
                 // former height, keeping spacer.top at the same viewport position in both states.
-                getAnchorEl: () => this.$el?.querySelector('.sticky-header-spacer'),
+                getAnchorEl: () => this._rootEl()?.querySelector('.sticky-header-spacer'),
                 getContainerEl: () => [
-                    this.$el?.querySelector('.table-wrapper'),
-                    this.$el?.closest('.container'),
+                    this._rootEl()?.querySelector('.table-wrapper'),
+                    this._rootEl()?.closest('.container'),
                 ].filter(Boolean),
                 getIsActive: () => this.stickyActive,
                 canActivate: () => {
                     const minHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--page-height-card')) || 360;
-                    return (this.$el?.offsetHeight ?? 0) >= minHeight;
+                    return (this._rootEl()?.offsetHeight ?? 0) >= minHeight;
                 },
                 onActivate: () => {
                     // Measure spacer height only on first activation (before thead clone is added)
                     if (!this.stickyActive) {
-                        const wrapper = this.$el?.querySelector('.sticky-header-wrapper');
+                        const wrapper = this._rootEl()?.querySelector('.sticky-header-wrapper');
                         this.stickySpacerHeight = wrapper ? wrapper.offsetHeight : 0;
                     }
                     // Re-measure column widths on every tick (table may resize)
-                    const thead = this.$el?.querySelector('.table-wrapper thead');
+                    const thead = this._rootEl()?.querySelector('.table-wrapper thead');
                     if (thead) {
                         this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
                             .map(th => th.getBoundingClientRect().width);
                     }
                     // Update position (left and width only; top uses CSS variable --navbar-height)
-                    const tableWrapper = this.$el?.querySelector('.table-wrapper');
-                    const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this.$el?.getBoundingClientRect();
+                    const tableWrapper = this._rootEl()?.querySelector('.table-wrapper');
+                    const rect = tableWrapper ? tableWrapper.getBoundingClientRect() : this._rootEl()?.getBoundingClientRect();
                     const navEl = document.querySelector('header nav');
                     this.stickyTop = navEl ? Math.max(0, navEl.getBoundingClientRect().bottom) : 0;
                     this.stickyActive = true;
                     this.showStickyHeader = true;
                     this.stickyLeft = rect ? rect.left : 0;
                     this.stickyWidth = rect ? rect.width : 0;
+                    this.tableWrapperWidth = rect ? rect.width : 0;
                     this.stickyScrollLeft = tableWrapper?.scrollLeft ?? 0;
+                    this.colWidths = this.stickyColumnWidths.slice();
                     // Lazily attach horizontal scroll listener — .table-wrapper may not exist at mounted() time
                     if (tableWrapper && !this._tableWrapperScrollEl) {
                         this._tableWrapperScrollEl = tableWrapper;
@@ -2178,6 +2193,7 @@ export const TableComponent = {
             this.$nextTick(() => {
                 requestAnimationFrame(() => {
                     if (this._stickyHeader) this._stickyHeader.setup();
+                    this._measureColWidths();
                 });
             });
         }
@@ -2216,6 +2232,62 @@ export const TableComponent = {
         }
     },
     methods: {
+        // Returns null when $el is a text/comment node (fragment root) to prevent querySelector errors.
+        _rootEl() { return this.$el instanceof Element ? this.$el : null; },
+        _measureColWidths() {
+            const ths = this._rootEl()?.querySelectorAll('.table-wrapper thead tr th');
+            if (!ths?.length) return;
+            this.colWidths = Array.from(ths).map(th => th.getBoundingClientRect().width);
+            const tw = this._rootEl()?.querySelector('.table-wrapper');
+            if (tw) this.tableWrapperWidth = tw.clientWidth;
+        },
+        _stickyStartLeft(colIdx) {
+            let offset = this.draggable ? (this.colWidths[0] ?? 20) : 0;
+            for (let i = 0; i < colIdx; i++) {
+                if (this.visibleColumns[i]?.sticky === 'start') {
+                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.visibleColumns[i].width ?? 0;
+                }
+            }
+            return offset;
+        },
+        _stickyEndRight(colIdx) {
+            const detailsAbsIdx = (this.draggable ? 1 : 0) + this.visibleColumns.length;
+            let offset = (this.allowDetails && !this.forceDetails) ? (this.colWidths[detailsAbsIdx] ?? 40) : 0;
+            for (let i = this.visibleColumns.length - 1; i > colIdx; i--) {
+                if (this.visibleColumns[i]?.sticky === 'end') {
+                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.visibleColumns[i].width ?? 0;
+                }
+            }
+            return offset;
+        },
+        getStickyColProps(column) {
+            if (!column?.sticky) return null;
+            const colIdx = this.visibleColumns.findIndex(c => c.key === column.key);
+            if (colIdx === -1) return null;
+            const isStart = column.sticky === 'start';
+            const offset = isStart ? this._stickyStartLeft(colIdx) : this._stickyEndRight(colIdx);
+            return {
+                stickyClass: isStart ? 'col-sticky-start' : 'col-sticky-end',
+                stickyStyle: isStart ? { left: offset + 'px' } : { right: offset + 'px' },
+            };
+        },
+        // position:sticky is broken inside transformed ancestors; manually pin sticky columns in the clone header.
+        getCloneStickyThStyle(column, colIdx) {
+            if (!column?.sticky) return {};
+            const absIdx = this.draggable ? colIdx + 1 : colIdx;
+            let naturalLeft = 0;
+            for (let i = 0; i < absIdx; i++) naturalLeft += this.stickyColumnWidths[i] ?? 0;
+            if (column.sticky === 'start') {
+                const dx = Math.max(0, this._stickyStartLeft(colIdx) - naturalLeft + this.stickyScrollLeft);
+                return dx ? { transform: 'translateX(' + dx + 'px)' } : {};
+            } else {
+                const colWidth = this.stickyColumnWidths[absIdx] ?? 0;
+                // Sticky-end columns are off-screen to the right at low scroll values; correction is negative (pull left).
+                const dx = Math.min(0, this.stickyWidth - this._stickyEndRight(colIdx) - naturalLeft - colWidth + this.stickyScrollLeft);
+                return dx ? { transform: 'translateX(' + dx + 'px)' } : {};
+            }
+        },
+
         // Universal autoColor method
         getAutoColorClass(value) {
             return getAutoColorClass(value);
@@ -4438,9 +4510,9 @@ export const TableComponent = {
                             <th 
                                 v-for="(column, colIdx) in visibleColumns" 
                                 :key="column.key"
-                                :class="getColumnFont(column)"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass]"
                                 :title="column.title || column.label"
-                                :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}"
+                                :style="[stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}, getCloneStickyThStyle(column, colIdx)]"
                             >
                                 <div>
                                     <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
@@ -4462,7 +4534,7 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}">&#9432;</th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]">&#9432;</th>
                         </tr>
                     </thead>
                 </table>
@@ -4487,8 +4559,9 @@ export const TableComponent = {
                             <th 
                                 v-for="(column, colIdx) in visibleColumns" 
                                 :key="column.key"
-                                :class="getColumnFont(column)"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass]"
                                 :title="column.title || column.label"
+                                :style="getStickyColProps(column)?.stickyStyle"
                             >
                                 <div>
                                     <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
@@ -4510,7 +4583,7 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header" style="font-size: 20px; line-height: 1em;" title="Details">&#9432;</th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em; right: 0;" title="Details">&#9432;</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4544,7 +4617,8 @@ export const TableComponent = {
                                     v-for="(column, colIndex) in mainTableColumns" 
                                     :key="column.key"
                                     :colspan="column.colspan || 1"
-                                    :class="[getCellClass(row[column.key], column, idx, colIndex)]"
+                                    :class="[getCellClass(row[column.key], column, idx, colIndex), getStickyColProps(column)?.stickyClass]"
+                                    :style="getStickyColProps(column)?.stickyStyle"
                                     v-show="!hideSet.has(column.key)"
                                     @click="handleEditableCellContainerClick(idx, colIndex, column, $event)"
                                 >
@@ -4630,7 +4704,7 @@ export const TableComponent = {
                                         ></slot>
                                     </div>
                                 </td>
-                                <td v-if="allowDetails && !forceDetails" class="details-cell">
+                                <td v-if="allowDetails && !forceDetails" class="details-cell col-sticky-end" :style="{ right: '0' }">
                                     <slot 
                                         name="details-cell"
                                         :row="row" 
@@ -4672,7 +4746,7 @@ export const TableComponent = {
                                 <td v-if="draggable"></td>
                                 <td :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" class="details-container">
                                     
-                                    <div v-if="shouldShowDetailsContent(row, idx)" class="details-content">
+                                    <div v-if="shouldShowDetailsContent(row, idx)" class="details-content" :style="tableWrapperWidth ? { width: (tableWrapperWidth - 2) + 'px' } : {}">
                                         <!-- Auto-generated details from columns marked with details: true -->
                                         <div v-if="detailsColumns.length > 0" class="auto-details">
                                             <div class="details-grid">

@@ -716,7 +716,7 @@ export const PacklistTable = {
                 computed: {
                     columns() {
                         return [
-                            { key: 'image', labelHtml: '<span class="material-symbols-outlined">imagesmode</span>', label: 'IMG', width: 1, sortable: false },
+                            { key: 'image', labelHtml: '<span class="material-symbols-outlined">imagesmode</span>', label: 'IMG', width: 1, sortable: false, sticky: 'start' },
                             { key: 'itemNumber', label: 'Item#', type: 'item', width: 120, sortable: true },
                             { key: 'description', label: 'Description', sortable: true },
                             { key: 'quantity', label: 'Available', width: 100, sortable: true },

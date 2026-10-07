@@ -869,7 +869,8 @@ export const InventoryTableComponent = {
                     labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
                     label: 'IMG',
                     width: 1,
-                    sortable: false
+                    sortable: false,
+                    sticky: 'start'
                 },
                 { 
                     key: 'itemNumber', 
@@ -904,7 +905,8 @@ export const InventoryTableComponent = {
                     labelHtml: '<span class="material-symbols-outlined">calendar_month</span>',
                     label: '',
                     width: 36,
-                    sortable: false
+                    sortable: false,
+                    sticky: 'end'
                 }
             ];
             // Apply column filters based on metadata flags
