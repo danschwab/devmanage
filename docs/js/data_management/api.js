@@ -766,12 +766,10 @@ class Requests_uncached {
         const availableTabs = await deps.call(Database.getTabs, 'PACK_LISTS');
         const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, rowData, availableTabs);
         
-        // If a matching tab was found, use its actual title as the identifier
-        // This ensures overrides navigate to the correct packlist tab
         if (matchingTabs.length > 0) {
             return {
                 exists: true,
-                identifier: matchingTabs[0].title
+                identifiers: matchingTabs.map(t => t.title)
             };
         }
         

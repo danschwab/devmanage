@@ -3,6 +3,19 @@ import { CalendarComponent } from '../interface/calendarComponent.js';
 import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
 import { TransshipmentModal } from '../interface/ScheduleModals.js';
 
+const PacklistSelectModal = {
+    props: ['tabs', 'onNavigate'],
+    template: html`
+        <div style="display:flex;flex-direction:column;gap:8px;padding:8px 0">
+            <button v-for="tab in tabs" :key="tab"
+                class="card-button white"
+                @click="() => { onNavigate(tab); $emit('close-modal') }">
+                {{ tab }}
+            </button>
+        </div>
+    `
+};
+
 export const ScheduleTableComponent = {
     components: {
         TableComponent,
@@ -452,12 +465,20 @@ export const ScheduleTableComponent = {
             }
         },
         async handlePacklistClick(packlistInfo) {
-            if (!packlistInfo.exists || !packlistInfo.identifier) {
+            if (!packlistInfo.exists || !packlistInfo.identifiers?.length) {
                 this.$modal.alert('No packlist available for this show', 'Info');
                 return;
             }
             
-            this.$emit('navigate-to-path', `packlist/${packlistInfo.identifier}`);
+            if (packlistInfo.identifiers.length === 1) {
+                this.$emit('navigate-to-path', `packlist/${packlistInfo.identifiers[0]}`);
+                return;
+            }
+
+            this.$modal.custom(PacklistSelectModal, {
+                tabs: packlistInfo.identifiers,
+                onNavigate: (tab) => this.$emit('navigate-to-path', `packlist/${tab}`)
+            }, 'Select Packlist');
         },
         async handleCreatePacklist(identifier, scheduleRow) {
             try {
@@ -564,7 +585,9 @@ export const ScheduleTableComponent = {
             
             if (packlistInfo.exists) {
                 return [{
-                    message: 'View Packlist',
+                    message: packlistInfo.identifiers.length > 1
+                        ? `View Packlist (${packlistInfo.identifiers.length})`
+                        : 'View Packlist',
                     disabled: false,
                     class: 'white',
                     action: () => this.handlePacklistClick(packlistInfo)
