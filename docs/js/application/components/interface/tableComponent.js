@@ -1636,7 +1636,8 @@ export const TableComponent = {
             colWidths: [], // Measured th widths for sticky column offset computation
             tableWrapperWidth: 0, // Visible width of .table-wrapper for details-content sizing
             hideRowsOnSearchLocal: this.hideRowsOnSearch, // Runtime toggle for hide-rows-on-search behavior
-            theadActive: false // Mobile: tap-to-show column buttons toggle
+            theadActive: false, // Mobile: tap-to-show column buttons toggle
+            isNarrow: false
         };
     },
     watch: {
@@ -1717,6 +1718,13 @@ export const TableComponent = {
             },
             deep: true
         },
+        isNarrow() {
+            this.$nextTick(() => {
+                this.applyDefaultSortColumn();
+                this.updateAllEditableCells();
+                this._measureColWidths();
+            });
+        },
         defaultSortColumn() {
             this.applyDefaultSortColumn({ force: true });
         },
@@ -1749,6 +1757,7 @@ export const TableComponent = {
                 this.stickyScrollLeft = 0;
                 this.stickyTop = 0;
                 this._stickyHeader.reset();
+                this.$nextTick(() => this._stickyHeader.update());
                 return;
             }
 
@@ -1956,13 +1965,13 @@ export const TableComponent = {
         },
         showSaveButton() {
             // True if any editable cell or add row button is present
-            const hasEditable = this.columns.some(col => col.editable);
+            const hasEditable = this.resolvedColumns.some(col => col.editable);
             const hasAddRow = !!this.newRow;
             return hasEditable || hasAddRow;
         },
         hasEditableColumns() {
             // True if any column is editable
-            return this.columns.some(col => col.editable);
+            return this.resolvedColumns.some(col => col.editable);
         },
         hideSet() {
             // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
@@ -1987,13 +1996,17 @@ export const TableComponent = {
             const offset = Math.min(0, this.stickyWidth - totalWidth + this.stickyScrollLeft);
             return 'translateX(' + offset + 'px)';
         },
+        resolvedColumns() {
+            if (!this.isNarrow) return this.columns;
+            return this.columns.map(col => col.whenSmall ? { ...col, ...col.whenSmall } : col);
+        },
         mainTableColumns() {
             // e.g. if column 2 has colspan: 3, then columns 3 and 4 are removed
             // This allows for dynamic column spanning in the main table view
             const columnsClipped = [];
             let i = 0;
-            while (i < this.columns.length) {
-                const col = this.columns[i];
+            while (i < this.resolvedColumns.length) {
+                const col = this.resolvedColumns[i];
                 columnsClipped.push(col);
                 if (col.colspan) {
                     i += col.colspan;
@@ -2007,7 +2020,7 @@ export const TableComponent = {
         },
         visibleColumns() {
             // Get only columns not in hideSet
-            return this.columns.filter(column => !this.hideSet.has(column.key) && !this.detailsColumns.includes(column));
+            return this.resolvedColumns.filter(column => !this.hideSet.has(column.key) && !this.detailsColumns.includes(column));
         },
         // Columns to serialize when writing to the OS clipboard (visible, non-action columns)
         clipboardExportColumns() {
@@ -2019,7 +2032,7 @@ export const TableComponent = {
         },
         detailsColumns() {
             // Get only columns marked for details display
-            return this.columns.filter(column => column.details);
+            return this.resolvedColumns.filter(column => column.details);
         },
         stackedColumnMap() {
             // Map parent column key -> child columns that stack under it
@@ -2068,7 +2081,7 @@ export const TableComponent = {
                 filteredData = filteredData.filter(({ row }) => {
                     if (!row) return false;
                     // Only search visible columns (exclude hidden columns)
-                    const visibleColumns = this.columns.filter(column => !this.hideSet.has(column.key));
+                    const visibleColumns = this.resolvedColumns.filter(column => !this.hideSet.has(column.key));
                     
                     // All search words must match somewhere in the row (AND logic)
                     return searchWords.every(word => 
@@ -2207,6 +2220,8 @@ export const TableComponent = {
                     this.stickyActive = false;
                     this.showStickyHeader = false;
                     this.stickyScrollLeft = 0;
+                    // Keep colWidths and tableWrapperWidth fresh on the same events that drive sticky positioning.
+                    this._measureColWidths();
                 },
             });
             // Use requestAnimationFrame to ensure layout measurements are accurate after all DOM updates
@@ -2223,6 +2238,21 @@ export const TableComponent = {
         if (this._theadActiveScrollEl) {
             this._theadActiveScrollFn = () => { this.theadActive = false; };
             this._theadActiveScrollEl.addEventListener('scroll', this._theadActiveScrollFn, { passive: true });
+        }
+
+        // Track container width for whenSmall column overrides
+        const observedEl = this._rootEl();
+        if (observedEl) {
+            // Read initial width synchronously after layout so isNarrow is correct before first paint
+            this.$nextTick(() => {
+                requestAnimationFrame(() => {
+                    this.isNarrow = observedEl.offsetWidth < 640;
+                });
+            });
+            this._resizeObserver = new ResizeObserver(entries => {
+                this.isNarrow = (entries[0]?.contentRect.width ?? observedEl.offsetWidth) < 640;
+            });
+            this._resizeObserver.observe(observedEl);
         }
     },
     beforeUnmount() {
@@ -2250,6 +2280,7 @@ export const TableComponent = {
         if (this._theadActiveScrollEl && this._theadActiveScrollFn) {
             this._theadActiveScrollEl.removeEventListener('scroll', this._theadActiveScrollFn);
         }
+        this._resizeObserver?.disconnect();
     },
     methods: {
         // Returns null when $el is a text/comment node (fragment root) to prevent querySelector errors.
@@ -2503,7 +2534,7 @@ export const TableComponent = {
             });
 
             // Ensure all declared columns exist on the row.
-            this.columns.forEach(column => {
+            this.resolvedColumns.forEach(column => {
                 if (!Object.prototype.hasOwnProperty.call(emptyRow, column.key)) {
                     emptyRow[column.key] = '';
                 }
@@ -2567,7 +2598,7 @@ export const TableComponent = {
 
         handleSort(columnKey) {
             // Check if this specific column is sortable
-            const column = this.columns.find(col => col.key === columnKey);
+            const column = this.resolvedColumns.find(col => col.key === columnKey);
             if (!column || !this.isColumnSortable(column)) return;
             this.isUsingDefaultSort = false;
             
@@ -2610,7 +2641,7 @@ export const TableComponent = {
                 })
                 .filter(item => item && item.key)
                 .map(item => {
-                    const column = this.columns.find(col => col.key === item.key);
+                    const column = this.resolvedColumns.find(col => col.key === item.key);
                     return column && this.isColumnSortable(column)
                         ? { column, direction: item.direction }
                         : null;
@@ -2620,7 +2651,7 @@ export const TableComponent = {
 
         getCurrentSortCriteria() {
             if (!this.sortColumn) return [];
-            const column = this.columns.find(col => col.key === this.sortColumn);
+            const column = this.resolvedColumns.find(col => col.key === this.sortColumn);
             if (!column || !this.isColumnSortable(column)) return [];
             return [{ column, direction: this.sortDirection }];
         },
@@ -2665,7 +2696,7 @@ export const TableComponent = {
             const defaultSortCriteria = this.getDefaultSortCriteria();
             if (defaultSortCriteria.length === 0) return;
 
-            const activeSortColumn = this.columns.find(col => col.key === this.sortColumn);
+            const activeSortColumn = this.resolvedColumns.find(col => col.key === this.sortColumn);
             const hasValidActiveSort = !!(this.sortColumn && activeSortColumn && this.isColumnSortable(activeSortColumn));
 
             if (!force && hasValidActiveSort) return;
@@ -2681,7 +2712,7 @@ export const TableComponent = {
         },
 
         getSortIcon(columnKey) {
-            const column = this.columns.find(col => col.key === columnKey);
+            const column = this.resolvedColumns.find(col => col.key === columnKey);
             if (!this.isColumnSortable(column) || this.sortColumn !== columnKey) return '';
             return this.sortDirection === 'asc' ? '⭡' : '⭣';
         },
@@ -3079,7 +3110,7 @@ export const TableComponent = {
             this.data.forEach((row, rowIndex) => {
                 const originalRow = this.originalData[rowIndex];
                 // Treat undefined originalRow as an object with all nulls for dirty checking
-                this.columns.forEach((column, colIndex) => {
+                this.resolvedColumns.forEach((column, colIndex) => {
                     const key = column.key;
                     if (column.editable) {
                         const currentValue = row[key];
@@ -3869,7 +3900,7 @@ export const TableComponent = {
             if (!Array.isArray(this.data)) return; // <-- guard against null/undefined
             this.data.forEach((row, rowIndex) => {
                 if (!row) return; // Skip undefined rows
-                this.columns.forEach((column, colIndex) => {
+                this.resolvedColumns.forEach((column, colIndex) => {
                     if (column.editable) {
                         const refName = 'editable_' + rowIndex + '_' + colIndex;
                         const cell = this.$refs[refName];

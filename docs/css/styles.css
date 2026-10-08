@@ -1844,6 +1844,11 @@ button.search-highlight {
     padding: calc(var(--padding-sm) * 2) !important;
 }
 
+.schedule-page .table-cell-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
 
 .show-when-narrow {
     display: none;

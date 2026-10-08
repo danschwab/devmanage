@@ -46,8 +46,7 @@ export const ScheduleTableComponent = {
     emits: ['navigate-to-path', 'packlist-created'],
     data() {
         return {
-            scheduleTableStore: null,
-            isNarrow: window.innerWidth < 640
+            scheduleTableStore: null
         };
     },
 
@@ -58,7 +57,7 @@ export const ScheduleTableComponent = {
                 // Return a basic set of columns if no data yet (for loading state)
                 return [
                     { key: 'Show', label: 'Show' },
-                    { key: 'Client', label: 'Client', ...(this.isNarrow ? { stackUnder: 'Show' } : {}) },
+                    { key: 'Client', label: 'Client', whenSmall: { stackUnder: 'Show' } },
                     { key: 'packlist', label: 'Packlist' }
                 ];
             }
@@ -75,14 +74,14 @@ export const ScheduleTableComponent = {
                 };
 
                 // Mark columns as details if they're not Show, Client, Ship, dates, or city/size
-                if (!['Show', 'Client', 'Ship', 'City', 'Size', 'S. Start', 'S. End', 'Expected Return'].includes(header)) {
+                if (!['Show', 'Client', 'Ship', 'City', 'Size', 'S. Start', 'S. End', 'Recieved'].includes(header)) {
                     column.details = true;
                 }
 
-                if (header === 'Client' && this.isNarrow) {
-                    column.stackUnder = 'Show';
+                if (header === 'Client') {
+                    column.whenSmall = { stackUnder: 'Show' };
                 }
-                if (header === 'Expected Return') {
+                if (header === 'Recieved') {
                     column.stackUnder = 'Ship';
                 }
                 if (header === 'S. End') {
@@ -205,12 +204,7 @@ export const ScheduleTableComponent = {
         }
     },
     async mounted() {
-        this._onResize = () => { this.isNarrow = window.innerWidth < 640; };
-        window.addEventListener('resize', this._onResize);
         this.recreateStore();
-    },
-    unmounted() {
-        window.removeEventListener('resize', this._onResize);
     },
     methods: {
         recreateStore() {
@@ -528,7 +522,7 @@ export const ScheduleTableComponent = {
                 }];
             }
             // Return date for source shows is extended to the destination's return date
-            if (columnKey === 'Expected Return' && dest) {
+            if (columnKey === 'Recieved' && dest) {
                 return [{
                     message: 'return extended',
                     class: 'gray',
@@ -871,7 +865,6 @@ export const ScheduleTableComponent = {
                 <template v-for="card in getTransshipCards(row, column.key)" :key="'transship-' + card.message">
                     <div
                         :class="['card', 'clickable', card.class]"
-                        style="font-size: 8pt;"
                         :title="card.hoverMessage"
                         @click="card.action()"
                         v-html="card.message"

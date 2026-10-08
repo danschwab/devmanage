@@ -784,7 +784,7 @@ export const ScheduleAdvancedFilter = {
                         if (!show.shipDate && !show.returnDate) return;
                         const filters = [];
                         if (show.shipDate) {
-                            filters.push({ column: 'Expected Return', value: show.shipDate, type: 'after' });
+                            filters.push({ column: 'Recieved', value: show.shipDate, type: 'after' });
                         }
                         if (show.returnDate) {
                             filters.push({ column: 'Ship', value: show.returnDate, type: 'before' });

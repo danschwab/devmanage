@@ -125,7 +125,7 @@ This causes ALL rows to be filtered out when using columns like:
 
 - 'S. Start'
 - 'S. End'
-- 'Expected Return'
+- 'Recieved'
 - Any other date column in the schedule
 
 ### Data Flow Analysis
