@@ -348,9 +348,17 @@ class packListUtils_uncached {
                 const matchingTabs = row
                     ? await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, row, tabs)
                     : [];
-                const packlistId = matchingTabs[0]?.title || current;
-                const showItems = await deps.call(PackListUtils.extractAllItemsForShow, packlistId, ctgFilter);
-                for (const [itemId, qty] of Object.entries(showItems)) {
+                // Sum across all tabs for this node (multi-booth: both tabs are active simultaneously)
+                const nodeItems = {};
+                const tabIds = matchingTabs.length ? matchingTabs.map(t => t.title) : [current];
+                for (const tabId of tabIds) {
+                    const tabItems = await deps.call(PackListUtils.extractAllItemsForShow, tabId, ctgFilter);
+                    for (const [itemId, qty] of Object.entries(tabItems)) {
+                        nodeItems[itemId] = (nodeItems[itemId] || 0) + qty;
+                    }
+                }
+                // Max across chain nodes (transship: items travel show-to-show, peak demand governs)
+                for (const [itemId, qty] of Object.entries(nodeItems)) {
                     combined[itemId] = Math.max(combined[itemId] || 0, qty);
                 }
                 // ScheduleOverrides stores canonical ids — always walk chain using canonical id

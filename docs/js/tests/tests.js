@@ -376,7 +376,45 @@ test('INVENTORY DATA', 'COUCH-001 quantity is 2', async () => {
     assertEqual(row.quantity, '2', 'COUCH-001 quantity');
 });
 
-// ── Group 8: Packlist Text Extraction ────────────────────────────────────────
+// ── Group 8: Multi-Booth Override Linking ────────────────────────────────────
+// When a schedule row has two associated packlist tabs — one matched naturally by name
+// and one linked via NameOverride — both tabs must be included. Quantities from all
+// tabs for the same show are SUMMED (not maxed), because both booths are active
+// simultaneously and their items come from the same warehouse stock.
+//
+// FakeGoogle data: MULTIBOOTHCO 2026 MULTI BOOTH
+//   Primary tab (natural match):      CHAIR-001=5
+//   Secondary tab (NameOverride):     CHAIR-001=2, STOOL-002=4
+//   Expected combined:                CHAIR-001=7 (5+2), STOOL-002=4
+
+test('MULTI BOOTH', 'items from both tabs are summed in the timeline Ships event', async () => {
+    // If both tabs are included, CHAIR-001 Ships change = 'quantity: -7' (5+2)
+    const events = await Requests.getItemTimeline('CHAIR-001', '2026-10-01', '2026-11-01');
+    const ship = events.find(e => e.event === 'Ships' && e.note === 'MULTIBOOTHCO 2026 MULTI BOOTH');
+    if (!ship) throw new Error('Ships event for MULTIBOOTHCO not found');
+    assertEqual(ship.change, 'quantity: -7', 'Ships change should sum both tabs: primary(5) + secondary(2) = 7');
+});
+
+test('MULTI BOOTH', 'item from override-only tab appears in the timeline', async () => {
+    // STOOL-002 exists only in the NameOverride-linked secondary tab
+    const events = await Requests.getItemTimeline('STOOL-002', '2026-10-01', '2026-11-01');
+    const ship = events.find(e => e.event === 'Ships' && e.note === 'MULTIBOOTHCO 2026 MULTI BOOTH');
+    if (!ship) throw new Error('Ships event for MULTIBOOTHCO not found for STOOL-002 — secondary tab was not included');
+    assertEqual(ship.change, 'quantity: -4', 'Ships change should be -4 (from secondary tab only)');
+});
+
+test('MULTI BOOTH', 'override-linked tab does not displace the natural-match tab', async () => {
+    // After adding the override, the natural-match tab MUST still be present.
+    // If findPacklistTabsForScheduleRow incorrectly early-returned on the override, CHAIR-001 would be -2 not -7.
+    const events = await Requests.getItemTimeline('CHAIR-001', '2026-10-01', '2026-11-01');
+    const ship = events.find(e => e.event === 'Ships' && e.note === 'MULTIBOOTHCO 2026 MULTI BOOTH');
+    if (!ship) throw new Error('Ships event for MULTIBOOTHCO not found');
+    if (ship.change === 'quantity: -2') throw new Error(
+        'Ships change is -2 — override replaced the natural tab instead of adding to it. Both tabs must be included.'
+    );
+});
+
+// ── Group 9: Packlist Text Extraction ────────────────────────────────────────
 // extractItemNumber / extractQuantity parse the "(qty) ITEM-NUM description" format
 // used in packlist cells. These are the foundation of the full extraction pipeline;
 // a regression here silently corrupts all downstream timeline and quantity results.

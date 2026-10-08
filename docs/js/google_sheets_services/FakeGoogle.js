@@ -514,6 +514,20 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', 'Mixed items: (2) BX-16x39, TABLE-001, (5) 901 00 030 MKII', 'Multiple item types', '', ''],
                 ['', '', '', '', '', '', '', '', 'Also includes: VU-8x39 and (3) CHAIR-002', '', '', '']
             ],
+            // Multi-booth test: primary packlist (natural match), CHAIR-001=5
+            // Expected combined: CHAIR-001=7 (5+2), STOOL-002=4 (secondary only)
+            'MULTIBOOTHCO 2026 MULTI BOOTH': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(5) CHAIR-001 stack chair', '', '', '']
+            ],
+            // Multi-booth test: secondary packlist (NameOverride-linked), CHAIR-001=2, STOOL-002=4
+            'MULTI BOOTH SECONDARY PACKLIST': [
+                ['Piece #', 'Type', 'L', 'W', 'H', 'Weight', 'Pack', 'Check', 'Description', 'Packing/shop notes', 'EditHistory', 'MetaData'],
+                ['1', 'Crate', '48', '48', '48', '200', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(2) CHAIR-001 stack chair', '', '', ''],
+                ['', '', '', '', '', '', '', '', '(4) STOOL-002 square stool', '', '', '']
+            ],
             // Two-show transship chain: source ships TABLE-001 qty 2 and CHAIR-002 qty 5
             // Chain max: TABLE-001=3 (from SUMMER SHOW), CHAIR-002=5 (from SPRING EXPO)
             'CHAINCO 2026 SPRING EXPO': [
@@ -558,7 +572,7 @@ export class FakeGoogleSheetsService {
         'PROD_SCHED': {
             'Production Schedule': [
                 // Headers with embedded carriage returns to simulate real Google Sheets data quality issues
-                ['Show', 'Client', 'Year', 'Identifier', 'City', 'Size', 'Booth#', 'S. Start', 'S. End', 'Ship', 'Ship BKD', 'O/B\nBKD', 'MHA Done', 'Expected\nReturn', 'Recieved', 'GC', 'Sup', 'Sup Badge\nReq.', 'Pack List', 'PL to OPS', 'SOW Sent', 'SOW Ret', 'Elev', 'Panels', 'Setups', 'ER to OPG', 'GD DUE', 'GP DUE', '3rd Party Auth', 'I&D', 'S/U to\nElite', 'MH', 'Elec', 'Elec and Net\ndwg sent', 'H/S', 'H/S dwg sent', 'Net', 'Oth', 'EAC', 'COI', 'DWG (H/S-ELEC)\nTO SHOW BY', 'S/U IN SHOP', 'S. Install', 'S. Dismantle'],
+                ['Show', 'Client', 'Year', 'Identifier', 'City', 'Size', 'Booth#', 'S. Start', 'S. End', 'Ship', 'Ship BKD', 'O/B\nBKD', 'MHA Done', 'Expected\nReturn Date', 'Recieved', 'GC', 'Sup', 'Sup Badge\nReq.', 'Pack List', 'PL to OPS', 'SOW Sent', 'SOW Ret', 'Elev', 'Panels', 'Setups', 'ER to OPG', 'GD DUE', 'GP DUE', '3rd Party Auth', 'I&D', 'S/U to\nElite', 'MH', 'Elec', 'Elec and Net\ndwg sent', 'H/S', 'H/S dwg sent', 'Net', 'Oth', 'EAC', 'COI', 'DWG (H/S-ELEC)\nTO SHOW BY', 'S/U IN SHOP', 'S. Install', 'S. Dismantle'],
                 ['SHOT Show', 'Allen Arms', '2025', 'ALLEN ARMS 2025 SHOT', 'Las Vegas, NV', '10x40 & 10x10', '75323 & 75324', '21-Jan', '24-Jan', '1/13/2025', 'X', 'X', 'X', '', '2/3', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', 'X', 'X', 'X', '', 'in', '1/10', 'X', 'X', '', 'X', 'X', '', '', '', '', '', 'X', 'X', '10-Dec', ''],
                 ['SHOT Show', 'MOJO', '2025', 'MOJO 2025 SHOT', 'Las Vegas, NV', '30x30', '10518', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', 'X', 'X', '', 'X', 'X', '', 'X', '', '', 'X', '', '', '10-Dec', ''],
                 ['SHOT Show', 'Gearfire', '2025', 'GEARFIRE 2025 SHOT', 'Las Vegas, NV', '20x30', '11255', '21-Jan', '24-Jan', '1/10/2025', 'X', 'X', 'X', '', '1/31', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '-', '-', 'X', '', '12/13', '1/9', 'X', 'X', '', 'X', 'X', '', 'N/a', '', '', '', 'X', 'X', '10-Dec', ''],
@@ -614,14 +628,20 @@ export class FakeGoogleSheetsService {
                 ,['User Conference','Softwriters','2025','', 'San Diego, CA','20x30','N/A','9/15','9/17','9/2/2025','','','','','Alliance','ELITE','','X','X','X','','9/1/2025','','8/1','','','','','','','','','','']
                 ,['HR Tech','PayActiv','2025','', 'Las Vegas','10x20','6708','9/16','9/18','9/2/2025','','','','','The Expo Gp','ELITE','','','','9/1/2025','','','','','','','','','','','','','','']
                 ,['ASNE FMMS','Austal','2025','', 'San Diego, CA','10x10','','9/23','9/25','','','','','','','','X','','','','','','','','','','','','','','','','','','']
+                // Multi-booth test: single schedule row, two packlists linked via natural match + NameOverride
+                // Expected chain items: CHAIR-001=7 (5+2 summed), STOOL-002=4 (secondary tab only)
+                ,['Multi Booth', 'MultiBoothCo', '2026', 'MULTIBOOTHCO 2026 MULTI BOOTH', 'Las Vegas, NV', '20x30', '1111 & 2222', '10/15', '10/18', '10/10/2026', 'X', 'X', 'X', '10/25/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
+                // Multi-booth test: single schedule row, two packlists linked via natural match + NameOverride
+                // Expected combined items: CHAIR-001=7 (5+2 summed), STOOL-002=4 (secondary tab only)
+                ,['Multi Booth', 'MultiBoothCo', '2026', 'MULTIBOOTHCO 2026 MULTI BOOTH', 'Las Vegas, NV', '20x30', '1111 & 2222', '10/15', '10/18', '10/10/2026', 'X', 'X', 'X', '10/25/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
                 // --- Test data for transship chain pathways ---
                 // Two-show chain: SPRING EXPO ships first, SUMMER SHOW receives items (no Ship date)
                 ,['Spring Expo', 'ChainCo', '2026', 'CHAINCO 2026 SPRING EXPO', 'Chicago, IL', '20x20', '1500', '3/8', '3/11', '3/1/2026', 'X', 'X', 'X', '3/18/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
-                ,['Summer Show', 'ChainCo', '2026', 'CHAINCO 2026 SUMMER SHOW', 'Las Vegas, NV', '20x20', '2500', '6/1', '6/4', '', '', '', '', '', '6/11/2026', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
+                ,['Summer Show', 'ChainCo', '2026', 'CHAINCO 2026 SUMMER SHOW', 'Las Vegas, NV', '20x20', '2500', '6/1', '6/4', '', '', '', '', '6/11/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', 'X', '', '', '', '', '', 'X', 'X', '', '']
                 // Three-show chain: STAGE A → STAGE B → STAGE C, each transshipping to the next
                 ,['Stage A', 'TriChain', '2026', 'TRICHAIN 2026 STAGE A', 'Dallas, TX', '10x20', '3500', '4/7', '4/10', '4/1/2026', 'X', 'X', 'X', '4/14/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
                 ,['Stage B', 'TriChain', '2026', 'TRICHAIN 2026 STAGE B', 'Phoenix, AZ', '10x20', '4500', '5/5', '5/8', '', '', '', '', '5/12/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
-                ,['Stage C', 'TriChain', '2026', 'TRICHAIN 2026 STAGE C', 'Denver, CO', '10x20', '5500', '6/9', '6/12', '', '', '', '', '', '6/16/2026', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
+                ,['Stage C', 'TriChain', '2026', 'TRICHAIN 2026 STAGE C', 'Denver, CO', '10x20', '5500', '6/9', '6/12', '', '', '', '', '6/16/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
                 // Overlaps SPRING EXPO's date window — conflict detection should return SPRING EXPO (chain root), not SUMMER SHOW (destination)
                 ,['Overlap Test', 'OverlapCo', '2026', 'OVERLAPCO 2026 OVERLAP TEST', 'Chicago, IL', '10x10', '6500', '3/8', '3/11', '3/3/2026', 'X', 'X', 'X', '3/18/2026', '', 'Freeman', 'Top Shelf', '', 'X', 'X', 'X', 'X', '', '', 'X', '', '', '', 'X', 'X', '', '', '', '', '', '', '', '', 'X', 'X', '', '']
                 // --- Test data for Show Date filtering: Shows with dates crossing year boundaries ---
@@ -662,7 +682,9 @@ export class FakeGoogleSheetsService {
             'NameOverrides': [
                 ['Schedule', 'Packlist'],
                 // sentinel row: ensures non-empty result so database:getData is cached and the invalidation chain can propagate
-                ['_FAKE_OVERRIDE_SENTINEL', '_FAKE_PACK_SENTINEL']
+                ['_FAKE_OVERRIDE_SENTINEL', '_FAKE_PACK_SENTINEL'],
+                // Multi-booth test: secondary packlist linked to the same schedule row via override
+                ['MULTIBOOTHCO 2026 MULTI BOOTH', 'MULTI BOOTH SECONDARY PACKLIST']
             ],
             'ScheduleOverrides': [
                 ['Schedule', 'Override'],
@@ -677,22 +699,22 @@ export class FakeGoogleSheetsService {
                 ['schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}', '1', '2026-01-19T10:30:00.000Z']
             ],
             'Inventory': [
-                ['PREFIX', 'INVENTORY', 'FOLDER'],
-                ['CAB', 'CABINETS', ''],
-                ['HS', 'HANGING SIGNS', ''],
-                ['LB', 'LIGHTBOXES', ''],
-                ['CNTR', 'COUNTERTOPS', ''],
-                ['SHLF', 'SHELVES', ''],
-                ['STOOL', 'FURNITURE', ''],
-                ['CHAIR', 'FURNITURE', 'CHAIRS'],
-                ['COUCH', 'FURNITURE', ''],
-                ['TABLE', 'FURNITURE', 'TABLES'],
-                ['TTOP', 'FURNITURE', ''],
-                ['TBASE', 'FURNITURE', ''],
-                ['BX', 'PANELS', ''],
-                ['VU', 'PANELS', ''],
-                ['ADD', 'ADDITIONS', ''],
-                ['HARDWARE', 'HARDWARE', 'HARDWARE']
+                ['PREFIX', 'INVENTORY', 'FOLDER', 'MetaData'],
+                ['CAB', 'CABINETS', '', ''],
+                ['HS', 'HANGING SIGNS', '', ''],
+                ['LB', 'LIGHTBOXES', '', ''],
+                ['CNTR', 'COUNTERTOPS', '', ''],
+                ['SHLF', 'SHELVES', '', ''],
+                ['STOOL', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['CHAIR', 'FURNITURE', 'CHAIRS', '{"suppressAnalysis":"true"}'],
+                ['COUCH', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TABLE', 'FURNITURE', 'TABLES', '{"suppressAnalysis":"true"}'],
+                ['TTOP', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['TBASE', 'FURNITURE', '', '{"suppressAnalysis":"true"}'],
+                ['BX', 'PANELS', '', ''],
+                ['VU', 'PANELS', '', ''],
+                ['ADD', 'ADDITIONS', '', '{"suppressAnalysis":"true","descriptionOnly":"true"}'],
+                ['HARDWARE', 'HARDWARE', 'HARDWARE', '{"customItemNumbers":"true"}']
             ],
             'Thumbnails': [
                 ['ItemNumber', 'File', 'Blob'],
@@ -786,7 +808,8 @@ export class FakeGoogleSheetsService {
                 // Test clients for transship chain pathway tests
                 ['CHAINCO', '', 'Test client for two-show transship chain'],
                 ['TRICHAIN', '', 'Test client for three-show transship chain'],
-                ['OVERLAPCO', '', 'Test client for transship conflict-detection']
+                ['OVERLAPCO', '', 'Test client for transship conflict-detection'],
+                ['MULTIBOOTHCO', '', 'Test client for multi-booth override linking']
             ],
             'Shows': [
                 ['Shows', 'Abbreviations', 'Notes'],
@@ -974,17 +997,8 @@ export class FakeGoogleSheetsService {
                 ['STAGE A', '', 'Test: three-show chain root'],
                 ['STAGE B', '', 'Test: three-show chain middle'],
                 ['STAGE C', '', 'Test: three-show chain end'],
-                ['OVERLAP TEST', '', 'Test: overlapping show for conflict detection']
-            ],
-            'Preferences': [
-                ['ID', 'Name', 'Description', 'Page', 'Type', 'Value', 'EditHistory'],
-                ['ScheduleShipOffsetDaysFromShow', 'Ships Show Offset', 'default offset days from show start date for shows with missing ship dates', 'schedule*', 'integer', '14', ''],
-                ['ScheduleReturnOffsetDaysFromShow', 'Returns Show Offset', 'default offset days from show end date for shows with missing return dates', 'schedule*', 'integer', '14', ''],
-                ['ScheduleShipOffsetDaysFromInstall', 'Ships Install Offset', 'default offset days from show install date for shows with missing ship dates', 'schedule*', 'integer', '7', ''],
-                ['ScheduleReturnOffsetDaysFromDismantle', 'Returns Dismantle Offset', 'default offset days from show dismantle date for shows with missing return dates', 'schedule*', 'integer', '7', ''],
-                ['InventorySuppressCategoryAnalysis', 'Skip Quantity Analysis', 'these inventories are skipped when finding shortages', 'inventory*', 'json', '["FURNITURE","MONITORS","LIGHTING","ELECTRONICS","ADDITIONS"]', ''],
-                ['InventoryCustomItemNumbers', 'Allow Nonstandard Item#s', 'these inventories have nonstandard item numbers and can slow down the system', 'inventory*', 'json', '["HARDWARE"]', ''],
-                ['InventoryDescriptionOnly', 'Omit Quantity Column', 'list of inventories that omit the quantity column, added to packlists as descriptions only', 'inventory*', 'json', '["ADDITIONS"]', '']
+                ['OVERLAP TEST', '', 'Test: overlapping show for conflict detection'],
+                ['MULTI BOOTH', '', 'Test: multi-booth show with two packlists']
             ]
         }
     };
@@ -1020,7 +1034,8 @@ export class FakeGoogleSheetsService {
             { title: 'TRICHAIN 2026 STAGE A', sheetId: 13 },
             { title: 'TRICHAIN 2026 STAGE B', sheetId: 14 },
             { title: 'TRICHAIN 2026 STAGE C', sheetId: 15 },
-            { title: 'OVERLAPCO 2026 OVERLAP TEST', sheetId: 16 }
+            { title: 'MULTIBOOTHCO 2026 MULTI BOOTH', sheetId: 17 },
+            { title: 'MULTI BOOTH SECONDARY PACKLIST', sheetId: 18 }
         ],
         'PROD_SCHED': [
             { title: 'Production Schedule', sheetId: 0 }
@@ -1035,8 +1050,7 @@ export class FakeGoogleSheetsService {
             { title: 'Thumbnails', sheetId: 6 },
             { title: 'Inventory', sheetId: 7 },
             { title: 'NameOverrides', sheetId: 8 },
-            { title: 'ScheduleOverrides', sheetId: 9 },
-            { title: 'Preferences', sheetId: 10 }
+            { title: 'ScheduleOverrides', sheetId: 9 }
         ]
     };
 
