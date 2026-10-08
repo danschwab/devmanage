@@ -813,6 +813,7 @@ table {
     border-collapse: collapse;
     margin: 0;
     background-color: var(--background-color);
+    overflow: hidden;
 }
 
 

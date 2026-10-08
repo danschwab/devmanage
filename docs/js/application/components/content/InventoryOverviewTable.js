@@ -48,6 +48,14 @@ export const InventoryOverviewTableComponent = {
                     sortable: true
                 },
                 { 
+                    key: 'quantity', 
+                    label: 'Qty',
+                    format: 'number',
+                    editable: false,
+                    autoColor: false,
+                    sortable: true
+                },
+                { 
                     key: 'description', 
                     label: 'Description',
                     editable: false,
@@ -60,14 +68,6 @@ export const InventoryOverviewTableComponent = {
                     editable: false,
                     details: true,
                     sortable: false
-                },
-                { 
-                    key: 'quantity', 
-                    label: 'Qty',
-                    format: 'number',
-                    editable: false,
-                    autoColor: false,
-                    sortable: true
                 }
             ],
             inventoryStore: null, // Reactive store for aggregated inventory
