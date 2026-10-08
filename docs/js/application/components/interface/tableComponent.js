@@ -2941,7 +2941,7 @@ export const TableComponent = {
             this.$emit('cell-edit', rowIndex, colIndex, value);
             // Dirty check for single cell
             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
-            const originalValue = this.originalData[rowIndex]?.[this.columns[colIndex].key];
+            const originalValue = this.originalData[rowIndex]?.[this.mainTableColumns[colIndex]?.key];
             if (value !== originalValue) {
                 this.dirtyCells[rowIndex][colIndex] = true;
             } else {
@@ -2980,7 +2980,7 @@ export const TableComponent = {
                 });
             }
             
-            const column = this.columns[colIndex];
+            const column = this.mainTableColumns[colIndex];
             const originalRow = this.getOriginalDataForRow(this.data[rowIndex], rowIndex);
             const originalValue = originalRow?.[column.key];
             
@@ -3083,7 +3083,8 @@ export const TableComponent = {
             this.data.forEach((row, rowIndex) => {
                 const originalRow = this.originalData[rowIndex];
                 // Treat undefined originalRow as an object with all nulls for dirty checking
-                this.columns.forEach((column, colIndex) => {
+                // Use mainTableColumns indices to match the template's v-for colIndex
+                this.mainTableColumns.forEach((column, colIndex) => {
                     const key = column.key;
                     if (column.editable) {
                         const currentValue = row[key];
@@ -3873,7 +3874,8 @@ export const TableComponent = {
             if (!Array.isArray(this.data)) return; // <-- guard against null/undefined
             this.data.forEach((row, rowIndex) => {
                 if (!row) return; // Skip undefined rows
-                this.columns.forEach((column, colIndex) => {
+                // Use mainTableColumns indices to match the template's v-for colIndex
+                this.mainTableColumns.forEach((column, colIndex) => {
                     if (column.editable) {
                         const refName = 'editable_' + rowIndex + '_' + colIndex;
                         const cell = this.$refs[refName];
