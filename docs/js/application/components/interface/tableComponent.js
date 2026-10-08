@@ -2002,8 +2002,8 @@ export const TableComponent = {
                 }
             }
 
-            // Filter out columns marked as details-only
-            return columnsClipped.filter(column => !column.details);
+            // Filter out columns marked as details-only or stacked under another column
+            return columnsClipped.filter(column => !column.details && !column.stackUnder);
         },
         visibleColumns() {
             // Get only columns not in hideSet
@@ -2020,6 +2020,26 @@ export const TableComponent = {
         detailsColumns() {
             // Get only columns marked for details display
             return this.columns.filter(column => column.details);
+        },
+        stackedColumnMap() {
+            // Map parent column key -> child columns that stack under it
+            const map = new Map();
+            this.visibleColumns.forEach(col => {
+                if (col.stackUnder && !this.hideSet.has(col.stackUnder)) {
+                    if (!map.has(col.stackUnder)) map.set(col.stackUnder, []);
+                    map.get(col.stackUnder).push(col);
+                }
+            });
+            return map;
+        },
+        hasStackedColumns() {
+            return this.stackedColumnMap.size > 0;
+        },
+        theadRow1Columns() {
+            return this.visibleColumns.filter(col => !col.stackUnder);
+        },
+        theadRow2Columns() {
+            return this.visibleColumns.filter(col => col.stackUnder && !this.hideSet.has(col.stackUnder));
         },
         visibleRows() {
             // Filter rows based on search value but keep all rows including marked for deletion
@@ -2157,7 +2177,7 @@ export const TableComponent = {
                     // Re-measure column widths on every tick (table may resize)
                     const thead = this._rootEl()?.querySelector('.table-wrapper thead');
                     if (thead) {
-                        this.stickyColumnWidths = Array.from(thead.querySelectorAll('th'))
+                        this.stickyColumnWidths = Array.from(thead.querySelectorAll('tr:first-child th'))
                             .map(th => th.getBoundingClientRect().width);
                     }
                     // Update position (left and width only; top uses CSS variable --navbar-height)
@@ -2235,7 +2255,7 @@ export const TableComponent = {
         // Returns null when $el is a text/comment node (fragment root) to prevent querySelector errors.
         _rootEl() { return this.$el instanceof Element ? this.$el : null; },
         _measureColWidths() {
-            const ths = this._rootEl()?.querySelectorAll('.table-wrapper thead tr th');
+            const ths = this._rootEl()?.querySelectorAll('.table-wrapper thead tr:first-child th');
             if (!ths?.length) return;
             this.colWidths = Array.from(ths).map(th => th.getBoundingClientRect().width);
             const tw = this._rootEl()?.querySelector('.table-wrapper');
@@ -2244,25 +2264,25 @@ export const TableComponent = {
         _stickyStartLeft(colIdx) {
             let offset = this.draggable ? (this.colWidths[0] ?? 20) : 0;
             for (let i = 0; i < colIdx; i++) {
-                if (this.visibleColumns[i]?.sticky === 'start') {
-                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.visibleColumns[i].width ?? 0;
+                if (this.theadRow1Columns[i]?.sticky === 'start') {
+                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.theadRow1Columns[i].width ?? 0;
                 }
             }
             return offset;
         },
         _stickyEndRight(colIdx) {
-            const detailsAbsIdx = (this.draggable ? 1 : 0) + this.visibleColumns.length;
+            const detailsAbsIdx = (this.draggable ? 1 : 0) + this.theadRow1Columns.length;
             let offset = (this.allowDetails && !this.forceDetails) ? (this.colWidths[detailsAbsIdx] ?? 40) : 0;
-            for (let i = this.visibleColumns.length - 1; i > colIdx; i--) {
-                if (this.visibleColumns[i]?.sticky === 'end') {
-                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.visibleColumns[i].width ?? 0;
+            for (let i = this.theadRow1Columns.length - 1; i > colIdx; i--) {
+                if (this.theadRow1Columns[i]?.sticky === 'end') {
+                    offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.theadRow1Columns[i].width ?? 0;
                 }
             }
             return offset;
         },
         getStickyColProps(column) {
             if (!column?.sticky) return null;
-            const colIdx = this.visibleColumns.findIndex(c => c.key === column.key);
+            const colIdx = this.theadRow1Columns.findIndex(c => c.key === column.key);
             if (colIdx === -1) return null;
             const isStart = column.sticky === 'start';
             const offset = isStart ? this._stickyStartLeft(colIdx) : this._stickyEndRight(colIdx);
@@ -4497,7 +4517,7 @@ export const TableComponent = {
                 <table v-if="showStickyHeader" :class="{ editing: hasEditableColumns, [dragId]: dragId, 'sticky-header': true }" :style="stickyScrollLeft ? { transform: 'translateX(-' + stickyScrollLeft + 'px)' } : {}">
                     <colgroup>
                         <col v-if="draggable" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : { width: '20px' }" />
-                        <col v-for="(column, colIdx) in visibleColumns" 
+                        <col v-for="(column, colIdx) in theadRow1Columns" 
                             :key="column.key"
                             :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
                             :class="column.columnClass || ''"
@@ -4506,11 +4526,12 @@ export const TableComponent = {
                     </colgroup>
                     <thead :class="{ [theme]: true, active: theadActive }" @click="handleTheadTap($event)">
                         <tr>
-                            <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
+                            <th v-if="draggable" class="spacer-cell" :rowspan="hasStackedColumns ? 2 : 1" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
                             <th 
-                                v-for="(column, colIdx) in visibleColumns" 
+                                v-for="(column, colIdx) in theadRow1Columns" 
                                 :key="column.key"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass]"
+                                :rowspan="hasStackedColumns && !stackedColumnMap.has(column.key) ? 2 : 1"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, stackedColumnMap.has(column.key) ? 'stacked-header' : '']"
                                 :title="column.title || column.label"
                                 :style="[stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}, getCloneStickyThStyle(column, colIdx)]"
                             >
@@ -4534,7 +4555,27 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]">&#9432;</th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]">&#9432;</th>
+                        </tr>
+                        <tr v-if="hasStackedColumns">
+                            <th
+                                v-for="column in theadRow2Columns"
+                                :key="column.key"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, 'stacked-header']"
+                                :title="column.title || column.label"
+                            >
+                                <div>
+                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
+                                    <span v-else>{{ column.label }}</span>
+                                    <button 
+                                        v-if="isColumnSortable(column)"
+                                        @click="handleSort(column.key)"
+                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
+                                    >
+                                        {{ getSortIcon(column.key) || '⭥' }}
+                                    </button>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                 </table>
@@ -4546,7 +4587,7 @@ export const TableComponent = {
                 <table :class="{ editing: hasEditableColumns, [dragId]: dragId }">
                     <colgroup>
                         <col v-if="draggable" :style="{ width: '20px' }" />
-                        <col v-for="(column, colIdx) in visibleColumns" 
+                        <col v-for="(column, colIdx) in theadRow1Columns" 
                             :key="column.key"
                             :style="column.width ? 'width:' + column.width + 'px' : ''"
                             :class="column.columnClass || ''"
@@ -4555,11 +4596,12 @@ export const TableComponent = {
                     </colgroup>
                     <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header', active: theadActive }" @click="handleClipboardHeaderClick($event); handleTheadTap($event)">
                         <tr>
-                            <th v-if="draggable" class="spacer-cell"></th>
+                            <th v-if="draggable" class="spacer-cell" :rowspan="hasStackedColumns ? 2 : 1"></th>
                             <th 
-                                v-for="(column, colIdx) in visibleColumns" 
+                                v-for="(column, colIdx) in theadRow1Columns" 
                                 :key="column.key"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass]"
+                                :rowspan="hasStackedColumns && !stackedColumnMap.has(column.key) ? 2 : 1"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, stackedColumnMap.has(column.key) ? 'stacked-header' : '']"
                                 :title="column.title || column.label"
                                 :style="getStickyColProps(column)?.stickyStyle"
                             >
@@ -4583,7 +4625,28 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em; right: 0;" title="Details">&#9432;</th>
+                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em; right: 0;" title="Details">&#9432;</th>
+                        </tr>
+                        <tr v-if="hasStackedColumns">
+                            <th
+                                v-for="column in theadRow2Columns"
+                                :key="column.key"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, 'stacked-header']"
+                                :title="column.title || column.label"
+                                :style="getStickyColProps(column)?.stickyStyle"
+                            >
+                                <div>
+                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
+                                    <span v-else>{{ column.label }}</span>
+                                    <button 
+                                        v-if="isColumnSortable(column)"
+                                        @click="handleSort(column.key)"
+                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
+                                    >
+                                        {{ getSortIcon(column.key) || '⭥' }}
+                                    </button>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4703,6 +4766,15 @@ export const TableComponent = {
                                             :isEditable="column.editable"
                                         ></slot>
                                     </div>
+                                    <template v-if="stackedColumnMap.has(column.key)">
+                                        <div
+                                            v-for="childCol in stackedColumnMap.get(column.key)"
+                                            :key="childCol.key"
+                                            :class="['table-cell-container', 'stacked-child-cell', { 'search-match': hasSearchMatch(row[childCol.key], childCol) }]"
+                                        >
+                                            <span v-html="highlightSearchText(row[childCol.key], childCol)"></span>
+                                        </div>
+                                    </template>
                                 </td>
                                 <td v-if="allowDetails && !forceDetails" class="details-cell col-sticky-end" :style="{ right: '0' }">
                                     <slot 
@@ -4744,7 +4816,7 @@ export const TableComponent = {
                             <!-- Expandable single-cell details row (row-details slot) -->
                             <tr v-if="allowDetails && !$slots['row-detail-rows']" class="details-row-container">
                                 <td v-if="draggable"></td>
-                                <td :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" class="details-container">
+                                <td :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)" class="details-container">
                                     
                                     <div v-if="shouldShowDetailsContent(row, idx)" class="details-content" :style="tableWrapperWidth ? { width: (tableWrapperWidth - 2) + 'px' } : {}">
                                         <!-- Auto-generated details from columns marked with details: true -->
@@ -4779,7 +4851,7 @@ export const TableComponent = {
                         <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
                             <td class="spacer-cell"></td>
                             <td
-                                :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)"
+                                :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)"
                                 class="empty-message"
                                 style="text-align: center;"
                             >
@@ -4791,7 +4863,7 @@ export const TableComponent = {
                         <tr>
                             <td v-if="draggable" class="spacer-cell"></td>
                             <td 
-                                :colspan="visibleColumns.length + (allowDetails && !forceDetails ? 1 : 0)" 
+                                :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)" 
                                 class="new-row-button"
                                 title="Add new row"
                                 @click="isInClipboardMode && dropTarget?.type === 'footer' ? completeClipboardAtCurrentTarget() : $emit('new-row')"

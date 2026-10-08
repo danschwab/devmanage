@@ -188,7 +188,7 @@ test('TRANSSHIP LINKS', 'unlinked show returns null', async () => {
     assertEqual(result, null, 'getTransshipSourceForShow(ATSC 2025 NAB)');
 });
 
-// ── Group 3: Chain-Aware Ship and Return Dates ────────────────────────────────
+// ── Group 3: Chain-Aware Ship and Returns ────────────────────────────────
 // getProjectShipDate walks the ScheduleOverrides source chain and returns the
 // earliest ship date (the chain root's date). getProjectReturnDate walks the
 // destination chain and returns the latest return date (the last show's date).

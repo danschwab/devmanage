@@ -11,7 +11,7 @@ export const PacklistItemsSummary = {
         containerPath: { type: String, default: '' },
         showDetailsVisible: {
             type: Array,
-            default: () => ['Ship', 'S. Start', 'S. End', 'Expected Return Date', 'City', 'Size', 'Booth#', 'S/U IN SHOP']
+            default: () => ['Ship', 'S. Start', 'S. End', 'Expected Return', 'City', 'Size', 'Booth#', 'S/U IN SHOP']
         }
     },
     inject: ['appContext', '$modal'],

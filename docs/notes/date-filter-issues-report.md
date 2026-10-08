@@ -125,7 +125,7 @@ This causes ALL rows to be filtered out when using columns like:
 
 - 'S. Start'
 - 'S. End'
-- 'Expected Return Date'
+- 'Expected Return'
 - Any other date column in the schedule
 
 ### Data Flow Analysis
@@ -178,7 +178,7 @@ if (sStart && ship >= sStart) {
 }
 ```
 
-**Return Date Year Correction:**
+**Return Year Correction:**
 
 ```javascript
 // If return is before dates, move return to next year

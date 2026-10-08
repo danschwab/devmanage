@@ -46,7 +46,8 @@ export const ScheduleTableComponent = {
     emits: ['navigate-to-path', 'packlist-created'],
     data() {
         return {
-            scheduleTableStore: null
+            scheduleTableStore: null,
+            isNarrow: window.innerWidth < 640
         };
     },
 
@@ -57,7 +58,7 @@ export const ScheduleTableComponent = {
                 // Return a basic set of columns if no data yet (for loading state)
                 return [
                     { key: 'Show', label: 'Show' },
-                    { key: 'Client', label: 'Client' },
+                    { key: 'Client', label: 'Client', ...(this.isNarrow ? { stackUnder: 'Show' } : {}) },
                     { key: 'packlist', label: 'Packlist' }
                 ];
             }
@@ -73,9 +74,19 @@ export const ScheduleTableComponent = {
                     label: this.formatColumnLabel(header)
                 };
 
-                // Mark columns as details if they're not Show, Client, or Ship
-                if (!['Show', 'Client', 'Ship', 'City', 'Size'].includes(header)) {
+                // Mark columns as details if they're not Show, Client, Ship, dates, or city/size
+                if (!['Show', 'Client', 'Ship', 'City', 'Size', 'S. Start', 'S. End', 'Expected Return'].includes(header)) {
                     column.details = true;
+                }
+
+                if (header === 'Client' && this.isNarrow) {
+                    column.stackUnder = 'Show';
+                }
+                if (header === 'Expected Return') {
+                    column.stackUnder = 'Ship';
+                }
+                if (header === 'S. End') {
+                    column.stackUnder = 'S. Start';
                 }
 
                 // Calendar chip row flags
@@ -83,7 +94,7 @@ export const ScheduleTableComponent = {
                 if (header === 'City' || header === 'Size') column.secondRow = true;
 
                 // Add sortable configuration for useful columns
-                const sortableColumns = ['Show', 'Client', 'Ship', 'City', 'Size'];
+                const sortableColumns = ['Show', 'Client', 'Ship', 'City', 'Size', 'S. Start'];
                 const dateColumns = ['Start Date', 'End Date', 'Load In', 'Load Out', 'Event Start', 'Event End'];
                 
                 if (sortableColumns.includes(header) || dateColumns.includes(header)) {
@@ -194,7 +205,12 @@ export const ScheduleTableComponent = {
         }
     },
     async mounted() {
+        this._onResize = () => { this.isNarrow = window.innerWidth < 640; };
+        window.addEventListener('resize', this._onResize);
         this.recreateStore();
+    },
+    unmounted() {
+        window.removeEventListener('resize', this._onResize);
     },
     methods: {
         recreateStore() {
@@ -505,14 +521,14 @@ export const ScheduleTableComponent = {
             const dest   = row.AppData?.transshipDestination;
             if (columnKey === 'Ship' && source) {
                 return [{
-                    message: 'transship',
+                    message: 'TS',
                     class: 'gray',
                     hoverMessage: `transship from: ${source}`,
                     action: () => this.handleTransshipClick(row, source)
                 }];
             }
             // Return date for source shows is extended to the destination's return date
-            if (columnKey === 'Expected Return Date' && dest) {
+            if (columnKey === 'Expected Return' && dest) {
                 return [{
                     message: 'return extended',
                     class: 'gray',
@@ -828,15 +844,16 @@ export const ScheduleTableComponent = {
                         <button @click="removeTransship(row)" class="red button-symbol" title="Remove ships-from link"><span class="material-symbols-outlined">close</span></button>
                     </template>
                     <button @click="openTransshipModal(row, 'from')" class="white small">
-                        {{ row.AppData?.transshipSource ? 'Change From' : 'Set Ships From' }}
+                        {{ row.AppData?.transshipSource ? 'Change From' : 'Set Transship From' }}
                     </button>
-                    <span style="width:1px;background:var(--color-border);margin:0 var(--padding-sm);align-self:stretch"></span>
+                </div>
+                <div class="button-bar" style="margin-top: var(--padding-sm)">
                     <template v-if="row.AppData?.transshipDestination">
                         <div class="card gray" style="white-space:nowrap">ships to: {{ row.AppData.transshipDestination }}</div>
                         <button @click="removeTransshipTo(row)" class="red button-symbol" title="Remove ships-to link"><span class="material-symbols-outlined">close</span></button>
                     </template>
                     <button @click="openTransshipModal(row, 'to')" class="white small">
-                        {{ row.AppData?.transshipDestination ? 'Change To' : 'Set Ships To' }}
+                        {{ row.AppData?.transshipDestination ? 'Change To' : 'Set Transship To' }}
                     </button>
                 </div>
             </template>
@@ -852,12 +869,13 @@ export const ScheduleTableComponent = {
 
                 <!-- Transship annotation replaces ship date in Ship column -->
                 <template v-for="card in getTransshipCards(row, column.key)" :key="'transship-' + card.message">
-                    <button
-                        :class="['card', card.class]"
+                    <div
+                        :class="['card', 'clickable', card.class]"
+                        style="font-size: 8pt;"
                         :title="card.hoverMessage"
                         @click="card.action()"
                         v-html="card.message"
-                    ></button>
+                    ></div>
                 </template>
                 
                 <!-- Add packlist cards based on AppData -->

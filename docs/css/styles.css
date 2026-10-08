@@ -425,7 +425,7 @@ td .card, .calendar-chip .card {
     display: inline-block;
 }
 td span:not(:empty):has(+ .card) {
-    margin-right: .5em;
+    margin-right:var(--padding-sm);
 }
 
 .card:only-child,
@@ -1201,6 +1201,29 @@ tr.is-group:hover .group-toggle {
 
 .table-cell-container {
     position: relative;
+}
+.table-cell-container span {
+    min-height:1em;
+    display: inline-block;
+}
+
+/* Stacked column header (both parent and child rows) */
+thead th.stacked-header {
+    font-size: 0.85em;
+    padding-top: 1px;
+    padding-bottom: 1px;
+}
+
+/* Stacked child value inside a data cell */
+.stacked-child-cell {
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--padding-sm);
+    margin-top: var(--margin-sm);
+    color: var(--color-text-light);
+}
+td:has(.stacked-child-cell) {
+    padding-top: var(--padding-sm);
+    padding-bottom: var(--padding-sm);
 }
 
 /* Pinned (sticky) column styles */

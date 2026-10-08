@@ -98,6 +98,7 @@ Ongoing User Conversations:
 
 inventory updates
 
+- [ ] add "substitutions" system to allow automatically recommended substitutions during shortage calculation (useful for multiple types of L-plates or cabinetry)
 - [ ] run configured upcoming inventory shortage report automatically on main inventory page and show warnings in items and categories
 - [ ] dims at the beginning of item descriptions for all items
 - [?] ensure inventory table generation is unified so changes propegate throughout components and reports correctly
