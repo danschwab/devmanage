@@ -1,3 +1,14 @@
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+
 /* theme.css - Centralized color variables for the site theme */
 :root {
     /* Interface Sizes */

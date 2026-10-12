@@ -16,6 +16,7 @@ body, #app {
 }
 
 
+
 /* Primary Navigation */
 header nav {
     position: fixed;
@@ -30,6 +31,8 @@ header nav {
     transition: max-height 0.2s ease;
     overflow: hidden;
     user-select: none;
+    
+    animation: fadeIn .5s ease-in-out;
 }
 
 nav .nav-toggle {
@@ -165,6 +168,8 @@ div#app-content > div.empty-message {
     /* flex: 1 0 calc(100vh - var(--navbar-height) * 2 - var(--padding-lg) * 2 - var(--padding-md)); */
     height: -webkit-fill-available;
     grid-column: 1 / -1;
+
+    animation: fadeIn 2s ease-in-out;
 }
 
 
