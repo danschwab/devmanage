@@ -105,11 +105,11 @@ const App = {
                 {
                     key: 'update-available',
                     color: 'orange',
-                    message: 'The application has received updates. Please refresh to get the latest version. \nIf this banner persists after refreshing, try clearing your browser cache.',
+                    message: 'Updates available! Please refresh to get the latest version. \nIf this banner persists after refreshing, try clearing your browser cache.',
                     visible: this.updateAvailable,
                     dismissible: true,
                     action: {
-                        label: 'Refresh',
+                        label: 'Refresh Now',
                         fn: () => window.location.reload()
                     }
                 }
