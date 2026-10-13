@@ -999,6 +999,16 @@ export class FakeGoogleSheetsService {
                 ['STAGE C', '', 'Test: three-show chain end'],
                 ['OVERLAP TEST', '', 'Test: overlapping show for conflict detection'],
                 ['MULTI BOOTH', '', 'Test: multi-booth show with two packlists']
+            ],
+            'Preferences': [
+                ['ID', 'Name', 'Description', 'Page', 'Type', 'Value', 'EditHistory'],
+                ['ScheduleShipOffsetDaysFromShow', 'Ships Show Offset', 'default offset days from show start date for shows with missing ship dates', 'schedule*', 'integer', '14', ''],
+                ['ScheduleReturnOffsetDaysFromShow', 'Returns Show Offset', 'default offset days from show end date for shows with missing return dates', 'schedule*', 'integer', '14', ''],
+                ['ScheduleShipOffsetDaysFromInstall', 'Ships Install Offset', 'default offset days from show install date for shows with missing ship dates', 'schedule*', 'integer', '7', ''],
+                ['ScheduleReturnOffsetDaysFromDismantle', 'Returns Dismantle Offset', 'default offset days from show dismantle date for shows with missing return dates', 'schedule*', 'integer', '7', ''],
+                ['InventorySuppressCategoryAnalysis', 'Skip Quantity Analysis', 'these inventories are skipped when finding shortages', 'inventory*', 'json', '["FURNITURE","MONITORS","LIGHTING","ELECTRONICS","ADDITIONS"]', ''],
+                ['InventoryCustomItemNumbers', 'Allow Nonstandard Item#s', 'these inventories have nonstandard item numbers and can slow down the system', 'inventory*', 'json', '["HARDWARE"]', ''],
+                ['InventoryDescriptionOnly', 'Omit Quantity Column', 'list of inventories that omit the quantity column, added to packlists as descriptions only', 'inventory*', 'json', '["ADDITIONS"]', '']
             ]
         }
     };
@@ -1034,8 +1044,9 @@ export class FakeGoogleSheetsService {
             { title: 'TRICHAIN 2026 STAGE A', sheetId: 13 },
             { title: 'TRICHAIN 2026 STAGE B', sheetId: 14 },
             { title: 'TRICHAIN 2026 STAGE C', sheetId: 15 },
+            { title: 'OVERLAPCO 2026 OVERLAP TEST', sheetId: 16 },
             { title: 'MULTIBOOTHCO 2026 MULTI BOOTH', sheetId: 17 },
-            { title: 'MULTI BOOTH SECONDARY PACKLIST', sheetId: 18 }
+            { title: 'MULTI BOOTH SECONDARY PACKLIST', sheetId: 18 },
         ],
         'PROD_SCHED': [
             { title: 'Production Schedule', sheetId: 0 }
@@ -1050,7 +1061,8 @@ export class FakeGoogleSheetsService {
             { title: 'Thumbnails', sheetId: 6 },
             { title: 'Inventory', sheetId: 7 },
             { title: 'NameOverrides', sheetId: 8 },
-            { title: 'ScheduleOverrides', sheetId: 9 }
+            { title: 'ScheduleOverrides', sheetId: 9 },
+            { title: 'Preferences', sheetId: 10 }
         ]
     };
 
