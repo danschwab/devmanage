@@ -447,9 +447,27 @@ export class Auth {
 
         // Fire at token expiry to proactively show the session timeout modal
         this._sessionExpiryTimer = setTimeout(async () => {
-            const isStillAuthenticated = await GoogleSheetsAuth.checkAuth();
-            if (!isStillAuthenticated && !authPromptShowing) {
-                await this.checkAuthWithPrompt({ context: 'session expiry' });
+            if (document.hidden) {
+                // Tab inactive: skip checkAuth (which calls silentRefresh and may show a Google popup).
+                // The application modal is safe to show while hidden — it waits in the DOM for the user.
+                if (GoogleSheetsAuth.getTokenSecondsRemaining() <= 0 && !authPromptShowing) {
+                    this.checkAuthWithPrompt({ context: 'session expiry' });
+                }
+                // Fallback for when the browser throttled JS and the timer fired late
+                const onVisible = async () => {
+                    if (document.visibilityState !== 'visible') return;
+                    document.removeEventListener('visibilitychange', onVisible);
+                    if (!authPromptShowing) {
+                        const stillExpired = !(await GoogleSheetsAuth.checkAuth());
+                        if (stillExpired) await this.checkAuthWithPrompt({ context: 'session expiry' });
+                    }
+                };
+                document.addEventListener('visibilitychange', onVisible);
+            } else {
+                const isStillAuthenticated = await GoogleSheetsAuth.checkAuth();
+                if (!isStillAuthenticated && !authPromptShowing) {
+                    await this.checkAuthWithPrompt({ context: 'session expiry' });
+                }
             }
         }, secondsRemaining * 1000);
     }
