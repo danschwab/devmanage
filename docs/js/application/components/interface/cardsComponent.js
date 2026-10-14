@@ -1,5 +1,5 @@
 import { html, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, parseDate } from '../../index.js';
-import { useSearch } from '../../utils/useSearch.js';
+import { useSearch, SearchBoxComponent, scrollToSearchResult, scrollToActiveResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 function normalizeItemSortWords(value) {
@@ -32,7 +32,7 @@ function compareItemLikeValues(aValue, bValue) {
 
 // Cards Grid Component: Simple responsive grid layout with clickable cards
 export const CardsComponent = {
-    components: { LoadingBarComponent, ViewChangeComponent },
+    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent },
     inject: ['appContext'],
     props: {
         theme: {
@@ -132,7 +132,7 @@ export const CardsComponent = {
             validator: (value) => ['asc', 'desc'].includes(String(value || '').toLowerCase())
         }
     },
-    setup(props, { emit }) {
+    setup(props) {
         // Initialize search composable
         const search = useSearch({
             formatValue: null,
@@ -157,25 +157,6 @@ export const CardsComponent = {
             selectedSortDirection: 'asc',
             isUsingDefaultSort: true,
         };
-    },
-    watch: {
-        sortColumns: {
-            handler() {
-                const selectedColumnStillExists = this.sortableColumns.some(col => col.key === this.selectedSortKey);
-                if (!selectedColumnStillExists) {
-                    this.applyDefaultSortColumn({ force: true });
-                }
-            },
-            deep: true
-        },
-        defaultSortColumn() {
-            this.applyDefaultSortColumn({ force: true });
-        },
-        defaultSortDirection() {
-            if (this.isUsingDefaultSort) {
-                this.selectedSortDirection = this.getNormalizedDefaultSortDirection();
-            }
-        }
     },
     computed: {
         sortableColumns() {
@@ -269,9 +250,52 @@ export const CardsComponent = {
             }
 
             return filteredData;
-        }
+        },
+        // Map from visibleCards index to 0-based match index; only used in navigate mode (!hideCardsOnSearch)
+        searchMatchedCards() {
+            if (!this.search.hasActiveSearch.value || this.hideCardsOnSearch) return [];
+            const words = this.search.searchWords.value;
+            return this.visibleCards
+                .map((card, idx) => ({ card, idx }))
+                .filter(({ card }) => {
+                    const fields = [card.title, card.content, card.contentFooter];
+                    return words.every(w => fields.some(f => f != null && String(f).toLowerCase().includes(w.toLowerCase())));
+                });
+        },
+        searchMatchedCardIndices() {
+            const map = new Map();
+            this.searchMatchedCards.forEach(({ idx }, matchIdx) => map.set(idx, matchIdx));
+            return map;
+        },
+        activeSearchIndex() { return this.search.searchIndex.value; }
     },
     watch: {
+        sortColumns: {
+            handler() {
+                const selectedColumnStillExists = this.sortableColumns.some(col => col.key === this.selectedSortKey);
+                if (!selectedColumnStillExists) {
+                    this.applyDefaultSortColumn({ force: true });
+                }
+            },
+            deep: true
+        },
+        defaultSortColumn() {
+            this.applyDefaultSortColumn({ force: true });
+        },
+        defaultSortDirection() {
+            if (this.isUsingDefaultSort) {
+                this.selectedSortDirection = this.getNormalizedDefaultSortDirection();
+            }
+        },
+        activeSearchIndex(newIndex) {
+            if (newIndex == null) return;
+            scrollToActiveResult(this, this.activeSearchIndex, this.searchMatchedCards.length);
+        },
+        searchMatchedCards(newCards) {
+            if (this.activeSearchIndex != null && newCards.length > 0) {
+                scrollToActiveResult(this, this.activeSearchIndex, this.searchMatchedCards.length);
+            }
+        },
         // Trigger sticky header recalculation when parameters change on the same route
         // (parameter-only changes don't cause component remount, unlike full route changes)
         'appContext.currentPath'(newPath, oldPath) {
@@ -330,8 +354,12 @@ export const CardsComponent = {
         this._stickyHeader?.teardown();
     },
     methods: {
-        
         handleCardClick(item) {
+            if (this.search.hasActiveSearch.value && !this.hideCardsOnSearch) {
+                const visibleIdx = this.visibleCards.indexOf(item);
+                const matchIdx = this.searchMatchedCardIndices.get(visibleIdx);
+                if (matchIdx !== undefined) this.search.setSearchIndex(matchIdx + 1);
+            }
             // Call item-specific onClick handler if provided, otherwise use component-level handler
             if (item.onClick && typeof item.onClick === 'function') {
                 item.onClick(item);
@@ -475,24 +503,12 @@ export const CardsComponent = {
                 ></slot>
                 <div class="spacer"></div>
                 <div v-if="showRefresh || showSearch || showSort || (viewModes && containerPath && navigateToPath)" class="button-bar">
-                    <div v-if="showSearch" class="input-container">
-                        <input
-                            type="text"
-                            v-model="search.searchValue.value"
-                            @blur="search.handleBlur"
-                            @keydown.esc="search.clearSearch"
-                            placeholder="Find..."
-                            class="search-input"
-                        />
-                        <button
-                            v-if="search.searchValue.value"
-                            @mousedown="search.clearSearch"
-                            class="column-button"
-                            title="Clear filter"
-                        >
-                            <span class="material-symbols-outlined">backspace</span>
-                        </button>
-                    </div>
+                    <SearchBoxComponent
+                        v-if="showSearch"
+                        :search="search"
+                        :match-count="searchMatchedCards.length"
+                        :show-navigate="!hideCardsOnSearch"
+                    />
                     <select v-if="showSort && sortableColumns.length > 0" v-model="selectedSortKey" @change="handleSortSelectionChange" class="search-input" title="Sort cards">
                         <option v-if="!selectedSortKey" value="">Default sort</option>
                         <option v-for="col in sortableColumns" :key="col.key" :value="col.key">Sort by: {{ col.label }}</option>
@@ -528,7 +544,8 @@ export const CardsComponent = {
                 <div
                     v-for="(item, idx) in visibleCards"
                     :key="(item.id || item.sheetId || item.title) + '_' + idx"
-                    :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx) }, item.cardClass || theme]"
+                    :data-search-match-idx="searchMatchedCardIndices.get(idx)"
+                    :class="['card', 'clickable', { 'analyzing': isCardAnalyzing(idx), 'search-active-result': !hideCardsOnSearch && searchMatchedCardIndices.get(idx) === search.searchIndex.value - 1 }, item.cardClass || theme]"
                     @click="handleCardClick(item)"
                     @keydown="handleKeyDown($event, item)"
                     :title="item.title"

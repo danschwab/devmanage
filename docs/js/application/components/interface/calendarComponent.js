@@ -1,10 +1,10 @@
 import { html, parseDate, LoadingBarComponent, ViewChangeComponent, NavigationRegistry } from '../../index.js';
-import { useSearch } from '../../utils/useSearch.js';
+import { useSearch, SearchBoxComponent, scrollToSearchResult, scrollToActiveResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 export const CalendarComponent = {
     name: 'CalendarComponent',
-    components: { LoadingBarComponent, ViewChangeComponent },
+    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent },
     props: {
         data: { type: Array, default: () => [] },
         columns: { type: Array, default: () => [] },
@@ -182,9 +182,35 @@ export const CalendarComponent = {
         },
         isEmpty() {
             return !this.isLoading && !this.isAnalyzing && (!this.data || this.data.length === 0);
-        }
+        },
+        searchMatchedChips() {
+            if (!this.search.hasActiveSearch.value) return [];
+            const words = this.search.searchWords.value;
+            const cols = [...this.firstRowColumns, ...this.secondRowColumns];
+            return this.parsedEvents.filter(event =>
+                words.every(word => cols.some(col => {
+                    const val = event.row[col.key];
+                    return val != null && String(val).toLowerCase().includes(word.toLowerCase());
+                }))
+            );
+        },
+        searchMatchChipKeyMap() {
+            const map = new Map();
+            this.searchMatchedChips.forEach((event, idx) => map.set(event.chipKey, idx));
+            return map;
+        },
+        activeSearchIndex() { return this.search.searchIndex.value; }
     },
     watch: {
+        activeSearchIndex(newIndex) {
+            if (newIndex == null) return;
+            scrollToActiveResult(this, this.activeSearchIndex, this.searchMatchedChips.length);
+        },
+        searchMatchedChips(newChips) {
+            if (this.activeSearchIndex != null && newChips.length > 0) {
+                scrollToActiveResult(this, this.activeSearchIndex, this.searchMatchedChips.length);
+            }
+        },
         // Trigger sticky header recalculation when parameters change on the same route
         // (parameter-only changes don't cause component remount, unlike full route changes)
         'appContext.currentPath'(newPath, oldPath) {
@@ -280,6 +306,9 @@ export const CalendarComponent = {
             const colorCls = this.chipColorClass ? this.chipColorClass(seg.row) : '';
             cls.push(colorCls || 'blue');
             if (this.hoveredKey !== null && this.hoveredKey === seg.chipKey) cls.push('hovered');
+            if (this.search.hasActiveSearch.value && this.searchMatchChipKeyMap.get(seg.chipKey) === this.search.searchIndex.value - 1) {
+                cls.push('search-active-result');
+            }
             return cls;
         },
         chipTitle(row) {
@@ -289,6 +318,13 @@ export const CalendarComponent = {
                 .join(' — ');
         },
         handleEventClick(row) {
+            if (this.search.hasActiveSearch.value) {
+                const chipKey = this.parsedEvents.findIndex(e => e.row === row);
+                if (chipKey >= 0) {
+                    const matchIdx = this.searchMatchChipKeyMap.get(chipKey);
+                    if (matchIdx !== undefined) this.search.setSearchIndex(matchIdx + 1);
+                }
+            }
             this.$emit('event-click', row);
         },
         handleKeyDown(event, row) {
@@ -334,23 +370,11 @@ export const CalendarComponent = {
                     <slot name="header-area"></slot>
                     <div class="spacer"></div>
                     <div class="button-bar">
-                        <div v-if="showSearch" class="input-container">
-                            <input
-                                type="text"
-                                v-model="search.searchValue.value"
-                                @focus="search.handleFocus"
-                                @blur="search.handleBlur"
-                                @keydown.esc="search.clearSearch"
-                                placeholder="Find..."
-                                class="search-input"
-                            />
-                            <button
-                                v-if="search.searchValue.value"
-                                @mousedown="search.clearSearch"
-                                class="column-button"
-                                title="Clear filter"
-                            ><span class="material-symbols-outlined">backspace</span></button>
-                        </div>
+                        <SearchBoxComponent
+                            v-if="showSearch"
+                            :search="search"
+                            :match-count="searchMatchedChips.length"
+                        />
                         <button
                             v-if="showRefresh"
                             @click="handleRefresh"
@@ -406,6 +430,7 @@ export const CalendarComponent = {
                             v-for="seg in lane"
                             :key="seg.row[eventStartColumn] + '-' + seg.row[eventEndColumn] + '-' + seg.startIdx"
                             :class="['calendar-chip', ...chipClasses(seg)]"
+                            :data-search-match-idx="searchMatchChipKeyMap.get(seg.chipKey)"
                             :style="{ gridColumn: chipGridColumn(seg), gridRow: '1' }"
                             :title="chipTitle(seg.row)"
                             tabindex="0"

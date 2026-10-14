@@ -1,3 +1,5 @@
+import {html} from '../index.js';
+
 /**
  * useSearch - Vue 3 Composable for Search Functionality
  * 
@@ -54,6 +56,46 @@ function escapeRegex(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function getFocusedSearchInput() {
+    const active = document.activeElement;
+    return (active instanceof HTMLInputElement && active.classList.contains('search-input')) ? active : null;
+}
+
+function captureSearchInputFocusState() {
+    const input = getFocusedSearchInput();
+    if (!input) return null;
+    return {
+        input,
+        value: input.value,
+        selectionStart: input.selectionStart,
+        selectionEnd: input.selectionEnd
+    };
+}
+
+function restoreSearchInputFocusState(state) {
+    if (!state) return;
+
+    let target = null;
+    if (state.input && document.contains(state.input)) {
+        target = state.input;
+    } else {
+        const candidates = Array.from(document.querySelectorAll('input.search-input'));
+        target = candidates.find(el => el.value === state.value && el.offsetParent !== null) || candidates[0] || null;
+    }
+
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    if (typeof state.selectionStart === 'number' && typeof state.selectionEnd === 'number') {
+        try { target.setSelectionRange(state.selectionStart, state.selectionEnd); } catch (_) {}
+    }
+}
+
+function restoreSearchInputFocusStateWithRetry(state) {
+    if (!state) return;
+    restoreSearchInputFocusState(state);
+    requestAnimationFrame(() => restoreSearchInputFocusState(state));
+}
+
 /**
  * Create a search composable
  * @param {Object} options - Configuration options
@@ -85,6 +127,8 @@ export function useSearch(options = {}) {
     const hasActiveSearch = Vue.computed(() => {
         return searchValue.value.trim().length > 0;
     });
+
+    const searchIndex = Vue.ref(null); // 1-based index of active search result, null = nothing selected
 
     /**
      * Core highlighting logic - processes a string and returns HTML with highlights
@@ -267,15 +311,52 @@ export function useSearch(options = {}) {
      * Clear the search field and optionally update URL
      */
     function clearSearch() {
+        const focusedSearchInputState = captureSearchInputFocusState();
         _clearingSearch.value = true;
         searchValue.value = '';
-        if (syncWithUrl) {
-            updateUrlParameter('');
+        searchIndex.value = null;
+        if (syncWithUrl && navigationRegistry && containerPath) {
+            const appContent = document.getElementById('app-content');
+            const savedTop = appContent ? appContent.scrollTop : window.scrollY;
+            const savedLeft = appContent ? appContent.scrollLeft : window.scrollX;
+            navigationRegistry.updatePathParametersSilently(
+                containerPath.split('?')[0],
+                appContext?.currentPath,
+                { searchTerm: undefined, searchIndex: undefined }
+            );
+            requestAnimationFrame(() => {
+                if (appContent) {
+                    appContent.scrollTo({ top: savedTop, left: savedLeft, behavior: 'auto' });
+                } else {
+                    window.scrollTo({ top: savedTop, left: savedLeft, behavior: 'auto' });
+                }
+                restoreSearchInputFocusStateWithRetry(focusedSearchInputState);
+            });
+        } else if (focusedSearchInputState) {
+            requestAnimationFrame(() => restoreSearchInputFocusStateWithRetry(focusedSearchInputState));
         }
-        // Reset flag after a brief delay
         setTimeout(() => {
             _clearingSearch.value = false;
         }, 100);
+    }
+
+    function setSearchIndex(n) {
+        const focusedSearchInputState = captureSearchInputFocusState();
+        searchIndex.value = n;
+        if (syncWithUrl && navigationRegistry && containerPath) {
+            // Include searchTerm in the same update to avoid the blur-delay race condition
+            navigationRegistry.updatePathParametersSilently(
+                containerPath.split('?')[0],
+                appContext?.currentPath,
+                {
+                    searchIndex: (n != null) ? String(n) : undefined,
+                    searchTerm: (searchValue.value && searchValue.value.trim()) ? searchValue.value : undefined
+                }
+            );
+            if (focusedSearchInputState) {
+                requestAnimationFrame(() => restoreSearchInputFocusStateWithRetry(focusedSearchInputState));
+            }
+        }
     }
 
     /**
@@ -355,6 +436,9 @@ export function useSearch(options = {}) {
         if (params?.searchTerm) {
             searchValue.value = params.searchTerm;
         }
+        if (params?.searchIndex) {
+            searchIndex.value = parseInt(params.searchIndex) || null;
+        }
     }
 
     /**
@@ -378,9 +462,11 @@ export function useSearch(options = {}) {
                     oldPath
                 );
                 
-                // Only update if searchTerm parameter changed
                 if (newParams?.searchTerm !== oldParams?.searchTerm) {
                     searchValue.value = newParams?.searchTerm || '';
+                }
+                if (newParams?.searchIndex !== oldParams?.searchIndex) {
+                    searchIndex.value = newParams?.searchIndex ? (parseInt(newParams.searchIndex) || null) : null;
                 }
             }
         );
@@ -391,6 +477,7 @@ export function useSearch(options = {}) {
         searchValue,
         searchWords,
         hasActiveSearch,
+        searchIndex,
         
         // Methods
         highlightText,
@@ -399,6 +486,7 @@ export function useSearch(options = {}) {
         hasMatch,
         matchesRow,
         clearSearch,
+        setSearchIndex,
         handleBlur,
         updateUrlParameter,
         initializeFromUrl,
@@ -409,3 +497,138 @@ export function useSearch(options = {}) {
         escapeHtml
     };
 }
+
+// Scrolls #app-content so the element is centered below the component's sticky header.
+export function scrollToSearchResult(el, componentEl) {
+    if (!el) return;
+
+    // Manage row-level search-active-result for nested tables where Vue bindings can't reach
+    if (componentEl) {
+        componentEl.querySelectorAll('tr.search-active-result').forEach(r => r.classList.remove('search-active-result'));
+    }
+    if (el.tagName === 'TR') {
+        el.classList.add('search-active-result');
+    }
+
+    const container = document.getElementById('app-content');
+    
+    if (!container) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+
+    // Try native scrollIntoView first (simplest approach)
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Also try custom calculation for better sticky header awareness
+    try {
+        const stickyEl = componentEl?.querySelector('.sticky-header-wrapper');
+        const stickyH = (stickyEl && window.getComputedStyle(stickyEl).position === 'fixed')
+            ? stickyEl.offsetHeight : 0;
+
+        const containerRect = container.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const elTop = elRect.top - containerRect.top + container.scrollTop;
+        const visibleH = container.clientHeight - stickyH;
+        const target = elTop - stickyH - visibleH / 2 + el.offsetHeight / 2;
+
+        if (Math.abs(container.scrollTop - target) > 5) {
+            container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }
+    } catch (_) {}
+}
+
+// Shared scroll implementation for components whose results use [data-search-match-idx] on a flat element.
+export function scrollToActiveResult(component, index, matchCount) {
+    component.$nextTick(() => {
+        if (index == null) return;
+        if (!(component.$el instanceof Element)) return;
+        const el = component.$el.querySelector(`[data-search-match-idx="${index - 1}"]`);
+        if (!el && matchCount === 0) return;
+        scrollToSearchResult(el, component.$el);
+    });
+}
+
+export const SearchBoxComponent = {
+    name: 'SearchBoxComponent',
+    props: {
+        search:          { type: Object,  required: true },
+        matchCount:      { type: Number,  default: 0 },
+        showNavigate:    { type: Boolean, default: true },
+        showHideToggle:  { type: Boolean, default: false },
+        hideRows:        { type: Boolean, default: false }
+    },
+    emits: ['update:hideRows'],
+    watch: {
+        matchCount(newCount) {
+            // Auto-select first result when results appear and no result is currently selected.
+            if (this.showNavigate && this.search.hasActiveSearch.value && newCount > 0 && !this.search.searchIndex.value) {
+                this.search.setSearchIndex(1);
+            }
+        }
+    },
+    methods: {
+        navigate(direction) {
+            if (!this.matchCount) return;
+            const current = this.search.searchIndex.value || 0;
+            let next = current + direction;
+            if (next < 1) next = this.matchCount;
+            if (next > this.matchCount) next = 1;
+            this.search.setSearchIndex(next);
+        }
+    },
+    template: html`
+        <div class="input-container">
+            <input
+                type="text"
+                v-model="search.searchValue.value"
+                @blur="search.handleBlur"
+                @keydown.esc="search.clearSearch"
+                placeholder="Find..."
+                class="search-input"
+            />
+            <button
+                v-if="search.searchValue.value"
+                @mousedown.prevent="search.clearSearch"
+                class="column-button"
+                title="Clear filter"
+            ><span class="material-symbols-outlined">backspace</span></button>
+            <button
+                v-if="showHideToggle"
+                @mousedown.prevent="$emit('update:hideRows', !hideRows)"
+                class="column-button"
+                :title="hideRows ? 'Show all rows' : 'Hide non-matching rows'"
+            ><span class="material-symbols-outlined">{{ hideRows ? 'visibility' : 'visibility_off' }}</span></button>
+        </div>
+        <div v-if="showNavigate" class="card search-nav-card white">
+            <!-- No search: blank card -->
+            <template v-if="!search.hasActiveSearch.value"></template>
+            <!-- Hide-rows mode: show count without navigation buttons -->
+            <template v-else-if="showHideToggle && hideRows">
+                <span class="search-nav-display">{{ matchCount }}</span>
+            </template>
+            <!-- Search active but no results: show 0/0 without buttons -->
+            <template v-else-if="matchCount === 0">
+                <span class="search-nav-display">0 / 0</span>
+            </template>
+            <!-- Search active with results: show full navigation -->
+            <template v-else>
+                <button
+                    @mousedown.prevent="navigate(-1)"
+                    class="column-button"
+                    style="margin:0; left: -2px; top: calc(50% - 10px); border: none; background: none; box-shadow: none; opacity: 0.7; pointer-events: auto;"
+                    :disabled="!matchCount"
+                    title="Previous result"
+                ><span class="material-symbols-outlined">chevron_left</span></button>
+                <span :class="'search-nav-display ' + (matchCount>=10 ? 'font-narrow' : '')">{{ search.searchIndex.value || '?' }}{{ matchCount < 100 ? ' ' : '' }}/{{ matchCount < 100 ? ' ' : '' }}{{ matchCount }}</span>
+                <button
+                    @mousedown.prevent="navigate(1)"
+                    class="column-button"
+                    style="margin:0; right: -2px;  top: calc(50% - 10px); border: none; background: none; box-shadow: none; opacity: 0.7; pointer-events: auto;"
+                    :disabled="!matchCount"
+                    title="Next result"
+                ><span class="material-symbols-outlined">chevron_right</span></button>
+            </template>
+        </div>
+    `
+};

@@ -335,7 +335,7 @@ export const PacklistTable = {
                 if (suggestedMatch) {
                     banners.push({
                         key: 'suggested-match',
-                        color: 'orange',
+                        color: 'red',
                         message: `Possible schedule match: "${suggestedMatch}"`,
                         visible: true,
                         dismissible: true,
@@ -347,7 +347,7 @@ export const PacklistTable = {
                 } else if (!clientIssue && !showIssue) {
                     banners.push({
                         key: 'not-on-schedule',
-                        color: 'orange',
+                        color: 'red',
                         message: 'Packlist not found on production schedule',
                         visible: true,
                         dismissible: true

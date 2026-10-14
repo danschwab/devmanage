@@ -1,5 +1,5 @@
 import { html, parseDate, toUSDateString, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
-import { useSearch } from '../../utils/useSearch.js';
+import { useSearch, SearchBoxComponent, scrollToSearchResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 
 function normalizeItemSortWords(value) {
@@ -1399,7 +1399,7 @@ document.addEventListener('mousemove', (e) => {
 
 export const TableComponent = {
     name: 'TableComponent',
-    components: { LoadingBarComponent, ViewChangeComponent },
+    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent },
     inject: ['appContext', '$modal'],
     props: {
         key: {
@@ -1641,6 +1641,83 @@ export const TableComponent = {
     },
     watch: {
 
+        activeSearchIndex(newIndex) {
+            if (newIndex == null) {
+                this.$el.querySelectorAll('tr.search-active-result').forEach(r => r.classList.remove('search-active-result'));
+                return;
+            }
+            this._scrollToActiveSearchResult();
+        },
+        searchMatchCount(newCount) {
+            if (this.activeSearchIndex != null && newCount > 0) {
+                this._scrollToActiveSearchResult();
+            }
+        },
+        activeSearchValue(newValue, oldValue) {
+            const newTerm = String(newValue || '').trim();
+            const oldTerm = String(oldValue || '').trim();
+
+            // Clear selection when the search is fully cleared.
+            if (!newTerm) {
+                this.search.setSearchIndex(null);
+                return;
+            }
+
+            if (!oldTerm || this.hideRowsOnSearchLocal) return;
+
+            const currentIdx = this.activeSearchIndex;
+            if (currentIdx == null) return;
+
+            const visibleCols = this.columns.filter(col => !this.hideSet.has(col.key));
+            const buildMapForTerm = (term) => {
+                const words = term.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+                const map = new Map();
+                let matchIdx = 0;
+                for (const { row, idx } of this.visibleRows) {
+                    if (!row) continue;
+                    if (words.every(w => visibleCols.some(col => {
+                        const val = row[col.key];
+                        return val != null && typeof val !== 'object' && String(val).toLowerCase().includes(w);
+                    }))) map.set(idx, matchIdx++);
+                }
+                return map;
+            };
+
+            const oldMap = buildMapForTerm(oldTerm);
+            const newMap = buildMapForTerm(newTerm);
+            if (newMap.size === 0) return;
+
+            let prevDataIdx = null;
+            for (const [dataIdx, matchIdx] of oldMap.entries()) {
+                if (matchIdx === currentIdx - 1) {
+                    prevDataIdx = dataIdx;
+                    break;
+                }
+            }
+
+            let targetIdx = currentIdx;
+            if (prevDataIdx == null) {
+                targetIdx = Math.min(currentIdx, newMap.size);
+            } else {
+                const newMatchIdx = newMap.get(prevDataIdx);
+                if (newMatchIdx != null) {
+                    targetIdx = newMatchIdx + 1;
+                } else {
+                    const candidates = Array.from(newMap.keys()).filter(idx => idx < prevDataIdx);
+                    if (candidates.length > 0) {
+                        const nearest = candidates.sort((a, b) => b - a)[0];
+                        targetIdx = newMap.get(nearest) + 1;
+                    } else {
+                        targetIdx = 1;
+                    }
+                }
+            }
+
+            if (targetIdx !== currentIdx) {
+                this.search.setSearchIndex(targetIdx);
+            }
+        },
+
         // Watch for changes to originalData prop and recompare dirty state
         originalData: {
             handler() {
@@ -1725,6 +1802,10 @@ export const TableComponent = {
                 this.sortDirection = this.getNormalizedDefaultSortDirection();
             }
         },
+        hideRowsOnSearchLocal(newValue, oldValue) {
+            if (newValue === oldValue) return;
+            this.syncHideRowsModeToUrl(newValue);
+        },
         // Clear drop targets when drag ends (handles touch where mouseleave doesn't fire)
         isDraggingGlobally(isActive, wasActive) {
             if (wasActive && !isActive) {
@@ -1739,6 +1820,10 @@ export const TableComponent = {
             
             const oldBasePath = oldPath.split('?')[0];
             const newBasePath = newPath.split('?')[0];
+
+            if (oldBasePath === newBasePath) {
+                this.applyHideRowsModeFromUrl(newPath);
+            }
             
             if (!this._stickyHeader) return;
 
@@ -1955,6 +2040,55 @@ export const TableComponent = {
             // Use parentSearchValue if provided, otherwise use composable searchValue
             return this.parentSearchValue || this.search.searchValue.value;
         },
+        // Map from data index to 0-based match index; only populated in navigate mode (rows visible, not filtered)
+        searchMatchIndexMap() {
+            const activeVal = this.activeSearchValue;
+            if (!activeVal || !activeVal.trim() || this.hideRowsOnSearchLocal) return new Map();
+            const words = activeVal.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+            const visibleCols = this.columns.filter(col => !this.hideSet.has(col.key));
+            const map = new Map();
+            let matchIdx = 0;
+            for (const { row, idx } of this.visibleRows) {
+                if (!row) continue;
+                if (words.every(w => visibleCols.some(col => {
+                    const val = row[col.key];
+                    return val != null && typeof val !== 'object' && String(val).toLowerCase().includes(w);
+                }))) map.set(idx, matchIdx++);
+            }
+            return map;
+        },
+        // Counts individual items inside nested arrays on each row (e.g. items within packlist crates)
+        searchNestedMatchCount() {
+            const activeVal = this.activeSearchValue;
+            if (!activeVal || !activeVal.trim()) return 0;
+            const words = activeVal.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+            let total = 0;
+            for (const { row } of this.visibleRows) {
+                if (!row) continue;
+                for (const arr of Object.values(row)) {
+                    if (!Array.isArray(arr)) continue;
+                    for (const item of arr) {
+                        if (!item || typeof item !== 'object') continue;
+                        if (words.every(w =>
+                            Object.values(item).some(v =>
+                                v != null && typeof v !== 'object' && String(v).toLowerCase().includes(w)
+                            )
+                        )) total++;
+                    }
+                }
+            }
+            return total;
+        },
+        searchMatchCount() {
+            // When hiding non-matching rows, count the filtered rows
+            if (this.hideRowsOnSearchLocal && this.activeSearchValue && this.activeSearchValue.trim()) {
+                return this.visibleRows.length;
+            }
+            // Otherwise count nested matches or search index map
+            const nested = this.searchNestedMatchCount;
+            return nested > 0 ? nested : this.searchMatchIndexMap.size;
+        },
+        activeSearchIndex() { return this.search.searchIndex.value; },
         showSaveButton() {
             // True if any editable cell or add row button is present
             const hasEditable = this.columns.some(col => col.editable);
@@ -2131,6 +2265,7 @@ export const TableComponent = {
         // Initialize search from URL and setup watcher if syncSearchWithUrl is enabled
         this.search.initializeFromUrl();
         this.search.setupUrlWatcher();
+        this.applyHideRowsModeFromUrl();
         
         this.$nextTick(() => {
             this.updateAllEditableCells();
@@ -2256,6 +2391,29 @@ export const TableComponent = {
         }
     },
     methods: {
+        applyHideRowsModeFromUrl(path = this.appContext?.currentPath) {
+            if (!this.syncSearchWithUrl || !this.containerPath || !path) return;
+            const params = NavigationRegistry.getParametersForContainer(this.containerPath, path);
+            if (!params || params.hideRowsOnSearch == null) return;
+            const raw = String(params.hideRowsOnSearch).toLowerCase();
+            const parsed = !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+            if (this.hideRowsOnSearchLocal !== parsed) {
+                this.hideRowsOnSearchLocal = parsed;
+            }
+        },
+        syncHideRowsModeToUrl(value = this.hideRowsOnSearchLocal) {
+            if (!this.syncSearchWithUrl || !this.containerPath) return;
+            NavigationRegistry.updatePathParametersSilently(
+                this.containerPath.split('?')[0],
+                this.appContext?.currentPath,
+                {
+                    hideRowsOnSearch: value ? '1' : '0',
+                    // Preserve existing search parameters when toggling hideRows
+                    searchTerm: (this.search.searchValue.value && this.search.searchValue.value.trim()) ? this.search.searchValue.value : undefined,
+                    searchIndex: (this.search.searchIndex.value != null) ? String(this.search.searchIndex.value) : undefined
+                }
+            );
+        },
         // Returns null when $el is a text/comment node (fragment root) to prevent querySelector errors.
         _rootEl() { return this.$el instanceof Element ? this.$el : null; },
         _measureColWidths() {
@@ -2450,6 +2608,40 @@ export const TableComponent = {
                 (dt.visualTargetIndex === visibleIdx || dt.visualTargetIndex === visibleIdx + 1);
             const isOnto = dt.type === 'onto' && dt.targetIndex === idx;
             if (isBetween || isOnto) this.completeClipboardAtCurrentTarget();
+        },
+
+        handleSearchResultClick(idx) {
+            if (!this.search.hasActiveSearch.value || this.hideRowsOnSearchLocal) return;
+            const matchIdx = this.searchMatchIndexMap.get(idx);
+            if (matchIdx === undefined) return;
+            this.search.setSearchIndex(matchIdx + 1);
+        },
+
+        _scrollToActiveSearchResult() {
+            this.$nextTick(() => {
+                const index = this.activeSearchIndex;
+                if (index == null) return;
+                const el = this._findOwnSearchRow(index - 1);
+                if (!el && this.searchMatchCount === 0) return;
+                scrollToSearchResult(el, this.$el);
+            });
+        },
+
+        // Finds the matchIdx-th (0-based) search result, scoped to this table.
+        // If nested sub-tables are present, navigates through their individual item matches in DOM order.
+        _findOwnSearchRow(matchIdx) {
+            // Nested-table mode: collect all sub-table matches in DOM order and index them globally
+            const nestedMatches = Array.from(this.$el.querySelectorAll('[data-search-match-idx]'))
+                .filter(el => el.closest('.dynamic-table') !== this.$el);
+            if (nestedMatches.length > 0) {
+                return nestedMatches[matchIdx] ?? null;
+            }
+            // Flat-table mode: find the row belonging to this table by its match index
+            const candidates = this.$el.querySelectorAll(`[data-search-match-idx="${matchIdx}"]`);
+            for (const el of candidates) {
+                if (el.closest('.dynamic-table') === this.$el) return el;
+            }
+            return null;
         },
 
 
@@ -2687,7 +2879,7 @@ export const TableComponent = {
         getSortIcon(columnKey) {
             const column = this.columns.find(col => col.key === columnKey);
             if (!this.isColumnSortable(column) || this.sortColumn !== columnKey) return '';
-            return this.sortDirection === 'asc' ? '⭡' : '⭣';
+            return this.sortDirection === 'asc' ? 'arrow_upward_alt' : 'arrow_downward_alt';
         },
         
         handleHideColumn(columnKey) {
@@ -4433,32 +4625,13 @@ export const TableComponent = {
                     ></slot>
                     <div class="spacer"></div>
                     <div v-if="showNewRowButton || showSaveButton || showRefresh || showSearch || viewModes" class="button-bar">
-                        <div v-if="showSearch" class="input-container">
-                            <input
-                                type="text"
-                                v-model="search.searchValue.value"
-                                @blur="search.handleBlur"
-                                @keydown.esc="search.clearSearch"
-                                placeholder="Find..."
-                                class="search-input"
-                            />
-                            <button
-                                v-if="search.searchValue.value"
-                                @mousedown="search.clearSearch"
-                                class="column-button"
-                                title="Clear filter"
-                            >
-                                <span class="material-symbols-outlined">backspace</span>
-                            </button>
-                            <button
-                                v-if="showSearch && hideRowsOnSearch"
-                                @mousedown.prevent="hideRowsOnSearchLocal = !hideRowsOnSearchLocal"
-                                class="column-button"
-                                :title="hideRowsOnSearchLocal ? 'Show all rows' : 'Hide non-matching rows'"
-                            >
-                                <span class="material-symbols-outlined">{{ hideRowsOnSearchLocal ? 'visibility' : 'visibility_off' }}</span>
-                            </button>
-                        </div>
+                        <SearchBoxComponent
+                            v-if="showSearch && !parentSearchValue"
+                            :search="search"
+                            :match-count="searchMatchCount"
+                            :show-hide-toggle="hideRowsOnSearch"
+                            v-model:hide-rows="hideRowsOnSearchLocal"
+                        />
                         <button
                             v-if="showNewRowButton"
                             @click="$emit('new-row')"
@@ -4549,7 +4722,7 @@ export const TableComponent = {
                                         @click="handleSort(column.key)"
                                         :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        {{ getSortIcon(column.key) || '⭥' }}
+                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
                                     </button>
                                     <button 
                                         v-if="column.allowHide"
@@ -4578,7 +4751,7 @@ export const TableComponent = {
                                         @click="handleSort(column.key)"
                                         :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        {{ getSortIcon(column.key) || '⭥' }}
+                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
                                     </button>
                                 </div>
                             </th>
@@ -4619,7 +4792,7 @@ export const TableComponent = {
                                         @click="handleSort(column.key)"
                                         :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        {{ getSortIcon(column.key) || '⭥' }}
+                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
                                     </button>
                                     <button 
                                         v-if="column.allowHide"
@@ -4649,7 +4822,7 @@ export const TableComponent = {
                                         @click="handleSort(column.key)"
                                         :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
                                     >
-                                        {{ getSortIcon(column.key) || '⭥' }}
+                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
                                     </button>
                                 </div>
                             </th>
@@ -4659,6 +4832,7 @@ export const TableComponent = {
                         <template v-for="({ row, idx }, visibleIdx) in visibleRows" :key="idx">
                             <tr 
                                 :data-visible-idx="visibleIdx"
+                                :data-search-match-idx="searchMatchIndexMap.get(idx)"
                                 :class="[
                                     {
                                         'dragging': isRowDragging(idx),
@@ -4674,7 +4848,7 @@ export const TableComponent = {
                                     },
                                     getRowMetadataClass(row)
                                 ]"
-                                @click="handleClipboardRowClick(idx, visibleIdx, $event)"
+                                @click="handleClipboardRowClick(idx, visibleIdx, $event); handleSearchResultClick(idx)"
                             >
                                 <td v-if="draggable"
                                     class="row-drag-handle"
@@ -4691,7 +4865,7 @@ export const TableComponent = {
                                     v-show="!hideSet.has(column.key)"
                                     @click="handleEditableCellContainerClick(idx, colIndex, column, $event)"
                                 >
-                                    <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column) }]">
+                                    <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column), 'search-active-result': hasSearchMatch(row[column.key], column) && searchMatchIndexMap.get(idx) === search.searchIndex.value - 1 }]">
                                         <!-- Editable number input -->
                                         <slot
                                             v-if="column.editable && column.format === 'number'"

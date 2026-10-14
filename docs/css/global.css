@@ -64,6 +64,7 @@ label {
 
 :root {
     font-family: Arial, sans-serif;
+    font-size: 12pt;
 }
 .font-narrow {
     font-family: "Arial Narrow", sans-serif; 
@@ -472,14 +473,14 @@ table.green th, td.green th, th.green, td.green {
 .error-message {
     color: var(--color-red);
     font-size: 0.875rem;
-    margin-top: 0.25rem;
+    margin-top: var(--margin-small);
     display: block;
 }
 
 .helper-text {
     color: var(--color-text-light);
     font-size: 0.875rem;
-    margin-top: 0.25rem;
+    margin-top: var(--margin-small);
     display: block;
     font-style: italic;
 }
