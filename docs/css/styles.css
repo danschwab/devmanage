@@ -1286,25 +1286,21 @@ td.col-sticky-start, td.col-sticky-end {
 }
 
 .details-grid {
-    --details-grid-min-column-width: 200px;
+    --details-grid-min-column-width: 160px;
     display: grid;
     flex: 1 1 0%;
     grid-template-columns: repeat(auto-fit, minmax(var(--details-grid-min-column-width), 1fr));
     gap: var(--padding-md);
 }
 
-.details-grid label {
-    color: var(--color-text-light);
-    line-height: 1.2rem;
-}
-
 .detail-item {
     display: flex;
-    flex-direction: row;
-    background-color: var(--color-gray-bg);
-    padding: var(--padding-sm);
+    flex-direction: column;
     border-radius: var(--radius-md);
-    gap: 0.5rem;
+    background-color: var(--color-gray-bg);
+    overflow: hidden;
+    padding: var(--padding-sm);
+    gap: var(--padding-sm);
 }
 
 .detail-item span {
@@ -1312,6 +1308,8 @@ td.col-sticky-start, td.col-sticky-end {
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: left;
+    min-height: 1em;
+    height: 100%;
 }
 
 .item-image-container {
@@ -2054,7 +2052,7 @@ button.search-highlight {
         display: revert;
     }
 
-    button, input[type="submit"], input[type="button"], input[type="text"], select, .input-container {
+    button, input[type="submit"], input[type="button"], input[type="text"], input[type="date"], input[type="number"], input[type="email"], select, .input-container {
         width: 100%;
         flex-grow: 1;
     }

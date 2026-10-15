@@ -70,25 +70,25 @@ const InventorySaveModal = {
     template: html`
         <div class="content">
             <div class="form-group">
-                <label>Note <span v-if="hasQtyChanges" style="color: var(--color-red)">*</span></label>
+                <label>Note <span v-if="hasQtyChanges" class="red">*</span></label>
                 <input
                     type="text"
                     v-model="note"
                     maxlength="25"
                     :placeholder="hasQtyChanges ? 'What changed and why?' : 'Optional note'"
-                    :class="{ error: !!error && !note.trim() }"
+                    :class="{ red: !!error && !note.trim() }"
                     autofocus
                     @keyup.enter="handleApplyNow"
                 />
-                <span v-if="error && !note.trim()" class="error-message">{{ error }}</span>
-                <span v-else class="helper-text">{{ charCount }}/25</span>
+                <span v-if="error && !note.trim()" class="red font-small">{{ error }}</span>
+                <span v-else class="font-small gray">{{ charCount }}/25</span>
             </div>
             <div class="form-group">
                 <label>Effective Date</label>
-                <input type="date" v-model="scheduledDate" :min="todayISO" :class="{ error: !!error && scheduledDate < todayISO }" />
-                <span v-if="error && scheduledDate < todayISO" class="error-message">{{ error }}</span>
-                <span v-else-if="!isFutureDate" class="helper-text">Changes will be immediate</span>
-                <span v-else class="helper-text">Changes will be scheduled</span>
+                <input type="date" v-model="scheduledDate" :min="todayISO" :class="{ red: !!error && scheduledDate < todayISO }" />
+                <span v-if="error && scheduledDate < todayISO" class="red font-small">{{ error }}</span>
+                <span v-else-if="!isFutureDate" class="font-small gray">Changes will be immediate</span>
+                <span v-else class="font-small gray">Changes will be scheduled</span>
             </div>
             <div class="button-bar">
                 <button v-if="!isFutureDate" @click="handleApplyNow" class="purple">Apply Now</button>
@@ -300,13 +300,13 @@ const NewItemNumberPrompt = {
                         v-model="itemNumber"
                         @keyup.enter="handleSubmit"
                         @keydown="handleKeydown"
-                        :class="{ error: error }"
+                        :class="{ 'red': error }"
                         autofocus
                     />
                     <div class="ghost-text" v-if="ghostText">{{ itemNumber }}<span class="ghost">{{ ghostText }}</span></div>
                 </div>
-                <span v-if="error" class="error-message">{{ error }}</span>
-                <span v-else-if="helperText" class="helper-text">{{ helperText }}</span>
+                <span v-if="error" class="font-small red">{{ error }}</span>
+                <span v-else-if="helperText" class="font-small gray">{{ helperText }}</span>
             </div>
             <div class="button-bar">
                 <button @click="handleSubmit" :disabled="!!error" class="purple">Add Item</button>

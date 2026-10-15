@@ -55,8 +55,10 @@ input[type="submit"], input[type="button"], select, button {
     transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out, border 0.15s ease-in-out;
 }
 label {
+    z-index: 10;
     font-size: 0.75rem;
     text-align: left;
+    display: block;
 }
 
 
@@ -72,7 +74,7 @@ label {
     letter-spacing: -0.5px;
 }
 .font-black {font-family: "Arial Black", sans-serif; font-weight: 800;}
-.font-small {font-size: 0.75rem; font-weight: 600;}
+.font-small {font-size: 0.75rem;}
 
 p,
 h1,
@@ -262,71 +264,71 @@ button:disabled:after {
 
 /* apply colors */
 
-div.white, span.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)), .hover-highlight.white tr:hover {
+div.white, col.white:not(.striped:nth-child(even)), tr.white:not(.striped:nth-child(even)), .hover-highlight.white tr:hover {
     border-color: var(--color-border);
     background-color: var(--background-color);
     color: var(--color-text);
 }
-div.gray, span.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)), .hover-highlight.gray tr:hover {
+div.gray, col.gray:not(.striped:nth-child(even)), tr.gray:not(.striped:nth-child(even)), .hover-highlight.gray tr:hover {
     border-color: var(--color-gray);
     background-color: var(--color-gray-bg);
     color: var(--color-text);
 }
-div.purple, span.purple, col.purple, tr.purple:not(.striped:nth-child(even)), tr.purple:not(.striped:nth-child(even)), .hover-highlight.purple tr:hover {
+div.purple, col.purple, tr.purple:not(.striped:nth-child(even)), tr.purple:not(.striped:nth-child(even)), .hover-highlight.purple tr:hover {
     border-color: var(--color-purple);
     background-color: var(--color-purple-bg);
     color: var(--color-text);
 }
-div.red, span.red, col.red, tr.red {
+div.red, col.red, tr.red {
     border-color: var(--color-red);
     background-color: var(--color-red-bg);
     color: var(--color-text);
 }
-div.orange, span.orange, col.orange, tr.orange {
+div.orange, col.orange, tr.orange {
     border-color: var(--color-orange);
     background-color: var(--color-orange-bg);
     color: var(--color-text);
 }
-div.yellow, span.yellow, col.yellow, tr.yellow {
+div.yellow, col.yellow, tr.yellow {
     border-color: var(--color-yellow);
     background-color: var(--color-yellow-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
 }
-div.blue, span.blue, col.blue, tr.blue {
+div.blue, col.blue, tr.blue {
     border-color: var(--color-blue);
     background-color: var(--color-blue-bg);
     color: var(--color-text);
 }
-div.green, span.green, col.green, tr.green {
+div.green, col.green, tr.green {
     border-color: var(--color-green);
     background-color: var(--color-green-bg);
     color: var(--color-text);
 }
 
 
-div.clickable.white:hover, div.clickable.white.hovered, span.clickable.white:hover, col.clickable.white:hover, tr.clickable.white:hover {
+div.clickable.white:hover, div.clickable.white.hovered, col.clickable.white:hover, tr.clickable.white:hover {
     background-color: var(--background-color-hover);
 }
-div.clickable.gray:hover, div.clickable.gray.hovered, span.clickable.gray:hover, col.clickable.gray:hover, tr.clickable.gray:hover {
+div.clickable.gray:hover, div.clickable.gray.hovered, col.clickable.gray:hover, tr.clickable.gray:hover {
     background-color: var(--color-gray-bg-hover);
 }
-div.clickable.purple:hover, div.clickable.purple.hovered, span.clickable.purple:hover, col.clickable.purple:hover, tr.clickable.purple:hover {
+div.clickable.purple:hover, div.clickable.purple.hovered, col.clickable.purple:hover, tr.clickable.purple:hover {
     background-color: var(--color-purple-bg-hover);
 }
-div.clickable.red:hover, div.clickable.red.hovered, span.clickable.red:hover, col.clickable.red:hover, tr.clickable.red:hover {
+div.clickable.red:hover, div.clickable.red.hovered, col.clickable.red:hover, tr.clickable.red:hover {
     background-color: var(--color-red-bg-hover);
 }
-div.clickable.orange:hover, div.clickable.orange.hovered, span.clickable.orange:hover, col.clickable.orange:hover, tr.clickable.orange:hover {
+div.clickable.orange:hover, div.clickable.orange.hovered, col.clickable.orange:hover, tr.clickable.orange:hover {
     background-color: var(--color-orange-bg-hover);
 }
-div.clickable.yellow:hover, div.clickable.yellow.hovered, span.clickable.yellow:hover, col.clickable.yellow:hover, tr.clickable.yellow:hover {
+div.clickable.yellow:hover, div.clickable.yellow.hovered, col.clickable.yellow:hover, tr.clickable.yellow:hover {
     background-color: var(--color-yellow-bg-hover);
 }
-div.clickable.blue:hover, div.clickable.blue.hovered, span.clickable.blue:hover, col.clickable.blue:hover, tr.clickable.blue:hover {
+div.clickable.blue:hover, div.clickable.blue.hovered, col.clickable.blue:hover, tr.clickable.blue:hover {
     background-color: var(--color-blue-bg-hover);
 }
-div.clickable.green:hover, div.clickable.green.hovered, span.clickable.green:hover, col.clickable.green:hover, tr.clickable.green:hover {
+div.clickable.green:hover, div.clickable.green.hovered, col.clickable.green:hover, tr.clickable.green:hover {
     background-color: var(--color-green-bg-hover);
 }
 
@@ -398,28 +400,28 @@ button.green:hover, input[type="button"].green:hover, input[type="submit"].green
 }
 
 
-p.white, h1.white, h2.white, h3.white, h4.white, h5.white, h6.white {
+p.white, h1.white, h2.white, h3.white, h4.white, h5.white, h6.white, span.white {
     color: var(--color-text-inverted);
 }
-p.gray, h1.gray, h2.gray, h3.gray, h4.gray, h5.gray, h6.gray {
+p.gray, h1.gray, h2.gray, h3.gray, h4.gray, h5.gray, h6.gray, span.gray {
     color: var(--color-text-light);
 }
-p.purple, h1.purple, h2.purple, h3.purple, h4.purple, h5.purple, h6.purple {
+p.purple, h1.purple, h2.purple, h3.purple, h4.purple, h5.purple, h6.purple, span.purple {
     color: var(--color-purple);
 }
-p.red, h1.red, h2.red, h3.red, h4.red, h5.red, h6.red {
+p.red, h1.red, h2.red, h3.red, h4.red, h5.red, h6.red, span.red {
     color: var(--color-red);
 }
-p.orange, h1.orange, h2.orange, h3.orange, h4.orange, h5.orange, h6.orange {
+p.orange, h1.orange, h2.orange, h3.orange, h4.orange, h5.orange, h6.orange, span.orange {
     color: var(--color-orange);
 }
-p.yellow, h1.yellow, h2.yellow, h3.yellow, h4.yellow, h5.yellow, h6.yellow {
+p.yellow, h1.yellow, h2.yellow, h3.yellow, h4.yellow, h5.yellow, h6.yellow, span.yellow {
     color: var(--color-yellow);
 }
-p.blue, h1.blue, h2.blue, h3.blue, h4.blue, h5.blue, h6.blue {
+p.blue, h1.blue, h2.blue, h3.blue, h4.blue, h5.blue, h6.blue, span.blue {
     color: var(--color-blue);
 }
-p.green, h1.green, h2.green, h3.green, h4.green, h5.green, h6.green {
+p.green, h1.green, h2.green, h3.green, h4.green, h5.green, h6.green, span.green {
     color: var(--color-green);
 }
 
@@ -457,18 +459,36 @@ table.green th, td.green th, th.green, td.green {
     color: var(--color-text-inverted);
 }
 
-/* Form styling for modals and inputs */
-.form-group label {
-    z-index: 10;
-    /* background-color: var(--background-color); */
-    /* position: absolute;
-    transform: translate(0, -90%); */
-    display: block;
-}
 
-.form-group input.error {
+input[type="text"].white, input[type="date"].white, input[type="number"].white, input[type="email"].white, textarea.white {
+    border-color: var(--background-color);
+}
+input[type="text"].gray, input[type="date"].gray, input[type="number"].gray, input[type="email"].gray, textarea.gray {
+    border-color: var(--color-gray);
+}
+input[type="text"].purple, input[type="date"].purple, input[type="number"].purple, input[type="email"].purple, textarea.purple {
+    border-color: var(--color-purple);
+}
+input[type="text"].red, input[type="date"].red, input[type="number"].red, input[type="email"].red, textarea.red {
     border-color: var(--color-red);
 }
+input[type="text"].orange, input[type="date"].orange, input[type="number"].orange, input[type="email"].orange, textarea.orange {
+    border-color: var(--color-orange);
+}
+input[type="text"].yellow, input[type="date"].yellow, input[type="number"].yellow, input[type="email"].yellow, textarea.yellow {
+    border-color: var(--color-yellow);
+}
+input[type="text"].blue, input[type="date"].blue, input[type="number"].blue, input[type="email"].blue, textarea.blue {
+    border-color: var(--color-blue);
+}
+input[type="text"].green, input[type="date"].green, input[type="number"].green, input[type="email"].green, textarea.green {
+    border-color: var(--color-green);
+}
+
+
+
+
+
 
 .error-message {
     color: var(--color-red);

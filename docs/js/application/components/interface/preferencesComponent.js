@@ -201,7 +201,7 @@ export const PreferencesMenuComponent = {
     template: html`
         <div v-if="matchingPreferences.length > 0" class="preferences-menu-section">
             <button @click="openEditModal">Edit Global Parameters</button>
-            <div class="card details-grid">
+            <div class="card details-grid" style="--details-grid-min-column-width: 140px;">
                 <div v-for="pref in matchingPreferences" :key="pref.id" class="detail-item">
                     <label class="pref-label">{{ pref.name }}:</label>
                     <span class="pref-value">{{ pref.value }}</span>
