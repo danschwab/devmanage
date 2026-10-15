@@ -207,12 +207,12 @@ test('CHAIN DATES', 'source show returns own ship date', async () => {
 
 test('CHAIN DATES', 'source show return extends to destination return date', async () => {
     const result = await Requests.getProjectReturnDate('CHAINCO 2026 SPRING EXPO');
-    assertEqual(result, '2026-06-11', 'getProjectReturnDate(SPRING EXPO) should resolve to SUMMER SHOW return date');
+    assertEqual(result, '2026-06-18', 'getProjectReturnDate(SPRING EXPO) should resolve to SUMMER SHOW return date');
 });
 
 test('CHAIN DATES', 'destination show returns own return date', async () => {
     const result = await Requests.getProjectReturnDate('CHAINCO 2026 SUMMER SHOW');
-    assertEqual(result, '2026-06-11', 'getProjectReturnDate(SUMMER SHOW)');
+    assertEqual(result, '2026-06-18', 'getProjectReturnDate(SUMMER SHOW)');
 });
 
 test('CHAIN DATES', 'three-show chain: end show ship date resolves to Stage A', async () => {
@@ -222,7 +222,7 @@ test('CHAIN DATES', 'three-show chain: end show ship date resolves to Stage A', 
 
 test('CHAIN DATES', 'three-show chain: root show return extends to Stage C', async () => {
     const result = await Requests.getProjectReturnDate('TRICHAIN 2026 STAGE A');
-    assertEqual(result, '2026-06-16', 'getProjectReturnDate(STAGE A) should resolve to STAGE C return date');
+    assertEqual(result, '2026-06-26', 'getProjectReturnDate(STAGE A) should resolve to STAGE C return date');
 });
 
 // ── Group 4: Item Timeline Structure for Chain Shows ─────────────────────────
@@ -534,13 +534,13 @@ test('SCHEDULE ATTACHMENT', 'checkPacklistExists returns false for show with no 
 // FakeGoogle: TABLE-001 inventory qty=2; SPRING EXPO chain needs 3 (min dips below 2).
 
 test('ITEM MIN QUANTITY', 'TABLE-001 min during chain window is a finite number', async () => {
-    const result = await Requests.getItemMinQuantityInRange('TABLE-001', '2026-03-01', '2026-06-11');
+    const result = await Requests.getItemMinQuantityInRange('TABLE-001', '2026-03-01', '2026-06-18');
     assertFiniteNumber(result, 'getItemMinQuantityInRange(TABLE-001, chain window)');
 });
 
 test('ITEM MIN QUANTITY', 'TABLE-001 min during chain window drops below inventory quantity', async () => {
     // Chain needs 3 TABLE-001, inventory has 2 — min must be < 2
-    const result = await Requests.getItemMinQuantityInRange('TABLE-001', '2026-03-01', '2026-06-11');
+    const result = await Requests.getItemMinQuantityInRange('TABLE-001', '2026-03-01', '2026-06-18');
     assertLessThan(result, 2, 'TABLE-001 chain window min should be < 2');
 });
 

@@ -767,8 +767,10 @@ class Requests_uncached {
         const matchingTabs = await deps.call(ProductionUtils.findPacklistTabsForScheduleRow, rowData, availableTabs);
         
         if (matchingTabs.length > 0) {
+            const identifier = matchingTabs[0]?.title || null;
             return {
                 exists: true,
+                identifier,
                 identifiers: matchingTabs.map(t => t.title)
             };
         }
