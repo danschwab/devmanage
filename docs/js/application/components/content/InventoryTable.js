@@ -338,12 +338,8 @@ const ImageViewWithReplaceComponent = {
         }
     },
     template: html`
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
-            <img :src="displayUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
-            <div class="button-bar" v-if="onReplace">
-                <button class="" @click="() => { onReplace(); $emit('close-modal'); }">Replace</button>
-            </div>
-        </div>
+        <img :src="displayUrl" alt="Image" style="max-width: 90vw; max-height: 70vh; object-fit: contain;" />
+        <button v-if="onReplace" style="align-self: center;" @click="() => { onReplace(); $emit('close-modal'); }">Replace</button>
     `
 };
 
@@ -399,21 +395,16 @@ const ImageUploadComponent = {
         if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
     },
     template: html`
-        <div style="display: flex; flex-direction: column; gap: 12px; min-width: 260px;">
-            <div v-if="previewUrl" style="text-align: center;">
-                <img :src="previewUrl" alt="Preview" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 4px;" />
-            </div>
-            <label style="display: flex; flex-direction: column; gap: 4px;">
-                <span style="font-size: 0.85em; color: var(--color-text-secondary, #888);">Select image file</span>
-                <input type="file" accept="image/*" @change="handleFileSelect" :disabled="uploading" />
-            </label>
-            <div v-if="uploadError" style="color: var(--color-error, #c00); font-size: 0.85em;">{{ uploadError }}</div>
-            <div class="button-bar">
-                <button @click="handleUpload" :disabled="!selectedFile || uploading">
-                    {{ uploading ? 'Uploading...' : (mode === 'replace' ? 'Replace' : 'Upload') }}
-                </button>
-                <button class="gray" @click="$emit('close-modal')" :disabled="uploading">Cancel</button>
-            </div>
+        <div v-if="previewUrl" style="text-align: center;">
+            <img :src="previewUrl" alt="Preview" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 4px;" />
+        </div>
+        <input class="card" style="width:100%" type="file" accept="image/*" @change="handleFileSelect" :disabled="uploading" />
+        <div v-if="uploadError" class="red card">{{ uploadError }}</div>
+        <div class="button-bar">
+            <button @click="handleUpload" :disabled="!selectedFile || uploading">
+                {{ uploading ? 'Uploading...' : (mode === 'replace' ? 'Replace' : 'Upload') }}
+            </button>
+            <button class="gray" @click="$emit('close-modal')" :disabled="uploading">Cancel</button>
         </div>
     `
 };
@@ -717,7 +708,7 @@ export const ItemImageComponent = {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
                     thumbnailUrl: this.imageUrl,
                     itemNumber: this.itemNumber,
-                    modalClass: 'reading-menu',
+                    modalClass: 'page-menu',
                     onReplace: (this.editable && this.itemNumber) ? () => this.showUploadModal() : null
                 }, `Image: ${this.itemNumber}`);
             }
