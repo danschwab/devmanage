@@ -1,3 +1,8 @@
+Dig into the logic that sets editHistory and that sets pending changes for inventory items. We need a table feature that allows editHistory to be shown alongside pending changes in the same way. This should be togglable with a new 'history' toggle button next to the view switcher. Show these rows as
+
+Does this correctly distinguish between the google popup showing at odd times during silent refresh, and the application modal that is shown to alert the user that auth is expiring?
+Intended functionality: The google popup (automatic when attempting silent refresh) should not show when the app is hidden. The user prompt should show whenever auth is going to expire even when the document is inactive so that the user can log back in if silent refresh failed in the background or was suppressed. If it is helpful, maybe we should keep the document activate listener so that if the document was truly fully inactive and not running any code when auth expired, the auth check runs and shows the user prompt if auth is expired.
+
 ## TopShelf Live Inventory Notes
 
 Deployment Notes
