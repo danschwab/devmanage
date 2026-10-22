@@ -29,7 +29,7 @@
 
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
-import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -651,7 +651,7 @@ test('CAD SOURCE HISTORY', 'FakeGoogle ATSC NAB fixture produces cad alert', asy
     const crates = await Requests.getPackList('ATSC 2025 NAB');
     const firstItem = crates?.[0]?.Items?.[0];
     if (!firstItem) throw new Error('ATSC 2025 NAB first item row not found');
-    const result = await Requests.checkCadSourceHistory(firstItem.EditHistory);
+    const result = await Requests.checkCadSourceHistory(firstItem.edithistory);
     if (!result) throw new Error('expected cad alert for ATSC NAB fixture item, got null');
     assertEqual(result.type, 'cad-source-change', 'ATSC NAB fixture cad alert type');
 });
@@ -798,7 +798,7 @@ test('IDENTIFIER SAFETY', 'deduplicateScheduleByShow uses canonical identifiers,
 
 // ── Group 20: Item Quantities Summary ─────────────────────────────────────────
 // getItemQuantitiesSummary extracts item quantities from a single packlist tab.
-// The extractItems loop explicitly skips EditHistory and MetaData fields to prevent
+// The extractItems loop explicitly skips the edithistory and metadata fields to prevent
 // old description values in the EditHistory JSON from being parsed as item codes.
 // Tests cover: known simple extractions, EditHistory-skip regression (ATSC NAB),
 // and the Lockheed suffix variant tabs (primary and MEETING ROOM).
@@ -1302,8 +1302,9 @@ test('PAGE NOTES', 'getPageNotes returns an array', async () => {
 // The bus fires synchronously inside invalidate(), so events are always
 // captured before the mutation's await resolves — no timing gaps.
 // Mutations use round-trip saves (read → write same data back) to stay
-// idempotent: calculateRowDiff returns empty changes, so no edithistory
-// is appended and FakeGoogle's mockData is effectively unchanged.
+// idempotent: calculateRowDiff returns empty changes, so no history entry
+// is appended. The first round-trip of a tab assigns EditHistory.i to rows
+// that lack it (first touch); field values in mockData are unchanged.
 
 test('CACHE INVALIDATION', 'savePackList fires getPackList invalidation', async () => {
     await Requests.getPackList('CHAINCO 2026 SPRING EXPO'); // warm: registers dependency chain
@@ -1504,6 +1505,173 @@ test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
     for (const p of schedulePrefs) {
         if (p.page !== 'schedule*') throw new Error(`expected page "schedule*" for ${p.id}, got "${p.page}"`);
     }
+});
+
+// ── Group 36: Edit History ────────────────────────────────────────────────────
+// Contract: docs/notes/metadata-implementation.md
+// Pure tests cover EditHistoryUtils matching and aggregation. Integration tests save
+// through Database.setData into a dedicated hidden PACK_LISTS tab (_HISTORY_TEST) so
+// fixture tabs are untouched; deletions archive to PACK_LISTS/_EditHistory.
+
+const _eh = (obj) => JSON.stringify(obj);
+const _row = (name, qty, edithistory = '') => ({ name, qty, edithistory });
+
+test('EDIT HISTORY', 'getRowIndex reads positive integer i only', async () => {
+    assertEqual(EditHistoryUtils.getRowIndex(_eh({ i: 4, h: [] })), 4, 'valid i');
+    assertEqual(EditHistoryUtils.getRowIndex(_eh({ i: 0 })), null, 'zero rejected');
+    assertEqual(EditHistoryUtils.getRowIndex(_eh({ i: '4' })), null, 'string rejected');
+    assertEqual(EditHistoryUtils.getRowIndex(''), null, 'empty');
+});
+
+test('EDIT HISTORY', 'matchRows matches by i across reorder and insertion', async () => {
+    const originals = [_row('A', 1, _eh({ i: 1 })), _row('B', 2, _eh({ i: 2 })), _row('C', 3, _eh({ i: 3 }))];
+    const updated = [_row('NEW', 0), originals[2], originals[0], { ...originals[1], qty: 9 }];
+    const { matchOf, duplicates, deleted } = EditHistoryUtils.matchRows(originals, updated);
+    assertEqual(matchOf, [-1, 2, 0, 1], 'matchOf');
+    assertEqual([...duplicates], [], 'duplicates');
+    assertEqual(deleted, [], 'deleted');
+});
+
+test('EDIT HISTORY', 'matchRows: copied row closest to the original keeps i', async () => {
+    const originals = [_row('A', 1, _eh({ i: 1 })), _row('B', 2, _eh({ i: 2 }))];
+    const updated = [originals[0], originals[1], { ...originals[0] }];
+    const { matchOf, duplicates } = EditHistoryUtils.matchRows(originals, updated);
+    assertEqual(matchOf, [0, 1, -1], 'matchOf');
+    assertEqual([...duplicates], [2], 'duplicates');
+});
+
+test('EDIT HISTORY', 'matchRows: legacy rows without i match by content, then within gap', async () => {
+    const originals = [_row('X', 1), _row('Y', 2), _row('Z', 3)];
+    const updated = [_row('W', 5), _row('X', 1), _row('Y', 7), _row('Z', 3)];
+    const { matchOf, deleted } = EditHistoryUtils.matchRows(originals, updated);
+    assertEqual(matchOf, [-1, 0, 1, 2], 'matchOf (W new, edited Y matched in gap)');
+    assertEqual(deleted, [], 'deleted');
+});
+
+test('EDIT HISTORY', 'matchRows: unmatched stored row is reported deleted', async () => {
+    const originals = [_row('A', 1, _eh({ i: 1 })), _row('B', 2, _eh({ i: 2 }))];
+    const { deleted } = EditHistoryUtils.matchRows(originals, [originals[1]]);
+    assertEqual(deleted, [0], 'deleted');
+});
+
+test('EDIT HISTORY', 'aggregation merges same user+source within an hour, keeping the older o', async () => {
+    const first = { u: 'dan', t: 1000, s: 'web', c: [{ n: 'qty', o: '1' }] };
+    const second = { u: 'dan', t: 1000 + 600, s: 'web', c: [{ n: 'qty', o: '2' }, { n: 'name', o: 'A' }] };
+    const result = JSON.parse(EditHistoryUtils.appendToEditHistory(_eh({ i: 1, h: [first] }), second, undefined, { qty: '3', name: 'B' }));
+    assertEqual(result.h.length, 1, 'merged into one entry');
+    assertEqual(result.h[0].t, 1600, 'timestamp advanced');
+    assertEqual(result.h[0].c, [{ n: 'qty', o: '1' }, { n: 'name', o: 'A' }], 'older o kept, new field added');
+    assertEqual(result.i, 1, 'root keys preserved');
+});
+
+test('EDIT HISTORY', 'aggregation drops reverted fields and empty merged entries', async () => {
+    const first = { u: 'dan', t: 1000, s: 'web', c: [{ n: 'qty', o: '1' }] };
+    const second = { u: 'dan', t: 1100, s: 'web', c: [{ n: 'qty', o: '2' }] };
+    const result = JSON.parse(EditHistoryUtils.appendToEditHistory(_eh({ h: [first] }), second, undefined, { qty: '1' }));
+    assertEqual(result.h, [], 'edit + revert within window leaves no entry');
+});
+
+test('EDIT HISTORY', 'aggregation does not merge across source, window, or creation markers', async () => {
+    const base = { u: 'dan', t: 1000, s: 'web', c: [{ n: 'qty', o: '1' }] };
+    const cad = { u: 'dan', t: 1100, s: 'cad', c: [{ n: 'qty', o: '2' }] };
+    const late = { u: 'dan', t: 1000 + 36001, s: 'web', c: [{ n: 'qty', o: '2' }] };
+    const created = { u: 'dan', t: 1000, s: 'web', c: [] };
+    const soon = { u: 'dan', t: 1100, s: 'web', c: [{ n: 'qty', o: '0' }] };
+    assertEqual(JSON.parse(EditHistoryUtils.appendToEditHistory(_eh({ h: [base] }), cad)).h.length, 2, 'different source');
+    assertEqual(JSON.parse(EditHistoryUtils.appendToEditHistory(_eh({ h: [base] }), late)).h.length, 2, 'outside window');
+    assertEqual(JSON.parse(EditHistoryUtils.appendToEditHistory(_eh({ h: [created] }), soon)).h.length, 2, 'creation marker');
+});
+
+test('EDIT HISTORY', 'history is capped at 10 entries', async () => {
+    let eh = '';
+    for (let n = 0; n < 15; n++) {
+        eh = EditHistoryUtils.appendToEditHistory(eh, { u: `user${n}`, t: n, s: 'web', c: [{ n: 'qty', o: String(n) }] });
+    }
+    const parsed = JSON.parse(eh);
+    assertEqual(parsed.h.length, 10, 'cap');
+    assertEqual(parsed.h[0].u, 'user14', 'newest first');
+});
+
+const _HISTORY_TAB = '_HISTORY_TEST';
+const _HISTORY_MAPPING = { name: 'Name', qty: 'Qty', edithistory: 'EditHistory' };
+const _historySave = (rows) => Database.setData('PACK_LISTS', _HISTORY_TAB, rows, _HISTORY_MAPPING, { username: 'test@example.com', source: 'web' });
+// Copy rows: getData returns the cached array, and editing it in place would also edit the "stored" rows
+const _historyRead = async () => (await Database.getData('PACK_LISTS', _HISTORY_TAB, _HISTORY_MAPPING)).map(r => ({ ...r }));
+const _parsed = (row) => JSON.parse(row.edithistory || '{}');
+
+test('EDIT HISTORY', 'first touch assigns i to legacy rows without adding history', async () => {
+    await Database.setData('PACK_LISTS', _HISTORY_TAB, [_row('A', '1'), _row('B', '2'), _row('C', '3')], _HISTORY_MAPPING, { skipMetadata: true });
+    await _historySave(await _historyRead());
+    const rows = await _historyRead();
+    assertEqual(rows.map(r => _parsed(r).i), [1, 2, 3], 'identities');
+    assertEqual(rows.map(r => (_parsed(r).h || []).length), [0, 0, 0], 'no history entries');
+});
+
+test('EDIT HISTORY', 'inserting a row above others records no changes on shifted rows', async () => {
+    const rows = await _historyRead();
+    rows[1] = { ...rows[1], qty: '20' };
+    await _historySave([_row('NEW', '5'), ...rows]);
+    const saved = await _historyRead();
+    assertEqual(saved.map(r => r.name), ['NEW', 'A', 'B', 'C'], 'order');
+    assertEqual(_parsed(saved[0]).i, 4, 'new row gets next identity');
+    assertEqual(_parsed(saved[0]).h.map(e => e.c), [[]], 'new row has a creation marker');
+    assertEqual((_parsed(saved[1]).h || []).length, 0, 'A unchanged');
+    assertEqual(_parsed(saved[2]).h[0].c, [{ n: 'qty', o: '2' }], 'B records its own old qty');
+    assertEqual((_parsed(saved[3]).h || []).length, 0, 'C unchanged');
+});
+
+test('EDIT HISTORY', 'repeat edit within the hour aggregates into one entry', async () => {
+    const rows = await _historyRead();
+    rows[2] = { ...rows[2], qty: '25' };
+    await _historySave(rows);
+    const b = (await _historyRead())[2];
+    assertEqual(_parsed(b).h.length, 1, 'single entry');
+    assertEqual(_parsed(b).h[0].c, [{ n: 'qty', o: '2' }], 'oldest value kept');
+});
+
+test('EDIT HISTORY', 'copied row gets a fresh identity and history', async () => {
+    const rows = await _historyRead();
+    await _historySave([...rows, { ...rows[2] }]);
+    const saved = await _historyRead();
+    assertEqual(_parsed(saved[2]).i, 2, 'original B keeps i=2');
+    assertEqual(_parsed(saved[4]).i, 5, 'copy gets i=5');
+    assertEqual(_parsed(saved[4]).h.map(e => e.c), [[]], 'copy history restarts');
+});
+
+test('EDIT HISTORY', 'deletions append to _EditHistory without overwriting earlier archive rows', async () => {
+    const archiveMapping = { SourceTab: 'SourceTab', RowIdentifier: 'RowIdentifier', Operation: 'Operation' };
+    const archived = async () => (await Database.getData('PACK_LISTS', '_EditHistory', archiveMapping))
+        .filter(r => r.SourceTab === _HISTORY_TAB);
+    let rows = await _historyRead();
+    await _historySave(rows.filter(r => r.name !== 'C'));
+    rows = await _historyRead();
+    await _historySave(rows.filter(r => r.name !== 'NEW'));
+    const entries = await archived();
+    assertEqual(entries.map(r => r.RowIdentifier), ['3', '4'], 'both deletions archived by identity');
+    assertEqual(entries.map(r => r.Operation), ['delete', 'delete'], 'operation');
+});
+
+test('EDIT HISTORY', 'packlist crates and items use lowercase edithistory/metadata keys', async () => {
+    const crates = await Requests.getPackList('ATSC 2025 NAB');
+    const objects = crates.flatMap(crate => [crate, ...(crate.Items || [])]);
+    for (const obj of objects) {
+        if ('EditHistory' in obj || 'MetaData' in obj)
+            throw new Error(`capitalized key on packlist object: ${Object.keys(obj).join(', ')}`);
+    }
+    if (!crates[0].Items[0].edithistory.includes('cadbot'))
+        throw new Error('fixture history not found on item.edithistory');
+});
+
+test('EDIT HISTORY', 'packlist round-trip keeps history and assigns identity', async () => {
+    // ATSC 2025 NAB is the only fixture with history but is locked by another user; round-trip an unlocked copy
+    const tab = '_HISTORY_PACKLIST';
+    await Requests.createNewTab('PACK_LISTS', 'ATSC 2025 NAB', tab);
+    const crates = await Requests.getPackList(tab);
+    await Requests.savePackList(crates, tab);
+    const item = (await Requests.getPackList(tab))[0].Items[0];
+    const parsed = JSON.parse(item.edithistory);
+    assertEqual(parsed.h.map(e => e.u), ['cadbot', 'dan'], 'existing history preserved');
+    if (!Number.isInteger(parsed.i)) throw new Error(`expected integer i, got ${parsed.i}`);
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────

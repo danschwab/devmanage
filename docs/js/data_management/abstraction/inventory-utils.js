@@ -217,8 +217,8 @@ class inventoryUtils_uncached {
             const buildBareRow = (item) => {
                 const bare = {};
                 for (const key of Object.keys(item)) {
-                    if (['AppData', 'MetaData'].includes(key)) continue;
-                    if (key === 'itemNumber' || key === 'edithistory' || key === 'EditHistory') {
+                    if (['AppData', 'metadata'].includes(key)) continue;
+                    if (key === 'itemNumber' || key === 'edithistory') {
                         bare[key] = item[key];
                     } else {
                         // Numeric fields → 0, string fields → ''
@@ -236,7 +236,7 @@ class inventoryUtils_uncached {
 
                 const changes = [];
                 for (const key of Object.keys(item)) {
-                    if (['edithistory', 'EditHistory', 'AppData', 'MetaData'].includes(key)) continue;
+                    if (['edithistory', 'AppData', 'metadata'].includes(key)) continue;
                     if (String(item[key]) !== String(baseItem[key] ?? '')) {
                         const existingNum = parseFloat(baseItem[key]);
                         const newNum = parseFloat(item[key]);
@@ -255,13 +255,12 @@ class inventoryUtils_uncached {
                 if (changes.length === 0) return baseItem;
 
                 const pendingEntry = EditHistoryUtils.createPendingEntry(shortUser, changes, effectiveDeciseconds, note);
-                const updatedEH = EditHistoryUtils.appendToPendingChanges(baseItem.edithistory || baseItem.EditHistory, pendingEntry);
+                const updatedEH = EditHistoryUtils.appendToPendingChanges(baseItem.edithistory, pendingEntry);
                 return { ...baseItem, edithistory: updatedEH };
             });
 
             return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
                 username,
-                identifierKey: 'itemNumber',
                 source: note || 'scheduled',
                 skipMetadata: true
             });
@@ -294,7 +293,6 @@ class inventoryUtils_uncached {
                 // Use note as the source descriptor when provided
                 saveResult = await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
                     username,
-                    identifierKey: 'itemNumber',
                     source: note || source
                 });
             }
@@ -347,7 +345,7 @@ class inventoryUtils_uncached {
         }
         const rows = await deps.call(Database.getData, 'INVENTORY', resolvedTabName, mapping);
         return rows.filter(row => {
-            const pending = EditHistoryUtils.getPendingEntries(row.edithistory || row.EditHistory);
+            const pending = EditHistoryUtils.getPendingEntries(row.edithistory);
             return pending.some(e => e.t === effectiveDateDeciseconds);
         });
     }
@@ -380,7 +378,6 @@ class inventoryUtils_uncached {
 
         await Database.setData('INVENTORY', resolvedTabName, updatedItems, mapping, {
             username,
-            identifierKey: 'itemNumber',
             skipMetadata: true
         });
         return { applied: true };
@@ -415,8 +412,7 @@ class inventoryUtils_uncached {
             const editedRow = editedRows.find(r => r.itemNumber === origRow.itemNumber);
             if (!editedRow) return origRow;
 
-            const ehKey = Object.prototype.hasOwnProperty.call(origRow, 'edithistory') ? 'edithistory' : 'EditHistory';
-            const parsed = EditHistoryUtils.parseEditHistory(origRow[ehKey]) || {};
+            const parsed = EditHistoryUtils.parseEditHistory(origRow.edithistory) || {};
             if (!Array.isArray(parsed.p)) return origRow;
 
             parsed.p = parsed.p.map(entry => {
@@ -433,12 +429,11 @@ class inventoryUtils_uncached {
                 };
             });
 
-            return { ...origRow, [ehKey]: JSON.stringify(parsed) };
+            return { ...origRow, edithistory: JSON.stringify(parsed) };
         });
 
         return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
             username,
-            identifierKey: 'itemNumber',
             skipMetadata: true
         });
     }
@@ -479,7 +474,7 @@ class inventoryUtils_uncached {
         if (!row) return [];
 
         const currentQty = parseInt(row.quantity ?? row.QTY ?? 0, 10) || 0;
-        const parsed = EditHistoryUtils.parseEditHistory(row.edithistory || row.EditHistory) || {};
+        const parsed = EditHistoryUtils.parseEditHistory(row.edithistory) || {};
         const history = Array.isArray(parsed.h) ? parsed.h : [];
         const pending = Array.isArray(parsed.p) ? parsed.p : [];
 
@@ -809,17 +804,15 @@ class inventoryUtils_uncached {
 
         const rows = await Database.getData('INVENTORY', resolvedTabName, mapping);
         const updatedRows = rows.map(row => {
-            const ehKey = Object.prototype.hasOwnProperty.call(row, 'edithistory') ? 'edithistory' : 'EditHistory';
-            const parsed = EditHistoryUtils.parseEditHistory(row[ehKey]);
+            const parsed = EditHistoryUtils.parseEditHistory(row.edithistory);
             if (!parsed || !Array.isArray(parsed.p)) return row;
             const filtered = parsed.p.filter(e => e.t !== effectiveDateDeciseconds);
             if (filtered.length === parsed.p.length) return row;
-            return { ...row, [ehKey]: JSON.stringify({ ...parsed, p: filtered }) };
+            return { ...row, edithistory: JSON.stringify({ ...parsed, p: filtered }) };
         });
 
         return await Database.setData('INVENTORY', resolvedTabName, updatedRows, mapping, {
             username,
-            identifierKey: 'itemNumber',
             skipMetadata: true
         });
     }

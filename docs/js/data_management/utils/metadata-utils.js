@@ -1,11 +1,14 @@
 /**
  * EditHistory Management Utilities
- * 
+ *
  * Provides core functions for tracking row changes, managing history,
- * and archiving deleted rows to EditHistory table.
- * 
+ * matching rows across saves, and archiving deleted rows to the _EditHistory tab.
+ *
+ * Canonical contract: docs/notes/metadata-implementation.md
+ *
  * EditHistory Column Format (minimized):
  * {
+ *   "i": 7,
  *   "h": [
  *     {
  *       "u": "dan",
@@ -16,19 +19,34 @@
  *       ]
  *     }
  *   ],
- *   "a": { ... },
- *   "s": { ... }
+ *   "p": [ ... ]
  * }
- * 
+ *
  * Key mapping:
- * h = history
+ * i = row identity (positive integer, unique per tab, immutable, assigned on first touch)
+ * h = history, newest first
+ * p = pending (scheduled) changes, inventory only
  * u = user (username before @)
  * t = timestamp (deciseconds since epoch - divide by 10 for seconds, multiply by 100 for milliseconds)
- * s = source system ('web' | 'cad')
- * c = changes
- * n = column name
+ * s = source ('web' | 'cad') or, for inventory saves, the user's note
+ * c = changes ([] = creation marker)
+ * n = field name (application mapping key)
  * o = old value
  */
+
+/** Maximum number of entries kept in EditHistory.h */
+export const MAX_HISTORY_ENTRIES = 10;
+
+/** Adjacent entries from the same user and source within this window are merged (1 hour in deciseconds) */
+export const HISTORY_AGGREGATION_WINDOW = 36000;
+
+/** Tab (in each spreadsheet) that receives archived deleted rows */
+export const ARCHIVE_TAB_NAME = '_EditHistory';
+
+/** Row object key holding the EditHistory column (sheet header 'EditHistory') */
+export const HISTORY_KEY = 'edithistory';
+
+const DIFF_IGNORED_COLUMNS = [HISTORY_KEY, 'AppData'];
 
 export class EditHistoryUtils {
     /**
@@ -60,40 +78,71 @@ export class EditHistoryUtils {
      * Append a new entry to existing edithistory history
      * @param {string|Object} existingEditHistory - Existing edithistory (JSON string or object)
      * @param {Object} newEntry - New edithistory entry to append
-     * @param {number} maxHistory - Maximum history entries to keep (default: 100)
+     * @param {number} maxHistory - Maximum history entries to keep
+     * @param {Object} [currentRow] - Row values after the change; enables dropping reverted fields when aggregating
      * @returns {string} Updated edithistory as JSON string
      */
-    static appendToEditHistory(existingEditHistory, newEntry, maxHistory = 100) {
-        let edithistory;
-        
-        // Parse existing edithistory
-        if (typeof existingEditHistory === 'string') {
-            try {
-                edithistory = existingEditHistory ? JSON.parse(existingEditHistory) : { h: [] };
-            } catch (error) {
-                console.warn('Failed to parse existing edithistory, creating new:', error);
-                edithistory = { h: [] };
+    static appendToEditHistory(existingEditHistory, newEntry, maxHistory = MAX_HISTORY_ENTRIES, currentRow = null) {
+        const parsed = this.parseEditHistory(existingEditHistory);
+        return JSON.stringify(this._addEntry(parsed ? { ...parsed } : {}, newEntry, maxHistory, currentRow));
+    }
+
+    /**
+     * Add an entry to the front of an edithistory object's h array, merging it into the
+     * newest entry when the aggregation rules allow, then applying the cap.
+     * @private
+     * @param {Object} edithistory - Parsed edithistory object (shallow copy; h is replaced, not mutated)
+     * @returns {Object} The same object with an updated h array
+     */
+    static _addEntry(edithistory, newEntry, maxHistory = MAX_HISTORY_ENTRIES, currentRow = null) {
+        const history = Array.isArray(edithistory.h) ? [...edithistory.h] : [];
+        const prev = history[0];
+
+        if (this._canAggregate(prev, newEntry)) {
+            // prev.o values are older than newEntry's, so prev wins for fields it already lists
+            const listed = new Set(prev.c.map(ch => ch.n));
+            let merged = [...prev.c, ...newEntry.c.filter(ch => !listed.has(ch.n))];
+            if (currentRow) {
+                merged = merged.filter(ch => ch.n === undefined || !this._valuesEqual(ch.o, currentRow[ch.n]));
             }
-        } else if (typeof existingEditHistory === 'object' && existingEditHistory !== null) {
-            edithistory = { ...existingEditHistory };
+            if (merged.length === 0) {
+                history.shift(); // edited and reverted within the window: nothing left to record
+            } else {
+                history[0] = { ...prev, t: newEntry.t, c: merged };
+            }
         } else {
-            edithistory = { h: [] };
+            history.unshift(newEntry);
         }
 
-        // Ensure history array exists (support both old 'history' and new 'h' format)
-        if (!Array.isArray(edithistory.h)) {
-            edithistory.h = [];
-        }
+        edithistory.h = history.slice(0, maxHistory);
+        return edithistory;
+    }
 
-        // Add new entry at the beginning (most recent first)
-        edithistory.h.unshift(newEntry);
+    /**
+     * Whether newEntry can be merged into prev (the newest existing entry).
+     * @private
+     */
+    static _canAggregate(prev, newEntry) {
+        if (!prev || !newEntry) return false;
+        if (prev.d !== undefined || newEntry.d !== undefined) return false;
+        if (!Array.isArray(prev.c) || prev.c.length === 0) return false;
+        if (!Array.isArray(newEntry.c) || newEntry.c.length === 0) return false;
+        if (prev.c.some(ch => ch.n === undefined)) return false;
+        if (prev.u !== newEntry.u) return false;
+        if (this.normalizeSource(prev.s) !== this.normalizeSource(newEntry.s)) return false;
+        const gap = newEntry.t - prev.t;
+        return gap >= 0 && gap <= HISTORY_AGGREGATION_WINDOW;
+    }
 
-        // Trim to max history length
-        if (edithistory.h.length > maxHistory) {
-            edithistory.h = edithistory.h.slice(0, maxHistory);
-        }
-
-        return JSON.stringify(edithistory);
+    /**
+     * Normalize an entry source for comparison: missing → 'web', legacy 'app' → 'web'.
+     * Non-source values (inventory notes) are returned as-is.
+     * @param {string} source
+     * @returns {string}
+     */
+    static normalizeSource(source) {
+        const value = String(source || 'web').toLowerCase();
+        return value === 'app' ? 'web' : value;
     }
 
     /**
@@ -103,7 +152,7 @@ export class EditHistoryUtils {
      * @param {Array<string>} ignoredColumns - Columns to ignore (e.g., 'edithistory', 'AppData')
      * @returns {Array<{column: string, old: any, new: any}>} Array of changes
      */
-    static calculateRowDiff(oldRow, newRow, ignoredColumns = ['edithistory', 'EditHistory', 'AppData']) {
+    static calculateRowDiff(oldRow, newRow, ignoredColumns = DIFF_IGNORED_COLUMNS) {
         const changes = [];
 
         if (!oldRow || !newRow) {
@@ -162,87 +211,183 @@ export class EditHistoryUtils {
         return normalized1 === normalized2;
     }
 
+    // -------------------------------------------------------------------------
+    // Row Identity (EditHistory.i)
+    // -------------------------------------------------------------------------
+
     /**
-     * Calculate diffs for multiple rows
-     * @param {Array<Object>} originalRows - Original data array
-     * @param {Array<Object>} updatedRows - Updated data array
-     * @param {Array<string>} ignoredColumns - Columns to ignore
-     * @returns {Array<{index: number, changes: Array}>} Array of row indices with their changes
+     * Get a row's identity from its EditHistory.
+     * @param {string|Object} edithistory - EditHistory value
+     * @returns {number|null} Positive integer identity, or null if absent/invalid
      */
-    static calculateBatchDiff(originalRows, updatedRows, ignoredColumns = ['edithistory', 'EditHistory', 'AppData']) {
-        const results = [];
-
-        if (!Array.isArray(originalRows) || !Array.isArray(updatedRows)) {
-            return results;
-        }
-
-        const maxLength = Math.max(originalRows.length, updatedRows.length);
-
-        for (let i = 0; i < maxLength; i++) {
-            const oldRow = originalRows[i] || null;
-            const newRow = updatedRows[i] || null;
-
-            const changes = this.calculateRowDiff(oldRow, newRow, ignoredColumns);
-
-            if (changes.length > 0) {
-                results.push({
-                    index: i,
-                    changes: changes
-                });
-            }
-        }
-
-        return results;
+    static getRowIndex(edithistory) {
+        const i = this.parseEditHistory(edithistory)?.i;
+        return Number.isInteger(i) && i > 0 ? i : null;
     }
 
     /**
-     * Detect deleted rows by comparing original and updated data
-     * @param {Array<Object>} originalRows - Original data array
-     * @param {Array<Object>} updatedRows - Updated data array
-     * @param {string} identifierKey - Column name to use as row identifier (e.g., 'itemNumber', 'Piece #')
-     * @returns {Array<{identifier: string, rowData: Object}>} Deleted rows with their identifiers
+     * Next free identity for a tab: one more than the largest i among all given rows.
+     * @param {Array<Array<Object>>} rowSets - Row arrays to scan (e.g. stored and incoming rows)
+     * @returns {number}
      */
-    static detectDeletedRows(originalRows, updatedRows, identifierKey = null) {
-        const deletedRows = [];
-
-        if (!Array.isArray(originalRows) || !Array.isArray(updatedRows)) {
-            return deletedRows;
-        }
-
-        // If no identifier key provided, detect by position
-        if (!identifierKey) {
-            if (originalRows.length > updatedRows.length) {
-                // Rows were removed from the end
-                for (let i = updatedRows.length; i < originalRows.length; i++) {
-                    deletedRows.push({
-                        identifier: `row_${i + 1}`,
-                        rowData: originalRows[i]
-                    });
-                }
-            }
-            return deletedRows;
-        }
-
-        // Build a set of identifiers in updated data
-        const updatedIdentifiers = new Set(
-            updatedRows
-                .map(row => row[identifierKey])
-                .filter(id => id !== undefined && id !== null && id !== '')
-        );
-
-        // Find rows in original that aren't in updated
-        for (const row of originalRows) {
-            const identifier = row[identifierKey];
-            if (identifier !== undefined && identifier !== null && identifier !== '' && 
-                !updatedIdentifiers.has(identifier)) {
-                deletedRows.push({
-                    identifier: String(identifier),
-                    rowData: row
-                });
+    static nextRowIndex(rowSets) {
+        let max = 0;
+        for (const rows of rowSets) {
+            for (const row of rows || []) {
+                const i = this.getRowIndex(row?.[HISTORY_KEY]);
+                if (i !== null && i > max) max = i;
             }
         }
+        return max + 1;
+    }
 
-        return deletedRows;
+    /**
+     * Match incoming rows to stored rows for a save. Pure — no I/O.
+     * Contract: docs/notes/metadata-implementation.md "Matching rows during a save".
+     *
+     * @param {Array<Object>} originalRows - Rows currently stored in the tab
+     * @param {Array<Object>} updatedRows - Rows about to be saved
+     * @returns {{
+     *   matchOf: Array<number>,      // per updated row: index of matched original row, or -1
+     *   duplicates: Set<number>,     // updated rows that copied another row's i and need a fresh identity
+     *   deleted: Array<number>       // original row indices with no match
+     * }}
+     */
+    static matchRows(originalRows, updatedRows) {
+        const originals = Array.isArray(originalRows) ? originalRows : [];
+        const updates = Array.isArray(updatedRows) ? updatedRows : [];
+        const matchOf = new Array(updates.length).fill(-1);
+        const duplicates = new Set();
+        const claimed = new Set();
+
+        const origIdx = originals.map(row => this.getRowIndex(row?.[HISTORY_KEY]));
+        const updIdx = updates.map(row => this.getRowIndex(row?.[HISTORY_KEY]));
+
+        // Pass 1: match by i. When several incoming rows share an i, the one closest
+        // in position to the stored row keeps it; the rest are copies.
+        const originalByIndex = new Map();
+        origIdx.forEach((i, o) => {
+            if (i !== null && !originalByIndex.has(i)) originalByIndex.set(i, o);
+        });
+        const updatedByIndex = new Map();
+        updIdx.forEach((i, u) => {
+            if (i === null) return;
+            if (!updatedByIndex.has(i)) updatedByIndex.set(i, []);
+            updatedByIndex.get(i).push(u);
+        });
+        for (const [i, candidates] of updatedByIndex) {
+            if (originalByIndex.has(i)) {
+                const o = originalByIndex.get(i);
+                const keeper = candidates.reduce((best, u) => Math.abs(u - o) < Math.abs(best - o) ? u : best);
+                matchOf[keeper] = o;
+                claimed.add(o);
+                candidates.forEach(u => { if (u !== keeper) duplicates.add(u); });
+            } else {
+                // i not stored in this tab: the first occurrence keeps it, later copies are duplicates
+                candidates.slice(1).forEach(u => duplicates.add(u));
+            }
+        }
+
+        // Legacy fallback: rows without i only match stored rows without i
+        const legacyOriginals = new Set(origIdx.map((i, o) => i === null ? o : -1).filter(o => o !== -1));
+        const isOpenLegacy = (o) => legacyOriginals.has(o) && !claimed.has(o);
+        const legacyUpdates = updIdx.map((i, u) => i === null ? u : -1).filter(u => u !== -1);
+
+        // Pass 2: identical content, nearest position wins
+        const originalsBySignature = new Map();
+        legacyOriginals.forEach(o => {
+            const sig = this._rowSignature(originals[o]);
+            if (!originalsBySignature.has(sig)) originalsBySignature.set(sig, []);
+            originalsBySignature.get(sig).push(o);
+        });
+        for (const u of legacyUpdates) {
+            const pool = (originalsBySignature.get(this._rowSignature(updates[u])) || []).filter(isOpenLegacy);
+            if (pool.length === 0) continue;
+            const o = pool.reduce((best, c) => Math.abs(c - u) < Math.abs(best - u) ? c : best);
+            matchOf[u] = o;
+            claimed.add(o);
+        }
+
+        // Pass 3: within the gap between the nearest matched neighbors, by similarity,
+        // falling back to order when both sides of the gap have the same number of rows
+        for (const u of legacyUpdates) {
+            if (matchOf[u] !== -1) continue;
+            let prev = u - 1;
+            while (prev >= 0 && matchOf[prev] === -1) prev--;
+            let next = u + 1;
+            while (next < updates.length && matchOf[next] === -1) next++;
+            const lowBound = prev >= 0 ? matchOf[prev] : -1;
+            const highBound = next < updates.length ? matchOf[next] : originals.length;
+            const lo = Math.min(lowBound, highBound);
+            const hi = Math.max(lowBound, highBound);
+
+            const gapCandidates = [];
+            for (let o = lo + 1; o < hi; o++) if (isOpenLegacy(o)) gapCandidates.push(o);
+            if (gapCandidates.length === 0) continue;
+
+            let best = -1;
+            let bestScore = 0;
+            for (const o of gapCandidates) {
+                const score = this._rowSimilarity(originals[o], updates[u]);
+                if (score > bestScore) { best = o; bestScore = score; }
+            }
+            if (best === -1) {
+                const unmatchedInGap = [];
+                for (let k = prev + 1; k < next; k++) if (matchOf[k] === -1 && updIdx[k] === null) unmatchedInGap.push(k);
+                if (unmatchedInGap.length === gapCandidates.length) best = gapCandidates[0];
+            }
+            if (best !== -1) {
+                matchOf[u] = best;
+                claimed.add(best);
+            }
+        }
+
+        const deleted = [];
+        originals.forEach((_, o) => { if (!claimed.has(o)) deleted.push(o); });
+        return { matchOf, duplicates, deleted };
+    }
+
+    /**
+     * Content signature for exact matching: non-empty field values, excluding history/AppData.
+     * @private
+     */
+    static _rowSignature(row) {
+        if (!row) return '';
+        return JSON.stringify(Object.keys(row)
+            .filter(key => !DIFF_IGNORED_COLUMNS.includes(key))
+            .filter(key => !this._isEmptyValue(row[key]))
+            .sort()
+            .map(key => [key, String(row[key])]));
+    }
+
+    /**
+     * Number of fields that are non-empty and equal in both rows.
+     * @private
+     */
+    static _rowSimilarity(rowA, rowB) {
+        if (!rowA || !rowB) return 0;
+        let score = 0;
+        for (const key of Object.keys(rowA)) {
+            if (DIFF_IGNORED_COLUMNS.includes(key)) continue;
+            if (this._isEmptyValue(rowA[key])) continue;
+            if (String(rowA[key]) === String(rowB[key] ?? '')) score++;
+        }
+        return score;
+    }
+
+    /**
+     * Whether a row has no field content and no history (not worth archiving).
+     * @param {Object} row
+     * @returns {boolean}
+     */
+    static isBlankRow(row) {
+        if (!row) return true;
+        return Object.keys(row).every(key => key === 'AppData' || this._isEmptyValue(row[key]));
+    }
+
+    /** @private */
+    static _isEmptyValue(value) {
+        return value === undefined || value === null || String(value).trim() === '';
     }
 
     /**
@@ -417,7 +562,7 @@ export class EditHistoryUtils {
 
         let hasChanges = false;
         const updatedItems = items.map(item => {
-            const parsed = this.parseEditHistory(item.edithistory || item.EditHistory);
+            const parsed = this.parseEditHistory(item.edithistory);
             if (!parsed) return item;
 
             const pending = Array.isArray(parsed.p) ? parsed.p : [];
@@ -452,15 +597,14 @@ export class EditHistoryUtils {
                 });
             }
 
-            // Remove applied entries from p, prepend to h (max 10)
+            // Remove applied entries from p, prepend to h (capped)
             const appliedIds = new Set(due.map(e => e));
             const remainingPending = pending.filter(e => !appliedIds.has(e));
             const existingHistory = Array.isArray(parsed.h) ? parsed.h : [];
-            const newHistory = [...newHistoryEntries, ...existingHistory].slice(0, 10);
+            const newHistory = [...newHistoryEntries, ...existingHistory].slice(0, MAX_HISTORY_ENTRIES);
 
             const updatedEditHistory = JSON.stringify({ ...parsed, h: newHistory, p: remainingPending });
-            const ehKey = Object.prototype.hasOwnProperty.call(item, 'edithistory') ? 'edithistory' : 'EditHistory';
-            updatedItem[ehKey] = updatedEditHistory;
+            updatedItem.edithistory = updatedEditHistory;
 
             hasChanges = true;
             return updatedItem;

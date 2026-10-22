@@ -1,6 +1,10 @@
 import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
+// CACHE tabs with tracked history. EditHistory is always mapped to the key 'edithistory'.
+const NOTES_MAPPING = { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', edithistory: 'EditHistory' };
+const PREFERENCES_MAPPING = { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', edithistory: 'EditHistory' };
+
 /**
  * CACHING ARCHITECTURE NOTES:
  * 
@@ -1529,23 +1533,26 @@ class Requests_uncached {
     /**
      * Get all page notes from the CACHE Notes tab.
      * @param {Object} deps - Dependency decorator for tracking calls
-     * @returns {Promise<Array<{Path: string, Note: string, Color: string, Size: string, EditHistory: string}>>}
+     * @returns {Promise<Array<{Path: string, Note: string, Color: string, Size: string, edithistory: string}>>}
      */
     static async getPageNotes(deps) {
-        return await deps.call(Database.getData, 'CACHE', 'Notes', { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
+        return await deps.call(Database.getData, 'CACHE', 'Notes', NOTES_MAPPING);
     }
 
+    // MUTATION METHOD — excluded from caching. History is tracked by Database.setData.
     static async savePageNotes(data) {
-        return await Database.setData('CACHE', 'Notes', data, { Path: 'Path', Note: 'Note', Color: 'Color', Size: 'Size', EditHistory: 'EditHistory' });
+        const username = authState.user?.email || null;
+        return await Database.setData('CACHE', 'Notes', data, NOTES_MAPPING, { username, source: 'web' });
     }
 
     static async getPreferences(deps) {
-        return await deps.call(Database.getData, 'CACHE', 'Preferences', { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
+        return await deps.call(Database.getData, 'CACHE', 'Preferences', PREFERENCES_MAPPING);
     }
 
-    // MUTATION METHOD — excluded from caching
+    // MUTATION METHOD — excluded from caching. History is tracked by Database.setData.
     static async savePreferences(data) {
-        return await Database.setData('CACHE', 'Preferences', data, { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
+        const username = authState.user?.email || null;
+        return await Database.setData('CACHE', 'Preferences', data, PREFERENCES_MAPPING, { username, source: 'web' });
     }
 
 }

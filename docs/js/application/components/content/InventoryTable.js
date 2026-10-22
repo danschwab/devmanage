@@ -1247,7 +1247,7 @@ export const InventoryTableComponent = {
         },
 
         getPendingEntries(item) {
-            const eh = item?.edithistory || item?.EditHistory;
+            const eh = item?.edithistory;
             return EditHistoryUtils.getPendingEntries(eh);
         },
 

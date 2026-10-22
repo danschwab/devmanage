@@ -142,7 +142,7 @@ export const InventoryItemReport = {
                         minQty: lowestMinQty === Infinity ? null : lowestMinQty,
                         shows: combinedShows,
                         overlappingShows: allOverlappingShows,
-                        MetaData: JSON.stringify({ grouping: { groupId, isGroupMaster: true } })
+                        metadata: JSON.stringify({ grouping: { groupId, isGroupMaster: true } })
                     };
                     result.push(masterRow);
 
@@ -150,12 +150,12 @@ export const InventoryItemReport = {
                     rows.forEach(row => {
                         let existingMeta = {};
                         try {
-                            existingMeta = JSON.parse(row.MetaData || '{}');
+                            existingMeta = JSON.parse(row.metadata || '{}');
                         } catch (e) {}
                         
                         result.push({
                             ...row,
-                            MetaData: JSON.stringify({
+                            metadata: JSON.stringify({
                                 ...existingMeta,
                                 grouping: { groupId, isGroupMaster: false }
                             })
@@ -219,7 +219,7 @@ export const InventoryItemReport = {
                 .filter(row => {
                     // In calendar view, hide group masters but show group members and single items
                     try {
-                        const meta = JSON.parse(row.MetaData || '{}');
+                        const meta = JSON.parse(row.metadata || '{}');
                         if (meta.grouping?.isGroupMaster) return false;
                     } catch (e) {}
                     return true;
