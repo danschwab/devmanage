@@ -1,5 +1,5 @@
 // Dynamic Google Sheets Service selection
-import { isLocalhost } from '../../google_sheets_services/FakeGoogle.js';
+import { isLocalhost } from '../utils/helpers.js';
 let GoogleSheetsService, GoogleSheetsAuth;
 
 if (isLocalhost()) {

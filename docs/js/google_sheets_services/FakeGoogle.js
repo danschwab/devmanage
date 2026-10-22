@@ -5,25 +5,43 @@
 
 import { SheetSql } from './sheetSql.js';
 import { BaseTokenManager } from './GoogleSheetsAuth.js';
-import { normalizeHeaderName } from '../data_management/utils/helpers.js';
-
-// Environment detection utility
-export function isLocalhost() {
-    return (
-        typeof window !== 'undefined' &&
-        (
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.protocol === 'file:'
-        )
-    );
-}
+import { normalizeHeaderName, isLocalhost } from '../data_management/utils/helpers.js';
 
 let _delaysEnabled = true;
+
+// Serialize an EditHistory/MetaData fixture (contract: docs/notes/metadata-implementation.md)
+const _json = (value) => JSON.stringify(value);
+
+// ── Local dev state (see FakeGoogleState at the end of this file) ──
+const DEFAULT_FAKE_USER = 'test@example.com';
+const STATE_STORAGE_KEY = 'fakeGoogle:state';      // localStorage: persisted mockData/mockTabs
+const PERSIST_STORAGE_KEY = 'fakeGoogle:persist';  // localStorage: '0' disables persistence
+const USER_STORAGE_KEY = 'fakeGoogle:user';        // sessionStorage: per-browser-tab fake user
+let _sandboxed = false;                            // true while the test suite runs on pristine fixtures
+
+function _storageGet(area, key) {
+    try { return window[area].getItem(key); } catch { return null; }
+}
+function _storageSet(area, key, value) {
+    try {
+        if (value === null) window[area].removeItem(key);
+        else window[area].setItem(key, value);
+        return true;
+    } catch (error) {
+        console.warn(`[FakeGoogle] Could not write ${area} "${key}":`, error);
+        return false;
+    }
+}
+
+/** The fake signed-in user: per-tab override, or the default test account (always the default in the test sandbox) */
+function _configuredEmail() {
+    if (_sandboxed) return DEFAULT_FAKE_USER;
+    return _storageGet('sessionStorage', USER_STORAGE_KEY) || DEFAULT_FAKE_USER;
+}
 export function setFakeDelaysEnabled(enabled) { _delaysEnabled = enabled; }
 
 export class FakeGoogleSheetsAuth {
-    static userEmail = 'test@example.com';
+    static userEmail = _configuredEmail();
     static isInitialized = false;
     static isAuthenticatedState = false;
     static _authenticatePromise = null;
@@ -50,7 +68,7 @@ export class FakeGoogleSheetsAuth {
     static async _authenticateInternal() {
         await this.delay(200); // Simulate authentication delay
         this.isAuthenticatedState = true;
-        this.userEmail = 'test@example.com'; // Reset email on re-authentication
+        this.userEmail = _configuredEmail(); // Reset email on re-authentication
         
         // Create fresh token with current timestamp
         const mockToken = {
@@ -193,8 +211,22 @@ export class FakeGoogleSheetsService {
                 ['TABLE-003', '', '2', '', '', '', 'Glass-top rectangular coffee table w/ metal bases 42x18x16', ''],
                 ['CHAIR-001', '', '20', '', '', '', 'Stack Chair ( Black & Black ) w/ Arms', ''],
                 ['CHAIR-002', '', '15', '', '', '', 'Lounge Chair (White Leather) Swivel Barrel', ''],
-                ['CHAIR-003', '', '12', '', '', '', 'Cube chair (black?) collapsible', ''],
-                ['CHAIR-004', '', '', '', '', '', 'Conference swivel chair (white)', ''],
+                // CHAIR-003: three history entries and a future scheduled restock
+                ['CHAIR-003', '', '12', _json({
+                    i: 4,
+                    h: [
+                        { u: 'dan', t: 17912947200, s: 'restock', c: [{ n: 'quantity', o: '10' }] },
+                        { u: 'sam', t: 17894019000, s: 'web', c: [{ n: 'description', o: 'Cube chair (black) collapsible' }] },
+                        { u: 'dan', t: 17857668000, s: 'web', c: [{ n: 'quantity', o: '8' }, { n: 'notes', o: 'check legs' }] }
+                    ],
+                    p: [{ u: 'dan', t: 18118224000, d: 17912940000, s: 'summer order', c: [{ n: 'quantity', ne: '+6' }] }]
+                }), '', '', 'Cube chair (black?) collapsible', ''],
+                // CHAIR-004: past-due scheduled change, applied when the FURNITURE table is opened
+                ['CHAIR-004', '', '', _json({
+                    i: 5,
+                    h: [],
+                    p: [{ u: 'sam', t: 17684532000, d: 17680000000, s: 'new stock', c: [{ n: 'quantity', ne: '+5' }] }]
+                }), '', '', 'Conference swivel chair (white)', ''],
                 ['STOOL-001', '', '12', '', '', '', 'Ikea Glenn Stool, stacking bar-height (White)', ''],
                 ['STOOL-002', '', '12', '', '', '', 'Square Stool, stacking bar-height (White Leather)', ''],
                 ['STOOL-003', '', '20', '', '', '', 'Square Hi-back Stool, stacking bar-height (White Leather)', ''],
@@ -262,6 +294,14 @@ export class FakeGoogleSheetsService {
                 ['HH BOLTHOG 1-4 20 x 3', '', '120', '', '', '', 'HH bolt M4-20 x 3mm', 'Hardware kit'],
                 ['HH BOLTHOG M8 LONG', '', '100', '', '', '', 'HH bolt M8 long size', 'Hardware kit'],
                 ['HH BRACKET UPPER 62', '', '40', '', '', '', 'HH upper mounting bracket size 62', 'Mounting hardware']
+            ],
+            // Archive of deleted rows (written by Database._archiveDeletedRows)
+            '_EditHistory': [
+                ['SourceTable', 'SourceTab', 'RowIdentifier', 'Username', 'Timestamp', 'Operation', 'RowData'],
+                ['INVENTORY', 'FURNITURE', '9', 'dan@example.com', '17899164000', 'delete', _json({
+                    itemNumber: 'CHAIR-099', quantity: '4', description: 'Folding chair (retired)', notes: '',
+                    edithistory: _json({ i: 9, h: [{ u: 'dan', t: 17857668000, s: 'web', c: [{ n: 'quantity', o: '6' }] }] })
+                })]
             ]
         },
         'PACK_LISTS': {
@@ -366,10 +406,23 @@ export class FakeGoogleSheetsService {
                 ['', '', '', '', '', '', '', '', 'Client junk', '', '', ''],
                 ['2', 'Skid', '120', '48', '48', '1200', '', '', '', '', '', ''],
                 ['', '', '', '', '', '', '', '', '(3) rolls 10\'x70\' SLATE gray carpeting', '', '', ''],
-                ['3', 'Skid', '120', '48', '48', '600', '', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'Padding for 30x70', '', '', ''],
-                ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067', '', ''],
-                ['', '', '', '', '', '', '', '', 'SEG\'s', '', '', ''],
+                // Crate 3: row identities, a grouped pair, and a CAD edit over a web edit
+                ['3', 'Skid', '120', '48', '48', '600', '', '', '', '', _json({ i: 1, h: [] }), ''],
+                ['', '', '', '', '', '', '', '', 'Padding for 30x70', '', _json({
+                    i: 2,
+                    h: [{ u: 'dan', t: 17908794000, s: 'web', c: [{ n: 'metadata', o: '' }] }]
+                }), _json({ grouping: { groupId: 'fixture-padding', isGroupMaster: true } })],
+                ['', '', '', '', '', '', '', '', 'Padding For Triveni', 'Booth # W3067', _json({
+                    i: 3,
+                    h: [{ u: 'dan', t: 17908794000, s: 'web', c: [{ n: 'metadata', o: '' }, { n: 'Packing/shop notes', o: '' }] }]
+                }), _json({ grouping: { groupId: 'fixture-padding', isGroupMaster: false } })],
+                ['', '', '', '', '', '', '', '', 'SEG\'s', '', _json({
+                    i: 4,
+                    h: [
+                        { u: 'cadbot', t: 17912940000, s: 'cad', c: [{ n: 'Description', o: 'SEGs (12)' }] },
+                        { u: 'sam', t: 17899164000, s: 'web', c: [{ n: 'Description', o: 'SEGs' }] }
+                    ]
+                }), ''],
                 ['', '', '', '', '', '', '', '', 'Blank SEG\'s', '', '', ''],
                 ['', '', '', '', '', '', '', '', 'Client Packages', '', '', '']
             ],
@@ -1025,7 +1078,8 @@ export class FakeGoogleSheetsService {
             { title: 'SHELVES', sheetId: 8 },
             { title: 'PANELS', sheetId: 9 },
             { title: 'HARDWARE', sheetId: 10 },
-            { title: 'ADDITIONS', sheetId: 11 }
+            { title: 'ADDITIONS', sheetId: 11 },
+            { title: '_EditHistory', sheetId: 12 }
         ],
         'PACK_LISTS': [
             { title: '_TEMPLATE', sheetId: 0 },
@@ -1452,11 +1506,9 @@ export class FakeGoogleSheetsService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // Method to reset mock data to original state (useful for testing)
+    // Method to reset mock data to original state (discards locally saved changes)
     static resetMockData() {
-        //console.log('FakeGoogleSheetsService: Resetting mock data to original state');
-        // This would restore the original mockData structure
-        // Implementation left as exercise since it depends on specific testing needs
+        FakeGoogleState.reset();
     }
 
     // Method to add custom mock data for testing
@@ -1583,6 +1635,154 @@ export class FakeGoogleSheetsService {
     static getDriveImageUrl(fileId) {
         return `assets/placeholder.png`; // Always return placeholder for fake implementation
     }
+}
+
+// ── Local persistence, cross-tab sync, and test sandbox ─────────────────────
+// Mock data lives in memory, so by default every reload starts from the fixtures above.
+// On localhost the current state is also saved to localStorage after every write and
+// restored on load, so local testing (e.g. EditHistory) carries across reloads, and
+// other browser tabs on the same origin pick up changes (simulating other sessions).
+// Saved state is discarded automatically when the fixtures in this file change.
+
+const _fixtureJson = JSON.stringify({
+    mockData: FakeGoogleSheetsService.mockData,
+    mockTabs: FakeGoogleSheetsService.mockTabs
+});
+const _fixtureVersion = (() => {
+    let hash = 0;
+    for (let n = 0; n < _fixtureJson.length; n++) hash = (hash * 31 + _fixtureJson.charCodeAt(n)) | 0;
+    return String(hash);
+})();
+const _externalChangeListeners = new Set();
+let _saveTimer = null;
+
+function _applyState(state) {
+    FakeGoogleSheetsService.mockData = state.mockData;
+    FakeGoogleSheetsService.mockTabs = state.mockTabs;
+}
+
+function _currentStateJson() {
+    return JSON.stringify({
+        version: _fixtureVersion,
+        mockData: FakeGoogleSheetsService.mockData,
+        mockTabs: FakeGoogleSheetsService.mockTabs
+    });
+}
+
+/** Parse saved state, or null if absent, unreadable, or saved against different fixtures */
+function _parseSavedState(json) {
+    if (!json) return null;
+    try {
+        const state = JSON.parse(json);
+        return state?.version === _fixtureVersion ? state : null;
+    } catch {
+        return null;
+    }
+}
+
+export const FakeGoogleState = {
+    isPersistent() {
+        return _storageGet('localStorage', PERSIST_STORAGE_KEY) !== '0';
+    },
+
+    setPersistent(enabled) {
+        _storageSet('localStorage', PERSIST_STORAGE_KEY, enabled ? '1' : '0');
+        if (enabled) this.saveNow();
+        else _storageSet('localStorage', STATE_STORAGE_KEY, null);
+    },
+
+    /** Save soon (coalesces bursts of writes such as cache timestamps) */
+    save() {
+        if (_sandboxed || !this.isPersistent()) return;
+        clearTimeout(_saveTimer);
+        _saveTimer = setTimeout(() => this.saveNow(), 50);
+    },
+
+    saveNow() {
+        clearTimeout(_saveTimer);
+        if (_sandboxed || !this.isPersistent()) return;
+        _storageSet('localStorage', STATE_STORAGE_KEY, _currentStateJson());
+    },
+
+    /** Load saved state into memory. Returns true if saved state was applied. */
+    load() {
+        const json = _storageGet('localStorage', STATE_STORAGE_KEY);
+        const state = _parseSavedState(json);
+        if (json && !state) {
+            console.warn('[FakeGoogle] Saved local data was made with different fixtures; starting from the fixtures.');
+            _storageSet('localStorage', STATE_STORAGE_KEY, null);
+        }
+        if (!state) return false;
+        _applyState(state);
+        return true;
+    },
+
+    /** Discard all local changes and return to the fixtures in this file */
+    reset() {
+        _applyState(JSON.parse(_fixtureJson));
+        _storageSet('localStorage', STATE_STORAGE_KEY, null);
+        this.saveNow();
+    },
+
+    /**
+     * Run the test suite against pristine fixtures without touching local data.
+     * Returns a function that ends the sandbox and restores the latest local state.
+     */
+    beginSandbox() {
+        clearTimeout(_saveTimer);
+        const snapshot = _currentStateJson();
+        const previousEmail = FakeGoogleSheetsAuth.userEmail;
+        _sandboxed = true;
+        _applyState(JSON.parse(_fixtureJson));
+        FakeGoogleSheetsAuth.userEmail = DEFAULT_FAKE_USER;
+        return () => {
+            _sandboxed = false;
+            // Prefer the saved state: another tab may have written while the sandbox was active
+            if (!(this.isPersistent() && this.load())) _applyState(JSON.parse(snapshot));
+            FakeGoogleSheetsAuth.userEmail = previousEmail;
+        };
+    },
+
+    /** Called after another browser tab changes the shared local data */
+    onExternalChange(listener) {
+        _externalChangeListeners.add(listener);
+        return () => _externalChangeListeners.delete(listener);
+    },
+
+    getUser() {
+        return _configuredEmail();
+    },
+
+    /** Set this browser tab's fake user (takes effect at the next login) */
+    setUser(email) {
+        _storageSet('sessionStorage', USER_STORAGE_KEY, email || null);
+    }
+};
+
+// Persist after every mutating call
+['setSheetData', 'copySheetTab', 'createBlankTab', 'hideTabs', 'showTabs', 'setMockData'].forEach(name => {
+    const original = FakeGoogleSheetsService[name];
+    FakeGoogleSheetsService[name] = function (...args) {
+        const result = original.apply(this, args);
+        if (result && typeof result.then === 'function') {
+            return result.then(value => { FakeGoogleState.save(); return value; });
+        }
+        FakeGoogleState.save();
+        return result;
+    };
+});
+
+if (isLocalhost() && FakeGoogleState.isPersistent()) {
+    FakeGoogleState.load();
+    window.addEventListener('storage', (event) => {
+        if (event.key !== STATE_STORAGE_KEY || _sandboxed) return;
+        const state = _parseSavedState(event.newValue);
+        if (!state) return;
+        _applyState(state);
+        _externalChangeListeners.forEach(listener => {
+            try { listener(); } catch (error) { console.warn('[FakeGoogle] External change listener failed:', error); }
+        });
+    });
 }
 
 // Export both classes for easy swapping with real implementations

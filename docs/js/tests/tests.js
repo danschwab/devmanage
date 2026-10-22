@@ -28,7 +28,8 @@
  */
 
 import { Requests } from '../data_management/api.js';
-import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
+import { FakeGoogleSheetsAuth, FakeGoogleState, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
+import { refreshAppData } from './fakeGoogleDevTools.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
@@ -1592,6 +1593,18 @@ test('EDIT HISTORY', 'history is capped at 10 entries', async () => {
     assertEqual(parsed.h[0].u, 'user14', 'newest first');
 });
 
+test('EDIT HISTORY', 'applyNeValue returns strings like sheet cells', async () => {
+    assertEqual(EditHistoryUtils.applyNeValue('12', '+6'), '18', 'delta');
+    assertEqual(EditHistoryUtils.applyNeValue('', '+5'), '5', 'delta on empty');
+    assertEqual(EditHistoryUtils.applyNeValue('3', 10), '10', 'absolute number');
+    assertEqual(EditHistoryUtils.applyNeValue('a', 'b'), 'b', 'absolute string');
+    const { updatedItems } = EditHistoryUtils.applyPendingChangesToData(
+        [{ quantity: '12', edithistory: _eh({ i: 1, h: [], p: [{ u: 'dan', t: 1, d: 1, s: 'n', c: [{ n: 'quantity', ne: '+6' }] }] }) }],
+        Math.floor(Date.now() / 100)
+    );
+    assertEqual(updatedItems[0].quantity, '18', 'applied pending quantity is a string');
+});
+
 const _HISTORY_TAB = '_HISTORY_TEST';
 const _HISTORY_MAPPING = { name: 'Name', qty: 'Qty', edithistory: 'EditHistory' };
 const _historySave = (rows) => Database.setData('PACK_LISTS', _HISTORY_TAB, rows, _HISTORY_MAPPING, { username: 'test@example.com', source: 'web' });
@@ -1678,6 +1691,9 @@ test('EDIT HISTORY', 'packlist round-trip keeps history and assigns identity', a
 
 export async function runTests() {
     setFakeDelaysEnabled(false);
+    // Run against pristine fixtures; local data (saved across reloads) is restored afterwards
+    const endSandbox = FakeGoogleState.beginSandbox();
+    refreshAppData();
     try {
         // Ensure authenticated before any API-dependent tests run.
         // Auth tests below start with logout() so they still test from an unauthenticated state.
@@ -1712,6 +1728,8 @@ export async function runTests() {
 
         return { passed, failed };
     } finally {
+        endSandbox();
+        refreshAppData();
         setFakeDelaysEnabled(true);
     }
 }

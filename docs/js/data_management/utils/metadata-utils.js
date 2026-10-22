@@ -535,14 +535,14 @@ export class EditHistoryUtils {
      * ne strings prefixed with '+' or '-' are treated as numeric deltas.
      * @param {*} currentValue - Current field value on the row
      * @param {string|number} ne - New-value descriptor from pending entry
-     * @returns {*} Resulting field value
+     * @returns {string} Resulting field value, as a string like every other sheet cell value
      */
     static applyNeValue(currentValue, ne) {
         if (typeof ne === 'string' && /^[+\-]\d/.test(ne)) {
             const current = parseFloat(currentValue) || 0;
-            return current + parseFloat(ne);
+            return String(current + parseFloat(ne));
         }
-        return ne;
+        return ne === undefined || ne === null ? '' : String(ne);
     }
 
     /**
