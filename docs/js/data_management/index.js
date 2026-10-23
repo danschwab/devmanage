@@ -11,4 +11,4 @@ export { ProductionUtils } from './abstraction/production-utils.js';
 
 // Utility classes
 export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, searchFilter, mapWithConcurrency, GetTopFuzzyMatch, GetParagraphMatchRating, normalizeHeaderName, isLocalhost, sanitizeTabName, normalizeText, normalizeMatchKey, getRandomLoadingQuote } from './utils/helpers.js';
-export { EditHistoryUtils } from './utils/metadata-utils.js';
+export { EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS } from './utils/metadata-utils.js';

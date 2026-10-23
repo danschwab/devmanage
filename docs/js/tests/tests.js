@@ -1687,6 +1687,83 @@ test('EDIT HISTORY', 'packlist round-trip keeps history and assigns identity', a
     if (!Number.isInteger(parsed.i)) throw new Error(`expected integer i, got ${parsed.i}`);
 });
 
+// ── Group 37: Edit History View ───────────────────────────────────────────────
+// Plan: docs/notes/inventory-edit-history-view-plan.md
+// FakeGoogle FURNITURE fixtures:
+//   CHAIR-003  qty 12, three history entries (restock +2, description edit, qty+notes edit)
+//   CHAIR-004  qty '', past-due scheduled change (+5)
+//   INVENTORY/_EditHistory  one archived FURNITURE row (CHAIR-099)
+
+const _VIEW_FIELDS = ['quantity', 'description', 'notes'];
+const _furnitureRow = async (itemNumber) => (await Requests.getInventoryTabData('FURNITURE')).find(r => r.itemNumber === itemNumber);
+
+test('EDIT HISTORY VIEW', 'getHistoryStates rewinds CHAIR-003 newest first', async () => {
+    const states = EditHistoryUtils.getHistoryStates(await _furnitureRow('CHAIR-003'), _VIEW_FIELDS);
+    assertEqual(states.map(s => s.kind), ['current', 'change', 'change', 'earliest'], 'kinds');
+    assertEqual(states.map(s => s.state.quantity), ['12', '10', '10', '8'], 'quantity at each state');
+    assertEqual(states.map(s => s.state.notes), ['', '', '', 'check legs'], 'notes at each state');
+    assertEqual(states[2].state.description, 'Cube chair (black) collapsible', 'description before sam\'s edit');
+    assertEqual(states.map(s => s.entry?.u ?? null), ['dan', 'sam', 'dan', null], 'entry paired with each state');
+    assertEqual([...states[2].changed].sort(), ['notes', 'quantity'], 'fields changed by the oldest entry');
+});
+
+test('EDIT HISTORY VIEW', 'getHistoryStates ends with a created row when history reaches creation', async () => {
+    const row = { quantity: '3', edithistory: JSON.stringify({ i: 1, h: [
+        { u: 'dan', t: 200, s: 'web', c: [{ n: 'quantity', o: '1' }, { m: 4 }] },
+        { u: 'dan', t: 100, s: 'web', c: [] }
+    ] }) };
+    const states = EditHistoryUtils.getHistoryStates(row, ['quantity']);
+    assertEqual(states.map(s => s.kind), ['current', 'created'], 'kinds (no earliest row)');
+    assertEqual(states.map(s => s.state.quantity), ['3', '1'], 'created state; move record ignored');
+});
+
+test('EDIT HISTORY VIEW', 'getHistoryStates with no history returns only the current row', async () => {
+    const states = EditHistoryUtils.getHistoryStates({ quantity: '4', edithistory: '' }, ['quantity']);
+    assertEqual(states.map(s => s.kind), ['current'], 'kinds');
+    assertEqual(states[0].entry, null, 'no entry');
+});
+
+test('EDIT HISTORY VIEW', 'applied scheduled change reads like a normal entry (CHAIR-004)', async () => {
+    const row = await _furnitureRow('CHAIR-004');
+    const { updatedItems } = EditHistoryUtils.applyPendingChangesToData([row], Math.floor(Date.now() / 100));
+    const states = EditHistoryUtils.getHistoryStates(updatedItems[0], _VIEW_FIELDS);
+    assertEqual(states.map(s => s.state.quantity), ['5', ''], 'quantity after and before the scheduled change');
+    assertEqual(states[0].entry.s, 'new stock', 'note from the scheduled entry');
+});
+
+test('EDIT HISTORY VIEW', 'getArchivedRows returns this tab\'s deleted rows, parsed', async () => {
+    const rows = await Requests.getArchivedRows('INVENTORY', 'FURNITURE');
+    assertEqual(rows.length, 1, 'one archived FURNITURE row');
+    assertEqual(rows[0].RowData.itemNumber, 'CHAIR-099', 'RowData parsed');
+    assertFiniteNumber(rows[0].Timestamp, 'Timestamp is a number');
+    assertEqual(await Requests.getArchivedRows('INVENTORY', 'CABINETS'), [], 'other tab has none');
+});
+
+test('EDIT HISTORY VIEW', 'getArchivedRows returns [] when the spreadsheet has no archive tab', async () => {
+    assertEqual(await Requests.getArchivedRows('CACHE', 'Notes'), [], 'no CACHE/_EditHistory tab');
+});
+
+test('EDIT HISTORY VIEW', 'item timeline shows field changes and rebuilt quantities (CHAIR-003)', async () => {
+    const events = await Requests.getItemTimeline('CHAIR-003', '2026-01-01', '2026-12-31');
+    const balance = events.find(e => e.event === 'Balance');
+    assertEqual(balance.quantity, 8, 'opening balance is the earliest known quantity');
+    const changes = events.filter(e => e.event === 'Inv. Change');
+    assertEqual(changes.map(e => e.change), [
+        'quantity: +2, notes: "check legs" → ""',
+        'description: "Cube chair (black) collapsible" → "Cube chair (black?) collapsible"',
+        'quantity: +2'
+    ], 'change labels, oldest first');
+    assertEqual(changes.map(e => e.quantity), [10, 10, 12], 'running quantity');
+    assertEqual(changes[2].note, 'dan: restock', 'note');
+});
+
+test('EDIT HISTORY VIEW', 'item timeline labels scheduled changes by their own field', async () => {
+    const events = await Requests.getItemTimeline('CHAIR-003', '2027-01-01', '2027-12-31');
+    const scheduled = events.find(e => e.event === 'Scheduled');
+    assertEqual(scheduled.change, 'quantity: +6', 'scheduled label');
+    assertEqual(scheduled.quantity, 18, 'quantity after scheduled restock');
+});
+
 // ── Runner export ─────────────────────────────────────────────────────────────
 
 export async function runTests() {

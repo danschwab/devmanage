@@ -17,7 +17,7 @@ if (isLocalhost()) {
 
 import { wrapMethods, invalidateCache, stampDataChange, EditHistoryUtils } from '../index.js';
 import { ApplicationUtils } from '../index.js';
-import { ARCHIVE_TAB_NAME } from '../utils/metadata-utils.js';
+import { ARCHIVE_TAB_NAME, ARCHIVE_HEADERS } from '../utils/metadata-utils.js';
 
 class database_uncached {
     /**
@@ -560,7 +560,6 @@ function _addMetadataToRows(originalRows, updatedRows, username, source = 'web')
     return { rows, deletedRows };
 }
 
-const ARCHIVE_HEADERS = ['SourceTable', 'SourceTab', 'RowIdentifier', 'Username', 'Timestamp', 'Operation', 'RowData'];
 
 /**
  * Append deleted rows to the _EditHistory tab of the same spreadsheet.

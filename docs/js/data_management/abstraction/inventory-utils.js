@@ -9,6 +9,31 @@ function _parseMetadata(str) {
     try { return JSON.parse(str); } catch { return {}; }
 }
 
+/** Fields reconstructed for the item timeline (contract: "Reconstructing past row states") */
+const TIMELINE_FIELDS = ['itemNumber', 'quantity', 'description', 'notes'];
+
+/**
+ * Human-readable labels for one history entry, e.g. ['quantity: +2', 'description: "a" → "b"'].
+ * @param {Object} entry - h entry
+ * @param {Object} before - State before the entry
+ * @param {Object} after - State after the entry
+ * @returns {Array<string>}
+ */
+function _historyChangeLabels(entry, before, after) {
+    return (Array.isArray(entry.c) ? entry.c : [])
+        .filter(ch => ch?.n !== undefined)
+        .map(ch => {
+            if (ch.n === 'quantity') {
+                const delta = (parseInt(after.quantity, 10) || 0) - (parseInt(before.quantity, 10) || 0);
+                return `quantity: ${delta >= 0 ? '+' + delta : delta}`;
+            }
+            if (ch.n in after) {
+                return `${ch.n}: "${before[ch.n] ?? ''}" → "${after[ch.n] ?? ''}"`;
+            }
+            return `${ch.n} changed`;
+        });
+}
+
 /**
  * Utility functions for inventory operations
  */
@@ -473,10 +498,13 @@ class inventoryUtils_uncached {
         const row = tabData.find(r => r.itemNumber === lookupId) || tabData.find(r => r.itemNumber === itemId);
         if (!row) return [];
 
-        const currentQty = parseInt(row.quantity ?? row.QTY ?? 0, 10) || 0;
         const parsed = EditHistoryUtils.parseEditHistory(row.edithistory) || {};
         const history = Array.isArray(parsed.h) ? parsed.h : [];
         const pending = Array.isArray(parsed.p) ? parsed.p : [];
+        // Past states, newest first (same reconstruction as the Edit History page):
+        // states[k] is the state after history[k]; states[k + 1] is the state before it
+        const states = EditHistoryUtils.getHistoryStates(row, TIMELINE_FIELDS);
+        const qtyOf = (state) => parseInt(state?.quantity ?? 0, 10) || 0;
 
         const startParsed = startDate ? parseDate(startDate) : null;
         const endParsed   = endDate   ? parseDate(endDate)   : null;
@@ -487,67 +515,33 @@ class inventoryUtils_uncached {
         const events = [];
 
         // ── Phase 2: Inventory history entries ──
-        // Walk newest-first to compute per-entry deltas via backward replay from currentQty.
-        // The opening balance is derived here: when the replay first crosses startDate,
-        // runningQty has been rewound past all post-startDate changes — that is the qty at startDate.
-        let runningQty = currentQty;
-        let startQty = currentQty;
-        let openingBalanceSet = false;
+        // Opening balance: the quantity after the newest entry strictly BEFORE startDate.
+        // Strict less-than keeps entries ON startDate inside the window (no double count).
+        // If no entry precedes startDate, it is the oldest known quantity.
+        let startQty = qtyOf(states[states.length - 1].state);
+        const firstBeforeStart = startDs === null ? -1 : history.findIndex(entry => entry.t < startDs);
+        if (firstBeforeStart !== -1) {
+            startQty = qtyOf(states[firstBeforeStart].state);
+        }
 
-        for (const entry of history) {
+        history.forEach((entry, k) => {
             const ds = entry.t;
-            const date = toISODateString(new Date(ds * 100));
-
-            // Capture opening balance the moment we see the first entry strictly BEFORE startDate.
-            // Using strict less-than ensures entries ON startDate are fully rewound before capture,
-            // so the balance reflects qty before any startDate changes (preventing double-count).
-            if (!openingBalanceSet && startDs !== null && ds < startDs) {
-                startQty = runningQty;
-                openingBalanceSet = true;
-            }
-
-            let delta = 0;
-            const changeLabels = [];
-            if (Array.isArray(entry.c)) {
-                for (const ch of entry.c) {
-                    if (ch.n === 'quantity' || ch.n === 'QTY') {
-                        const oldVal = parseInt(ch.o, 10) || 0;
-                        delta = runningQty - oldVal;
-                        changeLabels.push(`quantity: ${delta >= 0 ? '+' + delta : delta}`);
-                    } else {
-                        changeLabels.push(ch.n);
-                    }
-                }
-            }
-
             const inWindow = (!startDs || ds >= startDs) && (!endDs || ds <= endDs);
-            if (inWindow) {
-                const noteText = entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || '');
-                events.push({
-                    date,
-                    event: 'Inv. Change',
-                    note: noteText,
-                    change: changeLabels.join(', ') || '',
-                    quantity: null,
-                    _delta: delta
-                });
-            }
+            if (!inWindow) return;
 
-            // Rewind regardless of window (needed to correctly replay earlier entries)
-            if (Array.isArray(entry.c)) {
-                for (const ch of entry.c) {
-                    if (ch.n === 'quantity' || ch.n === 'QTY') {
-                        runningQty = parseInt(ch.o, 10) || 0;
-                    }
-                }
-            }
-        }
-
-        // If all history entries are after startDate (or there is no history),
-        // runningQty is fully rewound to before any recorded changes — correct opening balance.
-        if (!openingBalanceSet) {
-            startQty = runningQty;
-        }
+            const after = states[k].state;
+            const before = states[k + 1]?.state ?? after;
+            const delta = qtyOf(after) - qtyOf(before);
+            const isCreated = Array.isArray(entry.c) && entry.c.length === 0;
+            events.push({
+                date: toISODateString(new Date(ds * 100)),
+                event: isCreated ? 'Created' : 'Inv. Change',
+                note: entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || ''),
+                change: _historyChangeLabels(entry, before, after).join(', '),
+                quantity: null,
+                _delta: delta
+            });
+        });
 
         // NOTE: Balance row is pushed AFTER Phase 4 so pre-window ship adjustments are
         // captured in startQty before the anchor row is written.
@@ -564,10 +558,8 @@ class inventoryUtils_uncached {
             if (Array.isArray(entry.c)) {
                 for (const ch of entry.c) {
                     const ne = ch.ne;
-                    const label = (typeof ne === 'string' && /^[+-]/.test(ne))
-                        ? `quantity: ${ne.startsWith('+') ? ne : (parseInt(ne, 10) >= 0 ? '+' + ne : ne)}`
-                        : `${ch.n}: ${ne}`;
-                    changeLabels.push(label);
+                    // Deltas already carry their sign ('+2', '-1'); absolute values are shown as-is
+                    changeLabels.push(`${ch.n}: ${ne}`);
                     // Accumulate quantity delta so the forward pass stacks entries correctly.
                     // ne is always a delta string (e.g. '+2', '-1') for numeric fields.
                     if ((ch.n === 'quantity' || ch.n === 'QTY') && typeof ne === 'string' && /^[+\-]\d/.test(ne)) {
@@ -678,7 +670,7 @@ class inventoryUtils_uncached {
         }
 
         // ── Phase 5: Sort ──
-        const eventOrder = { 'Balance': -1, 'Returns': 0, 'Inv. Change': 1, 'Scheduled': 2, 'Ships': 3 };
+        const eventOrder = { 'Balance': -1, 'Created': 0, 'Returns': 0, 'Inv. Change': 1, 'Scheduled': 2, 'Ships': 3 };
         events.sort((a, b) => {
             if (a.date !== b.date) return a.date < b.date ? -1 : 1;
             return (eventOrder[a.event] ?? 9) - (eventOrder[b.event] ?? 9);

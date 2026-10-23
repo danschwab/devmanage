@@ -93,6 +93,8 @@ Ongoing User Conversations:
 
 **problems**
 
+- [ ] things like CNTR-008l and CNTR-008r don't get inventoried correctly, because only the unified "CNTR-008" exists in inventory. Do we need a "sub-parts" system?
+- [ ] inventory tabs still lose dirty state during the process of making modifications which is disorienting.
 - [ ] Search needs to stay in a logical way, not on every navigation. Maybe give search boxes "findId"s that allow syncing/clearing of search across nav
 - [ ] AUTH def still automatically auths and needs to be revamped. We need to remove the auto auth and ensure the "expired" modal always shows
 - [ ] some odd thumbnail behavior...... mostly not loading in right away

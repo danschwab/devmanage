@@ -19,12 +19,16 @@ const InventorySaveModal = {
         hasQtyChanges: {
             type: Boolean,
             default: true
+        },
+        initialNote: {
+            type: String,
+            default: ''
         }
     },
     data() {
         return {
             scheduledDate: todayISOString(),
-            note: '',
+            note: (this.initialNote || '').slice(0, 25),
             error: null
         };
     },
@@ -813,6 +817,16 @@ export const ItemImageComponent = {
 
 
 
+// Fields shown in pending and history sub-rows, and restored by a history revert
+const HISTORY_FIELDS = ['quantity', 'description', 'notes'];
+
+/** Format a decisecond timestamp for the history columns, e.g. "Oct 6, 2026, 1:52 PM" */
+function formatHistoryTime(deciseconds) {
+    return new Date(deciseconds * 100).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+}
+
 export const InventoryTableComponent = {
     mixins: [sheetLockMixin],
     components: {
@@ -841,11 +855,18 @@ export const InventoryTableComponent = {
         editMode: {
             type: Boolean,
             default: true
+        },
+        // Edit History page: read-only past states under each item, with revert
+        historyMode: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
         return {
             inventoryTableStore: null,
+            archivedRows: [],
+            revertNote: '',
             lockNamespace: 'INVENTORY',
             tabMetaFlags: { hideQuantity: false, hideItemNumber: false },
             _visibilityManager: createVisibilityManager()
@@ -854,7 +875,7 @@ export const InventoryTableComponent = {
     computed: {
         columns() {
             // Dynamically set columns' editable property based on allowEdit
-            const cols = [
+            let cols = [
                 { 
                     key: 'image', 
                     labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
@@ -870,24 +891,27 @@ export const InventoryTableComponent = {
                     width: 120,
                     sortable: true
                 },
-                { 
-                    key: 'quantity', 
+                {
+                    key: 'quantity',
                     label: 'Qty',
                     format: 'number',
+                    historyField: true,
                     editable: this.allowEdit,
                     autoColor: false,
                     width: 120,
                     sortable: true
                 },
                 { 
-                    key: 'description', 
+                    key: 'description',
                     label: 'Description (visible in pack lists)',
+                    historyField: true,
                     editable: this.allowEdit,
                     sortable: true
                 },
                 { 
-                    key: 'notes', 
+                    key: 'notes',
                     label: 'Notes (internal only)',
+                    historyField: true,
                     editable: this.allowEdit,
                     sortable: false
                 },
@@ -900,6 +924,24 @@ export const InventoryTableComponent = {
                     sticky: 'end'
                 }
             ];
+            if (this.historyMode) {
+                // No item timeline button; history metadata and revert columns at the end
+                cols = cols.filter(c => c.key !== '_navigate');
+                const meta = () => 'history-meta';
+                cols.push(
+                    { key: '_historyDate', label: 'Date', width: 160, sortable: false, cellClass: meta },
+                    { key: '_historyUser', label: 'User', width: 90, sortable: false, cellClass: meta },
+                    { key: '_historyNote', label: 'Note', width: 160, sortable: false, cellClass: meta },
+                    {
+                        key: '_revert',
+                        labelHtml: '<span class="material-symbols-outlined">history</span>',
+                        label: '',
+                        width: 36,
+                        sortable: false,
+                        sticky: 'end'
+                    }
+                );
+            }
             // Apply column filters based on metadata flags
             return cols.filter(c => {
                 if (this.tabMetaFlags.hideQuantity && c.key === 'quantity') return false;
@@ -909,6 +951,36 @@ export const InventoryTableComponent = {
         },
         tableData() {
             return this.inventoryTableStore ? this.inventoryTableStore.data : [];
+        },
+        // Past states per item, rebuilt from the SAVED rows so unsaved edits or reverts
+        // don't shift the reconstruction (see EditHistoryUtils.getHistoryStates)
+        historyByItem() {
+            const map = new Map();
+            if (!this.historyMode) return map;
+            for (const row of this.inventoryTableStore?.originalData || []) {
+                map.set(row.itemNumber, EditHistoryUtils.getHistoryStates(row, HISTORY_FIELDS));
+            }
+            return map;
+        },
+        deletedColumns() {
+            return [
+                { key: 'itemNumber', label: 'Item#', width: 120 },
+                { key: 'quantity', label: 'Qty', width: 80 },
+                { key: 'description', label: 'Description' },
+                { key: 'notes', label: 'Notes' },
+                { key: 'deletedAt', label: 'Deleted', width: 160, cellClass: () => 'history-meta' },
+                { key: 'deletedBy', label: 'By', width: 90, cellClass: () => 'history-meta' }
+            ];
+        },
+        deletedRows() {
+            return this.archivedRows.map(entry => ({
+                itemNumber: entry.RowData.itemNumber ?? '',
+                quantity: entry.RowData.quantity ?? '',
+                description: entry.RowData.description ?? '',
+                notes: entry.RowData.notes ?? '',
+                deletedAt: entry.Timestamp ? formatHistoryTime(entry.Timestamp) : '',
+                deletedBy: (entry.Username || '').split('@')[0]
+            }));
         },
         originalData() {
             // Use the originalData from the store, not a copy of the reactive data
@@ -1005,6 +1077,12 @@ export const InventoryTableComponent = {
             [this.tabTitle, undefined, undefined, undefined] // No filters needed - search is handled in UI
         );
         
+        if (this.historyMode && this.tabTitle) {
+            Requests.getArchivedRows('INVENTORY', this.tabTitle)
+                .then(rows => { this.archivedRows = rows || []; })
+                .catch(err => console.warn('[InventoryTable] Failed to load deleted rows:', err));
+        }
+
         // Apply any pending changes that are due today or earlier
         if (this.tabTitle) {
             Requests.checkAndApplyPendingChanges(this.tabTitle).catch(err => {
@@ -1234,12 +1312,15 @@ export const InventoryTableComponent = {
             });
             this.$modal.custom(InventorySaveModal, {
                 hasQtyChanges,
+                initialNote: this.historyMode ? this.revertNote : '',
                 onConfirm: async (scheduledDate, note) => {
                     await this.inventoryTableStore.save('Saving inventory...', { scheduledDate, note });
+                    this.revertNote = '';
                     // After a scheduled (future) save the server keeps the original quantity and
                     // stores the change as a pending entry. The store's optimistic data still
                     // shows the user-edited quantity, so force a reload to display the actual state.
-                    if (scheduledDate > todayISOString()) {
+                    // On the history page, reload so the entry this save recorded appears right away.
+                    if (scheduledDate > todayISOString() || this.historyMode) {
                         await this.inventoryTableStore.load('Loading...');
                     }
                 }
@@ -1272,6 +1353,83 @@ export const InventoryTableComponent = {
 
         formatPendingDate(deciseconds) {
             return new Date(deciseconds * 100).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        },
+
+        /**
+         * Sub-rows under an item, in one shape for both kinds:
+         *   - category table: pending (scheduled) changes
+         *   - edit history page: past states, newest first (no pending rows)
+         * @returns {Array<{label, fields, changed: Set, meta: {date, user, note}|null, revertState, rowClass}>}
+         */
+        getDetailRows(row) {
+            if (!this.historyMode) {
+                return this.getPendingEntriesForDisplay(row).map(entry => ({
+                    label: `${this.formatPendingDate(entry.t)}→`,
+                    fields: entry.fields,
+                    changed: new Set(Object.keys(entry.fields)),
+                    meta: null,
+                    revertState: null,
+                    rowClass: 'detail-row-pending'
+                }));
+            }
+            const states = this.historyByItem.get(row.itemNumber) || [];
+            return states.slice(1).map(item => ({
+                label: item.kind === 'created' ? 'Created' : item.kind === 'earliest' ? 'Earliest recorded' : '',
+                fields: item.state,
+                changed: item.changed,
+                meta: this.historyMeta(item.entry),
+                revertState: item.state,
+                rowClass: 'detail-row-history'
+            }));
+        },
+
+        hasDetailRows(row) {
+            if (this.historyMode) return (this.historyByItem.get(row.itemNumber)?.length || 0) > 1;
+            return this.getPendingEntries(row).length > 0;
+        },
+
+        historyMeta(entry) {
+            if (!entry) return { date: '', user: '', note: '' };
+            return { date: formatHistoryTime(entry.t), user: entry.u || '', note: entry.s ?? '' };
+        },
+
+        // Metadata for the main row: the change that produced the current saved values
+        currentHistoryMeta(row) {
+            return this.historyMeta(this.historyByItem.get(row.itemNumber)?.[0]?.entry);
+        },
+
+        // Leading visible columns without history fields (image, item#) share one label cell
+        leadingSpan(visibleColumns) {
+            const index = visibleColumns.findIndex(col => col.historyField);
+            return index === -1 ? visibleColumns.length : index;
+        },
+
+        /**
+         * Restore an item to a past state, rewinding every newer change. Applies the state to
+         * the store (shared with the category table); the user saves it from either page.
+         */
+        async revertToState(row, detail) {
+            const store = this.inventoryTableStore;
+            const target = store?.data.find(r => r.itemNumber === row.itemNumber);
+            if (!target || !detail.revertState) return;
+
+            if (!await this.acquireLockForEdit()) {
+                this.$modal.alert(`Cannot revert: ${this.tabTitle} is locked for editing by ${this.lockOwnerDisplay || 'another user'}.`, 'Locked');
+                return;
+            }
+
+            const routeKey = this.appContext?.currentPath?.split('?')[0];
+            if (routeKey) {
+                undoRegistry.capture(store.data, routeKey, { type: 'revert' });
+            }
+            for (const field of HISTORY_FIELDS) {
+                target[field] = detail.revertState[field] ?? '';
+            }
+            // Save note (max 25 characters), e.g. "revert to Oct 6, 2026" / "revert to earliest"
+            const when = detail.meta?.date
+                ? detail.meta.date.split(',').slice(0, 2).join(',')
+                : (detail.label === 'Created' ? 'creation' : 'earliest');
+            this.revertNote = `revert to ${when}`.slice(0, 25);
         },
 
         handleReportsClick() {
@@ -1316,8 +1474,8 @@ export const InventoryTableComponent = {
                 :newRow="allowEdit"
                 :external-dirty-state="isDirty"
                 :allowDetails="true"
-                :forceDetails="editMode"
-                :rowDetailsVisible="row => getPendingEntries(row).length > 0"
+                :forceDetails="editMode || historyMode"
+                :rowDetailsVisible="hasDetailRows"
                 emptyMessage="No inventory items found"
                 :loading-message="loadingMessage"
                 class="inventory-table-component mark-dirty"
@@ -1341,22 +1499,54 @@ export const InventoryTableComponent = {
                         @click.stop="navigateToItemPage(row)"
                         title="View item timeline"
                     >☷</button>
+                    <span v-else-if="column.key === '_historyDate'">{{ currentHistoryMeta(row).date }}</span>
+                    <span v-else-if="column.key === '_historyUser'">{{ currentHistoryMeta(row).user }}</span>
+                    <span v-else-if="column.key === '_historyNote'">{{ currentHistoryMeta(row).note }}</span>
+                    <span v-else-if="column.key === '_revert'"></span>
                 </template>
-                <template #row-detail-rows="{ row }">
+                <template #row-detail-rows="{ row, visibleColumns }">
                     <tr
-                        v-for="(entry, i) in getPendingEntriesForDisplay(row)"
+                        v-for="(detail, i) in getDetailRows(row)"
                         :key="i"
-                        class="detail-row-pending in-group"
+                        :class="['detail-row', detail.rowClass, 'in-group']"
                     >
-                        <td colspan="2" class="detail-meta-cell">
-                            <strong>{{ formatPendingDate(entry.t) }}→ </strong>
+                        <td v-if="leadingSpan(visibleColumns) > 0" :colspan="leadingSpan(visibleColumns)" class="detail-meta-cell">
+                            <strong>{{ detail.label }}</strong>
                         </td>
-                        <td class="detail-value-cell">{{ entry.fields.quantity !== undefined ? entry.fields.quantity : '' }}</td>
-                        <td class="detail-value-cell">{{ entry.fields.description !== undefined ? entry.fields.description : '' }}</td>
-                        <td class="detail-value-cell">{{ entry.fields.notes !== undefined ? entry.fields.notes : '' }}</td>
+                        <td
+                            v-for="column in visibleColumns.slice(leadingSpan(visibleColumns))"
+                            :key="column.key"
+                            :class="{
+                                'detail-value-cell': column.historyField,
+                                'history-changed': column.historyField && detail.changed.has(column.key),
+                                'history-meta': column.key.startsWith('_history')
+                            }"
+                        >
+                            <template v-if="column.historyField">{{ detail.fields[column.key] ?? '' }}</template>
+                            <template v-else-if="column.key === '_historyDate' && detail.meta">{{ detail.meta.date }}</template>
+                            <template v-else-if="column.key === '_historyUser' && detail.meta">{{ detail.meta.user }}</template>
+                            <template v-else-if="column.key === '_historyNote' && detail.meta">{{ detail.meta.note }}</template>
+                            <button
+                                v-else-if="column.key === '_revert' && detail.revertState"
+                                class="button-symbol purple"
+                                @click.stop="revertToState(row, detail)"
+                                title="Revert to this state (undoes every newer change)"
+                            >↶</button>
+                        </td>
                     </tr>
                 </template>
             </TableComponent>
+            <TableComponent
+                v-if="historyMode && deletedRows.length > 0"
+                theme="purple"
+                title="Deleted items"
+                :data="deletedRows"
+                :columns="deletedColumns"
+                :showSearch="false"
+                :showRefresh="false"
+                emptyMessage="No deleted items"
+                class="inventory-deleted-rows"
+            />
         </slot>
     `
 };

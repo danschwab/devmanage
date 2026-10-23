@@ -4,19 +4,42 @@ import { ShowInventoryReport } from './ShowInventoryReport.js';
 import { InventoryItemReport } from './InventoryItemReport.js';
 import { InventoryItemTimeline } from './InventoryItemTimeline.js';
 
+/** Route key of the per-category history page: inventory/<category>/edit-history */
+export const EDIT_HISTORY_ROUTE = 'edit-history';
+
+/**
+ * Split an inventory path into its category slug and sub-route.
+ * @param {string} path - Container path (query parameters allowed)
+ * @returns {{ category: string|null, subRoute: string|null }}
+ */
+function parseInventoryPath(path) {
+    const segments = String(path || '').split('?')[0].split('/').filter(Boolean);
+    if (segments[0] !== 'inventory') return { category: null, subRoute: null };
+    return { category: segments[1] || null, subRoute: segments[2] || null };
+}
+
 // Inventory Hamburger Menu Component (content only)
 export const InventoryMenuComponent = {
     props: {
         containerPath: String,
-        containerType: String, 
+        containerType: String,
         currentView: String,
         title: String,
         refreshCallback: Function,
-        navigateToPath: Function,
-        tabTitle: String
+        navigateToPath: Function
     },
     inject: ['$modal', 'appContext'],
     computed: {
+        // Derived from the menu's current containerPath (supplied fresh each time the menu opens)
+        inventoryLocation() {
+            const { category, subRoute } = parseInventoryPath(this.containerPath);
+            const isRegisteredCategory = !!category && !!NavigationRegistry.getRoute(`inventory/${category}`);
+            return {
+                category,
+                isCategoryTable: isRegisteredCategory && !subRoute,
+                isEditHistory: isRegisteredCategory && subRoute === EDIT_HISTORY_ROUTE
+            };
+        },
         hasSearchTerm() {
             // Get current path and check for searchTerm
             const currentCleanPath = (this.appContext?.currentPath || '').split('?')[0];
@@ -31,13 +54,19 @@ export const InventoryMenuComponent = {
             
             // Add clear filter if searchTerm is present
             if (this.hasSearchTerm) {
-                items.push({ 
-                    label: 'Clear Filter', 
+                items.push({
+                    label: 'Clear Filter',
                     action: 'clearFilter',
                     class: 'yellow'
                 });
             }
-            
+
+            if (this.inventoryLocation.isCategoryTable) {
+                items.push({ label: 'See Edit History', action: 'openEditHistory' });
+            } else if (this.inventoryLocation.isEditHistory) {
+                items.push({ label: 'Back to Table', action: 'closeEditHistory' });
+            }
+
             return items;
         }
     },
@@ -59,6 +88,16 @@ export const InventoryMenuComponent = {
                         this.$emit('close-modal');
                     }
                     break;
+                case 'openEditHistory':
+                case 'closeEditHistory': {
+                    const base = `inventory/${this.inventoryLocation.category}`;
+                    const target = action === 'openEditHistory' ? `${base}/${EDIT_HISTORY_ROUTE}` : base;
+                    // Keep the search term so the same items stay highlighted
+                    const { searchTerm } = NavigationRegistry.getParametersForContainer(this.containerPath, this.appContext?.currentPath);
+                    this.navigateToPath?.(NavigationRegistry.buildPath(target, { searchTerm }));
+                    this.$emit('close-modal');
+                    break;
+                }
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }
@@ -211,6 +250,33 @@ export const InventoryContent = {
         },
         authIsAuthenticated() {
             return authState.isAuthenticated;
+        },
+        // Registered sub-route of a category (e.g. edit-history), checked before item numbers
+        registeredSubRoute() {
+            NavigationRegistry.routeRegistrationVersion.value; // re-evaluate when routes register
+            const { category, subRoute } = parseInventoryPath(this.cleanContainerPath);
+            if (!category || !subRoute) return null;
+            return NavigationRegistry.getRoute(`inventory/${category}/${subRoute}`) ? subRoute : null;
+        },
+        isEditHistoryView() {
+            return this.registeredSubRoute === EDIT_HISTORY_ROUTE;
+        },
+        isInventorySubPath() {
+            return !!parseInventoryPath(this.cleanContainerPath).subRoute;
+        },
+        // Category titles; reading every element tracks in-place updates to the store's array
+        categoryTitles() {
+            return (this.categoriesStore?.data || []).map(cat => cat?.title).filter(Boolean);
+        },
+        // Sub-routes are registered from the category list, so wait for it before treating
+        // an unknown third segment as an item number
+        categoryRoutesReady() {
+            NavigationRegistry.routeRegistrationVersion.value; // re-evaluate when routes register
+            const { category } = parseInventoryPath(this.cleanContainerPath);
+            if (category && NavigationRegistry.getRoute(`inventory/${category}`)) return true;
+            // Unknown category: resolve once the category list has finished loading (or failed)
+            const store = this.categoriesStore;
+            return !!store && !store.isLoading && !store.initialLoad && (this.categoryTitles.length > 0 || !!store.error);
         }
     },
     watch: {
@@ -219,6 +285,13 @@ export const InventoryContent = {
             if (isAuth && !wasAuth) {
                 this.initializeCategoriesStore();
             }
+        },
+        // Register category routes (and their history pages) whenever the category list changes
+        categoryTitles: {
+            handler(titles) {
+                this.registerCategoryRoutes(titles);
+            },
+            immediate: true
         },
         // Watch for when categories data is loaded and check for auto-saved data
         'categoriesStore.data': {
@@ -231,6 +304,15 @@ export const InventoryContent = {
         }
     },
     methods: {
+        registerCategoryRoutes(titles) {
+            for (const title of titles || []) {
+                if (title === 'INDEX' || title.startsWith('_')) continue;
+                const slug = title.toLowerCase();
+                const displayName = title.charAt(0).toUpperCase() + title.slice(1).toLowerCase();
+                NavigationRegistry.addDynamicRoute('inventory', slug, { displayName });
+                NavigationRegistry.addDynamicRoute(`inventory/${slug}`, EDIT_HISTORY_ROUTE, { displayName: 'Edit History' });
+            }
+        },
         async checkAutoSavedCategories() {
             if (!authState.isAuthenticated || !authState.user?.email || !this.categoriesStore?.data) return;
 
@@ -376,8 +458,7 @@ export const InventoryContent = {
                     const lockInfo = await Requests.getInventoryLock(categoryName.toUpperCase());
                     //console.log('[InventoryContent] Lock info from API:', lockInfo);
                     return lockInfo;
-                },
-                tabTitle: this.currentCategoryName
+                }
             }
         });
     },
@@ -413,9 +494,27 @@ export const InventoryContent = {
                 :view-modes="viewModes"
             />
             
+            <!-- inventory/<cat>/<segment>: wait for registered sub-routes before resolving -->
+            <div v-else-if="isInventorySubPath && !categoryRoutesReady" class="loading-message">
+                <img src="assets/loading.gif" alt="..."/>
+                <p>Loading...</p>
+            </div>
+
+            <!-- Edit History Subpage: inventory/<cat>/edit-history -->
+            <inventory-table
+                ref="inventoryTable"
+                v-else-if="isEditHistoryView && currentCategoryName"
+                :key="'history:' + currentCategoryName"
+                :container-path="containerPath"
+                :inventory-name="'Edit History: ' + currentCategoryName.toLowerCase()"
+                :tab-title="currentCategoryName"
+                :history-mode="true"
+                :edit-mode="false"
+            ></inventory-table>
+
             <!-- Item Timeline Subpage: inventory/<cat>/<item#> -->
             <inventory-item-timeline
-                v-else-if="containerPath.startsWith('inventory/') && cleanContainerPath.split('/').length >= 3"
+                v-else-if="isInventorySubPath"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />
@@ -424,6 +523,7 @@ export const InventoryContent = {
             <inventory-table
                 ref="inventoryTable"
                 v-else-if="containerPath.startsWith('inventory/') && currentCategoryName"
+                :key="'table:' + currentCategoryName"
                 :container-path="containerPath"
                 :inventory-name="'Inventory: ' + currentCategoryName.toLowerCase()"
                 :tab-title="currentCategoryName"

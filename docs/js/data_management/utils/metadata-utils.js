@@ -43,6 +43,9 @@ export const HISTORY_AGGREGATION_WINDOW = 36000;
 /** Tab (in each spreadsheet) that receives archived deleted rows */
 export const ARCHIVE_TAB_NAME = '_EditHistory';
 
+/** Archive tab columns, in write order (contract: "Archive Table") */
+export const ARCHIVE_HEADERS = ['SourceTable', 'SourceTab', 'RowIdentifier', 'Username', 'Timestamp', 'Operation', 'RowData'];
+
 /** Row object key holding the EditHistory column (sheet header 'EditHistory') */
 export const HISTORY_KEY = 'edithistory';
 
@@ -478,6 +481,53 @@ export class EditHistoryUtils {
             return null;
         }
         return history[0];
+    }
+
+    /**
+     * Reconstruct a row's past states from its history (contract: "Reconstructing past row states").
+     * Each h[k] holds the metadata of change k plus the OLD values of the fields it changed,
+     * so the state after change k is the row with the old values of every newer entry applied.
+     *
+     * Returned rows, newest first:
+     *   - 'current':  the row's values, paired with h[0] (the change that produced them)
+     *   - 'change':   state after h[k], paired with h[k]
+     *   - 'created':  the change row whose entry is a creation marker (c: []) — always last
+     *   - 'earliest': oldest known state when history does not reach creation (entry: null)
+     *
+     * Pass the SAVED row (not one with unsaved edits), or every reconstructed state shifts.
+     * Pending changes (p) are ignored.
+     *
+     * @param {Object} row - Row object with an edithistory field
+     * @param {Array<string>} [fields] - Keys to include in each state (default: all except edithistory/AppData)
+     * @returns {Array<{kind: string, state: Object, entry: Object|null, changed: Set<string>}>}
+     */
+    static getHistoryStates(row, fields = null) {
+        const keys = fields || Object.keys(row || {}).filter(key => !DIFF_IGNORED_COLUMNS.includes(key));
+        const parsedHistory = this.parseEditHistory(row?.[HISTORY_KEY])?.h;
+        const entries = Array.isArray(parsedHistory) ? parsedHistory : [];
+        // c items without n (planned move records) and fields outside `keys` are ignored
+        const fieldChanges = (entry) => (Array.isArray(entry?.c) ? entry.c : []).filter(ch => ch?.n !== undefined && keys.includes(ch.n));
+        const changedSet = (entry) => new Set(fieldChanges(entry).map(ch => ch.n));
+        const isCreation = (entry) => Array.isArray(entry?.c) && entry.c.length === 0;
+
+        const state = Object.fromEntries(keys.map(key => [key, row?.[key] ?? '']));
+        const states = [{ kind: 'current', state: { ...state }, entry: entries[0] || null, changed: changedSet(entries[0]) }];
+
+        for (let k = 1; k <= entries.length; k++) {
+            // Rewind change k-1: restore the old values it recorded
+            for (const ch of fieldChanges(entries[k - 1])) {
+                state[ch.n] = ch.o ?? '';
+            }
+            if (k < entries.length) {
+                const entry = entries[k];
+                states.push({ kind: isCreation(entry) ? 'created' : 'change', state: { ...state }, entry, changed: changedSet(entry) });
+            }
+        }
+
+        if (entries.length > 0 && !isCreation(entries[entries.length - 1])) {
+            states.push({ kind: 'earliest', state: { ...state }, entry: null, changed: new Set() });
+        }
+        return states;
     }
 
     // -------------------------------------------------------------------------

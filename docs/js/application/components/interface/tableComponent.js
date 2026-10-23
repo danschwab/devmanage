@@ -1544,6 +1544,12 @@ export const TableComponent = {
             type: Function,
             default: null
         },
+        // Parent-owned unsaved state (e.g. a store modified outside cell editing, such as a revert
+        // on a read-only table). Shows Save/Discard even when no cell is dirty.
+        externalDirtyState: {
+            type: Boolean,
+            default: false
+        },
         parentSearchValue: {
             type: String,
             default: ''
@@ -2095,6 +2101,9 @@ export const TableComponent = {
             const hasAddRow = !!this.newRow;
             return hasEditable || hasAddRow;
         },
+        hasUnsavedChanges() {
+            return this.allowSaveEvent || this.externalDirtyState;
+        },
         hasEditableColumns() {
             // True if any column is editable
             return this.columns.some(col => col.editable);
@@ -2476,8 +2485,8 @@ export const TableComponent = {
         },
 
         handleRefresh() {
-            // Capture state before discarding changes (when allowSaveEvent is true)
-            if (this.allowSaveEvent && undoRegistry.currentRouteKey) {
+            // Capture state before discarding changes
+            if (this.hasUnsavedChanges && undoRegistry.currentRouteKey) {
                 undoRegistry.capture(this.data, undoRegistry.currentRouteKey, { type: 'discard' });
             }
             
@@ -4641,9 +4650,9 @@ export const TableComponent = {
                             New Item
                         </button>
                         <button
-                            v-if="showSaveButton || allowSaveEvent"
+                            v-if="showSaveButton || hasUnsavedChanges"
                             @click="handleSave"
-                            :disabled="isLoading || !allowSaveEvent"
+                            :disabled="isLoading || !hasUnsavedChanges"
                             class="green"
                         >
                             Save
@@ -4652,9 +4661,9 @@ export const TableComponent = {
                             v-if="showRefresh" 
                             @click="handleRefresh" 
                             :disabled="isLoading" 
-                            :class="allowSaveEvent ? 'red' : ''"
+                            :class="hasUnsavedChanges ? 'red' : ''"
                         >
-                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
+                            {{ isLoading ? 'Loading...' : (hasUnsavedChanges ? 'Discard' : 'Refresh') }}
                         </button>
                         <button
                             v-if="hasEditableColumns && showUndoRedo"
@@ -5080,7 +5089,7 @@ export const TableComponent = {
                 
                 
             </div>
-            <div class="content-footer red"  v-if="showFooter && allowSaveEvent"><p>There are unsaved changes in this table.</p></div>
+            <div class="content-footer red"  v-if="showFooter && hasUnsavedChanges"><p>There are unsaved changes in this table.</p></div>
         </div>
     `
 };

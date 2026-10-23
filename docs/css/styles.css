@@ -1181,6 +1181,23 @@ tr.in-group:not(:has(+ .in-group)) > td:not(.row-drag-handle) {
     box-shadow: inset 0 -12px 12px -12px var(--color-shadow);
 }
 
+/* Inventory sub-rows: pending changes (category table) and past states (edit history) */
+/* td.history-meta {
+    color: var(--color-text-light);
+    background-color: var(--color-purple-bg);
+}
+tr.detail-row-history > td {
+    color: var(--color-text-light);
+}
+tr.detail-row-history > td.history-changed {
+    color: var(--color-text);
+    font-weight: bold;
+}
+tr.detail-row > td.detail-meta-cell {
+    text-align: right;
+    white-space: nowrap;
+} */
+
 /* Group Toggle Button */
 .group-toggle {
     position: absolute;

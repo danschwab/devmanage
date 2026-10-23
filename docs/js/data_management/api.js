@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 // CACHE tabs with tracked history. EditHistory is always mapped to the key 'edithistory'.
@@ -1528,6 +1528,31 @@ class Requests_uncached {
     static async deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds) {
         const username = authState.user?.email || null;
         return await InventoryUtils.deletePendingChangeEntry(tabOrItemName, effectiveDateDeciseconds, username);
+    }
+
+    /**
+     * Get rows archived (deleted) from one tab, newest first.
+     * Reads the _EditHistory tab of the same spreadsheet (contract: "Archive Table").
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @param {string} tableId - Spreadsheet id (INVENTORY, PACK_LISTS, CACHE)
+     * @param {string} tabName - Source tab whose deleted rows to return
+     * @returns {Promise<Array<{RowIdentifier: string, Username: string, Timestamp: number, Operation: string, RowData: Object}>>}
+     */
+    static async getArchivedRows(deps, tableId, tabName) {
+        // Reading a missing tab throws on real Sheets, so check that the archive exists first
+        const tabs = await deps.call(Database.getTabs, tableId);
+        if (!tabs.some(tab => tab.title === ARCHIVE_TAB_NAME)) return [];
+
+        const mapping = Object.fromEntries(ARCHIVE_HEADERS.map(header => [header, header]));
+        const rows = await deps.call(Database.getData, tableId, ARCHIVE_TAB_NAME, mapping);
+        return rows
+            .filter(row => row.SourceTable === tableId && row.SourceTab === tabName)
+            .map(row => {
+                let rowData = {};
+                try { rowData = JSON.parse(row.RowData || '{}'); } catch { /* unreadable archive row */ }
+                return { ...row, Timestamp: Number(row.Timestamp) || 0, RowData: rowData };
+            })
+            .sort((a, b) => b.Timestamp - a.Timestamp);
     }
 
     /**

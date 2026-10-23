@@ -10,11 +10,11 @@ Status notes:
 
 Current implementation lives in:
 
-- `docs/js/data_management/utils/metadata-utils.js` — entry creation, aggregation, row matching, pending changes
+- `docs/js/data_management/utils/metadata-utils.js` — entry creation, aggregation, row matching, state reconstruction, pending changes
 - `docs/js/data_management/abstraction/database.js` — save-time history generation, identity assignment, archiving
 - `docs/js/data_management/abstraction/inventory-utils.js` — inventory scheduled (pending) changes
 - `docs/js/data_management/abstraction/packlist-utils.js` — packlist flattening before save
-- `docs/js/data_management/api.js` — CAD source alert (`checkCadSourceHistory`), Notes/Preferences mappings
+- `docs/js/data_management/api.js` — CAD source alert (`checkCadSourceHistory`), archive reader (`getArchivedRows`), Notes/Preferences mappings
 
 ---
 
@@ -139,6 +139,22 @@ Migration seeds the id column from `i`. While any Sheets-based writer still exis
 - Readers must not assume one entry per save (aggregation merges saves).
 
 ---
+
+## Reconstructing Past Row States (Readers)
+
+Each `h[k]` entry stores the metadata of change *k* (`u`, `t`, `s`) and the **old** values of the fields it changed (`o`). The state *after* change *k* is not stored on entry *k*; readers rebuild it:
+
+1. Start from the row's **saved** values (never from unsaved edits).
+2. State after `h[0]` = the saved values.
+3. For *k* = 1, 2, …: state after `h[k]` = state after `h[k-1]` with every `o` in `h[k-1].c` applied. Keep one running copy, because `c` lists only changed fields.
+4. If the oldest entry is a creation marker (`c: []`), its state is the row as created. Otherwise, applying the oldest entry's `o` values gives the earliest known state (history may have been capped).
+5. Ignore `c` items without `n` (planned move records) and the `p` array.
+
+Applied scheduled entries are read like any other entry, using `t`.
+
+Restoring ("reverting to") a past state writes that state's field values onto the row. This rewinds every newer change, and the save that follows records a normal history entry.
+
+Implemented in `EditHistoryUtils.getHistoryStates` (used by the inventory Edit History page and the item timeline).
 
 ## Archive Table (Deleted Rows)
 
