@@ -1362,6 +1362,11 @@ td.col-sticky-start, td.col-sticky-end {
     outline: none;
 }
 
+/* Preserve newlines in multi-line notes */
+.table-edit-textarea {
+    white-space: pre-wrap;
+}
+
 .table-cell-container:has(input[type="number"]),
 .table-cell-container:has(button:only-child) {
     display: flex;

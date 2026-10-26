@@ -30,6 +30,17 @@ function compareItemLikeValues(aValue, bValue) {
     return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+// Clean pasted text before it enters a cell: normalize line endings, turn non-breaking spaces into
+// plain spaces, and strip invisible characters (zero-width space, BOM, soft hyphen, control chars)
+// that ride along from PDFs, web pages and Office documents. Tabs and newlines are kept.
+function sanitizeCellText(text) {
+    return String(text ?? '')
+        .replace(/\r\n?|[\u2028\u2029]/g, '\n')
+        .replace(/[\u00A0\u2007\u202F]/g, ' ')
+        .replace(/[\u200B\u2060\uFEFF\u00AD]/g, '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+}
+
 // Global table row selection state - single source of truth for all selections
 export const tableRowSelectionState = Vue.reactive({
     // Selection map with unique keys to handle multiple tables
@@ -3234,30 +3245,65 @@ export const TableComponent = {
             }
         },
         handleCellPaste(rowIndex, colIndex, event) {
-            const text = event.clipboardData?.getData('text/plain') || '';
-            if (!text) return;
+            // Always take over the paste so the browser never inserts images or rich content,
+            // even when the clipboard has no plain text at all.
+            event.preventDefault();
+            const cell = event.currentTarget;
+            let text = sanitizeCellText(event.clipboardData?.getData('text/plain'));
 
-            // If the pasted content has tabs (multi-column) or newlines (multi-row), defer entirely
-            // to the row paste system. Blur the cell first to ensure it updates properly.
-            // _handleExternalPaste fires on the same event and will handle this data.
-            if (text.includes('\t') || text.includes('\n')) {
-                event.preventDefault();
-                // Blur the cell so its content updates and doesn't retain stale data from before insertion
-                event.target?.blur();
+            // Tab-separated content is spreadsheet rows: defer entirely to the row paste system.
+            // Blur the cell first so _handleExternalPaste (which fires on the same event) sees no
+            // focused cell and inserts the data as rows.
+            if (text.includes('\t')) {
+                cell?.blur();
                 return;
             }
 
-            // Single-row single-column: allow paste but strip all HTML by inserting as plain text only.
-            event.preventDefault();
+            // Spreadsheet apps end a copied cell with a line break, and wrap it in quotes when the
+            // cell itself contains line breaks. Undo both so a copied multi-line note pastes cleanly.
+            text = text.replace(/\n$/, '');
+            const quoted = text.match(/^"([\s\S]*)"$/);
+            if (quoted && quoted[1].includes('\n')) text = quoted[1].replace(/""/g, '"');
+            if (!text) return;
+
+            this.insertCellText(rowIndex, colIndex, cell, text);
+        },
+        handleCellBeforeInput(rowIndex, colIndex, event) {
+            // Enter (or a mobile keyboard's return): insert a plain "\n" ourselves. Browsers otherwise
+            // wrap the new line in a <div>, which textContent drops, so the line break would show on
+            // screen but never be saved.
+            if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
+                event.preventDefault();
+                this.insertCellText(rowIndex, colIndex, event.currentTarget, '\n');
+            }
+        },
+        // Insert plain text at the caret in an editable cell; newlines render as line breaks
+        // (white-space: pre-wrap). Calls handleCellEdit since a cancelled event fires no input event.
+        insertCellText(rowIndex, colIndex, cell, text) {
             const selection = window.getSelection();
-            if (!selection || !selection.rangeCount) return;
+            if (!cell || !selection || !selection.rangeCount) return;
             selection.deleteFromDocument();
-            selection.getRangeAt(0).insertNode(document.createTextNode(text));
-            selection.collapseToEnd();
-            // Trigger the input handler so data and dirty state stay in sync.
-            this.handleCellEdit(rowIndex, colIndex, event.target.textContent);
+            const range = selection.getRangeAt(0);
+            const textNode = document.createTextNode(text);
+            range.insertNode(textNode);
+            // A trailing "\n" doesn't render a new line by itself; a placeholder <br> (ignored by
+            // textContent, so never saved) gives the caret an empty line to sit on.
+            if (cell.textContent.endsWith('\n') && cell.lastChild?.nodeName !== 'BR') {
+                cell.appendChild(document.createElement('br'));
+            }
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.handleCellEdit(rowIndex, colIndex, cell.textContent);
         },
         handleCellBlur(rowIndex, colIndex, event) {
+            // Safety net: if markup got into the cell anyway (e.g. from a browser extension),
+            // flatten it to its text so the cell shows exactly the value that was saved.
+            const cell = event.currentTarget;
+            if (cell && Array.from(cell.children).some(child => child.tagName !== 'BR')) {
+                cell.textContent = cell.textContent;
+            }
             // Clear flags when cell loses focus (enables new snapshot on next focus+edit)
             this.hasUndoCaptured = false;
             this.lastEditTimestamp = null;
@@ -4089,8 +4135,8 @@ export const TableComponent = {
             });
         },
         unselectAllEditableCells() {
-            // Remove focus from any editable cell. get editable cells by searching dom for contenteditable=true
-            const editableCells = this.$el.querySelectorAll('[contenteditable="true"]');
+            // Remove focus from any editable cell. get editable cells by searching dom for contenteditable
+            const editableCells = this.$el.querySelectorAll('[contenteditable]');
             editableCells.forEach(cell => {
                 if (cell instanceof HTMLElement && document.activeElement === cell) {
                     cell.blur();
@@ -4265,7 +4311,8 @@ export const TableComponent = {
             if (tableRowSelectionState.clipboardMode) return;
             if (tableRowSelectionState.externalPasteActive) return;
 
-            const text = event.clipboardData?.getData('text/plain') || '';
+            // Sanitizing also normalizes \r\n, so Excel rows don't leave a stray \r in the last cell
+            const text = sanitizeCellText(event.clipboardData?.getData('text/plain'));
             if (!text || (!text.includes('\t') && !text.includes('\n'))) return;
 
             const lines = text.trim().split('\n');
@@ -4899,13 +4946,14 @@ export const TableComponent = {
                                         <!-- Editable text div -->
                                         <div
                                             v-else-if="column.editable"
-                                            contenteditable="true"
+                                            contenteditable="plaintext-only"
                                             :data-row-index="idx"
                                             :data-col-index="colIndex"
                                             @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
                                             @focus="handleCellFocus(idx, colIndex, $event)"
                                             @blur="handleCellBlur(idx, colIndex, $event)"
                                             @paste="handleCellPaste(idx, colIndex, $event)"
+                                            @beforeinput="handleCellBeforeInput(idx, colIndex, $event)"
                                             class="table-edit-textarea"
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
                                             :ref="'editable_' + idx + '_' + colIndex"
@@ -5084,4 +5132,3 @@ export const TableComponent = {
         </div>
     `
 };
-
