@@ -355,12 +355,12 @@ const ImageUploadComponent = {
             selectedFile: null,
             previewUrl: null,
             uploading: false,
-            uploadError: null
+            uploadError: null,
+            canReadClipboard: !!navigator.clipboard?.read
         };
     },
     methods: {
-        handleFileSelect(event) {
-            const file = event.target.files[0];
+        setSelectedFile(file) {
             if (!file) return;
             if (!file.type.startsWith('image/')) {
                 this.uploadError = 'Please select an image file.';
@@ -370,6 +370,62 @@ const ImageUploadComponent = {
             this.selectedFile = file;
             if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
             this.previewUrl = URL.createObjectURL(file);
+        },
+        handleFileSelect(event) {
+            this.setSelectedFile(event.target.files[0]);
+        },
+        // Wrap a clipboard blob in a named File — _resizeImageFile and the Drive upload both expect one.
+        // The name is irrelevant: uploadItemImage renames the file to <itemNumber>.<ext>.
+        _fileFromClipboardBlob(blob, type) {
+            const ext = type === 'image/png' ? 'png' : 'jpg';
+            return new File([blob], `pasted.${ext}`, { type });
+        },
+        // Clear the file input so it doesn't keep showing a previously chosen file name
+        _clearFileInput() {
+            if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+        },
+        async pasteFromClipboard() {
+            if (this.uploading) return;
+            try {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                    const type = item.types.find(t => t.startsWith('image/'));
+                    if (!type) continue;
+                    const blob = await item.getType(type);
+                    this.setSelectedFile(this._fileFromClipboardBlob(blob, type));
+                    this._clearFileInput();
+                    return;
+                }
+                this.uploadError = 'No image found on the clipboard.';
+            } catch (e) {
+                console.warn('[ImageUploadComponent] Clipboard read failed:', e);
+                this.uploadError = e.name === 'NotAllowedError'
+                    ? 'Clipboard access was blocked. Allow clipboard access in your browser\'s site settings, or press Ctrl+V.'
+                    : 'Could not read the clipboard.';
+            }
+        },
+        // Ctrl+V while the modal is open. Registered on window in the capture phase so it runs before
+        // tableComponent's document-level paste listener, and stops propagation so a paste made here
+        // never inserts spreadsheet rows into a table behind the modal.
+        handleWindowPaste(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (this.uploading) return;
+            const data = event.clipboardData;
+            if (!data) return;
+            // clipboardData.files covers image data and, in some browsers, files copied in the OS file manager
+            let file = Array.from(data.files || []).find(f => f.type.startsWith('image/'));
+            if (!file) {
+                const item = Array.from(data.items || []).find(i => i.kind === 'file' && i.type.startsWith('image/'));
+                file = item?.getAsFile() || null;
+            }
+            if (!file) {
+                this.uploadError = 'No image found on the clipboard.';
+                return;
+            }
+            if (!file.name) file = this._fileFromClipboardBlob(file, file.type);
+            this.setSelectedFile(file);
+            this._clearFileInput();
         },
         async handleUpload() {
             if (!this.selectedFile || this.uploading) return;
@@ -391,14 +447,21 @@ const ImageUploadComponent = {
             }
         }
     },
+    mounted() {
+        window.addEventListener('paste', this.handleWindowPaste, true);
+    },
     beforeUnmount() {
+        window.removeEventListener('paste', this.handleWindowPaste, true);
         if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
     },
     template: html`
         <div v-if="previewUrl" style="text-align: center;">
             <img :src="previewUrl" alt="Preview" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 4px;" />
         </div>
-        <input class="card" style="width:100%" type="file" accept="image/*" @change="handleFileSelect" :disabled="uploading" />
+        <div v-if="canReadClipboard" class="card clickable white" @click="pasteFromClipboard" :disabled="uploading" title="Or press Ctrl+V">
+            Paste from clipboard (ctrl + V)
+        </div>
+        <input ref="fileInput" class="card" style="width:100%" type="file" accept="image/*" @change="handleFileSelect" :disabled="uploading" />
         <div v-if="uploadError" class="red card">{{ uploadError }}</div>
         <div class="button-bar">
             <button @click="handleUpload" :disabled="!selectedFile || uploading">
