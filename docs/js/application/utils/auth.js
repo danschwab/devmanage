@@ -148,6 +148,15 @@ export class Auth {
         Auth._clearProactiveRefreshTimer();
 
         try {
+            // Disconnect Dropbox first so its token is revoked even if the save below is slow or canceled.
+            // Lazy import: dropbox.js depends on api.js, which imports this file.
+            try {
+                const { Dropbox } = await import('./dropbox.js');
+                await Dropbox.disconnect();
+            } catch (dropboxError) {
+                console.warn('[Auth] Dropbox disconnect failed during logout, continuing anyway:', dropboxError);
+            }
+
             // Try to save data if token is valid and all permissions are granted
             const tokenValid = GoogleSheetsAuth.isAuthenticated();
             

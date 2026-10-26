@@ -1008,7 +1008,8 @@ export class FakeGoogleSheetsService {
                 ['ScheduleReturnOffsetDaysFromDismantle', 'Returns Dismantle Offset', 'default offset days from show dismantle date for shows with missing return dates', 'schedule*', 'integer', '7', ''],
                 ['InventorySuppressCategoryAnalysis', 'Skip Quantity Analysis', 'these inventories are skipped when finding shortages', 'inventory*', 'json', '["FURNITURE","MONITORS","LIGHTING","ELECTRONICS","ADDITIONS"]', ''],
                 ['InventoryCustomItemNumbers', 'Allow Nonstandard Item#s', 'these inventories have nonstandard item numbers and can slow down the system', 'inventory*', 'json', '["HARDWARE"]', ''],
-                ['InventoryDescriptionOnly', 'Omit Quantity Column', 'list of inventories that omit the quantity column, added to packlists as descriptions only', 'inventory*', 'json', '["ADDITIONS"]', '']
+                ['InventoryDescriptionOnly', 'Omit Quantity Column', 'list of inventories that omit the quantity column, added to packlists as descriptions only', 'inventory*', 'json', '["ADDITIONS"]', ''],
+                ['DropboxAppKey', 'Dropbox App Key', 'app key for the LiveInventoryManagement Dropbox app', 'hidden', 'string', 'fake_dropbox_app_key', '']
             ]
         }
     };

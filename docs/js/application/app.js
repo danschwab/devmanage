@@ -2,7 +2,7 @@ import { html } from './index.js';
 import { ContainerComponent } from './index.js';
 import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
-import { Auth, authState } from './index.js';
+import { Auth, authState, Dropbox, dropboxState } from './index.js';
 import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent, ReportsContent } from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
@@ -103,6 +103,20 @@ const App = {
                     dismissible: false
                 },
                 {
+                    key: 'dropbox-disconnected',
+                    color: 'red',
+                    message: dropboxState.error
+                        ? `Dropbox is not connected: ${dropboxState.error}`
+                        : 'Dropbox is not connected.',
+                    visible: this.isAuthenticated && dropboxState.isInitialized && !dropboxState.isConnected && !dropboxState.isConnecting,
+                    dismissible: true,
+                    action: {
+                        label: 'Connect',
+                        // Called directly from the click so the sign-in popup is allowed
+                        fn: () => Dropbox.connect()
+                    }
+                },
+                {
                     key: 'update-available',
                     color: 'orange',
                     message: 'Updates available! Please refresh to get the latest version. \nIf this banner persists after refreshing, try clearing your browser cache.',
@@ -169,6 +183,7 @@ const App = {
     async mounted() {
         // Initialize authentication on app mount
         await Auth.initialize();
+        Dropbox.initialize();
 
         // Initialize URL routing system
         NavigationRegistry.initializeURLRouting(this);

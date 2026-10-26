@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="referrer" content="no-referrer">
+        <title>Dropbox Sign-In</title>
+        <link rel="icon" href="assets/favicon.png" />
+    </head>
+    <body style="font-family: sans-serif; padding: 2rem;">
+        <p id="message">Completing Dropbox sign-in...</p>
+        <script>
+            // OAuth redirect target for the Dropbox sign-in popup.
+            // Hands the result to the app window (DropboxAuth._waitForCallback) and closes.
+            (function () {
+                const params = new URLSearchParams(window.location.search);
+                const result = {
+                    state: params.get('state'),
+                    code: params.get('code'),
+                    error: params.get('error'),
+                    errorDescription: params.get('error_description')
+                };
+                // Remove the authorization code from the address bar and history
+                history.replaceState(null, '', window.location.pathname);
+
+                // Must match DROPBOX_AUTH_CHANNEL in js/dropbox_services/DropboxAuth.js
+                const channel = new BroadcastChannel('tse-dropbox-auth');
+                channel.postMessage(result);
+                channel.close();
+
+                document.getElementById('message').textContent = result.error
+                    ? 'Dropbox sign-in failed. You can close this window.'
+                    : 'Dropbox sign-in complete. You can close this window.';
+                window.close();
+            })();
+        </script>
+    </body>
+</html>

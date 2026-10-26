@@ -1,4 +1,4 @@
-import { html, NavigationRegistry, appSettings, runNonessentialAnalysisOnAllStores } from '../../index.js';
+import { html, NavigationRegistry, appSettings, runNonessentialAnalysisOnAllStores, Dropbox, dropboxState, authState } from '../../index.js';
 import { PriorityQueue } from '../../utils/priorityQueue.js';
 
 // Settings Menu Component
@@ -13,7 +13,20 @@ const SettingsMenuComponent = {
         toggleDashboardHeaders: { type: Function, required: true }
     },
     emits: ['close-modal'],
+    computed: {
+        isAuthenticated() {
+            return authState.isAuthenticated;
+        },
+        dropbox() {
+            return dropboxState;
+        }
+    },
     methods: {
+        handleToggleDropbox() {
+            // No await before connect(): the sign-in popup must open inside this click
+            if (dropboxState.isConnected) Dropbox.disconnect();
+            else Dropbox.connect();
+        },
         handleToggleAnalysis() {
             this.toggleEssentialAnalysis();
             this.$emit('close-modal');
@@ -40,6 +53,12 @@ const SettingsMenuComponent = {
             <button @click="handleToggleDashboardHeaders" 
                     :class="['page-menu-item', { 'red': !showDashboardHeaders }]">
                 {{ showDashboardHeaders ? 'Hide' : 'Show' }} Dashboard Headers
+            </button>
+            <button v-if="isAuthenticated"
+                    @click="handleToggleDropbox"
+                    :disabled="dropbox.isConnecting"
+                    class="page-menu-item">
+                {{ dropbox.isConnecting ? 'Connecting Dropbox...' : dropbox.isConnected ? 'Disconnect Dropbox' : 'Connect Dropbox' }}
             </button>
         </div>
     `

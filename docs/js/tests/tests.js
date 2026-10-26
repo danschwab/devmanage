@@ -30,6 +30,8 @@
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
+import { FakeDropboxAuth, FAKE_DROPBOX_ACCOUNT } from '../dropbox_services/FakeDropbox.js';
+import { DROPBOX_AUTH_CHANNEL, pkceChallenge } from '../dropbox_services/DropboxAuth.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -1457,18 +1459,19 @@ test('CACHE INVALIDATION', 'remote Caching-tab timestamp for getTabs fires getPa
 });
 
 // ── Group 35: Preferences ─────────────────────────────────────────────────────
-// FakeGoogle CACHE/Preferences has 7 rows:
+// FakeGoogle CACHE/Preferences has 8 rows:
 //   4 schedule* integer prefs (offsets 14, 14, 7, 7)
 //   3 inventory* json prefs   (suppress, customItemNumbers, descriptionOnly)
+//   1 hidden string pref      (DropboxAppKey = "fake_dropbox_app_key")
 
 test('PREFERENCES', 'getPreferences returns an array', async () => {
     const result = await Requests.getPreferences();
     if (!Array.isArray(result)) throw new Error(`expected array, got ${typeof result}`);
 });
 
-test('PREFERENCES', 'getPreferences returns 7 rows', async () => {
+test('PREFERENCES', 'getPreferences returns 8 rows', async () => {
     const result = await Requests.getPreferences();
-    assertEqual(result.length, 7, 'getPreferences row count');
+    assertEqual(result.length, 8, 'getPreferences row count');
 });
 
 test('PREFERENCES', 'all rows have required fields', async () => {
@@ -1504,6 +1507,127 @@ test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
     for (const p of schedulePrefs) {
         if (p.page !== 'schedule*') throw new Error(`expected page "schedule*" for ${p.id}, got "${p.page}"`);
     }
+});
+
+// ── Dropbox Auth ──────────────────────────────────────────────────────────────
+// Exercises the real DropboxAuth PKCE flow against FakeDropboxAuth's endpoints.
+// A fake popup stands in for the browser window: when the flow navigates it to the
+// authorize URL, it broadcasts the result exactly as docs/dropbox-auth.html does.
+// Uses separate storage keys so the app's own Dropbox connection is not touched.
+//
+// Expected values:
+//   DropboxAppKey preference          = "fake_dropbox_app_key"
+//   FAKE_DROPBOX_ACCOUNT.account_id   = "dbid:fake_account_0001"
+//   RFC 7636 Appendix B: verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+//                        -> challenge "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+class TestDropboxAuth extends FakeDropboxAuth {
+    static tokenKey = 'dropbox_token_test';
+    static _serverKey = 'fake_dropbox_server_test';
+}
+
+const getTestDropboxAppKey = async () =>
+    (await Requests.getPreferences()).find(p => p.id === 'DropboxAppKey').value;
+
+// Simulates the popup landing on dropbox-auth.html. `rewrite` can alter the redirect params.
+function fakeDropboxPopup(rewrite = params => params) {
+    return {
+        close() {},
+        location: {
+            set href(url) {
+                const params = rewrite(new URL(url).searchParams);
+                const channel = new BroadcastChannel(DROPBOX_AUTH_CHANNEL);
+                channel.postMessage({
+                    state: params.get('state'),
+                    code: params.get('code'),
+                    error: params.get('error'),
+                    errorDescription: params.get('error_description')
+                });
+                channel.close();
+            }
+        }
+    };
+}
+
+test('DROPBOX AUTH', 'pkceChallenge matches RFC 7636 test vector', async () => {
+    const challenge = await pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
+    assertEqual(challenge, 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', 'PKCE S256 challenge');
+});
+
+test('DROPBOX AUTH', 'DropboxAppKey preference resolves to fake key', async () => {
+    assertEqual(await getTestDropboxAppKey(), 'fake_dropbox_app_key', 'DropboxAppKey value');
+});
+
+test('DROPBOX AUTH', 'full popup roundtrip stores token and loads account', async () => {
+    TestDropboxAuth.clearStoredToken();
+    const result = await TestDropboxAuth._runAuthFlow(fakeDropboxPopup(), getTestDropboxAppKey);
+    assertEqual(result, true, '_runAuthFlow result');
+    const stored = TestDropboxAuth.getStoredToken();
+    assertEqual(stored.app_key, 'fake_dropbox_app_key', 'stored app_key');
+    assertEqual(stored.account_id, FAKE_DROPBOX_ACCOUNT.account_id, 'stored account_id');
+    assertEqual(TestDropboxAuth.hasStoredToken(), true, 'hasStoredToken after auth');
+    const account = await TestDropboxAuth.getCurrentAccount();
+    assertEqual(account.account_id, 'dbid:fake_account_0001', 'get_current_account account_id');
+});
+
+test('DROPBOX AUTH', 'callback with mismatched state is ignored', async () => {
+    const pending = TestDropboxAuth._runAuthFlow(
+        fakeDropboxPopup(params => { params.set('state', 'not-our-state'); return params; }),
+        getTestDropboxAppKey
+    );
+    // Wait until the flow is listening, give the stray message time to arrive, then cancel
+    for (let i = 0; i < 100 && !TestDropboxAuth._cancelAuthentication; i++) await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 50));
+    TestDropboxAuth._cancelAuthentication();
+    let message = null;
+    try { await pending; } catch (e) { message = e.message; }
+    assertEqual(message, 'Dropbox authentication cancelled', 'mismatched state not accepted');
+});
+
+test('DROPBOX AUTH', 'user denying access rejects with Dropbox error description', async () => {
+    let message = null;
+    try {
+        await TestDropboxAuth._runAuthFlow(
+            fakeDropboxPopup(params => new URLSearchParams({
+                state: params.get('state'), error: 'access_denied', error_description: 'The user chose not to give your app access'
+            })),
+            getTestDropboxAppKey
+        );
+    } catch (e) { message = e.message; }
+    assertEqual(message, 'Dropbox sign-in failed: The user chose not to give your app access', 'denied error message');
+});
+
+test('DROPBOX AUTH', 'code exchange rejects a verifier that does not match the challenge', async () => {
+    const redirectUri = TestDropboxAuth.getRedirectUri();
+    const url = TestDropboxAuth._buildAuthorizeUrl({
+        appKey: 'fake_dropbox_app_key', redirectUri, state: 's', challenge: await pkceChallenge('verifier-A')
+    });
+    const code = new URL(url).searchParams.get('code');
+    let status = null;
+    try {
+        await TestDropboxAuth._exchangeCode({ appKey: 'fake_dropbox_app_key', code, verifier: 'verifier-B', redirectUri });
+    } catch (e) { status = e.status; }
+    assertEqual(status, 400, 'tampered verifier status');
+});
+
+test('DROPBOX AUTH', 'expired access token is refreshed transparently', async () => {
+    const before = TestDropboxAuth.getStoredToken();
+    localStorage.setItem(TestDropboxAuth.tokenKey, JSON.stringify({ ...before, expires_at: Date.now() - 1000 }));
+    const newToken = await TestDropboxAuth.getAccessToken();
+    if (newToken === before.access_token) throw new Error('expected a new access token after refresh');
+    assertEqual(TestDropboxAuth.getStoredToken().refresh_token, before.refresh_token, 'refresh token preserved across refresh');
+    const account = await TestDropboxAuth.getCurrentAccount();
+    assertEqual(account.email, 'test@example.com', 'account email after refresh');
+});
+
+test('DROPBOX AUTH', 'logout revokes refresh token and clears storage', async () => {
+    const refreshToken = TestDropboxAuth.getStoredToken().refresh_token;
+    await TestDropboxAuth.logout();
+    assertEqual(TestDropboxAuth.hasStoredToken(), false, 'hasStoredToken after logout');
+    let status = null;
+    try { await TestDropboxAuth._refreshToken({ refreshToken }); } catch (e) { status = e.status; }
+    assertEqual(status, 400, 'revoked refresh token status');
+    localStorage.removeItem(TestDropboxAuth._serverKey);
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────
