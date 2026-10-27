@@ -42,7 +42,8 @@ Rules:
 
 - **Rewind from the saved row (`originalData`), never from unsaved edits.** Otherwise a pending revert or edit would corrupt every reconstructed state.
 - `c` lists only changed fields, so the rewind is cumulative: keep one running copy of the row.
-- On each history row, the fields that entry changed are highlighted. All fields are shown (the full state), so a revert button's effect is visible.
+- On each history row, the fields whose value differs from the next-newer row (the row above, or the current row for the first history row) are highlighted, so each highlight marks a value that a later change replaced. A highlighted cell whose value was empty shows a red italic *(empty)* placeholder. The current row has no change highlighting. All fields are shown (the full state), so a revert button's effect is visible.
+- While an item has unsaved changes (after a revert, before Save), the main row shows the live values, with the unsaved fields tinted red and "Unsaved" in the Date column. The saved state becomes the first history row, labeled "Saved", with its own revert button (which undoes the unsaved change for that item).
 - `c` items without `n` (planned move records) are ignored.
 
 This algorithm is also added to the contract as a reader section ("Reconstructing past row states"), so other apps reconstruct states the same way.
@@ -190,6 +191,7 @@ Implemented as planned, with these additions found during browser testing:
 - **The revert note** reads `revert to <Mon D, YYYY>`, `revert to earliest`, or `revert to creation` (25-character limit).
 - **The `history` icon was added to the Material Symbols subset** in `index.html`; it's used for the revert column header.
 - **Archive constants are shared:** `ARCHIVE_TAB_NAME` and `ARCHIVE_HEADERS` are exported from `metadata-utils.js` and used by both the archive writer and `getArchivedRows`.
-- **Sub-row styles** (`.detail-row-history`, `.history-changed`, `.history-meta`) are in `styles.css`.
+- **Sub-row styles** (`.history-meta`, `.history-changed`, `.history-unsaved`, `.history-unsaved-label`, `.history-empty`) are in `styles.css`. Rows carry `.detail-row` plus `.detail-row-pending` or `.detail-row-history` as unstyled hooks.
+- **Change highlighting is toggled per view** by `HIGHLIGHT_CHANGES` in `InventoryTable.js`: on for the Edit History page, off for pending (scheduled) rows on the category table. Unsaved-value marking on the history page is not affected by the flag.
 - **Tests:** group "EDIT HISTORY VIEW" in `tests.js` (8 tests). Routing, revert, save and alignment were checked in a browser: they need a mounted page, which the console test runner doesn't provide.
 

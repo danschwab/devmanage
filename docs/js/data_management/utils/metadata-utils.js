@@ -56,7 +56,8 @@ export class EditHistoryUtils {
      * Create a new edithistory entry for a row change
      * @param {string} username - User email making the change
      * @param {Array<{column: string, old: any, new: any}>} changes - List of changes
-     * @param {string} source - Source system for this change ('web' | 'cad')
+     * @param {string|null} source - Source system for this change ('web' | 'cad'), an inventory
+     *   note, or null/'' to omit `s` (readers treat a missing `s` as 'web')
      * @returns {Object} Metadata entry object
      */
     static createEditHistoryEntry(username, changes, source = 'web') {
@@ -69,12 +70,13 @@ export class EditHistoryUtils {
             o: change.old      // o = old value (new value not stored)
         }));
         
-        return {
+        const entry = {
             u: shortUser,                           // u = user
-            t: Math.floor(new Date().getTime() / 100),  // t = timestamp in deciseconds
-            s: source || 'web',                  // s = source system
-            c: minimalChanges                       // c = changes
+            t: Math.floor(new Date().getTime() / 100)  // t = timestamp in deciseconds
         };
+        if (source) entry.s = source;               // s = source system or inventory note
+        entry.c = minimalChanges;                   // c = changes
+        return entry;
     }
 
     /**
@@ -135,6 +137,17 @@ export class EditHistoryUtils {
         if (this.normalizeSource(prev.s) !== this.normalizeSource(newEntry.s)) return false;
         const gap = newEntry.t - prev.t;
         return gap >= 0 && gap <= HISTORY_AGGREGATION_WINDOW;
+    }
+
+    /**
+     * The user-facing note of a history entry: `s` unless it is only the default source
+     * marker ('web' or legacy 'app'), which older inventory saves wrote when no note was given.
+     * @param {Object} entry - History entry
+     * @returns {string}
+     */
+    static entryNote(entry) {
+        const s = entry?.s ?? '';
+        return ['web', 'app'].includes(String(s).toLowerCase()) ? '' : String(s);
     }
 
     /**

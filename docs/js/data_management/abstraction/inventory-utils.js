@@ -291,6 +291,10 @@ class inventoryUtils_uncached {
             });
         }
 
+        // Inventory history stores the save note in `s`; without a note `s` is omitted
+        // (readers treat a missing `s` as 'web'). Non-web sources such as 'cad' are kept.
+        const historySource = note || (source === 'web' ? null : source);
+
         let saveResult;
         try {
             if (filters) {
@@ -305,7 +309,7 @@ class inventoryUtils_uncached {
 
                 // Send updates one by one with username
                 for (const update of updates) {
-                    await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username, source });
+                    await Database.updateRow('INVENTORY', resolvedTabName, update, mapping, { username, source: historySource });
                 }
 
                 saveResult = true;
@@ -315,10 +319,9 @@ class inventoryUtils_uncached {
                 }
 
                 // Save JS objects using mapping with edithistory options
-                // Use note as the source descriptor when provided
                 saveResult = await Database.setData('INVENTORY', resolvedTabName, mappedData, mapping, {
                     username,
-                    source: note || source
+                    source: historySource
                 });
             }
         } finally {
@@ -533,10 +536,11 @@ class inventoryUtils_uncached {
             const before = states[k + 1]?.state ?? after;
             const delta = qtyOf(after) - qtyOf(before);
             const isCreated = Array.isArray(entry.c) && entry.c.length === 0;
+            const entryNote = EditHistoryUtils.entryNote(entry);
             events.push({
                 date: toISODateString(new Date(ds * 100)),
                 event: isCreated ? 'Created' : 'Inv. Change',
-                note: entry.u ? (entry.s ? `${entry.u}: ${entry.s}` : entry.u) : (entry.s || ''),
+                note: entry.u ? (entryNote ? `${entry.u}: ${entryNote}` : entry.u) : entryNote,
                 change: _historyChangeLabels(entry, before, after).join(', '),
                 quantity: null,
                 _delta: delta

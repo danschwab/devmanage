@@ -74,7 +74,7 @@ Every `h` entry has `{u, t, s, c}`:
 | ----- | ---------------------------------------------------------------------------------------------------- |
 | `u`   | User short name (email prefix before `@`).                                                           |
 | `t`   | Timestamp in deciseconds since epoch (`Math.floor(Date.now() / 100)`).                               |
-| `s`   | Source or reason — see Source rules.                                                                 |
+| `s`   | Optional. Source or reason — see Source rules.                                                       |
 | `c`   | Changed fields array. Empty array (`[]`) is a creation marker.                                       |
 | `d`   | Optional. Present only on applied scheduled entries: when the change was scheduled (deciseconds). For those entries `t` is the effective date. |
 
@@ -87,7 +87,7 @@ Change item (`c[]`): `{ "n": <field>, "o": <old value> }`
 
 - `cad` — written by CAD automation. The only value that means "CAD".
 - `web` — this web app. Missing `s` and legacy `app` are read as `web`.
-- Inventory web saves store the user's save note in `s` when one is given; applied scheduled changes store their note in `s`. Readers must therefore treat **any value other than `cad`** as a non-CAD (web) entry.
+- Inventory web saves store the user's save note in `s` when one is given and **omit `s`** when there is no note; applied scheduled changes store their note in `s`. Readers must therefore treat **any value other than `cad`** as a non-CAD (web) entry. Older inventory entries may still hold `web` where no note was given; displays hide `web`/`app` as a note (`EditHistoryUtils.entryNote`).
 
 ---
 
@@ -178,7 +178,7 @@ Rows with no content and no history are not archived.
 
 | Path                                    | History                      | Notes                                               |
 | --------------------------------------- | ---------------------------- | --------------------------------------------------- |
-| Inventory save (apply now)              | tracked, `s` = note or `web` | via `Database.setData`                              |
+| Inventory save (apply now)              | tracked, `s` = note or none  | via `Database.setData`                              |
 | Inventory save (scheduled, future date) | `p` entry only               | writes with `skipMetadata`; `i` assigned on next tracked save |
 | Inventory apply/edit/delete pending     | moves/edits `p`, `h`         | writes with `skipMetadata`; preserves `i`           |
 | Packlist save                           | tracked, `s` = `web`         | crates and items flattened, then matched by `i`     |

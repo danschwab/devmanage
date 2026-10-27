@@ -820,6 +820,10 @@ export const ItemImageComponent = {
 // Fields shown in pending and history sub-rows, and restored by a history revert
 const HISTORY_FIELDS = ['quantity', 'description', 'notes'];
 
+// Red highlighting of changed values in sub-rows, per view:
+// pending = scheduled-change rows on the category table, history = the Edit History page
+const HIGHLIGHT_CHANGES = { pending: false, history: true };
+
 /** Format a decisecond timestamp for the history columns, e.g. "Oct 6, 2026, 1:52 PM" */
 function formatHistoryTime(deciseconds) {
     return new Date(deciseconds * 100).toLocaleString('en-US', {
@@ -927,19 +931,23 @@ export const InventoryTableComponent = {
             if (this.historyMode) {
                 // No item timeline button; history metadata and revert columns at the end
                 cols = cols.filter(c => c.key !== '_navigate');
+                // Main row: mark values that differ from the saved row (unsaved revert)
+                cols = cols.map(c => c.historyField ? {
+                    ...c,
+                    cellClass: (value, row) => row && this.unsavedFields(row).has(c.key) ? 'history-unsaved' : ''
+                } : c);
                 const meta = () => 'history-meta';
                 cols.push(
-                    { key: '_historyDate', label: 'Date', width: 160, sortable: false, cellClass: meta },
-                    { key: '_historyUser', label: 'User', width: 90, sortable: false, cellClass: meta },
-                    { key: '_historyNote', label: 'Note', width: 160, sortable: false, cellClass: meta },
                     {
                         key: '_revert',
                         labelHtml: '<span class="material-symbols-outlined">history</span>',
                         label: '',
                         width: 36,
-                        sortable: false,
-                        sticky: 'end'
-                    }
+                        sortable: false
+                    },
+                    { key: '_historyDate', label: 'Date', width: 160, sortable: false, cellClass: meta },
+                    { key: '_historyUser', label: 'User', width: 90, sortable: false, cellClass: meta },
+                    { key: '_historyNote', label: 'Note', width: 160, sortable: false, cellClass: meta }
                 );
             }
             // Apply column filters based on metadata flags
@@ -1366,17 +1374,28 @@ export const InventoryTableComponent = {
                 return this.getPendingEntriesForDisplay(row).map(entry => ({
                     label: `${this.formatPendingDate(entry.t)}→`,
                     fields: entry.fields,
-                    changed: new Set(Object.keys(entry.fields)),
+                    changed: HIGHLIGHT_CHANGES.pending ? new Set(Object.keys(entry.fields)) : new Set(),
                     meta: null,
                     revertState: null,
                     rowClass: 'detail-row-pending'
                 }));
             }
             const states = this.historyByItem.get(row.itemNumber) || [];
-            return states.slice(1).map(item => ({
-                label: item.kind === 'created' ? 'Created' : item.kind === 'earliest' ? 'Earliest recorded' : '',
+            // With unsaved changes the main row shows the live values, so the saved state
+            // becomes the first history row
+            const unsaved = this.unsavedFields(row).size > 0;
+            const shown = unsaved ? states : states.slice(1);
+            const above = (j) => unsaved ? (j === 0 ? row : states[j - 1].state) : states[j].state;
+            // Highlight the fields where this past state differs from the next-newer one
+            // (the row above it), i.e. the values that the newer change replaced
+            return shown.map((item, j) => ({
+                label: item.kind === 'current' ? 'Saved'
+                    : item.kind === 'created' ? 'Created'
+                    : item.kind === 'earliest' ? 'Earliest recorded' : '',
                 fields: item.state,
-                changed: item.changed,
+                changed: HIGHLIGHT_CHANGES.history
+                    ? new Set(HISTORY_FIELDS.filter(key => String(item.state[key] ?? '') !== String(above(j)[key] ?? '')))
+                    : new Set(),
                 meta: this.historyMeta(item.entry),
                 revertState: item.state,
                 rowClass: 'detail-row-history'
@@ -1384,17 +1403,31 @@ export const InventoryTableComponent = {
         },
 
         hasDetailRows(row) {
-            if (this.historyMode) return (this.historyByItem.get(row.itemNumber)?.length || 0) > 1;
+            if (this.historyMode) {
+                const count = this.historyByItem.get(row.itemNumber)?.length || 0;
+                return count > 1 || (count > 0 && this.unsavedFields(row).size > 0);
+            }
             return this.getPendingEntries(row).length > 0;
+        },
+
+        // History fields whose live (store) value differs from the saved row, e.g. after a revert
+        unsavedFields(row) {
+            const saved = this.historyByItem.get(row.itemNumber)?.[0]?.state;
+            if (!saved) return new Set();
+            return new Set(HISTORY_FIELDS.filter(key => String(row[key] ?? '') !== String(saved[key] ?? '')));
         },
 
         historyMeta(entry) {
             if (!entry) return { date: '', user: '', note: '' };
-            return { date: formatHistoryTime(entry.t), user: entry.u || '', note: entry.s ?? '' };
+            return { date: formatHistoryTime(entry.t), user: entry.u || '', note: EditHistoryUtils.entryNote(entry) };
         },
 
-        // Metadata for the main row: the change that produced the current saved values
+        // Metadata for the main row: the change that produced the current saved values,
+        // or an "Unsaved" marker while the row has unsaved changes
         currentHistoryMeta(row) {
+            if (this.unsavedFields(row).size > 0) {
+                return { date: 'Unsaved', user: (authState.user?.email || '').split('@')[0], note: '', unsaved: true };
+            }
             return this.historyMeta(this.historyByItem.get(row.itemNumber)?.[0]?.entry);
         },
 
@@ -1499,7 +1532,7 @@ export const InventoryTableComponent = {
                         @click.stop="navigateToItemPage(row)"
                         title="View item timeline"
                     >☷</button>
-                    <span v-else-if="column.key === '_historyDate'">{{ currentHistoryMeta(row).date }}</span>
+                    <span v-else-if="column.key === '_historyDate'" :class="{ 'history-unsaved-label': currentHistoryMeta(row).unsaved }">{{ currentHistoryMeta(row).date }}</span>
                     <span v-else-if="column.key === '_historyUser'">{{ currentHistoryMeta(row).user }}</span>
                     <span v-else-if="column.key === '_historyNote'">{{ currentHistoryMeta(row).note }}</span>
                     <span v-else-if="column.key === '_revert'"></span>
@@ -1510,19 +1543,24 @@ export const InventoryTableComponent = {
                         :key="i"
                         :class="['detail-row', detail.rowClass, 'in-group']"
                     >
-                        <td v-if="leadingSpan(visibleColumns) > 0" :colspan="leadingSpan(visibleColumns)" class="detail-meta-cell">
+                        <td v-if="leadingSpan(visibleColumns) > 0" :colspan="leadingSpan(visibleColumns)">
                             <strong>{{ detail.label }}</strong>
                         </td>
                         <td
                             v-for="column in visibleColumns.slice(leadingSpan(visibleColumns))"
                             :key="column.key"
                             :class="{
-                                'detail-value-cell': column.historyField,
-                                'history-changed': column.historyField && detail.changed.has(column.key),
+                                'history-changed': detail.changed.has(column.key),
                                 'history-meta': column.key.startsWith('_history')
                             }"
                         >
-                            <template v-if="column.historyField">{{ detail.fields[column.key] ?? '' }}</template>
+                            <template v-if="column.historyField">
+                                <span
+                                    v-if="detail.changed.has(column.key) && String(detail.fields[column.key] ?? '').trim() === ''"
+                                    class="history-empty"
+                                >(empty)</span>
+                                <template v-else>{{ detail.fields[column.key] ?? '' }}</template>
+                            </template>
                             <template v-else-if="column.key === '_historyDate' && detail.meta">{{ detail.meta.date }}</template>
                             <template v-else-if="column.key === '_historyUser' && detail.meta">{{ detail.meta.user }}</template>
                             <template v-else-if="column.key === '_historyNote' && detail.meta">{{ detail.meta.note }}</template>

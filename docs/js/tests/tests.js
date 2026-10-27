@@ -30,7 +30,7 @@
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, FakeGoogleState, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { refreshAppData } from './fakeGoogleDevTools.js';
-import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils, InventoryUtils } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -1762,6 +1762,33 @@ test('EDIT HISTORY VIEW', 'item timeline labels scheduled changes by their own f
     const scheduled = events.find(e => e.event === 'Scheduled');
     assertEqual(scheduled.change, 'quantity: +6', 'scheduled label');
     assertEqual(scheduled.quantity, 18, 'quantity after scheduled restock');
+});
+
+test('EDIT HISTORY VIEW', 'entryNote hides the default web/app source but keeps notes and cad', async () => {
+    assertEqual(EditHistoryUtils.entryNote({ s: 'web' }), '', 'web hidden');
+    assertEqual(EditHistoryUtils.entryNote({ s: 'app' }), '', 'legacy app hidden');
+    assertEqual(EditHistoryUtils.entryNote({}), '', 'missing s');
+    assertEqual(EditHistoryUtils.entryNote({ s: 'restock' }), 'restock', 'note kept');
+    assertEqual(EditHistoryUtils.entryNote({ s: 'cad' }), 'cad', 'cad kept');
+});
+
+test('EDIT HISTORY VIEW', 'createEditHistoryEntry omits s when no source is given', async () => {
+    const entry = EditHistoryUtils.createEditHistoryEntry('dan@example.com', [{ column: 'quantity', old: '1' }], null);
+    assertEqual('s' in entry, false, 'no s');
+    assertEqual(EditHistoryUtils.createEditHistoryEntry('dan@example.com', []).s, 'web', 'default source still web');
+});
+
+test('EDIT HISTORY VIEW', 'inventory save stores the note in s, and omits s without a note', async () => {
+    const save = async (quantity, note) => {
+        const rows = (await Requests.getInventoryTabData('FURNITURE')).map(r => ({ ...r }));
+        rows.find(r => r.itemNumber === 'STOOL-002').quantity = quantity;
+        await InventoryUtils.saveInventoryTabData(rows, 'FURNITURE', undefined, null, 'test@example.com', { source: 'web', note });
+        return JSON.parse((await _furnitureRow('STOOL-002')).edithistory).h[0];
+    };
+    const withoutNote = await save('13', '');
+    assertEqual('s' in withoutNote, false, 'no s without a note');
+    const withNote = await save('14', 'recount');
+    assertEqual(withNote.s, 'recount', 'note stored in s');
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────
