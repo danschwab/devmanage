@@ -1215,6 +1215,33 @@ td.history-unsaved {
     opacity: 0.75;
 }
 
+/* Inventory proposals: rows under items on the category table, and the proposal page */
+tr.detail-row-proposal > td {
+    color: var(--color-purple);
+    font-style: italic;
+}
+td.proposal-increase {
+    color: var(--color-green);
+    font-weight: bold;
+}
+td.proposal-decrease,
+td.proposal-changed {
+    color: var(--color-red);
+    font-weight: bold;
+}
+.proposal-choice {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-weight: normal;
+}
+.proposal-projection {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    white-space: nowrap;
+}
+
 /* Group Toggle Button */
 .group-toggle {
     position: absolute;

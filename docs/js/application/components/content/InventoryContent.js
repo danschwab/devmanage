@@ -3,6 +3,7 @@ import { InventoryOverviewTableComponent } from './InventoryOverviewTable.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 import { InventoryItemReport } from './InventoryItemReport.js';
 import { InventoryItemTimeline } from './InventoryItemTimeline.js';
+import { getProposalsStore, PROPOSALS_PATH } from '../../utils/inventoryProposals.js';
 
 /** Route key of the per-category history page: inventory/<category>/edit-history */
 export const EDIT_HISTORY_ROUTE = 'edit-history';
@@ -29,7 +30,13 @@ export const InventoryMenuComponent = {
         navigateToPath: Function
     },
     inject: ['$modal', 'appContext'],
+    data() {
+        return { proposalsStore: getProposalsStore() };
+    },
     computed: {
+        hasActiveProposals() {
+            return (this.proposalsStore?.data || []).some(entry => !entry.committed);
+        },
         // Derived from the menu's current containerPath (supplied fresh each time the menu opens)
         inventoryLocation() {
             const { category, subRoute } = parseInventoryPath(this.containerPath);
@@ -67,6 +74,10 @@ export const InventoryMenuComponent = {
                 items.push({ label: 'Back to Table', action: 'closeEditHistory' });
             }
 
+            if (this.hasActiveProposals) {
+                items.push({ label: 'View Proposals', action: 'viewProposals' });
+            }
+
             return items;
         }
     },
@@ -98,6 +109,10 @@ export const InventoryMenuComponent = {
                     this.$emit('close-modal');
                     break;
                 }
+                case 'viewProposals':
+                    this.navigateToPath?.(PROPOSALS_PATH);
+                    this.$emit('close-modal');
+                    break;
                 default:
                     this.$modal.alert(`Action ${action} not implemented yet.`, 'Info');
             }

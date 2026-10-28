@@ -30,7 +30,10 @@
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, FakeGoogleState, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { refreshAppData } from './fakeGoogleDevTools.js';
-import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils, InventoryUtils } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils, InventoryUtils, ProposalUtils } from '../data_management/index.js';
+import { authState } from '../application/utils/auth.js';
+import { commitInventoryProposal } from '../application/utils/inventoryProposals.js';
+import { getReactiveStore } from '../application/utils/reactiveStores.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -1789,6 +1792,131 @@ test('EDIT HISTORY VIEW', 'inventory save stores the note in s, and omits s with
     assertEqual('s' in withoutNote, false, 'no s without a note');
     const withNote = await save('14', 'recount');
     assertEqual(withNote.s, 'recount', 'note stored in s');
+});
+
+// ── INVENTORY PROPOSALS ──────────────────────────────────────────────────────
+// Fixtures (CACHE/InventoryProposals): "Spring buy" (FURNITURE + HANGING SIGNS), "Cabinet fix"
+// (CABINETS, locked by another user), "Fall buy" (committed). These tests run last: commits change inventory.
+
+const _proposalRows = async (name) => (await Requests.getInventoryProposals()).filter(e => e.proposal === name);
+
+// Commit needs a logged-in user; tests otherwise run without one
+async function _asUser(fn) {
+    const previous = authState.user;
+    authState.user = { email: 'test@example.com' };
+    try { return await fn(); } finally { authState.user = previous; }
+}
+
+test('INVENTORY PROPOSALS', 'validateName enforces length, characters and case-insensitive uniqueness', async () => {
+    const existing = ['Spring buy', 'Fall buy'];
+    assertEqual(ProposalUtils.validateName('', existing), 'Enter a proposal name', 'empty');
+    assertEqual(ProposalUtils.validateName('x'.repeat(16), existing), 'Use at most 15 characters', 'too long');
+    assertEqual(ProposalUtils.validateName('---', existing), 'Use at least one letter or number', 'no letters');
+    assertEqual(ProposalUtils.validateName('SPRING BUY', existing), 'A proposal with this name already exists', 'duplicate ignoring case');
+    assertEqual(ProposalUtils.validateName('Spring-buy', existing), 'A proposal with this name already exists', 'duplicate by slug');
+    assertEqual(ProposalUtils.validateName('Winter buy', existing), null, 'valid');
+    assertEqual(ProposalUtils.commitNote('Winter buy'), 'proposal: Winter buy', 'default commit note');
+});
+
+test('INVENTORY PROPOSALS', 'diffRow stores quantity as a delta and text fields as new values', async () => {
+    const saved = { quantity: '12', description: 'Chair', notes: '' };
+    assertEqual(ProposalUtils.diffRow(saved, { quantity: '20', description: 'Chair', notes: 'buy black' }),
+        [{ n: 'quantity', ne: '+8' }, { n: 'notes', ne: 'buy black' }], 'delta and new value');
+    assertEqual(ProposalUtils.diffRow(saved, { quantity: '9', description: 'Chair', notes: '' }), [{ n: 'quantity', ne: '-3' }], 'negative delta');
+    assertEqual(ProposalUtils.diffRow(saved, { ...saved }), [], 'no change');
+});
+
+test('INVENTORY PROPOSALS', 'applyChanges adds quantity deltas but sets text literally', async () => {
+    const row = ProposalUtils.applyChanges({ quantity: '12', description: 'Pole' }, [
+        { n: 'quantity', ne: '+8' }, { n: 'description', ne: '-5 ft pole' }
+    ]);
+    assertEqual(row.quantity, '20', 'quantity delta applied');
+    assertEqual(row.description, '-5 ft pole', 'signed text is not a delta');
+});
+
+test('INVENTORY PROPOSALS', 'mergeIntoProposal overwrites listed fields and keeps everything else', async () => {
+    const entries = ProposalUtils.parseRows([
+        { proposal: 'Spring buy', category: 'FURNITURE', itemNumber: 'CHAIR-003', changes: JSON.stringify([{ n: 'quantity', ne: '+4' }, { n: 'notes', ne: 'legs' }]), updated: '1' },
+        { proposal: 'Spring buy', category: 'FURNITURE', itemNumber: 'CHAIR-001', changes: JSON.stringify([{ n: 'quantity', ne: '+8' }]), updated: '1' }
+    ]);
+    const merged = ProposalUtils.mergeIntoProposal(entries, 'spring BUY', 'FURNITURE', [
+        { itemNumber: 'CHAIR-003', changes: [{ n: 'quantity', ne: '+2' }] },
+        { itemNumber: 'TABLE-001', changes: [{ n: 'quantity', ne: '+1' }] }
+    ], 'sam', 99);
+    const chair3 = merged.find(e => e.itemNumber === 'CHAIR-003');
+    assertEqual(chair3.changes, [{ n: 'notes', ne: 'legs' }, { n: 'quantity', ne: '+2' }], 'quantity replaced, notes kept');
+    assertEqual(merged.find(e => e.itemNumber === 'CHAIR-001').changes, [{ n: 'quantity', ne: '+8' }], 'untouched item kept');
+    assertEqual(merged.find(e => e.itemNumber === 'TABLE-001').proposal, 'Spring buy', 'new item uses the stored name');
+});
+
+test('INVENTORY PROPOSALS', 'groupProposals lists active proposals before committed ones', async () => {
+    const proposals = ProposalUtils.groupProposals(await Requests.getInventoryProposals());
+    assertEqual(proposals.map(p => p.name), ['Spring buy', 'Cabinet fix', 'Fall buy'], 'order');
+    assertEqual(proposals.map(p => !!p.committed), [false, false, true], 'committed flags');
+    assertEqual(proposals[0].categories, ['FURNITURE', 'HANGING SIGNS'], 'categories');
+    assertEqual(proposals[0].slug, 'spring-buy', 'slug');
+});
+
+test('INVENTORY PROPOSALS', 'proposal table joins current values and projects owned quantity by date', async () => {
+    const rows = await Requests.getInventoryProposalTable('spring buy');
+    assertEqual(rows.map(r => r.itemNumber), ['CHAIR-001', 'CHAIR-003', 'HS-001'], 'items');
+    const chair3 = rows.find(r => r.itemNumber === 'CHAIR-003');
+    assertEqual([chair3.currentQuantity, chair3.quantityChange, chair3.notes, chair3.currentNotes], ['12', '4', 'order matching legs', ''], 'joined values');
+    const ds = (iso) => Math.floor(new Date(`${iso}T12:00:00`).getTime() / 100);
+    assertEqual(ProposalUtils.projectQuantity(chair3, ds('2027-05-01')), 16, 'before the scheduled +6');
+    assertEqual(ProposalUtils.projectQuantity(chair3, ds('2027-07-01')), 22, 'after the scheduled +6');
+});
+
+test('INVENTORY PROPOSALS', 'saving the proposal table replaces its rows and drops unchanged ones', async () => {
+    const rows = (await Requests.getInventoryProposalTable('Cabinet fix')).map(r => ({ ...r }));
+    rows[0].quantityChange = '-2';
+    rows[0].description = 'Curved counter';
+    await _asUser(() => Requests.saveInventoryProposalTable(rows, 'Cabinet fix'));
+    assertEqual((await _proposalRows('Cabinet fix'))[0].changes, [{ n: 'quantity', ne: '-2' }, { n: 'description', ne: 'Curved counter' }], 'changes saved');
+    assertEqual((await _proposalRows('Spring buy')).length, 3, 'other proposals untouched');
+});
+
+test('INVENTORY PROPOSALS', 'committed proposals cannot be edited', async () => {
+    let error = null;
+    try { await Requests.saveInventoryProposalTable([], 'Fall buy'); } catch (e) { error = e; }
+    assertEqual(!!error, true, 'save refused');
+    assertEqual((await _proposalRows('Fall buy')).length, 1, 'committed row kept');
+});
+
+test('INVENTORY PROPOSALS', 'commit refuses when a category has unsaved edits', async () => {
+    const store = getReactiveStore(Requests.getInventoryTabData, Requests.saveInventoryTabData, ['FURNITURE', undefined, undefined, undefined]);
+    for (let i = 0; i < 100 && (store.isLoading || store.initialLoad); i++) await new Promise(r => setTimeout(r, 50));
+    store.data[0].notes = 'unsaved edit';
+    let error = null;
+    try { await _asUser(() => commitInventoryProposal('Spring buy', new Date().toISOString().slice(0, 10), 'proposal: Spring buy')); } catch (e) { error = e; }
+    store.setData(store.originalData);
+    assertEqual(/unsaved changes in FURNITURE/.test(error?.message || ''), true, `refused: ${error?.message}`);
+    assertEqual((await _proposalRows('Spring buy')).every(e => !e.committed), true, 'nothing committed');
+});
+
+test('INVENTORY PROPOSALS', 'commit changes nothing when a category is locked by another user', async () => {
+    let error = null;
+    try { await _asUser(() => commitInventoryProposal('Cabinet fix', new Date().toISOString().slice(0, 10), 'proposal: Cabinet fix')); } catch (e) { error = e; }
+    assertEqual(/CABINETS is locked/.test(error?.message || ''), true, `refused: ${error?.message}`);
+    const cab = (await Requests.getInventoryTabData('CABINETS')).find(r => r.itemNumber === 'CAB-004');
+    assertEqual(cab.quantity, '10', 'quantity unchanged');
+    assertEqual((await _proposalRows('Cabinet fix'))[0].committed, 0, 'not committed');
+});
+
+test('INVENTORY PROPOSALS', 'commit applies every category with the note and marks the proposal committed', async () => {
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const result = await _asUser(() => commitInventoryProposal('Spring buy', iso, 'proposal: Spring buy'));
+    assertEqual(result, { committed: ['FURNITURE', 'HANGING SIGNS'], failed: [] }, 'both categories saved');
+    const furniture = await Requests.getInventoryTabData('FURNITURE');
+    const chair1 = furniture.find(r => r.itemNumber === 'CHAIR-001');
+    const chair3 = furniture.find(r => r.itemNumber === 'CHAIR-003');
+    assertEqual([chair1.quantity, chair3.quantity, chair3.notes], ['28', '16', 'order matching legs'], 'FURNITURE changed');
+    assertEqual(JSON.parse(chair1.edithistory).h[0].s, 'proposal: Spring buy', 'history note');
+    const sign = (await Requests.getInventoryTabData('HANGING SIGNS')).find(r => r.itemNumber === 'HS-001');
+    assertEqual(sign.quantity, '2', 'HANGING SIGNS changed');
+    assertEqual((await _proposalRows('Spring buy')).every(e => e.committed && e.committedBy === 'test'), true, 'rows committed');
+    assertEqual(await Requests.getSheetLock('INVENTORY', 'FURNITURE'), null, 'FURNITURE lock released');
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────

@@ -1,16 +1,20 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString, INVENTORY_NOTE_MAX_LENGTH, ProposalUtils, PROPOSAL_NAME_MAX_LENGTH } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
+import { getProposalsStore, reloadProposals, proposalPath } from '../../utils/inventoryProposals.js';
 
 /**
  * Modal displayed before any inventory save.
  * Asks for an effective date (today = apply immediately; future = schedule) and a required note.
+ * With onProposal, a Proposal button switches to choosing a proposal instead (no date or note).
  *
  * Props:
  *   onConfirm(scheduledDate: string, note: string) — called with ISO date and trimmed note on confirm.
+ *   onProposal(name: string, isNew: boolean) — optional; called when the edits go to a proposal.
+ *   proposalNames — active proposals offered for update; allProposalNames — every name (uniqueness).
  *
  * Emits 'close-modal' to close itself.
  */
-const InventorySaveModal = {
+export const InventorySaveModal = {
     props: {
         onConfirm: {
             type: Function,
@@ -23,13 +27,31 @@ const InventorySaveModal = {
         initialNote: {
             type: String,
             default: ''
+        },
+        onProposal: {
+            type: Function,
+            default: null
+        },
+        proposalNames: {
+            type: Array,
+            default: () => []
+        },
+        allProposalNames: {
+            type: Array,
+            default: () => []
         }
     },
     data() {
         return {
             scheduledDate: todayISOString(),
-            note: (this.initialNote || '').slice(0, 25),
-            error: null
+            note: (this.initialNote || '').slice(0, INVENTORY_NOTE_MAX_LENGTH),
+            error: null,
+            noteMaxLength: INVENTORY_NOTE_MAX_LENGTH,
+            mode: 'save',
+            selectedProposal: this.proposalNames[0] || '',
+            newProposalName: '',
+            proposalNameMaxLength: PROPOSAL_NAME_MAX_LENGTH,
+            proposalError: null
         };
     },
     computed: {
@@ -44,6 +66,23 @@ const InventorySaveModal = {
         }
     },
     methods: {
+        handleUpdateProposal() {
+            const newName = this.newProposalName.trim();
+            if (newName) {
+                const error = ProposalUtils.validateName(newName, this.allProposalNames);
+                if (error) {
+                    this.proposalError = error;
+                    return;
+                }
+                this.onProposal(newName, true);
+            } else if (this.selectedProposal) {
+                this.onProposal(this.selectedProposal, false);
+            } else {
+                this.proposalError = 'Choose a proposal or enter a new name';
+                return;
+            }
+            this.$emit('close-modal');
+        },
         validate() {
             if (this.hasQtyChanges && !this.note.trim()) {
                 this.error = 'A note is required for quantity changes';
@@ -72,20 +111,47 @@ const InventorySaveModal = {
         }
     },
     template: html`
-        <div class="content">
+        <div v-if="mode === 'proposal'" class="content">
+            <div v-if="proposalNames.length" class="form-group">
+                <label>Add to an active proposal</label>
+                <label v-for="name in proposalNames" :key="name" class="proposal-choice">
+                    <input type="radio" :value="name" v-model="selectedProposal" :disabled="!!newProposalName.trim()" />
+                    {{ name }}
+                </label>
+            </div>
+            <div class="form-group">
+                <label>{{ proposalNames.length ? 'Or start a new proposal' : 'New proposal name' }}</label>
+                <input
+                    type="text"
+                    v-model="newProposalName"
+                    :maxlength="proposalNameMaxLength"
+                    placeholder="Proposal name"
+                    :class="{ red: !!proposalError }"
+                    @input="proposalError = null"
+                    @keyup.enter="handleUpdateProposal"
+                />
+                <span v-if="proposalError" class="red font-small">{{ proposalError }}</span>
+                <span v-else class="font-small gray">Proposals do not change inventory until committed.</span>
+            </div>
+            <div class="button-bar">
+                <button @click="handleUpdateProposal" class="purple">Update Proposal</button>
+                <button @click="mode = 'save'">Back</button>
+            </div>
+        </div>
+        <div v-else class="content">
             <div class="form-group">
                 <label>Note <span v-if="hasQtyChanges" class="red">*</span></label>
                 <input
                     type="text"
                     v-model="note"
-                    maxlength="25"
+                    :maxlength="noteMaxLength"
                     :placeholder="hasQtyChanges ? 'What changed and why?' : 'Optional note'"
                     :class="{ red: !!error && !note.trim() }"
                     autofocus
                     @keyup.enter="handleApplyNow"
                 />
                 <span v-if="error && !note.trim()" class="red font-small">{{ error }}</span>
-                <span v-else class="font-small gray">{{ charCount }}/25</span>
+                <span v-else class="font-small gray">{{ charCount }}/{{ noteMaxLength }}</span>
             </div>
             <div class="form-group">
                 <label>Effective Date</label>
@@ -97,6 +163,7 @@ const InventorySaveModal = {
             <div class="button-bar">
                 <button v-if="!isFutureDate" @click="handleApplyNow" class="purple">Apply Now</button>
                 <button v-else @click="handleSchedule" class="purple" :title="'Schedule for ' + scheduledDate">Schedule</button>
+                <button v-if="onProposal" @click="mode = 'proposal'" title="Save these edits to a proposal instead of inventory">Proposal</button>
                 <button @click="$emit('close-modal')">Cancel</button>
             </div>
         </div>
@@ -869,6 +936,7 @@ export const InventoryTableComponent = {
     data() {
         return {
             inventoryTableStore: null,
+            proposalsStore: null,
             archivedRows: [],
             revertNote: '',
             lockNamespace: 'INVENTORY',
@@ -967,6 +1035,16 @@ export const InventoryTableComponent = {
             if (!this.historyMode) return map;
             for (const row of this.inventoryTableStore?.originalData || []) {
                 map.set(row.itemNumber, EditHistoryUtils.getHistoryStates(row, HISTORY_FIELDS));
+            }
+            return map;
+        },
+        // Active proposal entries for this category, by item number (shown under each item)
+        proposalEntriesByItem() {
+            const map = new Map();
+            for (const entry of ProposalUtils.activeEntries(this.proposalsStore?.data || [])) {
+                if (entry.category !== this.tabTitle) continue;
+                if (!map.has(entry.itemNumber)) map.set(entry.itemNumber, []);
+                map.get(entry.itemNumber).push(entry);
             }
             return map;
         },
@@ -1084,7 +1162,8 @@ export const InventoryTableComponent = {
             Requests.saveInventoryTabData,
             [this.tabTitle, undefined, undefined, undefined] // No filters needed - search is handled in UI
         );
-        
+        if (!this.historyMode) this.proposalsStore = getProposalsStore();
+
         if (this.historyMode && this.tabTitle) {
             Requests.getArchivedRows('INVENTORY', this.tabTitle)
                 .then(rows => { this.archivedRows = rows || []; })
@@ -1318,9 +1397,14 @@ export const InventoryTableComponent = {
                 const orig = original.find(o => o.itemNumber === row.itemNumber);
                 return orig && String(row.quantity) !== String(orig.quantity);
             });
+            const proposals = ProposalUtils.groupProposals(this.proposalsStore?.data || []);
             this.$modal.custom(InventorySaveModal, {
                 hasQtyChanges,
                 initialNote: this.historyMode ? this.revertNote : '',
+                // Edits on the category table can go to a proposal instead of inventory
+                onProposal: this.historyMode ? null : (name, isNew) => this.handleProposal(name, isNew),
+                proposalNames: proposals.filter(p => !p.committed).map(p => p.name),
+                allProposalNames: proposals.map(p => p.name),
                 onConfirm: async (scheduledDate, note) => {
                     await this.inventoryTableStore.save('Saving inventory...', { scheduledDate, note });
                     this.revertNote = '';
@@ -1333,6 +1417,80 @@ export const InventoryTableComponent = {
                     }
                 }
             }, 'Save Changes');
+        },
+
+        /**
+         * Send the table's edits to a proposal instead of inventory. New items are first created
+         * in inventory at quantity 0 (after confirmation); the proposal holds their quantity.
+         * The edits are then dropped from the table, which releases the lock.
+         */
+        async handleProposal(name, isNew) {
+            const store = this.inventoryTableStore;
+            if (!store || !this.tabTitle) return;
+            const savedByItem = new Map(store.originalData.map(row => [row.itemNumber, row]));
+            const newRows = store.data.filter(row => row.itemNumber && !savedByItem.has(row.itemNumber));
+
+            if (newRows.length > 0) {
+                const confirmed = await new Promise(resolve => this.$modal.confirm(
+                    'This will create and add new items to the table immediately set to quantity 0.',
+                    () => resolve(true),
+                    () => resolve(false),
+                    'New Items',
+                    'Create Items',
+                    'Cancel'
+                ));
+                if (!confirmed) return;
+            }
+
+            const updates = store.data
+                .filter(row => row.itemNumber)
+                .map(row => ({
+                    itemNumber: row.itemNumber,
+                    changes: ProposalUtils.diffRow(savedByItem.get(row.itemNumber) || { ...row, quantity: '0' }, row)
+                }))
+                .filter(update => update.changes.length > 0);
+
+            try {
+                if (newRows.length > 0) {
+                    const rowsToSave = [
+                        ...store.originalData.map(row => ({ ...row })),
+                        ...newRows.map(row => ({ ...row, quantity: '0' }))
+                    ];
+                    await Requests.saveInventoryTabData(rowsToSave, this.tabTitle, undefined, undefined, undefined, {
+                        note: ProposalUtils.commitNote(name)
+                    });
+                }
+                if (updates.length > 0) {
+                    await Requests.updateInventoryProposal(name, this.tabTitle, updates);
+                }
+                // Drop the edits: they now live in the proposal (and new items in inventory)
+                await store.load('Loading...');
+                await reloadProposals();
+                if (isNew && this.appContext?.navigateToPath) {
+                    this.appContext.navigateToPath(proposalPath(name));
+                }
+            } catch (error) {
+                console.error('[InventoryTable] Proposal update failed:', error);
+                this.$modal.alert(`Could not update the proposal: ${error.message}`, 'Error');
+            }
+        },
+
+        removeFromProposal(entry) {
+            this.$modal.confirm(
+                `Remove ${entry.itemNumber} from the "${entry.proposal}" proposal?`,
+                async () => {
+                    try {
+                        await Requests.removeInventoryProposalEntry(entry.proposal, entry.category, entry.itemNumber);
+                        await reloadProposals();
+                    } catch (error) {
+                        this.$modal.alert(`Could not update the proposal: ${error.message}`, 'Error');
+                    }
+                },
+                null,
+                'Remove from Proposal',
+                'Remove',
+                'Cancel'
+            );
         },
 
         getPendingEntries(item) {
@@ -1371,7 +1529,7 @@ export const InventoryTableComponent = {
          */
         getDetailRows(row) {
             if (!this.historyMode) {
-                return this.getPendingEntriesForDisplay(row).map(entry => ({
+                const pending = this.getPendingEntriesForDisplay(row).map(entry => ({
                     label: `${this.formatPendingDate(entry.t)}→`,
                     fields: entry.fields,
                     changed: HIGHLIGHT_CHANGES.pending ? new Set(Object.keys(entry.fields)) : new Set(),
@@ -1379,6 +1537,23 @@ export const InventoryTableComponent = {
                     revertState: null,
                     rowClass: 'detail-row-pending'
                 }));
+                // Proposal rows: the proposed change (quantity as "+8"), never applied to the item
+                const proposals = (this.proposalEntriesByItem.get(row.itemNumber) || []).map(entry => {
+                    const fields = {};
+                    for (const ch of entry.changes) {
+                        fields[ch.n] = ch.n === 'quantity' ? ProposalUtils.formatQuantityChange(ch.ne) : ch.ne;
+                    }
+                    return {
+                        label: `${entry.proposal} proposal`,
+                        fields,
+                        changed: HIGHLIGHT_CHANGES.pending ? new Set(Object.keys(fields)) : new Set(),
+                        meta: null,
+                        revertState: null,
+                        rowClass: 'detail-row-proposal',
+                        proposal: entry
+                    };
+                });
+                return [...pending, ...proposals];
             }
             const states = this.historyByItem.get(row.itemNumber) || [];
             // With unsaved changes the main row shows the live values, so the saved state
@@ -1407,7 +1582,7 @@ export const InventoryTableComponent = {
                 const count = this.historyByItem.get(row.itemNumber)?.length || 0;
                 return count > 1 || (count > 0 && this.unsavedFields(row).size > 0);
             }
-            return this.getPendingEntries(row).length > 0;
+            return this.getPendingEntries(row).length > 0 || this.proposalEntriesByItem.has(row.itemNumber);
         },
 
         // History fields whose live (store) value differs from the saved row, e.g. after a revert
@@ -1570,6 +1745,12 @@ export const InventoryTableComponent = {
                                 @click.stop="revertToState(row, detail)"
                                 title="Revert to this state (undoes every newer change)"
                             >↶</button>
+                            <button
+                                v-else-if="column.key === '_navigate' && detail.proposal"
+                                class="button-symbol white"
+                                @click.stop="removeFromProposal(detail.proposal)"
+                                :title="'Remove from the ' + detail.proposal.proposal + ' proposal'"
+                            >×</button>
                         </td>
                     </tr>
                 </template>

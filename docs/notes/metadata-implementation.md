@@ -181,6 +181,7 @@ Rows with no content and no history are not archived.
 | Inventory save (apply now)              | tracked, `s` = note or none  | via `Database.setData`                              |
 | Inventory save (scheduled, future date) | `p` entry only               | writes with `skipMetadata`; `i` assigned on next tracked save |
 | Inventory apply/edit/delete pending     | moves/edits `p`, `h`         | writes with `skipMetadata`; preserves `i`           |
+| Inventory proposal commit / new items   | tracked, `s` = note          | normal inventory save; note defaults to `proposal: <name>`. Proposals themselves live in `CACHE/InventoryProposals` (no history) |
 | Packlist save                           | tracked, `s` = `web`         | crates and items flattened, then matched by `i`     |
 | CACHE Notes / Preferences save          | tracked, `s` = `web`         |                                                     |
 | Other CACHE writes (user data, locks…)  | none                         | `skipMetadata` or no `EditHistory` column           |

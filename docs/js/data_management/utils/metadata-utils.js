@@ -49,6 +49,9 @@ export const ARCHIVE_HEADERS = ['SourceTable', 'SourceTab', 'RowIdentifier', 'Us
 /** Row object key holding the EditHistory column (sheet header 'EditHistory') */
 export const HISTORY_KEY = 'edithistory';
 
+/** Maximum length of an inventory save note (stored in EditHistory `s`) */
+export const INVENTORY_NOTE_MAX_LENGTH = 25;
+
 const DIFF_IGNORED_COLUMNS = [HISTORY_KEY, 'AppData'];
 
 export class EditHistoryUtils {
@@ -563,7 +566,7 @@ export class EditHistoryUtils {
             u: shortUser,
             t: effectiveDateDeciseconds,
             d: Math.floor(Date.now() / 100),
-            s: (note || '').slice(0, 25),
+            s: (note || '').slice(0, INVENTORY_NOTE_MAX_LENGTH),
             c: changes.map(ch => ({ n: ch.n, ne: ch.ne }))
         };
     }

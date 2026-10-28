@@ -34,17 +34,20 @@ function _historyChangeLabels(entry, before, after) {
         });
 }
 
+/** Inventory tab row key → sheet header (the wrapped InventoryUtils does not expose static fields) */
+export const DEFAULT_INVENTORY_MAPPING = {
+    itemNumber: 'ITEM#',
+    quantity: 'QTY',
+    description: 'Description',
+    notes: 'NOTES',
+    edithistory: 'EditHistory'
+};
+
 /**
  * Utility functions for inventory operations
  */
 class inventoryUtils_uncached {
-    static DEFAULT_INVENTORY_MAPPING = {
-        itemNumber: 'ITEM#',
-        quantity: 'QTY',
-        description: 'Description',
-        notes: 'NOTES',
-        edithistory: 'EditHistory'
-    };
+    static DEFAULT_INVENTORY_MAPPING = DEFAULT_INVENTORY_MAPPING;
 
     static INDEX_MAPPING = {
         prefix: 'PREFIX',

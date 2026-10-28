@@ -732,6 +732,16 @@ export class FakeGoogleSheetsService {
             'Notes': [
                 ['Path', 'Note', 'Color', 'Size', 'EditHistory']
             ],
+            // Inventory proposals: "Spring buy" spans two categories, "Cabinet fix" targets the
+            // locked CABINETS tab (commit must fail), "Fall buy" is committed (read-only)
+            'InventoryProposals': [
+                ['Proposal', 'Category', 'ItemNumber', 'Changes', 'UpdatedBy', 'Updated', 'CommittedBy', 'Committed'],
+                ['Spring buy', 'FURNITURE', 'CHAIR-001', _json([{ n: 'quantity', ne: '+8' }]), 'sam', '17915000000', '', ''],
+                ['Spring buy', 'FURNITURE', 'CHAIR-003', _json([{ n: 'quantity', ne: '+4' }, { n: 'notes', ne: 'order matching legs' }]), 'sam', '17915000000', '', ''],
+                ['Spring buy', 'HANGING SIGNS', 'HS-001', _json([{ n: 'quantity', ne: '+2' }]), 'dan', '17915100000', '', ''],
+                ['Cabinet fix', 'CABINETS', 'CAB-004', _json([{ n: 'quantity', ne: '-1' }]), 'dan', '17914000000', '', ''],
+                ['Fall buy', 'FURNITURE', 'STOOL-001', _json([{ n: 'quantity', ne: '+4' }]), 'dan', '17880000000', 'dan', '17890000000']
+            ],
             'NameOverrides': [
                 ['Schedule', 'Packlist'],
                 // sentinel row: ensures non-empty result so database:getData is cached and the invalidation chain can propagate
@@ -1116,7 +1126,8 @@ export class FakeGoogleSheetsService {
             { title: 'Inventory', sheetId: 7 },
             { title: 'NameOverrides', sheetId: 8 },
             { title: 'ScheduleOverrides', sheetId: 9 },
-            { title: 'Preferences', sheetId: 10 }
+            { title: 'Preferences', sheetId: 10 },
+            { title: 'InventoryProposals', sheetId: 11 }
         ]
     };
 
