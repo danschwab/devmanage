@@ -118,7 +118,9 @@ class database_uncached {
      * @param {File} file - The image file to upload
      * @param {string} itemNumber - The item number used to name the file
      * @param {string} folderId - Google Drive folder ID for thumbnails
-     * @returns {Promise<string|null>} The new image URL, or null on failure
+     * @returns {Promise<{fileId: string, file: File}|null>} The new Drive file ID and the image
+     *   that was uploaded (already resized — lets the caller show it without downloading it back),
+     *   or null on failure
      */
     static async uploadItemImage(file, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
         const itemNumberStr = String(itemNumber).trim();
@@ -133,7 +135,7 @@ class database_uncached {
 
         // Check if this item currently has a thumbnail record that points to a prefix file
         // If so, we need to preserve that file when uploading the item's own image
-        const currentRecord = await ApplicationUtils.getThumbnailRecord(null, itemNumberStr);
+        const currentRecord = await ApplicationUtils.getThumbnailRecord(itemNumberStr);
         const prefixFileIdsToPreserve = new Set();
         if (currentRecord && currentRecord.file) {
             // Extract prefix from item number
@@ -142,7 +144,7 @@ class database_uncached {
             if (parts.length >= 2 && parts[0]) {
                 const prefix = parts[0];
                 // Check if the current file belongs to the prefix (not the item itself)
-                const prefixRecord = await ApplicationUtils.getThumbnailRecord(null, prefix);
+                const prefixRecord = await ApplicationUtils.getThumbnailRecord(prefix);
                 if (prefixRecord && prefixRecord.file === currentRecord.file) {
                     // This item is using a prefix file - preserve it
                     prefixFileIdsToPreserve.add(prefixRecord.file);
@@ -179,64 +181,22 @@ class database_uncached {
             if (oldId === uploaded.id) continue;
             await GoogleSheetsService.deleteDriveFile(oldId);
         }
-        
-        invalidateCache([
-            { namespace: 'database', methodName: 'getItemImageBlobUrl', args: [itemNumberStr] }
-        ], true);
 
-        // Fetch blob and store file reference to CACHE sheet (without blob URL generation)
-        const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(uploaded.id);
-        if (blobUrl) {
-            ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, null)
-                .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
-            return blobUrl;
-        }
-        return null;
+        ApplicationUtils.storeThumbnailRecord(itemNumberStr, uploaded.id, null)
+            .catch(err => console.warn('[icons] Failed to store thumbnail record on upload:', err));
+        return { fileId: uploaded.id, file: resizedFile };
     }
 
     /**
-     * Fetch the full-resolution image for an item as a blob URL.
-     * Only called when the full-size image modal is opened.
-     * @param {Object} deps - Dependency decorator
-     * @param {string} itemNumber - Item number to search for
-     * @param {string} folderId - Google Drive folder ID
-     * @returns {Promise<string>} Blob URL or empty string
-     */
-    static async getItemImageBlobUrl(deps, itemNumber, folderId = window.ENDPOINT_IDS.THUMBNAILS) {
-        if (!itemNumber) return '';
-        const itemNumberStr = String(itemNumber).trim();
-        if (!itemNumberStr) return '';
-
-        const extensions = ['jpg', 'jpeg', 'png'];
-        for (const ext of extensions) {
-            const fileName = `${itemNumberStr}.${ext}`;
-            const file = await GoogleSheetsService.searchDriveFileInFolder(fileName, folderId);
-            if (file && file.id) {
-                const blobUrl = await GoogleSheetsService.getAuthenticatedImageUrl(file.id);
-                if (blobUrl) return blobUrl;
-            }
-        }
-
-        const separators = /[\s\-_]+/;
-        const parts = itemNumberStr.split(separators);
-        // Prefix fallback commented out — only search for exact match for now.
-        // if (parts.length > 1 && parts[0]) {
-        //     return await deps.call(Database.getItemImageBlobUrl, parts[0], folderId);
-        // }
-
-        return '';
-    }
-
-    /**
-     * Fetch an authenticated blob URL directly from a Drive file ID.
-     * Used by the thumbnail store analysis step to convert stored file IDs to displayable URLs.
-     * @param {Object} deps - Dependency decorator
+     * Fetch a Drive file's raw content as a Blob.
+     * NOT CACHED — callers own the result: the thumbnail cache (application/utils/thumbnailCache.js)
+     * downscales and persists it per device; the full-size image modal frees it on close.
      * @param {string} fileId - Google Drive file ID
-     * @returns {Promise<string|null>} Blob URL or null
+     * @returns {Promise<Blob|null>} The file content, or null on failure
      */
-    static async getDriveBlobUrl(deps, fileId) {
+    static async getDriveFileBlob(fileId) {
         if (!fileId) return null;
-        return await GoogleSheetsService.getAuthenticatedImageUrl(fileId);
+        return await GoogleSheetsService.getDriveFileBlob(fileId);
     }
 
     /* MUTATION FUNCTIONS */
@@ -490,12 +450,11 @@ class database_uncached {
 }
 
 // Wrap and export the class with caching, excluding mutation methods
-// Image URLs get infinite cache since they rarely change and are expensive Google Drive API calls
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
-    ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage', 'getDriveFileBlob'], // getDriveFileBlob: uncached read (callers own the Blob)
+    ['getTabs'], // Infinite cache
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);
         // 20-minute default for everything else (PROD_SCHED, CACHE, etc.)

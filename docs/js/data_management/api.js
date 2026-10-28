@@ -823,19 +823,15 @@ class Requests_uncached {
         return await deps.call(ApplicationUtils.getAllThumbnailRecords);
     }
 
-    static async getDriveBlobUrl(deps, fileId) {
-        return await deps.call(Database.getDriveBlobUrl, fileId);
-    }
-
     /**
-     * Fetch the full-resolution image for an item as a blob URL.
-     * Only call this when the user requests the full-size view.
-     * @param {Object} deps - Dependency decorator for tracking calls
-     * @param {string} itemNumber - The item number to search for
-     * @returns {Promise<string>} Blob URL or empty string
+     * Fetch a Drive file's raw content as a Blob.
+     * NOT CACHED — excluded from wrapping; callers own the result (thumbnail cache, full-size image modal).
+     * Does NOT accept deps parameter.
+     * @param {string} fileId - Google Drive file ID
+     * @returns {Promise<Blob|null>} The file content, or null on failure
      */
-    static async getItemImageBlobUrl(deps, itemNumber) {
-        return await deps.call(Database.getItemImageBlobUrl, itemNumber);
+    static async getDriveFileBlob(fileId) {
+        return await Database.getDriveFileBlob(fileId);
     }
 
     /**
@@ -847,7 +843,8 @@ class Requests_uncached {
      *
      * @param {File} file - The image file to upload
      * @param {string} itemNumber - Item number the image belongs to
-     * @returns {Promise<string|null>} The new direct image URL, or null on failure
+     * @returns {Promise<{fileId: string, file: File}|null>} The new Drive file ID and the uploaded
+     *   (resized) image, or null on failure
      */
     static async uploadItemImage(file, itemNumber) {
         return await Database.uploadItemImage(file, itemNumber);
@@ -1583,7 +1580,8 @@ export const Requests = wrapMethods(
         'setTransshipLink',
         'removeTransshipLink',
         'savePageNotes',
-        'savePreferences'
+        'savePreferences',
+        'getDriveFileBlob' // Uncached read: callers own the Blob
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

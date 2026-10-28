@@ -1529,12 +1529,9 @@ export class FakeGoogleSheetsService {
     }
 
     /**
-     * Fake implementation of fetching an authenticated image blob URL from a file ID.
-     * Maps fake file IDs to test images. For dynamically uploaded files, returns a test image.
+     * Maps fake file IDs to test image paths. Dynamically uploaded files get a default test image.
      */
-    static async getAuthenticatedImageUrl(fileId) {
-        await this.delay(50);
-        
+    static _fakeImagePath(fileId) {
         // Map predefined file IDs to test image paths
         const fileMap = {
             'file_id_bx_prefix': 'assets/logobkp.png',
@@ -1555,6 +1552,18 @@ export class FakeGoogleSheetsService {
         }
         
         return null;
+    }
+
+    /**
+     * Fake implementation of fetching a Drive file's raw content as a Blob.
+     * Loads the test image that _fakeImagePath maps the file ID to.
+     */
+    static async getDriveFileBlob(fileId) {
+        await this.delay(50);
+        const url = this._fakeImagePath(fileId);
+        if (!url) return null;
+        const response = await fetch(url);
+        return response.ok ? await response.blob() : null;
     }
 
     /**
