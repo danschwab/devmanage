@@ -447,6 +447,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 this.setData([]);
                 return;
             }
+            // Edits made while the fetch is in flight must not be overwritten when it resolves.
+            // A store that is already modified here is being discarded/refreshed on purpose.
+            const modifiedAtStart = !isReadOnly && this.isModified;
             this.setLoading(true, message);
             this.loadingProgress = -1;
             this.isReloadingMainData = true; // Lock to prevent analysis during reload
@@ -495,6 +498,12 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     priorities.load,
                     { label: message, type: 'load', store: 'reactive' }
                 );
+                // The user edited during the fetch: keep their edits and flag the newer server
+                // data as a conflict, as the invalidation handler does for a modified store.
+                if (!modifiedAtStart && !isReadOnly && this.isModified) {
+                    this.externalConflict = true;
+                    return;
+                }
                 // Handle null, undefined, or empty results by initializing empty arrays
                 const dataToSet = (result && Array.isArray(result)) ? result : [];
                 // Pre-assign stable row IDs before splitting into data and originalData.

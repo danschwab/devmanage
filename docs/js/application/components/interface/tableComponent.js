@@ -1753,6 +1753,16 @@ export const TableComponent = {
         visibleColumns() {
             this.$nextTick(() => this._measureColWidths());
         },
+        // Columns can become editable after mount (e.g. once a parent's lock check completes) or
+        // shift position. Recompare so cells edited earlier (data restored from a store that was
+        // modified before this table mounted) show as dirty without waiting for another edit.
+        editableColumnSignature() {
+            if (!this.hasEditableColumns) return;
+            this.$nextTick(() => {
+                this.updateAllEditableCells();
+                this.compareAllCellsDirty();
+            });
+        },
         isLoading(val) {
             if (!this.hasEditableColumns) return;
             // When loading state changes, update cells and compare dirty
@@ -2107,6 +2117,10 @@ export const TableComponent = {
         hasEditableColumns() {
             // True if any column is editable
             return this.columns.some(col => col.editable);
+        },
+        // Which main-table columns are editable, by position (dirtyCells is keyed by column index)
+        editableColumnSignature() {
+            return this.mainTableColumns.map(col => col.editable ? `${col.key}*` : col.key).join('|');
         },
         hideSet() {
             // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'edithistory', and 'metadata'
