@@ -434,11 +434,19 @@ class packListUtils_uncached {
         const metadataHeaders = Object.values(PACKLIST_METADATA_COLUMNS);
         const metadataKeys = Object.keys(PACKLIST_METADATA_COLUMNS);
 
+        // Read rows are keyed by normalized header names (getPackList collapses newlines, e.g.
+        // "Packing/shop\nnotes" → "Packing/shop notes"); the sheet keeps the raw header
+        const valueFor = (obj, header) => {
+            if (obj[header] !== undefined) return obj[header];
+            const normalized = obj[normalizeHeaderName(header)];
+            return normalized !== undefined ? normalized : '';
+        };
+
         // Clean crates: only keep properties in mainHeaders/itemHeaders, plus metadata keys
         const cleanCrates = Array.isArray(mappedData) ? mappedData.map(crate => {
             const cleanCrate = {};
             mainHeaders.forEach(h => {
-                cleanCrate[h] = crate[h] !== undefined ? crate[h] : '';
+                cleanCrate[h] = valueFor(crate, h);
             });
             metadataKeys.forEach(key => {
                 if (crate[key] !== undefined) cleanCrate[key] = crate[key];
@@ -448,7 +456,7 @@ class packListUtils_uncached {
                 ? crate.Items.map(itemObj => {
                     const cleanItem = {};
                     itemHeaders.forEach(h => {
-                        cleanItem[h] = itemObj[h] !== undefined ? itemObj[h] : '';
+                        cleanItem[h] = valueFor(itemObj, h);
                     });
                     metadataKeys.forEach(key => {
                         if (itemObj[key] !== undefined) cleanItem[key] = itemObj[key];

@@ -68,6 +68,13 @@ function assertLessThan(val, threshold, label) {
         throw new Error(`${label}\n    expected ${val} < ${threshold}`);
 }
 
+// Run fn as a logged-in user. Tests otherwise run logged out, so saves record no history entries.
+async function _asUser(fn) {
+    const previous = authState.user;
+    authState.user = { email: 'test@example.com' };
+    try { return await fn(); } finally { authState.user = previous; }
+}
+
 // ── Group 0: Authentication ──────────────────────────────────────────────────
 // Tests the full FakeGoogleSheetsAuth lifecycle. This group runs first and ends
 // authenticated so all subsequent API-dependent groups have a valid session.
@@ -1683,9 +1690,13 @@ test('EDIT HISTORY', 'packlist round-trip keeps history and assigns identity', a
     const tab = '_HISTORY_PACKLIST';
     await Requests.createNewTab('PACK_LISTS', 'ATSC 2025 NAB', tab);
     const crates = await Requests.getPackList(tab);
-    await Requests.savePackList(crates, tab);
-    const item = (await Requests.getPackList(tab))[0].Items[0];
-    const parsed = JSON.parse(item.edithistory);
+    const notes = (list) => list.flatMap(c => (c.Items || []).map(i => i['Packing/shop notes'])).filter(Boolean);
+    // Run as a logged-in user so a false change would also show up as a history entry
+    await _asUser(() => Requests.savePackList(crates, tab));
+    const saved = await Requests.getPackList(tab);
+    // The sheet header is "Packing/shop\nnotes"; rows use the normalized key
+    assertEqual(notes(saved), notes(crates), 'packing notes survive the round trip');
+    const parsed = JSON.parse(saved[0].Items[0].edithistory);
     assertEqual(parsed.h.map(e => e.u), ['cadbot', 'dan'], 'existing history preserved');
     if (!Number.isInteger(parsed.i)) throw new Error(`expected integer i, got ${parsed.i}`);
 });
@@ -1800,12 +1811,6 @@ test('EDIT HISTORY VIEW', 'inventory save stores the note in s, and omits s with
 
 const _proposalRows = async (name) => (await Requests.getInventoryProposals()).filter(e => e.proposal === name);
 
-// Commit needs a logged-in user; tests otherwise run without one
-async function _asUser(fn) {
-    const previous = authState.user;
-    authState.user = { email: 'test@example.com' };
-    try { return await fn(); } finally { authState.user = previous; }
-}
 
 test('INVENTORY PROPOSALS', 'validateName enforces length, characters and case-insensitive uniqueness', async () => {
     const existing = ['Spring buy', 'Fall buy'];
