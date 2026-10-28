@@ -1,4 +1,4 @@
-import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth } from '../index.js';
+import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth, resolveInventoryNoteMaxLength } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
 
 // Re-export Priority for component use
@@ -2088,6 +2088,15 @@ export function getPreferencesStore() {
         Requests.savePreferences,
         []
     );
+}
+
+/**
+ * Maximum inventory save note length (InventoryNoteMaxLength preference, default 25 until loaded).
+ * Reactive: computed properties that call it update when the preference changes.
+ * @returns {number}
+ */
+export function getInventoryNoteMaxLength() {
+    return resolveInventoryNoteMaxLength(getPreferencesStore().data);
 }
 
 export function runNonessentialAnalysisOnAllStores() {

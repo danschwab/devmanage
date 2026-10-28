@@ -21,13 +21,13 @@ export async function reloadProposals() {
     await getProposalsStore().load('Loading proposals...');
 }
 
-/** Register reports/inventory-proposals and one child route per proposal (for breadcrumbs and deep links) */
+/**
+ * Register one child route of reports/inventory-proposals per proposal (breadcrumb names, deep links).
+ * The parent route is registered by ReportsContent, which calls this whenever the list changes.
+ */
 export function registerProposalRoutes(proposals = []) {
-    // getRoute returns the deepest existing ancestor for a missing child, so check children directly
-    if (!NavigationRegistry.getRoute('reports')?.children?.[PROPOSALS_ROUTE]) {
-        NavigationRegistry.addDynamicRoute('reports', PROPOSALS_ROUTE, { displayName: 'Inventory Proposals' });
-    }
-    const registered = NavigationRegistry.getRoute(PROPOSALS_PATH)?.children || {};
+    // getRoute returns the deepest existing ancestor for a missing child, so read children directly
+    const registered = NavigationRegistry.getRoute('reports')?.children?.[PROPOSALS_ROUTE]?.children || {};
     for (const proposal of proposals) {
         if (registered[proposal.slug]?.displayName !== proposal.name) {
             NavigationRegistry.addDynamicRoute(PROPOSALS_PATH, proposal.slug, { displayName: proposal.name });

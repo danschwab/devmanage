@@ -1,4 +1,4 @@
-import { Database, ProductionUtils, PackListUtils, wrapMethods, parseDate, toISODateString, searchFilter, todayISOString, ApplicationUtils, invalidateCache, EditHistoryUtils } from '../index.js';
+import { Database, ProductionUtils, PackListUtils, wrapMethods, parseDate, toISODateString, searchFilter, todayISOString, ApplicationUtils, invalidateCache, EditHistoryUtils, DEFAULT_INVENTORY_NOTE_MAX_LENGTH } from '../index.js';
 
 /** Normalize an identifier for loose matching (strips spaces, case, non-alphanumeric) */
 function _normalizeId(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -205,8 +205,10 @@ class inventoryUtils_uncached {
     }
 
     static async saveInventoryTabData(mappedData, tabOrItemName, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, filters = null, username = null, options = {}) {
-        const { source = 'web', scheduledDate = null, note = '' } = options;
-        
+        const { source = 'web', scheduledDate = null, noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH } = options;
+        // Notes are capped by the InventoryNoteMaxLength preference (resolved by the API layer)
+        const note = String(options.note || '').slice(0, noteMaxLength);
+
         const allTabs = await Database.getTabs('INVENTORY');
         const tabExists = allTabs.some(tab => tab.title === tabOrItemName);
         let resolvedTabName = tabOrItemName;
@@ -282,7 +284,7 @@ class inventoryUtils_uncached {
 
                 if (changes.length === 0) return baseItem;
 
-                const pendingEntry = EditHistoryUtils.createPendingEntry(shortUser, changes, effectiveDeciseconds, note);
+                const pendingEntry = EditHistoryUtils.createPendingEntry(shortUser, changes, effectiveDeciseconds, note, noteMaxLength);
                 const updatedEH = EditHistoryUtils.appendToPendingChanges(baseItem.edithistory, pendingEntry);
                 return { ...baseItem, edithistory: updatedEH };
             });
@@ -422,12 +424,13 @@ class inventoryUtils_uncached {
      * @param {Array<Object>} originalRows - Original rows before edits (current field values)
      * @param {Array<Object>} editedRows - Rows as edited in the modal (future field values)
      * @param {number} effectiveDateDeciseconds
-     * @param {string} [note] - Updated note (≤25 chars)
+     * @param {string} [note] - Updated note (truncated to noteMaxLength)
      * @param {string} [username]
      * @param {Object} [mapping]
+     * @param {number} [noteMaxLength] - InventoryNoteMaxLength preference
      * @returns {Promise<boolean>}
      */
-    static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note = null, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING) {
+    static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note = null, username = null, mapping = inventoryUtils_uncached.DEFAULT_INVENTORY_MAPPING, noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH) {
         //console.log(`[InventoryUtils] Saving pending change entry for "${tabOrItemName}"...`);
         
         const allTabs = await Database.getTabs('INVENTORY');
@@ -456,7 +459,7 @@ class inventoryUtils_uncached {
                 return {
                     ...entry,
                     c: newChanges,
-                    s: note !== null ? String(note).slice(0, 25) : entry.s
+                    s: note !== null ? String(note).slice(0, noteMaxLength) : entry.s
                 };
             });
 

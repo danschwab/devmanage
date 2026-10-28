@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote, DEFAULT_INVENTORY_MAPPING, ProposalUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote, DEFAULT_INVENTORY_MAPPING, ProposalUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING, resolveInventoryNoteMaxLength } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 // CACHE tabs with tracked history. EditHistory is always mapped to the key 'edithistory'.
@@ -475,10 +475,12 @@ class Requests_uncached {
     static async saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, referenceDate, options = {}) {
         const username = authState.user?.email || null;
         const { scheduledDate, note, ...rest } = options;
+        const noteMaxLength = await Requests.getInventoryNoteMaxLength();
         return await InventoryUtils.saveInventoryTabData(mappedData, tabOrItemName, mapping, filters, username, {
             source: 'web',
             scheduledDate,
             note,
+            noteMaxLength,
             ...rest
         });
     }
@@ -1515,7 +1517,8 @@ class Requests_uncached {
      */
     static async savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note) {
         const username = authState.user?.email || null;
-        return await InventoryUtils.savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note, username);
+        const noteMaxLength = await Requests.getInventoryNoteMaxLength();
+        return await InventoryUtils.savePendingChangeEntry(tabOrItemName, originalRows, editedRows, effectiveDateDeciseconds, note, username, undefined, noteMaxLength);
     }
 
     /**
@@ -1574,6 +1577,20 @@ class Requests_uncached {
         return await deps.call(Database.getData, 'CACHE', 'Preferences', PREFERENCES_MAPPING);
     }
 
+    /**
+     * Maximum length of an inventory save note (InventoryNoteMaxLength preference, default 25).
+     * @param {Object} deps - Dependency decorator for tracking calls
+     * @returns {Promise<number>}
+     */
+    static async getInventoryNoteMaxLength(deps) {
+        try {
+            return resolveInventoryNoteMaxLength(await deps.call(Requests.getPreferences));
+        } catch (error) {
+            console.warn('[getInventoryNoteMaxLength] Preferences unavailable, using the default:', error);
+            return resolveInventoryNoteMaxLength(null);
+        }
+    }
+
     // MUTATION METHOD — excluded from caching. History is tracked by Database.setData.
     static async savePreferences(data) {
         const username = authState.user?.email || null;
@@ -1604,10 +1621,8 @@ class Requests_uncached {
      * @param {string} name - Proposal name (case-insensitive)
      */
     static async getInventoryProposalTable(deps, name) {
-        const entries = (await deps.call(Requests.getInventoryProposals))
-            .filter(entry => entry.proposal.toLowerCase() === String(name).toLowerCase());
-        const isCommitted = entries.length > 0 && entries.every(entry => entry.committed);
-        const shown = isCommitted ? entries : ProposalUtils.activeEntries(entries);
+        const entries = ProposalUtils.entriesOf(await deps.call(Requests.getInventoryProposals), name);
+        const shown = ProposalUtils.isCommitted(entries) ? entries : ProposalUtils.activeEntries(entries);
         const inventoryByCategory = {};
         for (const category of new Set(shown.map(entry => entry.category))) {
             try {
@@ -1631,72 +1646,20 @@ class Requests_uncached {
      * @param {Array<{itemNumber: string, changes: Array<{n, ne}>}>} updates
      */
     static async updateInventoryProposal(name, category, updates) {
-        const entries = await _readProposalEntries();
-        const merged = ProposalUtils.mergeIntoProposal(entries, name, category, updates, _shortUser(), _nowDeciseconds());
-        return await _writeProposalEntries(merged);
+        return await _updateProposalEntries((entries, user, now) =>
+            ProposalUtils.mergeIntoProposal(entries, name, category, updates, user, now));
     }
 
     /**
-     * Remove one item from a proposal (the × on a proposal row). Committed rows are kept.
-     * MUTATION METHOD — excluded from caching.
-     */
-    static async removeInventoryProposalEntry(name, category, itemNumber) {
-        const entries = await _readProposalEntries();
-        const kept = entries.filter(entry => entry.committed
-            || entry.proposal.toLowerCase() !== String(name).toLowerCase()
-            || entry.category !== category
-            || entry.itemNumber !== itemNumber);
-        return await _writeProposalEntries(kept);
-    }
-
-    /**
-     * Save edits from the proposal page. Replaces the proposal's active entries with the rows'
-     * changes (rows without changes, and removed rows, are dropped). Signature matches the
-     * reactive store save call: (data, ...apiArgs, options).
+     * Save edits from the proposal page (see ProposalUtils.replaceActiveEntries). Signature matches
+     * the reactive store save call: (data, ...apiArgs, options).
      * MUTATION METHOD — excluded from caching.
      * @param {Array<Object>} rows - Proposal page rows (see ProposalUtils.toTableRow)
      * @param {string} name - Proposal name
      */
     static async saveInventoryProposalTable(rows, name) {
-        const entries = await _readProposalEntries();
-        const isThis = (entry) => entry.proposal.toLowerCase() === String(name).toLowerCase();
-        if (entries.some(isThis) && entries.filter(isThis).every(entry => entry.committed)) {
-            throw new Error(`Proposal "${name}" is committed and can no longer be edited`);
-        }
-        const user = _shortUser();
-        const now = _nowDeciseconds();
-        const previous = new Map(entries.filter(entry => isThis(entry) && !entry.committed)
-            .map(entry => [`${entry.category}\u0000${entry.itemNumber}`, entry]));
-        const storedName = entries.find(isThis)?.proposal || name;
-        const updated = [];
-        for (const row of rows || []) {
-            const changes = ProposalUtils.changesFromTableRow(row);
-            if (changes.length === 0) continue;
-            const before = previous.get(`${row.category}\u0000${row.itemNumber}`);
-            const unchanged = before && JSON.stringify(before.changes) === JSON.stringify(changes);
-            updated.push({
-                proposal: storedName,
-                category: row.category,
-                itemNumber: row.itemNumber,
-                changes,
-                updatedBy: unchanged ? before.updatedBy : user,
-                updated: unchanged ? before.updated : now,
-                committedBy: '',
-                committed: 0
-            });
-        }
-        // Keep other proposals and this proposal's committed rows; replace its active rows in place
-        const result = [];
-        let inserted = false;
-        for (const entry of entries) {
-            if (isThis(entry) && !entry.committed) {
-                if (!inserted) { result.push(...updated); inserted = true; }
-                continue;
-            }
-            result.push(entry);
-        }
-        if (!inserted) result.push(...updated);
-        return await _writeProposalEntries(result);
+        return await _updateProposalEntries((entries, user, now) =>
+            ProposalUtils.replaceActiveEntries(entries, name, rows, user, now));
     }
 
     /**
@@ -1706,37 +1669,29 @@ class Requests_uncached {
      * @param {Array<string>} categories - Inventory tabs that were committed
      */
     static async markInventoryProposalCommitted(name, categories) {
-        const entries = await _readProposalEntries();
-        const user = _shortUser();
-        const now = _nowDeciseconds();
-        const committedTabs = new Set(categories);
-        const result = entries.map(entry => (
-            !entry.committed && committedTabs.has(entry.category)
-            && entry.proposal.toLowerCase() === String(name).toLowerCase()
-        ) ? { ...entry, committedBy: user, committed: now } : entry);
-        return await _writeProposalEntries(result);
+        return await _updateProposalEntries((entries, user, now) =>
+            ProposalUtils.markCommitted(entries, name, categories, user, now));
     }
 
 }
 
-// ── Proposal storage helpers (used by the mutation methods above) ─────────────
+// ── Proposal storage (used by the mutation methods above) ─────────────────────
 
-const _shortUser = () => (authState.user?.email || 'unknown').split('@')[0];
-const _nowDeciseconds = () => Math.floor(Date.now() / 100);
-
-async function _readProposalEntries() {
+/**
+ * Read every proposal entry, transform the list, and write it back (creating the tab on first use).
+ * No edithistory in the mapping: Database.setData writes without history tracking.
+ * @param {function(Array, string, number): Array} transform - (entries, short user, now in deciseconds) → entries
+ */
+async function _updateProposalEntries(transform) {
     const tabs = await Database.getTabs('CACHE');
-    if (!tabs.some(tab => tab.title === PROPOSALS_TAB_NAME)) return [];
-    return ProposalUtils.parseRows(await Database.getData('CACHE', PROPOSALS_TAB_NAME, PROPOSAL_MAPPING));
-}
-
-async function _writeProposalEntries(entries) {
-    const tabs = await Database.getTabs('CACHE');
-    if (!tabs.some(tab => tab.title === PROPOSALS_TAB_NAME)) {
-        await Database.createTab('CACHE', null, PROPOSALS_TAB_NAME);
-    }
-    // No edithistory in the mapping: Database.setData writes without history tracking
-    return await Database.setData('CACHE', PROPOSALS_TAB_NAME, ProposalUtils.toRows(entries), PROPOSAL_MAPPING);
+    const tabExists = tabs.some(tab => tab.title === PROPOSALS_TAB_NAME);
+    const entries = tabExists
+        ? ProposalUtils.parseRows(await Database.getData('CACHE', PROPOSALS_TAB_NAME, PROPOSAL_MAPPING))
+        : [];
+    const user = (authState.user?.email || 'unknown').split('@')[0];
+    const updated = transform(entries, user, Math.floor(Date.now() / 100));
+    if (!tabExists) await Database.createTab('CACHE', null, PROPOSALS_TAB_NAME);
+    return await Database.setData('CACHE', PROPOSALS_TAB_NAME, ProposalUtils.toRows(updated), PROPOSAL_MAPPING);
 }
 
 /**
@@ -1773,7 +1728,7 @@ export const Requests = wrapMethods(
         'removeTransshipLink',
         'savePageNotes',
         'savePreferences',
-        'updateInventoryProposal', 'removeInventoryProposalEntry', 'saveInventoryProposalTable', 'markInventoryProposalCommitted'
+        'updateInventoryProposal', 'saveInventoryProposalTable', 'markInventoryProposalCommitted'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

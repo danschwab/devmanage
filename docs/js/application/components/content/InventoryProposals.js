@@ -1,6 +1,7 @@
-import { html, Requests, TableComponent, CardsComponent, getReactiveStore, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, parseDate, todayISOString } from '../../index.js';
+import { html, Requests, TableComponent, CardsComponent, ItemImageComponent, getReactiveStore, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, parseDate, todayISOString, getInventoryNoteMaxLength } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
-import { getProposalsStore, reloadProposals, registerProposalRoutes, proposalPath, commitInventoryProposal } from '../../utils/inventoryProposals.js';
+import { getProposalsStore, reloadProposals, proposalPath, commitInventoryProposal } from '../../utils/inventoryProposals.js';
+import { escapeHtml } from '../../utils/useSearch.js';
 import { InventorySaveModal } from './InventoryTable.js';
 
 /**
@@ -8,9 +9,6 @@ import { InventorySaveModal } from './InventoryTable.js';
  * Plan: docs/notes/inventory-proposals-plan.md
  */
 
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, ch => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
-));
 const formatDay = (deciseconds) => (deciseconds
     ? new Date(deciseconds * 100).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '');
@@ -43,14 +41,6 @@ export const InventoryProposalsGrid = {
             }));
         }
     },
-    watch: {
-        proposals: {
-            handler(proposals) {
-                registerProposalRoutes(proposals);
-            },
-            immediate: true
-        }
-    },
     template: html`
         <cards-grid
             :items="cards"
@@ -69,7 +59,7 @@ export const InventoryProposalsGrid = {
  */
 export const InventoryProposalTable = {
     mixins: [sheetLockMixin],
-    components: { TableComponent },
+    components: { TableComponent, ItemImageComponent },
     inject: ['appContext', '$modal', '$notify'],
     props: {
         proposalSlug: { type: String, required: true },
@@ -134,6 +124,15 @@ export const InventoryProposalTable = {
                 row && String(value ?? '') !== String(row[currentKey] ?? '') ? 'proposal-changed' : ''
             );
             return [
+                // Read-only thumbnail, as on the inventory overview table
+                {
+                    key: 'image',
+                    labelHtml: '<span class="material-symbols-outlined">imagesmode</span>',
+                    label: 'I',
+                    width: 1,
+                    sortable: false,
+                    sticky: 'start'
+                },
                 { key: 'category', label: 'Category', width: 130, sortable: true },
                 { key: 'itemNumber', label: 'Item#', type: 'item', width: 120, sortable: true },
                 { key: 'currentQuantity', label: 'Current Qty', width: 90, sortable: true },
@@ -170,6 +169,13 @@ export const InventoryProposalTable = {
                     action: this.lockedBySelf ? { label: 'Claim this device', fn: () => this.claimLock() } : null
                 },
                 {
+                    key: 'conflict',
+                    color: 'red',
+                    message: 'Another session changed this proposal while you have unsaved edits. Save to keep your changes or discard them.',
+                    visible: !!this.tableStore?.externalConflict,
+                    action: { label: 'Discard', fn: () => this.handleRefresh() }
+                },
+                {
                     key: 'committed',
                     color: '',
                     message: `Committed by ${this.proposal?.committedBy} on ${formatDay(this.proposal?.committed)}. Committed proposals are read-only.`,
@@ -189,12 +195,6 @@ export const InventoryProposalTable = {
                 if (!name || this.tableStore) return;
                 this.tableStore = getReactiveStore(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [name]);
                 this.checkLockStatus();
-            },
-            immediate: true
-        },
-        proposals: {
-            handler(proposals) {
-                registerProposalRoutes(proposals);
             },
             immediate: true
         },
@@ -247,7 +247,8 @@ export const InventoryProposalTable = {
             const name = this.proposalName;
             this.$modal.custom(InventorySaveModal, {
                 hasQtyChanges: true,
-                initialNote: ProposalUtils.commitNote(name),
+                initialNote: ProposalUtils.commitNote(name, getInventoryNoteMaxLength()),
+                initialDate: this.projectionDate,
                 onConfirm: async (scheduledDate, note) => {
                     this.committing = true;
                     try {
@@ -297,10 +298,10 @@ export const InventoryProposalTable = {
         >
             <template #header-area>
                 <div v-if="!isCommitted" class="button-bar">
-                    <label class="proposal-projection">
-                        Projected on
-                        <input type="date" v-model="projectionDate" :min="todayISO" />
-                    </label>
+                    <div class="card white">
+                        Projected on:
+                    </div>
+                    <input type="date" v-model="projectionDate" :min="todayISO" />
                     <button
                         class="purple"
                         :disabled="!canCommit"
@@ -310,7 +311,12 @@ export const InventoryProposalTable = {
                 </div>
             </template>
             <template #default="{ row, column }">
-                <span v-if="column.key === '_projected'">{{ projected(row) }}</span>
+                <ItemImageComponent
+                    v-if="column.key === 'image'"
+                    :imageSize="32"
+                    :itemNumber="row.itemNumber"
+                />
+                <span v-else-if="column.key === '_projected'">{{ projected(row) }}</span>
                 <span v-else-if="column.key === 'currentQuantity' && row.missing" class="red" title="This item no longer exists in inventory">missing</span>
                 <button
                     v-else-if="column.key === '_remove' && allowEdit"

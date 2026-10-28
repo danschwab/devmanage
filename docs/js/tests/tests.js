@@ -30,7 +30,7 @@
 import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, FakeGoogleState, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { refreshAppData } from './fakeGoogleDevTools.js';
-import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils, InventoryUtils, ProposalUtils } from '../data_management/index.js';
+import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, Database, EditHistoryUtils, InventoryUtils, ProposalUtils, resolveInventoryNoteMaxLength } from '../data_management/index.js';
 import { authState } from '../application/utils/auth.js';
 import { commitInventoryProposal } from '../application/utils/inventoryProposals.js';
 import { getReactiveStore } from '../application/utils/reactiveStores.js';
@@ -1471,9 +1471,9 @@ test('PREFERENCES', 'getPreferences returns an array', async () => {
     if (!Array.isArray(result)) throw new Error(`expected array, got ${typeof result}`);
 });
 
-test('PREFERENCES', 'getPreferences returns 7 rows', async () => {
+test('PREFERENCES', 'getPreferences returns 8 rows', async () => {
     const result = await Requests.getPreferences();
-    assertEqual(result.length, 7, 'getPreferences row count');
+    assertEqual(result.length, 8, 'getPreferences row count');
 });
 
 test('PREFERENCES', 'all rows have required fields', async () => {
@@ -1849,6 +1849,27 @@ test('INVENTORY PROPOSALS', 'mergeIntoProposal overwrites listed fields and keep
     assertEqual(merged.find(e => e.itemNumber === 'TABLE-001').proposal, 'Spring buy', 'new item uses the stored name');
 });
 
+test('INVENTORY PROPOSALS', 'replaceActiveEntries and markCommitted only touch the named proposal', async () => {
+    const entries = ProposalUtils.parseRows([
+        { proposal: 'Spring buy', category: 'FURNITURE', itemNumber: 'CHAIR-001', changes: JSON.stringify([{ n: 'quantity', ne: '+8' }]), updatedBy: 'sam', updated: '5' },
+        { proposal: 'Spring buy', category: 'FURNITURE', itemNumber: 'CHAIR-003', changes: JSON.stringify([{ n: 'quantity', ne: '+4' }]), updatedBy: 'sam', updated: '5' },
+        { proposal: 'Spring buy', category: 'HANGING SIGNS', itemNumber: 'HS-001', changes: JSON.stringify([{ n: 'quantity', ne: '+2' }]), updatedBy: 'dan', updated: '5' },
+        { proposal: 'Fall buy', category: 'FURNITURE', itemNumber: 'STOOL-001', changes: JSON.stringify([{ n: 'quantity', ne: '+4' }]), updated: '1', committedBy: 'dan', committed: '2' }
+    ]);
+    const row = (itemNumber, quantityChange) => ({ category: 'FURNITURE', itemNumber, quantityChange, description: '', currentDescription: '', notes: '', currentNotes: '' });
+    // CHAIR-001 unchanged, CHAIR-003 edited, HS-001 removed from the page
+    const replaced = ProposalUtils.replaceActiveEntries(entries, 'spring buy', [row('CHAIR-001', '8'), row('CHAIR-003', '6')], 'test', 99);
+    const spring = ProposalUtils.entriesOf(replaced, 'Spring buy');
+    assertEqual(spring.map(e => `${e.itemNumber} ${e.changes[0].ne} ${e.updatedBy}`), ['CHAIR-001 +8 sam', 'CHAIR-003 +6 test'], 'unchanged keeps its author; removed row dropped');
+    assertEqual(ProposalUtils.entriesOf(replaced, 'Fall buy').length, 1, 'other proposal kept');
+    let error = null;
+    try { ProposalUtils.replaceActiveEntries(entries, 'Fall buy', [], 'test', 99); } catch (e) { error = e; }
+    assertEqual(!!error, true, 'committed proposal refused');
+    const marked = ProposalUtils.markCommitted(entries, 'Spring buy', ['FURNITURE'], 'test', 99);
+    assertEqual(ProposalUtils.entriesOf(marked, 'Spring buy').map(e => e.committed), [99, 99, 0], 'only the committed category');
+    assertEqual(ProposalUtils.isCommitted(ProposalUtils.entriesOf(marked, 'Spring buy')), false, 'partially committed is still active');
+});
+
 test('INVENTORY PROPOSALS', 'groupProposals lists active proposals before committed ones', async () => {
     const proposals = ProposalUtils.groupProposals(await Requests.getInventoryProposals());
     assertEqual(proposals.map(p => p.name), ['Spring buy', 'Cabinet fix', 'Fall buy'], 'order');
@@ -1917,6 +1938,40 @@ test('INVENTORY PROPOSALS', 'commit applies every category with the note and mar
     assertEqual(sign.quantity, '2', 'HANGING SIGNS changed');
     assertEqual((await _proposalRows('Spring buy')).every(e => e.committed && e.committedBy === 'test'), true, 'rows committed');
     assertEqual(await Requests.getSheetLock('INVENTORY', 'FURNITURE'), null, 'FURNITURE lock released');
+});
+
+// ── NOTE LENGTH (InventoryNoteMaxLength preference) ───────────────────────────
+
+test('NOTE LENGTH', 'resolveInventoryNoteMaxLength reads the preference and falls back to 25', async () => {
+    const pref = (value) => [{ id: 'InventoryNoteMaxLength', value }];
+    assertEqual(resolveInventoryNoteMaxLength(pref('10')), 10, 'integer value');
+    assertEqual([resolveInventoryNoteMaxLength(null), resolveInventoryNoteMaxLength([])], [25, 25], 'missing');
+    assertEqual(['abc', '0', '-3'].map(v => resolveInventoryNoteMaxLength(pref(v))), [25, 25, 25], 'invalid');
+    assertEqual(await Requests.getInventoryNoteMaxLength(), 25, 'fixture preference');
+});
+
+test('NOTE LENGTH', 'proposal names and commit notes follow the note limit', async () => {
+    assertEqual([ProposalUtils.nameMaxLength(25), ProposalUtils.nameMaxLength(20), ProposalUtils.nameMaxLength(5)], [15, 10, 1], 'name limits');
+    assertEqual(ProposalUtils.validateName('Eleven char', [], 20), 'Use at most 10 characters', 'shorter limit');
+    assertEqual(ProposalUtils.commitNote('Spring buy', 15), 'proposal: Sprin', 'commit note truncated');
+});
+
+test('NOTE LENGTH', 'inventory saves truncate notes to the preference', async () => {
+    const setLimit = async (value) => {
+        const prefs = (await Requests.getPreferences()).map(p => ({ ...p, value: p.id === 'InventoryNoteMaxLength' ? value : p.value }));
+        await _asUser(() => Requests.savePreferences(prefs));
+    };
+    await setLimit('10');
+    try {
+        assertEqual(await Requests.getInventoryNoteMaxLength(), 10, 'preference change picked up');
+        const rows = (await Requests.getInventoryTabData('FURNITURE')).map(r => ({ ...r }));
+        rows.find(r => r.itemNumber === 'STOOL-003').quantity = '21';
+        await _asUser(() => Requests.saveInventoryTabData(rows, 'FURNITURE', undefined, undefined, undefined, { note: 'a long recount note' }));
+        const saved = (await Requests.getInventoryTabData('FURNITURE')).find(r => r.itemNumber === 'STOOL-003');
+        assertEqual(JSON.parse(saved.edithistory).h[0].s, 'a long rec', 'note truncated to 10');
+    } finally {
+        await setLimit('25');
+    }
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────

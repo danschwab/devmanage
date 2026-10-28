@@ -1,4 +1,4 @@
-import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString, INVENTORY_NOTE_MAX_LENGTH, ProposalUtils, PROPOSAL_NAME_MAX_LENGTH } from '../../index.js';
+import { html, Requests, TableComponent, getReactiveStore, createAnalysisConfig, NavigationRegistry, Priority, invalidateCache, authState, undoRegistry, EditHistoryUtils, todayISOString, ProposalUtils, getInventoryNoteMaxLength } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 import { getProposalsStore, reloadProposals, proposalPath } from '../../utils/inventoryProposals.js';
 
@@ -28,6 +28,11 @@ export const InventorySaveModal = {
             type: String,
             default: ''
         },
+        // ISO date to start with (ignored if in the past)
+        initialDate: {
+            type: String,
+            default: ''
+        },
         onProposal: {
             type: Function,
             default: null
@@ -43,14 +48,12 @@ export const InventorySaveModal = {
     },
     data() {
         return {
-            scheduledDate: todayISOString(),
-            note: (this.initialNote || '').slice(0, INVENTORY_NOTE_MAX_LENGTH),
+            scheduledDate: this.initialDate > todayISOString() ? this.initialDate : todayISOString(),
+            note: (this.initialNote || '').slice(0, getInventoryNoteMaxLength()),
             error: null,
-            noteMaxLength: INVENTORY_NOTE_MAX_LENGTH,
             mode: 'save',
             selectedProposal: this.proposalNames[0] || '',
             newProposalName: '',
-            proposalNameMaxLength: PROPOSAL_NAME_MAX_LENGTH,
             proposalError: null
         };
     },
@@ -63,13 +66,20 @@ export const InventorySaveModal = {
         },
         charCount() {
             return this.note.length;
+        },
+        // InventoryNoteMaxLength preference
+        noteMaxLength() {
+            return getInventoryNoteMaxLength();
+        },
+        proposalNameMaxLength() {
+            return ProposalUtils.nameMaxLength(this.noteMaxLength);
         }
     },
     methods: {
         handleUpdateProposal() {
             const newName = this.newProposalName.trim();
             if (newName) {
-                const error = ProposalUtils.validateName(newName, this.allProposalNames);
+                const error = ProposalUtils.validateName(newName, this.allProposalNames, this.noteMaxLength);
                 if (error) {
                     this.proposalError = error;
                     return;
@@ -1457,7 +1467,7 @@ export const InventoryTableComponent = {
                         ...newRows.map(row => ({ ...row, quantity: '0' }))
                     ];
                     await Requests.saveInventoryTabData(rowsToSave, this.tabTitle, undefined, undefined, undefined, {
-                        note: ProposalUtils.commitNote(name)
+                        note: ProposalUtils.commitNote(name, getInventoryNoteMaxLength())
                     });
                 }
                 if (updates.length > 0) {
@@ -1475,22 +1485,8 @@ export const InventoryTableComponent = {
             }
         },
 
-        removeFromProposal(entry) {
-            this.$modal.confirm(
-                `Remove ${entry.itemNumber} from the "${entry.proposal}" proposal?`,
-                async () => {
-                    try {
-                        await Requests.removeInventoryProposalEntry(entry.proposal, entry.category, entry.itemNumber);
-                        await reloadProposals();
-                    } catch (error) {
-                        this.$modal.alert(`Could not update the proposal: ${error.message}`, 'Error');
-                    }
-                },
-                null,
-                'Remove from Proposal',
-                'Remove',
-                'Cancel'
-            );
+        openProposal(entry) {
+            this.appContext?.navigateToPath?.(proposalPath(entry.proposal));
         },
 
         getPendingEntries(item) {
@@ -1633,11 +1629,11 @@ export const InventoryTableComponent = {
             for (const field of HISTORY_FIELDS) {
                 target[field] = detail.revertState[field] ?? '';
             }
-            // Save note (max 25 characters), e.g. "revert to Oct 6, 2026" / "revert to earliest"
+            // Save note (InventoryNoteMaxLength), e.g. "revert to Oct 6, 2026" / "revert to earliest"
             const when = detail.meta?.date
                 ? detail.meta.date.split(',').slice(0, 2).join(',')
                 : (detail.label === 'Created' ? 'creation' : 'earliest');
-            this.revertNote = `revert to ${when}`.slice(0, 25);
+            this.revertNote = `revert to ${when}`.slice(0, getInventoryNoteMaxLength());
         },
 
         handleReportsClick() {
@@ -1747,10 +1743,10 @@ export const InventoryTableComponent = {
                             >↶</button>
                             <button
                                 v-else-if="column.key === '_navigate' && detail.proposal"
-                                class="button-symbol white"
-                                @click.stop="removeFromProposal(detail.proposal)"
-                                :title="'Remove from the ' + detail.proposal.proposal + ' proposal'"
-                            >×</button>
+                                class="button-symbol purple"
+                                @click.stop="openProposal(detail.proposal)"
+                                :title="'Open the ' + detail.proposal.proposal + ' proposal'"
+                            ><span class="material-symbols-outlined">info</span></button>
                         </td>
                     </tr>
                 </template>

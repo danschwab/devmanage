@@ -256,7 +256,7 @@ Field contract:
 - `u`: user short name (email prefix before `@`).
 - `t`: **effective date** in deciseconds (start-of-day precision — compare dates only, ignore time-of-day).
 - `d`: creation timestamp in deciseconds (when the entry was scheduled).
-- `s`: note text (max 25 characters).
+- `s`: note text, at most the `InventoryNoteMaxLength` preference (CACHE/Preferences, default 25). The same limit applies to inventory notes in `h` entries.
 - `c`: changed fields array.
 - `n`: application field name (e.g. `"quantity"`).
 - `ne`: new value descriptor — either an absolute value (`"10"`, `10`) or a numeric delta string (`"+5"`, `"-2"`). A delta string starts with `+` or `-` followed by a digit. Numeric fields are always scheduled as deltas.

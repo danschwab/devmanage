@@ -1,4 +1,4 @@
-import { EditHistoryUtils, INVENTORY_NOTE_MAX_LENGTH } from './metadata-utils.js';
+import { EditHistoryUtils, DEFAULT_INVENTORY_NOTE_MAX_LENGTH } from './metadata-utils.js';
 
 /**
  * Inventory proposals: proposed inventory changes kept apart from real inventory until committed.
@@ -31,15 +31,16 @@ export const PROPOSAL_LOCK_NAMESPACE = 'INVENTORY_PROPOSALS';
 
 const PROPOSAL_NOTE_PREFIX = 'proposal: ';
 
-/** Names fit the default commit note "proposal: <name>" within the inventory note limit */
-export const PROPOSAL_NAME_MAX_LENGTH = INVENTORY_NOTE_MAX_LENGTH - PROPOSAL_NOTE_PREFIX.length;
-
 const toNumber = (value) => {
     const n = parseFloat(value);
     return Number.isFinite(n) ? n : 0;
 };
 const formatDelta = (delta) => (delta > 0 ? `+${delta}` : String(delta));
 const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+const itemKey = (entry) => `${entry.category}\u0000${entry.itemNumber}`;
+const newEntry = (proposal, category, itemNumber, changes, user, now) => ({
+    proposal, category, itemNumber, changes: [...changes], updatedBy: user, updated: now, committedBy: '', committed: 0
+});
 
 export class ProposalUtils {
     /** URL segment for a proposal name: lowercase, non-alphanumerics as '-' */
@@ -47,9 +48,21 @@ export class ProposalUtils {
         return String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     }
 
-    /** Default commit note, e.g. "proposal: Spring buy" */
-    static commitNote(name) {
-        return `${PROPOSAL_NOTE_PREFIX}${name}`.slice(0, INVENTORY_NOTE_MAX_LENGTH);
+    /**
+     * Longest proposal name: names fit the default commit note "proposal: <name>" within the
+     * InventoryNoteMaxLength preference (25 → 15 characters).
+     * @param {number} [noteMaxLength] - InventoryNoteMaxLength preference
+     */
+    static nameMaxLength(noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH) {
+        return Math.max(1, noteMaxLength - PROPOSAL_NOTE_PREFIX.length);
+    }
+
+    /**
+     * Default commit note, e.g. "proposal: Spring buy"
+     * @param {number} [noteMaxLength] - InventoryNoteMaxLength preference
+     */
+    static commitNote(name, noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH) {
+        return `${PROPOSAL_NOTE_PREFIX}${name}`.slice(0, noteMaxLength);
     }
 
     /** Signed text for a quantity change, e.g. "+8", "-2", "" for none */
@@ -62,12 +75,14 @@ export class ProposalUtils {
      * Validate a name for a new proposal.
      * @param {string} name
      * @param {Array<string>} existingNames - Every proposal name, active and committed
+     * @param {number} [noteMaxLength] - InventoryNoteMaxLength preference
      * @returns {string|null} Error message, or null when valid
      */
-    static validateName(name, existingNames = []) {
+    static validateName(name, existingNames = [], noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH) {
         const trimmed = String(name || '').trim();
+        const maxLength = this.nameMaxLength(noteMaxLength);
         if (!trimmed) return 'Enter a proposal name';
-        if (trimmed.length > PROPOSAL_NAME_MAX_LENGTH) return `Use at most ${PROPOSAL_NAME_MAX_LENGTH} characters`;
+        if (trimmed.length > maxLength) return `Use at most ${maxLength} characters`;
         const slug = this.slugify(trimmed);
         if (!slug) return 'Use at least one letter or number';
         if (existingNames.some(existing => this.slugify(existing) === slug)) return 'A proposal with this name already exists';
@@ -111,9 +126,18 @@ export class ProposalUtils {
         }));
     }
 
+    /** Entries of one proposal (names match ignoring case) */
+    static entriesOf(entries, name) {
+        return (entries || []).filter(entry => sameName(entry.proposal, name));
+    }
+
+    /** A proposal is committed when it has rows and every one of them is committed */
+    static isCommitted(proposalEntries) {
+        return proposalEntries.length > 0 && proposalEntries.every(entry => entry.committed);
+    }
+
     /**
      * Group entries into proposals: active first (most recently updated first), then committed.
-     * A proposal is committed when every one of its rows is committed.
      * @returns {Array<{name, slug, entries, categories, itemCount, updatedBy, updated, committed, committedBy}>}
      */
     static groupProposals(entries) {
@@ -126,8 +150,9 @@ export class ProposalUtils {
         return [...byName.values()]
             .map(proposal => {
                 const newest = proposal.entries.reduce((a, b) => (b.updated > a.updated ? b : a));
-                const isCommitted = proposal.entries.every(entry => entry.committed);
-                const lastCommit = isCommitted ? proposal.entries.reduce((a, b) => (b.committed > a.committed ? b : a)) : null;
+                const lastCommit = this.isCommitted(proposal.entries)
+                    ? proposal.entries.reduce((a, b) => (b.committed > a.committed ? b : a))
+                    : null;
                 return {
                     ...proposal,
                     categories: [...new Set(proposal.entries.map(entry => entry.category))],
@@ -144,7 +169,7 @@ export class ProposalUtils {
 
     /** Active (uncommitted) entries, optionally only those of one proposal */
     static activeEntries(entries, name = null) {
-        return (entries || []).filter(entry => !entry.committed && (name === null || sameName(entry.proposal, name)));
+        return (name === null ? (entries || []) : this.entriesOf(entries, name)).filter(entry => !entry.committed);
     }
 
     /**
@@ -180,24 +205,57 @@ export class ProposalUtils {
      */
     static mergeIntoProposal(entries, name, category, updates, user, now) {
         const result = entries.map(entry => ({ ...entry, changes: [...entry.changes] }));
-        const storedName = result.find(entry => sameName(entry.proposal, name))?.proposal || String(name).trim();
+        const storedName = this.entriesOf(result, name)[0]?.proposal || String(name).trim();
+        const active = new Map(this.activeEntries(result, storedName).map(entry => [itemKey(entry), entry]));
         for (const { itemNumber, changes } of updates) {
             if (!changes?.length) continue;
-            const existing = result.find(entry => !entry.committed && sameName(entry.proposal, storedName)
-                && entry.category === category && entry.itemNumber === itemNumber);
+            const existing = active.get(itemKey({ category, itemNumber }));
             if (existing) {
                 const replaced = new Set(changes.map(ch => ch.n));
                 existing.changes = [...existing.changes.filter(ch => !replaced.has(ch.n)), ...changes];
                 existing.updatedBy = user;
                 existing.updated = now;
             } else {
-                result.push({
-                    proposal: storedName, category, itemNumber, changes: [...changes],
-                    updatedBy: user, updated: now, committedBy: '', committed: 0
-                });
+                result.push(newEntry(storedName, category, itemNumber, changes, user, now));
             }
         }
         return result;
+    }
+
+    /**
+     * Replace a proposal's active entries with the changes in proposal page rows (save from the
+     * proposal page). Rows without changes are dropped; an entry whose changes did not change keeps
+     * its UpdatedBy/Updated. Other proposals and committed rows are kept.
+     * @throws {Error} When the proposal is committed
+     */
+    static replaceActiveEntries(entries, name, rows, user, now) {
+        const own = this.entriesOf(entries, name);
+        if (this.isCommitted(own)) throw new Error(`Proposal "${name}" is committed and can no longer be edited`);
+        const storedName = own[0]?.proposal || String(name).trim();
+        const previous = new Map(this.activeEntries(own).map(entry => [itemKey(entry), entry]));
+        const replacements = [];
+        for (const row of rows || []) {
+            const changes = this.changesFromTableRow(row);
+            if (changes.length === 0) continue;
+            const before = previous.get(itemKey(row));
+            const entry = newEntry(storedName, row.category, row.itemNumber, changes, user, now);
+            if (before && JSON.stringify(before.changes) === JSON.stringify(changes)) {
+                entry.updatedBy = before.updatedBy;
+                entry.updated = before.updated;
+            }
+            replacements.push(entry);
+        }
+        return [...entries.filter(entry => entry.committed || !sameName(entry.proposal, name)), ...replacements];
+    }
+
+    /** Mark a proposal's active rows in the given categories as committed */
+    static markCommitted(entries, name, categories, user, now) {
+        const committedTabs = new Set(categories);
+        return entries.map(entry => (
+            !entry.committed && committedTabs.has(entry.category) && sameName(entry.proposal, name)
+                ? { ...entry, committedBy: user, committed: now }
+                : entry
+        ));
     }
 
     /**

@@ -49,8 +49,22 @@ export const ARCHIVE_HEADERS = ['SourceTable', 'SourceTab', 'RowIdentifier', 'Us
 /** Row object key holding the EditHistory column (sheet header 'EditHistory') */
 export const HISTORY_KEY = 'edithistory';
 
-/** Maximum length of an inventory save note (stored in EditHistory `s`) */
-export const INVENTORY_NOTE_MAX_LENGTH = 25;
+/** CACHE/Preferences ID holding the maximum length of an inventory save note (EditHistory `s`) */
+export const INVENTORY_NOTE_MAX_LENGTH_PREFERENCE = 'InventoryNoteMaxLength';
+
+/** Note length used when the preference is missing or invalid */
+export const DEFAULT_INVENTORY_NOTE_MAX_LENGTH = 25;
+
+/**
+ * Inventory note limit from preference rows ({ id, value }), e.g. Requests.getPreferences().
+ * @param {Array<{id: string, value: string}>} preferences
+ * @returns {number} Positive integer
+ */
+export function resolveInventoryNoteMaxLength(preferences) {
+    const row = Array.isArray(preferences) ? preferences.find(p => p?.id === INVENTORY_NOTE_MAX_LENGTH_PREFERENCE) : null;
+    const value = parseInt(row?.value, 10);
+    return Number.isInteger(value) && value > 0 ? value : DEFAULT_INVENTORY_NOTE_MAX_LENGTH;
+}
 
 const DIFF_IGNORED_COLUMNS = [HISTORY_KEY, 'AppData'];
 
@@ -557,16 +571,17 @@ export class EditHistoryUtils {
      * @param {string} username - User email
      * @param {Array<{n: string, ne: string|number}>} changes - Changed fields
      * @param {number} effectiveDateDeciseconds - Effective date in deciseconds
-     * @param {string} note - Description/note (max 25 chars)
+     * @param {string} note - Description/note
+     * @param {number} [noteMaxLength] - InventoryNoteMaxLength preference; the note is truncated to it
      * @returns {Object} Pending entry object
      */
-    static createPendingEntry(username, changes, effectiveDateDeciseconds, note) {
+    static createPendingEntry(username, changes, effectiveDateDeciseconds, note, noteMaxLength = DEFAULT_INVENTORY_NOTE_MAX_LENGTH) {
         const shortUser = username ? username.split('@')[0] : 'unknown';
         return {
             u: shortUser,
             t: effectiveDateDeciseconds,
             d: Math.floor(Date.now() / 100),
-            s: (note || '').slice(0, INVENTORY_NOTE_MAX_LENGTH),
+            s: (note || '').slice(0, noteMaxLength),
             c: changes.map(ch => ({ n: ch.n, ne: ch.ne }))
         };
     }

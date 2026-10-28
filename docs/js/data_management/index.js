@@ -11,5 +11,5 @@ export { ProductionUtils } from './abstraction/production-utils.js';
 
 // Utility classes
 export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, searchFilter, mapWithConcurrency, GetTopFuzzyMatch, GetParagraphMatchRating, normalizeHeaderName, isLocalhost, sanitizeTabName, normalizeText, normalizeMatchKey, getRandomLoadingQuote } from './utils/helpers.js';
-export { EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, INVENTORY_NOTE_MAX_LENGTH } from './utils/metadata-utils.js';
-export { ProposalUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING, PROPOSAL_FIELDS, PROPOSAL_LOCK_NAMESPACE, PROPOSAL_NAME_MAX_LENGTH } from './utils/proposal-utils.js';
+export { EditHistoryUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, INVENTORY_NOTE_MAX_LENGTH_PREFERENCE, DEFAULT_INVENTORY_NOTE_MAX_LENGTH, resolveInventoryNoteMaxLength } from './utils/metadata-utils.js';
+export { ProposalUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING, PROPOSAL_LOCK_NAMESPACE } from './utils/proposal-utils.js';

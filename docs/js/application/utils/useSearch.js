@@ -38,7 +38,7 @@ function splitSearchTerms(searchTerm) {
  * @param {String} text - Text to escape
  * @returns {String} Escaped text
  */
-function escapeHtml(text) {
+export function escapeHtml(text) {
     return String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')

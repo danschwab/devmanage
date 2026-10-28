@@ -15,10 +15,10 @@
 | New items | Allowed. On **Update Proposal**, a confirm dialog says new items are created in inventory immediately at quantity 0; the proposal holds their quantity change. Cancel aborts. |
 | Updating from a category page | Merge: each edited field overwrites that item's previous change for the field; untouched items stay. Creating a new proposal navigates to it. |
 | Row label | `<Name> proposal`, no date. |
-| Names | 1–15 characters, unique ignoring case (across active and committed proposals), no renaming. 15 = note limit (25) minus `proposal: `. |
+| Names | Unique ignoring case (across active and committed proposals), no renaming. Length: the `InventoryNoteMaxLength` preference minus `proposal: ` (25 → 15 characters). |
 | After commit | Kept, immutable. Committed cards are styled gray and sorted after active ones. No management UI yet. |
 | Commit safety | Two passes. Pass 1 locks every category and applies the edits to each category's store; any lock failure undoes everything. Pass 2 saves every category and releases its lock. If any affected category has unsaved edits, the commit refuses and asks the user to save or discard them first. |
-| Overlapping proposals | Allowed. An item can show several proposal rows; each has an × button that removes the item from that proposal. |
+| Overlapping proposals | Allowed. An item can show several proposal rows; each has an info button that opens that proposal, where the item can be removed (×). |
 | Projected quantity | On the proposal page, for a date picked in the table header: saved quantity + scheduled changes due by that date + this proposal's change. This is the **owned total**, not availability (no show usage subtracted). |
 
 ---
@@ -56,7 +56,7 @@ Text fields are applied as plain values; only `quantity` goes through `applyNeVa
 
 ### Category table
 
-Under each item, after scheduled-change rows: one row per active proposal entry, labeled `<Name> proposal`, showing the quantity change (`+8`) and any new description/notes, with an × that removes the item from that proposal.
+Under each item, after scheduled-change rows: one row per active proposal entry, labeled `<Name> proposal`, showing the quantity change (`+8`) and any new description/notes, with an info button that opens that proposal.
 
 ### Hamburger menu
 
@@ -68,15 +68,15 @@ Inventory pages show **View Proposals** when an active proposal exists → `repo
 - `reports/inventory-proposals` — cards grid, one card per proposal (active first, committed gray at the end).
 - `reports/inventory-proposals/<slug>` — the proposal page. `<slug>` is the lowercase name with non-alphanumerics as `-`.
 
-Routes for proposals register when the proposal list loads, not only when the Reports landing mounts.
+`ReportsContent` (which hosts both pages) registers one child route per proposal from the shared proposal list, so breadcrumbs and deep links work on every Reports path.
 
 ### Proposal page
 
-One table: Category, Item#, Current Qty, Change (green `+` / red `-`), Projected Qty, Description, Notes, ×.
+One table: image (read-only, as on the overview table), Category, Item#, Current Qty, Change (green `+` / red `-`), Projected Qty, Description, Notes, × (removes the item from the proposal).
 
-- Projected date picker in the table header (defaults to today).
+- Projected date picker in the table's button bar (`card white`, "Projected on:"), defaulting to today.
 - Editable with the standard lock (`INVENTORY_PROPOSALS:<name>`) and Save/Discard. Edited Description/Notes that match the current value drop that change; a zero quantity change drops it.
-- **Commit** (disabled while dirty or committed) → the standard inventory save dialog, note required and prefilled `proposal: <name>`, then the two-pass commit.
+- **Commit** (disabled while dirty or committed) → the standard inventory save dialog, note required and prefilled `proposal: <name>`, date starting at the projected date, then the two-pass commit.
 - Committed proposals are read-only with a banner.
 
 ---
@@ -85,18 +85,17 @@ One table: Category, Item#, Current Qty, Change (green `+` / red `-`), Projected
 
 | Area | File |
 |---|---|
-| Constants, pure helpers (names, slugs, diff, merge, apply) | `docs/js/data_management/utils/proposal-utils.js` |
-| Read and write the tab | `docs/js/data_management/api.js` (`getInventoryProposals`, `getInventoryProposalTable`, `updateInventoryProposal`, `removeInventoryProposalEntry`, `saveInventoryProposalTable`, `markInventoryProposalCommitted`) |
-| Two-pass commit | `docs/js/application/utils/inventoryProposals.js` |
+| Constants and all entry logic as pure helpers: names, slugs, diff, merge, replace (page save), mark committed, apply, projection | `docs/js/data_management/utils/proposal-utils.js` |
+| Read and write the tab | `docs/js/data_management/api.js`: `getInventoryProposals`, `getInventoryProposalTable`; the three mutations are one-line wrappers over `_updateProposalEntries(transform)` (read → pure helper → write) |
+| Shared proposal store, routes, two-pass commit | `docs/js/application/utils/inventoryProposals.js` |
 | Save dialog, proposal rows | `docs/js/application/components/content/InventoryTable.js` |
 | Menu item | `docs/js/application/components/content/InventoryContent.js` |
 | Cards grid and proposal page | `docs/js/application/components/content/InventoryProposals.js`, routed from `ReportsContent.js` |
-| Note length constant | `INVENTORY_NOTE_MAX_LENGTH` in `metadata-utils.js` (first step toward one global setting) |
+| Note length | `InventoryNoteMaxLength` preference (CACHE/Preferences, integer, default 25): `resolveInventoryNoteMaxLength` in `metadata-utils.js`, `Requests.getInventoryNoteMaxLength` for saves, `getInventoryNoteMaxLength()` (reactive) for the UI |
 
 ---
 
 ## Follow-Ups
 
-- Move the remaining `25` literals (pending-change editor, other note inputs) to `INVENTORY_NOTE_MAX_LENGTH`.
 - Proposal management (rename, delete, archive committed) if the list grows.
 - `applyNeValue` treats any `+digit`/`-digit` string as a delta for every field; scheduled description changes starting with a sign have the same issue proposals avoid.

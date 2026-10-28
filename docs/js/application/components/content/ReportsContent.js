@@ -1,9 +1,9 @@
-import { html, CardsComponent, hamburgerMenuRegistry, NavigationRegistry, DashboardToggleComponent } from '../../index.js';
+import { html, CardsComponent, hamburgerMenuRegistry, NavigationRegistry, DashboardToggleComponent, ProposalUtils } from '../../index.js';
 import { ShowInventoryReport } from './ShowInventoryReport.js';
 import { InventoryItemReport } from './InventoryItemReport.js';
 import { IndexMismatchReport } from './IndexMismatchReport.js';
 import { InventoryProposalsGrid, InventoryProposalTable } from './InventoryProposals.js';
-import { PROPOSALS_PATH, PROPOSALS_ROUTE } from '../../utils/inventoryProposals.js';
+import { PROPOSALS_PATH, PROPOSALS_ROUTE, getProposalsStore, registerProposalRoutes } from '../../utils/inventoryProposals.js';
 
 export const ReportsContent = {
     components: {
@@ -23,6 +23,7 @@ export const ReportsContent = {
     },
     data() {
         return {
+            proposalsStore: getProposalsStore(),
             items: [
                 { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.', cardClass: 'blue' },
                 { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.', cardClass: 'blue' },
@@ -32,6 +33,10 @@ export const ReportsContent = {
         };
     },
     computed: {
+        // Every proposal (reads each entry, so in-place store updates re-register routes)
+        proposals() {
+            return ProposalUtils.groupProposals(this.proposalsStore.data || []);
+        },
         cleanContainerPath() {
             return this.containerPath.split('?')[0];
         },
@@ -44,6 +49,11 @@ export const ReportsContent = {
             return this.cleanContainerPath.startsWith(prefix)
                 ? this.cleanContainerPath.slice(prefix.length).split('/')[0]
                 : null;
+        }
+    },
+    watch: {
+        proposals(proposals) {
+            registerProposalRoutes(proposals);
         }
     },
     methods: {
@@ -75,6 +85,9 @@ export const ReportsContent = {
                 }
             }
         });
+
+        // One child route per proposal (breadcrumb names, deep links); kept current by the watcher
+        registerProposalRoutes(this.proposals);
 
         // Register hamburger menu for reports
         hamburgerMenuRegistry.registerMenu('reports', {
