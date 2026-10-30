@@ -1,4 +1,4 @@
-import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority, TableComponent } from '../../index.js';
+import { html, getReactiveStore, Requests, authState, NavigationRegistry, buildTextFilterParameters, parseTextFilterParameters, LoadingBarComponent, createAnalysisConfig, parseDateFilterParameters, buildDateFilterParameters, toISODateString, parseDate, toUSDateString, offsetToISO, Priority, DataView } from '../../index.js';
 
 // Shared utility: Match URL search data to a saved search
 function matchUrlToSavedSearch(savedSearches, urlSearchData) {
@@ -285,9 +285,9 @@ export const ScheduleAdvancedFilter = {
             const filter = {
                 dateFilters: params.dateFilters || [],
                 textFilters: params.textFilters || [],
-                view: params.view || null
+                dateFilter: params.dateFilter || null
             };
-            
+
             // Try to match URL to a saved search
             const matchedSearchIndex = matchUrlToSavedSearch(this.savedSearchesStore?.data || [], filter);
             if (matchedSearchIndex >= 0) {
@@ -719,7 +719,7 @@ export const ScheduleAdvancedFilter = {
             const self = this;
 
             const ShowOverlapModalComponent = {
-                components: { TableComponent, ScheduleFilterSelect },
+                components: { DataView, ScheduleFilterSelect },
                 inject: ['$modal', 'appContext'],
                 data() {
                     return {
@@ -738,13 +738,28 @@ export const ScheduleAdvancedFilter = {
                         // Data is already filtered at the store level via searchFilter watcher
                         return this.allShows;
                     },
-                    columns() {
+                    fields() {
                         return [
                             { key: 'show', label: 'Show', sortable: true },
-                            { key: 'shipDate', label: 'Ship Date', sortable: true, format: 'date' },
-                            { key: 'returnDate', label: 'Return', sortable: true, format: 'date' },
-                            { key: '_action', label: '', width: 90, sortable: false, sticky: 'end' }
+                            { key: 'shipDate', label: 'Ship Date', sortable: true, format: 'date', type: 'date' },
+                            { key: 'returnDate', label: 'Return', sortable: true, format: 'date', type: 'date' }
                         ];
+                    },
+                    // Single-view registry, no URL; Select is the primary action (button in the action cell)
+                    registry() {
+                        return {
+                            id: 'show-overlap-picker',
+                            default: 'table',
+                            theme: 'gray',
+                            views: [{ id: 'table', name: 'Shows', layout: 'table', columns: ['show', 'shipDate', 'returnDate'], sort: { key: 'show', dir: 'asc' } }]
+                        };
+                    },
+                    selectAction() {
+                        return {
+                            run: (row) => this.selectShow(row),
+                            label: 'Select',
+                            disabled: (row) => !row.shipDate && !row.returnDate
+                        };
                     }
                 },
                 async mounted() {
@@ -797,15 +812,15 @@ export const ScheduleAdvancedFilter = {
                     }
                 },
                 template: html`
-                    <TableComponent
-                        :data="tableData"
-                        :theme="'gray hover-highlight'"
-                        :columns="columns"
+                    <DataView
+                        :fields="fields"
+                        :rows="tableData"
+                        :registry="registry"
+                        :action="selectAction"
                         :isLoading="isLoading"
                         :showSearch="true"
                         :showRefresh="false"
                         :syncSearchWithUrl="false"
-                        defaultSortColumn="show"
                         emptyMessage="No shows found."
                         loadingMessage="Loading shows..."
                     >
@@ -819,15 +834,7 @@ export const ScheduleAdvancedFilter = {
                                 @search-selected="handleSearchSelected"
                             />
                         </template>
-                        <template #cell-extra="{ row, column }">
-                            <button
-                                v-if="column.key === '_action'"
-                                @click="selectShow(row)"
-                                :disabled="!row.shipDate && !row.returnDate"
-                                class="green"
-                            >Select</button>
-                        </template>
-                    </TableComponent>
+                    </DataView>
                 `
             };
 
@@ -1261,8 +1268,9 @@ export const ScheduleFilterSelect = {
                 // Skip if params haven't actually changed
                 if (JSON.stringify(newParams) === JSON.stringify(oldParams)) return;
 
-                // Skip if only non-filter params changed (e.g. layout toggle)
-                const filterKeys = ['dateFilters', 'textFilters', 'view'];
+                // Skip if only non-filter params changed (e.g. a view switch).
+                // `view` is the views system's view id; show-all lives in `dateFilter`.
+                const filterKeys = ['dateFilters', 'textFilters', 'dateFilter'];
                 const newFilter = JSON.stringify(filterKeys.map(k => newParams[k]));
                 const oldFilter = JSON.stringify(filterKeys.map(k => oldParams[k]));
                 if (newFilter === oldFilter) return;
@@ -1369,10 +1377,10 @@ export const ScheduleFilterSelect = {
             if (!value) {
                 this.$emit('search-selected', null);
                 // Clear all schedule filter parameters by setting them to undefined
-                this.updateURL({ 
-                    dateFilters: undefined, 
-                    textFilters: undefined, 
-                    view: undefined 
+                this.updateURL({
+                    dateFilters: undefined,
+                    textFilters: undefined,
+                    dateFilter: undefined
                 });
                 return;
             }
@@ -1388,8 +1396,8 @@ export const ScheduleFilterSelect = {
 
             if (option.type === 'show-all') {
                 this.$emit('search-selected', { type: 'show-all', startDate: null, endDate: null });
-                this.updateURL({ 
-                    view: 'all',
+                this.updateURL({
+                    dateFilter: 'all',
                     dateFilters: undefined, // Clear date filters for show-all
                     textFilters: undefined  // Clear text filters for show-all
                 }, replaceHistory);
@@ -1407,7 +1415,7 @@ export const ScheduleFilterSelect = {
                 };
                 this.$emit('search-selected', searchData);
                 this.updateURL({
-                    view: undefined, // Clear show-all view parameter
+                    dateFilter: undefined, // Clear show-all parameter
                     dateFilters: searchData.dateFilters,
                     textFilters: undefined // Explicitly clear text filters for year selection
                 }, replaceHistory);
@@ -1458,7 +1466,7 @@ export const ScheduleFilterSelect = {
             if (!searchData) return;
             
             const params = {
-                view: undefined // Clear show-all view parameter
+                dateFilter: undefined // Clear show-all parameter
             };
             // Clean filters to remove AppData before passing to URL
             if (searchData.dateFilters?.length) params.dateFilters = cleanFilters(searchData.dateFilters);
@@ -1510,17 +1518,17 @@ export const ScheduleFilterSelect = {
             const filter = {
                 dateFilters: params.dateFilters || [],
                 textFilters: params.textFilters || [],
-                view: params.view || null
+                dateFilter: params.dateFilter || null
             };
 
-            // Only non-filter params present (e.g. just layout) — don't change filter state
-            if (!filter.dateFilters.length && !filter.textFilters.length && !filter.view) {
+            // Only non-filter params present (e.g. just a view id) — don't change filter state
+            if (!filter.dateFilters.length && !filter.textFilters.length && !filter.dateFilter) {
                 this.defaultSearch && this.applyDefaultSearch(replaceHistory);
                 return;
             }
-            
-            // Check for view=all (show-all)
-            if (filter.view === 'all' && this.allowShowAll) {
+
+            // Check for dateFilter=all (show-all)
+            if (filter.dateFilter === 'all' && this.allowShowAll) {
                 this.selectedValue = 'show-all';
                 this.lastNonCustomValue = 'show-all';
                 this.$emit('search-selected', { type: 'show-all' });

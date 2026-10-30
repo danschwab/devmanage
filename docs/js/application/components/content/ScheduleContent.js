@@ -1,5 +1,6 @@
 import { html, ScheduleTableComponent, hamburgerMenuRegistry, DashboardToggleComponent, NavigationRegistry, Requests, ScheduleFilterSelect } from '../../index.js';
 import { TransshipmentModal } from '../interface/ScheduleModals.js';
+import { DesignQueueContent } from './DesignQueueContent.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 
 // Schedule Hamburger Menu Component
@@ -15,6 +16,7 @@ export const ScheduleMenuComponent = {
     computed: {
         menuItems() {
             return [
+                { label: 'Design Queue', action: 'designQueue' },
                 { label: 'Manage Transshipments', action: 'manageTransshipments' }
             ];
         }
@@ -23,6 +25,11 @@ export const ScheduleMenuComponent = {
         handleAction(action) {
             this.$emit('close-modal');
             switch (action) {
+                case 'designQueue':
+                    if (this.navigateToPath) {
+                        this.navigateToPath('schedule/design-queue');
+                    }
+                    break;
                 case 'manageTransshipments':
                     this.$modal.custom(TransshipmentModal, { modalClass: 'page-menu' }, 'Manage Transshipments');
                     break;
@@ -53,7 +60,8 @@ export const ScheduleMenuComponent = {
 export const ScheduleContent = {
     components: {
         ScheduleTableComponent,
-        ScheduleFilterSelect
+        ScheduleFilterSelect,
+        DesignQueueContent
     },
     inject: ['$modal'],
     props: {
@@ -66,10 +74,6 @@ export const ScheduleContent = {
     computed: {
         cleanContainerPath() {
             return (this.containerPath || 'schedule').split('?')[0].replace(/\/calendar$/, '');
-        },
-        isCalendarView() {
-            const params = NavigationRegistry.getNavigationParameters(this.containerPath);
-            return params.layout === 'calendar';
         },
         // The effective base path for ScheduleFilterSelect URL sync
         scheduleBasePath() {
@@ -87,18 +91,20 @@ export const ScheduleContent = {
     },
     data() {
         return {
-            filter: null,
-            viewModes: [
-                { paramName: 'layout', paramValue: 'calendar', symbol: 'calendar_month', title: 'Switch to calendar view' },
-                { paramName: 'layout', paramValue: null, symbol: 'table', title: 'Switch to table view' }
-            ]
+            filter: null
         };
     },
 
     mounted() {
         // Register schedule navigation routes
         NavigationRegistry.registerNavigation('schedule', {
-            routes: {}
+            routes: {
+                // Design queue: its own page under Schedule (R2.9, R6.1)
+                'design-queue': {
+                    displayName: 'Design Queue',
+                    dashboardTitle: 'Design Queue'
+                }
+            }
         });
 
         // Register hamburger menu for schedule
@@ -158,14 +164,17 @@ export const ScheduleContent = {
     },
     template: html`
         <slot>
-            <div class="schedule-page">
+            <DesignQueueContent
+                v-if="cleanContainerPath === 'schedule/design-queue'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+            />
+            <div v-else class="schedule-page">
                 <ScheduleTableComponent
                     :filter="dateFilter"
                     :search-params="tableSearchParams"
-                    :calendar-view="isCalendarView"
                     :container-path="containerPath"
                     :navigate-to-path="navigateToPath"
-                    :view-modes="viewModes"
                     @navigate-to-path="navigateToPath"
                 >
                     <template #header-area>

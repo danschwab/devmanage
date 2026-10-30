@@ -1,11 +1,24 @@
 import { html, parseDate, LoadingBarComponent, ViewChangeComponent, NavigationRegistry } from '../../index.js';
 import { useSearch, SearchBoxComponent, scrollToSearchResult, scrollToActiveResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
+import { formatText, escapeHtml } from '../../utils/views/fieldFormat.js';
+import { matchRows } from '../../utils/views/searchMatch.js';
+import { ContentHeaderComponent } from './contentHeaderComponent.js';
+import { CellRenderer, DecorationCards, placeDecorations } from './cells.js';
 
 export const CalendarComponent = {
     name: 'CalendarComponent',
-    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent },
+    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent, ContentHeaderComponent, CellRenderer, DecorationCards },
     props: {
+        // ── Views system (DataView) ──────────────────────────────────────────
+        // Primary action (ResolvedAction + perform(row, ctx)). Null = legacy chip click → event-click.
+        action: { type: Object, default: null },
+        decorations: { type: Function, default: null },
+        decorationKeys: { type: Array, default: () => [] },
+        // Chip colour (rowColorFor); replaces chipColorClass
+        rowClass: { type: Function, default: null },
+        viewSelect: { type: Object, default: null },
+        theme: { type: String, default: '' },
         data: { type: Array, default: () => [] },
         columns: { type: Array, default: () => [] },
         isLoading: { type: Boolean, default: false },
@@ -66,10 +79,60 @@ export const CalendarComponent = {
         secondRowColumns() {
             return (this.columns || []).filter(c => c.secondRow);
         },
+        // Searched tiers: chip lines are shown; other non-hidden columns are details (opened in the modal)
+        searchTierKeys() {
+            const shown = [...this.firstRowColumns, ...this.secondRowColumns].map(c => c.key);
+            const details = (this.columns || []).filter(c => c.details && !shown.includes(c.key)).map(c => c.key);
+            return { shown, details };
+        },
+        searchResult() {
+            return matchRows(this.data || [], this.searchTierKeys, this.search.searchWords.value);
+        },
+        searchActive() {
+            return this.searchResult.active && !this.searchResult.aborted;
+        },
+        searchResultByRow() {
+            const map = new Map();
+            if (!this.searchActive) return map;
+            this.searchResult.results.forEach((r, i) => { if (r) map.set(this.data[i], r); });
+            return map;
+        },
+        searchMatchCount() {
+            return this.searchResult.aborted ? Infinity : this.searchMatchedChips.length;
+        },
+        chipKeySet() {
+            return new Set(this.searchTierKeys.shown);
+        },
+        // Decorations placed per row: inline on chip keys, the rest at the chip end
+        rowDecorMap() {
+            const map = new Map();
+            if (!this.decorations) return map;
+            for (const ev of this.parsedEvents) {
+                map.set(ev.row, placeDecorations(this.decorations, this.decorationKeys, ev.row, this.chipKeySet));
+            }
+            return map;
+        },
+        effectiveAction() {
+            return this.action || { kind: 'legacy', trigger: 'row' };
+        },
+        hasActionButton() {
+            const a = this.effectiveAction;
+            return a.kind !== 'none' && a.kind !== 'legacy' && a.trigger === 'button';
+        },
+        chipIsTrigger() {
+            const a = this.effectiveAction;
+            return a.kind === 'legacy' || (a.kind !== 'none' && a.trigger === 'row');
+        },
+        hasEndCards() {
+            return !!(this.decorations || this.chipActions);
+        },
         parsedEvents() {
             if (!this.data || this.data.length === 0) return [];
             return this.data
                 .map((row, idx) => {
+                    // Row groups are a table concept: a group master summarizes its members, which
+                    // are the real events, so the calendar draws the members only.
+                    if (this._isGroupMaster(row)) return null;
                     const defaultYear = this.yearColumn ? (row[this.yearColumn] || null) : null;
                     const start = parseDate(row[this.eventStartColumn], true, defaultYear);
                     const end = parseDate(row[this.eventEndColumn], true, defaultYear) || start;
@@ -184,15 +247,9 @@ export const CalendarComponent = {
             return !this.isLoading && !this.isAnalyzing && (!this.data || this.data.length === 0);
         },
         searchMatchedChips() {
-            if (!this.search.hasActiveSearch.value) return [];
-            const words = this.search.searchWords.value;
-            const cols = [...this.firstRowColumns, ...this.secondRowColumns];
-            return this.parsedEvents.filter(event =>
-                words.every(word => cols.some(col => {
-                    const val = event.row[col.key];
-                    return val != null && String(val).toLowerCase().includes(word.toLowerCase());
-                }))
-            );
+            if (!this.searchActive) return [];
+            const byRow = this.searchResultByRow;
+            return this.parsedEvents.filter(event => byRow.has(event.row));
         },
         searchMatchChipKeyMap() {
             const map = new Map();
@@ -265,6 +322,13 @@ export const CalendarComponent = {
         this._stickyHeader?.teardown();
     },
     methods: {
+        _isGroupMaster(row) {
+            if (!row || !row.MetaData) return false;
+            try {
+                const meta = typeof row.MetaData === 'string' ? JSON.parse(row.MetaData) : row.MetaData;
+                return !!meta?.grouping?.isGroupMaster;
+            } catch { return false; }
+        },
         _getWeekStart(date, weekStartDay) {
             const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
             let diff = d.getDay() - weekStartDay;
@@ -303,34 +367,75 @@ export const CalendarComponent = {
             if (!seg.isStart) cls.push('chip-continuation');
             if (!seg.isEnd) cls.push('chip-continues');
             if (seg.row && seg.row.AppData && seg.row.AppData._analyzing) cls.push('analyzing');
-            const colorCls = this.chipColorClass ? this.chipColorClass(seg.row) : '';
+            const colorCls = this.rowClass ? this.rowClass(seg.row) : (this.chipColorClass ? this.chipColorClass(seg.row) : '');
             cls.push(colorCls || 'blue');
+            if (!this.chipIsTrigger) cls.push('chip-no-trigger');
             if (this.hoveredKey !== null && this.hoveredKey === seg.chipKey) cls.push('hovered');
-            if (this.search.hasActiveSearch.value && this.searchMatchChipKeyMap.get(seg.chipKey) === this.search.searchIndex.value - 1) {
+            if (this.searchActive && this.searchMatchChipKeyMap.get(seg.chipKey) === this.search.searchIndex.value - 1) {
                 cls.push('search-active-result');
             }
+            if (this.chipIsTrigger && this.isDetailsOnlyMatch(seg.row)) cls.push('details-match');
             return cls;
         },
         chipTitle(row) {
             return [...this.firstRowColumns, ...this.secondRowColumns]
-                .map(col => row[col.key])
+                .map(col => formatText(row[col.key], col))
                 .filter(Boolean)
                 .join(' — ');
         },
-        handleEventClick(row) {
-            if (this.search.hasActiveSearch.value) {
-                const chipKey = this.parsedEvents.findIndex(e => e.row === row);
-                if (chipKey >= 0) {
-                    const matchIdx = this.searchMatchChipKeyMap.get(chipKey);
-                    if (matchIdx !== undefined) this.search.setSearchIndex(matchIdx + 1);
-                }
+        // Escaped, formatted, highlighted chip text (no highlight while the search is inactive or aborted)
+        highlightValue(value, field) {
+            const text = formatText(value, field);
+            return this.searchActive ? this.search.highlightRawText(text) : escapeHtml(text);
+        },
+        isDetailsOnlyMatch(row) {
+            const r = this.searchResultByRow.get(row);
+            return !!(r && !r.shownMatch);
+        },
+        isActionDisabled(row) {
+            const fn = this.effectiveAction.disabled;
+            try { return typeof fn === 'function' ? !!fn(row) : false; } catch { return false; }
+        },
+        inlineCards(row, colKey) {
+            if (this.decorations) return this.rowDecorMap.get(row)?.byKey.get(colKey) || [];
+            return this.getChipInlineCards(row, colKey);
+        },
+        endCards(row) {
+            if (this.decorations) return this.rowDecorMap.get(row)?.rowLevel || [];
+            return this.getChipEndCards(row);
+        },
+        selectSearchResultFor(row) {
+            if (!this.searchActive) return;
+            const chipKey = this.parsedEvents.findIndex(e => e.row === row);
+            if (chipKey >= 0) {
+                const matchIdx = this.searchMatchChipKeyMap.get(chipKey);
+                if (matchIdx !== undefined) this.search.setSearchIndex(matchIdx + 1);
             }
-            this.$emit('event-click', row);
+        },
+        // Primary action (§4.8): perform via DataView, or the legacy event-click
+        performAction(row) {
+            const a = this.effectiveAction;
+            if (a.kind === 'legacy') { this.$emit('event-click', row); return; }
+            if (a.kind === 'none' || this.isActionDisabled(row)) return;
+            const ctx = { searchTerm: (this.search.searchValue.value || '').trim() };
+            if (typeof a.perform === 'function') a.perform(row, ctx);
+            else this.$emit('event-click', row);
+        },
+        handleEventClick(row, event) {
+            if (event?.target?.closest?.('button, a, input, select, textarea, .card.clickable')) return;
+            this.selectSearchResultFor(row);
+            if (this.chipIsTrigger) this.performAction(row);
+        },
+        handleActionButton(row) {
+            this.selectSearchResultFor(row);
+            this.performAction(row);
         },
         handleKeyDown(event, row) {
+            if (event.target !== event.currentTarget) return;
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                this.handleEventClick(row);
+                this.selectSearchResultFor(row);
+                this.performAction(row);
             }
         },
         handleRefresh() {
@@ -366,34 +471,25 @@ export const CalendarComponent = {
 
             <!-- Sticky: filter header + day-of-week row -->
             <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '500' } : {}">
-                <div class="content-header">
-                    <slot name="header-area"></slot>
-                    <div class="spacer"></div>
-                    <div class="button-bar">
-                        <SearchBoxComponent
-                            v-if="showSearch"
-                            :search="search"
-                            :match-count="searchMatchedChips.length"
-                        />
-                        <button
-                            v-if="showRefresh"
-                            @click="handleRefresh"
-                            :disabled="isLoading"
-                        >{{ isLoading ? 'Loading...' : 'Refresh' }}</button>
-                        <ViewChangeComponent
-                            v-if="viewModes && containerPath && navigateToPath"
-                            :container-path="containerPath"
-                            :navigate-to-path="navigateToPath"
-                            :view-modes="viewModes"
-                        />
-                    </div>
-                    <LoadingBarComponent
-                        :is-loading="isLoading"
-                        :is-analyzing="isAnalyzing"
-                        :percent-complete="loadingProgress"
-                        class="embedded"
-                    />
-                </div>
+                <ContentHeaderComponent
+                    :theme="theme"
+                    :search="search"
+                    :show-search="showSearch"
+                    :match-count="searchMatchCount"
+                    :show-refresh="showRefresh"
+                    :is-loading="isLoading"
+                    :view-select="viewSelect"
+                    :view-modes="viewModes"
+                    :container-path="containerPath"
+                    :navigate-to-path="navigateToPath"
+                    :embedded-loading="true"
+                    :is-analyzing="isAnalyzing"
+                    :loading-progress="loadingProgress"
+                    :always-show-buttons="true"
+                    @refresh="handleRefresh"
+                >
+                    <template #header-area><slot name="header-area"></slot></template>
+                </ContentHeaderComponent>
                 <div v-if="!isEmpty && calendarWeeks.length > 0" class="calendar-dow-header">
                     <div v-for="name in dayNames" :key="name" class="calendar-dow-cell">{{ name }}</div>
                 </div>
@@ -433,34 +529,43 @@ export const CalendarComponent = {
                             :data-search-match-idx="searchMatchChipKeyMap.get(seg.chipKey)"
                             :style="{ gridColumn: chipGridColumn(seg), gridRow: '1' }"
                             :title="chipTitle(seg.row)"
-                            tabindex="0"
+                            :tabindex="chipIsTrigger ? 0 : -1"
                             @mouseenter="hoveredKey = seg.chipKey"
                             @mouseleave="hoveredKey = null"
-                            @click="handleEventClick(seg.row)"
+                            @click="handleEventClick(seg.row, $event)"
                             @keydown="handleKeyDown($event, seg.row)"
                         >
+                            <!-- Primary action button at the chip start (stays visible when narrow) -->
+                            <button
+                                v-if="hasActionButton && seg.isStart"
+                                :class="['button-symbol', 'chip-action-button', theme || 'white', isDetailsOnlyMatch(seg.row) ? 'search-match' : '']"
+                                :disabled="isActionDisabled(seg.row)"
+                                :title="effectiveAction.label || 'Details'"
+                                @click.stop="handleActionButton(seg.row)"
+                            >{{ effectiveAction.label || effectiveAction.icon || '☷' }}</button>
                             <div class="chip-text">
                                 <span v-if="firstRowColumns.length > 0" class="chip-first-row">
                                     <template v-for="(col, colIdx) in firstRowColumns" :key="col.key">
                                         <span v-if="colIdx > 0" class="chip-sep"> | </span>
-                                        <span class="chip-val" v-html="search.highlightRawText(seg.row[col.key] != null && seg.row[col.key] !== '' ? String(seg.row[col.key]) : '')"></span>
-                                        <span v-for="card in getChipInlineCards(seg.row, col.key)" :key="card.message" :class="['card', card.color || card.class, { 'clickable': card.action && !card.disabled }]" :title="card.title || null" @click.stop="card.action && !card.disabled ? card.action() : null" v-html="card.message"></span>
+                                        <span :class="['chip-val', col.cellClass ? col.cellClass(seg.row[col.key], seg.row) : '']"><CellRenderer :row="seg.row" :field="col" renderer="calendar" density="compact" :highlight="highlightValue" :theme="theme" :search-term="search.searchValue.value" :cell-slot="$slots.cell" /></span>
+                                        <DecorationCards :cards="inlineCards(seg.row, col.key)" :inline="true" />
                                     </template>
                                 </span>
                                 <span v-if="secondRowColumns.length > 0" class="chip-second-row">
                                     <template v-for="(col, colIdx) in secondRowColumns" :key="col.key">
                                         <span v-if="colIdx > 0" class="chip-sep"> | </span>
-                                        <span class="chip-val" v-html="search.highlightRawText(seg.row[col.key] != null && seg.row[col.key] !== '' ? String(seg.row[col.key]) : '')"></span>
-                                        <span v-for="card in getChipInlineCards(seg.row, col.key)" :key="card.message" :class="['card', card.color || card.class, { 'clickable': card.action && !card.disabled }]" :title="card.title || null" @click.stop="card.action && !card.disabled ? card.action() : null" v-html="card.message"></span>
+                                        <span :class="['chip-val', col.cellClass ? col.cellClass(seg.row[col.key], seg.row) : '']"><CellRenderer :row="seg.row" :field="col" renderer="calendar" density="compact" :highlight="highlightValue" :theme="theme" :search-term="search.searchValue.value" :cell-slot="$slots.cell" /></span>
+                                        <DecorationCards :cards="inlineCards(seg.row, col.key)" :inline="true" />
                                     </template>
                                 </span>
                             </div>
-                            <div v-if="seg.isEnd && chipActions" class="chip-actions hide-when-narrow">
+                            <div v-if="seg.isEnd && hasEndCards && endCards(seg.row).length > 0" class="chip-actions hide-when-narrow">
                                 <button
-                                    v-for="card in getChipEndCards(seg.row)"
+                                    v-for="card in endCards(seg.row)"
                                     :key="card.message"
                                     :class="['card', card.color || card.class, { 'clickable': card.action && !card.disabled }]"
-                                    :title="card.title || null"
+                                    :title="card.title || card.hoverMessage || null"
+                                    :disabled="card.disabled"
                                     @click.stop="card.action && !card.disabled ? card.action() : null"
                                     v-html="card.message"
                                 ></button>

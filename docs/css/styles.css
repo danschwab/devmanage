@@ -2356,3 +2356,85 @@ button.search-highlight {
 }
 
 
+
+/* ── Views system: primary action (views-and-renderers-plan §4.8) ───────────── */
+
+/* Row trigger: the whole row (or chip, or card) runs the primary action */
+.table-wrapper tr.row-action {
+    cursor: pointer;
+}
+.table-wrapper tr.row-action:hover > td,
+.table-wrapper tr.row-action:focus-visible > td {
+    background-color: var(--background-color-hover);
+}
+.table-wrapper tr.row-action:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+/* Details-only match with a row trigger: the row matched through fields not visible in place */
+tr.details-match > td:first-child,
+.calendar-chip.details-match,
+.card.details-match {
+    box-shadow: inset 4px 0 0 var(--color-yellow);
+}
+
+/* Labelled action button in the trailing action cell ("Select", "+ Add Item") */
+td.details-cell button.action-button {
+    white-space: nowrap;
+    width: auto;
+    height: auto;
+    min-height: 28px;
+    padding: 0 var(--padding-sm);
+}
+
+/* Calendar: action button at the chip start; chips without a row trigger aren't clickable */
+.calendar-chip .chip-action-button {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+.calendar-chip.chip-no-trigger {
+    cursor: default;
+}
+
+/* ── Views system: editable cells and instant writes (views-and-renderers-plan §4.16) ── */
+
+.cell-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--padding-sm);
+    cursor: pointer;
+}
+.cell-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+.cell-checkbox.cell-readonly, .cell-checkbox.cell-readonly input {
+    cursor: default;
+}
+.cell-hint {
+    font-size: 0.7rem;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+select.cell-select, input.cell-text-input {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+/* Instant-write state classes (state classes win over row/column/cell colour, §4.9) */
+td.instant-pending {
+    outline: 2px dashed var(--color-blue);
+    outline-offset: -3px;
+}
+td.instant-failed {
+    outline: 2px solid var(--color-red);
+    outline-offset: -3px;
+    background-color: var(--color-red-bg) !important;
+}

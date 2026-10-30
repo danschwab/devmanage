@@ -1,6 +1,15 @@
 import { html, parseDate, toUSDateString, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
 import { useSearch, SearchBoxComponent, scrollToSearchResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
+import { formatValue, escapeHtml } from '../../utils/views/fieldFormat.js';
+import { getDateColorClass as dateColorClass } from '../../utils/views/viewColor.js';
+import { searchWords as toSearchWords, matchRows, matchRow, valueMatchesAny } from '../../utils/views/searchMatch.js';
+import { ContentHeaderComponent } from './contentHeaderComponent.js';
+import { RowDetailsComponent } from './rowDetailsComponent.js';
+import { CellRenderer, DecorationCards, placeDecorations } from './cells.js';
+
+// Clicks landing on these never trigger a row action (§4.8 row-trigger guards)
+const ROW_TRIGGER_IGNORE = 'button, a, input, select, textarea, [contenteditable], .column-button, .card.clickable';
 
 function normalizeItemSortWords(value) {
     return String(value)
@@ -1399,7 +1408,7 @@ document.addEventListener('mousemove', (e) => {
 
 export const TableComponent = {
     name: 'TableComponent',
-    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent },
+    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent, ContentHeaderComponent, RowDetailsComponent, CellRenderer, DecorationCards },
     inject: ['appContext', '$modal'],
     props: {
         key: {
@@ -1568,9 +1577,45 @@ export const TableComponent = {
         dragLabel: {
             type: String,
             default: null
+        },
+        // ── Views system (DataView) ──────────────────────────────────────────
+        // Primary action (ResolvedAction from resolveAction + perform(row, ctx) from DataView).
+        // When null, the legacy allowDetails/forceDetails props decide (until Phase 5).
+        action: {
+            type: Object,
+            default: null
+        },
+        // decorations(row, key) → Card[]; key = null is row-level
+        decorations: {
+            type: Function,
+            default: null
+        },
+        decorationKeys: {
+            type: Array,
+            default: () => []
+        },
+        // Row colour class (rowColorFor) — lowest colour precedence (§4.9)
+        rowClass: {
+            type: Function,
+            default: null
+        },
+        // ViewSelectComponent config: { views, currentId, defaultId, containerPath, navigateToPath }
+        viewSelect: {
+            type: Object,
+            default: null
+        },
+        // Instant edit mode (§4.16): cellState(row, key) → '' | 'pending' | 'failed'
+        cellState: {
+            type: Function,
+            default: null
+        },
+        // cellDisabled(row, key) → '' or a reason; blocks editing a registry cell (e.g. duplicate identity)
+        cellDisabled: {
+            type: Function,
+            default: null
         }
     },
-    emits: ['refresh', 'cell-edit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search'],
+    emits: ['refresh', 'cell-edit', 'cell-commit', 'new-row', 'inner-table-dirty', 'show-hamburger-menu', 'search', 'on-save', 'row-move', 'row-options', 'row-action'],
     setup(props, { emit }) {
         // Initialize search composable
         const search = useSearch({
@@ -1590,7 +1635,7 @@ export const TableComponent = {
         return {
             dirtyCells: {},
             allowSaveEvent: false,
-            nestedTableDirtyCells: {}, // Track dirty state for nested tables by [row][col]
+            nestedTableDirtyCells: {}, // Track dirty state for nested tables by [rowIndex][columnKey]
             sortColumn: null, // Current sort column key
             sortDirection: 'asc', // Current sort direction: 'asc' or 'desc'
             isUsingDefaultSort: true,
@@ -1668,17 +1713,16 @@ export const TableComponent = {
             const currentIdx = this.activeSearchIndex;
             if (currentIdx == null) return;
 
-            const visibleCols = this.columns.filter(col => !this.hideSet.has(col.key));
+            if (this.searchAborted) return;
+            const tiers = this.searchTierKeys;
             const buildMapForTerm = (term) => {
-                const words = term.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+                const words = toSearchWords(term);
                 const map = new Map();
+                if (words.length === 0) return map;
                 let matchIdx = 0;
                 for (const { row, idx } of this.visibleRows) {
                     if (!row) continue;
-                    if (words.every(w => visibleCols.some(col => {
-                        const val = row[col.key];
-                        return val != null && typeof val !== 'object' && String(val).toLowerCase().includes(w);
-                    }))) map.set(idx, matchIdx++);
+                    if (matchRow(row, tiers, words).matched) map.set(idx, matchIdx++);
                 }
                 return map;
             };
@@ -2040,28 +2084,86 @@ export const TableComponent = {
             // Use parentSearchValue if provided, otherwise use composable searchValue
             return this.parentSearchValue || this.search.searchValue.value;
         },
+        // Search words after the app-wide minimum term length (§4.5)
+        activeSearchWords() {
+            return toSearchWords(this.activeSearchValue);
+        },
+        // Searched tiers: shown columns (incl. stacked children) and details columns; hidden never searched
+        searchTierKeys() {
+            const shown = [];
+            const details = [];
+            for (const col of this.columns) {
+                if (this.hideSet.has(col.key)) continue;
+                if (col.details) details.push(col.key); else shown.push(col.key);
+            }
+            return { shown, details };
+        },
+        // One matching pass over the rows handed to the table, with the broad-search abort (§4.5)
+        searchResult() {
+            return matchRows(Array.isArray(this.data) ? this.data : [], this.searchTierKeys, this.activeSearchWords);
+        },
+        searchAborted() {
+            return this.searchResult.aborted;
+        },
+        // True when a search filters/highlights (has words and wasn't aborted)
+        searchActive() {
+            return this.searchResult.active && !this.searchResult.aborted;
+        },
+        searchResultByRow() {
+            const map = new Map();
+            if (!this.searchActive) return map;
+            const data = this.data || [];
+            this.searchResult.results.forEach((r, i) => { if (r) map.set(data[i], r); });
+            return map;
+        },
+        // ── Primary action (§4.8) ────────────────────────────────────────────
+        effectiveAction() {
+            if (this.action) return this.action;
+            return this.allowDetails
+                ? { kind: 'details', trigger: 'button', icon: '☷', label: '' }
+                : { kind: 'none', trigger: 'button', icon: '', label: '' };
+        },
+        // Inline details expand is available (rows render the details container)
+        detailsEnabled() {
+            return this.action ? this.action.kind === 'details' : this.allowDetails;
+        },
+        // Trailing sticky action cell (generalizes today's details button)
+        hasActionCell() {
+            const a = this.effectiveAction;
+            return !this.forceDetails && a.kind !== 'none' && a.trigger === 'button';
+        },
+        hasRowTrigger() {
+            const a = this.effectiveAction;
+            return a.kind !== 'none' && a.trigger === 'row' && !this.hasEditableColumns;
+        },
+        // Keys displayed in place (columns and stacked children) — decorations for other keys go row-level
+        displayedKeySet() {
+            return new Set(this.visibleColumns.map(c => c.key));
+        },
+        rowDecorMap() {
+            const map = new Map();
+            if (!this.decorations) return map;
+            for (const { row } of this.visibleRows) {
+                map.set(row, placeDecorations(this.decorations, this.decorationKeys, row, this.displayedKeySet));
+            }
+            return map;
+        },
         // Map from data index to 0-based match index; only populated in navigate mode (rows visible, not filtered)
         searchMatchIndexMap() {
-            const activeVal = this.activeSearchValue;
-            if (!activeVal || !activeVal.trim() || this.hideRowsOnSearchLocal) return new Map();
-            const words = activeVal.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
-            const visibleCols = this.columns.filter(col => !this.hideSet.has(col.key));
+            if (!this.searchActive || this.hideRowsOnSearchLocal) return new Map();
+            const results = this.searchResult.results;
             const map = new Map();
             let matchIdx = 0;
             for (const { row, idx } of this.visibleRows) {
                 if (!row) continue;
-                if (words.every(w => visibleCols.some(col => {
-                    const val = row[col.key];
-                    return val != null && typeof val !== 'object' && String(val).toLowerCase().includes(w);
-                }))) map.set(idx, matchIdx++);
+                if (results[idx]) map.set(idx, matchIdx++);
             }
             return map;
         },
         // Counts individual items inside nested arrays on each row (e.g. items within packlist crates)
         searchNestedMatchCount() {
-            const activeVal = this.activeSearchValue;
-            if (!activeVal || !activeVal.trim()) return 0;
-            const words = activeVal.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+            if (!this.searchActive) return 0;
+            const words = this.activeSearchWords;
             let total = 0;
             for (const { row } of this.visibleRows) {
                 if (!row) continue;
@@ -2080,8 +2182,10 @@ export const TableComponent = {
             return total;
         },
         searchMatchCount() {
+            // Broad search aborted: the counter shows ∞
+            if (this.searchAborted) return Infinity;
             // When hiding non-matching rows, count the filtered rows
-            if (this.hideRowsOnSearchLocal && this.activeSearchValue && this.activeSearchValue.trim()) {
+            if (this.hideRowsOnSearchLocal && this.searchActive) {
                 return this.visibleRows.length;
             }
             // Otherwise count nested matches or search index map
@@ -2194,26 +2298,10 @@ export const TableComponent = {
                 });
             }
 
-            // Apply search filter if activeSearchValue is provided and hideRowsOnSearch is enabled
-            if (this.activeSearchValue && this.activeSearchValue.trim() && this.hideRowsOnSearchLocal) {
-                const searchTerm = this.activeSearchValue.toLowerCase().trim();
-                // Split search term into multiple words for partial matching
-                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
-                
-                filteredData = filteredData.filter(({ row }) => {
-                    if (!row) return false;
-                    // Only search visible columns (exclude hidden columns)
-                    const visibleColumns = this.columns.filter(column => !this.hideSet.has(column.key));
-                    
-                    // All search words must match somewhere in the row (AND logic)
-                    return searchWords.every(word => 
-                        visibleColumns.some(column => {
-                            const value = row[column.key];
-                            // Skip null/undefined values to prevent matching "undefined" or "null" strings
-                            return value != null && String(value).toLowerCase().includes(word);
-                        })
-                    );
-                });
+            // Apply search filter (hide-rows mode). An aborted broad search leaves the set unfiltered.
+            if (this.searchActive && this.hideRowsOnSearchLocal) {
+                const results = this.searchResult.results;
+                filteredData = filteredData.filter(({ row, idx }) => row && !!results[idx]);
             }
 
             const sortCriteria = this.isUsingDefaultSort
@@ -2434,7 +2522,7 @@ export const TableComponent = {
         },
         _stickyEndRight(colIdx) {
             const detailsAbsIdx = (this.draggable ? 1 : 0) + this.theadRow1Columns.length;
-            let offset = (this.allowDetails && !this.forceDetails) ? (this.colWidths[detailsAbsIdx] ?? 40) : 0;
+            let offset = this.hasActionCell ? (this.colWidths[detailsAbsIdx] ?? 40) : 0;
             for (let i = this.theadRow1Columns.length - 1; i > colIdx; i--) {
                 if (this.theadRow1Columns[i]?.sticky === 'end') {
                     offset += this.colWidths[this.draggable ? i + 1 : i] ?? this.theadRow1Columns[i].width ?? 0;
@@ -2890,45 +2978,25 @@ export const TableComponent = {
         },
         
         formatCellValue(value, column) {
-            if (value === null || value === undefined) return '';
-            
-            // Apply column-specific formatting
-            if (column.format) {
-                switch (column.format) {
-                    case 'currency':
-                        return `$${parseFloat(value).toFixed(2)}`;
-                    case 'date': {
-                        const parsedDate = parseDate(value);
-                        return toUSDateString(parsedDate) ?? String(value);
-                    }
-                    case 'number':
-                        return parseFloat(value).toLocaleString();
-                    case 'percentage':
-                        return `${parseFloat(value).toFixed(1)}%`;
-                    default:
-                        return value;
-                }
-            }
-            
-            return value;
+            return formatValue(value, column);
         },
 
-        // Wrapper method for search highlighting that uses the composable with proper formatting
+        // Format, escape and highlight a cell value (highlighting only while a search is active)
         highlightSearchText(value, column) {
-            // Create a temporary formatter that uses this component's formatCellValue
-            const formatter = (val, col) => this.formatCellValue(val, col);
-            
-            // Call the composable's highlightText with the formatter
-            const formattedValue = formatter(value, column);
-            
-            // If no search, return formatted value
-            if (!this.activeSearchValue || !this.activeSearchValue.trim() || !formattedValue) {
-                return formattedValue;
+            let formattedValue = this.formatCellValue(value, column);
+            if (Array.isArray(formattedValue)) {
+                formattedValue = formattedValue.filter(v => v != null && typeof v !== 'object').join(', ');
+            } else if (formattedValue !== null && typeof formattedValue === 'object') {
+                formattedValue = '';
             }
-            
-            // Use the composable's escapeHtml and highlighting logic
+
+            // If no active search, return the escaped formatted value
+            if (!this.searchActive || formattedValue === '' || formattedValue === null || formattedValue === undefined) {
+                return escapeHtml(formattedValue ?? '');
+            }
+
             const stringValue = String(formattedValue);
-            const words = this.search.splitSearchTerms(this.activeSearchValue);
+            const words = this.activeSearchWords;
             
             // Collect all match positions
             const matches = [];
@@ -2979,67 +3047,67 @@ export const TableComponent = {
             return result;
         },
 
-        // Wrapper method for search match detection
+        // Per-cell match indication (OR across words) on the raw or formatted value
         hasSearchMatch(value, column) {
-            if (!this.activeSearchValue || !this.activeSearchValue.trim()) {
-                return false;
-            }
-            
+            if (!this.searchActive) return false;
+            const words = this.activeSearchWords;
+            if (valueMatchesAny(value, words)) return true;
             const formattedValue = this.formatCellValue(value, column);
-            if (!formattedValue) return false;
-            
-            const formattedLower = String(formattedValue).toLowerCase();
-            const words = this.search.splitSearchTerms(this.activeSearchValue);
-            
-            // Check if any search word matches (OR logic)
-            return words.some(word => formattedLower.includes(word.toLowerCase()));
+            return formattedValue !== value && valueMatchesAny(formattedValue, words);
         },
 
-        // Get color class for date values based on proximity to today
+        // Get color class for date values based on proximity to today (shared rule in viewColor.js)
         getDateColorClass(dateValue) {
-            if (!dateValue) return '';
-            
-            // Parse the date using the parseDate helper to handle all supported formats
-            let date;
-            if (dateValue instanceof Date) {
-                date = dateValue;
-            } else {
-                date = parseDate(dateValue);
+            return dateColorClass(dateValue);
+        },
+
+        // ── Primary action (§4.8) ────────────────────────────────────────────
+        // Details-only match: the row matched but its shown fields don't explain it
+        isDetailsOnlyMatch(row) {
+            const r = this.searchResultByRow.get(row);
+            return !!(r && r.matched && !r.shownMatch);
+        },
+        isActionDisabled(row) {
+            const fn = this.effectiveAction.disabled;
+            try { return typeof fn === 'function' ? !!fn(row) : false; } catch { return false; }
+        },
+        performAction(row, idx) {
+            const a = this.effectiveAction;
+            if (a.kind === 'none' || this.isActionDisabled(row)) return;
+            if (a.kind === 'details' && this.detailsEnabled) {
+                this.toggleRowDetails(idx);
+                return;
             }
-            
-            // Check if date is valid
-            if (!date || isNaN(date.getTime())) {
-                return '';
+            const ctx = { searchTerm: (this.activeSearchValue || '').trim() };
+            if (typeof a.perform === 'function') a.perform(row, ctx);
+            else this.$emit('row-action', row, ctx);
+        },
+        // Whole-row trigger with guards: interactive elements, selected text, clipboard/drag mode
+        handleRowTriggerClick(row, idx, event) {
+            if (!this.hasRowTrigger) return;
+            const target = event?.target;
+            if (target?.closest?.(ROW_TRIGGER_IGNORE)) return;
+            const sel = typeof window !== 'undefined' ? window.getSelection?.() : null;
+            if (sel && !sel.isCollapsed && String(sel).trim()) return;
+            if (tableRowSelectionState.clipboardMode || tableRowSelectionState.findingDropTargets) return;
+            this.performAction(row, idx);
+        },
+        handleRowTriggerKey(row, idx, event) {
+            if (!this.hasRowTrigger) return;
+            if (event.target !== event.currentTarget) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                this.performAction(row, idx);
             }
-            
-            // Get today's date at midnight for comparison
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // Set the target date to midnight for fair comparison
-            const targetDate = new Date(date);
-            targetDate.setHours(0, 0, 0, 0);
-            
-            // Calculate difference in days
-            const diffTime = targetDate.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            // Don't color dates more than a week in the past
-            if (diffDays < -7) {
-                return '';  // No coloring for dates older than a week
-            }
-            
-            // Apply color based on proximity
-            if (diffDays <= 2) {
-                return 'red';  // Within 2 days (including past dates up to a week ago)
-            } else if (diffDays <= 7) {
-                return 'orange';  // Within 7 days
-            }
-            
-            return '';  // No special coloring for dates more than 7 days in the future
+        },
+        cellDecorations(row, key) {
+            return this.rowDecorMap.get(row)?.byKey.get(key) || [];
+        },
+        rowLevelDecorations(row) {
+            return this.rowDecorMap.get(row)?.rowLevel || [];
         },
         
-        getCellClass(value, column, rowIndex, colIndex) {
+        getCellClass(value, column, rowIndex) {
             let baseClass = '';
             
             // Support function-based cell classes FIRST (before autoColor)
@@ -3080,12 +3148,12 @@ export const TableComponent = {
                 if (cellClass) baseClass = cellClass;
             }
             
-            // Add dirty class if cell is dirty
-            if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][colIndex]) {
+            // Add dirty class if cell is dirty (dirty state is keyed by column key)
+            if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][column.key]) {
                 baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';
             }
             // Add dirty class if nested table in this cell is dirty
-            if (this.nestedTableDirtyCells[rowIndex] && this.nestedTableDirtyCells[rowIndex][colIndex]) {
+            if (this.nestedTableDirtyCells[rowIndex] && this.nestedTableDirtyCells[rowIndex][column.key]) {
                 baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';
             }
             return baseClass;
@@ -3097,8 +3165,10 @@ export const TableComponent = {
         getColumnFont(column) {
             return column.font ? 'font-' + column.font : '';
         },
-        handleCellEdit(rowIndex, colIndex, value) {
-            if (!this.hasEditableColumns) return;
+        // Batch edit contract: emits cell-edit(rowIndex, columnKey, value); dirty state is keyed by column key.
+        handleCellEdit(rowIndex, column, value) {
+            if (!this.hasEditableColumns || !column) return;
+            const columnKey = column.key;
             const now = Date.now();
             const timeSinceLastEdit = this.lastEditTimestamp ? now - this.lastEditTimestamp : Infinity;
             
@@ -3111,7 +3181,7 @@ export const TableComponent = {
                 const routeKey = this.appContext.currentPath.split('?')[0];
                 undoRegistry.capture(this.data, routeKey, {
                     type: 'cell-edit',
-                    cellInfo: { rowIndex, colIndex },
+                    cellInfo: { rowIndex, columnKey },
                     preventDuplicates: true
                 });
                 this.hasUndoCaptured = true;
@@ -3130,16 +3200,41 @@ export const TableComponent = {
             // Update last edit timestamp
             this.lastEditTimestamp = now;
             
-            this.$emit('cell-edit', rowIndex, colIndex, value);
+            this.$emit('cell-edit', rowIndex, columnKey, value);
             // Dirty check for single cell
             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
-            const originalValue = this.originalData[rowIndex]?.[this.mainTableColumns[colIndex]?.key];
+            const originalValue = this.originalData[rowIndex]?.[columnKey];
             if (value !== originalValue) {
-                this.dirtyCells[rowIndex][colIndex] = true;
+                this.dirtyCells[rowIndex][columnKey] = true;
             } else {
-                delete this.dirtyCells[rowIndex][colIndex];
+                delete this.dirtyCells[rowIndex][columnKey];
             }
             this.checkDirtyCells();
+        },
+        // Edits from registry cells (checkbox, select, text):
+        //   batch   → the standard cell-edit path (page writes the store; dirty tracking; Save)
+        //   instant → cell-commit(row, columnKey, value) for DataView's delayed verified-write queue
+        commitCellValue(rowIndex, column, value) {
+            if (column.editable) {
+                this.handleCellEdit(rowIndex, column, value);
+            } else if (column.cellEditable) {
+                this.$emit('cell-commit', this.data[rowIndex], column.key, value);
+            }
+        },
+        cellStateClass(row, column) {
+            if (!this.cellState) return '';
+            const s = this.cellState(row, column.key);
+            return s ? 'instant-' + s : '';
+        },
+        cellDisabledReason(row, column) {
+            if (!this.cellDisabled) return '';
+            try { return this.cellDisabled(row, column.key) || ''; } catch { return ''; }
+        },
+        isCellDirty(rowIndex, column) {
+            return !!(this.dirtyCells[rowIndex] && column && this.dirtyCells[rowIndex][column.key]);
+        },
+        cellRefName(prefix, rowIndex, column) {
+            return prefix + rowIndex + '_' + column.key;
         },
         _getRowKeyValue(row) {
             if (!this.rowKey || !row) return undefined;
@@ -3155,7 +3250,7 @@ export const TableComponent = {
             }
             return this.originalData?.[idx];
         },
-        revertCellToOriginal(rowIndex, colIndex, event) {
+        revertCellToOriginal(rowIndex, column, event) {
             if (!this.hasEditableColumns) return;
             // Stop propagation to prevent cell focus
             if (event) {
@@ -3168,11 +3263,10 @@ export const TableComponent = {
                 const routeKey = this.appContext.currentPath.split('?')[0];
                 undoRegistry.capture(this.data, routeKey, {
                     type: 'cell-revert',
-                    cellInfo: { rowIndex, colIndex }
+                    cellInfo: { rowIndex, columnKey: column.key }
                 });
             }
-            
-            const column = this.mainTableColumns[colIndex];
+
             const originalRow = this.getOriginalDataForRow(this.data[rowIndex], rowIndex);
             const originalValue = originalRow?.[column.key];
             
@@ -3183,41 +3277,41 @@ export const TableComponent = {
             
             // Update the DOM element if it exists
             if (column.format === 'number') {
-                const refName = 'number_editable_' + rowIndex + '_' + colIndex;
+                const refName = this.cellRefName('number_editable_', rowIndex, column);
                 const ref = this.$refs[refName];
                 const inputEl = Array.isArray(ref) ? ref[0] : ref;
                 if (inputEl) {
                     inputEl.value = Number.isFinite(parseFloat(originalValue)) ? parseFloat(originalValue) : '';
                 }
             } else {
-                const refName = 'editable_' + rowIndex + '_' + colIndex;
+                const refName = this.cellRefName('editable_', rowIndex, column);
                 const ref = this.$refs[refName];
                 const editableEl = Array.isArray(ref) ? ref[0] : ref;
                 if (editableEl) {
                     editableEl.textContent = originalValue || '';
                 }
             }
-            
+
             // Clear dirty flag
             if (this.dirtyCells[rowIndex]) {
-                delete this.dirtyCells[rowIndex][colIndex];
+                delete this.dirtyCells[rowIndex][column.key];
             }
-            
+
             // Emit cell-edit event
-            this.$emit('cell-edit', rowIndex, colIndex, originalValue);
+            this.$emit('cell-edit', rowIndex, column.key, originalValue);
             this.checkDirtyCells();
         },
-        handleCellFocus(rowIndex, colIndex, event) {
+        handleCellFocus(rowIndex, column, event) {
             // No undo capture on focus - only capture when user starts typing in handleCellEdit
         },
-        handleEditableCellContainerClick(rowIndex, colIndex, column, event) {
+        handleEditableCellContainerClick(rowIndex, column, event) {
             if (!column?.editable) return;
 
             const target = event?.target;
             if (target?.isContentEditable || target?.tagName === 'INPUT') return;
 
             if (column.format === 'number') {
-                const numberRefName = 'number_editable_' + rowIndex + '_' + colIndex;
+                const numberRefName = this.cellRefName('number_editable_', rowIndex, column);
                 const numberRef = this.$refs[numberRefName];
                 const numberInputEl = Array.isArray(numberRef) ? numberRef[0] : numberRef;
                 if (numberInputEl && typeof numberInputEl.focus === 'function') {
@@ -3226,14 +3320,14 @@ export const TableComponent = {
                 return;
             }
 
-            const refName = 'editable_' + rowIndex + '_' + colIndex;
+            const refName = this.cellRefName('editable_', rowIndex, column);
             const ref = this.$refs[refName];
             const editableEl = Array.isArray(ref) ? ref[0] : ref;
             if (editableEl && typeof editableEl.focus === 'function') {
                 editableEl.focus({ preventScroll: true });
             }
         },
-        handleCellPaste(rowIndex, colIndex, event) {
+        handleCellPaste(rowIndex, column, event) {
             const text = event.clipboardData?.getData('text/plain') || '';
             if (!text) return;
 
@@ -3255,9 +3349,9 @@ export const TableComponent = {
             selection.getRangeAt(0).insertNode(document.createTextNode(text));
             selection.collapseToEnd();
             // Trigger the input handler so data and dirty state stay in sync.
-            this.handleCellEdit(rowIndex, colIndex, event.target.textContent);
+            this.handleCellEdit(rowIndex, column, event.target.textContent);
         },
-        handleCellBlur(rowIndex, colIndex, event) {
+        handleCellBlur(rowIndex, column, event) {
             // Clear flags when cell loses focus (enables new snapshot on next focus+edit)
             this.hasUndoCaptured = false;
             this.lastEditTimestamp = null;
@@ -3275,8 +3369,8 @@ export const TableComponent = {
             this.data.forEach((row, rowIndex) => {
                 const originalRow = this.originalData[rowIndex];
                 // Treat undefined originalRow as an object with all nulls for dirty checking
-                // Use mainTableColumns indices to match the template's v-for colIndex
-                this.mainTableColumns.forEach((column, colIndex) => {
+                // Dirty state is keyed by column key (not position), so details/stacked columns can't shift it
+                this.mainTableColumns.forEach((column) => {
                     const key = column.key;
                     if (column.editable) {
                         const currentValue = row[key];
@@ -3284,7 +3378,7 @@ export const TableComponent = {
                         const originalValue = originalRow ? originalRow[key] : null;
                         if (currentValue !== originalValue) {
                             if (!this.dirtyCells[rowIndex]) this.dirtyCells[rowIndex] = {};
-                            this.dirtyCells[rowIndex][colIndex] = true;
+                            this.dirtyCells[rowIndex][key] = true;
                         }
                     }
                 });
@@ -3307,13 +3401,13 @@ export const TableComponent = {
             });
             this.checkDirtyCells();
         },
-        // Called by slot from nested TableComponent
-        handleInnerTableDirty(isDirty, rowIndex, colIndex) {
+        // Called by slot from nested TableComponent (keyed by the host cell's column key)
+        handleInnerTableDirty(isDirty, rowIndex, columnKey) {
             if (!this.nestedTableDirtyCells[rowIndex]) this.nestedTableDirtyCells[rowIndex] = {};
             if (isDirty) {
-                this.nestedTableDirtyCells[rowIndex][colIndex] = true;
+                this.nestedTableDirtyCells[rowIndex][columnKey] = true;
             } else {
-                delete this.nestedTableDirtyCells[rowIndex][colIndex];
+                delete this.nestedTableDirtyCells[rowIndex][columnKey];
                 if (Object.keys(this.nestedTableDirtyCells[rowIndex]).length === 0) {
                     delete this.nestedTableDirtyCells[rowIndex];
                 }
@@ -4066,10 +4160,9 @@ export const TableComponent = {
             if (!Array.isArray(this.data)) return; // <-- guard against null/undefined
             this.data.forEach((row, rowIndex) => {
                 if (!row) return; // Skip undefined rows
-                // Use mainTableColumns indices to match the template's v-for colIndex
-                this.mainTableColumns.forEach((column, colIndex) => {
+                this.mainTableColumns.forEach((column) => {
                     if (column.editable) {
-                        const refName = 'editable_' + rowIndex + '_' + colIndex;
+                        const refName = this.cellRefName('editable_', rowIndex, column);
                         const cell = this.$refs[refName];
                         const value = row[column.key] || '';
                         if (cell && cell instanceof HTMLElement) {
@@ -4549,22 +4642,10 @@ export const TableComponent = {
             }
         },
 
+        // Action button glow: the row matched through fields not visible in place
         hasDetailsSearchMatch(row) {
-            if (!this.activeSearchValue || !this.activeSearchValue.trim()) {
-                return false;
-            }
-            
-            // Split search term into individual words for partial matching
-            const searchWords = this.search.splitSearchTerms(this.activeSearchValue);
-            
-            // All search words must match somewhere in the details columns (AND logic)
-            return searchWords.every(word => 
-                this.detailsColumns.some(column => {
-                    const value = row[column.key];
-                    // Skip null/undefined values to prevent matching "undefined" or "null" strings
-                    return value != null && String(value).toLowerCase().includes(word.toLowerCase());
-                })
-            );
+            if (!this.searchActive || this.detailsColumns.length === 0) return false;
+            return this.isDetailsOnlyMatch(row);
         },
     },
     template: html `
@@ -4619,19 +4700,26 @@ export const TableComponent = {
             <!-- Sticky wrapper: content-header + loading bar + thead clone (all fixed together when sticky) -->
             <div class="sticky-header-wrapper" :style="stickyActive ? { position: 'fixed', left: stickyLeft + 'px', width: stickyWidth + 'px', zIndex: '1000' } : {}">
 
-                <div key="content-header" v-if="showHeader && (title || showRefresh || showSearch)" :class="['content-header', theme]">
-                    <slot 
-                        name="header-area"
-                    ></slot>
-                    <div class="spacer"></div>
-                    <div v-if="showNewRowButton || showSaveButton || showRefresh || showSearch || viewModes" class="button-bar">
-                        <SearchBoxComponent
-                            v-if="showSearch && !parentSearchValue"
-                            :search="search"
-                            :match-count="searchMatchCount"
-                            :show-hide-toggle="hideRowsOnSearch"
-                            v-model:hide-rows="hideRowsOnSearchLocal"
-                        />
+                <ContentHeaderComponent
+                    key="content-header"
+                    v-if="showHeader && (title || showRefresh || showSearch)"
+                    :theme="theme"
+                    :search="search"
+                    :show-search="showSearch && !parentSearchValue"
+                    :match-count="searchMatchCount"
+                    :show-hide-toggle="hideRowsOnSearch"
+                    v-model:hide-rows="hideRowsOnSearchLocal"
+                    :show-refresh="showRefresh"
+                    :is-loading="isLoading"
+                    :dirty="allowSaveEvent"
+                    :view-select="viewSelect"
+                    :view-modes="viewModes"
+                    :container-path="containerPath"
+                    :navigate-to-path="navigateToPath"
+                    @refresh="handleRefresh"
+                >
+                    <template #header-area><slot name="header-area"></slot></template>
+                    <template #actions>
                         <button
                             v-if="showNewRowButton"
                             @click="$emit('new-row')"
@@ -4648,14 +4736,8 @@ export const TableComponent = {
                         >
                             Save
                         </button>
-                        <button 
-                            v-if="showRefresh" 
-                            @click="handleRefresh" 
-                            :disabled="isLoading" 
-                            :class="allowSaveEvent ? 'red' : ''"
-                        >
-                            {{ isLoading ? 'Loading...' : (allowSaveEvent ? 'Discard' : 'Refresh') }}
-                        </button>
+                    </template>
+                    <template #actions-end>
                         <button
                             v-if="hasEditableColumns && showUndoRedo"
                             @click="handleUndo"
@@ -4674,14 +4756,8 @@ export const TableComponent = {
                         >
                             ⮣
                         </button>
-                        <ViewChangeComponent
-                            v-if="viewModes && containerPath && navigateToPath"
-                            :container-path="containerPath"
-                            :navigate-to-path="navigateToPath"
-                            :view-modes="viewModes"
-                        />
-                    </div>
-                </div>
+                    </template>
+                </ContentHeaderComponent>
 
                 <!-- Loading/Analysis Progress Indicator -->
                 <LoadingBarComponent
@@ -4701,7 +4777,7 @@ export const TableComponent = {
                             :style="stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : (column.width ? { width: column.width + 'px' } : {})"
                             :class="column.columnClass || ''"
                         />
-                        <col v-if="allowDetails && !forceDetails" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
+                        <col v-if="hasActionCell" :style="stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}" />
                     </colgroup>
                     <thead :class="{ [theme]: true, active: theadActive }" @click="handleTheadTap($event)">
                         <tr>
@@ -4734,7 +4810,7 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]">&#9432;</th>
+                            <th v-if="hasActionCell" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
                         </tr>
                         <tr v-if="hasStackedColumns">
                             <th
@@ -4771,7 +4847,7 @@ export const TableComponent = {
                             :style="column.width ? 'width:' + column.width + 'px' : ''"
                             :class="column.columnClass || ''"
                         />
-                        <col v-if="allowDetails && !forceDetails" />
+                        <col v-if="hasActionCell" />
                     </colgroup>
                     <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header', active: theadActive }" @click="handleClipboardHeaderClick($event); handleTheadTap($event)">
                         <tr>
@@ -4804,7 +4880,7 @@ export const TableComponent = {
                                     </button>
                                 </div>
                             </th>
-                            <th v-if="allowDetails && !forceDetails" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em; right: 0;" title="Details">&#9432;</th>
+                            <th v-if="hasActionCell" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em; right: 0;" :title="effectiveAction.kind === 'details' ? 'Details' : (effectiveAction.label || '')"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
                         </tr>
                         <tr v-if="hasStackedColumns">
                             <th
@@ -4844,11 +4920,16 @@ export const TableComponent = {
                                         'is-group': isRowGroupMaster(idx),
                                         'drop-target-above': dropTarget?.type === 'between' && dropTarget?.visualTargetIndex === visibleIdx,
                                         'drop-target-below': dropTarget?.type === 'between' && dropTarget?.visualTargetIndex === visibleIdx + 1,
-                                        'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx
+                                        'drop-target-onto': dropTarget?.type === 'onto' && dropTarget?.targetIndex === idx,
+                                        'row-action': hasRowTrigger,
+                                        'details-match': hasRowTrigger && isDetailsOnlyMatch(row)
                                     },
-                                    getRowMetadataClass(row)
+                                    getRowMetadataClass(row),
+                                    rowClass ? rowClass(row) : ''
                                 ]"
-                                @click="handleClipboardRowClick(idx, visibleIdx, $event); handleSearchResultClick(idx)"
+                                :tabindex="hasRowTrigger ? 0 : null"
+                                @click="handleClipboardRowClick(idx, visibleIdx, $event); handleSearchResultClick(idx); handleRowTriggerClick(row, idx, $event)"
+                                @keydown="handleRowTriggerKey(row, idx, $event)"
                             >
                                 <td v-if="draggable"
                                     class="row-drag-handle"
@@ -4860,30 +4941,30 @@ export const TableComponent = {
                                     v-for="(column, colIndex) in mainTableColumns" 
                                     :key="column.key"
                                     :colspan="column.colspan || 1"
-                                    :class="[getCellClass(row[column.key], column, idx, colIndex), getStickyColProps(column)?.stickyClass]"
+                                    :class="[getCellClass(row[column.key], column, idx), getStickyColProps(column)?.stickyClass, cellStateClass(row, column)]"
                                     :style="getStickyColProps(column)?.stickyStyle"
                                     v-show="!hideSet.has(column.key)"
-                                    @click="handleEditableCellContainerClick(idx, colIndex, column, $event)"
+                                    @click="handleEditableCellContainerClick(idx, column, $event)"
                                 >
                                     <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column), 'search-active-result': hasSearchMatch(row[column.key], column) && searchMatchIndexMap.get(idx) === search.searchIndex.value - 1 }]">
                                         <!-- Editable number input -->
                                         <slot
-                                            v-if="column.editable && column.format === 'number'"
+                                            v-if="!column.cell && column.editable && column.format === 'number'"
                                             :row="row"
                                             :column="column">
                                             <span 
-                                                v-if="dirtyCells[idx] && dirtyCells[idx][colIndex] && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
-                                                class="original-value clickable" 
+                                                v-if="isCellDirty(idx, column) && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
+                                                class="original-value clickable"
                                                 :title="'Click to revert to: ' + formatCellValue(getOriginalDataForRow(row, idx)?.[column.key], column)"
-                                                @click="revertCellToOriginal(idx, colIndex, $event)"
+                                                @click="revertCellToOriginal(idx, column, $event)"
                                             >
                                                 {{ formatCellValue(getOriginalDataForRow(row, idx)?.[column.key], column) }} →
                                             </span>
                                             <input
                                                 type="number"
                                                 :value="Number.isFinite(parseFloat(row[column.key])) ? parseFloat(row[column.key]) : ''"
-                                                :ref="'number_editable_' + idx + '_' + colIndex"
-                                                @input="handleCellEdit(idx, colIndex, $event.target.value)"
+                                                :ref="cellRefName('number_editable_', idx, column)"
+                                                @input="handleCellEdit(idx, column, $event.target.value)"
                                             />
                                         </slot>
                                         <!-- Externally editable (tracked for dirty but not directly editable) -->
@@ -4898,41 +4979,58 @@ export const TableComponent = {
                                         </slot>
                                         <!-- Editable text div -->
                                         <div
-                                            v-else-if="column.editable"
+                                            v-else-if="!column.cell && column.editable"
                                             contenteditable="true"
                                             :data-row-index="idx"
-                                            :data-col-index="colIndex"
-                                            @input="handleCellEdit(idx, colIndex, $event.target.textContent)"
-                                            @focus="handleCellFocus(idx, colIndex, $event)"
-                                            @blur="handleCellBlur(idx, colIndex, $event)"
-                                            @paste="handleCellPaste(idx, colIndex, $event)"
+                                            :data-col-key="column.key"
+                                            @input="handleCellEdit(idx, column, $event.target.textContent)"
+                                            @focus="handleCellFocus(idx, column, $event)"
+                                            @blur="handleCellBlur(idx, column, $event)"
+                                            @paste="handleCellPaste(idx, column, $event)"
                                             class="table-edit-textarea"
                                             :class="{ 'search-match': hasSearchMatch(row[column.key], column) }"
-                                            :ref="'editable_' + idx + '_' + colIndex"
+                                            :ref="cellRefName('editable_', idx, column)"
                                         ></div>
-                                        <span v-if="column.editable && column.format !== 'external-edit' && getOriginalDataForRow(row, idx) !== undefined" class="column-button-hint">
+                                        <span v-if="!column.cell && column.editable && column.format !== 'external-edit' && getOriginalDataForRow(row, idx) !== undefined" class="column-button-hint">
                                             {{ getOriginalDataForRow(row, idx)?.[column.key] || '(empty)' }}
                                         </span>
                                         <button
-                                            v-if="column.editable && column.format !== 'external-edit' && dirtyCells[idx] && dirtyCells[idx][colIndex] && column.format !== 'number' && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
-                                            @click="revertCellToOriginal(idx, colIndex, $event)"
+                                            v-if="column.editable && column.format !== 'external-edit' && isCellDirty(idx, column) && column.format !== 'number' && getOriginalDataForRow(row, idx) !== undefined && getOriginalDataForRow(row, idx)?.[column.key] !== row[column.key]"
+                                            @click="revertCellToOriginal(idx, column, $event)"
                                             title="Revert to original value"
                                             class="column-button red">
                                             ⮢
                                         </button>
-                                        <!-- Non-editable content (slot) -->
+                                        <!-- Non-editable content: registry/page cell, else the legacy default slot with text fallback -->
+                                        <CellRenderer
+                                            v-if="column.cell"
+                                            :row="row"
+                                            :field="column"
+                                            renderer="table"
+                                            density="full"
+                                            :search-term="activeSearchValue || ''"
+                                            :highlight="highlightSearchText"
+                                            :theme="theme"
+                                            :cell-slot="$slots.cell"
+                                            :editable="!!(column.editable || column.cellEditable)"
+                                            :commit="(value) => commitCellValue(idx, column, value)"
+                                            :disabled="cellDisabledReason(row, column)"
+                                        />
                                         <slot 
-                                            v-if="!column.editable"
+                                            v-else-if="!column.editable"
                                             :row="row" 
-                                            :rowIndex="idx" 
+                                            :rowIndex="idx"
                                             :column="column"
                                             :cellRowIndex="idx"
                                             :cellColIndex="colIndex"
-                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, colIndex)"
+                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, column.key)"
                                         >
                                             <span v-html="highlightSearchText(row[column.key], column)"></span>
                                         </slot>
-                                        
+
+                                        <!-- Decorations for this key (§4.14) -->
+                                        <DecorationCards v-if="decorations" :cards="cellDecorations(row, column.key)" />
+
                                         <!-- Additional cell content slot (for warnings, etc.) -->
                                         <slot 
                                             name="cell-extra"
@@ -4950,29 +5048,49 @@ export const TableComponent = {
                                         <div
                                             v-for="childCol in stackedColumnMap.get(column.key)"
                                             :key="childCol.key"
-                                            :class="['table-cell-container', 'stacked-child-cell', { 'search-match': hasSearchMatch(row[childCol.key], childCol) }]"
+                                            :class="['table-cell-container', 'stacked-child-cell', { 'search-match': hasSearchMatch(row[childCol.key], childCol) }, childCol.cellClass ? childCol.cellClass(row[childCol.key], row) : '']"
                                         >
-                                            <span v-html="highlightSearchText(row[childCol.key], childCol)"></span>
+                                            <CellRenderer
+                                                v-if="childCol.cell"
+                                                :row="row"
+                                                :field="childCol"
+                                                renderer="table"
+                                                density="full"
+                                                :search-term="activeSearchValue || ''"
+                                                :highlight="highlightSearchText"
+                                                :theme="theme"
+                                                :cell-slot="$slots.cell"
+                                            />
+                                            <span v-else v-html="highlightSearchText(row[childCol.key], childCol)"></span>
+                                            <DecorationCards v-if="decorations" :cards="cellDecorations(row, childCol.key)" />
                                         </div>
                                     </template>
                                 </td>
-                                <td v-if="allowDetails && !forceDetails" class="details-cell col-sticky-end" :style="{ right: '0' }">
-                                    <slot 
+                                <td v-if="hasActionCell" class="details-cell col-sticky-end" :style="{ right: '0' }">
+                                    <slot
                                         name="details-cell"
-                                        :row="row" 
+                                        :row="row"
                                         :rowIndex="idx"
                                         :isExpanded="isRowExpanded(idx)"
                                         :hasSearchMatch="hasDetailsSearchMatch(row)"
                                         :toggleDetails="() => toggleRowDetails(idx)"
                                     >
-                                        <button 
+                                        <button
+                                            v-if="effectiveAction.kind === 'details'"
                                             @click="toggleRowDetails(idx)"
                                             title="Toggle Details"
                                             :class="[theme, 'button-symbol', 'details-toggle', isRowExpanded(idx) ? 'expanded' : 'collapsed', hasDetailsSearchMatch(row) ? 'search-match' : '']"
                                         >
-                                            <span v-if="isRowExpanded(idx)" class="material-symbols-outlined">close</span>    
-                                            <slot v-else>☷</slot>
+                                            <span v-if="isRowExpanded(idx)" class="material-symbols-outlined">close</span>
+                                            <template v-else>{{ effectiveAction.icon || '☷' }}</template>
                                         </button>
+                                        <button
+                                            v-else
+                                            @click.stop="performAction(row, idx)"
+                                            :disabled="isActionDisabled(row)"
+                                            :title="effectiveAction.label || 'Open'"
+                                            :class="[theme, effectiveAction.label ? 'action-button' : 'button-symbol', 'row-action-button', isDetailsOnlyMatch(row) ? 'search-match' : '']"
+                                        >{{ effectiveAction.label || effectiveAction.icon || '☷' }}</button>
                                     </slot>
                                 </td>
                             </tr>
@@ -4989,39 +5107,38 @@ export const TableComponent = {
                             </button>
                             
                             <!-- Column-aligned detail rows (row-detail-rows slot) -->
-                            <template v-if="allowDetails && $slots['row-detail-rows'] && shouldShowDetailsContent(row, idx)">
+                            <template v-if="detailsEnabled && $slots['row-detail-rows'] && shouldShowDetailsContent(row, idx)">
                                 <slot name="row-detail-rows" :row="row" :rowIndex="idx" :visibleColumns="visibleColumns" />
                             </template>
 
-                            <!-- Expandable single-cell details row (row-details slot) -->
-                            <tr v-if="allowDetails && !$slots['row-detail-rows']" class="details-row-container">
+                            <!-- Expandable single-cell details row (details grid + row-details slot) -->
+                            <tr v-if="detailsEnabled && !$slots['row-detail-rows']" class="details-row-container">
                                 <td v-if="draggable"></td>
-                                <td :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)" class="details-container">
-                                    
+                                <td :colspan="theadRow1Columns.length + (hasActionCell ? 1 : 0)" class="details-container">
+
                                     <div v-if="shouldShowDetailsContent(row, idx)" class="details-content" :style="tableWrapperWidth ? { width: (tableWrapperWidth - 2) + 'px' } : {}">
-                                        <!-- Auto-generated details from columns marked with details: true -->
-                                        <div v-if="detailsColumns.length > 0" class="auto-details">
-                                            <div class="details-grid">
-                                                <div 
-                                                    v-for="column in detailsColumns" 
-                                                    :key="column.key"
-                                                    class="detail-item"
-                                                >
-                                                    <label>{{ column.label }}:</label>
-                                                    <span v-html="highlightSearchText(row[column.key], column)"></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Custom slot content -->
-                                        <slot 
-                                            name="row-details"
-                                            :row="row" 
-                                            :rowIndex="idx"
-                                            :isExpanded="isRowExpanded(idx)"
-                                            :detailsColumns="detailsColumns"
+                                        <RowDetailsComponent
+                                            :row="row"
+                                            :fields="detailsColumns"
+                                            :highlight="highlightSearchText"
+                                            :cell-slot="$slots.cell"
+                                            :search-term="activeSearchValue || ''"
+                                            :theme="theme"
                                         >
-                                        </slot>
+                                            <!-- Custom slot content -->
+                                            <slot
+                                                name="row-details"
+                                                :row="row"
+                                                :rowIndex="idx"
+                                                :isExpanded="isRowExpanded(idx)"
+                                                :detailsColumns="detailsColumns"
+                                            >
+                                            </slot>
+                                            <!-- Row-level decorations (and decorated keys not shown in place) -->
+                                            <div v-if="decorations && rowLevelDecorations(row).length > 0" class="button-bar">
+                                                <DecorationCards :cards="rowLevelDecorations(row)" />
+                                            </div>
+                                        </RowDetailsComponent>
                                     </div>
                                 </td>
                             </tr>
@@ -5031,7 +5148,7 @@ export const TableComponent = {
                         <tr v-if="draggable && (!data || data.length === 0)" class="empty-drop-target">
                             <td class="spacer-cell"></td>
                             <td
-                                :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)"
+                                :colspan="theadRow1Columns.length + (hasActionCell ? 1 : 0)"
                                 class="empty-message"
                                 style="text-align: center;"
                             >
@@ -5043,7 +5160,7 @@ export const TableComponent = {
                         <tr>
                             <td v-if="draggable" class="spacer-cell"></td>
                             <td 
-                                :colspan="theadRow1Columns.length + (allowDetails && !forceDetails ? 1 : 0)" 
+                                :colspan="theadRow1Columns.length + (hasActionCell ? 1 : 0)"
                                 class="new-row-button"
                                 title="Add new row"
                                 @click="isInClipboardMode && dropTarget?.type === 'footer' ? completeClipboardAtCurrentTarget() : $emit('new-row')"
@@ -5069,7 +5186,7 @@ export const TableComponent = {
                 <p v-else>Showing {{ data.length }} row{{ data.length !== 1 ? 's' : '' }}</p>
                 
                 <button
-                    v-if="activeSearchValue && hideRowsOnSearchLocal"
+                    v-if="searchActive && hideRowsOnSearchLocal"
                     @click="search.clearSearch"
                     class="card yellow"
                     style="width: auto;"

@@ -1,4 +1,4 @@
-import { Requests, html, hamburgerMenuRegistry, PacklistTable, CardsComponent, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, invalidateCache, Priority } from '../../index.js';
+import { Requests, html, hamburgerMenuRegistry, PacklistTable, DataView, NavigationRegistry, DashboardToggleComponent, getReactiveStore, findMatchingStores, createAnalysisConfig, generateStoreKey, authState, ScheduleFilterSelect, invalidateCache, Priority } from '../../index.js';
 import { normalizeFilterValues } from '../../../data_management/utils/helpers.js';
 import { PacklistItemsSummary } from './PacklistItemsSummary.js';
 import { ScheduleTableComponent } from './ScheduleTable.js';
@@ -414,11 +414,41 @@ const PacklistPinToggleComponent = {
     `
 };
 
+// What each packlist card key is. _shipLine, _status and _cardColor are derived on a computed copy.
+const PACKLIST_FIELDS = [
+    { key: 'title', label: 'Title', type: 'string', sortable: true },
+    { key: 'shipDate', label: 'Ship Date', type: 'date', sortable: true },
+    { key: '_shipLine', label: 'Ship' },
+    { key: 'description', label: 'Description', format: 'multiline' },
+    { key: '_status', label: 'Status' },
+    { key: '_cardColor', label: 'Card colour' }
+];
+
+// Packlists page view registry (views-and-renderers-plan §4.3, §5). Cards don't link /details (R4.1).
+const PACKLIST_VIEWS = {
+    id: 'packlists',
+    default: 'cards',
+    theme: 'gray',
+    views: [
+        {
+            id: 'cards',
+            name: 'Packlists',
+            icon: 'grid_view',
+            layout: 'cards',
+            cards: { card: [['title'], ['_shipLine'], ['description']], footer: [['_status']] },
+            hidden: ['shipDate', '_cardColor'],
+            rowColor: { field: '_cardColor', rule: 'value' },
+            sort: { key: 'title', dir: 'asc' },
+            action: 'row'
+        }
+    ]
+};
+
 export const PacklistContent = {
     mixins: [packlistIndexResolutionMixin],
     components: {
         'packlist-table': PacklistTable,
-        'cards-grid': CardsComponent,
+        DataView,
         'PacklistItemsSummary': PacklistItemsSummary,
         'ScheduleFilterSelect': ScheduleFilterSelect
     },
@@ -435,7 +465,10 @@ export const PacklistContent = {
             filter: null, // Filter for schedule overlaps (date range or identifier)
             resolvedTabName: null, // Verified actual tab name after resolution
             packlistNotFound: false, // True when route segment doesn't match any packlist
-            isResolving: false // True while resolving identifier
+            isResolving: false, // True while resolving identifier
+            PACKLIST_FIELDS,
+            PACKLIST_VIEWS,
+            packlistAction: { to: (row) => 'packlist/' + row.title }
         };
     },
     computed: {
@@ -503,8 +536,8 @@ export const PacklistContent = {
                 })
                 : tabs;
             
-            // Format tabs for CardsComponent
-            return filteredTabs.map(tab => this.formatPacklistCard(tab));
+            // Rows with derived fields for the cards view
+            return filteredTabs.map(tab => this.packlistRow(tab));
         },
         hasPinnedOrUnsaved() {
             if (this.pinnedPacklists.size > 0) return true;
@@ -738,129 +771,64 @@ export const PacklistContent = {
                 analysisConfig
             );
         },
-        formatPacklistCard(tab) {
-            //console.log(`[PacklistContent.formatPacklistCard] Formatting card for "${tab.title}", lockInfo:`, tab.lockInfo);
-            // Find any reactive stores for this packlist (regardless of analysis config)
-            const matchingStores = findMatchingStores(
-                Requests.getPackList,
-                [tab.title]
-            );
-            
-            // If a reactive store exists, use its state. Otherwise check userData for auto-save
-            const hasUnsavedChanges = matchingStores.length > 0
+        hasUnsavedChanges(title) {
+            const matchingStores = findMatchingStores(Requests.getPackList, [title]);
+            return matchingStores.length > 0
                 ? matchingStores.some(match => match.isModified)
-                : this.autoSavedPacklists.has(tab.title);
-            
-            // Check if the packlist is locked
-            const isLocked = tab.lockInfo && tab.lockInfo !== null;
-            //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - isLocked: ${isLocked}, hasUnsavedChanges: ${hasUnsavedChanges}`);
-
-            // Check schedule attachment state
+                : this.autoSavedPacklists.has(title);
+        },
+        isUnattached(tab) {
             const attachment = tab.scheduleAttachment;
-            const isUnattached = attachment && !attachment.attached && attachment.hasIdentifierParts;
-
-            // Determine card styling based on lock state, unsaved changes, and schedule attachment.
-            // Priority: locked (yellow) > unsaved changes (red) > unattached (orange) > normal (gray).
-            const cardClass = isUnattached ? 'red' : 'gray';
-            //console.log(`[PacklistContent.formatPacklistCard] "${tab.title}" - cardClass: ${cardClass}`);
-            
-            // Build content footer
-            let contentFooter = undefined;
+            return !!(attachment && !attachment.attached && attachment.hasIdentifierParts);
+        },
+        // Derived fields on a computed copy (colour rules that need logic live here, R3.5)
+        packlistRow(tab) {
+            const isLocked = !!tab.lockInfo;
+            const unsaved = this.hasUnsavedChanges(tab.title);
+            let status = '';
             if (isLocked) {
                 const lockOwner = tab.lockInfo.user || 'Unknown';
-                const username = lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner;
-                contentFooter = `Locked for edit by: ${username}`;
-            } else if (hasUnsavedChanges) {
-                contentFooter = 'Unsaved changes';
+                status = `Locked for edit by: ${lockOwner.includes('@') ? lockOwner.split('@')[0] : lockOwner}`;
+            } else if (unsaved) {
+                status = 'Unsaved changes';
             }
-
-            // Build footer action buttons
-            let footerActions = [];
-            
-            // Add green Save button for unsaved packlists
-            if (hasUnsavedChanges) {
-                footerActions.push({
-                    label: 'Save',
-                    class: 'green',
-                    onClick: () => this.savePacklist(tab.title)
-                });
+            let shipLine = '';
+            if (tab.showDetails && tab.showDetails.Ship) shipLine = `Ship Date: ${tab.showDetails.Ship}`;
+            else if (tab.description && !tab.showDetails) shipLine = 'Ship Date: ...';
+            const description = tab.description || (this.packlistsStore ? (this.packlistsStore.isAnalyzing ? 'Loading...' : '') : '');
+            return {
+                ...tab,
+                shipDate: tab.showDetails?.Ship || null,
+                _shipLine: shipLine,
+                description,
+                _status: status,
+                _cardColor: this.isUnattached(tab) ? 'red' : 'gray',
+                _unsaved: unsaved
+            };
+        },
+        // Row-level decorations → footer actions: Save, and schedule-link fixes for unattached packlists
+        packlistDecorations(row, key) {
+            if (key !== null) return [];
+            const cards = [];
+            if (row._unsaved) {
+                cards.push({ message: 'Save', class: 'green', action: () => this.savePacklist(row.title) });
             }
-
-            // Add red buttons for unattached schedule packlists with missing client/show
-            if (isUnattached) {
+            if (this.isUnattached(row)) {
+                const attachment = row.scheduleAttachment;
                 const suggestedMatch = attachment.suggestedMatch;
                 const clientIssue = attachment.clientIssue;
                 const showIssue = attachment.showIssue;
                 if (suggestedMatch) {
-                    footerActions.push({
-                        label: 'Link to schedule',
-                        class: 'gray',
-                        onClick: () => this.openLinkToScheduleModal(tab.title)
-                    });
-                    footerActions.push({
-                        label: `Link: ${suggestedMatch}`,
-                        class: 'red',
-                        onClick: () => this.openSuggestedMatchModal(tab.title, suggestedMatch)
-                    });
+                    cards.push({ message: 'Link to schedule', class: 'gray', action: () => this.openLinkToScheduleModal(row.title) });
+                    cards.push({ message: `Link: ${suggestedMatch}`, class: 'red', action: () => this.openSuggestedMatchModal(row.title, suggestedMatch) });
                 } else if (clientIssue || showIssue) {
-                    if (clientIssue) {
-                        footerActions.push({
-                            label: '⚠ Client missing',
-                            class: 'red',
-                            onClick: () => this.openPacklistIndexResolutionModal(tab.title, 'client', clientIssue.rawValue)
-                        });
-                    }
-                    if (showIssue) {
-                        footerActions.push({
-                            label: '⚠ Show missing',
-                            class: 'red',
-                            onClick: () => this.openPacklistIndexResolutionModal(tab.title, 'show', showIssue.rawValue)
-                        });
-                    }
+                    if (clientIssue) cards.push({ message: '⚠ Client missing', class: 'red', action: () => this.openPacklistIndexResolutionModal(row.title, 'client', clientIssue.rawValue) });
+                    if (showIssue) cards.push({ message: '⚠ Show missing', class: 'red', action: () => this.openPacklistIndexResolutionModal(row.title, 'show', showIssue.rawValue) });
                 } else {
-                    footerActions.push({
-                        label: 'Link to schedule',
-                        class: 'red',
-                        onClick: () => this.openLinkToScheduleModal(tab.title)
-                    });
+                    cards.push({ message: 'Link to schedule', class: 'red', action: () => this.openLinkToScheduleModal(row.title) });
                 }
             }
-
-            // Only set footerActions if there are any actions; otherwise undefined
-            if (footerActions.length === 0) {
-                footerActions = undefined;
-            }
-            
-            // Build content with ship date first, then description
-            let content = '';
-            
-            // Add ship date first if available (use <br> to match description format)
-            if (tab.showDetails && tab.showDetails.Ship) {
-                content = `Ship Date: ${tab.showDetails.Ship}`;
-            } else if (tab.description && !tab.showDetails) {
-                // Show details analysis not complete yet
-                content = 'Ship Date: ...';
-            }
-            
-            // Add description after ship date
-            const description = tab.description || (this.packlistsStore ? (this.packlistsStore.isAnalyzing ? 'Loading...' : '') : '');
-            if (content) {
-                content += `<br>${description}`;
-            } else {
-                content = description;
-            }
-
-            const shipDate = tab.showDetails?.Ship || null;
-
-            return {
-                id: tab.sheetId,
-                title: tab.title,
-                shipDate,
-                content: content,
-                cardClass: cardClass,
-                contentFooter: contentFooter,
-                footerActions: footerActions
-            };
+            return cards;
         },
         async resolvePacklistIdentifier(identifier) {
             // Reset state
@@ -1090,22 +1058,24 @@ export const PacklistContent = {
     },
     template: html `
         <slot>
-            <cards-grid
+            <DataView
                 v-if="!isViewingPacklist"
+                :fields="PACKLIST_FIELDS"
+                :rows="availablePacklists"
+                :registry="PACKLIST_VIEWS"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+                :action="packlistAction"
+                :decorations="packlistDecorations"
                 :show-header="true"
                 :show-search="true"
                 :show-sort="true"
                 :sync-search-with-url="true"
-                :container-path="containerPath"
-                :navigate-to-path="navigateToPath"
                 :show-refresh="true"
-                :items="availablePacklists"
                 :sort-columns="[
                     { key: 'title', label: 'Title', type: 'string', sortable: true },
                     { key: 'shipDate', label: 'Ship Date', type: 'date', sortable: true }
                 ]"
-                default-sort-column="title"
-                :on-item-click="handlePacklistSelect"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"
                 :loading-progress="loadingProgress"
@@ -1138,7 +1108,7 @@ export const PacklistContent = {
                         <button v-if="showUnlinkedOnly" @click="toggleUnlinkedView" class="small">Back</button>
                     </div>
                 </template>
-            </cards-grid>
+            </DataView>
             
             <!-- Loading state while resolving identifier -->
             <div v-else-if="isResolving" class="loading-message">

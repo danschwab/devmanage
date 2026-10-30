@@ -1,4 +1,5 @@
 import {html} from '../index.js';
+import { searchWords as toSearchWords, matchRow } from './views/searchMatch.js';
 
 /**
  * useSearch - Vue 3 Composable for Search Functionality
@@ -120,12 +121,14 @@ export function useSearch(options = {}) {
     const _clearingSearch = Vue.ref(false);
 
     // Computed
+    // Words shorter than SEARCH_LIMITS.minTermLength are dropped before matching and highlighting (§4.5)
     const searchWords = Vue.computed(() => {
-        return splitSearchTerms(searchValue.value);
+        return toSearchWords(searchValue.value);
     });
 
+    // A search with no remaining words is inactive: no filtering, highlighting or glow
     const hasActiveSearch = Vue.computed(() => {
-        return searchValue.value.trim().length > 0;
+        return searchWords.value.length > 0;
     });
 
     const searchIndex = Vue.ref(null); // 1-based index of active search result, null = nothing selected
@@ -295,16 +298,8 @@ export function useSearch(options = {}) {
     function matchesRow(row, visibleColumns) {
         if (!hasActiveSearch.value) return true;
         if (!row) return false;
-        
-        const words = searchWords.value;
-        
-        // All search words must match somewhere in the row (AND logic)
-        return words.every(word => 
-            visibleColumns.some(column => {
-                const value = row[column.key];
-                return String(value).toLowerCase().includes(word);
-            })
-        );
+        // Wraps the shared matcher (AND across words)
+        return matchRow(row, { shown: (visibleColumns || []).map(c => c.key), details: [] }, searchWords.value).matched;
     }
 
     /**
@@ -562,14 +557,20 @@ export const SearchBoxComponent = {
     watch: {
         matchCount(newCount) {
             // Auto-select first result when results appear and no result is currently selected.
-            if (this.showNavigate && this.search.hasActiveSearch.value && newCount > 0 && !this.search.searchIndex.value) {
+            if (this.showNavigate && this.search.hasActiveSearch.value && newCount > 0 && Number.isFinite(newCount) && !this.search.searchIndex.value) {
                 this.search.setSearchIndex(1);
             }
         }
     },
+    computed: {
+        // Broad search aborted (§4.5): the renderer passes matchCount = Infinity
+        isBroad() {
+            return this.matchCount === Infinity;
+        }
+    },
     methods: {
         navigate(direction) {
-            if (!this.matchCount) return;
+            if (!this.matchCount || !Number.isFinite(this.matchCount)) return;
             const current = this.search.searchIndex.value || 0;
             let next = current + direction;
             if (next < 1) next = this.matchCount;
@@ -603,6 +604,10 @@ export const SearchBoxComponent = {
         <div v-if="showNavigate" class="card search-nav-card white">
             <!-- No search: blank card -->
             <template v-if="!search.hasActiveSearch.value"></template>
+            <!-- Broad search aborted: show infinity without navigation -->
+            <template v-else-if="isBroad">
+                <span class="search-nav-display">∞</span>
+            </template>
             <!-- Hide-rows mode: show count without navigation buttons -->
             <template v-else-if="showHideToggle && hideRows">
                 <span class="search-nav-display">{{ matchCount }}</span>
