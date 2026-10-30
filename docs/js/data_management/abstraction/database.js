@@ -399,6 +399,23 @@ class database_uncached {
     }
 
     /**
+     * Read a tab or an A1 range straight from the sheet, bypassing the cache.
+     * Used by verified writes (read → write → re-read), which must see the live sheet.
+     * NOT cached (listed with the mutation methods in wrapMethods below).
+     * @param {string} tableId
+     * @param {string} rangeOrTab - Tab name, or "Tab!A1:B2"
+     * @returns {Promise<Array<Array<string>>>} raw 2D array
+     */
+    static async readFresh(tableId, rangeOrTab) {
+        return await GoogleSheetsService.getSheetData(tableId, rangeOrTab);
+    }
+
+    /** 1-based column number → A1 column letters (1 → A, 27 → AA). */
+    static columnLetter(columnNumber) {
+        return _numberToColumnLetter(columnNumber);
+    }
+
+    /**
      * Write a single cell value using A1 notation range.
      * This avoids full-table writes for high-concurrency updates.
      * @param {string} tableId - Identifier for the table
@@ -494,7 +511,7 @@ class database_uncached {
 export const Database = wrapMethods(
     database_uncached, 
     'database', 
-    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage'],
+    ['createTab', 'hideTabs', 'showTabs', 'setData', 'updateRow', 'setCellValue', 'appendSheetRow', 'uploadItemImage', 'readFresh', 'columnLetter'],
     ['getItemImageBlobUrl', 'getDriveBlobUrl', 'getTabs'], // Infinite cache: image URLs (expensive Google Drive API calls)
     {
         // Sheet data: infinite for INVENTORY and PACK_LISTS (cross-session poller handles freshness);

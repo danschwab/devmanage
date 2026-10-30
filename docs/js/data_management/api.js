@@ -1,4 +1,4 @@
-import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
+import { wrapMethods, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, InstantWriteUtils, todayISOString, offsetToISO, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote } from './index.js';
 import { authState } from '../application/utils/auth.js';
 
 /**
@@ -1548,6 +1548,58 @@ class Requests_uncached {
         return await Database.setData('CACHE', 'Preferences', data, { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
     }
 
+    /**
+     * Parsed value of a json-type preference (e.g. DesignQueueFields), or the fallback.
+     * @param {Object} deps
+     * @param {string} id
+     * @param {*} [fallback]
+     */
+    static async getJsonPreference(deps, id, fallback = null) {
+        const prefs = await deps.call(Database.getData, 'CACHE', 'Preferences', { id: 'ID', name: 'Name', description: 'Description', page: 'Page', type: 'Type', value: 'Value', editHistory: 'EditHistory' });
+        const pref = (prefs || []).find(p => p.id === id);
+        if (!pref || pref.value === undefined || pref.value === null || pref.value === '') return fallback;
+        try { return JSON.parse(pref.value); } catch { return fallback; }
+    }
+
+    /**
+     * The InstantWriteTables entry ({ identity, columns }) for a database/tab, or null.
+     */
+    static async getInstantWriteConfig(deps, database, tab) {
+        const all = await deps.call(Requests.getJsonPreference, 'InstantWriteTables', {});
+        const entry = all && all[`${database}/${tab}`];
+        if (!entry || !Array.isArray(entry.identity) || !entry.identity.length || !entry.columns) return null;
+        return { identity: entry.identity, columns: entry.columns };
+    }
+
+    /**
+     * MUTATION METHOD — excluded from caching.
+     * Verified single-cell write located by row identity and column header (views plan §4.16).
+     * @returns {Promise<{ ok: boolean, reason?: string }>}
+     */
+    static async writeCellVerified(database, tab, row, column, value) {
+        return await InstantWriteUtils.writeCellVerified(database, tab, row, column, value);
+    }
+
+    /** Show notes from CACHE/ShowNotes as [{ Identifier, Note, EditHistory }] ([] if the tab is missing). */
+    static async getShowNotes(deps) {
+        try {
+            const data = await deps.call(Database.getData, 'CACHE', 'ShowNotes', { Identifier: 'Identifier', Note: 'Note', EditHistory: 'EditHistory' });
+            return Array.isArray(data) ? data.filter(r => r && r.Identifier) : [];
+        } catch (e) {
+            console.warn('[Requests.getShowNotes] ShowNotes tab unavailable:', e?.message || e);
+            return [];
+        }
+    }
+
+    /**
+     * MUTATION METHOD — excluded from caching.
+     * Upsert one show note keyed by computeIdentifier, verified by re-reading.
+     */
+    static async saveShowNote(identifier, text) {
+        const username = authState.user?.email || null;
+        return await InstantWriteUtils.saveShowNote(identifier, text, username);
+    }
+
 }
 
 /**
@@ -1583,7 +1635,9 @@ export const Requests = wrapMethods(
         'setTransshipLink',
         'removeTransshipLink',
         'savePageNotes',
-        'savePreferences'
+        'savePreferences',
+        'writeCellVerified',
+        'saveShowNote'
     ], // Mutation methods
     ['computeIdentifier'], // Infinite cache methods
     {} // No custom cache durations needed - lock methods delegate to ApplicationUtils caching

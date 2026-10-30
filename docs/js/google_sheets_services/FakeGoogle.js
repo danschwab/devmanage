@@ -19,6 +19,13 @@ export function isLocalhost() {
     );
 }
 
+// A1 column letters → 0-based index ("A" → 0, "Z" → 25, "AA" → 26)
+function _colToIndex(letters) {
+    let n = 0;
+    for (const ch of String(letters)) n = n * 26 + (ch.charCodeAt(0) - 64);
+    return n - 1;
+}
+
 let _delaysEnabled = true;
 export function setFakeDelaysEnabled(enabled) { _delaysEnabled = enabled; }
 
@@ -1121,14 +1128,21 @@ export class FakeGoogleSheetsService {
             const cellMatch = cellRange.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
             if (cellMatch) {
                 const [, startCol, startRow, endCol, endRow] = cellMatch;
-                const colIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
-                const rowIndex = parseInt(startRow) - 1;
-                
-                // Return specific cell data
-                if (sheetData[rowIndex] && sheetData[rowIndex][colIndex] !== undefined) {
-                    return [[sheetData[rowIndex][colIndex]]];
+                const c0 = _colToIndex(startCol);
+                const c1 = _colToIndex(endCol);
+                const r0 = parseInt(startRow) - 1;
+                const r1 = parseInt(endRow) - 1;
+                // Return the requested block (multi-letter columns and multi-cell ranges supported)
+                const block = [];
+                for (let r = r0; r <= r1; r++) {
+                    const line = [];
+                    for (let c = c0; c <= c1; c++) {
+                        const v = sheetData[r] ? sheetData[r][c] : undefined;
+                        line.push(v === undefined ? '' : v);
+                    }
+                    block.push(line);
                 }
-                return [['']]; // Empty cell
+                return block;
             }
         }
 
@@ -1153,8 +1167,8 @@ export class FakeGoogleSheetsService {
             const rangeMatch = tabName.match(/^([^!]+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
             if (rangeMatch) {
                 const [, sheetName, startCol, startRow, endCol, endRow] = rangeMatch;
-                const startColIndex = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
-                const endColIndex = endCol.charCodeAt(0) - 'A'.charCodeAt(0);
+                const startColIndex = _colToIndex(startCol);
+                const endColIndex = _colToIndex(endCol);
                 const rowIndex = parseInt(startRow) - 1;
                 
                 // Initialize sheet if it doesn't exist
@@ -1584,6 +1598,47 @@ export class FakeGoogleSheetsService {
         return `assets/placeholder.png`; // Always return placeholder for fake implementation
     }
 }
+
+// ── Design queue fixtures (views-and-renderers-plan §4.16, Phase 2) ──────────
+// The live database gets the same: three json preferences, a CACHE/ShowNotes tab, and
+// Account Manager / Assignee columns on the Production Schedule.
+(function addDesignQueueFixtures() {
+    const data = FakeGoogleSheetsService.mockData;
+    const prefs = data.CACHE && data.CACHE.Preferences;
+    if (prefs) {
+        prefs.push(
+            ['InstantWriteTables', 'Instant-write tables', 'row identity and writable columns for tables that save each edit immediately', 'schedule*', 'json',
+                '{"PROD_SCHED/Production Schedule": {"identity": ["Client", "Year", "Show"], "columns": {"Elev": "checkbox", "Panels": "checkbox", "Setups": "checkbox", "Assignee": "select"}}}', ''],
+            ['DesignQueueFields', 'Design queue fields', 'columns shown on the design queue', 'schedule/design-queue*', 'json',
+                '["Client", "Show", "Size", "Elev", "Panels", "Setups", "Assignee", "Account Manager", "Ship", "Note", "Booth#"]', ''],
+            ['DesignQueueAssignees', 'Design queue assignees', 'people who can be assigned design work', 'schedule/design-queue*', 'json',
+                '["Alex", "Sam"]', '']
+        );
+    }
+    if (data.CACHE && !data.CACHE.ShowNotes) {
+        data.CACHE.ShowNotes = [
+            ['Identifier', 'Note', 'EditHistory'],
+            ['GEARFIRE 2025 SHOT', 'Waiting on client logo files', '']
+        ];
+    }
+    const tabs = FakeGoogleSheetsService.mockTabs && FakeGoogleSheetsService.mockTabs.CACHE;
+    if (tabs && !tabs.some(t => t.title === 'ShowNotes')) tabs.push({ title: 'ShowNotes', sheetId: 11 });
+
+    const sched = data.PROD_SCHED && data.PROD_SCHED['Production Schedule'];
+    if (sched && sched.length && !sched[0].includes('Assignee')) {
+        const width = sched[0].length;
+        sched[0][width] = 'Account Manager';
+        sched[0][width + 1] = 'Assignee';
+        const managers = ['Dana', 'Lee', 'Morgan'];
+        const assignees = ['Alex', 'Sam', 'Jordan', ''];
+        for (let i = 1; i < sched.length; i++) {
+            const row = sched[i];
+            while (row.length < width) row.push('');
+            row[width] = managers[i % managers.length];
+            row[width + 1] = assignees[i % assignees.length];
+        }
+    }
+})();
 
 // Export both classes for easy swapping with real implementations
 export { FakeGoogleSheetsAuth as GoogleSheetsAuth, FakeGoogleSheetsService as GoogleSheetsService };

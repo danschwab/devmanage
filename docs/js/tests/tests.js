@@ -28,7 +28,8 @@
  */
 
 import { Requests } from '../data_management/api.js';
-import { FakeGoogleSheetsAuth, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
+import { FakeGoogleSheetsAuth, FakeGoogleSheetsService, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
+import { isCheckedValue } from '../data_management/abstraction/instant-write-utils.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
@@ -1468,7 +1469,7 @@ test('PREFERENCES', 'getPreferences returns an array', async () => {
 
 test('PREFERENCES', 'getPreferences returns 7 rows', async () => {
     const result = await Requests.getPreferences();
-    assertEqual(result.length, 7, 'getPreferences row count');
+    assertEqual(result.length, 10, 'getPreferences row count');
 });
 
 test('PREFERENCES', 'all rows have required fields', async () => {
@@ -1504,6 +1505,118 @@ test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
     for (const p of schedulePrefs) {
         if (p.page !== 'schedule*') throw new Error(`expected page "schedule*" for ${p.id}, got "${p.page}"`);
     }
+});
+
+// ── Instant write (views-and-renderers-plan §4.16, Phase 2) ──────────────────
+// writeCellVerified locates rows by identity (Client + Year + Show) and columns by header name,
+// reads, writes, re-reads, and retries once if rows moved. These tests run against FakeGoogle's
+// Production Schedule and restore every cell they touch.
+
+const IW_DB = 'PROD_SCHED';
+const IW_TAB = 'Production Schedule';
+const IW_ROW = { Client: 'Gearfire', Year: '2025', Show: 'SHOT Show' };
+
+function iwSheet() {
+    return FakeGoogleSheetsService.mockData[IW_DB][IW_TAB];
+}
+function iwCell(row, header) {
+    const sheet = iwSheet();
+    const c = sheet[0].findIndex(h => String(h).replace(/\s+/g, ' ').trim().toLowerCase() === header.toLowerCase());
+    const r = sheet.findIndex((line, i) => i > 0 && line[0] === row.Show && line[1] === row.Client && String(line[2]) === row.Year);
+    return { r, c, value: sheet[r]?.[c] };
+}
+
+test('INSTANT WRITE', 'checkbox reading: X/TRUE checked, any other value unchecked', async () => {
+    assertEqual(['X', 'x', ' TRUE ', '-', 'N/a', '1/10', '', null].map(isCheckedValue), [true, true, true, false, false, false, false, false], 'isChecked');
+});
+
+test('INSTANT WRITE', 'writeCellVerified writes one cell by identity and verifies it', async () => {
+    const before = iwCell(IW_ROW, 'Elev');
+    try {
+        const res = await Requests.writeCellVerified(IW_DB, IW_TAB, IW_ROW, 'Elev', 'X');
+        assertEqual(res.ok, true, 'ok');
+        assertEqual(iwCell(IW_ROW, 'Elev').value, 'X', 'cell written');
+        const res2 = await Requests.writeCellVerified(IW_DB, IW_TAB, IW_ROW, 'Elev', '');
+        assertEqual([res2.ok, iwCell(IW_ROW, 'Elev').value], [true, ''], 'uncheck writes blank');
+    } finally {
+        iwSheet()[before.r][before.c] = before.value;
+    }
+});
+
+test('INSTANT WRITE', 'refuses columns not listed in InstantWriteTables and tables without an entry', async () => {
+    const r1 = await Requests.writeCellVerified(IW_DB, IW_TAB, IW_ROW, 'City', 'X');
+    assertEqual(r1, { ok: false, reason: 'column-not-writable' }, 'column refused');
+    const r2 = await Requests.writeCellVerified(IW_DB, 'Some Other Tab', IW_ROW, 'Elev', 'X');
+    assertEqual(r2, { ok: false, reason: 'no-config' }, 'no config');
+});
+
+test('INSTANT WRITE', 'duplicate identity is never guessed', async () => {
+    const sheet = iwSheet();
+    const src = iwCell(IW_ROW, 'Elev');
+    const copy = [...sheet[src.r]];
+    sheet.push(copy);
+    try {
+        const res = await Requests.writeCellVerified(IW_DB, IW_TAB, IW_ROW, 'Elev', 'X');
+        assertEqual(res, { ok: false, reason: 'duplicate' }, 'duplicate');
+        assertEqual(sheet[src.r][src.c], src.value, 'original untouched');
+    } finally {
+        sheet.splice(sheet.indexOf(copy), 1);
+    }
+});
+
+test('INSTANT WRITE', 'row moved mid-write: re-located by identity and written correctly', async () => {
+    const sheet = iwSheet();
+    const before = iwCell(IW_ROW, 'Panels');
+    const original = FakeGoogleSheetsService.getSheetData;
+    let inserted = null;
+    // The first single-row range read happens after the row was located: insert a row above it then.
+    FakeGoogleSheetsService.getSheetData = async function (tableId, range) {
+        if (!inserted && tableId === IW_DB && /!A\d+:/.test(range)) {
+            inserted = new Array(sheet[0].length).fill('');
+            inserted[0] = 'Inserted Show'; inserted[1] = 'Inserted Client'; inserted[2] = '2025';
+            sheet.splice(1, 0, inserted);
+        }
+        return original.call(this, tableId, range);
+    };
+    try {
+        const res = await Requests.writeCellVerified(IW_DB, IW_TAB, IW_ROW, 'Panels', 'X');
+        assertEqual(res.ok, true, 'ok after retry');
+        const after = iwCell(IW_ROW, 'Panels');
+        assertEqual([after.r, after.value], [before.r + 1, 'X'], 'written at the moved row');
+        assertEqual(inserted[after.c], '', 'inserted row untouched');
+    } finally {
+        FakeGoogleSheetsService.getSheetData = original;
+        if (inserted) sheet.splice(sheet.indexOf(inserted), 1);
+        const cur = iwCell(IW_ROW, 'Panels');
+        sheet[cur.r][cur.c] = before.value;
+    }
+});
+
+test('INSTANT WRITE', 'saveShowNote creates the row the first time, then updates it', async () => {
+    const sheet = FakeGoogleSheetsService.mockData.CACHE.ShowNotes;
+    const startLen = sheet.length;
+    const id = 'TESTCO 2099 NOTE TEST';
+    try {
+        const r1 = await Requests.saveShowNote(id, 'first note');
+        assertEqual(r1.ok, true, 'create ok');
+        assertEqual(sheet.length, startLen + 1, 'row appended');
+        const r2 = await Requests.saveShowNote(id, 'second note');
+        assertEqual(r2.ok, true, 'update ok');
+        assertEqual(sheet.length, startLen + 1, 'no second row');
+        const notes = await Requests.getShowNotes();
+        assertEqual(notes.find(n => n.Identifier === id)?.Note, 'second note', 'read back');
+    } finally {
+        const i = sheet.findIndex(r => r[0] === id);
+        if (i > 0) sheet.splice(i, 1);
+    }
+});
+
+test('INSTANT WRITE', 'design queue preferences are readable as json', async () => {
+    const fields = await Requests.getJsonPreference('DesignQueueFields', []);
+    assertContains(fields, 'Assignee', 'DesignQueueFields');
+    const cfg = await Requests.getInstantWriteConfig('PROD_SCHED', 'Production Schedule');
+    assertEqual(cfg.identity, ['Client', 'Year', 'Show'], 'identity');
+    assertEqual(cfg.columns.Assignee, 'select', 'Assignee select');
 });
 
 // ── Runner export ─────────────────────────────────────────────────────────────
