@@ -585,7 +585,6 @@ export const InventoryItemReport = {
                 :navigate-to-path="navigateToPath"
                 :view-modes="viewModes"
                 :hide-rows-on-search="false"
-                :readonly="true"
                 :allowDetails="false"
                 :show-search="true"
                 :is-loading="isLoading"

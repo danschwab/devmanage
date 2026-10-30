@@ -232,7 +232,6 @@ export const PacklistItemsSummary = {
                 :container-path="containerPath || 'packlist/' + projectIdentifier + '/details'"
                 :navigate-to-path="appContext.navigateToPath"
                 :hide-rows-on-search="false"
-                :readonly="true"
                 :is-loading="itemsSummaryStore ? itemsSummaryStore.isLoading : false"
                 :is-analyzing="itemsSummaryStore ? itemsSummaryStore.isAnalyzing : false"
                 :loading-message="itemsSummaryStore && itemsSummaryStore.isLoading ? itemsSummaryStore.analysisMessage.loadingMessage : (itemsSummaryStore ? itemsSummaryStore.analysisMessage : null)"

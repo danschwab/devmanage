@@ -1,10 +1,29 @@
 # Views System & Unified Renderers: Refactor Plan
 
-**Status:** proposal for review · **Branch:** `views-system` · **Date:** 2026-10-26
+**Status:** revision 9, decisions applied, open for review · **Branch:** `views-system` · **Date:** 2026-10-30
 
-Refactor `TableComponent`, `CalendarComponent` and `CardsComponent` into interchangeable **renderers** of the same row data, driven by a **data-only views system**. The system has to ship with no feature loss. It also has to leave room for each renderer to reach parity later in three areas: what data is visible, how it adapts to small and large containers, and how cell content is composed.
+## Purpose
 
-Related notes: [notes.md](notes.md) (TODO items L79–82, L126, L131–135, L138–139), [calendar-view-feature.md](calendar-view-feature.md), [item-grouping-implementation.md](item-grouping-implementation.md), [memory-optimization-analysis.md](memory-optimization-analysis.md).
+Replace today's built-in, scattered presentation model with **one precise, data-driven views system** applied to the existing pages. Today presentation is spread across:
+
+- column flags set inside page components,
+- `hideColumns` props,
+- `viewModes`,
+- `chipColorClass`, `cardClass`, `cellClass` functions,
+- hand-built card items and `hiddenSearchData`,
+- three different row-action paths (`event-click`, `onItemClick`, `#details-cell` overrides).
+
+**The separation:**
+
+- **View data** says what is shown, where, in what colour, at what size, and how the primary action is triggered. It is plain data, shared by every renderer.
+- **Renderers** (`TableComponent`, `CalendarComponent`, `CardsComponent`) only draw a resolved view.
+- **Pages** own data, domain logic, edit mode and actions.
+
+Once every page runs on the system it becomes the single mechanism for presentation defaults, and all other mechanisms are removed. New pages and customization options can then be added to the views layer as their own concern, separate from rendering and data manipulation.
+
+Revision history: the answers to revisions 1–8 are folded into the plan and logged in [§10](#10-decisions-log). Remaining questions are in [§11](#11-open-questions).
+
+Related notes: [notes.md](notes.md) (TODO items L80–82, L131–135), [calendar-view-feature.md](calendar-view-feature.md), [item-grouping-implementation.md](item-grouping-implementation.md), [memory-optimization-analysis.md](memory-optimization-analysis.md).
 
 ---
 
@@ -19,7 +38,8 @@ Related notes: [notes.md](notes.md) (TODO items L79–82, L126, L131–135, L138
 7. [Challenges](#7-challenges)
 8. [Feature parity matrix](#8-feature-parity-matrix)
 9. [No-feature-loss verification checklist](#9-no-feature-loss-verification-checklist)
-10. [Open questions and unresolved problems](#10-open-questions-and-unresolved-problems)
+10. [Decisions log](#10-decisions-log)
+11. [Open questions](#11-open-questions)
 
 ---
 
@@ -27,24 +47,35 @@ Related notes: [notes.md](notes.md) (TODO items L79–82, L126, L131–135, L138
 
 ### Goals
 
-- **One data contract for every renderer.** Each renderer takes `rows` plus `fields` plus a resolved view. Calendar and cards stop being special cases with their own data shapes.
-- **Views are plain data.** A view is a serializable object that says which layout to use, which fields are visible and where, and how the layout adapts when narrow. Views can be defined in code now and stored per user later.
-- **Renderers stay presentational.** All view logic lives in pure functions that are unit-tested in [tests.js](../js/tests/tests.js). `TableComponent` (5,087 lines) does not learn about views.
-- **Parity can grow per renderer over time.** Data visibility (shown / details / hidden), small/large adaptation (narrow variants), and modularity (stacks, cell components, decorations) are each one shared concept that every renderer interprets.
+1. **One presentation model.** Every renderer instance gets its presentation from a view: visibility tiers, placement, stacking, colour, theme, default sort, size variants, print, action trigger.
+2. **Strict separation.**
+   - Fields describe the data (§4.1). Views describe presentation (§4.2).
+   - Page hooks supply actions and derived values; the page also sets the edit mode (§4.8, §4.16).
+   - Renderers consume a resolved view through a fixed contract (§4.4) and contain no page-specific presentation logic.
+3. **Single mechanism.** Once migration is complete, renderers no longer accept presentation settings from pages, only through `DataView` (Phase 5).
+4. **Parity by construction.** Visibility, size adaptation, colour, the primary action (details or a page action), search and decorations are each one concept that every renderer interprets.
+5. **Ready to extend.** `resolveView` accepts view patches from components (§4.15), so customization, new views and new pages are later additions to the views layer and need no renderer changes.
 
-### Non-goals (for this refactor)
+### Principle: page or view?
 
-- Filters and row selection inside views. Saved searches stay the mechanism for choosing rows, and views only control presentation. The URL carries both, so a dashboard card is a saved search plus a view.
-- Layout switching for editing tables (`InventoryTable`, `PacklistTable`). They get views for column visibility and print only.
-- A drag-and-drop column editor, team-shared views, or user-created layouts. These are deferred to Phase 5 and the open questions.
-- Replacing the CSS container-query styling. CSS keeps handling purely visual responsiveness.
+- **New page:** content that is different in purpose (its own analysis, endpoints, or actions). Example: the design queue gets its own page under Schedule.
+- **New view:** a different visualization of the same data for the same purpose. Example: Schedule table and calendar, or a ship/return calendar.
+
+### Non-goals
+
+- **Customization UI and per-user override storage.** The system accepts patches (§4.15). The only source built here is the `DesignQueueFields` preference for the design queue; other sources are decided per page later.
+- **Views controlling data types or editing.** Checkbox fields and the instant-write edit mode are part of this plan (Phase 2, §4.16), but they are configured by the page with its fields and the instant-write preference. Views only place them.
+- **Filters inside views.** Saved searches and filter parameters choose rows; filter options don't depend on the layout.
+- **History rows.**
+- **More than one dashboard card per page** (§4.11).
+- **Layout switching on pages that edit through the table** (InventoryTable, PacklistTable).
 
 ### Ship criteria
 
-- **No feature loss.** Everything in the [feature inventory](#22-renderer-feature-inventory) and the [verification checklist](#9-no-feature-loss-verification-checklist) still works on every page that has it today.
-- **Old links keep working.** Existing URLs, bookmarks and dashboard card paths (`?layout=calendar`, `?view=categories`) resolve to the equivalent view.
-- **Visual shifts are allowed if they help.** The intended ones are listed in [§6.7](#67-intended-visual-shifts).
-- **Each phase ships on its own.** No phase leaves a page half-migrated.
+- **No feature loss**, with one accepted removal: the per-column hide button (`allowHide`, used only by ShowInventoryReport's dynamic show columns). It is removed when that page migrates, and show columns can't be hidden per run until customization exists.
+- **Old links:** `?view=categories` works natively. `?layout=calendar` maps to the `calendar` view. `?view=all` (show-all) is **not** kept and becomes `?dateFilter=all`.
+- **Visual shifts are allowed if they help** ([§6, Intended visual shifts](#intended-visual-shifts)).
+- **Each phase ships on its own.** Phase 5 ships as one change after a manual testing period (R3.11).
 
 ---
 
@@ -52,17 +83,18 @@ Related notes: [notes.md](notes.md) (TODO items L79–82, L126, L131–135, L138
 
 ### 2.1 Renderers
 
-|                  | `TableComponent` ([tableComponent.js](../js/application/components/interface/tableComponent.js))                                                                                                                       | `CalendarComponent` ([calendarComponent.js](../js/application/components/interface/calendarComponent.js)) | `CardsComponent` ([cardsComponent.js](../js/application/components/interface/cardsComponent.js))                                                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Size             | 5,087 lines, including about 1,360 lines of shared selection/drag/clipboard state (`tableRowSelectionState`)                                                                                                           | 492 lines                                                                                                 | 617 lines                                                                                                                                                                                                         |
-| Data input       | `data`, `originalData`, `columns`                                                                                                                                                                                      | `data`, `columns`                                                                                         | `items: [{ id, title, content, contentFooter, footerActions, cardClass, hiddenSearchData, AppData }]`                                                                                                             |
-| Props            | 39 (see 2.2)                                                                                                                                                                                                           | 25                                                                                                        | 23                                                                                                                                                                                                                |
-| Emits            | `refresh`, `cell-edit`, `new-row`, `on-save`, `inner-table-dirty`, `row-move`, `row-options`                                                                                                                           | `refresh`, `event-click`                                                                                  | `refresh`, `toggle-pin`                                                                                                                                                                                           |
-| Slots            | default (non-editable cell), `header-area`, `cell-extra`, `details-cell`, `row-details`, `row-detail-rows`, `selection-actions`                                                                                        | `header-area`                                                                                             | default (wraps everything), `header-area`                                                                                                                                                                         |
-| Field flags read | `key label labelHtml title width font format editable sortable autoColor type cellClass columnClass allowHide details stackUnder sticky colspan`                                                                       | `key firstRow secondRow` (plus `colKey` on action cards)                                                  | none                                                                                                                                                                                                              |
-| Search           | `useSearch`. Filters or navigates over `columns` not in `hideSet`. Details-only matches light up the details button (`hasDetailsSearchMatch`, [L4552](../js/application/components/interface/tableComponent.js#L4552)) | `useSearch`. Highlight only, never hides                                                                  | Its own filter over `title/content/contentFooter`, then `hiddenSearchData`. Shows the matched hidden fields when the term is over 3 chars ([L180](../js/application/components/interface/cardsComponent.js#L180)) |
-| Sticky header    | `useStickyHeader`, plus a cloned `<thead>` with manual `translateX` fixes                                                                                                                                              | `useStickyHeader`                                                                                         | `useStickyHeader`                                                                                                                                                                                                 |
-| Value formatting | `formatCellValue` ([L2892](../js/application/components/interface/tableComponent.js#L2892)): date, currency, number                                                                                                    | none. Chips show raw values                                                                               | none. Consumers preformat HTML strings                                                                                                                                                                            |
+|                   | `TableComponent` ([tableComponent.js](../js/application/components/interface/tableComponent.js))                                                                     | `CalendarComponent` ([calendarComponent.js](../js/application/components/interface/calendarComponent.js)) | `CardsComponent` ([cardsComponent.js](../js/application/components/interface/cardsComponent.js))                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size              | 5,087 lines, including about 1,360 lines of shared selection/drag/clipboard state (`tableRowSelectionState`)                                                         | 492 lines                                                                                                 | 617 lines                                                                                                                                                     |
+| Data input        | `data`, `originalData`, `columns`                                                                                                                                    | `data`, `columns`                                                                                         | `items: [{ id, title, content, contentFooter, footerActions, cardClass, hiddenSearchData, AppData }]`                                                         |
+| Props             | 39                                                                                                                                                                   | 25                                                                                                        | 23                                                                                                                                                            |
+| Emits             | `refresh`, `cell-edit`, `new-row`, `on-save`, `inner-table-dirty`, `row-move`, `row-options`                                                                         | `refresh`, `event-click`                                                                                  | `refresh`, `toggle-pin`                                                                                                                                       |
+| Slots             | default (non-editable cell), `header-area`, `cell-extra`, `details-cell`, `row-details`, `row-detail-rows`, `selection-actions`                                      | `header-area`                                                                                             | default (wraps everything), `header-area`                                                                                                                     |
+| Column flags read | `key label labelHtml title width font format editable sortable autoColor type cellClass columnClass allowHide details stackUnder sticky colspan`                     | `key firstRow secondRow` (plus `colKey` on action cards)                                                  | none                                                                                                                                                          |
+| Search            | Columns not in `hideSet` (details included). Details-only matches light the details button ([L4552](../js/application/components/interface/tableComponent.js#L4552)) | Highlight only                                                                                            | `title/content/contentFooter`, then `hiddenSearchData`, with a matched-fields display ([L180](../js/application/components/interface/cardsComponent.js#L180)) |
+| Formatting        | `formatCellValue` ([L2892](../js/application/components/interface/tableComponent.js#L2892))                                                                          | none                                                                                                      | none (consumers preformat HTML)                                                                                                                               |
+| Row action        | details button (expand), or a `#details-cell` override; `hover-highlight` theme on some tables, with buttons in cells                                                | chip click → `event-click`                                                                                | card click → `onItemClick`                                                                                                                                    |
+| Colour            | `theme`; `autoColor`; `cellClass` (fn/object, [L3042](../js/application/components/interface/tableComponent.js#L3042)); `columnClass`; state classes                 | `theme`; `chipColorClass(row)`                                                                            | `theme`; `item.cardClass`                                                                                                                                     |
 
 ### 2.2 Renderer feature inventory
 
@@ -70,209 +102,209 @@ This list defines "no feature loss." Every item maps to a row in §9.
 
 **Table**
 
-- Header: `header-area` slot, search box with hide-rows toggle and match navigation, New Item, Save, Refresh/Discard, Undo/Redo, view toggle, loading/analysis bar.
-- Sticky header clone with column-width mirroring and horizontal-scroll sync.
-- Sticky columns (`sticky: 'start'|'end'`), with offsets computed from measured widths ([L2426–2471](../js/application/components/interface/tableComponent.js#L2426)).
-- Stacked columns (`stackUnder`), with a two-row `<thead>` and `rowspan` ([L2159](../js/application/components/interface/tableComponent.js#L2159), [L4712](../js/application/components/interface/tableComponent.js#L4712)).
-- `colspan` column clipping (`mainTableColumns`, [L2125](../js/application/components/interface/tableComponent.js#L2125)). Used by PacklistTable's nested item table.
-- Hiding: the `hideColumns` prop, ad-hoc per-column hide via `handleHideColumn` ([L2885](../js/application/components/interface/tableComponent.js#L2885), reset on refresh), and always-hidden `AppData`, `EditHistory`, `MetaData`.
-- Details: `allowDetails`, `forceDetails`, `rowDetailsVisible`; auto details grid from `details: true` fields; `row-details` and `row-detail-rows` slots; `details-cell` slot.
-- Sorting: per-column `sortable`, table-wide `sortable`, `defaultSortColumn/Direction`, item-like comparison for `type: 'item'`.
-- Editing: contenteditable text cells, number inputs, `external-edit` format, revert-to-original, original-value hints, dirty tracking, undo/redo snapshots with 5 s idle, "unsaved changes" footer.
-- Rows: new row (`newRow`, `showNewRowButton`, footer click), drag handle, drag/drop between tables (`dragId`, `dragLabel`, `allowDropOnto`), multi-select and shift-select, selection bubble with actions slot, delete/restore, cut/copy/paste including OS clipboard TSV, row groups (`hideGroupMembers`, `groupVisibilityOverride`, group master toggles), nested inner tables (`inner-table-dirty`, `parentSearchValue`).
-- States: error banner, analyzing row class, marked-for-deletion class, row metadata classes, empty-drop-target row, footer ("Showing x of y", Show all).
+- Header: `header-area`, search (hide-rows toggle, navigation), New Item, Save, Refresh/Discard, Undo/Redo, view toggle, loading bar.
+- Sticky header clone; sticky columns ([L2426–2471](../js/application/components/interface/tableComponent.js#L2426)); two-high stacks (`stackUnder`, [L2159](../js/application/components/interface/tableComponent.js#L2159)); `colspan` clipping ([L2125](../js/application/components/interface/tableComponent.js#L2125)).
+- Hiding: `hideColumns`; ad-hoc hide button (`allowHide`, [L2885](../js/application/components/interface/tableComponent.js#L2885)) **(to be removed)**; always-hidden `AppData`, `EditHistory`, `MetaData`.
+- Details: `allowDetails`, `forceDetails`, `rowDetailsVisible`, the `details` grid, and the `row-details`, `row-detail-rows` and `details-cell` slots.
+- Sorting: `sortable`, `defaultSortColumn/Direction`, `type: 'item'` comparison.
+- Editing: text, number, `external-edit`, revert, hints, dirty tracking, undo/redo, unsaved footer.
+- Rows: new row; drag/drop (`dragId`, `dragLabel`, `allowDropOnto`); multi/shift select; selection bubble; delete/restore; cut/copy/paste (OS TSV); row groups; nested inner tables.
+- States: error, analyzing, marked-for-deletion, metadata classes, empty drop target, footer counts and Show all.
 - Mobile: `theadActive` tap-to-show column buttons.
 
 **Calendar**
 
-- Week rows with month labels, `weekStart`, `yearColumn`, sticky day-of-week header, today highlight.
-- Event chips spanning start→end that split at week boundaries, with `firstRow` (bold) and `secondRow` lines.
-- `chipColorClass(row)`, `chipActions(row)` → inline cards (by `colKey`) and end-of-chip cards (`hide-when-narrow`).
-- `event-click` (the parent opens the detail modal), `analyzing` chip state, keyboard Enter/Space, search highlight, header-area slot, refresh, view toggle, loading bar, error, empty message.
-- Narrow CSS: grid compression and chip font size (`@container container-component (width < 600px)`).
+- Week rows, month labels, `weekStart`, `yearColumn`, sticky day header, today highlight.
+- Chips spanning start→end that split at weeks, with `firstRow`/`secondRow` lines.
+- `chipColorClass`; `chipActions` → inline and end cards (end cards hidden when narrow).
+- Chip click and Enter/Space → `event-click`; analyzing state; search highlight; header-area; refresh; view toggle; loading; error; empty.
 
 **Cards**
 
-- Header: header-area slot, search box with navigate mode (`hideCardsOnSearch=false`) or filter mode, sort select (`showSort`, `sortColumns`, default sort), refresh, view toggle, loading bar.
-- Card: title (highlighted), pin button (`showPinButtons`, `pinnedItems`, `toggle-pin`), `content` and `contentFooter` HTML (highlighted), `footerActions` buttons, `cardClass` colour, analyzing state, keyboard access, `onItemClick`.
-- Hidden-field deep search with a matched-fields display, the "Showing x of y cards / Show all" card, and empty/loading states.
-- Narrow CSS: cards stack full width.
+- Header: header-area, search (navigate or filter mode), sort select, refresh, view toggle, loading.
+- Card: title, pin (`showPinButtons`, `pinnedItems`, `toggle-pin`), content/footer HTML, `footerActions`, `cardClass`, analyzing, keyboard, `onItemClick`.
+- Hidden-field deep search with matched-fields display; "Showing x of y / Show all"; empty/loading.
 
 ### 2.3 Consumers
 
-There are 17 renderer instances on 12 pages.
+There are 20 renderer instances in 14 components.
 
-| Page component                                                                                                                                                                                                                                                        | Renderer(s)                              | Notable usage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [ScheduleTable.js](../js/application/components/content/ScheduleTable.js) (inside [ScheduleContent.js](../js/application/components/content/ScheduleContent.js))                                                                                                      | table ↔ calendar                         | Columns built from sheet headers ([L67](../js/application/components/content/ScheduleTable.js#L67)) with `details`, `stackUnder`, `whenSmall`, `firstRow/secondRow`. `#row-details`. `#cell-extra` renders ship-date, transship, packlist and index-issue cards ([L877](../js/application/components/content/ScheduleTable.js#L877)). `chipActionsProvider` rebuilds packlist and index cards for the calendar ([L190](../js/application/components/content/ScheduleTable.js#L190)). `handleCalendarEventClick` defines an inline detail-modal component ([L676](../js/application/components/content/ScheduleTable.js#L676)). Layout comes from `ScheduleContent.isCalendarView` via the `calendarView` prop. |
-| [InventoryItemTimeline.js](../js/application/components/content/InventoryItemTimeline.js)                                                                                                                                                                             | table ↔ calendar                         | Derived `calendarStart/calendarEnd` built from the next row's date (`calendarData`). `chipColorClass` from autoColor of quantity. Header-area date filter.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| [InventoryItemReport.js](../js/application/components/content/InventoryItemReport.js)                                                                                                                                                                                 | table ↔ calendar                         | Separate `calendarColumns` and `calendarData`. Table uses `hide-columns`, `hide-group-members`, and a `#default` cell slot for `image`, `itemId`, `minQty`, `overlappingShows`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| [InventoryContent.js](../js/application/components/content/InventoryContent.js) + [InventoryOverviewTable.js](../js/application/components/content/InventoryOverviewTable.js)                                                                                         | cards ↔ table (`?view=categories`)       | Category cards come from `categoriesStore` (tab list), with `_hiddenSearchData` analysis ([L181](../js/application/components/content/InventoryContent.js#L181), [L277](../js/application/components/content/InventoryContent.js#L277)) plus autosave/lock state, footer Save action and cardClass. The overview table is `getAllInventoryData` with `details` fields, sticky `image`, a `#default` cell for `tab` (purple button) and `image`, and `#details-cell` for timeline navigation.                                                                                                                                                                                                                   |
-| [PacklistContent.js](../js/application/components/content/PacklistContent.js)                                                                                                                                                                                         | cards                                    | `formatPacklistCard` ([L741](../js/application/components/content/PacklistContent.js#L741)): ship date or description HTML, lock/unsaved footer, link-to-schedule and index-issue actions, pins, pinned-only and unlinked-only subpages, sort by ship date.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| [ReportsContent.js](../js/application/components/content/ReportsContent.js)                                                                                                                                                                                           | cards                                    | Static menu of three items. Not row data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| [InventoryTable.js](../js/application/components/content/InventoryTable.js)                                                                                                                                                                                           | table (editing)                          | Editable, new row, locks, `forceDetails`, `rowDetailsVisible`, `#row-detail-rows`, `#default` for `image` and `_navigate`. `handleCellEdit` maps `colIdx` through its own `this.columns` (see challenge C1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| [PacklistTable.js](../js/application/components/content/PacklistTable.js)                                                                                                                                                                                             | table ×3 (crates, nested items, summary) | Draggable crates with nested item tables rendered through the default slot. `colspan` item headers. Hard-coded `hiddenColumns` ([L154](../js/application/components/content/PacklistTable.js#L154)) temporarily changed by `handlePrint` ([L1294](../js/application/components/content/PacklistTable.js#L1294)). Inner `@cell-edit` maps `itemHeaders[itemColIdx]`.                                                                                                                                                                                                                                                                                                                                            |
-| [PacklistItemsSummary.js](../js/application/components/content/PacklistItemsSummary.js), [ShowInventoryReport.js](../js/application/components/content/ShowInventoryReport.js), [IndexMismatchReport.js](../js/application/components/content/IndexMismatchReport.js) | table (read-only)                        | `#default` cell slots. Dynamic `show_*` fields (ShowInventoryReport). Fallback cells reimplemented per page, sometimes without search highlighting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Component                                                                                                                                                                                                                                                             | Renderer(s)       | Presentation set today by                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ScheduleTable.js](../js/application/components/content/ScheduleTable.js) (in [ScheduleContent.js](../js/application/components/content/ScheduleContent.js))                                                                                                          | table ↔ calendar  | `columns()` flags from sheet headers ([L67](../js/application/components/content/ScheduleTable.js#L67)); `#row-details`; `#cell-extra` cards ([L877](../js/application/components/content/ScheduleTable.js#L877)); `chipActionsProvider` ([L190](../js/application/components/content/ScheduleTable.js#L190)); inline detail modal ([L676](../js/application/components/content/ScheduleTable.js#L676)); `isCalendarView`/`viewModes` in ScheduleContent.                    |
+| [InventoryItemTimeline.js](../js/application/components/content/InventoryItemTimeline.js)                                                                                                                                                                             | table ↔ calendar  | Derived `calendarStart/End`; `chipColorClass` = autoColor(quantity) or green; `autoColor` on quantity; chip click opens a detail modal ([L181](../js/application/components/content/InventoryItemTimeline.js#L181)).                                                                                                                                                                                                                                                         |
+| [InventoryItemReport.js](../js/application/components/content/InventoryItemReport.js)                                                                                                                                                                                 | table ↔ calendar  | `calendarColumns`, `calendarData`, `hide-columns`, `#default` cells (the `itemId` cell is a button that navigates, [L625](../js/application/components/content/InventoryItemReport.js#L625)), `cellClass` autoColor on `minQty` and `columnClass: 'gray'`; `chipColorClass` = autoColor(minQty) or green; chip click navigates; reads `params.view` as a search param ([L243](../js/application/components/content/InventoryItemReport.js#L243)).                            |
+| [InventoryContent.js](../js/application/components/content/InventoryContent.js) + [InventoryOverviewTable.js](../js/application/components/content/InventoryOverviewTable.js)                                                                                         | cards ↔ table     | Category items with `_hiddenSearchData`, autosave/lock footers, Save, cardClass ([L113–181](../js/application/components/content/InventoryContent.js#L113)); card click navigates and keeps `searchTerm` ([L293](../js/application/components/content/InventoryContent.js#L293)); overview `details` fields, sticky `image`, `#default` cells, `#details-cell` override that navigates to the item timeline with `searchTerm` (so its details fields can never be expanded). |
+| [PacklistContent.js](../js/application/components/content/PacklistContent.js)                                                                                                                                                                                         | cards             | `formatPacklistCard` ([L741](../js/application/components/content/PacklistContent.js#L741)): HTML content, footers, actions, `cardClass` red/gray from schedule attachment; pins, pinned-only and unlinked-only; sort select. Routes `packlist/<name>/details` exist.                                                                                                                                                                                                        |
+| [ReportsContent.js](../js/application/components/content/ReportsContent.js)                                                                                                                                                                                           | cards             | Static three-item menu.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| [InventoryTable.js](../js/application/components/content/InventoryTable.js)                                                                                                                                                                                           | table (editing)   | `forceDetails`, `rowDetailsVisible`, `#row-detail-rows` (pending changes), `#default` for `image` and `_navigate`.                                                                                                                                                                                                                                                                                                                                                           |
+| [PacklistTable.js](../js/application/components/content/PacklistTable.js)                                                                                                                                                                                             | table ×3          | Crates with nested item tables; `colspan` headers; hard-coded `hiddenColumns` ([L154](../js/application/components/content/PacklistTable.js#L154)) and the print toggle ([L1294](../js/application/components/content/PacklistTable.js#L1294)); summary table `theme="purple hover-highlight"` with a "+ Add Item" button per row; `theme="packlist-table"` structural class.                                                                                                |
+| [PacklistItemsSummary.js](../js/application/components/content/PacklistItemsSummary.js), [ShowInventoryReport.js](../js/application/components/content/ShowInventoryReport.js), [IndexMismatchReport.js](../js/application/components/content/IndexMismatchReport.js) | table (read-only) | `#default` cells; `cellClass` autoColor and `columnClass: 'striped gray'` on `show_*` (ShowInventoryReport, which also reads `params.view`, [L148](../js/application/components/content/ShowInventoryReport.js#L148)); `allowHide`.                                                                                                                                                                                                                                          |
+| [ScheduleModals.js](../js/application/components/interface/ScheduleModals.js) `TransshipmentModal`                                                                                                                                                                    | table ×2          | `hide-columns: ['Year']`, `gray hover-highlight`, two direction buttons per row, no URL.                                                                                                                                                                                                                                                                                                                                                                                     |
+| [filterComponents.js](../js/application/components/interface/filterComponents.js) `ScheduleAdvancedFilter`                                                                                                                                                            | table             | Overlapping-show picker: `gray hover-highlight`, a "Select" button per row, no URL.                                                                                                                                                                                                                                                                                                                                                                                          |
 
-### 2.4 Existing view-like mechanisms
+### 2.4 Existing view-like mechanisms (all replaced)
 
-| Mechanism                                 | Where                                                                                                                                         | Limitation                                                                                                                                                                                                                                                            |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ViewChangeComponent`                     | [navigationComponents.js:603](../js/application/components/interface/navigationComponents.js#L603)                                            | Cycles through values of one URL parameter. Shows an icon only, with no names. On the dashboard it calls `dashboardRegistry.updatePath` instead of navigating.                                                                                                        |
-| `?layout=calendar`                        | Schedule, Timeline, ItemReport                                                                                                                | Each page reads it separately (`isCalendarView`).                                                                                                                                                                                                                     |
-| `?view=categories`                        | Inventory                                                                                                                                     | Uses the name `view`, which collides with the schedule filter's `?view=all` (show-all, [filterComponents.js](../js/application/components/interface/filterComponents.js)).                                                                                            |
-| `hideColumns`, `hiddenColumns`, `details` | Table                                                                                                                                         | Fixed per page in code. Ad-hoc hides are lost on refresh.                                                                                                                                                                                                             |
-| `firstRow/secondRow`                      | Calendar                                                                                                                                      | Calendar-only flags placed on the shared column objects.                                                                                                                                                                                                              |
-| `whenSmall`                               | ScheduleTable                                                                                                                                 | **Dead config.** Added in 8c03261 (a `ResizeObserver` on the table root at 640px, merging `whenSmall` into `resolvedColumns`) and removed the same day in aff6f47 ("fixing overscroll"). Nothing reads it now.                                                        |
-| Narrow CSS                                | [styles.css](../css/styles.css)                                                                                                               | Container queries at 600px on `.container` and `.modal > .content`, a media query at 800px, a `matchMedia('(max-width: 768px)')` in [useStickyHeader.js:174](../js/application/utils/useStickyHeader.js#L174), and the nav `isMobileView` at 800px. Four breakpoints. |
-| Print                                     | PacklistTable                                                                                                                                 | Imperative toggle of `hiddenColumns`, restored after 100 ms.                                                                                                                                                                                                          |
-| Saved searches                            | `getUserData/storeUserData` via `getReactiveStore` ([filterComponents.js:97](../js/application/components/interface/filterComponents.js#L97)) | Already a working per-user persistence pattern to copy.                                                                                                                                                                                                               |
-| Dashboard                                 | `DashboardRegistry` stores full paths with parameters                                                                                         | Any view held in the URL can be pinned without extra work.                                                                                                                                                                                                            |
+| Mechanism                                                                                                                                                                                             | Replaced by                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `ViewChangeComponent` / `viewModes` ([navigationComponents.js:603](../js/application/components/interface/navigationComponents.js#L603))                                                              | `ViewSelectComponent` and the page view registry                                |
+| `?layout=calendar`, `?view=categories`, per-page `isCalendarView`                                                                                                                                     | `?view=<id>`                                                                    |
+| `?view=all` show-all (`filterComponents` L288, L1375–1523; ItemReport L243; ShowInventoryReport L148)                                                                                                 | `?dateFilter=all` (filter concern)                                              |
+| `hideColumns`, `hiddenColumns`, `details`, `stackUnder`, `sticky`, `firstRow/secondRow`, `whenSmall` flags                                                                                            | View tiers, slots, `table.sticky`, `calendar.chip`, variants                    |
+| `autoColor`, `cellClass`, `columnClass`, `chipColorClass`, `cardClass`, `theme` strings incl. `hover-highlight`                                                                                       | View `style`, `rowColor`, `theme`, `className`; hover follows the `row` trigger |
+| `hiddenSearchData`, `getInventoryHiddenSearchData`                                                                                                                                                    | Bucket member search through `matchRow`                                         |
+| Hand-built card items (`categoryList`, `formatPacklistCard`)                                                                                                                                          | `rowsToCards` / `bucketRowsToCards` plus decorations                            |
+| `event-click`, `onItemClick`, `#details-cell` navigation override, per-row Select/Add buttons                                                                                                         | One primary action: page `action` hook plus view `action` trigger (§4.8)        |
+| Reports' use of `CardsComponent` `items`                                                                                                                                                              | A small card grid inside ReportsContent (R3.7)                                  |
+| `defaultSortColumn/Direction` props passed by pages                                                                                                                                                   | `view.sort`                                                                     |
+| PacklistTable print toggle                                                                                                                                                                            | `variants.print`                                                                |
+| Breakpoints: container 600; media 800 (chrome plus duplicated content rules); `isMobileView` 800; a 768 settle heuristic in [useStickyHeader.js:174](../js/application/utils/useStickyHeader.js#L174) | The size model (§4.10)                                                          |
+| Modal width classes `small-menu`, `hamburger-menu` (width part), `page-menu`, `event-detail`, `page-note-edit-menu`                                                                                   | Modal size tiers (§4.17)                                                        |
+| `currentView` = last path segment (content components, [HamburgerMenuRegistry.js:248](../js/application/utils/HamburgerMenuRegistry.js#L248)), a name collision with views                            | Renamed `currentSegment` in Phase 5                                             |
 
 ### 2.5 Defects found during the survey
 
-Fix these in Phase 0. Several would otherwise turn into migration bugs.
-
-- **D1:** Inventory categories pass `:analysis-progress` to `CardsComponent`, but the prop is `loadingProgress`, so the progress bar never moves ([InventoryContent.js:396](../js/application/components/content/InventoryContent.js#L396)).
-- **D2:** `readonly` (IndexMismatch, ItemReport, ItemsSummary, ShowInventory, Timeline) and `external-dirty-state` (InventoryTable) are not `TableComponent` props. They fall through to the root DOM element and do nothing.
-- **D3:** `whenSmall` is dead config (see 2.4).
-- **D4:** The `cell-edit` contract is index-based. The table emits the `mainTableColumns` index, but `InventoryTable.handleCellEdit` resolves it through its own unfiltered `this.columns[colIdx]` ([InventoryTable.js:1084](../js/application/components/content/InventoryTable.js#L1084)). This is only correct while no `details`, `stackUnder` or `colspan` field comes before an editable field. `dirtyCells` is keyed by the same index (`[rowIndex][colIndex]`).
-- **D5:** The Schedule builds its action cards two ways: the `#cell-extra` template for the table and `chipActionsProvider` for the calendar. Ship-date and transship cards never appear on calendar chips.
-- **D6:** Custom `#default` cell slots replace the renderer's fallback for every non-editable field. Each page reimplements the fallback, and some (for example `IndexMismatchReport`) drop search highlighting.
-- **D7:** The inventory data is loaded twice: `getAllInventoryData` for the overview, and `getInventoryHiddenSearchData` once per tab ([api.js:337](../js/data_management/api.js#L337)), which fetches each full tab only to build search strings.
+- **D1 (fixed 2026-10-28):** Inventory categories passed `:analysis-progress`. It is now `:loading-progress`.
+- **D2 (fixed 2026-10-28):** removed the undeclared `readonly` and `external-dirty-state` attributes.
+- **D3:** `whenSmall` is dead config. It is replaced by the Schedule narrow variant (Phase 6).
+- **D4:** index-based `cell-edit` and `dirtyCells` ([InventoryTable.js:1084](../js/application/components/content/InventoryTable.js#L1084)). Fixed in Phase 0.
+- **D5:** Schedule action cards built twice; calendar chips miss the ship-date and transship cards.
+- **D6:** custom `#default` slots replace the fallback for all fields; some pages lose highlighting.
+- **D7:** inventory rows loaded twice (`getInventoryHiddenSearchData`, [api.js:337](../js/data_management/api.js#L337)).
+- **D8:** InventoryOverviewTable defines `details` fields, but its `#details-cell` override replaces the expand toggle, so those fields can only be matched by search and never seen in place. Accepted as designed (R3.8): the timeline it navigates to reveals them.
+- **D9:** `$modal.custom()` takes three arguments, but three call sites pass a fourth that is silently ignored: ItemReport [L494](../js/application/components/content/InventoryItemReport.js#L494) and PacklistItemsSummary [L201](../js/application/components/content/PacklistItemsSummary.js#L201) (`{ modalClass: 'hamburger-menu' }`), and the show-overlap picker in [filterComponents.js:834](../js/application/components/interface/filterComponents.js#L834) (`{ size: 'large' }`, which was never applied). Fixed by the modal size tiers (Phase 6).
 
 ---
 
 ## 3. Target architecture
 
 ```
- Page component (owns data + domain logic; unchanged responsibilities)
- ├─ rows        ← reactive store data (+ derived fields, computed once)
- ├─ fields      ← field definitions: what each key IS (label, format, type, sortable, editable, cell…)
- ├─ views       ← view definitions: how to SHOW the rows (data only)
- └─ hooks       ← decorations(row, key), groupDecorations(key, rows), onRowClick(row)
+ Page component — data, domain logic, actions, edit mode
+ ├─ rows     ← store data + derived fields (computed copy; never written to store.data)
+ ├─ fields   ← FieldDef[]: what each key IS (label, type, format, sortable, editable, cell)
+ ├─ editMode ← 'none' | 'batch' | 'instant'  (page data, never view data; §4.16)
+ ├─ registry ← page view registry: views (data), default, theme
+ └─ hooks    ← action · decorations · bucketDecorations · commitCell (instant mode)
         │
         ▼
- <DataView>  (new, thin)
- ├─ currentViewId  ← URL ?display=… (legacy params mapped) → default
- ├─ narrow         ← useNarrow()  (nearest container-component, one breakpoint)
- ├─ resolved       ← resolveView(fields, view, { narrow, print })   ← pure, tested
- ├─ renderer pick  ← layout: 'table' | 'calendar' | 'cards'
- ├─ slot forwarding (#cell, #header-area, table-only slots)
- └─ attrs forwarding (renderer-specific props like draggable)
-        │
+ <DataView>  — the only producer of renderer presentation input
+ ├─ viewId   ← ?view= (fallback ?layout=) → registry default; no URL (modal) → default
+ ├─ size     ← 'wide' until Phase 6; then useContainerSize() → 'wide' | 'medium' | 'narrow'
+ ├─ patches  ← optional, from the component (customization later)
+ ├─ resolved ← resolveView(fields, view, { size, print, patches, editMode })  ← pure, tested
+ ├─ action   ← resolveAction(hooks.action, resolved, editMode) → { kind, trigger, … }
+ ├─ renderer ← resolved.layout
+ └─ details  ← RowDetailsModal | table expand
+        │  renderer contract: { rows, resolved, action, state, hooks, slots }
         ▼
- Renderers (presentational)
- ├─ TableComponent     ← resolved fields → existing column-flag format
- ├─ CalendarComponent  ← resolved fields + calendar options
- └─ CardsComponent     ← items produced by rowsToCards / groupRowsToCards (pure, tested)
+ TableComponent · CalendarComponent · CardsComponent   (draw only)
 
- Shared building blocks (extracted, used by all three)
- ContentHeaderComponent · ViewSelectComponent · RowDetailsComponent
- formatValue() · matchRow() · cell registry · decoration cards · useNarrow() · BREAKPOINTS
+ Shared: ContentHeaderComponent · ViewSelectComponent · RowDetailsComponent/RowDetailsModal
+         formatValue · matchRow · colorFor · cell registry · decoration cards · useContainerSize
 ```
-
-**Separation of concerns:**
-
-- A **field** says what the data is. It is owned by the page and identical across views.
-- A **view** says where each field appears. It is data and can be persisted.
-- `resolveView` is the only place the two meet.
-- Placement flags that live on columns today (`details`, `stackUnder`, `sticky`, `firstRow`, `secondRow`, `whenSmall`) move into views. `resolveView` writes them back onto the resolved column objects, so in Phase 1 the renderers keep reading the flags they already understand.
 
 **Files**
 
-| File                                                                 | Purpose                                                                              |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `docs/js/application/utils/views/resolveView.js`                     | `resolveView`, `normalizeSlot`, key-pattern matching, variant merge                  |
-| `docs/js/application/utils/views/cardsAdapter.js`                    | `rowsToCards`, `groupRowsToCards`                                                    |
-| `docs/js/application/utils/views/fieldFormat.js`                     | `formatValue` (moved from `TableComponent.formatCellValue`) and the autoColor lookup |
-| `docs/js/application/utils/views/searchMatch.js`                     | `matchRow` (generalizes `useSearch.matchesRow` plus the cards hidden-field logic)    |
-| `docs/js/application/utils/useNarrow.js`                             | `useNarrow()` composable and the `BREAKPOINTS` constant                              |
-| `docs/js/application/components/interface/dataViewComponent.js`      | `DataView` wrapper                                                                   |
-| `docs/js/application/components/interface/contentHeaderComponent.js` | Shared header (extracted from all three renderers)                                   |
-| `docs/js/application/components/interface/rowDetailsComponent.js`    | Shared key/value details grid (table expand and calendar/cards modal)                |
-| `docs/js/application/components/interface/cells.js`                  | Cell registry (`image`, `itemId`, `navigate`, …)                                     |
+| File                                                                 | Purpose                                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `docs/js/application/utils/views/resolveView.js`                     | `resolveView`, `resolveAction`, slot normalization, key patterns, variants, patches        |
+| `docs/js/application/utils/views/cardsAdapter.js`                    | `rowsToCards`, `bucketRowsToCards`                                                         |
+| `docs/js/application/utils/views/fieldFormat.js`                     | `formatValue` (from `formatCellValue`)                                                     |
+| `docs/js/application/utils/views/viewColor.js`                       | `colorFor(row, field, resolved)`, `rowColorFor(row, resolved)` (wraps `getAutoColorClass`) |
+| `docs/js/application/utils/views/searchMatch.js`                     | `SEARCH_LIMITS`, `searchWords`, `matchRow`, `matchRows` (abort)                            |
+| `docs/js/application/utils/useContainerSize.js`                      | `useContainerSize()`, `useViewportSize()`, `BREAKPOINTS`                                   |
+| `docs/js/application/components/interface/dataViewComponent.js`      | `DataView`                                                                                 |
+| `docs/js/application/components/interface/viewSelectComponent.js`    | `ViewSelectComponent`                                                                      |
+| `docs/js/application/components/interface/contentHeaderComponent.js` | Shared header                                                                              |
+| `docs/js/application/components/interface/rowDetailsComponent.js`    | `RowDetailsComponent`, `RowDetailsModal`                                                   |
+| `docs/js/application/components/interface/cells.js`                  | Cell registry                                                                              |
 
-View definitions live as a `const` at the top of each page component, as `viewModes` does today. Move them to a separate file only when two pages share them.
+- **Registries** live as a `const` in the page component.
+- **Shared fields:** field definitions shared by more than one page (Schedule and the future design queue page) move to a module next to that data's abstraction, for example `scheduleFields.js`.
 
 ---
 
 ## 4. Specification
 
-### 4.1 Field definition (page-owned)
+### 4.1 Field definition: what the data is
 
 ```js
 /**
  * @typedef {Object} FieldDef
  * @property {string}  key
  * @property {string}  [label]
- * @property {string}  [labelHtml]     header HTML (e.g. icon)
- * @property {string}  [title]         header tooltip
+ * @property {string}  [labelHtml]   header label as HTML (icon)
+ * @property {string}  [title]       header tooltip
+ * @property {string}  [type]        data type / compare semantics: 'item', 'date', 'number', 'checkbox' (Phase 2), …
  * @property {'date'|'currency'|'number'|'external-edit'|string} [format]
- * @property {string}  [type]          sort/compare semantics, e.g. 'item'
  * @property {boolean} [sortable]
- * @property {boolean} [editable]      table only; never inside a stack child (validated)
- * @property {boolean} [autoColor]
- * @property {number}  [width]
- * @property {string}  [font]          'narrow' …
- * @property {string|Function} [cellClass]
- * @property {string}  [columnClass]
- * @property {boolean} [allowHide]
- * @property {number}  [colspan]       table only; PacklistTable nested item header
- * @property {string}  [cell]          'slot' → page #cell template; '<name>' → cell registry; absent → formatted text
+ * @property {boolean} [editable]    configured with the page's data, not by views (§4.16)
+ * @property {string}  [cell]        'slot' → page #cell; '<name>' → registry; absent → formatted text
+ * @property {number}  [colspan]     table-structural; PacklistTable nested item header only
  */
 ```
 
-These are exactly the field-level properties consumers use today; the inventory in §2.1 is complete for the table. Placement properties are **not** part of a field: `details`, `stackUnder`, `sticky`, `firstRow`, `secondRow`, `whenSmall`. During migration, `resolveView` tolerates them on fields with a console warning so pages can move one at a time.
+Presentation properties (`width`, `font`, `autoColor`, `cellClass`, `columnClass`, `allowHide`, `details`, `stackUnder`, `sticky`, `firstRow`, `secondRow`, `whenSmall`) are **not** field properties. They move into views. During migration `resolveView` tolerates them on fields with a dev warning. Phase 5 removes that tolerance.
 
-### 4.2 View definition (data only)
+### 4.2 View definition: presentation as data
 
 ```js
 /**
- * @typedef {string|string[]} Line      one key, or keys shown inline on one line (joined " | " in chips)
+ * @typedef {string|string[]} Line      one key, or keys shown inline on one line
  * @typedef {string|Line[]}   Slot      one key, or a stack of lines (top → bottom)
+ * @typedef {'auto'|string}   ColorRule 'auto' = getAutoColorClass(value); 'value' = the value is the class; otherwise a class name
  *
  * @typedef {Object} ViewDef
- * @property {string}  id                 stable, URL-safe; used in ?display=
- * @property {string}  name               shown in the view menu
- * @property {string}  [icon]             material symbol for the toggle button
+ * @property {string}  id                 stable, never renamed
+ * @property {string}  name
+ * @property {string}  [icon]
  * @property {'table'|'calendar'|'cards'} layout
+ * @property {string}  [theme]            header/footer/button colour; defaults to registry.theme
+ * @property {string}  [className]        structural CSS hook (e.g. 'packlist-table'); never colour
  *
- * // Data visibility (all layouts)
- * @property {Slot[]}  [columns]          shown fields, in order. Table: one entry per column.
- *                                        Defaults to every field not in details/hidden.
- * @property {string[]|'rest'} [details='rest']   fields in expand row / detail modal; 'rest' = all not shown & not hidden
- * @property {string[]} [hidden]          never shown, never searched
- * @property {'details'|'hidden'} [unlisted='details']  where fields not mentioned anywhere go
- * @property {{key:string, dir:'asc'|'desc'}} [sort]   default sort (renderers' existing default-sort props)
+ * // Visibility
+ * @property {Slot[]}  [columns]          shown, in order
+ * @property {string[]|'rest'} [details='rest']  'rest' = every field not listed elsewhere
+ * @property {string[]|'rest'} [hidden]          never shown, never searched
+ * @property {{key:string, dir:'asc'|'desc'}} [sort]
  *
- * // Layout sections (each renderer reads only its own)
+ * // Interaction
+ * @property {'button'|'row'} [action='button']   how the primary action is triggered (§4.8)
+ *
+ * // Style and colour
+ * @property {Object<string,{ width?:number, font?:string, color?:ColorRule, columnColor?:string }>} [style]
+ *           keyed by field key or pattern; columnColor = column background class (table)
+ * @property {{ field:string, rule:ColorRule, fallback?:string }} [rowColor]
+ *
+ * // Layout sections
  * @property {{ sticky?: {start?:string[], end?:string[]}, hideRowsOnSearch?: boolean }} [table]
  * @property {{ start:string, end:string, weekStart?:'sunday'|'saturday', yearColumn?:string, chip:Line[] }} [calendar]
- * @property {{ groupBy?:string, card:Line[], footer?:Line[], hideOnSearch?:boolean }} [cards]
+ * @property {{ bucketBy?:string, card:Line[], footer?:Line[], hideOnSearch?:boolean }} [cards]
  *
- * // Variants: partial ViewDefs merged when a condition holds
- * @property {{ narrow?: Partial<ViewDef>, print?: Partial<ViewDef> }} [variants]
+ * // Variants: partial ViewDefs by condition
+ * @property {{ medium?: Partial<ViewDef>, narrow?: Partial<ViewDef>, print?: Partial<ViewDef> }} [variants]
  */
 ```
 
-**Key patterns.** Any key list accepts a trailing `*` (`'show_*'`), using the same rule as `matchesPagePattern` in [preferencesComponent.js](../js/application/components/interface/preferencesComponent.js). Needed for ShowInventoryReport's dynamic columns.
+**Rules**
 
-**Merge rule for variants.** Objects merge deeply, and arrays **replace**. When narrow and print both apply, they merge in that order (print wins).
+- **Key patterns:** a trailing `*` (`'show_*'`) works in every key list and in `style` keys, using the same rule as `matchesPagePattern` in [preferencesComponent.js](../js/application/components/interface/preferencesComponent.js).
+- **Variant cascade:** `medium` applies at medium and narrow sizes; `narrow` applies on top of it at narrow size; `print` applies last. Objects merge deeply, arrays replace.
+- **Colour rules are data only** (R3.5). Any rule that needs logic (packlist red when unattached, a fallback colour) becomes a **derived field** computed by the page (for example `_cardColor: 'red'`), and the view references it: `rowColor: { field: '_cardColor', rule: 'value' }`.
+- **Validation:** dev warnings, never throws.
+  - Unknown keys are ignored.
+  - The first tier wins on duplicates. At most one of `details` and `hidden` may be `'rest'`.
+  - Editable fields inside a stack child render read-only.
+  - A view with a missing calendar start or end field falls back to the default view.
+  - `action: 'row'` with an `editMode` other than `'none'` falls back to `'button'` (§4.8).
 
-**Validation** (dev console warnings, never throws):
-
-- Unknown keys are ignored. Sheet headers change, so they can't be errors.
-- A key appearing in more than one of `columns`, `details` and `hidden` is resolved by first wins, in that order.
-- `editable` fields inside a stack child are rendered read-only and produce a warning.
-- `calendar.start`/`end` must resolve to an existing field, otherwise the view falls back to the page default.
-
-### 4.3 Page registration
+### 4.3 Page view registry
 
 ```js
 const SCHEDULE_VIEWS = {
+  id: "schedule", // page-type identity (future patch scope: per page type)
   default: "table",
-  legacy: { layout: { calendar: "calendar" } }, // ?layout=calendar → ?display=calendar
+  theme: "gray",
   views: [
     {
       id: "table",
@@ -288,7 +320,6 @@ const SCHEDULE_VIEWS = {
         "Size",
         "packlist",
       ],
-      table: {},
       variants: {
         narrow: {
           columns: [
@@ -320,411 +351,811 @@ const SCHEDULE_VIEWS = {
 };
 ```
 
-The Phase 1 Schedule views must reproduce today's layout exactly. Today, `details` is every header except `Show, Client, Ship, City, Size, S. Start, S. End, Recieved`, which is `details: 'rest'` with those columns listed. The `narrow` variant restores what `whenSmall` was meant to do.
+- **Single-view registries** have no switcher. Modal tables are single-view and have no URL.
+- **Schedule Phase 1** reproduces today: shown `Show, Client, Ship, City, Size, S. Start, S. End, Recieved, packlist`, with the rest in details. The narrow variant ships in Phase 6.
 
-### 4.4 `resolveView(fields, view, { narrow, print })`
+### 4.4 `resolveView` and the renderer contract
 
-This is a pure function. It returns `{ layout, columns: ResolvedColumn[], details: FieldDef[], hidden: Set, calendar, cards, sort }`.
+```js
+resolveView(fields, view, { size = 'wide', print = false, patches = [], editMode = 'none' }) → ResolvedView
+```
 
-1. Merge variants (`narrow`, then `print`) into the view.
-2. Expand key patterns against `fields`.
-3. Assign each field to a tier: shown (in `columns`), details, or hidden. Unlisted fields go to `view.unlisted`.
-4. Build `ResolvedColumn[]` in `columns` order. For a stack, the first key is the **parent**, and later lines are children. Phase 1 output is in the **legacy flag format**: children get `stackUnder: parentKey`, details fields get `details: true`, sticky fields get `sticky`, chip lines get `firstRow`/`secondRow`. Unchanged renderers keep working.
-5. Phase 3 output adds `stack: Line[]` on the parent, and the table switches to it (see 4.8).
-6. Always hide `AppData`, `EditHistory` and `MetaData`. They also stay in the table's `hideSet`.
+**Steps**
 
-**Index stability.** The table keeps hidden columns in `mainTableColumns` (it uses `v-show`), so indices stay stable when columns are hidden. View-driven reordering and stacking do change indices, which is why Phase 0 makes editing key-based (C1).
+1. Apply variants (`medium`, `narrow`, `print`) for `size` and `print`.
+2. Apply `patches` (§4.15) whose `sizes` include `size`.
+3. Expand patterns; assign tiers (shown, details, hidden; unlisted fields go to whichever of `details` or `hidden` is `'rest'`); always hide `AppData`, `EditHistory`, `MetaData`.
+4. Resolve style per field (`width`, `font`, `color`, `columnColor`) and `rowColor`.
+5. Resolve the action trigger (with the edit-mode rule).
+6. Build the output.
 
-### 4.5 Visibility tiers and search semantics
+```js
+/** @typedef {Object} ResolvedView
+ *  @property {string} viewId, layout, theme, className
+ *  @property {ResolvedSlot[]} slots      [{ key, field, lines: Line[], width, font, color, columnColor, sticky }]
+ *  @property {FieldDef[]} details
+ *  @property {Set<string>} hidden
+ *  @property {Object} rowColor, sort, table, calendar, cards
+ *  @property {'button'|'row'} trigger
+ *  @property {boolean} hasDetails
+ */
+```
 
-| Tier    | Table                       | Calendar     | Cards                                          | Searched? | Match indicator                                                                                      |
-| ------- | --------------------------- | ------------ | ---------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
-| shown   | column / stack line         | chip line    | card line                                      | yes       | highlight                                                                                            |
-| details | expand row (`details` grid) | detail modal | detail modal (new), or the matched-fields list | yes       | table: details button glows (exists). Cards: matched-fields list (exists). Calendar: chip glow (new) |
-| hidden  | not rendered                | not rendered | not rendered                                   | **no**    | n/a                                                                                                  |
+**Two output forms**
 
-`matchRow(row, { shown, details }, words)` returns `{ matched: boolean, shownMatch: boolean, detailMatches: [{ key, label, value }] }`. All three renderers use it:
+- **Phases 1–4 (adapter):** `toLegacyColumns(resolved)` converts the result into the column flags renderers read today: `stackUnder`, `details`, `sticky`, `firstRow/secondRow`, `width`, `font`, `cellClass`, `columnClass`. Renderer internals don't change while pages migrate, except for the primary action, which tables and calendars gain in Phase 1 and cards in Phase 3, and the instant-edit additions in Phase 2.
+- **Phase 5 (contract):** renderers read `ResolvedView` directly. The adapter, the legacy flags and the public presentation props are deleted.
 
-- **Table:** replaces the filter at [L2206](../js/application/components/interface/tableComponent.js#L2206) and `hasDetailsSearchMatch`.
-- **Cards:** replaces the `visibleCards` matching and `_matchedHiddenFields`.
-- **Calendar:** marks chips whose only match is in details.
-- `useSearch.matchesRow` becomes a thin wrapper around it.
+**Renderer contract** (Phase 5 end state)
 
-**Behaviour change to accept:** a field a page hides today with `hideColumns` should be put in `hidden`, not left to fall into `details`. Otherwise it becomes searchable. The per-page migration (§5) lists each case.
+- `rows`
+- `resolved: ResolvedView`
+- `action: ResolvedAction` (§4.8)
+- `state: { isLoading, isAnalyzing, loadingProgress, loadingMessage, error, emptyMessage }`
+- `hooks: { decorations, bucketDecorations, commitCell }`
+- slots: `#cell`, `#row-details`, `#header-area`, plus table-only `#cell-extra`, `#row-detail-rows`, `#selection-actions`
+- renderer-only behaviour props: table editing/drag/selection/grouping and `editMode`; cards pins
+
+### 4.5 Visibility tiers and search
+
+| Tier    | Table               | Calendar     | Cards        | Searched | Match indicator                                           |
+| ------- | ------------------- | ------------ | ------------ | -------- | --------------------------------------------------------- |
+| shown   | column / stack line | chip line    | card line    | yes      | highlight                                                 |
+| details | expand              | modal        | modal        | yes      | action button glows, or `details-match` on the row (§4.8) |
+| hidden  | not rendered        | not rendered | not rendered | no       | n/a                                                       |
+
+- **One matcher:** `matchRow(row, { shown, details }, words) → { matched, shownMatch, detailMatches }`. All renderers use it, and `useSearch.matchesRow` wraps it. This is today's table `visibleRows` rule (AND across words).
+- **Search is for pinpointing (R4.2).** Two app-wide rules apply to every search, in every renderer:
+  1. **Minimum term length 2.** `searchWords(term, minTermLength)` splits the term and drops words shorter than 2 characters before matching **and** highlighting. "TV", "AV" and two-digit numbers still search; single characters don't. If no words remain, search is inactive: no filtering, highlighting or glow.
+  2. **Broad-search abort.** If the searched set has more than 100 rows and the search matches more than 80% of them, the search is aborted. Results aren't processed: the unfiltered set is shown with no highlighting, glow or matched-field lists, and no message (R5.1). If the search-navigation card is visible, it shows `∞` with no previous/next buttons. `SearchBoxComponent` ([useSearch.js:552](../js/application/utils/useSearch.js#L552)) receives `matchCount: Infinity` and adds one template branch for it, next to today's `0 / 0` branch.
+- **Abort mechanics:**
+  - `matchRows(rows, tiers, words, limits)` counts matches before any highlighting or rendering work.
+  - It stops early once the count passes the threshold, so an aborted search costs one partial pass over the rows and no highlighting.
+  - The searched set is the rows handed to the renderer, after page filters. For bucket cards that means the member rows, not the buckets.
+- **Constants:** `SEARCH_LIMITS = { minTermLength: 2, abortRatio: 0.8, abortMinRows: 100 }` lives in `searchMatch.js`. It is the one app-wide setting; views can't override it (R6.6).
+- **Navigation:** the URL `searchTerm` is passed on unchanged, and the destination page applies the same rules to its own rows.
+- **Details with a navigating action (R3.8):** details fields stay searchable when the primary action navigates away. A details-only match lights the indicator even though the value isn't visible in place, and the navigation carries `searchTerm` so the destination can reveal it. Pages that use this must make sure the destination shows those fields; InventoryOverviewTable → timeline already does.
+- **Migrating `hideColumns`:** those fields go to `hidden`.
+- **Bucket cards:** tiers apply to member rows. The categories view declares no tier lists, so every non-hidden item field is searched. That matches the overview table exactly (R2.12). A short number that matches quantities across most items trips the broad-search abort (R4.2). Matched member fields are listed on the card as today.
 
 ### 4.6 Cards adapter
 
 ```js
-rowsToCards(rows, resolved, { decorations, rowKey });
-// one card per row
-// → [{ id, title, content, contentFooter, footerActions, cardClass, searchFields, AppData, row }]
-
-groupRowsToCards(rows, resolved, { groupBy, groupKeys, groupDecorations });
-// one card per distinct row[groupBy]; groupKeys seeds the list so empty groups still appear
-// → same item shape; searchFields = member rows' shown+details values (replaces hiddenSearchData)
+rowsToCards(rows, resolved, hooks); // one card per row
+bucketRowsToCards(rows, resolved, { bucketKeys, bucketDecorations }); // one per distinct row[cards.bucketBy]
+// → [{ id, title, content, contentFooter, footerActions, cardClass, searchFields, hasDetails, AppData, row }]
 ```
 
-- **Mapping:** `cards.card[0]` → `title`, remaining `card` lines → `content`, `cards.footer` lines → `contentFooter`.
-- **Escaping:** lines are formatted with `formatValue` and HTML-escaped. HTML only comes from cell renderers or decorations, never from raw data. Today consumers build HTML strings by hand.
-- **Decorations** come from page hooks (§4.9). They supply `footerActions`, `cardClass` and status text such as "Locked for edit by" or "Unsaved changes".
-- **Items mode stays.** `CardsComponent` keeps accepting hand-built `items` for real menus (Reports). The adapter produces the same shape, so the renderer needs only a small change: use `searchFields` for matching (via `matchRow`) instead of `hiddenSearchData`.
-
-**Naming:** `groupBy` is the card grouping. It is unrelated to the table's packlist row groups (`hideGroupMembers`, `MetaData` groups). The docs and code comments must keep the two apart. See Q14.
+- **Lines:** `card[0]` → title, other lines → content, `footer` → contentFooter. Values pass through `formatValue` and are HTML-escaped. Field colour renders as a badge on the value.
+- **Colour:** `rowColor` → `cardClass`.
+- **Decorations:** row-level decorations → `footerActions`. Status text ("Locked for edit by …", "Unsaved changes") comes from decorations or derived fields.
+- **Bucket cards:**
+  - `bucketKeys` seeds empty buckets.
+  - `bucketDecorations` supplies autosave/lock/Save.
+  - They have **no details** (R2.7); their primary action is the page's navigation.
+- **No items mode (R3.7).** `CardsComponent` takes only adapter output from `DataView`. ReportsContent builds its own three-card menu with the shared card CSS and drops `CardsComponent`.
+- **`bucketBy`** is unrelated to packlist row groups (`hideGroupMembers`, `MetaData`). Code comments must say so.
 
 ### 4.7 Calendar mapping
 
-- `calendar.start/end/weekStart/yearColumn` → the existing props `eventStartColumn`, `eventEndColumn`, `weekStart`, `yearColumn`.
-- `calendar.chip` → `firstRow` (line 0) and `secondRow` (line 1) in Phase 1. Phase 3 replaces the two flags with `chipLines: Line[][]`, so chips can show any number of lines. Line 0 is bold, and each line is joined with `|` and truncated as today.
-- Chip values go through `formatValue` (new; fixes raw dates and numbers on chips).
-- **Derived fields** (Timeline's `calendarStart/calendarEnd`, ItemReport's date range) are computed by the page and added to **every** row, not just a calendar-only copy. The calendar view then names them like any other field, and the table can show them if a view asks. ItemReport's separate `calendarColumns` becomes a view.
-- **Detail modal:** `CalendarComponent` still emits `event-click`, and `DataView` handles it by default. It opens `RowDetailsComponent` with `details` plus `shown` fields, followed by the row's decoration cards, which replaces Schedule's inline `DetailModalComponent`. Pages can override this with `onRowClick` (ItemReport navigates to the item page instead).
+- **Props:** `calendar.start/end/weekStart/yearColumn` → the existing props. `calendar.chip` → `firstRow`/`secondRow` (adapter), and N lines in Phase 5.
+- **Values:** pass through `formatValue`. Field colour renders as a badge; `rowColor` sets the chip colour, replacing `chipColorClass`.
+- **Derived fields** (Timeline end dates, ItemReport ranges) are computed on a computed copy of the rows.
+- **Interaction:** the primary action (§4.8). With `action: 'button'` the action button sits at the chip start and stays visible when narrow; with `action: 'row'` the chip body is the trigger. Inline decorations stay clickable either way.
 
-### 4.8 Stacks (N-high), sticky, and the table header
+### 4.8 The primary action (R3.4, R3.8, replacing R2.6/R2.7)
 
-**Phase 1:** the legacy `stackUnder` output keeps today's two-row header.
+Row click and the details button are **one mechanism**. Every row has at most one primary action, and the view chooses how it is triggered.
 
-**Phase 3:** a parent-owned stack.
-
-- **Data:** the resolved parent column carries `stack: Line[]` (line 0 is itself). `stackedColumnMap`, `theadRow2Columns` and `rowspan` are removed.
-- **Header:** one `<tr>`. A stacked `<th>` renders its labels as a vertical flex list. Each label is its own sort button, so stacks of 3 or more work. The sticky-header clone mirrors this, and because there is a single header row, `_stickyStartLeft`/`_stickyEndRight` and the clone width logic lose the second-row special cases.
-- **Body:** line 0 renders through the normal cell path, including editing. Lines 1+ render through the read-only cell path (formatted, highlighted, `cell` registry or slot), as stacked children do today. Inline lines (`['City','Size']`) render in one row separated by `·`.
-- **Sticky:** `view.table.sticky.start/end` lists **slot parents**. The resolver sets `sticky` on the parent's resolved column. Only `theadRow1Columns` (now simply the columns) take part in offset math, as today.
-- **Mobile `theadActive`:** the tap-to-show column buttons attach to each label in the stack rather than to the `<th>`.
-
-### 4.9 Modularity: cells, decorations, slots
-
-There are three mechanisms, from most to least reusable:
-
-1. **Cell registry** (`field.cell = '<name>'`). A component receives `{ row, field, value, renderer, density, search }`.
-   - `density` is `'full'` for table cells and card content, and `'compact'` for chips and stacked children.
-   - Initial registry, deduplicated from five pages: `image` (`ItemImageComponent` at 32px full, 20px compact or hidden), `itemId`, `navigate` (☷ button).
-   - A cell that has nothing to show at `compact` density returns nothing, and the renderer falls back to formatted text.
-2. **Page slot** (`field.cell = 'slot'`). The page's `#cell="{ row, field, renderer, density }"` template is called for that field only. Other fields keep the renderer's fallback, which fixes D6.
-   - Table: `#cell` is tried first for `cell: 'slot'` fields. The legacy default slot keeps working until every page has migrated.
-   - Calendar and cards only call `#cell` for fields that are on a chip or card line.
-3. **Decorations** `decorations(row, key) → Card[]`, where `Card = { message, class, title, disabled, action }`. This is the one API behind today's `#cell-extra` card content and `chipActions`.
-   - `key = null` means row-level decorations: end-of-chip, card footer actions, details modal button bar.
-   - Table: rendered after the cell content (where `#cell-extra` sits). `#cell-extra` stays for markup that isn't a card (PacklistTable group toggles).
-   - Calendar: inline on the chip line that contains `key`, or at the chip end for `null`. Hidden when narrow, as now.
-   - Cards: row-level decorations become `footerActions`. Field-level ones render after the line.
-   - Group cards use `groupDecorations(groupKey, rows)`. This is where Inventory's Save/autosave/lock state goes.
-
-### 4.10 Narrow and small/large
+**What the action is** (page data, `DataView` prop `action`):
 
 ```js
-// utils/useNarrow.js
-export const BREAKPOINTS = { narrowEnter: 600, narrowExit: 640 };   // container width, px
-export function useNarrow(elRef) → Ref<boolean>
+/** @typedef {Object} ActionDef
+ *  @property {(row) => string} [to]     navigation path; DataView adds the current searchTerm
+ *  @property {(row) => void}   [run]    in-place action (select, add)
+ *  @property {string} [label]           button text, e.g. 'Select', '+ Add Item'
+ *  @property {string} [icon]            button icon; default is the details icon (☷)
+ *  @property {(row) => boolean} [disabled]  e.g. the picker disables Select for shows without dates
+ */
 ```
 
-- **What it observes:** the nearest ancestor with `container-type: inline-size` (`.container`, `.modal > .content`), which is the same element the CSS container queries use. JS and CSS therefore always agree, and the observed width doesn't depend on the renderer's content. That is the likely cause of the aff6f47 rollback (C6).
-- **Hysteresis:** narrow below 600, wide again above 640.
-- **Initial value:** read synchronously in `mounted` before the first render that depends on it. Until it is known, `DataView` renders the wide variant.
-- **What each tool handles:** structural changes (which fields, stacks, sticky) use `variants.narrow`. Purely visual changes (font size, hide-when-narrow, grid compression) stay in CSS.
-- **Dashboard cards** are where narrow matters most (cards live in `.container`, which is narrow on the dashboard). Phase 1 verification covers dashboard cards explicitly.
+An `ActionDef` has exactly one of `to` and `run` (R6.5). If both are given, `resolveAction` logs a dev warning and uses `to`.
 
-### 4.11 URL, switcher, dashboard
+`resolveAction(actionDef, resolved, editMode)` picks one, in order:
 
-- **Parameter:** `?display=<viewId>` on the container path. Absent means the page default. Unknown ids fall back to the default with a console warning (old dashboard paths, renamed views).
-- **Legacy mapping:** in `DataView` only, read-side. `?layout=calendar` and `?view=categories` resolve to view ids. When the user switches views, the legacy parameter is removed (`buildPathWithCurrentParams` with `undefined`) and `display` is written. `?view=all` (schedule show-all) is a filter parameter and is left alone.
-- **`ViewSelectComponent`** replaces `ViewChangeComponent`:
-  - 2 views: the same icon toggle as today, showing the next view's icon and name as the tooltip.
-  - 3 or more: a button with the current view's name that opens a menu.
-  - It keeps the dashboard branch (`NavigationRegistry.dashboardRegistry.updatePath(cleanPath, newPath)` when on the dashboard).
-  - Phase 5 adds a "Customize…" entry.
-- **Ad-hoc column hide** (`handleHideColumn`) stays session-only and is reset on refresh, as today (Q9).
+1. **Page action:** the page defines `to` or `run`.
+2. **Details:** otherwise, if the row has details (`resolved.hasDetails` or a `#row-details` slot). Tables expand inline. Calendar and cards open `RowDetailsModal`.
+3. **None.**
+
+**How it is triggered** (view data, `view.action`):
+
+| Trigger              | Table                                                                                  | Calendar                 | Cards                     |
+| -------------------- | -------------------------------------------------------------------------------------- | ------------------------ | ------------------------- |
+| `'button'` (default) | one action button in the trailing sticky cell (today's details cell, `col-sticky-end`) | button at the chip start | button in the card footer |
+| `'row'`              | whole row, with hover highlight, `tabindex="0"` and Enter/Space; no button             | chip body; no button     | whole card; no button     |
+
+- **Glow:** with `'button'`, the button glows on a details-only match. With `'row'`, the row, chip or card gets a `details-match` class instead; cards also keep their matched-fields list.
+- **Row-trigger guards:** a click is ignored when it lands inside an interactive element (`button, a, input, select, textarea, [contenteditable], .column-button`), when text is selected (`!getSelection().isCollapsed`, so cell contents can still be copied), and during clipboard or drag mode. Use `click`, not `touchend`.
+- **Editable data never gets a row trigger.** If `editMode` is not `'none'`, `'row'` falls back to `'button'` with a dev warning.
+- **Navigation passes search.** `to` actions append the current `searchTerm`, as InventoryContent and InventoryOverviewTable do by hand today ([L293](../js/application/components/content/InventoryContent.js#L293), [L165](../js/application/components/content/InventoryOverviewTable.js#L165)).
+- **In-place actions hide details.** A page with a `run` action and details-tier fields can't show those fields; `resolveAction` logs a dev warning, and the view should move them to `shown` or `hidden`.
+- **Bucket cards** use the page's `to` action; they never fall back to details.
+
+**`RowDetailsModal`** (the details action outside tables) contains:
+
+- the details grid (details fields, plus shown fields in calendar and cards), rendered through the **cell pipeline** (§4.14) so details cells can later have data types and become editable (R2.2);
+- then `#row-details`, passed as a function prop (modals render in the root app via the `modals` array in [app.js](../js/application/app.js), so slot scope and injections survive);
+- then the row-level decorations.
+
+Table-only: `#row-detail-rows` (column-aligned rows, used by InventoryTable).
+
+**Per instance**
+
+| Instance                      | Action                         | Trigger | Change from today                                                  |
+| ----------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------ |
+| Schedule table                | details (expand)               | button  | none                                                               |
+| Schedule calendar             | details (modal)                | button  | chip body no longer opens the modal (R1.7)                         |
+| Timeline table                | details (expand)               | button  | none                                                               |
+| Timeline calendar             | details (modal)                | row     | none (chip click opens details)                                    |
+| ItemReport table, calendar    | `to` item page                 | row     | table rows become clickable; the `itemId` button cell becomes text |
+| Inventory overview (items)    | `to` item timeline             | button  | replaces the `#details-cell` override                              |
+| Inventory categories (bucket) | `to` category                  | row     | none                                                               |
+| Packlist cards                | `to` packlist                  | row     | none; no `/details` link (R4.1)                                    |
+| InventoryTable, PacklistTable | details (expand)               | button  | none (`batch` edit mode)                                           |
+| Report tables                 | details, if any                | button  | none                                                               |
+| Overlapping-show picker       | `run` selectShow, "Select"     | button  | the `_action` column becomes the action cell; no hover highlight   |
+| Packlist summary table        | `run` selectItem, "+ Add Item" | button  | the `actions` column becomes the action cell; no hover highlight   |
+| Transshipment tables ×2       | none (two cell buttons)        | —       | no hover highlight                                                 |
+| Design queue (Phase 2)        | details (expand), if any       | button  | new page; `instant` edit mode, so no row trigger                   |
+
+### 4.9 Colour and theme (R2.8, R3.5, R3.6)
+
+- **Theme** (`view.theme` or `registry.theme`) colours the header, footer and buttons only. Table bodies have no background unless the view colours rows, columns or cells.
+- **`className`** carries structural classes (`packlist-table`), never colour.
+- **Precedence**, highest first:
+  1. State classes: selected, dirty/original, instant-write pending/failed, marked-for-deletion, search-active, `details-match`, drop target, analyzing
+  2. Cell colour (`style[key].color`)
+  3. Column colour (`style[key].columnColor`)
+  4. Row colour (`rowColor`)
+  5. None
+- **Where each renderer applies it:**
+
+|          | Row colour                                  | Column colour                                     | Cell colour                  |
+| -------- | ------------------------------------------- | ------------------------------------------------- | ---------------------------- |
+| Table    | `<tr>` class (existing `tr.<color>` styles) | `<col>` class (existing `col.<color>`, `striped`) | cell class                   |
+| Calendar | chip                                        | n/a                                               | value badge on the chip line |
+| Cards    | card                                        | n/a                                               | value badge on the card line |
+
+- **Colour is per view.** The Timeline calendar view sets `rowColor: { field: 'quantity', rule: 'auto', fallback: 'green' }`, and the Timeline table view doesn't, so table rows keep their current look. A page that wants coloured table rows sets it on the table view.
+- **`colorFor` and `rowColorFor`** are pure, wrap `getAutoColorClass`, and are tested.
+
+### 4.10 Size model (R2.10, R3.1)
+
+There are two scopes, each with the same three tiers.
+
+| Tier     | Container width | Typical container                                                                 |
+| -------- | --------------- | --------------------------------------------------------------------------------- |
+| `wide`   | ≥ 1000px        | full page on a monitor, `page` modal                                              |
+| `medium` | 600–999px       | portrait tablet page, double-wide dashboard card (750px, by design), `wide` modal |
+| `narrow` | < 600px         | phone page, 360px dashboard card, `card` modal                                    |
+
+**Container scope** (`useContainerSize()`, CSS `@container`) covers all content and views. `DataView` passes a fixed `wide` until Phase 6, then switches to `useContainerSize()` in the same change as the CSS (R6.4).
+
+- It observes the nearest `container-type: inline-size` ancestor (`.container`, `.modal > .content`) with the same thresholds as CSS. JS and CSS therefore agree, and there is no hysteresis.
+- Structural changes use `variants.medium` and `variants.narrow`. Visual changes (`hide-when-narrow`, a new `hide-when-medium`, font, grid) use CSS.
+- **Padding:** a container query measures the container's content box. `.container` has no padding, so a page or dashboard card measures its full width (1000, 750, 360). `.modal > .content` has `--padding-md` padding, so modal widths add it back (§4.17).
+
+**Viewport scope** (`useViewportSize()`, CSS `@media`) covers app chrome, dashboard layout and default CSS variables: primary nav (`isMobileView`, today 800), root font size, the dashboard grid, `--padding-*`, `--navbar-height`, `--page-width-*`.
+
+| Viewport tier | Chrome (R4.4)                                                 | Dashboard                                                                                       |
+| ------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `wide`        | full: 80px navbar, `--padding-md` 12px, `--padding-lg` 30px   | 360px card grid; double-wide cards span 2                                                       |
+| `medium`      | compact: 50px navbar, `--padding-md` 8px, `--padding-lg` 16px | 360px card grid; double-wide cards are `min(750px, 100%)` and span 2 when they fit              |
+| `narrow`      | compact                                                       | full-width cards (`--page-width-card: calc(100vw - 16px)`); double-wide collapses to one column |
+
+- **Compact chrome** covers medium and narrow (R4.4). It replaces today's ≤ 800px block, so portrait tablets and small laptop windows up to 1023px get the compact navbar.
+- **Full-width dashboard cards** stay narrow-only, so medium screens keep the card grid.
+- **Viewport thresholds include the page gutter**, so a viewport tier matches the tier of a full-width page container. `#app-content` has `--padding-md` on each side, and the gutter is the one in effect on the larger side of each boundary:
+  - narrow: `width < calc(600px + 2 * 8px)` (616px). Compact chrome is on both sides, so this boundary matches the container exactly.
+  - wide: `width >= calc(1000px + 2 * 12px)` (1024px).
+- **Residual mismatch at the wide boundary only:**
+  - Between 1016 and 1023px the viewport is medium (8px gutter) while a full-width container already measures at least 1000px (wide). That is an 8px band.
+  - On desktop Windows the `#app-content` scrollbar (about 17px) adds a band of that width. Overlay scrollbars on mobile and macOS add none.
+  - Both bands are harmless because views follow the container, not the viewport.
+- **Height:** there is no height tier (R6.6). The `short` flag was dropped because compact chrome now covers medium and nothing else needed it. Add it if a height-bound rule appears.
+
+**Constants**
+
+- Defined once in `BREAKPOINTS` (JS: `{ narrow: 600, wide: 1000, gutterCompact: 8, gutterFull: 12 }`) and documented in [theme.css](../css/theme.css).
+- `@media` and `@container` conditions can't use CSS variables, but they can use `calc()` with literals. The numbers are therefore repeated as `calc(600px + 2 * 8px)` and similar, each with a comment pointing at `BREAKPOINTS`. `useViewportSize()` computes the same sums.
+
+**Migration**
+
+- Content rules move out of the 800px media block into container rules.
+- Chrome rules move to the viewport tiers.
+- The 768 settle heuristic in `useStickyHeader` becomes an unconditional second update after 100 ms.
+
+### 4.11 URL, switcher, dashboard (R1.1, R1.13, R2.9, R3.3)
+
+- **View id:** `?view=<id>`. Absent, or an unknown id with a dev warning, falls back to the registry default.
+- **Calendar fallback:** if `view` is absent and `layout` is present, `layout` is used as the view id, and switching rewrites to `view`.
+- **Show-all rename:** `?view=all` → `?dateFilter=all` in Phase 0, with no compatibility.
+- **Ids are never renamed.** An alias map is added when first needed.
+- **`ViewSelectComponent`:** an icon toggle for 2 views; a named menu for 3 or more; it keeps the dashboard `updatePath` branch.
+- **Dashboard:** one card per page path stays.
+  - Switching views inside a dashboard card rewrites that card's stored path, so the card remembers its last view. This stays until a "set as primary view" action exists (R3.3).
+  - Views that are truly unique get their own page.
 
 ### 4.12 Print
 
-`variants.print` is applied while `DataView` is in print mode. PacklistTable's `handlePrint` sets a reactive `printing` flag on its `DataView` instead of changing `hiddenColumns`, so the restore timeout is no longer needed. Printing in other renderers is out of scope.
+`variants.print` is applied while `printing` is true.
+
+- **`DataView`:** `printing` is a prop.
+- **PacklistTable:** it resolves once for all crates (§5), so `printing` is its own data property passed to `resolveView`.
+
+This replaces the `hiddenColumns` mutation and the 100 ms restore.
 
 ### 4.13 Shared header
 
-`ContentHeaderComponent` is extracted from all three renderers:
+`ContentHeaderComponent` contains `header-area`, a spacer, search, refresh/discard, `ViewSelectComponent`, the loading bar, and an `#actions` slot (table: New Item, Save, Undo/Redo; cards: sort). Sticky positioning stays in each renderer.
 
-- **Contents:** `header-area` slot, spacer, `SearchBoxComponent`, refresh/discard, `ViewSelectComponent`, `LoadingBarComponent`, and an `#actions` slot for renderer-specific buttons (table: New Item, Save, Undo/Redo; cards: sort select).
-- **Sticky behaviour:** stays in each renderer, because the table must also clone `<thead>` inside the same fixed wrapper. The header component is only the content of the sticky wrapper.
+### 4.14 Modularity: cells, decorations, slots
+
+1. **Cell registry** (`field.cell = '<name>'`).
+   - Props: `{ row, field, value, renderer, density, search }`, where `density` is `'full'` or `'compact'`.
+   - Initial registry: `image`, `itemId`, `navigate`; Phase 2 adds `checkbox` and `select`.
+   - A missing compact form falls back to text.
+   - The table, chips, cards **and the details grid** all use this pipeline, so a future data type (checkbox) is added once.
+2. **Page slot** (`field.cell = 'slot'`). `#cell="{ row, field, renderer, density }"` is called only for those fields, and other fields keep the fallback (fixes D6). Clickable content inside chips and cards is allowed.
+3. **Decorations** `decorations(row, key) → Card[]`, where `key = null` is row-level.
+   - Table: rendered after the cell content. `#cell-extra` stays for markup that isn't a card.
+   - Calendar: inline on the chip line, or at the chip end (hidden when narrow).
+   - Cards: after the line, or as footer actions.
+   - Details modal: in its button bar.
+   - `bucketDecorations(key, rows)` is the bucket-card equivalent.
+
+### 4.15 Patches: the extension point (R2.4, R2.5, R2.11)
+
+The system's only extension input is a list of view patches supplied by the component:
+
+```js
+/** @typedef {{ patch: Partial<ViewDef>, sizes?: Array<'wide'|'medium'|'narrow'> }} ViewPatch */
+```
+
+- **Application:** patches apply after variants, in order, with the same merge rules. An omitted `sizes` means all sizes.
+- **Narrow toggle (R2.4):** an override created at narrow size defaults to `sizes: ['narrow']`, and a UI can toggle each override per size later.
+- **Scope:** per page type (registry `id`), not per path (R2.11).
+- **First source: the design queue fields preference (R6.1, R7.2).** The `DesignQueueFields` preference (§4.16) is a plain array of column names. The design queue page passes it as one patch, `{ patch: { columns } }`. It affects only the design queue, never the Schedule page. Unknown names are ignored as usual, so the list can name a sheet column before it exists.
+- **Still not decided** (R2.5): other sources (session, local, per-user), which other pages allow patches, and any UI. Code-defined default views _are_ the app defaults; a preference only patches them.
+
+### 4.16 Edit modes and other data concerns (R2.1, R2.2, R3.9)
+
+These are set by the content component with its data, never by views.
+
+**Edit mode** (`DataView` prop `editMode`). Every table is in one of these modes:
+
+| Mode      | Used by                       | Behaviour                                                                                                                                        |
+| --------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `none`    | report, modal, Schedule       | Read-only.                                                                                                                                       |
+| `batch`   | InventoryTable, PacklistTable | Today's model. An edit (text, number, and later a checkbox toggle) changes the store data, marks the cell dirty by column key, and prompts Save. |
+| `instant` | Design queue (Phase 2)        | Each edit is one verified single-cell write, after a short delay. No dirty tracking and no Save.                                                 |
+
+**`editMode` and `editable` (R6.3).** `editMode` picks how edits are saved; `editable` on a field picks which fields can be edited. With `editMode: 'none'`, `editable` flags are ignored with a dev warning. A table with any editable field in `batch` or `instant` mode can't use the `row` trigger.
+
+**Instant write contract** (Phase 2):
+
+1. The renderer emits `cell-commit(row, columnKey, value)`. The cell shows the new value **immediately** (R7.3), on the local computed row.
+   - `DataView` holds the commit in a small queue keyed by row identity and column for `INSTANT_WRITE_DELAY_MS` (2000).
+   - Another commit to the same cell within the delay replaces the queued value and restarts the timer. If the final value equals the loaded value, nothing is written, so a quick check-then-uncheck costs no write.
+   - When the timer fires, `DataView` calls the page's `commitCell` hook, which returns a promise. The cell shows a pending state until it settles.
+   - Queued commits flush immediately when the page unmounts (in-app navigation). A browser cannot be relied on to finish a write while a tab is closing, so while commits are queued or in flight, `beforeunload` shows the browser's leave-confirmation prompt and starts the flush.
+2. `commitCell` calls one data-layer function, `Requests.writeCellVerified(database, tab, row, column, value)`. Steps 3–6 live there, in the abstraction layer, not in the page (per the [notes.md](notes.md) TODO on moving API logic into abstractions).
+3. It locates the target by **identity, not position**: the row by its identity fields, the column by header name. It resolves both to live sheet indices just before writing.
+4. It reads the exact cell and aborts if the read fails or the row no longer matches.
+5. It writes only the desired state, in the sheet's existing convention (see checkbox values below), optionally with date metadata. A formula cell is replaced by the written value.
+6. It re-reads to verify. If rows or columns moved while the write was in flight, it re-locates by identity and retries once. Otherwise it returns a failure, and `DataView` reverts the cell, shows the failed state and an error, and refreshes the data.
+
+Phase 0's key-based `cell-edit` contract serves `batch`. `instant` adds `cell-commit` beside it and leaves `cell-edit` unchanged.
+
+**Preferences (R4.5, R5.2, R7.1, R7.2).** Everything an instant-write page needs from the sheet lives in the live database, so a renamed header or a new assignee needs no code change. For Schedule data the identity is Client + Year + Show, the same three inputs as `ProductionUtils.computeIdentifier` ([production-utils.js:332](../js/data_management/abstraction/production-utils.js#L332)).
+
+_Before Phase 2 starts_, add these rows to the live `CACHE/Preferences` sheet. All use the existing `json` type, which the preferences editor already validates:
+
+| ID                     | Name                   | Page                     | Type   | Value                                                                                                                                                                             |
+| ---------------------- | ---------------------- | ------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `InstantWriteTables`   | Instant-write tables   | `schedule*`              | `json` | `{"PROD_SCHED/Production Schedule": {"identity": ["Client", "Year", "Show"], "columns": {"Elev": "checkbox", "Panels": "checkbox", "Setups": "checkbox", "Assignee": "select"}}}` |
+| `DesignQueueFields`    | Design queue fields    | `schedule/design-queue*` | `json` | `["Client", "Show", "Size", "Elev", "Panels", "Setups", "Assignee", "Account Manager", "Ship", "Note", "Booth#"]`                                                                 |
+| `DesignQueueAssignees` | Design queue assignees | `schedule/design-queue*` | `json` | `["<name>", "<name>"]`                                                                                                                                                            |
+
+- **Keys:** `InstantWriteTables` is keyed by `<database>/<tab>`, the same pair passed to `Database.getData`.
+- **Writable columns:** `columns` lists every column an instant write may touch, with its cell type. The page builds those field definitions as `{ type, cell: type, editable: true }`. `writeCellVerified` refuses any column not listed. A listed column missing from the sheet is skipped with a dev warning.
+- **Select options:** the `Assignee` select takes its options from `DesignQueueAssignees`. A current value that isn't in the list still shows, as an extra option, so nothing is hidden or overwritten.
+- **Checkbox values (R7.3).** The sheet marks done with `X`. Unchecked cells may hold blank, `-`, `FALSE` or a date ([FakeGoogle.js:575](../js/google_sheets_services/FakeGoogle.js#L575)). In a column configured as a checkbox:
+  - `X` (or `TRUE`) reads as checked, and **any other value reads as unchecked**;
+  - checking writes `X`; unchecking writes blank;
+  - a non-`X` value such as a date is replaced when the cell is checked, and isn't restored if it is later unchecked after the write. That is accepted for now (R8.2): these dates are disposable once the step is done. The write delay protects quick mistakes.
+- **Identity source:** the fake Schedule data also has an `Identifier` column (`ALLEN ARMS 2025 SHOT`). If the live sheet keeps it filled in reliably, the preference could use `["Identifier"]` instead. The plan keeps Client + Year + Show as you specified.
+- **Matching:** values are compared trimmed and case-insensitively against the raw sheet values in those columns. `computeIdentifier`'s normalized identifier isn't used, because the write has to find the raw row.
+- **Guards:**
+  - If a table in `instant` mode has no entry, or names a column that doesn't exist, its instant cells render read-only with a visible "write disabled: no row identity" hint.
+  - If two loaded rows share an identity, instant cells on those rows are disabled. The write never guesses.
+- **Read path:** the page (for `columns` and the design queue preferences) and `writeCellVerified` (for `identity` and `columns`) read the preferences through `Requests.getPreferences`, the way `InventorySuppressCategoryAnalysis` is read today ([api.js:1407](../js/data_management/api.js#L1407)).
+
+**Field data types and editability** belong to field definitions. In future, details cells get data types and editing through the same cell pipeline (§4.14).
+
+**Show notes (design queue `Note`, R6.1).** The note isn't a Schedule column, so it is saved separately in a new `CACHE/ShowNotes` tab, the same pattern as page notes in `CACHE/Notes` ([api.js:1534](../js/data_management/api.js#L1534)):
+
+- **Columns:** `Identifier`, `Note`, `EditHistory`. `Identifier` is the value `ProductionUtils.computeIdentifier(show, client, year)` returns, so the same note follows the show on any page.
+- **Reading:** the page joins notes into its rows as the field `Note`, so the `DesignQueueFields` preference can use the plain name. If the Schedule sheet ever gets its own `Note` column, the join logs a dev warning and the sheet value wins.
+- **Writing:** an edit commits on blur, through the same delayed `cell-commit` queue, and `commitCell` routes it to `Requests.saveShowNote(identifier, text)`. This is an upsert: it updates the note row if it exists, appends one otherwise, and verifies by re-reading. It is not `writeCellVerified`, because the note's row may not exist yet.
+- **Setup:** add the `ShowNotes` tab to the live CACHE spreadsheet and to FakeGoogle before Phase 2.
+
+### 4.17 Modal size tiers (R3.2)
+
+**Survey of today's modal widths** ([styles.css:640–700](../css/styles.css#L640), [modalComponent.js](../js/application/components/interface/modalComponent.js)):
+
+| Class today           | Rule                                                             | Effective width      | Used by                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| (none)                | `.modal > .content { min-width: 360px }`                         | content-sized, ≥ 360 | Timeline detail, PacklistSelect, ImageUpload, InventorySaveModal, NewItemNumberPrompt (`''`), SaveSearch, Schedule IndexResolution |
+| `small-menu`          | `max-width: 360px`                                               | 360                  | `alert`, `confirm`, preferences edit, settings menu, OverlappingShows                                                              |
+| `hamburger-menu`      | `width: 360px` plus full-width buttons                           | 360                  | hamburger registry, LinkModal, RowOptionsMenu, IndexResolution family, IndexMismatch resolution                                    |
+| `page-menu`           | `min-width: 800px` (100vw − 16 below 800), fixed viewport height | ≥ 800                | Transshipment, ScheduleAdvancedFilter, show-overlap picker, InventorySelector, ImageViewWithReplace, packlist template             |
+| `event-detail`        | `min-width: min(90vw, 1000px)`                                   | ≈ 1000               | Schedule detail modal                                                                                                              |
+| `page-note-edit-menu` | on `.modal` itself: flex column, `min-width: min(480px, 360px)`  | 360                  | page note editor                                                                                                                   |
+| `reading-menu`, `red` | spacing / colour only                                            | —                    | alert, confirm, error, image, packlist new/duplicate, CadSourceRestore, DescriptionMismatch                                        |
+
+The real committed widths are 360, about 800 and about 1000, plus content-sized. Width is mixed into layout classes, and D9 shows intended sizes that were never applied.
+
+**Target:** exactly one size per modal, chosen by a `size` option on `$modal` (like dashboard cards), with layout and colour classes kept separate.
+
+| `size`           | Container content width        | Container tier  | Default for                                                                                      |
+| ---------------- | ------------------------------ | --------------- | ------------------------------------------------------------------------------------------------ |
+| `card` (default) | 360px                          | narrow          | `alert`, `confirm`, `error`, hamburger menus, settings, preferences, page note, small prompts    |
+| `wide`           | 750px (two cards plus gap)     | medium          | reading modals with more content (CadSourceRestore, DescriptionMismatch, packlist new/duplicate) |
+| `page`           | `min(100vw − margins, 1000px)` | wide on desktop | `page-menu` users, every `RowDetailsModal`, any modal hosting a `DataView`                       |
+| `auto`           | content-sized                  | n/a             | `image` only                                                                                     |
+
+- **Height:** a `tall` modifier keeps `page-menu`'s fixed viewport height, like the dashboard `.tall`.
+- **Padding:** each width is set on `.modal > .content` as `calc(<tier width> + 2 * var(--padding-md))`, so the container's content box is exactly the tier width.
+- **Small screens:** every size is capped at `100vw − 2 × margin`, so all modals become narrow on phones.
+- **Layout classes stay:** `reading-menu` (spacing), `hamburger-menu` (button layout, width removed), `red`. `page-note-edit-menu` moves its layout onto its own component.
+- **Dead arguments:** D9's ignored 4th arguments are removed. The show-overlap picker gets `size: 'page'` explicitly.
+- **Audit:** the modals in the "(none)" row have no fixed size today. Each one is checked at `card` width, and moved to `wide` if its content needs more room (R4.3).
 
 ---
 
 ## 5. Per-page migration
 
-| Page                                                           | Phase | Views shipped                                                       | Specific work                                                                                                                                                                                                                                                                                                                                                                                      | Risk                                          |
-| -------------------------------------------------------------- | ----- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| ScheduleTable                                                  | 1     | `table`, `calendar` (identical to today). Narrow variant in Phase 3 | Move placement flags out of the `columns()` computed into views. Merge `#cell-extra` cards and `chipActionsProvider` into `decorations(row, key)` (`getShipDateCards`, `getTransshipCards`, `getPacklistCards`, `getIndexIssueCards`). Delete the inline `DetailModalComponent` in favour of the default handler. Remove the `calendarView` prop and `ScheduleContent.isCalendarView`/`viewModes`. | Medium: dynamic headers, the most decorations |
-| InventoryItemTimeline                                          | 1     | `table`, `calendar`                                                 | Add derived `calendarStart/End` to all rows. `chipColorClass` stays a calendar prop passed through `DataView` attrs (Q11).                                                                                                                                                                                                                                                                         | Low                                           |
-| InventoryItemReport                                            | 1     | `table`, `calendar`                                                 | `calendarColumns` becomes the calendar view's `chip`. `calendarData` date logic becomes derived fields. `hide-columns` becomes `hidden`. `#default` becomes `cell: 'slot'` and the registry (`image`, `itemId`). `onRowClick` navigates to the item page.                                                                                                                                          | Medium                                        |
-| Inventory categories + overview                                | 2     | `items` (table), `categories` (cards, `groupBy: 'tab'`)             | `groupKeys` from `categoriesStore`. `groupDecorations` for autosave/lock/Save/cardClass. Retire `_hiddenSearchData` analysis and `getInventoryHiddenSearchData` once verified (C8). `tab` cell becomes `cell: 'slot'` (purple button), `image` comes from the registry. `#details-cell` stays as a table-only slot. Legacy `?view=categories`.                                                     | High: data path change                        |
-| PacklistContent cards                                          | 2     | `cards` only (row cards)                                            | `formatPacklistCard` becomes `decorations` (lock, unsaved, link and index actions) plus card lines (`title`, ship date, description). Pins, pinned-only and unlinked-only stay page logic: they filter rows before `DataView`. Sort select stays (`view.sort` sets the default).                                                                                                                   | Medium                                        |
-| ReportsContent                                                 | none  | n/a                                                                 | Stays in items mode.                                                                                                                                                                                                                                                                                                                                                                               | none                                          |
-| PacklistItemsSummary, ShowInventoryReport, IndexMismatchReport | 3     | one table view each (no switcher)                                   | `hide-columns` becomes `hidden`. `#default` becomes `cell: 'slot'` plus registry. `show_*` patterns. The view switcher appears only if there are 2 or more views.                                                                                                                                                                                                                                  | Low                                           |
-| InventoryTable                                                 | 4     | one table view                                                      | Key-based edit contract (Phase 0) is the prerequisite. `forceDetails`, `rowDetailsVisible` and `#row-detail-rows` stay table props/slots.                                                                                                                                                                                                                                                          | Medium: editing                               |
-| PacklistTable (crates, items, summary)                         | 4     | one table view plus `print` variant                                 | The nested item table's columns come from a view (`hidden: ['Pack','Check','Extracted Item','Extracted Qty']`, `print` variant un-hides Pack/Check). `colspan` stays a field property. No layout switching.                                                                                                                                                                                        | High: drag, nesting, grouping, clipboard      |
+| Component                                                      | Phase | Views                                                    | Specific work                                                                                                                                                                                                                                                                                                                                                                         | Risk   |
+| -------------------------------------------------------------- | ----- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| ScheduleTable                                                  | 1     | `table`, `calendar`                                      | Flags move into views. `#cell-extra` cards and `chipActionsProvider` become decorations. The inline modal becomes `RowDetailsModal` (with `#row-details`). Action is details with `button` in both views. `ScheduleContent` view state is removed. Fields go to `scheduleFields.js`.                                                                                                  | Medium |
+| InventoryItemTimeline                                          | 1     | `table`, `calendar`                                      | Derived dates on a computed copy. Calendar view `rowColor` = auto(quantity), fallback green. `style.quantity.color = 'auto'`. `DetailModalComponent` → `RowDetailsModal`; calendar `action: 'row'`.                                                                                                                                                                                   | Low    |
+| InventoryItemReport                                            | 1     | `table`, `calendar`                                      | `calendarColumns` → `chip`. `hide-columns` → `hidden`. `cellClass` → `style.minQty.color='auto'`. `columnClass` → `style.overlappingShows.columnColor='gray'`. `#default` → slot plus registry. Action `to` item page, `action: 'row'` in both views. Show-all reader → `dateFilter` (Phase 0).                                                                                       | Medium |
+| Design queue (new page)                                        | 2     | `table` (one view)                                       | New content component and registry (`design-queue`) under Schedule, sharing `scheduleFields.js` and the Schedule data. Columns from `DesignQueueFields`; `Elev`/`Panels`/`Setups` checkboxes; `Assignee` select; `Note` from `ShowNotes`; completed rows gray; `view.sort` on Ship; default filter upcoming shows; `editMode: 'instant'`. Schedule page stays read-only. See Phase 2. | Medium |
+| Inventory categories + overview                                | 3     | `items` (table), `categories` (cards, `bucketBy: 'tab'`) | `bucketKeys` and `bucketDecorations` from `categoriesStore`. Remove `_hiddenSearchData`. Widened search (§4.5). Categories: action `to` category, `row`. Overview: action `to` timeline, `button` (replaces `#details-cell`; details fields stay searchable, R3.8). Sticky `image` → `table.sticky`.                                                                                  | High   |
+| PacklistContent                                                | 3     | `cards`                                                  | `formatPacklistCard` → derived fields (`_shipDate`, `_status`, `_cardColor`) plus decorations. Action `to` packlist, `row`. Pins and subpage filters stay page logic. `view.sort` sets the default sort. Cards don't link `/details` (R4.1).                                                                                                                                          | Medium |
+| ReportsContent                                                 | 3     | none                                                     | Builds its three-card menu inline with the card CSS; no longer uses `CardsComponent` (R3.7).                                                                                                                                                                                                                                                                                          | Low    |
+| PacklistItemsSummary, ShowInventoryReport, IndexMismatchReport | 4     | one each                                                 | `hide-columns` → `hidden`. `cellClass`/`columnClass` → `style` (with `show_*` patterns). `#default` → slot plus registry. **Remove `allowHide`** with the ShowInventoryReport migration.                                                                                                                                                                                              | Low    |
+| TransshipmentModal ×2, overlapping-show picker                 | 4     | one each, no URL                                         | `hide-columns` → `hidden`. The picker's action is `run` selectShow with label "Select". Modal size `page` (Phase 6).                                                                                                                                                                                                                                                                  | Low    |
+| InventoryTable                                                 | 4     | one                                                      | Needs Phase 0's key-based edits. `editMode: 'batch'`. `forceDetails`, `rowDetailsVisible`, `#row-detail-rows` unchanged. `_navigate` → `navigate` cell.                                                                                                                                                                                                                               | Medium |
+| PacklistTable (crates, items, summary)                         | 4     | one each, immutable; items view has a `print` variant    | `resolveView` once, shared by all crates (no `DataView` per crate). `editMode: 'batch'`. Summary: action `run` selectItem with label "+ Add Item", `theme: 'purple'`; `packlist-table` → `className`.                                                                                                                                                                                 | High   |
+
+After Phase 4, every renderer instance gets its presentation from a view.
 
 ---
 
 ## 6. Phased delivery
 
-Each phase ships on its own, and every page keeps working throughout.
-
 ### Phase 0: Groundwork (no intended visible change)
 
-1. **Key-based edit contract (C1).**
-   - `cell-edit` emits `(rowIndex, colIndex, value, columnKey)`, adding the key as a 4th argument so existing handlers don't break.
-   - `dirtyCells` is keyed `[rowIndex][columnKey]`.
-   - Revert/hint lookups use the key.
-   - `InventoryTable`, `InventoryOverviewTable` and `PacklistTable` handlers switch to the key.
-   - Fixes D4.
-2. **Extract `formatValue` and the autoColor lookup** to `fieldFormat.js`. `TableComponent.formatCellValue` delegates to it.
-3. **Extract `matchRow`.** Table and cards use it. `useSearch.matchesRow` wraps it.
-4. **Extract `ContentHeaderComponent` and `RowDetailsComponent`.** The table's expand grid and Schedule's modal use `RowDetailsComponent`.
-5. **Add `useNarrow` and `BREAKPOINTS`.** Not used by any page yet.
-6. **Fix D1 and D2.** Delete D3 (`whenSmall`) only after its intent is captured in the Schedule narrow variant in Phase 3; until then leave a comment.
-7. **Tests:** `formatValue`, `matchRow` (AND logic, shown/details/hidden tiers, detailMatches), and the key-based dirty logic, if it is extracted as a pure helper.
+1. **Key-based edit contract:** `cell-edit` gains `columnKey`; `dirtyCells` are keyed by column key; nested dirty propagation and the `[-1]` sentinel are kept. This is the `batch` mode contract; `instant` is added beside it in Phase 2 (§4.16).
+2. **Show-all rename** to `?dateFilter=all` (filterComponents, ItemReport, ShowInventoryReport, and [json-path-segment-implementation.md](json-path-segment-implementation.md) / [navigation-system.md](navigation-system.md)).
+3. **Extractions:** `formatValue`, `colorFor`/`rowColorFor`, `searchWords`/`matchRow`/`matchRows`, `ContentHeaderComponent`, `RowDetailsComponent`.
+4. **`useContainerSize` and `BREAKPOINTS`** (defined, unused).
+5. **Tests** for the pure functions.
+6. ~~D1, D2~~ done.
 
-### Phase 1: View engine plus table/calendar pages
+### Phase 1: Engine plus table/calendar pages
 
-1. `resolveView` with legacy flag output, patterns, tiers, variant merge, validation, and tests.
-2. `DataView`: URL read and legacy mapping, `useNarrow`, resolve, renderer pick, `$attrs` and slot forwarding, the default `event-click` modal, `decorations` plumbing.
-3. `ViewSelectComponent` replaces `ViewChangeComponent` on migrated pages. The old component stays until Phase 2 finishes.
-4. Calendar: `formatValue` on chips, `decorations` replace `chipActions` (the prop is kept as an alias until all three pages migrate), details-match chip glow.
-5. Migrate Schedule, Timeline and ItemReport (§5).
-6. Verify §9 on desktop, narrow (dashboard card and modal) and print.
+1. `resolveView` and `resolveAction` (variants, patches, tiers, style, colour, trigger, legacy adapter) with tests.
+2. `DataView`:
+   - view id, size (always `wide` until Phase 6, R6.4), resolve, renderer pick;
+   - `$attrs` and slot forwarding;
+   - `RowDetailsModal` (uses the existing `event-detail` class until Phase 6);
+   - the primary action, `searchTerm` passing for `to` actions, decorations.
+3. `ViewSelectComponent`.
+4. Calendar: `formatValue`, decorations, `rowColor`, both action triggers (with aliases for `event-click` and `chipColorClass` until all three calendar pages migrate).
+5. Table: both action triggers, the trailing action cell (generalizing today's details button), row-trigger guards, `details-match`. All renderers in this phase get the search limits: minimum term length, broad-search abort, and the `∞` counter (§4.5).
+6. Migrate Schedule, Timeline, ItemReport. Verify §9.
 
-### Phase 2: Cards as a renderer
+### Phase 2: Checkboxes and the design queue (R5.3)
 
-1. `rowsToCards` and `groupRowsToCards` with tests (empty groups, `groupKeys` seeding, `searchFields`, escaping).
-2. `CardsComponent` matches through `matchRow` on `searchFields`. Items mode keeps working (`searchFields` absent → title/content/footer).
-3. Migrate PacklistContent (row cards), then Inventory categories (group cards). Keep `_hiddenSearchData` behind a flag until load and memory are measured (C8).
-4. Remove `ViewChangeComponent`.
+Depends only on Phases 0–1.
 
-### Phase 3: Table layout features
+**Prerequisites in the live data** (you add these; FakeGoogle gets the same):
 
-1. Parent-owned N-high stacks (4.8), the single-row header, and sticky-clone simplification.
-2. `variants.narrow` on Schedule. Remove `whenSmall`.
-3. `view.table.sticky`, moving `sticky` off fields.
-4. Calendar `chipLines` (N lines).
-5. Migrate the read-only report tables.
-6. Unify breakpoints: point `useStickyHeader`'s 768 and the nav/media 800 at `BREAKPOINTS`, or document why they differ (Q8).
+- Preferences `InstantWriteTables`, `DesignQueueFields` and `DesignQueueAssignees` (§4.16).
+- An `Assignee` column on the Production Schedule.
+- An `Account Manager` column in the FakeGoogle Schedule data (it exists live).
+- A `CACHE/ShowNotes` tab (§4.16).
 
-### Phase 4: Editing tables
+1. **`checkbox` and `select` cells** in the cell registry.
+   - Checkbox works in both edit modes: in `batch` a toggle marks the cell dirty and prompts Save; in `instant` it emits `cell-commit`.
+   - Select takes its options from a page-supplied list.
+2. **`Requests.writeCellVerified`** in the data layer: identity lookup, writable-column check, read, verify, write, re-read, one retry by identity, revert on failure (§4.16). Tested against FakeGoogle in [tests.js](../js/tests/tests.js), including a row moved mid-write and a duplicate identity.
+3. **`instant` edit mode** in `DataView` and `TableComponent` (still through the legacy adapter):
+   - the delayed `cell-commit` queue with immediate local display (§4.16);
+   - pending and failed state classes;
+   - no dirty tracking;
+   - the `row` trigger is refused, as for any editable table.
+4. **Design queue page** under Schedule (R6.1, R7.1): its own content component and registry (`design-queue`), sharing `scheduleFields.js` and the Schedule data, with `editMode: 'instant'`. The Schedule page itself stays read-only (`none`).
+   - **Route:** `schedule/design-queue`, one view (`table`). It gets its own dashboard card, as a separate page (R2.9).
+   - **Fields** use the production sheet's header names. Shown columns come from the `DesignQueueFields` preference (§4.15), and the code default is the same list:
+     `Client`, `Show`, `Size`, `Elev`, `Panels`, `Setups`, `Assignee`, `Account Manager`, `Ship`, `Note`, `Booth#`.
+   - **`Elev`, `Panels`, `Setups`** are shown directly as checkboxes. There is no Task aggregation for now (R7.1).
+   - **Completed rows** stay in the list, unchanged in order. They are styled gray through a derived colour field: `_rowColor = 'gray'`, with `rowColor: { field: '_rowColor', rule: 'value' }` (R3.5). The field recomputes from the local row, so the row greys as soon as the last box is checked.
+     A row is complete when each of the three columns is `X`, `-` or `N/a` (R8.2). `-` and `N/a` count as done for this rule only; the cell itself still shows unchecked, and checking it writes `X`.
+   - **Assignee** is a `select` whose options come from `DesignQueueAssignees`.
+   - **Note** is an editable text field saved to `CACHE/ShowNotes` (§4.16).
+   - **Routing writes:** `commitCell` routes by field: `Note` → `saveShowNote`; every other column → `writeCellVerified`.
+   - **Order and filter:** `view.sort = { key: 'Ship', dir: 'asc' }`, so the most urgent work is first. The initial filter is upcoming shows (Ship on or after today), set through the existing Schedule filter parameters. Filters stay a page concern (R1.16).
+5. Verify the instant-write and design queue items in §9.
 
-1. InventoryTable: view-driven visibility.
-2. PacklistTable: view-driven visibility for the nested item table plus the `print` variant.
+### Phase 3: Cards
 
-### Phase 5: Customization and new views
+1. `rowsToCards` and `bucketRowsToCards` with tests.
+2. `CardsComponent` uses `matchRow` and the primary action (footer button or whole card), replacing `onItemClick`.
+3. ReportsContent builds its own menu grid; `CardsComponent` drops `items`.
+4. Migrate PacklistContent, then Inventory categories plus overview.
 
-1. "Customize…" modal: checkboxes for shown/details/hidden, up/down order, stack builder (indent/outdent a field under the one above), no drag-and-drop.
-2. Per-user overrides stored as `{ baseViewId, columns, details, hidden, … }`, using `storeUserData(email, 'views_<page>')` with a `getReactiveStore` modelled on saved searches. Overrides reference built-in ids, so code updates still reach users who never customized.
-3. New views: design queue, ship/return calendar (Q4).
+### Phase 4: Remaining tables
 
-### 6.7 Intended visual shifts
+1. Report tables (removing `allowHide`), modal tables, InventoryTable, PacklistTable.
+2. **Milestone:** every renderer instance is view-driven.
 
-- Calendar chips show formatted dates and numbers.
-- Calendar chips gain the ship-date and transship badges that only tables show today (D5).
-- The view switcher shows a name or menu when there are more than two views.
-- Fallback cells on report pages gain search highlighting (D6).
-- Stacked headers render as labels inside one header cell (Phase 3).
-- Schedule on narrow containers stacks Client under Show, as `whenSmall` intended.
-- Category cards may appear slightly later on first load if they come from the overview store (C8).
-- Detail-only search matches glow on calendar chips.
+### Phase 5: Renderer contract (one change, R3.11)
+
+1. Renderers read `ResolvedView` and `ResolvedAction` directly: parent-owned N-high stacks (single-row header, simpler sticky clone), calendar N chip lines, sticky from `table.sticky`, colour from `ResolvedView`.
+2. **Delete the old mechanisms:**
+   - `toLegacyColumns` and the column presentation flags;
+   - public props `hideColumns`, `viewModes`, `chipColorClass`, `chipActions`, `onItemClick`, `items`, `defaultSortColumn/Direction`, `theme` strings including `hover-highlight`;
+   - the `event-click` emit and the `#details-cell` slot;
+   - `ViewChangeComponent`, `whenSmall`, `allowHide`, `handleHideColumn`.
+3. Rename the path-segment `currentView` to `currentSegment` (content components and `HamburgerMenuRegistry`).
+4. A dev check warns if a page passes a removed prop.
+5. Manual testing period on the dev site before deploying.
+
+### Phase 6: Size model
+
+1. Three tiers in CSS and JS, with gutter-adjusted viewport thresholds (§4.10). Move rules out of the 800px block. `DataView` switches from a fixed `wide` to `useContainerSize()`, so JS and CSS tiers turn on together (R6.4).
+2. `variants.medium`/`narrow` support verified. Schedule narrow variant.
+3. Modal size tiers for **all** modals (§4.17), with the audit and the D9 cleanup.
+
+### Later (not scheduled, built on this system)
+
+- Other patch sources (beyond the `DesignQueueFields` preference) and customization UI (per page).
+- Instant-write checkboxes on the Schedule page itself, and a Task column that aggregates design progress (R7.1).
+- Editable details cells.
+- Ship/return calendar view.
+- Dashboard "set as primary view".
+- Performance monitoring.
+
+### Intended visual shifts
+
+- **Calendar:**
+  - chips show formatted values and gain ship-date and transship badges (D5);
+  - Schedule chips get a ☷ action button, and their bodies no longer open the modal.
+- **Tables:**
+  - the picker's Select and the summary's "+ Add Item" buttons move from their own columns into the sticky action cell, and those tables lose hover highlight;
+  - ItemReport rows become clickable (navigate to the item), and the `itemId` button becomes text;
+  - transshipment tables lose hover highlight;
+  - stacked headers become labels in one cell (Phase 5);
+  - inventory overview's action button uses the standard action button style (it already navigated).
+- **Search:**
+  - report fallback cells gain search highlighting (D6);
+  - category card search matches the same fields as the overview table;
+  - single-character words are ignored on every page;
+  - a search matching more than 80% of a set over 100 rows is ignored: the set stays unfiltered and unhighlighted, and the match counter shows `∞`.
+- **Design queue (Phase 2):** a new page with checkboxes and an assignee pick list that write to the Schedule sheet after a 2-second delay, and a saved note per show; completed rows turn gray.
+- **Sizes:**
+  - viewports and containers in the 600–999px range follow the medium tier (Phase 6);
+  - the compact navbar and padding now apply below 1024px instead of at 800px and below, so tablets and small laptop windows get compact chrome;
+  - Schedule narrow stacks Client under Show;
+  - modals snap to the `card`, `wide` or `page` widths; `page-menu` modals grow from about 800px to 1000px on desktop.
 
 ---
 
 ## 7. Challenges
 
-Each entry gives the problem, why it matters, the approach, and the risk that remains.
+Each entry gives the problem (where it isn't obvious), the approach, and the risk that remains.
 
-**C1. The edit contract is column-index based.**
+**C1. Index-based edits.** Phase 0. Watch nested dirty propagation and the `[-1]` sentinel ([L3303](../js/application/components/interface/tableComponent.js#L3303)).
 
-- _Problem:_ `cell-edit` emits a `mainTableColumns` index, `dirtyCells` is keyed by it, and consumers map it back through their own lists (`this.columns[colIdx]`, `itemHeaders[itemColIdx]`). Views reorder, stack and remove columns, so indices shift.
-- _Approach:_ Phase 0 key-based contract (4th argument plus key-keyed `dirtyCells`).
-- _Residual risk:_ PacklistTable's nested tables have their own dirty propagation (`inner-table-dirty`, `nestedTableDirtyCells`), which needs the same treatment. The `[-1]` row-level sentinel at [L3303](../js/application/components/interface/tableComponent.js#L3303) must keep its meaning.
+**C2. `TableComponent` size.**
 
-**C2. `TableComponent` size and entanglement.**
+- _Approach:_ the adapter keeps Phases 1–4 out of table internals, except the action cell and row trigger. Phase 5 changes the stack, header, sticky and colour code together.
+- _Residual risk:_ the sticky-clone width mirroring (`stickyColumnWidths`, `getCloneStickyThStyle`).
 
-- _Problem:_ sticky clones, stacks, details, editing, drag, clipboard and groups all read `columns`/`mainTableColumns`/`theadRow1Columns`.
-- _Approach:_ Phase 1 changes no table internals, because the legacy flag output makes views invisible to the table. Phase 3 changes only stack and header code, behind the `stack` property, and keeps the legacy `stackUnder` path until every page has migrated.
-- _Residual risk:_ the sticky-clone width mirroring (`stickyColumnWidths`, `getCloneStickyThStyle`) is the most fragile code involved.
+**C3. Forwarding through `DataView`.** `inheritAttrs: false` with `v-bind="$attrs"`; slots forwarded with `<template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}"/></template>` (runtime compiler). PacklistTable's crates bypass `DataView`.
 
-**C3. Slot and attribute forwarding through `DataView`.**
+**C4. Dynamic fields.** Unknown keys are ignored, and patterns are supported. A renamed sheet header silently moves a field to details (logged in dev).
 
-- _Problem:_ pages use about a dozen table-only props (`draggable`, `newRow`, `dragId`, …), table-only slots, and a cell slot whose name differs by renderer. Templates are compiled at runtime with the global Vue build (the `html` tag).
-- _Approach:_
-  - `inheritAttrs: false` and `v-bind="$attrs"` on the chosen renderer.
-  - Slots forwarded with `<template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}"/></template>`, which the runtime compiler supports.
-  - Renderer-specific props that don't apply to the current layout are ignored, so the page passes one set.
-- _Residual risk:_ the extra component layer per instance matters for nested PacklistTable tables, which is why they don't use `DataView` and get views directly via `resolveView` (Phase 4).
+**C5. Derived fields**, including the new colour fields, live on computed copies and never reach store save paths (the [notes.md](notes.md) date rule). The design queue `Note` (joined from `CACHE/ShowNotes`, not a Schedule column) is saved only through `saveShowNote`, never through the Schedule store.
 
-**C4. Dynamic and pattern fields.**
+**C6. Size detection.**
 
-- _Problem:_ Schedule fields come from sheet headers, and ShowInventoryReport adds `show_*`.
-- _Approach:_ unknown keys are ignored, unlisted fields go to `unlisted`, and lists support patterns. Per-user overrides (Phase 5) keep stale keys harmlessly.
-- _Residual risk:_ a renamed sheet header silently moves a field into details. Acceptable, but log it in dev.
+- Container scope uses the same thresholds as CSS.
+- Modal content boxes get definite widths with padding added back (§4.17).
+- Viewport thresholds add the page gutter; the residual bands are documented in §4.10.
 
-**C5. Derived fields.**
+**C7. Sticky × stack × size.** Re-measure on every change to the view id, size or patches.
 
-- _Problem:_ the calendar needs start/end values that don't exist in the raw rows (Timeline derives end dates from the next row).
-- _Approach:_ pages derive these once onto all rows.
-- _Residual risk:_ derived fields must not reach save paths. The stores' save functions operate on store data, so derived fields belong in a computed copy, not on `store.data`. Timeline already does this with a mapped copy. Note the system rule in [notes.md](notes.md) that dates must never be passed into reactive-store save/load calls.
+**C8. Categories data path.**
 
-**C6. Narrow detection loop and timing.**
+- _Decision:_ accepted.
+- _Approach:_ render from `bucketKeys` immediately; add a dev timing log; revert via git if slow.
 
-- _Problem:_ the previous attempt observed the table root at 640px and was rolled back. Changing structure on narrow can change the observed width and cause oscillation or scroll jumps.
-- _Approach:_ observe the container ancestor (not affected by content), use hysteresis, and read synchronously on mount.
-- _Residual risk:_ modals size to content (`min-width: var(--page-width-card)`), so a modal's container width can depend on what it contains. Verify the timeline and report modals, and pin the modal content width if needed.
+**C9. Bucket state** comes from `bucketDecorations` (`categoriesStore`).
 
-**C7. Sticky × stack × narrow.**
+**C10. Search changes.**
 
-- _Problem:_ sticky offsets are summed from measured widths, stacks change widths, and narrow variants change both.
-- _Approach:_ measure after every resolved-column change (the existing `visibleColumns` watcher calls `_measureColWidths`; extend it to the resolved view id and narrow flag). Narrow variants should normally drop sticky columns.
+- `hideColumns` → `hidden`, with search compared before and after per page.
+- Category search widens to all item fields. The broad-search abort (R4.2) stops short numbers that match most quantities, and single characters are ignored everywhere.
 
-**C8. Group cards data path (Inventory).**
+**C11. Details in the modal.** `#row-details` content that relies on table row context gets `rowIndex: null` and `isExpanded: true`. Audit Schedule's slot.
 
-- _Problem:_ categories built from `getAllInventoryData` must wait for all items before the first paint, while today the tab list shows immediately and search data fills in progressively.
-- _Approach:_ render group cards from `groupKeys` (the tab list) immediately with empty `searchFields`, then fill them as overview rows arrive. Keep `_hiddenSearchData` behind a flag until measured.
-- _Residual risk:_ memory and eviction policy ([memory-optimization-analysis.md](memory-optimization-analysis.md)). Holding all inventory rows for the categories page could conflict with planned store eviction. `groupRowsToCards` over thousands of rows on every analysis tick needs memoizing by group (C13).
+**C12. URL.** Show-all rename across four readers; the `layout` fallback; dashboard paths with `view=all` lose show-all (accepted).
 
-**C9. Group-level state that isn't in rows.**
+**C13. Reactivity.** Keep the explicit `isAnalyzing`/`analysisProgress` reads, memoize adapters per row and bucket, and avoid deep watchers.
 
-- _Problem:_ autosave, unsaved changes, locks and the Save action are per tab, not per item.
-- _Approach:_ `groupDecorations(groupKey, rows)` reads `categoriesStore` metadata, which stays for this purpose.
+**C14. Row trigger versus everything else in a table.**
 
-**C10. Search semantics change.**
+- _Problem:_ clipboard row click, search-result click, selection and drag share `<tr>` clicks.
+- _Approach:_ the guards in §4.8. Editable tables never get a row trigger.
+- _Residual risk:_ accidental activation on touch scroll, so use `click`, not `touchend`.
 
-- _Problem:_ today `hideColumns` fields are unsearchable, `details` fields are searchable, and card hidden data is a fixed set (item#, description, notes).
-- _Approach:_ explicit tiers. Each migration maps `hideColumns` → `hidden` and verifies search results before and after on the same data.
-- _Residual risk:_ inventory category search will match more fields (every shown and details field of every item) than the three it matches today. That is better recall, but more noise. Decide with users (Q6).
+**C15. Testing.** Pure functions get tests; behaviour uses the §9 checklist.
 
-**C11. Detail modal parity.**
+**C16. Undo across view switches.** Same-layout switches keep the renderer mounted. Verify `undoRegistry` survives layout remounts.
 
-- _Problem:_ Schedule's calendar modal shows all non-empty fields plus action cards. ItemReport navigates instead. Table expand also supports `#row-details` and `#row-detail-rows` custom content.
-- _Approach:_ `RowDetailsComponent` plus decorations as the default; `onRowClick` override; custom detail slots stay table-only for now (Q12).
+**C17. Colour as data.**
 
-**C12. The dashboard and URL compatibility.**
+- _Problem:_ every colour decision that is logic today (cardClass branches, chipColorClass fallbacks, cellClass functions) has to become `auto`, a static class, or a derived field.
+- _Approach:_ migrate the four current function rules: ItemReport `minQty`, ShowInventoryReport `show_*`, Timeline and ItemReport chip colours, and packlist cardClass.
+- _Residual risk:_ the object form of `cellClass` (`{ className: condition }`) is supported by the table but unused by pages, so it is dropped.
 
-- _Problem:_ pinned dashboard paths contain `?layout=calendar` and `?view=categories`. The view switcher behaves differently on the dashboard.
-- _Approach:_ read-side legacy mapping kept indefinitely, `ViewSelect` keeps the `updatePath` branch, and unknown ids fall back to the default.
-- _Residual risk:_ view ids become a public contract once pinned, so define a rename policy (Q13).
+**C18. Phase 5 removal.** Removing public props breaks any page that wasn't migrated. Phase 4's milestone, the dev prop check and the manual testing period gate it.
 
-**C13. Reactivity and performance.**
+**C19. One action per row.**
 
-- _Problem:_ `resolveView` is cheap, but adapters run over every row whenever `store.data` changes. Analysis updates rows progressively (`AppData`), and `isAnalyzing`/`analysisProgress` are read as reactivity triggers in today's computeds (`categoryList`, `availablePacklists`).
-- _Approach:_ keep those explicit dependency reads in the page computeds that feed `DataView`, memoize per row (WeakMap keyed by row object) and per group, and avoid deep watchers on rows.
+- _Problem:_ pages that today have both a row action and a details view (the inventory overview; Packlist `/details`, which cards won't link, R4.1) must pick one primary action.
+- _Approach:_ navigating actions keep details searchable and pass the search (R3.8). Any secondary action becomes a decoration.
+- _Residual risk:_ an in-place `run` action with details fields hides those details; `resolveAction` warns.
 
-**C14. Keyboard, accessibility and the analyzing state.**
+**C20. Modal consolidation.**
 
-- _Problem:_ cards and chips have Enter/Space handling and `analyzing` classes, and the table has search-result navigation.
-- _Approach:_ no change in renderers. Adapters must pass `AppData` through so `isCardAnalyzing` keeps working.
+- _Problem:_ snapping content-sized modals to fixed widths can clip or crowd content.
+- _Approach:_ audit every "(none)" modal (§4.17) at its new size, and keep `auto` only for images.
+- _Residual risk:_ about 30 call sites change in one phase; each needs a quick visual check.
 
-**C15. Testing.**
+**C21. Instant writes.**
 
-- _Problem:_ [tests.js](../js/tests/tests.js) is a console suite against FakeGoogle with no component harness.
-- _Approach:_ all new logic is in pure functions, which are fully unit-tested. Renderer and page behaviour is verified manually with §9. Add FakeGoogle fixtures for a narrow-width check if feasible.
-
-**C16. Undo and layout switching.**
-
-- _Problem:_ switching views is a URL change. If it remounts the table, undo capture state (`hasUndoCaptured`, idle timer) and expanded rows reset.
-- _Approach:_ `DataView` keeps the renderer mounted across same-layout view changes (only resolved columns change). Layout changes remount, as today's `v-if` does. Verify that the undo registry is keyed by route (`currentRouteKey`) and survives the change.
+- _Problem:_ rows and columns can move between the read and the write.
+- _Approach:_ identity-based location, read-verify-write, one retry, then revert and refresh (§4.16).
+- _Residual risks:_
+  - Duplicate identities (two rows with the same Client + Year + Show). Those rows are write-disabled, not guessed (§4.16).
+  - The 2-second write delay. In-app navigation flushes queued writes. Closing the tab shows the leave prompt, but a user who forces the close can lose the last change.
+  - Overwritten values. Checking a box replaces a date or `-` with `X`, and unchecking writes blank. Accepted for now (R8.2); the design queue will be improved later.
 
 ---
 
 ## 8. Feature parity matrix
 
-Legend: ✅ today · 🟢 after this refactor · 🔵 possible later (unblocked by the design) · — not applicable
+Legend: ✅ today · 🟢 this refactor · 🔵 later · — not applicable
 
-| Feature                             | Table                        | Calendar                      | Cards                           |
-| ----------------------------------- | ---------------------------- | ----------------------------- | ------------------------------- |
-| Shown / details / hidden tiers      | ✅ (ad hoc) → 🟢 view-driven | 🟢 (modal = details)          | 🟢 (row and group cards)        |
-| Search filter                       | ✅                           | — (highlight only, by design) | ✅                              |
-| Search navigate                     | ✅                           | ✅ highlight                  | ✅                              |
-| Details-only match indicator        | ✅                           | 🟢 chip glow                  | ✅ → 🟢 via `matchRow`          |
-| Value formatting                    | ✅                           | 🟢                            | 🟢 (adapter)                    |
-| Stacks                              | ✅ 2-high → 🟢 N-high (Ph3)  | ✅ 2 lines → 🟢 N lines (Ph3) | 🟢 card lines                   |
-| Narrow variant                      | CSS only → 🟢                | CSS only → 🟢                 | CSS only → 🟢                   |
-| Sticky columns / header             | ✅                           | header ✅                     | header ✅                       |
-| Cell registry / slot                | slot ✅ → 🟢                 | 🟢 compact                    | 🟢                              |
-| Decorations                         | `#cell-extra` ✅ → 🟢        | `chipActions` ✅ → 🟢         | `footerActions` ✅ → 🟢         |
-| Row click / detail                  | expand ✅                    | modal ✅ → 🟢 shared          | `onItemClick` ✅ / 🔵 modal     |
-| Sort                                | ✅ headers                   | —                             | ✅ select; default from view 🟢 |
-| Grouping                            | packlist row groups ✅       | —                             | 🟢 `groupBy`                    |
-| Pinning                             | —                            | —                             | ✅                              |
-| Editing, drag, clipboard, selection | ✅                           | —                             | —                               |
-| Print variant                       | 🟢 (packlist)                | 🔵                            | 🔵                              |
-| User customization                  | 🔵 Ph5                       | 🔵 Ph5                        | 🔵 Ph5                          |
+| Feature                                 | Table                  | Calendar       | Cards                    |
+| --------------------------------------- | ---------------------- | -------------- | ------------------------ |
+| Tiers (shown/details/hidden)            | ✅ ad hoc → 🟢         | 🟢             | 🟢 (row and bucket)      |
+| Search filter / navigate                | ✅ / ✅                | — / ✅         | ✅ / ✅                  |
+| Minimum term length, broad-search abort | 🟢                     | 🟢             | 🟢                       |
+| Primary action (details or page action) | details ✅ → 🟢        | ✅ ad hoc → 🟢 | ✅ ad hoc → 🟢           |
+| Trigger: button / row                   | ✅ / 🟢 (not editable) | 🟢 / ✅        | 🟢 / ✅                  |
+| Details-only match indicator            | ✅                     | 🟢             | ✅ (matched fields) → 🟢 |
+| Navigation passes search                | ad hoc → 🟢            | 🟢             | ad hoc → 🟢              |
+| Formatting                              | ✅                     | 🟢             | 🟢                       |
+| Colour (row/column/cell, theme)         | ✅ ad hoc → 🟢         | ✅ ad hoc → 🟢 | ✅ ad hoc → 🟢           |
+| Stacks                                  | 2 → 🟢 N (Ph5)         | 2 → 🟢 N (Ph5) | 🟢 lines                 |
+| Size variants (medium/narrow)           | CSS → 🟢               | CSS → 🟢       | CSS → 🟢                 |
+| Sticky columns / header                 | ✅                     | header ✅      | header ✅                |
+| Cells and decorations                   | ✅ → 🟢                | 🟢             | 🟢                       |
+| Default sort from view                  | 🟢                     | —              | 🟢                       |
+| Print variant                           | 🟢                     | 🔵             | 🔵                       |
+| Patches / customization                 | 🟢 input / 🔵 UI       | 🟢 / 🔵        | 🟢 / 🔵                  |
+| Edit modes: batch / instant             | ✅ / 🟢 (Phase 2)      | —              | —                        |
+| Editing, drag, selection                | ✅ (renderer)          | —              | —                        |
 
 ---
 
 ## 9. No-feature-loss verification checklist
 
-Run this per migrated page on: desktop width; a narrow dashboard card; inside a modal, where the page can be opened in one; and print, where applicable.
+Run per migrated page at desktop width, in a 360px dashboard card, in a double-width card, in a modal where applicable, and in print where applicable.
 
 **All renderers**
 
-- [ ] Header-area content (filters) renders and works; refresh; loading and analysis bar progresses (Inventory: D1 fixed)
-- [ ] Search: highlight, navigate (next/prev, count), filter mode, Show all, URL sync of `searchTerm`, and search preserved when navigating into a category
-- [ ] View switch: URL updates, back/forward works, dashboard card updates its stored path, legacy `?layout=calendar` and `?view=categories` links open the right view
-- [ ] Analyzing state classes; error banner; empty message; keyboard Enter/Space on chips and cards
+- [ ] Header-area filters, refresh, loading/analysis progress (categories bar now moves)
+- [ ] Search: highlight, navigate, filter, Show all, `searchTerm` URL sync, search kept into a category and into the timeline
+- [ ] Search limits: single characters ignored; on a set over 100 rows, a search matching more than 80% leaves the set unfiltered and unhighlighted, and the counter shows `∞`; a precise search still filters and highlights; categories count member rows
+- [ ] View switch: `?view=` updates, back/forward, dashboard card path updates, `?layout=calendar` and `?view=categories` links
+- [ ] Show-all through `?dateFilter=all` (Schedule, ItemReport, ShowInventoryReport)
+- [ ] Primary action: right action per §4.8 table; button vs row trigger; glow or `details-match` on details-only matches; row trigger ignores buttons, inputs and selected text; keyboard Enter/Space
+- [ ] Details: table expand, or `RowDetailsModal` in calendar and cards (fields, `#row-details`, actions)
+- [ ] Colours: theme on header/footer/buttons, row/column/cell colours as before, state classes win
+- [ ] Analyzing, error, empty states
 
 **Table**
 
-- [ ] Column order, sticky start/end (overview `image`), horizontal scroll with the sticky-header clone aligned
-- [ ] Stacked cells and headers; sort on every sortable field including stacked lines; default sort; `type: 'item'` ordering
-- [ ] Details: toggle, auto grid, `#row-details`, `#row-detail-rows`, `#details-cell`, `forceDetails`, `rowDetailsVisible`, details-match glow
-- [ ] Hiding: `hidden` fields absent and unsearchable; ad-hoc header hide and reset on refresh
-- [ ] Editing: text, number, external-edit, revert, original hint, dirty markers in the right cells after reorder, Save, Discard, undo/redo, unsaved footer, locks (InventoryTable)
-- [ ] Rows: new row (button and footer), drag/drop between crates, drop-onto, multi/shift select, selection bubble actions, delete/restore, cut/copy/paste (in-app and OS TSV), group create/toggle/visibility override, nested table dirty propagation
+- [ ] Column order, sticky, sticky-clone alignment, stacks, sort including stack lines, `type: 'item'` ordering
+- [ ] Details: expand, `#row-details`, `#row-detail-rows`, `forceDetails`, `rowDetailsVisible`
+- [ ] Hidden fields absent and unsearchable
+- [ ] Editing (`batch`): all cell types, revert, hints, dirty markers on the right cells, Save, Discard, undo/redo, locks; no row trigger
+- [ ] Rows: new row, drag/drop, drop-onto, selection, delete/restore, cut/copy/paste, groups, nested dirty
 - [ ] Mobile tap-to-show column buttons; footer counts
-- [ ] Packlist print shows Pack/Check and restores afterwards
+- [ ] Packlist print shows Pack/Check, and the screen view is unchanged after printing
+- [ ] Modal tables: transshipment flow; picker Select; summary "+ Add Item"
 
 **Calendar**
 
-- [ ] Spans and week splits; month labels; year column; week start; today highlight; sticky day header
-- [ ] Chip lines and colours (`chipColorClass`); inline and end decorations; end decorations hidden when narrow
-- [ ] Detail modal content and actions (Schedule); navigation on click (ItemReport)
+- [ ] Spans, week splits, labels, year, week start, today, sticky header
+- [ ] Chip lines, colours, decorations, end decorations hidden when narrow, action button visible when narrow
+- [ ] Schedule chips: modal via button only; Timeline chips open details; ItemReport chips navigate
 
 **Cards**
 
-- [ ] Inventory: every category including empty ones; cardClass; unsaved/lock footer; Save action; deep search shows matched fields; click navigates with `searchTerm`
-- [ ] Packlists: ship date/description content; lock/unsaved footer; link and index actions; pins; pinned-only and unlinked-only subpages; sort select and default
-- [ ] Reports menu unchanged
+- [ ] Inventory: all categories including empty ones, colours, footers, Save, member search with matched fields, click navigates with `searchTerm`, no details
+- [ ] Packlists: content, footers, actions, pins, subpages, sort, click opens the packlist; no `/details` link
+- [ ] Reports menu unchanged (now inline in ReportsContent)
+
+**Instant write and design queue (Phase 2)**
+
+- [ ] Checkbox shows checked at once; nothing is written for 2 seconds; check-then-uncheck within the delay writes nothing
+- [ ] After the delay, one cell is written: `X` to check, blank to uncheck; a date or `-` in the cell reads as unchecked
+- [ ] Leaving the page during the delay still writes the queued change
+- [ ] Row moved or inserted above mid-write: re-located by Client + Year + Show and written correctly
+- [ ] Duplicate identity: those rows' cells disabled; missing preference: cells read-only with the hint; a column not in `columns` is refused
+- [ ] Failed write: cell reverts, error shown, data refreshed; no Save prompt or dirty marker
+- [ ] Assignee pick list shows `DesignQueueAssignees`; an existing value outside the list still shows
+- [ ] Note saves on blur, creates its `ShowNotes` row the first time, and survives refresh
+- [ ] Design queue: upcoming shows by default, sorted by Ship; columns follow `DesignQueueFields`; a row turns gray when each box is checked or holds `-`/`N/a`, and stays in place
+- [ ] Schedule page unchanged and read-only; it shows the written values after refresh
+
+**Modals (Phase 6)**
+
+- [ ] Every modal at its new size on desktop and phone: no clipped content, tables in `page` modals at the wide tier
 
 ---
 
-## 10. Open questions and unresolved problems
+## 10. Decisions log
 
-1. **URL parameter name.** Is `display` acceptable? Should the existing `?view=all` (schedule show-all) be renamed for clarity, given that it is a filter and not a view? Renaming means a second legacy mapping.
-   Decision: Use "view". Schedule show all should probably be worked through everything as a special date filter rather than "view". Maybe just dateFilter=all clarifies. Nothing in the database currently uses this particular view param, so don't worry about backwards compatability in this case.
-2. **Who owns views?** Built-in views are in code. Are per-user overrides enough, or are team-shared views needed? The Preferences sheet has locking and JSON values, but editing shared presentation state invites conflicts. Can users create new views, or only modify built-in ones?
-   Decision: Built in views should be entirely migrated into this system as defaults. I intend to build future pages with this system. Per-user overrides for the simplest things (like column order, details membership, and stickyness) are enough for current customization. I may in the future want to surface some application view settings as app wide parameters.
-3. **Default for unlisted fields.** Is `details` right for every page? For sheet-driven pages (Schedule) yes. For report pages with internal helper fields, `hidden` may be safer. Per-page default, or a global default?
-   Decision: Pages will have a default view including hidden details on some pages. New pages initially will be built with default views. Various customizations will be allowed on a per-page basis as user-customization or app-level overrides. Some tables will only have a default immutable view, for example the advanced filters overlapping show modal.
-4. **New Schedule views.** Do the fields a design queue needs exist in the production schedule sheet? [notes.md](notes.md) pairs the design queue with "updating logic", which suggests editing schedule rows, but the schedule table is read-only today. That would bring layout switching and editing together, which this plan avoids.
-   Basic fields exist and more can be added at the proper time. Before the design queue becomes operational, we will need to impliment "checkbox fields" in tables, and an api mechanism that
-5. **Inventory categories data path (C8).** Is loading all inventory rows for the categories page acceptable on real data volumes and slow connections? This needs measurement against `_hiddenSearchData` before it is removed. How does it fit the store eviction plans?
+**Revision 1 answers**
 
-6. **Search recall versus noise (C10).** Should category deep search match every item field or only a chosen subset? This could be a per-view `searchable` list, which would add a fourth tier.
+| #     | Decision                                                                          | Applied in     |
+| ----- | --------------------------------------------------------------------------------- | -------------- |
+| R1.1  | URL param `view`; show-all → `dateFilter=all`, no compatibility                   | §4.11, Phase 0 |
+| R1.2  | All built-in views migrate as defaults; future pages use the system               | §1, §5         |
+| R1.3  | Per-page default views, some with hidden fields; some views immutable             | §4.3           |
+| R1.4  | Design queue needs checkbox fields and a write mechanism first (detailed in R2.1) | §4.16          |
+| R1.5  | Load all inventory rows for categories; revert if slow                            | C8             |
+| R1.6  | Search only shown and details fields (table `visibleRows` rule)                   | §4.5           |
+| R1.7  | Details button instead of chip-click details (Schedule calendar)                  | §4.8           |
+| R1.8  | Unify breakpoints, moving toward container-based (refined by R2.10, R3.1)         | §4.10          |
+| R1.9  | Remove the ad-hoc hide button (refined by R2.3)                                   | §1, Phase 4    |
+| R1.10 | The view owns the default sort; user sort is session-only                         | §4.2           |
+| R1.11 | Shared colour mechanism (refined by R2.8)                                         | §4.9           |
+| R1.12 | Details parity: shared modal, `#row-details` in the modal (refined by R3.4)       | §4.8           |
+| R1.13 | Never rename view ids; alias map when needed                                      | §4.11          |
+| R1.14 | `bucketBy`                                                                        | §4.2, §4.6     |
+| R1.15 | History is not part of views                                                      | §1             |
+| R1.16 | Filters decoupled from views                                                      | §1             |
+| R1.17 | Manual checklist for renderer behaviour                                           | C15, §9        |
+| R1.18 | Rephrased as R2.13                                                                | —              |
 
-7. **Custom cells at compact density.** Should page slot cells (`cell: 'slot'`) ever render inside calendar chips, or only registry cells with a defined compact form? Clickable content inside a clickable chip is an interaction problem.
+**Revision 2 answers**
 
-8. **Breakpoints.** Is 600/640 container width right for every renderer? Are the 768 (sticky header) and 800 (navigation) page-width breakpoints deliberately different from the container breakpoint, or accidental?
+| #     | Decision                                                                                                                                                      | Applied in         |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| R2.1  | Checkbox writes use atomic read-verify-write (`TRUE`/`FALSE` or `X` replacing a formula), with optional date metadata. Separate from views (refined by R3.9). | §4.16, Phase 2     |
+| R2.2  | Data types and editability are configured with fields, alongside default views; views don't control them. Details cells get types and editing later.          | §4.1, §4.8, §4.16  |
+| R2.3  | Option (a): remove the hide button and accept it. Removed at ShowInventoryReport's migration, since all other presentation mechanisms are removed.            | §1, §5             |
+| R2.4  | Each override can be toggled per size; overrides created at narrow size default to narrow.                                                                    | §4.15              |
+| R2.5  | Code default views are the app defaults, and other default mechanisms are removed. Override sourcing is deferred; build the patch input only.                 | §1, §4.15, Phase 5 |
+| R2.6  | ~~`onRowClick` as a separate hook~~, superseded by R3.4                                                                                                       | §4.8               |
+| R2.7  | No details for bucket cards. Navigation for packlist `/details` and the inventory timeline (refined by R3.4 and R4.1: cards don't link `/details`).           | §4.6, §4.8         |
+| R2.8  | Colour is part of views: auto colour, row colour, column colour. Auto colour overrides row colour. Theme colours only header, footer and buttons.             | §4.9               |
+| R2.9  | One dashboard card per page; unique views get their own pages; design queue is its own page. "Set as primary view" later.                                     | §1, §4.11          |
+| R2.10 | Size tiers wide/medium/narrow, height handled separately; chrome keeps viewport breakpoints.                                                                  | §4.10, Phase 6     |
+| R2.11 | Override scope per page type                                                                                                                                  | §4.15              |
+| R2.12 | Widen category search for parity with the table                                                                                                               | §4.5               |
+| R2.13 | PacklistTable stays immutable for now                                                                                                                         | §5                 |
+| R2.14 | Reports stays a hand-built menu (refined by R3.7)                                                                                                             | §5                 |
+| R2.15 | Customization is a later stage                                                                                                                                | §1, Later          |
+| R2.16 | Different purpose → new page; same data, different visualization → view                                                                                       | §1                 |
 
-9. **Ad-hoc hide.** Should the per-column hide button in the table header offer "save to my view" in Phase 5, or stay session-only?
+**Revision 3 answers**
 
-10. **Sort in views.** Should a view own only the default sort, or also remember the user's last sort per view? If the latter, does it go in the URL (shareable) or user data (persistent)?
+| #     | Decision                                                                                                                                                                                      | Applied in        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| R3.1  | Thresholds accepted (narrow < 600, medium 600–999, wide ≥ 1000, short < 500 high). The double-wide dashboard card is medium by design. Viewport thresholds add the page gutter with `calc()`. | §4.10             |
+| R3.2  | Modal widths consolidate into a few size tiers, like dashboard cards, applied as defaults; adjust if issues appear.                                                                           | §4.17, Phase 6    |
+| R3.3  | A dashboard card keeps remembering its last view until "set as primary view" exists.                                                                                                          | §4.11             |
+| R3.4  | Row click and the details button merge into one primary action, triggered by a button or the row. Navigating actions pass the search. Editable tables can't use the row trigger.              | §4.8              |
+| R3.5  | Colour precedence accepted (state classes, then cell, column, row). Logic-based colours are page-computed derived fields with `rule: 'value'`.                                                | §4.2, §4.9        |
+| R3.6  | `className` carries structural classes; `theme` is colour only.                                                                                                                               | §4.2, §4.9        |
+| R3.7  | Reports builds a simple card grid inline; `CardsComponent` drops `items`.                                                                                                                     | §4.6, §5, Phase 3 |
+| R3.8  | Details fields can coexist with a navigating action: they're searched and light the indicator without being visible in place. The destination must reveal them.                               | §4.5, §4.8, D8    |
+| R3.9  | Tables are batch (store, dirty, Save) or instant (single verified cell write with relocation fallback). The content component's data decides, not the view.                                   | §4.16             |
+| R3.10 | Minimum search term length for all fields (refined by R4.2: 2 everywhere, plus broad-search abort).                                                                                           | §4.5              |
+| R3.11 | Phase 5 ships as one change after a manual testing period.                                                                                                                                    | §1, Phase 5       |
 
-11. **Renderer-only callbacks.** `chipColorClass` (calendar) and `cardClass` (cards) are colour rules. Should they become a shared `rowClass(row, renderer)` hook, or stay renderer props passed through attrs?
+**Revision 4 answers**
 
-12. **Custom details content.** `#row-details` and `#row-detail-rows` are table-only. Should the calendar and card detail modals render the same slot, which would give calendar and cards parity with InventoryTable's pending-changes rows?
+| #    | Decision                                                                                                                                                                     | Applied in          |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| R4.1 | Packlist cards don't link `/details`; no change for now.                                                                                                                     | §4.8, §5, §9        |
+| R4.2 | Search is for pinpointing. Minimum term length is 2 on all searches. On sets over 100 rows, a search matching more than about 80% aborts and its results aren't processed.   | §4.5, §6 shifts, §9 |
+| R4.3 | `page-menu` modals become `page` (1000px on desktop). Content-sized modals default to `card`.                                                                                | §4.17               |
+| R4.4 | Compact navbar and padding at medium and narrow.                                                                                                                             | §4.10, §6 shifts    |
+| R4.5 | Schedule rows are identified by Client + Year + Show. Identity columns live in a JSON preference. Only tables with instant-write checkboxes need one (today, Schedule only). | §4.16, C21          |
+| R4.6 | Keep the calendar difference: Timeline opens details on chip click (`row`); Schedule uses a button.                                                                          | §4.8                |
 
-13. **View id stability.** Once a view is pinned to a dashboard, its id is effectively public. Is the policy "never rename; alias old ids", and where do aliases live (the page's `legacy` map)?
+**Revision 5 answers**
 
-14. **Terminology.** Should "group" (packlist row groups) and `groupBy` (card grouping) be renamed so they can't be confused, for example `cards.bucketBy`?
+| #    | Decision                                                                                                                  | Applied in          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| R5.1 | An aborted search shows the unfiltered set with no message. A visible search-navigation card shows `∞`.                   | §4.5, §6 shifts, §9 |
+| R5.2 | The instant-write preference also lists the checkbox columns (`InstantWriteTables`: `identity` + `checkboxes` per table). | §4.16, Phase 2      |
+| R5.3 | Checkboxes, instant write and the design queue are Phase 2, right after Phase 1. Former Phases 2–5 are renumbered 3–6.    | §5, §6              |
 
-15. **The "history" toggle** from [notes.md](notes.md) L1 (edit history rows next to pending changes). It adds rows rather than changing presentation, so is it a view option (`table.showHistory`), a page toggle in `header-area`, or a saved-search concern? It shouldn't be built into views by accident.
+**Revision 6 answers**
 
-16. **Advanced filter options per view** ([notes.md](notes.md) L79). Should the filter UI read the active view's layout and hide options the layout can't use? That couples filter and view, which this plan otherwise keeps separate.
+| #    | Decision                                                                                                                                                                                                                                                                                                           | Applied in                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| R6.1 | Design queue fields (refined by R7.1): Client, Show, Size, Task (derived from `Elev`, `Panels`, `Setups`), Assignee (new live column), Account Manager (add to fake data), Ship, Note (saved separately), Booth#. Shown fields controlled by a preference. Sorted by upcoming work; initial filter upcoming shows. | §4.15, §4.16, §5, Phase 2 |
+| R6.2 | Drop `unlisted`; `details` and `hidden` each accept `'rest'`, and at most one of them may use it.                                                                                                                                                                                                                  | §4.2, §4.4                |
+| R6.3 | `editMode` picks how edits are saved, and `editable` picks which fields; `editable` is ignored with `editMode: 'none'`.                                                                                                                                                                                            | §4.16                     |
+| R6.4 | `DataView` passes `wide` until Phase 6, so JS and CSS size tiers switch on together.                                                                                                                                                                                                                               | §3, §4.10, Phases 1 and 6 |
+| R6.5 | `ActionDef` has exactly one of `to` and `run`.                                                                                                                                                                                                                                                                     | §4.8                      |
+| R6.6 | Removed: `table.details: 'modal'`, per-view `search` overrides, the `short` flag, the bare `rowColor` form.                                                                                                                                                                                                        | §4.2, §4.5, §4.8, §4.10   |
+| R6.7 | `style[key].column` renamed `columnColor`; "6.7 Intended visual shifts" renamed "Intended visual shifts".                                                                                                                                                                                                          | §4.2, §4.9, §5, §6        |
 
-17. **Testing depth.** Is a manual checklist acceptable for renderer behaviour, or is a lightweight component test harness on FakeGoogle worth adding before Phase 3 (stack/header rewrite) and Phase 4 (editing tables)?
+**Revision 7 answers**
 
-18. **PacklistTable scope.** Is view-driven visibility for the nested item table worth the risk, given that the current hard-coded list plus print toggle works? The alternative is to leave PacklistTable on `hideColumns` permanently and only move print to a `variants.print` helper.
+| #    | Decision                                                                                                                                                                                                               | Applied in                |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| R7.1 | No Task aggregation yet: the design queue shows the `Elev`, `Panels` and `Setups` checkboxes directly. Completed rows stay in the list unchanged and are styled gray. Assignee is a pick list from a preference array. | §4.16, §5, Phase 2, Later |
+| R7.2 | The fields preference is exclusively "Design queue fields" (`DesignQueueFields`) and doesn't affect the Schedule page.                                                                                                 | §4.15, §4.16              |
+| R7.3 | In checkbox columns any non-`X` value counts as unchecked. The check shows immediately, and the write waits a short delay so a quick uncheck cancels it.                                                               | §4.16, §9                 |
+
+**Revision 8 answers**
+
+| #    | Decision                                                                                                                                                            | Applied in          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| R8.1 | Checkboxes only in the design queue; the Schedule page stays read-only.                                                                                             | §4.16, §5, Phase 2  |
+| R8.2 | For now, dates in checkbox columns are disposable once checked, and `-`/`N/a` count as done for the gray "completed" rule. The design queue will be improved later. | §4.16, Phase 2, C21 |
+
+**Notes on how answers were applied**
+
+- **R3.4:** which trigger each instance uses is in the §4.8 table. Labelled per-row buttons (Select, "+ Add Item") became `button`-trigger actions with labels, so they keep their wording.
+- **R3.9:** the mode is per table (`editMode`), not per field, since you described tables falling into two categories. Read-only tables are a third, implicit `none`.
+- **R3.10 and R4.2:** "minimum length for all fields" is read as a per-word minimum. Words shorter than the minimum are dropped from the search, across every field.
+- **R4.2:** "the set" is the rows handed to the renderer after page filters, and for bucket cards it is the member rows. A row counts as a match if it matches through shown or details fields. "Don't process results" means the count runs first with an early exit, and no filtering, highlighting, glow or matched-field lists are produced.
+- **R4.4:** compact chrome now covers medium. That changes the narrow viewport threshold to `calc(600px + 2 * 8px)` and leaves the only residual mismatch at the wide boundary. Full-width dashboard cards stay narrow-only, so medium keeps the card grid.
+- **R4.5 and R5.2:** the preference row (`InstantWriteTables`, holding identity and checkbox columns) is for you to add to the live database before Phase 2. The exact row is in §4.16.
+- **R6.1 and R7.2:** the design queue fields preference is the first patch source (`DesignQueueFields`, §4.15), so no separate mechanism was added. "Sort based on upcoming work" became Ship ascending.
+- **R7.1:** "keep completed in the list without change" is read as: same position and sort, only the colour changes. The Schedule page stays read-only in Phase 2 (R8.1).
+
+---
+
+## 11. Open questions
+
+1. **Batch-mode checkboxes.** Phase 2 builds the checkbox cell for both edit modes, but no `batch` table uses checkboxes yet; only the design queue (instant) does. Proposed: build and test only the instant path in Phase 2. The batch path works the same as any other editable cell (`cell-edit` with a value) and gets added and tested when a batch table first needs a checkbox. OK?
+   (Answer) Yes, the batch path just requires checkboxes as an element that mutates store data and follows standard save pathways. It is not really a new feature.

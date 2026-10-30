@@ -366,7 +366,6 @@ export const ShowInventoryReport = {
                 :container-path="containerPath || 'reports/show-usage'"
                 :navigate-to-path="navigateToPath"
                 :hide-rows-on-search="false"
-                :readonly="true"
                 :allowDetails="true"
                 :is-loading="isLoading"
                 :is-analyzing="isAnalyzing"

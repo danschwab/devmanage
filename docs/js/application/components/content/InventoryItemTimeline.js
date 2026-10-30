@@ -265,7 +265,6 @@ export const InventoryItemTimeline = {
                 theme="purple"
                 :data="timelineStore?.data ?? []"
                 :columns="columns"
-                :readonly="true"
                 :show-search="false"
                 :hide-rows-on-search="false"
                 :show-refresh="false"

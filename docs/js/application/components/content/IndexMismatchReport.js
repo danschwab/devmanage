@@ -221,7 +221,6 @@ export const IndexMismatchReport = {
             :sync-search-with-url="true"
             :container-path="containerPath || 'reports/index-mismatches'"
             :navigate-to-path="navigateToPath"
-            :readonly="false"
             :allowDetails="false"
             @refresh="handleRefresh"
             @on-save="() => reportStore.save()"

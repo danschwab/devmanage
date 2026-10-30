@@ -1314,7 +1314,6 @@ export const InventoryTableComponent = {
                 :container-path="containerPath"
                 :navigate-to-path="appContext.navigateToPath"
                 :newRow="allowEdit"
-                :external-dirty-state="isDirty"
                 :allowDetails="true"
                 :forceDetails="editMode"
                 :rowDetailsVisible="row => getPendingEntries(row).length > 0"
