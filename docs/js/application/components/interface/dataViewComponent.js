@@ -1,5 +1,5 @@
 import { html, NavigationRegistry, TableComponent, CalendarComponent, CardsComponent } from '../../index.js';
-import { resolveView, resolveAction, toLegacyColumns, pickView, devWarn, searchTiers } from '../../utils/views/resolveView.js';
+import { resolveView, resolveAction, pickView, devWarn, searchTiers } from '../../utils/views/resolveView.js';
 import { rowsToCards, bucketRowsToCards } from '../../utils/views/cardsAdapter.js';
 import { rowColorFor } from '../../utils/views/viewColor.js';
 import { RowDetailsModal } from './rowDetailsComponent.js';
@@ -7,6 +7,17 @@ import { isCheckedValue } from '../../../data_management/utils/checkbox-values.j
 
 /** Delay before an instant edit is written; another edit to the same cell restarts it (§4.16). */
 export const INSTANT_WRITE_DELAY_MS = 2000;
+
+/**
+ * Presentation props removed in Phase 5 (views-and-renderers-plan): presentation comes only from
+ * the view. A page still passing one gets a dev warning (attrs are listed as written by the page).
+ */
+const REMOVED_PRESENTATION_PROPS = [
+    'columns', 'hideColumns', 'hide-columns', 'viewModes', 'view-modes', 'chipColorClass', 'chip-color-class',
+    'chipActions', 'chip-actions', 'onItemClick', 'on-item-click', 'items', 'defaultSortColumn', 'default-sort-column',
+    'defaultSortDirection', 'default-sort-direction', 'theme', 'allowDetails', 'allow-details', 'onEventClick',
+    'eventStartColumn', 'event-start-column', 'eventEndColumn', 'event-end-column', 'rowClass', 'row-class'
+];
 
 /**
  * DataView — the only producer of renderer presentation input (§3).
@@ -126,16 +137,9 @@ export const DataView = {
         layout() {
             return this.resolved.layout;
         },
-        legacyColumns() {
-            return toLegacyColumns(this.resolved);
-        },
         resolvedAction() {
             const base = resolveAction(this.action, this.resolved, this.editMode, { hasRowDetails: !!(this.$slots['row-details'] || this.$slots['row-detail-rows']) });
             return { ...base, perform: (row, ctx) => this.performAction(base, row, ctx) };
-        },
-        rowClass() {
-            const resolved = this.resolved;
-            return resolved.rowColor ? (row) => rowColorFor(row, resolved) : null;
         },
         viewSelect() {
             const views = this.registry?.views || [];
@@ -199,6 +203,10 @@ export const DataView = {
                 if (!row || this.sameCellValue(p.key, row[p.key], p.value)) delete this.pendingCells[k];
             }
         }
+    },
+    created() {
+        const removed = Object.keys(this.$attrs || {}).filter(k => REMOVED_PRESENTATION_PROPS.includes(k));
+        if (removed.length) devWarn(`registry "${this.registry?.id}": removed presentation props passed to DataView (${removed.join(', ')}); presentation comes from the view`);
     },
     mounted() {
         this._onBeforeUnload = (e) => {
@@ -367,20 +375,17 @@ export const DataView = {
             key="dataview-table"
             v-bind="$attrs"
             :class="rendererClass"
-            :theme="resolved.theme"
+            :resolved="resolved"
+            :edit-mode="editMode"
             :data="rowsView"
             :original-data="originalData || []"
             :cell-state="editMode === 'instant' ? cellStateFor : null"
             :cell-disabled="cellDisabled"
             @cell-commit="onCellCommit"
-            :columns="legacyColumns"
             :action="resolvedAction"
             :decorations="decorations"
             :decoration-keys="decorationKeys"
-            :row-class="rowClass"
             :view-select="viewSelect"
-            :default-sort-column="sortKey"
-            :default-sort-direction="sortDir"
             :hide-rows-on-search="resolved.table?.hideRowsOnSearch ?? $attrs.hideRowsOnSearch ?? $attrs['hide-rows-on-search'] ?? true"
             :container-path="containerPath"
             :navigate-to-path="navigateToPath"
@@ -392,17 +397,11 @@ export const DataView = {
             key="dataview-calendar"
             v-bind="$attrs"
             :class="rendererClass"
-            :theme="resolved.theme"
+            :resolved="resolved"
             :data="rowsView"
-            :columns="legacyColumns"
-            :event-start-column="resolved.calendar.start"
-            :event-end-column="resolved.calendar.end"
-            :week-start="resolved.calendar.weekStart"
-            :year-column="resolved.calendar.yearColumn"
             :action="resolvedAction"
             :decorations="decorations"
             :decoration-keys="decorationKeys"
-            :row-class="rowClass"
             :view-select="viewSelect"
             :container-path="containerPath"
             :navigate-to-path="navigateToPath"

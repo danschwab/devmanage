@@ -1,8 +1,8 @@
-import { html, parseDate, toUSDateString, LoadingBarComponent, ViewChangeComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
+import { html, parseDate, toUSDateString, LoadingBarComponent, NavigationRegistry, undoRegistry, setTableRowSelectionState, modalManager, getAutoColorClass } from '../../index.js';
 import { useSearch, SearchBoxComponent, scrollToSearchResult } from '../../utils/useSearch.js';
 import { useStickyHeader } from '../../utils/useStickyHeader.js';
 import { formatValue, escapeHtml } from '../../utils/views/fieldFormat.js';
-import { getDateColorClass as dateColorClass } from '../../utils/views/viewColor.js';
+import { getDateColorClass as dateColorClass, colorFor, rowColorFor } from '../../utils/views/viewColor.js';
 import { searchWords as toSearchWords, matchRows, matchRow, valueMatchesAny } from '../../utils/views/searchMatch.js';
 import { ContentHeaderComponent } from './contentHeaderComponent.js';
 import { RowDetailsComponent } from './rowDetailsComponent.js';
@@ -1408,24 +1408,27 @@ document.addEventListener('mousemove', (e) => {
 
 export const TableComponent = {
     name: 'TableComponent',
-    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent, ContentHeaderComponent, RowDetailsComponent, CellRenderer, DecorationCards },
+    components: { LoadingBarComponent, SearchBoxComponent, ContentHeaderComponent, RowDetailsComponent, CellRenderer, DecorationCards },
     inject: ['appContext', '$modal'],
     props: {
         key: {
             type: String,
             default: 'defaultkey'
         },
-        theme: {
-            type: String,
-            default: ''
-        },
         data: {
             type: Array,
             default: () => []
         },
-        columns: {
-            type: Array,
+        // Renderer contract (views-and-renderers-plan §4.4): the resolved view drives every column,
+        // stack, width, font, colour, sticky column, details field and the default sort.
+        resolved: {
+            type: Object,
             required: true
+        },
+        // 'none' | 'batch' | 'instant' — page data, never view data (§4.16)
+        editMode: {
+            type: String,
+            default: 'none'
         },
         isLoading: {
             type: Boolean,
@@ -1499,10 +1502,6 @@ export const TableComponent = {
             type: String,
             default: null
         },
-        hideColumns: {
-            type: Array,
-            default: () => []
-        },
         // Global sortable prop - can be overridden per-column using column.sortable
         // Example column configuration:
         // { key: 'name', label: 'Name', sortable: true }   - Always sortable
@@ -1533,17 +1532,9 @@ export const TableComponent = {
             type: Function,
             default: null
         },
-        viewModes: {
-            type: Array,
-            default: null
-        },
         hideRowsOnSearch: {
             type: Boolean,
             default: true
-        },
-        allowDetails: {
-            type: Boolean,
-            default: false
         },
         forceDetails: {
             type: Boolean,
@@ -1565,22 +1556,12 @@ export const TableComponent = {
             type: Boolean,
             default: false
         },
-        defaultSortColumn: {
-            type: [String, Array],
-            default: null
-        },
-        defaultSortDirection: {
-            type: String,
-            default: 'asc',
-            validator: (value) => ['asc', 'desc'].includes(String(value || '').toLowerCase())
-        },
         dragLabel: {
             type: String,
             default: null
         },
         // ── Views system (DataView) ──────────────────────────────────────────
-        // Primary action (ResolvedAction from resolveAction + perform(row, ctx) from DataView).
-        // When null, the legacy allowDetails/forceDetails props decide (until Phase 5).
+        // Primary action (ResolvedAction from resolveAction + perform(row, ctx) from DataView)
         action: {
             type: Object,
             default: null
@@ -1593,11 +1574,6 @@ export const TableComponent = {
         decorationKeys: {
             type: Array,
             default: () => []
-        },
-        // Row colour class (rowColorFor) — lowest colour precedence (§4.9)
-        rowClass: {
-            type: Function,
-            default: null
         },
         // ViewSelectComponent config: { views, currentId, defaultId, containerPath, navigateToPath }
         viewSelect: {
@@ -1670,7 +1646,6 @@ export const TableComponent = {
             lastKnownMouseX: null,
             lastKnownMouseY: null,
             mouseMoveCounter: 0,
-            hiddenColumns: [], // Reactive property for dynamically hiding columns (internal use only)
             showStickyHeader: false, // Controls visibility of sticky header clone
             stickyActive: false, // Controls fixed positioning of sticky wrapper
             stickyLeft: 0,
@@ -1838,13 +1813,9 @@ export const TableComponent = {
             },
             deep: true
         },
-        defaultSortColumn() {
+        // The view's default sort changed (view switch, patch): apply it
+        defaultSortSignature() {
             this.applyDefaultSortColumn({ force: true });
-        },
-        defaultSortDirection() {
-            if (this.isUsingDefaultSort) {
-                this.sortDirection = this.getNormalizedDefaultSortDirection();
-            }
         },
         hideRowsOnSearchLocal(newValue, oldValue) {
             if (newValue === oldValue) return;
@@ -2088,15 +2059,64 @@ export const TableComponent = {
         activeSearchWords() {
             return toSearchWords(this.activeSearchValue);
         },
-        // Searched tiers: shown columns (incl. stacked children) and details columns; hidden never searched
+        theme() {
+            return this.resolved?.theme || '';
+        },
+        /**
+         * Column model from the resolved view: one entry per slot (a parent-owned stack of lines,
+         * each line a list of inline keys) plus the details fields. Hidden fields never appear.
+         * Editability follows editMode: batch → table editing; instant → registry cells only.
+         */
+        columnModel() {
+            const r = this.resolved;
+            if (!r) return { slots: [], details: [], all: [] };
+            const mode = this.editMode;
+            const make = (key, extra = {}) => {
+                const f = r.fieldMap.get(key) || { key };
+                const s = r.style[key] || {};
+                const canEdit = mode !== 'none' && !!f.editable;
+                return {
+                    ...f,
+                    label: f.label ?? key,
+                    width: s.width,
+                    font: s.font,
+                    columnClass: s.columnColor || '',
+                    colorRule: s.color || null,
+                    editable: canEdit && mode === 'batch',
+                    cellEditable: canEdit && !!f.cell,
+                    ...extra
+                };
+            };
+            const slots = r.slots.map(slot => {
+                const primary = make(slot.key, { sticky: slot.sticky || null });
+                // Editable fields inside a stack render read-only
+                const lines = slot.lines.map((line, li) => line.map((key, ki) =>
+                    (li === 0 && ki === 0) ? primary : make(key, { editable: false, cellEditable: false, stacked: true })));
+                return { key: slot.key, primary, inline: lines[0].slice(1), lines: lines.slice(1), headerLines: lines };
+            });
+            const details = r.details.map(f => make(f.key, { details: true, editable: false, cellEditable: false }));
+            return { slots, details, all: [...slots.flatMap(s => s.headerLines.flat()), ...details] };
+        },
+        // Every column the table knows (shown keys incl. stacked lines, then details)
+        columns() {
+            return this.columnModel.all;
+        },
+        slotByKey() {
+            return new Map(this.columnModel.slots.map(s => [s.key, s]));
+        },
+        defaultSortConfig() {
+            const s = this.resolved?.sort;
+            if (!s) return [];
+            return (Array.isArray(s) ? s : [s])
+                .filter(x => x && x.key)
+                .map(x => ({ key: x.key, direction: x.dir === 'desc' ? 'desc' : 'asc' }));
+        },
+        defaultSortSignature() {
+            return JSON.stringify(this.defaultSortConfig);
+        },
+        // Searched tiers: shown keys (incl. stacked lines) and details keys; hidden fields are never searched
         searchTierKeys() {
-            const shown = [];
-            const details = [];
-            for (const col of this.columns) {
-                if (this.hideSet.has(col.key)) continue;
-                if (col.details) details.push(col.key); else shown.push(col.key);
-            }
-            return { shown, details };
+            return { shown: this.visibleColumns.map(c => c.key), details: this.detailsColumns.map(c => c.key) };
         },
         // One matching pass over the rows handed to the table, with the broad-search abort (§4.5)
         searchResult() {
@@ -2118,14 +2138,11 @@ export const TableComponent = {
         },
         // ── Primary action (§4.8) ────────────────────────────────────────────
         effectiveAction() {
-            if (this.action) return this.action;
-            return this.allowDetails
-                ? { kind: 'details', trigger: 'button', icon: '☷', label: '' }
-                : { kind: 'none', trigger: 'button', icon: '', label: '' };
+            return this.action || { kind: 'none', trigger: 'button', icon: '', label: '' };
         },
         // Inline details expand is available (rows render the details container)
         detailsEnabled() {
-            return this.action ? this.action.kind === 'details' : this.allowDetails;
+            return this.effectiveAction.kind === 'details';
         },
         // Trailing sticky action cell (generalizes today's details button)
         hasActionCell() {
@@ -2203,10 +2220,6 @@ export const TableComponent = {
             // True if any column is editable
             return this.columns.some(col => col.editable);
         },
-        hideSet() {
-            // Hide columns from hideColumns prop, hiddenColumns reactive data, and always hide 'AppData', 'EditHistory', and 'MetaData'
-            return new Set([...(this.hideColumns || []), 'AppData', 'EditHistory', 'MetaData', ...(this.hiddenColumns || [])]);
-        },
         originalDataByKey() {
             if (!this.rowKey || !Array.isArray(this.originalData)) return null;
             const map = new Map();
@@ -2227,26 +2240,21 @@ export const TableComponent = {
             return 'translateX(' + offset + 'px)';
         },
         mainTableColumns() {
-            // e.g. if column 2 has colspan: 3, then columns 3 and 4 are removed
-            // This allows for dynamic column spanning in the main table view
-            const columnsClipped = [];
+            // Body cells: one per slot, except that a field with colspan N covers the next N-1 slots
+            // (PacklistTable's nested item header). The header keeps every slot.
+            const slots = this.theadRow1Columns;
+            const clipped = [];
             let i = 0;
-            while (i < this.columns.length) {
-                const col = this.columns[i];
-                columnsClipped.push(col);
-                if (col.colspan) {
-                    i += col.colspan;
-                } else {
-                    i++;
-                }
+            while (i < slots.length) {
+                const col = slots[i];
+                clipped.push(col);
+                i += col.colspan ? col.colspan : 1;
             }
-
-            // Filter out columns marked as details-only or stacked under another column
-            return columnsClipped.filter(column => !column.details && !column.stackUnder);
+            return clipped;
         },
+        // Shown columns: every key of every slot (primary, inline and stacked lines)
         visibleColumns() {
-            // Get only columns not in hideSet
-            return this.columns.filter(column => !this.hideSet.has(column.key) && !this.detailsColumns.includes(column));
+            return this.columnModel.slots.flatMap(s => s.headerLines.flat());
         },
         // Columns to serialize when writing to the OS clipboard (visible, non-action columns)
         clipboardExportColumns() {
@@ -2257,28 +2265,11 @@ export const TableComponent = {
             return this.visibleColumns.filter(col => !col.key.startsWith('_') && col.editable);
         },
         detailsColumns() {
-            // Get only columns marked for details display
-            return this.columns.filter(column => column.details);
+            return this.columnModel.details;
         },
-        stackedColumnMap() {
-            // Map parent column key -> child columns that stack under it
-            const map = new Map();
-            this.visibleColumns.forEach(col => {
-                if (col.stackUnder && !this.hideSet.has(col.stackUnder)) {
-                    if (!map.has(col.stackUnder)) map.set(col.stackUnder, []);
-                    map.get(col.stackUnder).push(col);
-                }
-            });
-            return map;
-        },
-        hasStackedColumns() {
-            return this.stackedColumnMap.size > 0;
-        },
+        // Header cells: one per slot (single header row; stacked labels share the cell)
         theadRow1Columns() {
-            return this.visibleColumns.filter(col => !col.stackUnder);
-        },
-        theadRow2Columns() {
-            return this.visibleColumns.filter(col => col.stackUnder && !this.hideSet.has(col.stackUnder));
+            return this.columnModel.slots.map(s => s.primary);
         },
         visibleRows() {
             // Filter rows based on search value but keep all rows including marked for deletion
@@ -2570,9 +2561,7 @@ export const TableComponent = {
             }
             
             this.$emit('refresh');
-            // Clear hidden columns on refresh
-            this.hiddenColumns = [];
-            // Also clear dirty state for nested tables on refresh
+            // Clear dirty state for nested tables on refresh
             this.nestedTableDirtyCells = {};
         },
 
@@ -2866,14 +2855,12 @@ export const TableComponent = {
         },
 
         getNormalizedDefaultSortDirection() {
-            return String(this.defaultSortDirection || '').toLowerCase() === 'desc' ? 'desc' : 'asc';
+            return 'asc';
         },
 
+        // The view's sort ({ key, dir } or a list of them)
         normalizeDefaultSortColumnConfig() {
-            const config = this.defaultSortColumn;
-            if (Array.isArray(config)) return config;
-            if (typeof config === 'string' && config.trim()) return [config.trim()];
-            return [];
+            return this.defaultSortConfig;
         },
 
         getDefaultSortCriteria() {
@@ -2970,12 +2957,6 @@ export const TableComponent = {
             return this.sortDirection === 'asc' ? 'arrow_upward_alt' : 'arrow_downward_alt';
         },
         
-        handleHideColumn(columnKey) {
-            // Add column to hiddenColumns array to hide it
-            if (!this.hiddenColumns.includes(columnKey)) {
-                this.hiddenColumns.push(columnKey);
-            }
-        },
         
         formatCellValue(value, column) {
             return formatValue(value, column);
@@ -3107,47 +3088,22 @@ export const TableComponent = {
             return this.rowDecorMap.get(row)?.rowLevel || [];
         },
         
+        // Cell colour from the view (style[key].color); state classes (dirty) are added after it
+        cellColorClass(row, column) {
+            if (!column?.colorRule || !row) return '';
+            return colorFor(row, column, this.resolved);
+        },
+        // Row colour from the view (rowColor) — lowest colour precedence (§4.9)
+        rowColorClass(row) {
+            if (!this.resolved?.rowColor || !row) return '';
+            return rowColorFor(row, this.resolved);
+        },
         getCellClass(value, column, rowIndex) {
             let baseClass = '';
-            
-            // Support function-based cell classes FIRST (before autoColor)
-            // This allows custom columns to override autoColor behavior
-            if (typeof column.cellClass === 'function') {
-                // Pass the full row data if rowIndex is provided and valid
-                if (typeof rowIndex === 'number' && this.data && this.data[rowIndex]) {
-                    const customClass = column.cellClass(value, this.data[rowIndex]);
-                    if (customClass) return customClass; // Return early if custom class provided
-                } else {
-                    const customClass = column.cellClass(value);
-                    if (customClass) return customClass; // Return early if custom class provided
-                }
-            }
-            
-            // Support object-based cell classes
-            if (typeof column.cellClass === 'object') {
-                for (const [className, condition] of Object.entries(column.cellClass)) {
-                    if (typeof condition === 'function' && condition(value)) {
-                        return className;
-                    }
-                    if (value === condition) {
-                        return className;
-                    }
-                }
-            }
-            
-            // Centralized autoColor logic for number columns
-            // Universal rule: < 0 → red, < 1 → yellow, >= 1 → no color
-            if (column.autoColor && column.format === 'number') {
-                const autoClass = this.getAutoColorClass(value);
-                if (autoClass) baseClass = autoClass;
-            }
-            
-            // Centralized autoColor logic for date columns
-            if (column.autoColor && column.format === 'date') {
-                const cellClass = this.getDateColorClass(value);
-                if (cellClass) baseClass = cellClass;
-            }
-            
+            const row = typeof rowIndex === 'number' && this.data ? this.data[rowIndex] : null;
+            const color = row ? this.cellColorClass(row, column) : '';
+            if (color) baseClass = color;
+                        
             // Add dirty class if cell is dirty (dirty state is keyed by column key)
             if (this.dirtyCells[rowIndex] && this.dirtyCells[rowIndex][column.key]) {
                 baseClass = (baseClass ? baseClass + ' ' : '') + 'dirty';
@@ -4713,9 +4669,6 @@ export const TableComponent = {
                     :is-loading="isLoading"
                     :dirty="allowSaveEvent"
                     :view-select="viewSelect"
-                    :view-modes="viewModes"
-                    :container-path="containerPath"
-                    :navigate-to-path="navigateToPath"
                     @refresh="handleRefresh"
                 >
                     <template #header-area><slot name="header-area"></slot></template>
@@ -4781,56 +4734,30 @@ export const TableComponent = {
                     </colgroup>
                     <thead :class="{ [theme]: true, active: theadActive }" @click="handleTheadTap($event)">
                         <tr>
-                            <th v-if="draggable" class="spacer-cell" :rowspan="hasStackedColumns ? 2 : 1" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
-                            <th 
-                                v-for="(column, colIdx) in theadRow1Columns" 
+                            <th v-if="draggable" class="spacer-cell" :style="stickyColumnWidths[0] ? { width: stickyColumnWidths[0] + 'px' } : {}"></th>
+                            <th
+                                v-for="(column, colIdx) in theadRow1Columns"
                                 :key="column.key"
-                                :rowspan="hasStackedColumns && !stackedColumnMap.has(column.key) ? 2 : 1"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, stackedColumnMap.has(column.key) ? 'stacked-header' : '']"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, slotByKey.get(column.key)?.headerLines.length > 1 ? 'stacked-header' : '']"
                                 :title="column.title || column.label"
                                 :style="[stickyColumnWidths[draggable ? colIdx + 1 : colIdx] ? { width: stickyColumnWidths[draggable ? colIdx + 1 : colIdx] + 'px' } : {}, getCloneStickyThStyle(column, colIdx)]"
                             >
-                                <div>
-                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
-                                    <span v-else>{{ column.label }}</span>
-                                    <button 
-                                        v-if="isColumnSortable(column)"
-                                        @click="handleSort(column.key)"
-                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
-                                    >
-                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
-                                    </button>
-                                    <button 
-                                        v-if="column.allowHide"
-                                        @click="handleHideColumn(column.key)"
-                                        class="column-button"
-                                        title="Hide this column"
-                                    >
-                                        <span class="material-symbols-outlined">close</span>
-                                    </button>
+                                <div v-for="(line, li) in slotByKey.get(column.key).headerLines" :key="li" :class="li > 0 ? 'stack-line' : ''">
+                                    <template v-for="(col, ci) in line" :key="col.key">
+                                        <span v-if="ci > 0" class="chip-sep"> | </span>
+                                        <span v-if="col.labelHtml" v-html="col.labelHtml"></span>
+                                        <span v-else>{{ col.label }}</span>
+                                        <button
+                                            v-if="isColumnSortable(col)"
+                                            @click="handleSort(col.key)"
+                                            :class="'column-button ' + (sortColumn === col.key ? 'active' : '')"
+                                        >
+                                            <span class="material-symbols-outlined">{{ getSortIcon(col.key) || 'swap_vert' }}</span>
+                                        </button>
+                                    </template>
                                 </div>
                             </th>
-                            <th v-if="hasActionCell" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
-                        </tr>
-                        <tr v-if="hasStackedColumns">
-                            <th
-                                v-for="column in theadRow2Columns"
-                                :key="column.key"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, 'stacked-header']"
-                                :title="column.title || column.label"
-                            >
-                                <div>
-                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
-                                    <span v-else>{{ column.label }}</span>
-                                    <button 
-                                        v-if="isColumnSortable(column)"
-                                        @click="handleSort(column.key)"
-                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
-                                    >
-                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
-                                    </button>
-                                </div>
-                            </th>
+                            <th v-if="hasActionCell" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em;" :style="[stickyColumnWidths[stickyColumnWidths.length - 1] ? { width: stickyColumnWidths[stickyColumnWidths.length - 1] + 'px' } : {}, cloneDetailsStickyTransform ? { transform: cloneDetailsStickyTransform } : {}]"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
                         </tr>
                     </thead>
                 </table>
@@ -4851,57 +4778,30 @@ export const TableComponent = {
                     </colgroup>
                     <thead :class="{ [theme]: true, 'drop-target-header': dropTarget?.type === 'header', active: theadActive }" @click="handleClipboardHeaderClick($event); handleTheadTap($event)">
                         <tr>
-                            <th v-if="draggable" class="spacer-cell" :rowspan="hasStackedColumns ? 2 : 1"></th>
-                            <th 
-                                v-for="(column, colIdx) in theadRow1Columns" 
-                                :key="column.key"
-                                :rowspan="hasStackedColumns && !stackedColumnMap.has(column.key) ? 2 : 1"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, stackedColumnMap.has(column.key) ? 'stacked-header' : '']"
-                                :title="column.title || column.label"
-                                :style="getStickyColProps(column)?.stickyStyle"
-                            >
-                                <div>
-                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
-                                    <span v-else>{{ column.label }}</span>
-                                    <button 
-                                        v-if="isColumnSortable(column)"
-                                        @click="handleSort(column.key)"
-                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
-                                    >
-                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
-                                    </button>
-                                    <button 
-                                        v-if="column.allowHide"
-                                        @click="handleHideColumn(column.key)"
-                                        class="column-button"
-                                        title="Hide this column"
-                                    >
-                                        <span class="material-symbols-outlined">close</span>
-                                    </button>
-                                </div>
-                            </th>
-                            <th v-if="hasActionCell" class="details-header col-sticky-end" :rowspan="hasStackedColumns ? 2 : 1" style="font-size: 20px; line-height: 1em; right: 0;" :title="effectiveAction.kind === 'details' ? 'Details' : (effectiveAction.label || '')"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
-                        </tr>
-                        <tr v-if="hasStackedColumns">
+                            <th v-if="draggable" class="spacer-cell"></th>
                             <th
-                                v-for="column in theadRow2Columns"
+                                v-for="(column, colIdx) in theadRow1Columns"
                                 :key="column.key"
-                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, 'stacked-header']"
+                                :class="[getColumnFont(column), getStickyColProps(column)?.stickyClass, slotByKey.get(column.key)?.headerLines.length > 1 ? 'stacked-header' : '']"
                                 :title="column.title || column.label"
                                 :style="getStickyColProps(column)?.stickyStyle"
                             >
-                                <div>
-                                    <span v-if="column.labelHtml" v-html="column.labelHtml"></span>
-                                    <span v-else>{{ column.label }}</span>
-                                    <button 
-                                        v-if="isColumnSortable(column)"
-                                        @click="handleSort(column.key)"
-                                        :class="'column-button ' + (sortColumn === column.key ? 'active' : '')"
-                                    >
-                                        <span class="material-symbols-outlined">{{ getSortIcon(column.key) || 'swap_vert' }}</span>
-                                    </button>
+                                <div v-for="(line, li) in slotByKey.get(column.key).headerLines" :key="li" :class="li > 0 ? 'stack-line' : ''">
+                                    <template v-for="(col, ci) in line" :key="col.key">
+                                        <span v-if="ci > 0" class="chip-sep"> | </span>
+                                        <span v-if="col.labelHtml" v-html="col.labelHtml"></span>
+                                        <span v-else>{{ col.label }}</span>
+                                        <button
+                                            v-if="isColumnSortable(col)"
+                                            @click="handleSort(col.key)"
+                                            :class="'column-button ' + (sortColumn === col.key ? 'active' : '')"
+                                        >
+                                            <span class="material-symbols-outlined">{{ getSortIcon(col.key) || 'swap_vert' }}</span>
+                                        </button>
+                                    </template>
                                 </div>
                             </th>
+                            <th v-if="hasActionCell" class="details-header col-sticky-end" style="font-size: 20px; line-height: 1em; right: 0;" :title="effectiveAction.kind === 'details' ? 'Details' : (effectiveAction.label || '')"><template v-if="effectiveAction.kind === 'details'">&#9432;</template></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4925,7 +4825,7 @@ export const TableComponent = {
                                         'details-match': hasRowTrigger && isDetailsOnlyMatch(row)
                                     },
                                     getRowMetadataClass(row),
-                                    rowClass ? rowClass(row) : ''
+                                    rowColorClass(row)
                                 ]"
                                 :tabindex="hasRowTrigger ? 0 : null"
                                 @click="handleClipboardRowClick(idx, visibleIdx, $event); handleSearchResultClick(idx); handleRowTriggerClick(row, idx, $event)"
@@ -4943,7 +4843,6 @@ export const TableComponent = {
                                     :colspan="column.colspan || 1"
                                     :class="[getCellClass(row[column.key], column, idx), getStickyColProps(column)?.stickyClass, cellStateClass(row, column)]"
                                     :style="getStickyColProps(column)?.stickyStyle"
-                                    v-show="!hideSet.has(column.key)"
                                     @click="handleEditableCellContainerClick(idx, column, $event)"
                                 >
                                     <div :class="['table-cell-container', { 'search-match': hasSearchMatch(row[column.key], column), 'search-active-result': hasSearchMatch(row[column.key], column) && searchMatchIndexMap.get(idx) === search.searchIndex.value - 1 }]">
@@ -5015,18 +4914,19 @@ export const TableComponent = {
                                             :editable="!!(column.editable || column.cellEditable)"
                                             :commit="(value) => commitCellValue(idx, column, value)"
                                             :disabled="cellDisabledReason(row, column)"
+                                            :cell-scope="{ rowIndex: idx, onInnerTableDirty: (isDirty) => handleInnerTableDirty(isDirty, idx, column.key) }"
                                         />
-                                        <slot 
-                                            v-else-if="!column.editable"
-                                            :row="row" 
-                                            :rowIndex="idx"
-                                            :column="column"
-                                            :cellRowIndex="idx"
-                                            :cellColIndex="colIndex"
-                                            :onInnerTableDirty="(isDirty) => handleInnerTableDirty(isDirty, idx, column.key)"
-                                        >
-                                            <span v-html="highlightSearchText(row[column.key], column)"></span>
-                                        </slot>
+                                        <span v-else-if="!column.editable" v-html="highlightSearchText(row[column.key], column)"></span>
+
+                                        <!-- Inline keys on the slot's first line -->
+                                        <template v-for="col in (slotByKey.get(column.key)?.inline || [])" :key="col.key">
+                                            <span class="chip-sep"> | </span>
+                                            <span :class="[cellColorClass(row, col), { 'search-match': hasSearchMatch(row[col.key], col) }]">
+                                                <CellRenderer v-if="col.cell" :row="row" :field="col" renderer="table" density="full" :search-term="activeSearchValue || ''" :highlight="highlightSearchText" :theme="theme" :cell-slot="$slots.cell" :cell-scope="{ rowIndex: idx }" />
+                                                <span v-else v-html="highlightSearchText(row[col.key], col)"></span>
+                                            </span>
+                                            <DecorationCards v-if="decorations" :cards="cellDecorations(row, col.key)" :inline="true" />
+                                        </template>
 
                                         <!-- Decorations for this key (§4.14) -->
                                         <DecorationCards v-if="decorations" :cards="cellDecorations(row, column.key)" />
@@ -5044,37 +4944,23 @@ export const TableComponent = {
                                             :isEditable="column.editable"
                                         ></slot>
                                     </div>
-                                    <template v-if="stackedColumnMap.has(column.key)">
-                                        <div
-                                            v-for="childCol in stackedColumnMap.get(column.key)"
-                                            :key="childCol.key"
-                                            :class="['table-cell-container', 'stacked-child-cell', { 'search-match': hasSearchMatch(row[childCol.key], childCol) }, childCol.cellClass ? childCol.cellClass(row[childCol.key], row) : '']"
-                                        >
-                                            <CellRenderer
-                                                v-if="childCol.cell"
-                                                :row="row"
-                                                :field="childCol"
-                                                renderer="table"
-                                                density="full"
-                                                :search-term="activeSearchValue || ''"
-                                                :highlight="highlightSearchText"
-                                                :theme="theme"
-                                                :cell-slot="$slots.cell"
-                                            />
-                                            <span v-else v-html="highlightSearchText(row[childCol.key], childCol)"></span>
-                                            <DecorationCards v-if="decorations" :cards="cellDecorations(row, childCol.key)" />
-                                        </div>
-                                    </template>
+                                    <!-- Stacked lines (N-high, parent-owned): each line lists its keys inline -->
+                                    <div
+                                        v-for="(line, li) in (slotByKey.get(column.key)?.lines || [])"
+                                        :key="'line-' + li"
+                                        :class="['table-cell-container', 'stacked-child-cell', { 'search-match': line.some(c => hasSearchMatch(row[c.key], c)) }]"
+                                    >
+                                        <template v-for="(col, ci) in line" :key="col.key">
+                                            <span v-if="ci > 0" class="chip-sep"> | </span>
+                                            <span :class="cellColorClass(row, col)">
+                                                <CellRenderer v-if="col.cell" :row="row" :field="col" renderer="table" density="full" :search-term="activeSearchValue || ''" :highlight="highlightSearchText" :theme="theme" :cell-slot="$slots.cell" :cell-scope="{ rowIndex: idx }" />
+                                                <span v-else v-html="highlightSearchText(row[col.key], col)"></span>
+                                            </span>
+                                            <DecorationCards v-if="decorations" :cards="cellDecorations(row, col.key)" />
+                                        </template>
+                                    </div>
                                 </td>
                                 <td v-if="hasActionCell" class="details-cell col-sticky-end" :style="{ right: '0' }">
-                                    <slot
-                                        name="details-cell"
-                                        :row="row"
-                                        :rowIndex="idx"
-                                        :isExpanded="isRowExpanded(idx)"
-                                        :hasSearchMatch="hasDetailsSearchMatch(row)"
-                                        :toggleDetails="() => toggleRowDetails(idx)"
-                                    >
                                         <button
                                             v-if="effectiveAction.kind === 'details'"
                                             @click="toggleRowDetails(idx)"
@@ -5091,7 +4977,6 @@ export const TableComponent = {
                                             :title="effectiveAction.label || 'Open'"
                                             :class="[theme, effectiveAction.label ? 'action-button' : 'button-symbol', 'row-action-button', isDetailsOnlyMatch(row) ? 'search-match' : '']"
                                         >{{ effectiveAction.label || effectiveAction.icon || '☷' }}</button>
-                                    </slot>
                                 </td>
                             </tr>
                             

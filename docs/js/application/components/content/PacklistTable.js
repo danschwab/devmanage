@@ -1,5 +1,5 @@
 import { html, TableComponent, DataView, Requests, getReactiveStore, NavigationRegistry, createAnalysisConfig, invalidateCache, Priority, tableRowSelectionState, EditHistoryUtils, authState, undoRegistry, todayISOString, getAutoColorClass } from '../../index.js';
-import { resolveView, toLegacyColumns } from '../../utils/views/resolveView.js';
+import { resolveView } from '../../utils/views/resolveView.js';
 import { ItemImageComponent } from './InventoryTable.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
 import { packlistIndexResolutionMixin } from '../interface/IndexResolutionModal.js';
@@ -191,8 +191,8 @@ export const PacklistTable = {
             }));
             return resolveView(fields, PACKLIST_ITEMS_VIEW, { print: this.isPrinting, editMode: this.editMode ? 'batch' : 'none' });
         },
-        itemColumns() {
-            return toLegacyColumns(this.itemsResolved);
+        tableEditMode() {
+            return this.editMode ? 'batch' : 'none';
         },
         // Item headers hidden by the items view (screen: Pack, Check, Extracted…; print: Extracted…)
         hiddenColumns() {
@@ -200,7 +200,11 @@ export const PacklistTable = {
         },
         // Crates view: the sheet's crate headers, in sheet order
         cratesResolved() {
-            const fields = this.mainColumns.map(c => ({ key: c.key, label: c.label, editable: !!c.editable, isIndex: c.isIndex, colspan: c.colspan }));
+            // Piece # and the nested item table are page cells (#cell); the rest are plain values
+            const fields = this.mainColumns.map(c => ({
+                key: c.key, label: c.label, editable: !!c.editable, isIndex: c.isIndex, colspan: c.colspan,
+                cell: (c.isIndex || c.key === this.itemHeadersStart) ? 'slot' : undefined
+            }));
             const style = {};
             for (const c of this.mainColumns) style[c.key] = crateColumnStyle(c.key);
             return resolveView(fields, {
@@ -210,9 +214,6 @@ export const PacklistTable = {
                 columns: this.mainColumns.map(c => c.key),
                 style
             }, { editMode: this.editMode ? 'batch' : 'none' });
-        },
-        crateColumns() {
-            return toLegacyColumns(this.cratesResolved);
         },
         mainHeaders() {
             // Use headers from the first crate if available, else use default schema
@@ -1435,7 +1436,8 @@ export const PacklistTable = {
                     ref="mainTableComponent"
                     :data="mainTableData"
                     :originalData="originalData"
-                    :columns="crateColumns"
+                    :resolved="cratesResolved"
+                    :edit-mode="tableEditMode"
                     :class="cratesResolved.className"
                     :rowKey="'Piece #'"
                     :title="tabName"
@@ -1502,7 +1504,7 @@ export const PacklistTable = {
                             </span-->
                         </div>
                     </template>
-                    <template #default="{ row, rowIndex, column, cellRowIndex, cellColIndex, onInnerTableDirty }">
+                    <template #cell="{ row, rowIndex, field: column, onInnerTableDirty }">
                         <template v-if="column && column.isIndex">
                             <!-- Only count visible (not marked-for-deletion) rows for Piece # -->
                             {{
@@ -1525,7 +1527,8 @@ export const PacklistTable = {
                                 :data="row.Items"
                                 :originalData="originalData && originalData[rowIndex] ? originalData[rowIndex].Items : []"
                                 :rowKey="'AppData._rowId'"
-                                :columns="itemColumns"
+                                :resolved="itemsResolved"
+                                :edit-mode="tableEditMode"
                                 :emptyMessage="'No items'"
                                 :draggable="editMode"
                                 :newRow="editMode"

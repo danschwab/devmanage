@@ -3,16 +3,13 @@
  *
  *   resolveView(fields, view, { size, print, patches, editMode }) → ResolvedView   (pure)
  *   resolveAction(actionDef, resolved, editMode, { hasRowDetails })  → ResolvedAction (pure)
- *   toLegacyColumns(resolved)                                         → column flags read by
- *       today's renderers (Phases 1–4 adapter; deleted in Phase 5)
+ * Renderers read the ResolvedView directly (Phase 5 renderer contract, §4.4).
  *
  * Fields describe what the data is (FieldDef). Views describe presentation (ViewDef).
  * Validation never throws: problems are reported through devWarn() and resolved to a safe result.
  *
  * Pure: no Vue, no DOM. Safe to import from tests.
  */
-import { colorFor } from './viewColor.js';
-
 // ── Dev warnings ─────────────────────────────────────────────────────────────
 
 const IS_DEV = typeof window !== 'undefined' && !!window.location && (
@@ -42,7 +39,7 @@ export function devWarn(msg) {
 
 export const ALWAYS_HIDDEN = Object.freeze(['AppData', 'EditHistory', 'MetaData']);
 
-/** Presentation properties that belong to views, not fields (§4.1). Tolerated with a warning until Phase 5. */
+/** Presentation properties that belong to views, not fields (§4.1). Ignored, with a dev warning. */
 export const LEGACY_FIELD_PROPS = Object.freeze([
     'width', 'font', 'autoColor', 'cellClass', 'columnClass', 'allowHide', 'details',
     'stackUnder', 'sticky', 'firstRow', 'secondRow', 'whenSmall'
@@ -142,14 +139,6 @@ export function applyPatches(view, patches = [], size = 'wide') {
     return out;
 }
 
-function stripLegacy(field) {
-    const out = {};
-    for (const [k, v] of Object.entries(field)) {
-        if (!LEGACY_FIELD_PROPS.includes(k)) out[k] = v;
-    }
-    return out;
-}
-
 // ── resolveView ──────────────────────────────────────────────────────────────
 
 /**
@@ -183,7 +172,7 @@ export function resolveView(fields, view, opts = {}) {
     for (const f of fields || []) {
         if (!f || typeof f.key !== 'string' || fieldMap.has(f.key)) continue;
         const legacy = LEGACY_FIELD_PROPS.filter(p => f[p] !== undefined);
-        if (legacy.length) devWarn(`field "${f.key}" has presentation props (${legacy.join(', ')}); move them into the view`);
+        if (legacy.length) devWarn(`field "${f.key}" has presentation props (${legacy.join(', ')}); they are ignored — set them in the view`);
         fieldMap.set(f.key, f);
     }
     const fieldKeys = [...fieldMap.keys()];
@@ -268,10 +257,6 @@ export function resolveView(fields, view, opts = {}) {
             if (isPattern(pat) && matchesKeyPattern(pat, key)) s = { ...s, ...val };
         }
         if (styleDecl[key]) s = { ...s, ...styleDecl[key] };
-        const f = fieldMap.get(key);
-        // Legacy tolerance (until Phase 5): field width/font fall back into style
-        if (s.width === undefined && f.width !== undefined) s.width = f.width;
-        if (s.font === undefined && f.font !== undefined) s.font = f.font;
         if (Object.keys(s).length) style[key] = s;
     }
     for (const pat of Object.keys(styleDecl)) {
@@ -290,7 +275,6 @@ export function resolveView(fields, view, opts = {}) {
     const slots = slotKeyLines.map(lines => {
         const key = lines[0][0];
         const s = style[key] || {};
-        const legacySticky = fieldMap.get(key)?.sticky;
         return {
             key,
             field: fieldMap.get(key),
@@ -299,7 +283,7 @@ export function resolveView(fields, view, opts = {}) {
             font: s.font,
             color: s.color,
             columnColor: s.columnColor,
-            sticky: stickyStart.includes(key) ? 'start' : (stickyEnd.includes(key) ? 'end' : (legacySticky || null))
+            sticky: stickyStart.includes(key) ? 'start' : (stickyEnd.includes(key) ? 'end' : null)
         };
     });
 
@@ -417,79 +401,6 @@ export function resolveAction(actionDef, resolved, editMode = resolved?.editMode
         return { kind: 'details', trigger, label: def.label || '', icon: def.icon || '☷', to: null, run: null, disabled };
     }
     return { kind: 'none', trigger: 'button', label: '', icon: '', to: null, run: null, disabled: null };
-}
-
-// ── Legacy adapter (Phases 1–4) ──────────────────────────────────────────────
-
-function legacyColumn(resolved, field, extra = {}) {
-    const s = resolved.style[field.key] || {};
-    // editMode picks how edits are saved, `editable` picks which fields (R6.3):
-    //   batch   → table editing (cell-edit, dirty tracking, Save) for every editable field
-    //   instant → only registry cells edit, each committing through DataView's verified-write queue
-    const canEdit = resolved.editMode !== 'none' && !!field.editable;
-    const col = {
-        ...stripLegacy(field),
-        label: field.label ?? field.key,
-        editable: canEdit && resolved.editMode === 'batch',
-        cellEditable: canEdit && !!field.cell
-    };
-    if (s.width !== undefined) col.width = s.width;
-    if (s.font !== undefined) col.font = s.font;
-    if (s.columnColor) col.columnClass = s.columnColor;
-    if (s.color) col.cellClass = (value, row) => colorFor(row || { [field.key]: value }, field, resolved);
-    return Object.assign(col, extra);
-}
-
-/**
- * Convert a ResolvedView into the column flags today's renderers read.
- *  table:    slots → columns (+ `stackUnder` children), details → `details: true`, hidden omitted
- *  calendar: chip line 1 → `firstRow`, line 2 → `secondRow`; other non-hidden fields included plain
- *  cards:    all non-hidden fields (cards are built by the cards adapter instead)
- * @param {Object} resolved
- * @returns {Object[]}
- */
-export function toLegacyColumns(resolved) {
-    if (!resolved) return [];
-    const cols = [];
-    if (resolved.layout === 'table') {
-        for (const slot of resolved.slots) {
-            const keys = slot.lines.flat();
-            const [parentKey, ...childKeys] = keys;
-            if (keys.length > 2) devWarn(`view "${resolved.viewId}": the table shows at most two stacked lines until Phase 5 (slot ${parentKey})`);
-            const parentExtra = {};
-            if (slot.sticky) parentExtra.sticky = slot.sticky;
-            cols.push(legacyColumn(resolved, resolved.fieldMap.get(parentKey), parentExtra));
-            for (const childKey of childKeys) {
-                // Editable fields inside a stack child render read-only
-                cols.push(legacyColumn(resolved, resolved.fieldMap.get(childKey), { stackUnder: parentKey, editable: false, cellEditable: false }));
-            }
-        }
-        for (const field of resolved.details) {
-            cols.push(legacyColumn(resolved, field, { details: true, editable: false, cellEditable: false }));
-        }
-        return cols;
-    }
-    if (resolved.layout === 'calendar') {
-        const chip = resolved.calendar?.chip || [];
-        if (chip.length > 2) devWarn(`view "${resolved.viewId}": the calendar shows at most two chip lines until Phase 5`);
-        const placed = new Set();
-        chip.slice(0, 2).forEach((line, i) => {
-            for (const key of line) {
-                placed.add(key);
-                cols.push(legacyColumn(resolved, resolved.fieldMap.get(key), i === 0 ? { firstRow: true } : { secondRow: true }));
-            }
-        });
-        for (const field of resolved.fields) {
-            if (placed.has(field.key) || resolved.hidden.has(field.key)) continue;
-            cols.push(legacyColumn(resolved, field, { details: true }));
-        }
-        return cols;
-    }
-    for (const field of resolved.fields) {
-        if (resolved.hidden.has(field.key)) continue;
-        cols.push(legacyColumn(resolved, field));
-    }
-    return cols;
 }
 
 /** Search tiers for matchRow: shown and details keys (hidden fields are never searched). */

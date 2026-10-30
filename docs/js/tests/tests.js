@@ -31,7 +31,7 @@ import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, FakeGoogleSheetsService, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { isCheckedValue } from '../data_management/abstraction/instant-write-utils.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
-import { resolveView, resolveAction, toLegacyColumns, pickView, mergeView, matchesKeyPattern, setViewWarningHandler } from '../application/utils/views/resolveView.js';
+import { resolveView, resolveAction, pickView, mergeView, matchesKeyPattern, setViewWarningHandler } from '../application/utils/views/resolveView.js';
 import { SEARCH_LIMITS, searchWords, matchRow, matchRows } from '../application/utils/views/searchMatch.js';
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
 import { rowsToCards, bucketRowsToCards } from '../application/utils/views/cardsAdapter.js';
@@ -1515,7 +1515,7 @@ test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
 });
 
 // ── Views system: pure functions (views-and-renderers-plan §4) ───────────────
-// resolveView / resolveAction / toLegacyColumns, the shared search matcher, value formatting,
+// resolveView / resolveAction, the shared search matcher, value formatting,
 // colour rules and size tiers. These are pure and run without the DOM; they lock in the
 // contracts every renderer relies on.
 
@@ -1633,20 +1633,19 @@ test('VIEWS ENGINE', 'pickView: view param, legacy layout fallback, unknown id �
     });
 });
 
-test('VIEWS ENGINE', 'toLegacyColumns: stacks become stackUnder, details flagged, hidden omitted', async () => {
-    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE));
-    const cols = toLegacyColumns(r);
-    const recv = cols.find(c => c.key === 'Recieved');
-    assertEqual(recv.stackUnder, 'Ship', 'stackUnder');
-    assertEqual(recv.editable, false, 'stack child read-only');
-    assertEqual(cols.find(c => c.key === 'Year').details, true, 'details flag');
-    assertEqual(cols.some(c => c.key === 'AppData'), false, 'hidden omitted');
-    assertEqual(cols.find(c => c.key === 'Ship').width, 120, 'style width');
-    assertEqual(typeof cols.find(c => c.key === 'Ship').cellClass, 'function', 'colour → cellClass');
+test('VIEWS ENGINE', 'resolved output: stacked lines, style, sticky, colour rules, hidden omitted', async () => {
+    const view = { ...V_TABLE, table: { sticky: { start: ['Show'] } } };
+    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, view));
+    const ship = r.slots.find(s => s.key === 'Ship');
+    assertEqual(ship.lines, [['Ship'], ['Recieved']], 'stack lines');
+    assertEqual([ship.width, ship.color], [120, 'auto'], 'slot style');
+    assertEqual(r.slots.find(s => s.key === 'Show').sticky, 'start', 'sticky');
+    assertEqual(r.slots.some(s => s.key === 'AppData'), false, 'hidden omitted');
+    assertEqual(r.shown.includes('Recieved'), true, 'stacked keys are shown');
     const { result: cal } = withViewWarnings(() => resolveView(V_FIELDS, V_CAL));
-    const ccols = toLegacyColumns(cal);
-    assertEqual(ccols.filter(c => c.firstRow).map(c => c.key), ['Show', 'Client'], 'firstRow');
-    assertEqual(ccols.filter(c => c.secondRow).map(c => c.key), ['City', 'Size'], 'secondRow');
+    assertEqual(cal.calendar.chip, [['Show', 'Client'], ['City', 'Size']], 'chip lines');
+    const legacy = withViewWarnings(() => resolveView([{ key: 'a', width: 50 }], { id: 'l', layout: 'table' }));
+    assertEqual([legacy.result.style.a, legacy.warnings.length > 0], [undefined, true], 'legacy field props ignored with a warning');
 });
 
 test('VIEWS ACTION', 'page action wins, then details, then none', async () => {

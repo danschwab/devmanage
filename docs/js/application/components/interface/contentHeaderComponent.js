@@ -1,5 +1,5 @@
 import { html } from '../../utils/template-helpers.js';
-import { LoadingBarComponent, ViewChangeComponent } from '../../index.js';
+import { LoadingBarComponent } from '../../index.js';
 import { SearchBoxComponent } from '../../utils/useSearch.js';
 import { ViewSelectComponent } from './viewSelectComponent.js';
 
@@ -10,11 +10,11 @@ import { ViewSelectComponent } from './viewSelectComponent.js';
  * Sticky positioning stays in each renderer; this component only draws the bar.
  *
  * View switching: `viewSelect` ({ views, currentId, defaultId, containerPath, navigateToPath }) renders
- * ViewSelectComponent. The legacy `viewModes` toggle (ViewChangeComponent) remains until Phase 5.
+ * ViewSelectComponent (the page view registry's switcher).
  */
 export const ContentHeaderComponent = {
     name: 'ContentHeaderComponent',
-    components: { LoadingBarComponent, ViewChangeComponent, SearchBoxComponent, ViewSelectComponent },
+    components: { LoadingBarComponent, SearchBoxComponent, ViewSelectComponent },
     props: {
         theme: { type: String, default: '' },
         // Search
@@ -30,9 +30,6 @@ export const ContentHeaderComponent = {
         dirty: { type: Boolean, default: false },
         // View switching
         viewSelect: { type: Object, default: null },
-        viewModes: { type: Array, default: null },
-        containerPath: { type: String, default: '' },
-        navigateToPath: { type: Function, default: null },
         // Embedded loading bar (calendar, cards). The table draws its own bar outside the header.
         embeddedLoading: { type: Boolean, default: false },
         isAnalyzing: { type: Boolean, default: false },
@@ -45,11 +42,8 @@ export const ContentHeaderComponent = {
         showViewSelect() {
             return !!(this.viewSelect && this.viewSelect.views && this.viewSelect.views.length > 1 && this.viewSelect.containerPath);
         },
-        showViewModes() {
-            return !this.showViewSelect && !!(this.viewModes && this.containerPath && this.navigateToPath);
-        },
         hasButtons() {
-            return this.alwaysShowButtons || this.showSearch || this.showRefresh || this.showViewSelect || this.showViewModes
+            return this.alwaysShowButtons || this.showSearch || this.showRefresh || this.showViewSelect
                 || !!this.$slots.actions || !!this.$slots['actions-end'];
         }
     },
@@ -82,12 +76,6 @@ export const ContentHeaderComponent = {
                     :default-id="viewSelect.defaultId"
                     :container-path="viewSelect.containerPath"
                     :navigate-to-path="viewSelect.navigateToPath"
-                />
-                <ViewChangeComponent
-                    v-else-if="showViewModes"
-                    :container-path="containerPath"
-                    :navigate-to-path="navigateToPath"
-                    :view-modes="viewModes"
                 />
             </div>
             <LoadingBarComponent

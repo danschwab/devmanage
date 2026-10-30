@@ -253,7 +253,9 @@ export const CellRenderer = {
         cellSlot: { type: Function, default: null },
         editable: { type: Boolean, default: false },
         commit: { type: Function, default: null },
-        disabled: { type: String, default: '' }
+        disabled: { type: String, default: '' },
+        // Extra scope for the page's #cell slot (e.g. rowIndex, onInnerTableDirty in PacklistTable)
+        cellScope: { type: Object, default: null }
     },
     render() {
         const h = Vue.h;
@@ -264,7 +266,7 @@ export const CellRenderer = {
             return h(comp, { row, field, value, renderer, density, searchTerm, highlight, theme, editable, commit, disabled });
         }
         if (field.cell === 'slot' && this.cellSlot) {
-            return this.cellSlot({ row, field, value, renderer, density });
+            return this.cellSlot({ ...(this.cellScope || {}), row, field, value, renderer, density });
         }
         let text;
         if (highlight) {

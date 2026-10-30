@@ -53,7 +53,7 @@ export const InventoryMenuComponent = {
     props: {
         containerPath: String,
         containerType: String, 
-        currentView: String,
+        currentSegment: String,
         title: String,
         refreshCallback: Function,
         navigateToPath: Function,

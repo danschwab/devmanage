@@ -8,7 +8,7 @@ export const ScheduleMenuComponent = {
     props: {
         containerPath: String,
         containerType: String,
-        currentView: String,
+        currentSegment: String,
         title: String,
         navigateToPath: Function
     },

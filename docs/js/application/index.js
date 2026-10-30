@@ -13,7 +13,7 @@ export { undoRegistry, setTableRowSelectionState } from './utils/undoRegistry.js
 export { getAutoColorClass, shouldAutoColor } from './utils/autoColor.js';
 
 // Navigation components
-export { BreadcrumbComponent, PrimaryNavComponent, ViewChangeComponent } from './components/interface/navigationComponents.js';
+export { BreadcrumbComponent, PrimaryNavComponent } from './components/interface/navigationComponents.js';
 export { NavigationRegistry } from './utils/navigationSystem.js';
 
 // Interface components export

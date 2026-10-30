@@ -71,7 +71,6 @@ export const CardsComponent = {
         syncSearchWithUrl: { type: Boolean, default: false },
         containerPath: { type: String, default: '' },
         navigateToPath: { type: Function, default: null },
-        viewModes: { type: Array, default: null },
         viewSelect: { type: Object, default: null },
         hideCardsOnSearch: { type: Boolean, default: true },
         showPinButtons: { type: Boolean, default: false },
@@ -461,9 +460,6 @@ export const CardsComponent = {
                     :show-refresh="showRefresh"
                     :is-loading="isLoading"
                     :view-select="viewSelect"
-                    :view-modes="viewModes"
-                    :container-path="containerPath"
-                    :navigate-to-path="navigateToPath"
                     :embedded-loading="true"
                     :is-analyzing="isAnalyzing"
                     :loading-progress="loadingProgress"

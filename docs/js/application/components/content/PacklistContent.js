@@ -9,7 +9,7 @@ export const PacklistMenuComponent = {
     props: {
         containerPath: String,
         containerType: String,
-        currentView: String,
+        currentSegment: String,
         title: String,
         refreshCallback: Function,
         navigateToPath: Function
@@ -32,7 +32,7 @@ export const PacklistMenuComponent = {
         menuItems() {
             const items = [];
             
-            switch (this.currentView) {
+            switch (this.currentSegment) {
                 default:
                     // Show duplicate option only when viewing a specific packlist (not on reserved pages like pins)
                     if (this.isViewingSpecificPacklist && this.currentPacklistName !== 'pins') {
@@ -484,8 +484,8 @@ export const PacklistContent = {
             const cleanPath = this.containerPath.split('?')[0];
             return cleanPath.split('/').filter(segment => segment.length > 0);
         },
-        currentView() {
-            // For packlist paths, the view is always 'packlist'
+        currentSegment() {
+            // Last path segment for packlist paths is always the section (not a view; see views-and-renderers-plan)
             return 'packlist';
         },
         currentPacklist() {
