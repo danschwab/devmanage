@@ -920,11 +920,12 @@ test('INVENTORY TAB AND INDEX', 'InventoryCustomItemNumbers preference contains 
     assertContains(tabs, 'HARDWARE', 'InventoryCustomItemNumbers must include HARDWARE');
 });
 
-test('INVENTORY TAB AND INDEX', 'getInventoryHiddenSearchData FURNITURE includes TABLE-001 item number', async () => {
-    const fields = await Requests.getInventoryHiddenSearchData('FURNITURE');
-    if (!Array.isArray(fields)) throw new Error('expected array from getInventoryHiddenSearchData');
-    const entry = fields.find(f => f.fieldName === 'Item#' && f.value === 'TABLE-001');
-    if (!entry) throw new Error('TABLE-001 item# field not found in FURNITURE hidden search data');
+test('INVENTORY TAB AND INDEX', 'category cards search item rows: getAllInventoryData has TABLE-001 in FURNITURE', async () => {
+    // Category cards bucket the overview rows by tab and search them directly (views plan R2.12, D7)
+    const rows = await Requests.getAllInventoryData(todayISOString());
+    if (!Array.isArray(rows)) throw new Error('expected array from getAllInventoryData');
+    const entry = rows.find(r => r.itemNumber === 'TABLE-001');
+    if (!entry || String(entry.tab).toUpperCase() !== 'FURNITURE') throw new Error('TABLE-001 not found in FURNITURE rows');
 });
 
 // ── Group 23: Item Details ────────────────────────────────────────────────────
