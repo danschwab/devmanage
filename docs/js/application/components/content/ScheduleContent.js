@@ -31,7 +31,7 @@ export const ScheduleMenuComponent = {
                     }
                     break;
                 case 'manageTransshipments':
-                    this.$modal.custom(TransshipmentModal, { modalClass: 'page-menu' }, 'Manage Transshipments');
+                    this.$modal.custom(TransshipmentModal, { size: 'page', tall: true }, 'Manage Transshipments');
                     break;
                 case 'advancedSearch':
                     if (this.navigateToPath) {

@@ -882,7 +882,8 @@ export const PacklistTable = {
             // Show the inventory selector modal
             this.$modal.custom(InventorySelectorModal, {
                 onItemSelected: (item) => this.addItemFromInventory(crateIdx, item, position),
-                modalClass: 'page-menu',
+                size: 'page',
+                tall: true,
                 onAddEmpty: () => this.addEmptyItem(crateIdx, position),
                 tabName
             }, 'Add Item');
@@ -1231,7 +1232,8 @@ export const PacklistTable = {
                     if (!item?.AppData) return;
                     delete item.AppData.cadSourceAlert;
                 },
-                modalClass: 'reading-menu'
+                modalClass: 'reading-menu',
+                size: 'wide'
             }, 'CAD Source Change');
         },
 
@@ -1293,7 +1295,8 @@ export const PacklistTable = {
                     const newDescription = `(${extractedQty}) ${itemNumber} ${inventoryDescription}`;
                     this.applyItemChanges(item, [{ n: 'Description', o: newDescription }], 'descriptionAlert');
                 },
-                modalClass: 'reading-menu'
+                modalClass: 'reading-menu',
+                size: 'wide'
             }, `${itemNumber}`);
         },
 

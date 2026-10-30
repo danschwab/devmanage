@@ -424,13 +424,13 @@ const App = {
             if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
                 event.preventDefault();
                 const alert = undoRegistry.undo();
-                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, '');
             }
             // Ctrl+Y or Ctrl+Shift+Z or Cmd+Shift+Z for redo
             else if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.shiftKey && event.key === 'z'))) {
                 event.preventDefault();
                 const alert = undoRegistry.redo();
-                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, '');
             }
         },
     },
@@ -553,6 +553,8 @@ const App = {
                         :is-visible="modal.isVisible"
                         :components="modal.components"
                         :modal-class="modal.modalClass"
+                        :size="modal.size"
+                        :tall="modal.tall"
                         :message="modal.message"
                         :content-class="modal.contentClass"
                         :component-props="modal.componentProps"

@@ -838,7 +838,7 @@ export const ScheduleAdvancedFilter = {
                 `
             };
 
-            this.$modal.custom(ShowOverlapModalComponent, {modalClass: 'page-menu'}, 'Select Show for Overlap', { size: 'large' });
+            this.$modal.custom(ShowOverlapModalComponent, { size: 'page', tall: true }, 'Select Show for Overlap');
         }
     },
     template: html`
@@ -1603,7 +1603,8 @@ export const ScheduleFilterSelect = {
             // Open the advanced search component in a modal
             const modal = this.$modal.custom(ScheduleAdvancedFilter, {
                 containerPath: this.containerPath,
-                modalClass: 'page-menu',
+                size: 'page',
+                tall: true,
                 navigateToPath: this.navigateToPath,
                 onSearchSelected: (searchData) => {
                     this.$emit('search-selected', searchData);

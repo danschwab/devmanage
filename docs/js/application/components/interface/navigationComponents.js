@@ -1,5 +1,6 @@
 import { html, NavigationRegistry, appSettings, runNonessentialAnalysisOnAllStores } from '../../index.js';
 import { PriorityQueue } from '../../utils/priorityQueue.js';
+import { viewportTier } from '../../utils/useContainerSize.js';
 
 // Settings Menu Component
 const SettingsMenuComponent = {
@@ -100,8 +101,8 @@ export const PrimaryNavComponent = {
             return this.isDarkMode ? 'assets/logoW.png' : 'assets/logo.png';
         },
         isMobileView() {
-            // Mobile view is max-width: 800px
-            return window.innerWidth <= 800;
+            // Compact chrome: viewport medium and narrow tiers (size model §4.10, R4.4)
+            return viewportTier(window.innerWidth) !== 'wide';
         },
         onlyEssentialAnalysis() {
             return appSettings.onlyRunEssentialAnalysis;
@@ -126,7 +127,8 @@ export const PrimaryNavComponent = {
     methods: {
         openSettingsMenu() {
             this.$modal.custom(SettingsMenuComponent, {
-                modalClass: 'hamburger-menu small-menu',
+                modalClass: 'hamburger-menu',
+                size: 'card',
                 darkMode: this.darkMode,
                 onlyEssentialAnalysis: this.onlyEssentialAnalysis,
                 showDashboardHeaders: this.showDashboardHeaders,

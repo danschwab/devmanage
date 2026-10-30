@@ -193,7 +193,7 @@ export const PacklistMenuComponent = {
             
             this.$modal.custom(
                 CreatePacklistModalContent,
-                { modalClass: 'page-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
+                { size: 'page', tall: true, navigateToPath: parentNavigateToPath, templateName: templateName },
                 templateName === '_TEMPLATE' ? 'Create Show Packlist' : 'Duplicate Packlist Attached to Show'
             );
         },
@@ -287,7 +287,7 @@ export const PacklistMenuComponent = {
             
             this.$modal.custom(
                 CustomPacklistModalContent,
-                { modalClass: 'reading-menu', navigateToPath: parentNavigateToPath, templateName: templateName },
+                { modalClass: 'reading-menu', size: 'wide', navigateToPath: parentNavigateToPath, templateName: templateName },
                 templateName === '_TEMPLATE' ? 'Create Custom Packlist' : 'Duplicate As Custom Packlist'
             );
         },
@@ -348,6 +348,7 @@ export const PacklistMenuComponent = {
                 DuplicateChoiceModalContent,
                 { 
                     modalClass: 'reading-menu',
+                    size: 'wide',
                     currentPacklist: currentPacklist,
                     openShowPacklistModal: this.openCreatePacklistModal.bind(this),
                     openCustomPacklistModal: this.openCreateCustomPacklistModal.bind(this)

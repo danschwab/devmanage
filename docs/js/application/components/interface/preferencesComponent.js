@@ -182,7 +182,7 @@ export const PreferencesMenuComponent = {
                 PreferencesEditModal,
                 {
                     preferences: this.matchingPreferences,
-                    modalClass: 'small-menu',
+                    size: 'card',
                     onSaved: (editValues) => this.savePreferences(editValues)
                 },
                 'Edit Global Parameters'

@@ -482,7 +482,7 @@ export const InventoryItemReport = {
         },
 
         openOverlappingShowsModal(shows) {
-            this.$modal.custom(OverlappingShowsModal, { shows, modalClass: 'hamburger-menu small-menu' }, `${shows.length} Overlapping Shows`, { modalClass: 'hamburger-menu' });
+            this.$modal.custom(OverlappingShowsModal, { shows, modalClass: 'hamburger-menu', size: 'card' }, `${shows.length} Overlapping Shows`);
         },
 
         showsMatchSearch(shows) {

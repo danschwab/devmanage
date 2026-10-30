@@ -6,7 +6,7 @@ import { buildScheduleFields } from '../../../data_management/abstraction/schedu
 /**
  * Schedule page view registry (views-and-renderers-plan §4.3). Presentation only: which fields
  * show where, widths, colours and the action trigger. Fields come from scheduleFields.js.
- * Phase 1 reproduces today's columns; the narrow variant ships with the size model (Phase 6).
+ * The table reproduces the original columns; narrow containers stack Client under Show (Phase 6).
  */
 const SCHEDULE_VIEWS = {
     id: 'schedule',
@@ -27,6 +27,12 @@ const SCHEDULE_VIEWS = {
                 'S. Start': { width: 120 },
                 'Ship': { width: 120, color: 'auto' },
                 'packlist': { width: 120 }
+            },
+            variants: {
+                // Narrow containers (phone, 360px dashboard card): stack Client under Show; City and Size move to details
+                narrow: {
+                    columns: [['Show', 'Client'], ['Ship', 'Recieved'], ['S. Start', 'S. End'], 'packlist']
+                }
             },
             action: 'button'
         },
@@ -564,7 +570,8 @@ export const ScheduleTableComponent = {
             this.$modal.custom(TransshipmentModal, {
                 preselectedRow: originalRow,
                 preselectedDirection: direction,
-                modalClass: 'page-menu'
+                size: 'page',
+                tall: true
             }, 'Set Transshipment');
         },
         async removeTransshipTo(row) {

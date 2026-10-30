@@ -708,7 +708,8 @@ export const ItemImageComponent = {
                 this.$modal.custom(ImageViewWithReplaceComponent, {
                     thumbnailUrl: this.imageUrl,
                     itemNumber: this.itemNumber,
-                    modalClass: 'page-menu',
+                    size: 'page',
+                    tall: true,
                     onReplace: (this.editable && this.itemNumber) ? () => this.showUploadModal() : null
                 }, `Image: ${this.itemNumber}`);
             }
@@ -1158,7 +1159,7 @@ export const InventoryTableComponent = {
                 onConfirm: (itemNumber) => {
                     this.addNewRow(itemNumber, positionData);
                 },
-                modalClass: ''
+                size: 'card'
             }, 'New Item');
         },
         

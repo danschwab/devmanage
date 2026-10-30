@@ -1,7 +1,7 @@
 import { html, NavigationRegistry, TableComponent, CalendarComponent, CardsComponent } from '../../index.js';
 import { resolveView, resolveAction, pickView, devWarn, searchTiers } from '../../utils/views/resolveView.js';
 import { rowsToCards, bucketRowsToCards } from '../../utils/views/cardsAdapter.js';
-import { rowColorFor } from '../../utils/views/viewColor.js';
+import { useContainerSize } from '../../utils/useContainerSize.js';
 import { RowDetailsModal } from './rowDetailsComponent.js';
 import { isCheckedValue } from '../../../data_management/utils/checkbox-values.js';
 
@@ -36,7 +36,8 @@ const REMOVED_PRESENTATION_PROPS = [
  * resolves it, resolves the primary action, and renders the renderer for the view's layout.
  * Everything else ($attrs: loading state, search options, listeners) and every slot is forwarded.
  *
- * Size: always 'wide' until Phase 6 switches to useContainerSize() together with the CSS (R6.4).
+ * Size: the container tier of the nearest size container (useContainerSize, same thresholds as
+ * the CSS @container rules), so view variants and CSS switch together (R6.4).
  *
  * Instant edit mode (§4.16): registry cells emit cell-commit(row, key, value). DataView shows the
  * value at once on a local overlay, holds the write for INSTANT_WRITE_DELAY_MS (restarting on
@@ -122,7 +123,7 @@ export const DataView = {
             return pickView(this.registry, this.containerPath ? this.urlParams : {});
         },
         size() {
-            return 'wide';
+            return this._containerSize ? this._containerSize.tier.value : 'wide';
         },
         resolved() {
             const opts = { size: this.size, print: this.printing, patches: this.patches, editMode: this.editMode, theme: this.registry?.theme || '' };
@@ -205,10 +206,12 @@ export const DataView = {
         }
     },
     created() {
+        this._containerSize = useContainerSize();
         const removed = Object.keys(this.$attrs || {}).filter(k => REMOVED_PRESENTATION_PROPS.includes(k));
         if (removed.length) devWarn(`registry "${this.registry?.id}": removed presentation props passed to DataView (${removed.join(', ')}); presentation comes from the view`);
     },
     mounted() {
+        this._containerSize.observe(this.$el instanceof Element ? this.$el : this.$el?.nextElementSibling);
         this._onBeforeUnload = (e) => {
             if (!this.hasQueuedWrites) return;
             this.flushAll();
@@ -219,6 +222,7 @@ export const DataView = {
         window.addEventListener('beforeunload', this._onBeforeUnload);
     },
     beforeUnmount() {
+        this._containerSize?.stop();
         window.removeEventListener('beforeunload', this._onBeforeUnload);
         // In-app navigation: write queued edits now
         this.flushAll();
@@ -365,7 +369,8 @@ export const DataView = {
                 cellSlot: this.$slots.cell || null,
                 searchTerm: ctx.searchTerm || '',
                 theme: r.theme,
-                modalClass: 'event-detail'
+                modalClass: 'details-modal',
+                size: 'page'
             }, String(title));
         }
     },

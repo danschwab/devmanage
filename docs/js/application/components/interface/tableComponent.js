@@ -3391,14 +3391,14 @@ export const TableComponent = {
         handleUndo() {
             if (this.canUndo) {
                 const alert = undoRegistry.undo();
-                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, '');
             }
         },
         
         handleRedo() {
             if (this.canRedo) {
                 const alert = undoRegistry.redo();
-                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, 'small-menu');
+                if (alert) modalManager.confirm(alert, () => {}, null, 'Note', 'OK', null, '');
             }
         },
         

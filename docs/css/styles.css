@@ -637,13 +637,33 @@ button.card {
     text-align: center;
 }
 
+/*
+ * Modal size tiers (views-and-renderers-plan §4.17). The content box is exactly the tier width,
+ * so container queries inside a modal see the same tiers as pages and dashboard cards:
+ *   card 360px (narrow) · wide 750px (medium) · page min(viewport, 1000px) (wide) · auto (images)
+ * Every size is capped at the viewport (minus the modal margin, border and content padding).
+ * Layout classes add content padding through --modal-pad (reading-menu, details-modal).
+ */
 .modal > .content {
     container-name: container-component;
     container-type: inline-size;
 
-    min-width: var(--page-width-card);
+    box-sizing: content-box;
+    padding: var(--modal-pad, 0px);
+    width: min(var(--modal-width, 360px), calc(100vw - 2 * var(--padding-md) - 2px - 2 * var(--modal-pad, 0px)));
     max-height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
     overflow: auto;
+}
+.modal.size-card { --modal-width: 360px; }
+.modal.size-wide { --modal-width: 750px; }
+.modal.size-page { --modal-width: 1000px; }
+.modal.size-auto > .content {
+    width: auto;
+    max-width: calc(100vw - 2 * var(--padding-md) - 2px - 2 * var(--modal-pad, 0px));
+}
+/* Fixed viewport height, like the dashboard .tall card */
+.modal.tall > .content {
+    height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
 }
 
 /* Hamburger Menu & Other Specific Modal Styles */
@@ -652,7 +672,6 @@ button.card {
     display: flex;
     flex-direction: column;
     gap: var(--padding-md);
-    min-width: min(480px, var(--page-width-card));
 }
 
 .page-note-edit-field {
@@ -668,25 +687,17 @@ button.card {
 
 
 
-.page-menu > .content {
-    min-width: var(--page-width-small);
-    height: calc(100vh - var(--padding-lg) * 4 - var(--padding-md) * 1);
-}
-.small-menu > .content {
-    max-width: var(--page-width-card);
+/* Layout classes (width comes only from the size tier) */
+.reading-menu {
+    --modal-pad: var(--padding-lg);
 }
 .reading-menu > .content {
     display: flex;
     flex-direction: column;
     gap: var(--padding-lg);
-    padding: var(--padding-lg);
 }
-.event-detail > .content {
-    padding: var(--padding-md);
-    min-width: min(90vw, var(--page-width-large));
-}
-.hamburger-menu >.content {
-     width: var(--page-width-card);
+.details-modal {
+    --modal-pad: var(--padding-md);
 }
 
 
@@ -1899,7 +1910,9 @@ button.search-highlight {
 
 
 
-@media (max-width: 800px) {
+/* Compact chrome: viewport medium and narrow, width < calc(BREAKPOINTS.wide + 2 * gutterFull).
+   Chrome only — content adapts through container queries (@container container-component). */
+@media (width < calc(1000px + 2 * 12px)) {
     :root {
         font-size: 10pt;
     }
@@ -1994,42 +2007,44 @@ button.search-highlight {
         min-height: 28px;
     }
 
-    .container.dashboard-card.wide {
-        width: var(--page-width-card);
-        grid-column: span 1;
-    }
-
-    .cards-grid {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .cards-grid .card {
-        width: 100%;
-        height: auto;
-    }
-
-    .hide-when-narrow {
-        display: none !important;
-    }
-    .show-when-narrow {
-        display: revert;
-    }
-
-    button,
-    input[type="submit"],
-    input[type="button"],
-    input[type="text"],
-    select,
-    .input-container,
-    .form-group {
+    /* Collapsible primary navigation: full-width controls */
+    header button,
+    header input[type="submit"],
+    header input[type="button"],
+    header input[type="text"],
+    header select,
+    header .input-container,
+    header .form-group {
         width: 100%;
         flex-grow: 1;
     }
 
+    /* Dashboard (medium): double-wide cards are min(750px, 100%) and span every column that fits */
+    .container.dashboard-card.wide {
+        width: min(calc(var(--padding-lg) + var(--page-width-card) * 2), 100%);
+        grid-column: 1 / -1;
+    }
+}
+
+/* Narrow viewport: width < calc(BREAKPOINTS.narrow + 2 * gutterCompact). Full-width dashboard
+   cards; double-wide cards collapse to one column. */
+@media (width < calc(600px + 2 * 8px)) {
+    .container.dashboard-card.wide {
+        width: var(--page-width-card);
+        grid-column: span 1;
+    }
+}
+
+/* Medium container tier (width < BREAKPOINTS.wide): visual changes for medium and narrow content.
+   Structural changes use view variants (variants.medium / variants.narrow). */
+@container container-component (width < 1000px) {
+    .hide-when-medium {
+        display: none !important;
+    }
 }
 
 
+/* Narrow container tier (width < BREAKPOINTS.narrow) */
 @container container-component (width < 600px) {
 
     .cards-grid {
