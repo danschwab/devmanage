@@ -31,6 +31,13 @@ import { Requests } from '../data_management/api.js';
 import { FakeGoogleSheetsAuth, FakeGoogleSheetsService, setFakeDelaysEnabled } from '../google_sheets_services/FakeGoogle.js';
 import { isCheckedValue } from '../data_management/abstraction/instant-write-utils.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll } from '../data_management/index.js';
+import { resolveView, resolveAction, toLegacyColumns, pickView, mergeView, matchesKeyPattern, setViewWarningHandler } from '../application/utils/views/resolveView.js';
+import { SEARCH_LIMITS, searchWords, matchRow, matchRows } from '../application/utils/views/searchMatch.js';
+import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
+import { rowsToCards, bucketRowsToCards } from '../application/utils/views/cardsAdapter.js';
+import { applyColorRule, colorFor, rowColorFor } from '../application/utils/views/viewColor.js';
+import { containerTier, viewportTier, BREAKPOINTS } from '../application/utils/useContainerSize.js';
+import { todayISOString } from '../data_management/utils/helpers.js';
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
@@ -1505,6 +1512,247 @@ test('PREFERENCES', 'schedule prefs have page "schedule*"', async () => {
     for (const p of schedulePrefs) {
         if (p.page !== 'schedule*') throw new Error(`expected page "schedule*" for ${p.id}, got "${p.page}"`);
     }
+});
+
+// ── Views system: pure functions (views-and-renderers-plan §4) ───────────────
+// resolveView / resolveAction / toLegacyColumns, the shared search matcher, value formatting,
+// colour rules and size tiers. These are pure and run without the DOM; they lock in the
+// contracts every renderer relies on.
+
+const V_FIELDS = ['Show', 'Client', 'Ship', 'Recieved', 'S. Start', 'S. End', 'City', 'Size', 'Year', 'Booth#', 'AppData', 'packlist']
+    .map(key => ({ key, label: key }));
+const V_TABLE = {
+    id: 'table', layout: 'table',
+    columns: ['Show', 'Client', ['Ship', 'Recieved'], ['S. Start', 'S. End'], 'City', 'Size', 'packlist'],
+    style: { Ship: { color: 'auto', width: 120 }, 'S*': { font: 'narrow' } },
+    variants: { narrow: { columns: [['Show', 'Client'], ['Ship', 'Recieved'], ['S. Start', 'S. End'], 'packlist'] } }
+};
+const V_CAL = { id: 'calendar', layout: 'calendar', calendar: { start: 'S. Start', end: 'S. End', chip: [['Show', 'Client'], ['City', 'Size']] } };
+
+function withViewWarnings(fn) {
+    const warnings = [];
+    setViewWarningHandler(m => warnings.push(m));
+    try { return { result: fn(), warnings }; } finally { setViewWarningHandler(null); }
+}
+
+test('VIEWS ENGINE', 'tiers: columns shown, unlisted to details (rest), AppData always hidden', async () => {
+    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE));
+    assertEqual(r.slots.map(s => s.lines), [[['Show']], [['Client']], [['Ship'], ['Recieved']], [['S. Start'], ['S. End']], [['City']], [['Size']], [['packlist']]], 'slots');
+    assertEqual(r.details.map(f => f.key), ['Year', 'Booth#'], 'details rest');
+    assertEqual(r.hidden.has('AppData'), true, 'AppData hidden');
+    assertEqual(r.hasDetails, true, 'hasDetails');
+});
+
+test('VIEWS ENGINE', 'hidden list removes fields from every tier; hidden rest hides unlisted', async () => {
+    const { result: r1 } = withViewWarnings(() => resolveView(V_FIELDS, { ...V_TABLE, hidden: ['Year'] }));
+    assertEqual(r1.details.map(f => f.key), ['Booth#'], 'Year hidden');
+    const { result: r2 } = withViewWarnings(() => resolveView(V_FIELDS, { ...V_TABLE, details: ['Year'], hidden: 'rest' }));
+    assertEqual(r2.details.map(f => f.key), ['Year'], 'explicit details');
+    assertEqual(r2.hidden.has('Booth#'), true, 'Booth# hidden by rest');
+});
+
+test('VIEWS ENGINE', 'first tier wins on duplicates and unknown keys are ignored with a warning', async () => {
+    const { result: r, warnings } = withViewWarnings(() => resolveView(V_FIELDS, { id: 'x', layout: 'table', columns: ['Show', 'Nope', 'Show'], details: ['Show', 'Year'] }));
+    assertEqual(r.slots.map(s => s.key), ['Show'], 'Show once');
+    assertEqual(r.details.map(f => f.key).includes('Show'), false, 'Show not in details');
+    if (!warnings.some(w => w.includes('"Nope"'))) throw new Error('expected unknown-key warning');
+    if (!warnings.some(w => w.includes('duplicate key "Show"'))) throw new Error('expected duplicate warning');
+});
+
+test('VIEWS ENGINE', 'narrow variant replaces columns; medium/wide keep them', async () => {
+    const { result: wide } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE, { size: 'wide' }));
+    const { result: medium } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE, { size: 'medium' }));
+    const { result: narrow } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE, { size: 'narrow' }));
+    assertEqual(wide.slots.length, 7, 'wide');
+    assertEqual(medium.slots.length, 7, 'medium');
+    assertEqual(narrow.slots[0].lines, [['Show'], ['Client']], 'narrow stacks Client under Show');
+    assertEqual(narrow.details.map(f => f.key).includes('City'), true, 'City moves to details when narrow');
+});
+
+test('VIEWS ENGINE', 'patches apply after variants and respect sizes', async () => {
+    const patches = [{ patch: { columns: ['Client', 'Show'] }, sizes: ['narrow'] }, { patch: { hidden: ['Booth#'] } }];
+    const { result: wide } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE, { size: 'wide', patches }));
+    const { result: narrow } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE, { size: 'narrow', patches }));
+    assertEqual(wide.slots.length, 7, 'narrow-only patch ignored when wide');
+    assertEqual(wide.hidden.has('Booth#'), true, 'all-size patch applied');
+    assertEqual(narrow.slots.map(s => s.key), ['Client', 'Show'], 'narrow patch applied');
+});
+
+test('VIEWS ENGINE', 'print variant applies last (PacklistTable items: Pack/Check shown when printing)', async () => {
+    const fields = ['Pack', 'Check', 'Description', 'Packing/shop notes'].map(key => ({ key }));
+    const view = { id: 'items', layout: 'table', hidden: ['Pack', 'Check'], variants: { narrow: { hidden: ['Pack', 'Check', 'Packing/shop notes'] }, print: { hidden: [] } } };
+    const screen = withViewWarnings(() => resolveView(fields, view)).result;
+    const printed = withViewWarnings(() => resolveView(fields, view, { print: true, size: 'narrow' })).result;
+    assertEqual(screen.slots.map(s => s.key), ['Description', 'Packing/shop notes'], 'screen');
+    assertEqual(printed.slots.map(s => s.key), ['Pack', 'Check', 'Description', 'Packing/shop notes'], 'print wins over narrow');
+});
+
+test('VIEWS ENGINE', 'mergeView merges objects deeply and replaces arrays', async () => {
+    const merged = mergeView({ a: { b: 1, c: [1, 2] }, d: 1 }, { a: { c: [3] }, e: 2 });
+    assertEqual(merged, { a: { b: 1, c: [3] }, d: 1, e: 2 }, 'merge');
+});
+
+test('VIEWS ENGINE', 'key patterns expand in lists and style', async () => {
+    const fields = ['itemId', 'show_A', 'show_B', 'qty'].map(key => ({ key }));
+    const { result: r } = withViewWarnings(() => resolveView(fields, { id: 'p', layout: 'table', columns: ['itemId', 'show_*'], style: { 'show_*': { columnColor: 'striped gray' }, show_B: { width: 50 } } }));
+    assertEqual(r.slots.map(s => s.key), ['itemId', 'show_A', 'show_B'], 'pattern columns');
+    assertEqual(r.style.show_B, { columnColor: 'striped gray', width: 50 }, 'pattern + exact style');
+    assertEqual(matchesKeyPattern('show_*', 'show_X'), true, 'pattern match');
+    assertEqual(matchesKeyPattern('show', 'show_X'), false, 'exact');
+});
+
+test('VIEWS ENGINE', 'table without columns shows every non-placed field', async () => {
+    const { result: r } = withViewWarnings(() => resolveView([{ key: 'a' }, { key: 'b' }, { key: 'c' }], { id: 'all', layout: 'table', hidden: ['c'] }));
+    assertEqual(r.slots.map(s => s.key), ['a', 'b'], 'all shown');
+    assertEqual(r.hasDetails, false, 'no details');
+});
+
+test('VIEWS ENGINE', "action 'row' falls back to 'button' when editMode is not none", async () => {
+    const { result: r, warnings } = withViewWarnings(() => resolveView(V_FIELDS, { ...V_TABLE, action: 'row' }, { editMode: 'batch' }));
+    assertEqual(r.trigger, 'button', 'trigger');
+    if (!warnings.some(w => w.includes("action 'row'"))) throw new Error('expected warning');
+    const { result: r2 } = withViewWarnings(() => resolveView(V_FIELDS, { ...V_TABLE, action: 'row' }));
+    assertEqual(r2.trigger, 'row', 'row allowed read-only');
+});
+
+test('VIEWS ENGINE', 'calendar view: chip lines shown, missing start/end flagged invalid', async () => {
+    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, V_CAL));
+    assertEqual(r.shown, ['Show', 'Client', 'City', 'Size'], 'chip keys shown');
+    assertEqual(r.invalid, null, 'valid');
+    const { result: bad } = withViewWarnings(() => resolveView(V_FIELDS, { ...V_CAL, calendar: { ...V_CAL.calendar, start: 'Nope' } }));
+    assertEqual(bad.invalid, 'calendar-fields', 'invalid');
+});
+
+test('VIEWS ENGINE', 'pickView: view param, legacy layout fallback, unknown id → default', async () => {
+    const reg = { id: 'schedule', default: 'table', views: [V_TABLE, V_CAL] };
+    withViewWarnings(() => {
+        assertEqual(pickView(reg, {}).id, 'table', 'default');
+        assertEqual(pickView(reg, { view: 'calendar' }).id, 'calendar', 'view param');
+        assertEqual(pickView(reg, { layout: 'calendar' }).id, 'calendar', 'layout fallback');
+        assertEqual(pickView(reg, { view: 'bogus' }).id, 'table', 'unknown → default');
+    });
+});
+
+test('VIEWS ENGINE', 'toLegacyColumns: stacks become stackUnder, details flagged, hidden omitted', async () => {
+    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE));
+    const cols = toLegacyColumns(r);
+    const recv = cols.find(c => c.key === 'Recieved');
+    assertEqual(recv.stackUnder, 'Ship', 'stackUnder');
+    assertEqual(recv.editable, false, 'stack child read-only');
+    assertEqual(cols.find(c => c.key === 'Year').details, true, 'details flag');
+    assertEqual(cols.some(c => c.key === 'AppData'), false, 'hidden omitted');
+    assertEqual(cols.find(c => c.key === 'Ship').width, 120, 'style width');
+    assertEqual(typeof cols.find(c => c.key === 'Ship').cellClass, 'function', 'colour → cellClass');
+    const { result: cal } = withViewWarnings(() => resolveView(V_FIELDS, V_CAL));
+    const ccols = toLegacyColumns(cal);
+    assertEqual(ccols.filter(c => c.firstRow).map(c => c.key), ['Show', 'Client'], 'firstRow');
+    assertEqual(ccols.filter(c => c.secondRow).map(c => c.key), ['City', 'Size'], 'secondRow');
+});
+
+test('VIEWS ACTION', 'page action wins, then details, then none', async () => {
+    const { result: r } = withViewWarnings(() => resolveView(V_FIELDS, V_TABLE));
+    assertEqual(resolveAction({ to: () => 'x' }, r).kind, 'navigate', 'to');
+    assertEqual(withViewWarnings(() => resolveAction({ run: () => {}, label: 'Select' }, r)).result.label, 'Select', 'run label');
+    assertEqual(resolveAction(null, r).kind, 'details', 'details');
+    const { result: noDetails } = withViewWarnings(() => resolveView([{ key: 'a' }], { id: 'n', layout: 'table', columns: ['a'] }));
+    assertEqual(resolveAction(null, noDetails).kind, 'none', 'none');
+    assertEqual(resolveAction(null, noDetails, 'none', { hasRowDetails: true }).kind, 'details', 'row-details slot');
+});
+
+test('VIEWS ACTION', 'both to and run → to, with a warning', async () => {
+    const { result: r } = withViewWarnings(() => resolveView([{ key: 'a' }], { id: 'n', layout: 'table', columns: ['a'] }));
+    const { result: a, warnings } = withViewWarnings(() => resolveAction({ to: () => 'x', run: () => {} }, r));
+    assertEqual(a.kind, 'navigate', 'to wins');
+    if (!warnings.length) throw new Error('expected warning');
+});
+
+test('VIEWS SEARCH', 'searchWords drops words shorter than 2 characters', async () => {
+    assertEqual(searchWords('a TV  15 x'), ['tv', '15'], 'words');
+    assertEqual(searchWords('a b'), [], 'inactive');
+    assertEqual(SEARCH_LIMITS.minTermLength, 2, 'limit');
+});
+
+test('VIEWS SEARCH', 'matchRow: AND across words, shown vs details, arrays matched', async () => {
+    const tiers = { shown: ['Show', 'Client'], details: ['Notes', 'Shows'] };
+    const row = { Show: 'Expo', Client: 'ACME', Notes: 'blue booth', Shows: ['NAB 2025', 'CES'] };
+    assertEqual(matchRow(row, tiers, ['acme', 'expo']).shownMatch, true, 'shown match');
+    const d = matchRow(row, tiers, ['acme', 'booth']);
+    assertEqual([d.matched, d.shownMatch, d.detailMatches], [true, false, ['Notes']], 'details-only');
+    assertEqual(matchRow(row, tiers, ['nab']).matched, true, 'array element');
+    assertEqual(matchRow(row, tiers, ['acme', 'zzz']).matched, false, 'AND');
+});
+
+test('VIEWS SEARCH', 'matchRows aborts a broad search over 100 rows', async () => {
+    const rows = Array.from({ length: 150 }, (_, i) => ({ Show: 'S' + i, Client: i < 10 ? 'ACME' : 'other' }));
+    const tiers = { shown: ['Show', 'Client'], details: [] };
+    const precise = matchRows(rows, tiers, searchWords('acme'));
+    assertEqual([precise.aborted, precise.matchCount], [false, 10], 'precise');
+    const broad = matchRows(rows, tiers, searchWords('other'));
+    assertEqual([broad.aborted, broad.matchCount, broad.results.length], [true, Infinity, 0], 'aborted');
+    const small = matchRows(rows.slice(0, 50), tiers, searchWords('s'));
+    assertEqual(small.active, false, 'single char inactive');
+    const smallBroad = matchRows(rows.slice(10, 60), tiers, searchWords('other'));
+    assertEqual(smallBroad.aborted, false, 'no abort at or under 100 rows');
+});
+
+test('VIEWS FORMAT', 'formatValue matches the table formatter', async () => {
+    assertEqual(formatValue(null, { format: 'date' }), '', 'null');
+    assertEqual(formatValue('2026-03-05', { format: 'date' }), '03/05/2026', 'date');
+    assertEqual(formatValue('12.5', { format: 'currency' }), '$12.50', 'currency');
+    assertEqual(formatValue('abc', {}), 'abc', 'passthrough');
+    assertEqual(formatText(['a', 'b'], {}), 'a, b', 'array text');
+});
+
+test('VIEWS COLOR', 'colour rules: auto numbers/dates, value, literal; rowColor fallback', async () => {
+    assertEqual(applyColorRule('auto', -1, { format: 'number' }), 'red', 'negative');
+    assertEqual(applyColorRule('auto', 0, { format: 'number' }), 'orange', 'zero');
+    assertEqual(applyColorRule('auto', 5, { format: 'number' }), '', 'positive');
+    assertEqual(applyColorRule('auto', '', { format: 'number' }), '', 'blank');
+    assertEqual(applyColorRule('value', 'gray', {}), 'gray', 'value');
+    assertEqual(applyColorRule('purple', 'x', {}), 'purple', 'literal');
+    const today = todayISOString();
+    assertEqual(applyColorRule('auto', today, { format: 'date' }), 'red', 'date today');
+    const resolved = { rowColor: { field: 'quantity', rule: 'auto', fallback: 'green' }, fieldMap: new Map([['quantity', { key: 'quantity', format: 'number' }]]), style: { quantity: { color: 'auto' } } };
+    assertEqual(rowColorFor({ quantity: 3 }, resolved), 'green', 'fallback');
+    assertEqual(rowColorFor({ quantity: -2 }, resolved), 'red', 'auto row');
+    assertEqual(colorFor({ quantity: 0 }, { key: 'quantity', format: 'number' }, resolved), 'orange', 'cell colour');
+});
+
+test('VIEWS SIZE', 'container and viewport tiers use the shared breakpoints', async () => {
+    assertEqual([containerTier(360), containerTier(599), containerTier(600), containerTier(999), containerTier(1000)], ['narrow', 'narrow', 'medium', 'medium', 'wide'], 'container');
+    assertEqual([viewportTier(615), viewportTier(616), viewportTier(1023), viewportTier(1024)], ['narrow', 'medium', 'medium', 'wide'], 'viewport');
+    assertEqual(BREAKPOINTS, { narrow: 600, wide: 1000, gutterCompact: 8, gutterFull: 12 }, 'constants');
+});
+
+test('VIEWS CARDS', 'rowsToCards: title, escaped content lines, footer, rowColor, decorations', async () => {
+    const fields = [{ key: 'title' }, { key: 'ship' }, { key: 'desc', format: 'multiline' }, { key: '_status' }, { key: '_color' }];
+    const view = { id: 'cards', layout: 'cards', cards: { card: [['title'], ['ship'], ['desc']], footer: [['_status']] }, hidden: ['_color'], rowColor: { field: '_color', rule: 'value' } };
+    const r = withViewWarnings(() => resolveView(fields, view)).result;
+    const rows = [{ title: 'ACME 2026 <EXPO>', ship: 'Ship: 1/2', desc: '2 crates<br>5 items', _status: 'Unsaved changes', _color: 'red', sheetId: 7 }];
+    const decorations = (row, key) => key === null ? [{ message: 'Save', class: 'green', action: () => {} }, { status: true, message: 'Locked' }] : [];
+    const [card] = rowsToCards(rows, r, { decorations, idKey: 'sheetId' });
+    assertEqual(card.title, 'ACME 2026 <EXPO>', 'title is plain text');
+    assertEqual(card.content, 'Ship: 1/2<br>2 crates<br>5 items', 'content lines, multiline breaks');
+    assertEqual(card.contentFooter, 'Unsaved changes<br>Locked', 'footer line + status decoration');
+    assertEqual(card.footerActions.map(a => a.label), ['Save'], 'footer actions');
+    assertEqual([card.cardClass, card.id], ['red', 7], 'rowColor and id');
+    const [escaped] = rowsToCards([{ title: 'x', ship: '<b>bold</b>', desc: '' }], r);
+    assertEqual(escaped.content, '&lt;b&gt;bold&lt;/b&gt;', 'values escaped');
+});
+
+test('VIEWS CARDS', 'bucketRowsToCards: buckets by key, empty buckets seeded, no details', async () => {
+    const fields = [{ key: 'tab' }, { key: 'itemNumber' }, { key: 'description' }];
+    const r = withViewWarnings(() => resolveView(fields, { id: 'categories', layout: 'cards', cards: { bucketBy: 'tab' }, theme: 'purple' }, { theme: 'purple' })).result;
+    const rows = [{ tab: 'FURNITURE', itemNumber: 'T-1' }, { tab: 'FURNITURE', itemNumber: 'C-1' }, { tab: 'SIGNS', itemNumber: 'S-1' }];
+    const cards = bucketRowsToCards(rows, r, {
+        bucketKeys: ['ADDITIONS', 'FURNITURE'],
+        bucketLabel: k => k.charAt(0) + k.slice(1).toLowerCase(),
+        bucketDecorations: (k, members) => members.length > 1 ? [{ status: true, message: members.length + ' items' }] : []
+    });
+    assertEqual(cards.map(c => c.title), ['Additions', 'Furniture', 'Signs'], 'titles in seed order then data order');
+    assertEqual(cards.map(c => c.rows.length), [0, 2, 1], 'members');
+    assertEqual(cards[1].contentFooter, '2 items', 'bucket decorations');
+    assertEqual([cards[1].row.tab, cards[1].hasDetails, cards[1].cardClass], ['FURNITURE', false, 'purple'], 'synthetic row, no details');
 });
 
 // ── Instant write (views-and-renderers-plan §4.16, Phase 2) ──────────────────
