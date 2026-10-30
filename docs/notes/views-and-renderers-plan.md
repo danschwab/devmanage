@@ -1,6 +1,32 @@
 # Views System & Unified Renderers: Refactor Plan
 
-**Status:** revision 9, decisions applied, open for review · **Branch:** `views-system` · **Date:** 2026-10-30
+**Status:** revision 9, decisions applied; Phases 0–6 implemented on `views-system` (uncommitted, awaiting manual testing) · **Branch:** `views-system` · **Date:** 2026-10-30
+
+## Implementation status (2026-10-30)
+
+All six phases are implemented in the working tree. The in-browser suite passes (207 tests, including new `VIEWS *`, `INSTANT WRITE` and `VIEWS CARDS` groups), and every migrated page was rendered headlessly against FakeGoogle.
+
+**Before deploying**
+
+- **Live data for Phase 2.** Add the `InstantWriteTables`, `DesignQueueFields` and `DesignQueueAssignees` preference rows (values in §4.16), the `Assignee` column on the Production Schedule, and a `CACHE/ShowNotes` tab with headers `Identifier | Note | EditHistory`. Until then the design queue shows its cells read-only with a "write disabled" hint, and notes can't be saved.
+- **Manual testing period (R3.11)** on the dev site, using the §9 checklist. Not yet exercised by hand: dashboard cards (view switch rewriting the card path, double-wide cards at the medium tier), print, drag/drop and clipboard in edit mode, and the §4.17 audit of the formerly content-sized modals at `card` width.
+
+**Where things live**
+
+- Engine: `js/application/utils/views/` (`resolveView.js`, `cardsAdapter.js`, `fieldFormat.js`, `viewColor.js`, `searchMatch.js`), `js/application/utils/useContainerSize.js`.
+- Components: `dataViewComponent.js`, `viewSelectComponent.js`, `contentHeaderComponent.js`, `rowDetailsComponent.js`, `cells.js` (registry: image, itemId, navigate, checkbox, select, text).
+- Data layer: `data_management/abstraction/scheduleFields.js`, `instant-write-utils.js` (`writeCellVerified`, `saveShowNote`), `utils/checkbox-values.js`; `Requests.writeCellVerified / saveShowNote / getShowNotes / getJsonPreference / getInstantWriteConfig`.
+- New page: `content/DesignQueueContent.js` (route `schedule/design-queue`, Schedule hamburger menu → Design Queue).
+
+**Choices made during implementation (all reversible)**
+
+- `cell-edit` is now `(rowIndex, columnKey, value)`; dirty state is keyed by column key.
+- Decorations take a `decorationKeys` list; a decorated key a renderer doesn't display moves to row level (chip end, card footer, details button bar), which is how calendar chips gained the transship badges (D5).
+- Fields may carry `cellOptions` (e.g. which key holds the item number for the image cell) and `format: 'multiline'`.
+- The calendar skips table group-master rows, so ItemReport uses one row set for both views.
+- PacklistTable resolves its views directly (no DataView), per C3.
+- The renderer contract keeps individual state props (`isLoading`, `error`, …) instead of one `state` object; cards keep `theme` and default-sort props, set only by DataView.
+- `Requests.getInventoryHiddenSearchData` was removed (D7); category cards search the item rows.
 
 ## Purpose
 
