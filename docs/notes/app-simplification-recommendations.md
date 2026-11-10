@@ -176,7 +176,7 @@ const InventoryStore = {
 
 ### Files to Keep As-Is
 
-- `GoogleSheetsAuth.js` - Working well, don't change
+- `GoogleSheetsAuth.js` - the sign-in session; see auth-audit-findings.md
 - `GoogleSheetsData.js` - Core functionality is solid
 - Individual content components - Generally well-structured
 
