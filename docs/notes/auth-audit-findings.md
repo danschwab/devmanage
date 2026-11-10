@@ -94,7 +94,8 @@ The account that owns the script runs every request. If it is suspended or delet
 
 - A token from before keeps working until it expires. Then the banner asks the user to sign in once, in a popup.
 - A user whose token already expired sees the sign-in page and redirects once.
-- The first time an account signs in through the service, Google may show the consent screen to grant offline access. After that, signing in on another device reuses the account's refresh token.
+- A device's first sign-in through the service asks Google for consent (`prompt=consent`, flagged by `auth_service_used`). Google gives a refresh token only with consent, and accounts that signed in with the popup before hold a grant without offline access. Without consent up front, the first sign-in would come back with no refresh token and redirect a second time. Later sign-ins on that device skip the permissions page.
+- Signed out, the page shows one card ("Sign-in has changed", or "Sign in" without the service) with a Log in button.
 
 ---
 

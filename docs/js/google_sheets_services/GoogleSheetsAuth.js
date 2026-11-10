@@ -20,6 +20,7 @@ const SCOPES = window.APP_CONFIG.SCOPES;
 const BROKER_URL = window.APP_CONFIG.AUTH_BROKER_URL || '';
 
 const SESSION_KEY = 'auth_session';   // localStorage: the sign-in service's session
+const SERVICE_USED_KEY = 'auth_service_used';   // localStorage: this device has signed in through the service
 const PENDING_KEY = 'auth_pending';   // sessionStorage: a redirect sign-in on its way to Google
 const RESULT_KEY = 'auth_result';     // sessionStorage: what auth-callback.html brought back
 const RELAY_CHANNEL = 'tse-auth';     // BroadcastChannel: auth-callback.html → the page, for a popup sign-in
@@ -123,7 +124,11 @@ export class GoogleSheetsAuth {
     static _token = null;
     static _timer = null;
     static _renewPromise = null;
-    static _needConsent = false;   // the service has no refresh token for this user: ask Google for consent
+    // Ask Google for consent, which is when it hands out a refresh token: on this device's first
+    // sign-in through the service (an account that signed in with the popup before has a grant
+    // without offline access, and asking later would cost a second redirect), and whenever the
+    // service has no refresh token for the account
+    static _needConsent = !localStorage.getItem(SERVICE_USED_KEY);
     static _cancelPopupWait = null;
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -397,6 +402,7 @@ export class GoogleSheetsAuth {
     static _acceptSession(answer) {
         localStorage.setItem(SESSION_KEY, answer.session);
         localStorage.setItem(BaseTokenManager.emailKey, answer.email);
+        localStorage.setItem(SERVICE_USED_KEY, '1');
         this._needConsent = false;
         const token = { access_token: answer.accessToken, expires_in: answer.expiresIn, scope: answer.scope, token_type: 'Bearer' };
         BaseTokenManager.storeToken(token);

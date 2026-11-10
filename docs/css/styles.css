@@ -113,7 +113,7 @@ footer {
     margin-top: var(--padding-lg);
     opacity: .6;
 }
-div#app-content.dashboard:not(:has(> div.empty-message)) footer {
+div#app-content.dashboard:not(:has(> div.empty-message, > .sign-in-card)) footer {
     grid-column: 1 / -1;
     align-self: end;
 }
@@ -154,7 +154,7 @@ div#app-content {
     scrollbar-gutter: stable both-edges;
 }
 
-div#app-content.dashboard:not(:has(> div.empty-message)) {
+div#app-content.dashboard:not(:has(> div.empty-message, > .sign-in-card)) {
     display: grid;
     justify-content: center;
     align-items: start;
@@ -243,6 +243,27 @@ div#app-content > div.empty-message {
 .container.dashboard-card > .content {
     flex: 1;
     /*overflow: auto;*/
+}
+
+/* Signed out: the one sign-in card, centered in the page, with its text and button centered in
+   it. Narrow containers grow buttons (the container-component query), which in this column
+   would stretch the button down the card. */
+div#app-content > .sign-in-card {
+    margin: auto;
+    max-width: 100%;
+    flex: none;          /* .container fills the page height */
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1;
+}
+.sign-in-card > .container-header {
+    justify-content: start;
+}
+.sign-in-card > .content {
+    justify-content: center;
+}
+.sign-in-card > .content > button {
+    flex-grow: 0;
 }
 
 .container.dashboard-card .container-header {

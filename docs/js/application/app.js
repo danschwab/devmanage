@@ -67,6 +67,12 @@ const App = {
         isAuthLoading() {
             return authState.isLoading;
         },
+        authInitialized() {
+            return authState.isInitialized;
+        },
+        usesSignInService() {
+            return authState.usesBroker;
+        },
         authError() {
             return authState.error;
         },
@@ -449,9 +455,19 @@ const App = {
             <div id="app-content" :class="{ 'dashboard': currentPage === 'dashboard' }">
                 <BannerNotifications :banners="appBanners" scope="app" />
 
-                <div v-if="!isAuthenticated" class="empty-message">
-                    <p>please log in to view content</p>
-                    <button :disabled="isAuthLoading" @click="login">Log in</button>
+                <!-- Signed out: one card (while sign-in starts up, the loading indicator below shows instead) -->
+                <div v-if="!isAuthenticated && authInitialized" class="container dashboard-card sign-in-card">
+                    <div class="container-header orange">
+                        <h2>{{ usesSignInService ? 'Sign-in has changed' : 'Sign in' }}</h2>
+                    </div>
+                    <div class="content">
+                        <template v-if="usesSignInService">
+                            <p>The app now keeps you signed in. Sign in once on this device through Google's page: no more pop-ups.</p>
+                            <p>The first time, Google shows a permissions page. Choose <strong>Allow</strong> so the app can stay signed in.</p>
+                        </template>
+                        <p v-else>Sign in with your Top Shelf Exhibits Google account to see inventory, pack lists and the schedule.</p>
+                        <button :disabled="isAuthLoading" class="orange" @click="login">{{ isAuthLoading ? 'Signing in…' : 'Log in' }}</button>
+                    </div>
                 </div>
                 
                 
