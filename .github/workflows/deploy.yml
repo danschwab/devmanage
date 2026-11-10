@@ -24,6 +24,7 @@ jobs:
       THUMBNAILS: ${{ vars.THUMBNAILS }}
       API_KEY: ${{ vars.API_KEY }}
       CLIENT_ID: ${{ vars.CLIENT_ID }}
+      AUTH_BROKER_URL: ${{ vars.AUTH_BROKER_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +32,7 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Inject config.js from secrets and variables
         run: |
-          echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}' };" > docs/js/google_sheets_services/config.js
+          echo "window.APP_CONFIG = { API_KEY: '${API_KEY}', CLIENT_ID: '${CLIENT_ID}', SCOPES: '${SCOPES}', AUTH_BROKER_URL: '${AUTH_BROKER_URL}' };" > docs/js/google_sheets_services/config.js
           echo "window.ENDPOINT_IDS = { INVENTORY: '${INVENTORY}', PACK_LISTS: '${PACK_LISTS}', PROD_SCHED: '${PROD_SCHED}', CACHE: '${CACHE}', THUMBNAILS: '${THUMBNAILS}' };" >> docs/js/google_sheets_services/config.js
           echo "// Build timestamp: $(date -u +%Y%m%d%H%M%S)" >> docs/js/google_sheets_services/config.js
       - name: Generate version.json with deployment timestamp
