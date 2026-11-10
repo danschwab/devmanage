@@ -39,33 +39,60 @@ function doGet() {
 
 /** The app POSTs plain-text JSON: { action: 'exchange' | 'refresh' | 'signout', ... } */
 function doPost(e) {
+  // Junk is turned away here, before any lock, Google call or property write, so a flood of it
+  // can't hold up real renewals. The URL is public: only well-formed requests for a session that
+  // exists, or carrying a Google code, go further.
+  var contents = e && e.postData && e.postData.contents;
+  if (!contents || contents.length > 4096) return reply_({ ok: false, error: 'BAD_REQUEST' });
   var request;
   try {
-    request = JSON.parse(e.postData.contents);
+    request = JSON.parse(contents);
   } catch (err) {
     return reply_({ ok: false, error: 'BAD_REQUEST' });
   }
-  var lock = LockService.getScriptLock();
+  if (!request || typeof request !== 'object') return reply_({ ok: false, error: 'BAD_REQUEST' });
   try {
-    lock.waitLock(20000);
-    if (request.action === 'exchange') return reply_(exchange_(request));
-    if (request.action === 'refresh') return reply_(refresh_(request));
-    if (request.action === 'signout') return reply_(signOut_(request));
+    if (request.action === 'exchange') {
+      if (!isWellFormedExchange_(request)) return reply_({ ok: false, error: 'BAD_REQUEST' });
+      return reply_(exchange_(request));
+    }
+    if (request.action === 'refresh' || request.action === 'signout') {
+      var parsed = parseSession_(request.session);
+      var known = parsed && PropertiesService.getScriptProperties().getProperty('session:' + parsed.id);
+      if (!known) return reply_(request.action === 'refresh' ? { ok: false, error: 'SESSION_ENDED' } : { ok: true });
+      return reply_(withLock_(function () {
+        return request.action === 'refresh' ? refresh_(request) : signOut_(request);
+      }));
+    }
     return reply_({ ok: false, error: 'BAD_REQUEST' });
   } catch (err) {
     // Never log tokens or secrets: editors can read the logs
     console.error('Sign-in service failure: ' + (err && err.message));
     return reply_({ ok: false, error: 'SERVER_ERROR' });
+  }
+}
+
+/** Runs fn holding the script lock: session rotation and property writes happen one at a time */
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return fn();
   } finally {
     lock.releaseLock();
   }
+}
+
+function isWellFormedExchange_(request) {
+  return typeof request.code === 'string' && request.code.length > 0 && request.code.length <= 512 &&
+    typeof request.redirectUri === 'string' && /^https:\/\/[^\s]{1,500}$/.test(request.redirectUri) &&
+    (request.verifier === undefined || (typeof request.verifier === 'string' && /^[A-Za-z0-9._~-]{43,128}$/.test(request.verifier)));
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 /** A Google sign-in code (with its PKCE verifier) → a new session */
 function exchange_(request) {
-  if (!request.code || !request.redirectUri) return { ok: false, error: 'BAD_REQUEST' };
   var tokens = googleToken_({
     grant_type: 'authorization_code',
     code: request.code,
@@ -81,20 +108,22 @@ function exchange_(request) {
     return { ok: false, error: 'ACCOUNT_NOT_ALLOWED', message: 'Sign in with your company Google account.' };
   }
 
-  var props = PropertiesService.getScriptProperties();
-  if (tokens.refresh_token) {
-    props.setProperty('user:' + email, JSON.stringify({ rt: tokens.refresh_token, updated: Date.now() }));
-  } else if (!props.getProperty('user:' + email)) {
-    // Google gives a refresh token only with consent: the app asks again with prompt=consent
-    return { ok: false, error: 'NO_REFRESH_TOKEN' };
-  }
-  cleanUp_(props);
+  return withLock_(function () {
+    var props = PropertiesService.getScriptProperties();
+    if (tokens.refresh_token) {
+      props.setProperty('user:' + email, JSON.stringify({ rt: tokens.refresh_token, updated: Date.now() }));
+    } else if (!props.getProperty('user:' + email)) {
+      // Google gives a refresh token only with consent: the app asks again with prompt=consent
+      return { ok: false, error: 'NO_REFRESH_TOKEN' };
+    }
+    cleanUp_(props);
 
-  var id = Utilities.getUuid().replace(/-/g, '');
-  var secret = randomSecret_();
-  var now = Date.now();
-  props.setProperty('session:' + id, JSON.stringify({ email: email, cur: hash_(secret), prev: null, rotatedAt: 0, created: now, lastUsed: now }));
-  return answer_(id + '.' + secret, email, tokens);
+    var id = Utilities.getUuid().replace(/-/g, '');
+    var secret = randomSecret_();
+    var now = Date.now();
+    props.setProperty('session:' + id, JSON.stringify({ email: email, cur: hash_(secret), prev: null, rotatedAt: 0, created: now, lastUsed: now }));
+    return answer_(id + '.' + secret, email, tokens);
+  });
 }
 
 /** A session → a new access token, and the session's next secret */
@@ -201,13 +230,7 @@ function installCleanUpTrigger() {
 }
 
 function dailyCleanUp() {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    cleanUp_(PropertiesService.getScriptProperties());
-  } finally {
-    lock.releaseLock();
-  }
+  withLock_(function () { cleanUp_(PropertiesService.getScriptProperties()); });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

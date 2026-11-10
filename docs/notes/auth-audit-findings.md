@@ -111,6 +111,8 @@ The account that owns the script runs every request. If it is suspended or delet
   - An older secret means a copy is elsewhere, and the session ends (`SESSION_REUSED`).
   - A session unused for `IDLE_DAYS` ends.
 - **Logs** never carry tokens or secrets.
+- **No third-party script runs on the page.** Any script on the app's origin could read the session, so Vue is served from the repo (`docs/js/vendor/vue.global.prod.js`, 3.5.45) instead of a CDN. Google's `api.js` and `gsi/client` are the only outside scripts. To upgrade Vue, replace the file with the new release's `dist/vue.global.prod.js`, after checking that two CDNs serve the same bytes.
+- **Junk can't hold up renewals.** The service turns away malformed requests, oversize bodies and unknown sessions before it takes its lock or calls Google. The lock covers only session rotation and property writes.
 - **Signing out** ends that device's session at the service. The account's Google grant stays, so its other devices stay signed in.
 - **Admin, from the script editor:**
   - `listSessions` lists accounts and last-used dates, with no secrets.
