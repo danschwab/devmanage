@@ -1,4 +1,5 @@
 import { GoogleSheetsAuth } from './GoogleSheetsAuth.js';
+import { classifyError } from './authStatus.js';
 import { SheetSql } from './sheetSql.js';
 import { normalizeHeaderName } from '../data_management/utils/helpers.js';
 import { ProgressBus } from '../data_management/utils/caching.js';
@@ -13,13 +14,6 @@ export class GoogleSheetsService {
     static _rateLimitCountdownActive = false;
     static _rateLimitCountdownPromise = null;
     
-    static _throwAuthError() {
-        const err = new Error('Authentication required');
-        err.status = 401;
-        err.result = { error: { code: 401, status: 'UNAUTHENTICATED', message: 'Authentication required' } };
-        throw err;
-    }
-
     /**
      * Throws a simulated 429 rate limit error matching the real Google Sheets API response
      * @private
@@ -75,40 +69,30 @@ export class GoogleSheetsService {
             this._throwRateLimitError();
         }
         
+        let authRetried = false;
         while (true) {
+            const usedToken = GoogleSheetsAuth.currentToken();
             try {
                 return await fn();
             } catch (err) {
                 // Immediately throw grid limit errors: the range calls grow or clip to the grid (gridRanges.js)
                 if (isGridLimitError(err)) throw err;
-                
-                // Immediately throw auth errors — retrying won't help; the Auth layer handles re-auth
-                const isAuthError = err && (
-                    err.status === 401 ||
-                    (err.result?.error?.code === 401) ||
-                    err.result?.error?.status === 'UNAUTHENTICATED' ||
-                    err.result?.error?.status === 'PERMISSION_DENIED' ||
-                    err.result?.error?.message?.toLowerCase().includes('insufficient authentication') ||
-                    err.result?.error?.message?.toLowerCase().includes('insufficient auth')
-                );
-                if (isAuthError) throw err;
 
-                // Immediately throw network-level errors (no HTTP response) — no point retrying
-                // when the device has no connectivity. The window 'offline' event sets the freeze state.
-                const isNetworkError = err instanceof TypeError && !err.status && !err.result;
-                if (isNetworkError) throw err;
-                
-                // Check for rate limit or quota errors (429, or 403 quota exhausted only)
-                const isRateLimit = err && (
-                    err.status === 429 ||
-                    (err.result && err.result.error && (
-                        err.result.error.status === 'RESOURCE_EXHAUSTED' ||
-                        err.result.error.message?.toLowerCase().includes('rate limit') ||
-                        err.result.error.message?.toLowerCase().includes('quota')
-                    ))
-                );
-                
-                if (isRateLimit) {
+                const kind = classifyError(err);
+                // A rejected token: the session renews it once (through the sign-in service) and the
+                // call retries; otherwise the session asks the user, and the error goes up
+                if (kind === 'auth') {
+                    if (!authRetried && await GoogleSheetsAuth.handleUnauthorized(usedToken)) {
+                        authRetried = true;
+                        continue;
+                    }
+                    throw err;
+                }
+                // Retrying won't help: the account lacks access, or the device has no connectivity
+                // (the window 'offline' event sets the freeze state)
+                if (kind === 'permission' || kind === 'network') throw err;
+
+                if (kind === 'quota') {
                     consecutiveRateLimits++;
                     // For rate limits, use much longer delays and more retries
                     // Google Sheets quota resets after 1 minute, so we need to wait
@@ -181,7 +165,7 @@ export class GoogleSheetsService {
     static async getSheetData(tableId, range) {
         //console.warn(`[GoogleSheets READ] ${tableId} → ${range}`);
         
-        await GoogleSheetsAuth.checkAuth();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.getSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
 
@@ -197,7 +181,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<Array<Array<string>>>>} one 2D array per range, in order ([[]] when empty)
      */
     static async batchGetValues(tableId, ranges) {
-        await GoogleSheetsAuth.checkAuth();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.batchGetValues] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         if (!ranges || !ranges.length) return [];
@@ -213,7 +197,7 @@ export class GoogleSheetsService {
      * @returns {Promise<boolean>}
      */
     static async batchSetValues(tableId, data, options = {}) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.batchSetValues] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         if (!data || !data.length) return true;
@@ -236,7 +220,7 @@ export class GoogleSheetsService {
      * @returns {Promise<boolean>}
      */
     static async appendSheetValues(tableId, range, rows) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.appendSheetValues] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         if (!rows || !rows.length) return true;
@@ -260,7 +244,7 @@ export class GoogleSheetsService {
      * @returns {Promise<boolean>}
      */
     static async deleteSheetRows(tableId, tabName, rowNumbers) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.deleteSheetRows] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         const rows = [...new Set((rowNumbers || []).map(Number).filter(n => Number.isInteger(n) && n > 1))].sort((a, b) => b - a);
@@ -291,7 +275,7 @@ export class GoogleSheetsService {
      * @returns {Promise<boolean|Array<Array<string>>>}
      */
     static async setSheetData(tableId, tabName, updates, mapping = null, options = {}) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[GoogleSheetsData.setSheetData] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);
         
@@ -534,7 +518,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<{title: string, sheetId: number}>>} - A promise that resolves to an array of objects with tab names and ids.
      */
     static async getSheetTabs(tableId) {
-        await GoogleSheetsAuth.checkAuth();
+        await GoogleSheetsAuth.getToken();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -560,7 +544,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async hideTabs(tableId, tabs) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -590,7 +574,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async showTabs(tableId, tabs) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -621,7 +605,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async copySheetTab(tableId, sourceTab, newTabName) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
@@ -666,7 +650,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Array<Object>>} - Query results as an array of objects
      */
     static async querySheetData(tableId, query) {
-        await GoogleSheetsAuth.checkAuth();
+        await GoogleSheetsAuth.getToken();
         
         try {
             // Parse the query
@@ -696,7 +680,7 @@ export class GoogleSheetsService {
      * @returns {Promise<void>}
      */
     static async createBlankTab(tableId, newTabName) {
-        if (!(await GoogleSheetsAuth.checkAuth())) GoogleSheetsService._throwAuthError();
+        await GoogleSheetsAuth.getToken();
 
         const spreadsheetId = window.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
@@ -751,7 +735,7 @@ export class GoogleSheetsService {
      * @returns {Promise<Object<string, string>|null>} tableId → RFC 3339 time; null without auth
      */
     static async getModifiedTimes(tableIds) {
-        if (!(await GoogleSheetsAuth.checkAuth())) return null;
+        if (!GoogleSheetsAuth.isActive()) return null;
         const entries = await Promise.all(tableIds.map(async (tableId) => {
             const fileId = window.ENDPOINT_IDS[tableId];
             if (!fileId) throw new Error(`[GoogleSheetsData.getModifiedTimes] SPREADSHEET_NOT_FOUND: Spreadsheet ID not found for table: ${tableId}`);

@@ -5,6 +5,7 @@
 
 import { SheetSql } from './sheetSql.js';
 import { BaseTokenManager } from './GoogleSheetsAuth.js';
+import { AUTH_STATUS, authRequiredError } from './authStatus.js';
 import { normalizeHeaderName, isLocalhost } from '../data_management/utils/helpers.js';
 
 // A1 column letters → 0-based index ("A" → 0, "Z" → 25, "AA" → 26)
@@ -55,92 +56,156 @@ function _unquoteSheetName(name) {
     return m ? m[1].replace(/''/g, "'") : name;
 }
 
+/**
+ * The fake sign-in session: the real GoogleSheetsAuth interface, with a pretend sign-in service
+ * (an Apps Script broker) that renews tokens without a window. Signing in or renewing counts a
+ * window (windowsOpened); a renewal through the service counts a refresh (refreshCount). Tests
+ * end the token (expireToken), the service's session (endBrokerSession) or the service itself
+ * (brokerAvailable = false). Localhost always starts signed out.
+ */
 export class FakeGoogleSheetsAuth {
     static userEmail = _configuredEmail();
-    static isInitialized = false;
-    static isAuthenticatedState = false;
-    static _authenticatePromise = null;
+    static state = {
+        status: AUTH_STATUS.SIGNED_OUT,
+        email: null,
+        missingScopes: [],
+        expiresAt: 0,
+        usesBroker: true,
+        reason: null,
+        error: null
+    };
+    static _listeners = new Set();
+    static _token = null;
+    static _renewPromise = null;
+    static brokerSession = null;   // the session the pretend service holds; null: it ended
+    static brokerAvailable = true;
+    static refreshCount = 0;
+    static windowsOpened = 0;
 
-    static async initialize() {
-        await this.delay(100); // Simulate async initialization
-        this.isInitialized = true;
-        return true;
+    static onChange(listener) {
+        this._listeners.add(listener);
+        return () => this._listeners.delete(listener);
     }
 
-    static async authenticate() {
-        if (this._authenticatePromise) {
-            return this._authenticatePromise;
-        }
-
-        this._authenticatePromise = this._authenticateInternal()
-            .finally(() => {
-                this._authenticatePromise = null;
-            });
-
-        return this._authenticatePromise;
+    static _set(changes) {
+        Object.assign(this.state, changes);
+        this._listeners.forEach(listener => {
+            try { listener(this.state); } catch (error) { console.error('[FakeGoogleSheetsAuth] Listener failed:', error); }
+        });
     }
 
-    static async _authenticateInternal() {
-        await this.delay(200); // Simulate authentication delay
-        this.isAuthenticatedState = true;
-        this.userEmail = _configuredEmail(); // Reset email on re-authentication
-        
-        // Create fresh token with current timestamp
-        const mockToken = {
-            access_token: 'fake_access_token_' + Date.now(),
-            token_type: 'Bearer',
-            expires_in: 3600,
-            timestamp: Date.now()
-        };
-        BaseTokenManager.storeToken(mockToken);
-        return true;
-    }
-
-    static async checkAuth() {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
-        return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
-    }
-
-    static async silentRefresh() {
-        if (!this.isAuthenticatedState) return false;
-        // Simulate a silent token renewal — refresh the stored token timestamp
-        const mockToken = {
-            access_token: 'fake_access_token_' + Date.now(),
-            token_type: 'Bearer',
-            expires_in: 3600,
-            timestamp: Date.now()
-        };
-        BaseTokenManager.storeToken(mockToken);
-        return true;
-    }
-
-    static getTokenSecondsRemaining() {
-        const token = BaseTokenManager.getStoredToken();
-        if (!token || !token.timestamp) return 0;
-        const tokenAge = (Date.now() - token.timestamp) / 1000;
-        return Math.max(0, 3500 - tokenAge);
+    static isActive() {
+        return this.state.status === AUTH_STATUS.ACTIVE || this.state.status === AUTH_STATUS.EXPIRING;
     }
 
     static isAuthenticated() {
-        return this.isAuthenticatedState && !BaseTokenManager.isTokenExpired(BaseTokenManager.getStoredToken());
+        return this.isActive();
     }
 
-    static async getUserEmail() {
-        await this.delay(50);
-        return this.userEmail;
-    }
-
-    static async logout() {
-        this.userEmail = null;
-        this.isAuthenticatedState = false;
-        BaseTokenManager.clearStoredToken();
-        await this.delay(100);
+    static currentToken() {
+        return this._token?.access_token || null;
     }
 
     static getMissingScopes() {
-        return [];
+        return this.state.missingScopes;
+    }
+
+    static async getUserEmail() {
+        return this.state.email;
+    }
+
+    static async initialize() {
+        await this.delay(100);
+        return true;
+    }
+
+    static async getToken() {
+        if (this.isActive() && BaseTokenManager.secondsLeft(this._token) > 60) return this._token.access_token;
+        if (this.state.status !== AUTH_STATUS.SIGNED_OUT && await this._renew()) return this._token.access_token;
+        if (this.isActive()) this._set({ status: AUTH_STATUS.NEEDS_USER, reason: 'ended' });
+        throw authRequiredError(this.state.status === AUTH_STATUS.SIGNED_OUT ? 'Sign in to continue.' : 'Sign in again to continue.');
+    }
+
+    static async handleUnauthorized(usedToken) {
+        if (this._token && this._token.access_token !== usedToken) return true;
+        this._token = null;
+        if (await this._renew()) return true;
+        if (this.state.status !== AUTH_STATUS.SIGNED_OUT) this._set({ status: AUTH_STATUS.NEEDS_USER, reason: 'ended' });
+        return false;
+    }
+
+    static async signIn() {
+        this.windowsOpened++;
+        await this.delay(200);
+        this.brokerSession = `fake_session_${Date.now()}`;
+        this._issueToken();
+        return true;
+    }
+
+    static renew() {
+        return this.signIn();
+    }
+
+    static async signOut() {
+        await this.delay(100);
+        this.brokerSession = null;
+        this._token = null;
+        this.userEmail = null;
+        this._set({ status: AUTH_STATUS.SIGNED_OUT, email: null, expiresAt: 0, reason: null });
+    }
+
+    /** The pretend service renews: one renewal at a time, no window */
+    static _renew() {
+        if (!this._renewPromise) {
+            this._renewPromise = (async () => {
+                await this.delay(50);
+                if (!this.brokerAvailable || !this.brokerSession) return false;
+                this.refreshCount++;
+                this._issueToken();
+                return true;
+            })().finally(() => { this._renewPromise = null; });
+        }
+        return this._renewPromise;
+    }
+
+    static _issueToken() {
+        this.userEmail = _configuredEmail();
+        const now = Date.now();
+        this._token = { access_token: `fake_access_token_${now}_${this.refreshCount}`, expires_in: 3600, timestamp: now, expiresAt: now + 3600 * 1000 };
+        this._set({ status: AUTH_STATUS.ACTIVE, email: this.userEmail, expiresAt: this._token.expiresAt, reason: null, error: null });
+    }
+
+    // ── Test hooks ────────────────────────────────────────────────────────────
+
+    /** The token runs out now (the next request renews it, or fails without the service) */
+    static expireToken() {
+        if (this._token) this._token.expiresAt = Date.now() - 1000;
+    }
+
+    /** The service ends the session (revoked or idle): renewing fails until the user signs in */
+    static endBrokerSession() {
+        this.brokerSession = null;
+    }
+
+    /** Everything about the session, to put back after the test suite (FakeGoogleState.beginSandbox) */
+    static _snapshot() {
+        return {
+            state: { ...this.state },
+            token: this._token && { ...this._token },
+            brokerSession: this.brokerSession,
+            brokerAvailable: this.brokerAvailable,
+            userEmail: this.userEmail,
+            listeners: this._listeners
+        };
+    }
+
+    static _restore(snapshot) {
+        Object.assign(this.state, snapshot.state);
+        this._token = snapshot.token;
+        this.brokerSession = snapshot.brokerSession;
+        this.brokerAvailable = snapshot.brokerAvailable;
+        this.userEmail = snapshot.userEmail;
+        this._listeners = snapshot.listeners;
     }
 
     // Utility method to simulate async delays
@@ -1221,7 +1286,7 @@ export class FakeGoogleSheetsService {
     /** Delete whole rows (1-based; the header row is never deleted), bottom up, as one step. */
     static async deleteSheetRows(tableId, tabName, rowNumbers) {
         await this.delay(500 + Math.random() * 500);
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
         if (!this.ENDPOINT_IDS[tableId]) throw new Error(`[deleteSheetRows] Spreadsheet ID not found for table: ${tableId}`);
         const sheet = this.mockData[tableId]?.[tabName];
         if (!sheet) throw new Error(`[deleteSheetRows] Sheet not found: ${tabName}`);
@@ -1238,7 +1303,7 @@ export class FakeGoogleSheetsService {
      */
     static async getModifiedTimes(tableIds) {
         await this.delay(100 + Math.random() * 200);
-        if (!(await FakeGoogleSheetsAuth.checkAuth())) return null;
+        if (!FakeGoogleSheetsAuth.isActive()) return null;
         const overrides = await this._fault('beforeModifiedTimes', tableIds) || {};
         return Object.fromEntries(tableIds.map(tableId => {
             if (!this.ENDPOINT_IDS[tableId]) throw new Error(`[getModifiedTimes] Spreadsheet ID not found for table: ${tableId}`);
@@ -1258,7 +1323,7 @@ export class FakeGoogleSheetsService {
      */
     static async appendSheetValues(tableId, range, rows) {
         await this.delay(300 + Math.random() * 300);
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
         if (!this.ENDPOINT_IDS[tableId]) throw new Error(`[appendSheetValues] Spreadsheet ID not found for table: ${tableId}`);
         if (await this._fault('beforeWrite', tableId, range, rows) === 'drop') return true;
         const bang = range.lastIndexOf('!');
@@ -1286,7 +1351,7 @@ export class FakeGoogleSheetsService {
      */
     static async batchSetValues(tableId, data) {
         await this.delay(500 + Math.random() * 500);
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
         if (!this.ENDPOINT_IDS[tableId]) throw new Error(`[batchSetValues] Spreadsheet ID not found for table: ${tableId}`);
         const fault = await this._fault('beforeBatchWrite', tableId, data);
         if (fault === 'drop') return true;
@@ -1341,7 +1406,7 @@ export class FakeGoogleSheetsService {
 
     static async getSheetData(tableId, range) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetData] Spreadsheet ID not found for table: ${tableId}`);
@@ -1426,7 +1491,7 @@ export class FakeGoogleSheetsService {
 
     static async setSheetData(tableId, tabName, updates, removeRowsBelow) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[setSheetData] Spreadsheet ID not found for table: ${tableId}`);
@@ -1542,7 +1607,7 @@ export class FakeGoogleSheetsService {
 
     static async getSheetTabs(tableId) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[getSheetTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -1556,7 +1621,7 @@ export class FakeGoogleSheetsService {
 
     static async hideTabs(tableId, tabs) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[hideTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -1573,7 +1638,7 @@ export class FakeGoogleSheetsService {
 
     static async showTabs(tableId, tabs) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[showTabs] Spreadsheet ID not found for table: ${tableId}`);
@@ -1590,7 +1655,7 @@ export class FakeGoogleSheetsService {
 
     static async copySheetTab(tableId, sourceTab, newTabName) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[copySheetTab] Spreadsheet ID not found for table: ${tableId}`);
@@ -1636,7 +1701,7 @@ export class FakeGoogleSheetsService {
 
     static async createBlankTab(tableId, newTabName) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
 
         const spreadsheetId = this.ENDPOINT_IDS[tableId];
         if (!spreadsheetId) throw new Error(`[createBlankTab] Spreadsheet ID not found for table: ${tableId}`);
@@ -1672,7 +1737,7 @@ export class FakeGoogleSheetsService {
 
     static async querySheetData(tableId, query) {
         await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        await FakeGoogleSheetsAuth.checkAuth();
+        await FakeGoogleSheetsAuth.getToken();
         
         //console.log(`FakeGoogleSheetsService: Executing query on ${tableId}: ${query}`);
         await this.delay(100);
@@ -2029,7 +2094,9 @@ export const FakeGoogleState = {
     beginSandbox() {
         clearTimeout(_saveTimer);
         const snapshot = _currentStateJson();
-        const previousEmail = FakeGoogleSheetsAuth.userEmail;
+        // The app's sign-in listeners don't hear the tests sign in, expire and sign out
+        const authSnapshot = FakeGoogleSheetsAuth._snapshot();
+        FakeGoogleSheetsAuth._listeners = new Set();
         _sandboxed = true;
         _applyState(JSON.parse(_fixtureJson));
         FakeGoogleSheetsAuth.userEmail = DEFAULT_FAKE_USER;
@@ -2037,7 +2104,7 @@ export const FakeGoogleState = {
             _sandboxed = false;
             // Prefer the saved state: another tab may have written while the sandbox was active
             if (!(this.isPersistent() && this.load())) _applyState(JSON.parse(snapshot));
-            FakeGoogleSheetsAuth.userEmail = previousEmail;
+            FakeGoogleSheetsAuth._restore(authSnapshot);
         };
     },
 

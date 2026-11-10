@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="referrer" content="no-referrer">
+        <title>Signing in…</title>
+    </head>
+    <body>
+        <p id="message">Signing in…</p>
+        <script>
+            // Google sends the sign-in here (the OAuth redirect URI; GoogleSheetsAuth.js). A popup
+            // sign-in (state "p.…") broadcasts the answer to the app's page and closes. A redirect
+            // sign-in (state "r.…") saves it for the app and goes back to the page it left.
+            (function () {
+                var params = new URLSearchParams(location.search);
+                var result = { code: params.get('code'), state: params.get('state'), error: params.get('error') };
+                if ((result.state || '').indexOf('p.') === 0) {
+                    try { new BroadcastChannel('tse-auth').postMessage(result); } catch (e) { /* no channel: the app's wait times out */ }
+                    document.getElementById('message').textContent = 'Signed in. You can close this window.';
+                    window.close();
+                    return;
+                }
+                var pending = null;
+                try { pending = JSON.parse(sessionStorage.getItem('auth_pending') || 'null'); } catch (e) { /* none */ }
+                sessionStorage.setItem('auth_result', JSON.stringify(result));
+                location.replace(pending && pending.returnUrl ? pending.returnUrl : './');
+            })();
+        </script>
+    </body>
+</html>

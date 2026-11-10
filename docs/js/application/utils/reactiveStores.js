@@ -1,4 +1,4 @@
-import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth, resolveInventoryNoteMaxLength, resolveInventoryTabList, EditHistoryUtils, readRowMetadata, writeRowMetadata } from '../index.js';
+import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth, isAuthError, resolveInventoryNoteMaxLength, resolveInventoryTabList, EditHistoryUtils, readRowMetadata, writeRowMetadata } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
 
 // Re-export Priority for component use
@@ -563,11 +563,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     await this.runConfiguredAnalysis();
                 }
             } catch (err) {
-                const isAuthError = err?.status === 401 || err?.result?.error?.code === 401 || err?.result?.error?.status === 'UNAUTHENTICATED';
-                if (isAuthError) {
-                    Auth.checkAuthWithPrompt({ context: 'data load' });
-                }
-                this.setError(err.message || 'Failed to load data');
+                // A sign-in failure: the session banner asks the user, and the store reloads once
+                // the session is active again (reloadErrorStores)
+                this.setError(isAuthError(err) ? 'Sign in again to load this data.' : (err.message || 'Failed to load data'));
                 // Initialize with empty arrays to allow dynamic property addition
                 if (!isReadOnly) this.setOriginalData([]);
                 this.setData([]);
@@ -617,11 +615,9 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 
                 return result;
             } catch (err) {
-                const isAuthError = err?.status === 401 || err?.result?.error?.code === 401 || err?.result?.error?.status === 'UNAUTHENTICATED';
-                if (isAuthError) {
-                    Auth.checkAuthWithPrompt({ context: 'data save' });
-                    return false;
-                }
+                // A sign-in failure: the edits stay, and the session banner asks the user to sign
+                // in again. No store error, which would reload the store over the edits.
+                if (isAuthError(err)) return false;
                 const lockMatch = err?.message?.match(/locked by (.+)$/i);
                 if (lockMatch) {
                     this.lockConflictOwner = lockMatch[1];
@@ -1569,16 +1565,11 @@ export async function saveDirtyStoresToUserData(options = {}) {
             return;
         }
 
-        // Normal auto-save flow - check auth silently; proactive refresh handles renewal
-        // before expiry. If expired, skip this cycle without prompting — the user will
-        // be prompted on their next explicit action (save, navigation, etc.).
-        const isAuthenticated = await Auth.checkAuth();
-        
-        if (!isAuthenticated) {
-            //console.log('[ReactiveStore AutoSave] Auth check failed, skipping auto-save');
-            return;
-        }
-        
+        // While the session needs the user, skip this cycle: the session banner asks them, and
+        // the edits stay in memory. (Renewing through the sign-in service needs no one: the
+        // session stays active.)
+        if (!Auth.isActive) return;
+
         if (!authState.user?.email) {
             //console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
             return;

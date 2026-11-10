@@ -2,15 +2,9 @@ import { Database, wrapMethods, invalidateCache, stampDataChange, normalizeHeade
 import { setTimestampWriter, setPersistentStore, startCacheTimestampPoller, startCacheCleanup } from '../utils/caching.js';
 import { networkState } from '../utils/networkState.js';
 
-// Dynamically import GoogleSheetsAuth based on environment
 import { isLocalhost, todayISOString, startOfTodayMs } from '../utils/helpers.js';
-let GoogleSheetsAuth, GoogleSheetsService;
-if (isLocalhost()) {
-    ({ GoogleSheetsAuth, GoogleSheetsService } = await import('../../google_sheets_services/FakeGoogle.js'));
-} else {
-    ({ GoogleSheetsAuth } = await import('../../google_sheets_services/GoogleSheetsAuth.js'));
-    ({ GoogleSheetsService } = await import('../../google_sheets_services/GoogleSheetsData.js'));
-}
+// The real or fake Google services (services.js picks them)
+import { GoogleSheetsAuth, GoogleSheetsService, classifyError } from '../services.js';
 
 // User data writes per tab name: { entries: the batch still collecting calls (null once it is
 // written), done: the latest batch's write } (storeUserData)
@@ -802,8 +796,9 @@ class applicationUtils_uncached {
      * @returns {Promise<Array<{key: string, timestamp: string}>|null>} Null if auth unavailable, empty array if no entries
      */
     static async readCacheTimestamps() {
-        // Return null when auth is unavailable — signals the poller to pause itself
-        if (!GoogleSheetsAuth || !(await GoogleSheetsAuth.checkAuth())) return null;
+        // Null while nobody is signed in or the session needs the user: the poller pauses itself,
+        // and the app restarts it when the session is active again
+        if (!GoogleSheetsAuth.isActive()) return null;
         try {
             const rawData = await GoogleSheetsService.getSheetData('CACHE', 'Caching');
             if (!rawData || rawData.length < 2) return [];
@@ -811,17 +806,10 @@ class applicationUtils_uncached {
                 .filter(row => Array.isArray(row) && row[0] && row[1])
                 .map(row => ({ key: row[0], timestamp: row[1] }));
         } catch (err) {
-            // Re-throw authentication errors so they can trigger re-authentication
-            const isAuthError = err && (
-                err.status === 401 ||
-                err.status === 403 ||
-                err.result?.error?.code === 401 ||
-                err.result?.error?.code === 403 ||
-                err.result?.error?.status === 'UNAUTHENTICATED' ||
-                err.result?.error?.status === 'PERMISSION_DENIED'
-            );
-            if (isAuthError) throw err;
-            
+            // Sign-in and access failures stop the poller (caching.js)
+            const kind = classifyError(err);
+            if (kind === 'auth' || kind === 'permission') throw err;
+
             console.warn('[readCacheTimestamps] Failed to read cache timestamps:', err);
             return [];
         }

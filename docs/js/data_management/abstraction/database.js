@@ -1,20 +1,6 @@
-// Dynamic Google Sheets Service selection
-import { isLocalhost, resolveSheetMapping } from '../utils/helpers.js';
-let GoogleSheetsService, GoogleSheetsAuth;
-
-if (isLocalhost()) {
-    // Dynamically import fake services
-    // Note: This import must match the actual path and export names
-    // If using a bundler, you may need to adjust this to static imports
-    // eslint-disable-next-line no-undef
-    console.warn('Running locally, using fake Google services.');
-    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/FakeGoogle.js'));
-} else {
-    // Use real services for production
-    // eslint-disable-next-line no-undef
-    ({ GoogleSheetsService, GoogleSheetsAuth } = await import('../../google_sheets_services/index.js'));
-}
-
+// The real or fake Google services (services.js picks them)
+import { resolveSheetMapping } from '../utils/helpers.js';
+import { GoogleSheetsService } from '../services.js';
 import { wrapMethods, invalidateCache, fillCache, stampDataChange, watchSpreadsheets, EditHistoryUtils, assertAppCurrent } from '../index.js';
 import { ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, MAX_HISTORY_ENTRIES } from '../utils/metadata-utils.js';
 import { MAX_UPLOAD_DIM } from '../utils/thumbnail-values.js';

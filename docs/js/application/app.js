@@ -2,7 +2,7 @@ import { html } from './index.js';
 import { ContainerComponent } from './index.js';
 import { ModalComponent, modalManager } from './index.js';
 import { PrimaryNavComponent } from './index.js';
-import { Auth, authState } from './index.js';
+import { Auth, authState, AUTH_STATUS } from './index.js';
 import { NavigationRegistry } from './index.js';
 import { PacklistContent, InventoryContent, ScheduleContent, ReportsContent } from './index.js';
 import { hamburgerMenuRegistry } from './index.js';
@@ -76,6 +76,20 @@ const App = {
         isOffline() {
             return authState.isOffline;
         },
+        // The one place the app asks the user about their sign-in. The button's click is what
+        // may open Google's popup; nothing else does.
+        sessionBanner() {
+            const banner = { key: 'session', severity: SEVERITY.warning, dismissible: false, visible: false };
+            if (!this.isAuthenticated) return banner;
+            if (authState.status === AUTH_STATUS.EXPIRING) {
+                return { ...banner, visible: true, message: 'Your sign-in ends in a few minutes.', action: { label: 'Stay signed in', fn: () => Auth.renew() } };
+            }
+            if (authState.status !== AUTH_STATUS.NEEDS_USER) return banner;
+            if (authState.reason === 'unavailable') {
+                return { ...banner, visible: true, message: 'The sign-in service is unreachable; retrying every minute. Your unsaved changes are kept.', action: { label: 'Try again', fn: () => Auth.renew() } };
+            }
+            return { ...banner, visible: true, severity: SEVERITY.critical, message: 'Your sign-in has ended. Sign in again to keep working: your unsaved changes are kept.', action: { label: 'Sign in', fn: () => Auth.renew() } };
+        },
         appBanners() {
             const staticBanners = [
                 {
@@ -99,10 +113,11 @@ const App = {
                 {
                     key: 'auth-error',
                     severity: SEVERITY.critical,
-                    message: `Error: ${this.authError}`,
-                    visible: !!this.authError && !this.isAuthenticated,
+                    message: `Sign-in: ${this.authError}`,
+                    visible: !!this.authError,
                     dismissible: false
                 },
+                this.sessionBanner,
                 {
                     key: 'update-available',
                     severity: SEVERITY.warning,
@@ -435,7 +450,8 @@ const App = {
                 <BannerNotifications :banners="appBanners" scope="app" />
 
                 <div v-if="!isAuthenticated" class="empty-message">
-                    please log in to view content
+                    <p>please log in to view content</p>
+                    <button :disabled="isAuthLoading" @click="login">Log in</button>
                 </div>
                 
                 

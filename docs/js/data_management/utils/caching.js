@@ -1,4 +1,5 @@
 import { networkState } from './networkState.js';
+import { classifyError } from '../../google_sheets_services/authStatus.js';
 
 /**
  * Cache Management System with CPU-Aware Operations
@@ -1227,17 +1228,10 @@ async function _pollCacheTimestamps() {
         if (times) _applyModifiedTimes(times);
         else _expireUnconfirmed();
     } catch (err) {
-        // Handle authentication errors by stopping the poller
-        // The poller will restart after successful re-authentication
-        const isAuthError = err && (
-            err.status === 401 ||
-            err.status === 403 ||
-            err.result?.error?.code === 401 ||
-            err.result?.error?.code === 403 ||
-            err.result?.error?.status === 'UNAUTHENTICATED' ||
-            err.result?.error?.status === 'PERMISSION_DENIED'
-        );
-        if (isAuthError) {
+        // Sign-in and access failures stop the poller; the app restarts it when the session is
+        // active again (auth.js)
+        const kind = classifyError(err);
+        if (kind === 'auth' || kind === 'permission') {
             console.warn('[CacheTimestampPoller] Authentication error detected, stopping poller:', err);
             stopCacheTimestampPoller();
             stopCacheCleanup();
