@@ -726,8 +726,10 @@ class applicationUtils_uncached {
                     console.error('[getLocksData] Failed to initialize Locks sheet:', initError);
                 }
             }
-            
-            return { users: [], lockKeys: [], locks: [] };
+
+            // Any other failure (no answer, sign-in, quota) goes up: an empty answer would be
+            // cached as "nothing is locked", and saves would pass the lock check
+            throw error;
         }
     }
 
