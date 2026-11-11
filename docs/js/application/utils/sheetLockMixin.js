@@ -1,4 +1,5 @@
-import { Requests, authState, CacheInvalidationBus, getDeviceId, undoRegistry } from '../index.js';
+import { Requests, authState, CacheInvalidationBus, getDeviceId, undoRegistry, isNetworkError } from '../index.js';
+import { whenConnected } from '../../data_management/utils/networkState.js';
 
 /**
  * sheetLockMixin — Vue Options API mixin for sheet-level write-lock management.
@@ -91,6 +92,7 @@ export const sheetLockMixin = {
         if (this._lockInvalidationHandler) {
             CacheInvalidationBus.off('api:getSheetLock', this._lockInvalidationHandler);
         }
+        this._cancelLockRetry?.();
     },
 
     computed: {
@@ -298,7 +300,8 @@ export const sheetLockMixin = {
         /**
          * Take the edit lock, or confirm it's held. Calls made while a request is out (several
          * quick edits, the isDirty watcher) share that one request.
-         * @returns {Promise<boolean>} whether this session holds the lock
+         * @returns {Promise<boolean|null>} whether this session holds the lock; null when Google
+         *   didn't answer (the lock is asked for again on reconnecting)
          */
         acquireLockForEdit() {
             if (this.isLocked) return Promise.resolve(true);
@@ -325,7 +328,10 @@ export const sheetLockMixin = {
             const routeKey = undo && rows ? this.appContext?.currentPath?.split('?')[0] : null;
             if (routeKey) undoRegistry.capture(rows, routeKey, { type: undo });
             apply();
-            if (await this.acquireLockForEdit()) return true;
+            const held = await this.acquireLockForEdit();
+            if (held) return true;
+            // No answer: the edit stands, and the lock is asked for again on reconnecting
+            if (held === null) return true;
             revert();
             if (routeKey) undoRegistry.discardLastSnapshotIfUnchanged(rows, routeKey);
             if (action) {
@@ -357,9 +363,23 @@ export const sheetLockMixin = {
                 }
                 return false;
             } catch (error) {
+                if (isNetworkError(error)) {
+                    this._retryLockWhenConnected();
+                    return null;
+                }
                 console.error(`[sheetLockMixin] acquireLockForEdit failed for ${this.lockKey}:`, error);
                 return false;
             }
+        },
+
+        // The lock request got no answer: ask again once requests go out, while edits still need
+        // it. Someone else holding it by then is handled as on any refused lock (handleLockState).
+        _retryLockWhenConnected() {
+            if (this._cancelLockRetry) return;
+            this._cancelLockRetry = whenConnected(() => {
+                this._cancelLockRetry = null;
+                if (this.isDirty && !this.isLocked) this.handleLockState(true);
+            });
         }
     }
 };

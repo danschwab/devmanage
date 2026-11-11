@@ -1,4 +1,4 @@
-import { html, appSettings } from '../../index.js';
+import { html, essentialAnalysisOnly } from '../../index.js';
 import { ThumbnailCache } from '../../utils/thumbnailCache.js';
 import { parseThumbnailEntries, primaryThumbnail, addThumbnails, thumbnailKey } from '../../../data_management/utils/thumbnail-values.js';
 import { cellProps } from './cells.js';
@@ -34,8 +34,9 @@ export const ThumbnailImage = {
         imageKey() {
             return this.fileId ? thumbnailKey(this.fileId, this.crop) : null;
         },
+        // Off with essential analysis only, or on a slow connection
         downloadsEnabled() {
-            return !appSettings.onlyRunEssentialAnalysis;
+            return !essentialAnalysisOnly();
         }
     },
     mounted() {

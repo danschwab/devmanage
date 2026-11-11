@@ -1,5 +1,12 @@
-import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth, isAuthError, resolveInventoryNoteMaxLength, resolveInventoryTabList, EditHistoryUtils, readRowMetadata, writeRowMetadata } from '../index.js';
+import { CacheInvalidationBus, ProgressBus, Requests, authState, Auth, isAuthError, isNetworkError, resolveInventoryNoteMaxLength, resolveInventoryTabList, EditHistoryUtils, readRowMetadata, writeRowMetadata } from '../index.js';
 import { PriorityQueue, Priority } from './priorityQueue.js';
+import { networkState, onConnectionChange, CONNECTION } from '../../data_management/utils/networkState.js';
+
+// A load with no news for this long says it is still waiting, and for how long
+const WAIT_NOTICE_MS = 10 * 1000;
+const NO_ANSWER_LOAD = "Can't reach Google, so this couldn't load. It reloads when the connection is back.";
+const NO_ANSWER_RELOAD = "Can't reach Google: showing what was loaded before. It reloads when the connection is back.";
+const NO_ANSWER_SAVE = "Can't reach Google, so nothing was saved. Your edits are kept: save again when the connection is back.";
 
 // Re-export Priority for component use
 export { Priority };
@@ -499,8 +506,16 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 : null;
             // Track original loading message to restore after rate limit clears
             let originalMessage = message;
+            // Without news for a while, say how long the load has waited
+            const startedAt = Date.now();
+            let lastNews = startedAt;
+            const waitTimer = setInterval(() => {
+                if (Date.now() - lastNews < WAIT_NOTICE_MS) return;
+                this.loadingMessage = `${originalMessage} Still waiting on Google (${Math.round((Date.now() - startedAt) / 1000)} s)…`;
+            }, 1000);
             
             const onProgress = progressTopic ? ({ current, total, message: msg }) => {
+                lastNews = Date.now();
                 if (msg) {
                     this.loadingMessage = msg;
                     originalMessage = msg; // Track the latest non-rate-limit message
@@ -512,6 +527,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             
             // System-level rate limit listener (all stores listen to this)
             const onRateLimit = ({ message: msg }) => {
+                lastNews = Date.now();
                 if (msg) {
                     this.loadingMessage = msg;
                     this.loadingProgress = -1; // Indeterminate during rate limit
@@ -557,6 +573,8 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 
                 // Release lock BEFORE running analysis so analysis can proceed
                 this.isReloadingMainData = false;
+                // The data is here: the wait notice is over
+                clearInterval(waitTimer);
                 
                 // After data is loaded, run analysis if configured, data exists, and not skipped
                 if (!skipAnalysis && this.analysisConfig && this.analysisConfig.length > 0 && this._data.length > 0) {
@@ -564,12 +582,19 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 }
             } catch (err) {
                 // A sign-in failure: the session banner asks the user, and the store reloads once
-                // the session is active again (reloadErrorStores)
-                this.setError(isAuthError(err) ? 'Sign in again to load this data.' : (err.message || 'Failed to load data'));
-                // Initialize with empty arrays to allow dynamic property addition
-                if (!isReadOnly) this.setOriginalData([]);
-                this.setData([]);
+                // the session is active again (reloadErrorStores). No answer: the store keeps what
+                // it loaded before, and reloads when the connection is back (auth.js).
+                const kept = isNetworkError(err) && this._data?.length > 0 && !this.isModified;
+                this.setError(isAuthError(err) ? 'Sign in again to load this data.'
+                    : isNetworkError(err) ? (kept ? NO_ANSWER_RELOAD : NO_ANSWER_LOAD)
+                    : (err.message || 'Failed to load data'));
+                if (!kept) {
+                    // Initialize with empty arrays to allow dynamic property addition
+                    if (!isReadOnly) this.setOriginalData([]);
+                    this.setData([]);
+                }
             } finally {
+                clearInterval(waitTimer);
                 if (progressTopic && onProgress) {
                     ProgressBus.off(progressTopic, onProgress);
                 }
@@ -623,7 +648,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                     this.lockConflictOwner = lockMatch[1];
                     this.setError(null);
                 } else {
-                    this.setError(err.message || 'Failed to save data');
+                    this.setError(isNetworkError(err) ? NO_ANSWER_SAVE : (err.message || 'Failed to save data'));
                 }
                 return false;
             } finally {
@@ -831,7 +856,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
                 batchSize = 10,
                 delayMs = 50,
                 skipIfAnalyzed = false,
-                essentialOnly = appSettings.onlyRunEssentialAnalysis // Check global setting
+                essentialOnly = essentialAnalysisOnly() // The setting, or a slow connection
             } = options;
 
             this.isAnalyzing = true;
@@ -1139,7 +1164,7 @@ export function createReactiveStore(apiCall = null, saveCall = null, apiArgs = [
             // While offline, skip background reloads — the network call will fail and the cache is
             // already frozen. Stores with errors are reloaded automatically by reloadErrorStores()
             // when connectivity is restored.
-            if (authState.isOffline) return;
+            if (networkState.isOffline) return;
             // If unsaved changes exist, don't silently overwrite them — flag the conflict instead.
             // The UI will show a warning banner; reload happens after the user saves or discards.
             if (this.isModified) {
@@ -1559,19 +1584,12 @@ export async function saveDirtyStoresToUserData(options = {}) {
             return;
         }
     } else {
-        // While offline, skip auto-save — the API call will fail and user data is preserved in memory.
-        if (authState.isOffline) {
-            //console.log('[ReactiveStore AutoSave] Network offline, skipping auto-save');
-            return;
-        }
-
-        // While the session needs the user, skip this cycle: the session banner asks them, and
-        // the edits stay in memory. (Renewing through the sign-in service needs no one: the
-        // session stays active.)
-        if (!Auth.isActive) return;
-
-        if (!authState.user?.email) {
-            //console.log('[ReactiveStore AutoSave] No user email available, skipping auto-save');
+        if (!authState.user?.email) return;
+        // The sheet can't take backups now (offline, or the session needs the user: the banners
+        // ask them): this browser keeps them. (Renewing through the sign-in service needs no one:
+        // the session stays active.)
+        if (networkState.isOffline || !Auth.isActive) {
+            backUpDirtyStoresLocally();
             return;
         }
     }
@@ -1602,6 +1620,10 @@ export async function saveDirtyStoresToUserData(options = {}) {
                     ).then(() => {
                         store.autoSaved = true;
                         store.lastAutoSaveHash = currentHash; // Record this state as saved
+                        removeLocalBackup(key);
+                    }, (error) => {
+                        console.warn('[ReactiveStore AutoSave] Backup write failed; keeping it in this browser:', error);
+                        writeLocalBackup(key, diff);
                     }));
                     savedCount++;
                 } else {
@@ -1615,6 +1637,7 @@ export async function saveDirtyStoresToUserData(options = {}) {
                     key
                 ).then(() => {
                     store.autoSaved = false;
+                    removeLocalBackup(key);
                 }));
                 cleanedCount++;
             }
@@ -1637,6 +1660,51 @@ export async function saveDirtyStoresToUserData(options = {}) {
         console.error('[ReactiveStore AutoSave] Failed to save dirty stores:', error);
     }
 }
+
+// ─── Backups in this browser ─────────────────────────────────────────────────
+// While the sheet can't take autosave backups (offline, a failed write, the session needing the
+// user), and when the tab closes with edits the sheet doesn't have yet, the backup goes to
+// localStorage. Restoring takes whichever of the two is newer; a successful backup to the sheet,
+// a save or a discard removes it.
+const LOCAL_BACKUP_PREFIX = 'tse_backup:';
+
+function localBackupKey(storeKey) {
+    return `${LOCAL_BACKUP_PREFIX}${authState.user?.email}:${storeKey}`;
+}
+
+function writeLocalBackup(storeKey, diff) {
+    if (!authState.user?.email) return;
+    try {
+        localStorage.setItem(localBackupKey(storeKey), JSON.stringify({ diff, timestamp: new Date().toISOString() }));
+    } catch (error) {
+        console.warn('[ReactiveStore] Could not keep a backup in this browser:', error);
+    }
+}
+
+function readLocalBackup(storeKey) {
+    if (!authState.user?.email) return null;
+    try {
+        return JSON.parse(localStorage.getItem(localBackupKey(storeKey)) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function removeLocalBackup(storeKey) {
+    if (!authState.user?.email) return;
+    try { localStorage.removeItem(localBackupKey(storeKey)); } catch { /* storage unavailable */ }
+}
+
+/** Back up, in this browser, every store with edits the sheet's backup doesn't hold yet. */
+function backUpDirtyStoresLocally() {
+    for (const [key, store] of Object.entries(reactiveStoreRegistry)) {
+        if (!store.isModified || !store.originalData || !store._data) continue;
+        const diff = calculateStoreDiff(store.originalData, store._data, store.analysisConfig);
+        if (diff && store.lastAutoSaveHash !== JSON.stringify(diff)) writeLocalBackup(key, diff);
+    }
+}
+
+if (typeof window !== 'undefined') window.addEventListener('pagehide', backUpDirtyStoresLocally);
 
 /**
  * Start auto-save timer
@@ -1790,7 +1858,18 @@ async function loadStoreBackupFromUserData(storeKey) {
     if (!authState.isAuthenticated || !authState.user?.email) {
         return null;
     }
-    
+    const remote = await loadRemoteStoreBackup(storeKey);
+    const local = readLocalBackup(storeKey);
+    const localBackup = normalizeBackupPayload(local);
+    const newer = (a, b) => new Date(a || 0).getTime() > new Date(b || 0).getTime();
+    if (localBackup && (!remote || newer(local.timestamp, remote.timestamp))) {
+        return { ...localBackup, key: storeKey };
+    }
+    return remote;
+}
+
+/** The backup in the user's data tab: exact key, else by key prefix. Carries its timestamp. */
+async function loadRemoteStoreBackup(storeKey) {
     try {
         // Retrieve using the storeKey as the ID
         const backupData = await Requests.getUserData(authState.user.email, storeKey);
@@ -1799,7 +1878,8 @@ async function loadStoreBackupFromUserData(storeKey) {
             //console.log('[ReactiveStore] Found backup for store (exact key match)');
             return {
                 ...normalizedExact,
-                key: storeKey
+                key: storeKey,
+                timestamp: backupData?.timestamp || null
             };
         }
 
@@ -1813,7 +1893,8 @@ async function loadStoreBackupFromUserData(storeKey) {
                 //console.log('[ReactiveStore] Found backup by store key prefix fallback');
                 return {
                     ...normalizedPrefix,
-                    key: prefixBackupData?.id || null
+                    key: prefixBackupData?.id || null,
+                    timestamp: prefixBackupData?.value?.timestamp || null
                 };
             }
         }
@@ -1829,6 +1910,7 @@ async function loadStoreBackupFromUserData(storeKey) {
  * @param {string} storeKey - Store registry key (used as the user data ID)
  */
 async function removeStoreBackupFromUserData(storeKey) {
+    removeLocalBackup(storeKey);
     if (!authState.isAuthenticated || !authState.user?.email) {
         return;
     }
@@ -2159,6 +2241,12 @@ export function reloadErrorStores() {
         store => (store.error || store.needsReload) && !store.isLoading && !store.isSaving
     );
     storesToReload.forEach(store => {
+        // Unsaved edits with an error: their save failed. Nothing changed elsewhere, so clear the
+        // error for the next save rather than reload (which would flag a conflict)
+        if (store.isModified && !store.needsReload) {
+            store.setError(null);
+            return;
+        }
         // Clear the flag before calling handleInvalidation — the flag guard in that method
         // exists to block bus-driven invalidations during logout, not intentional reloads.
         store.needsReload = false;
@@ -2200,6 +2288,24 @@ export function getInventoryNoteMaxLength() {
 export function getInventoryTabList(preferenceId) {
     return resolveInventoryTabList(getPreferencesStore().data, preferenceId);
 }
+
+/**
+ * Whether only essential analysis runs: the user's setting, or a slow connection (its requests
+ * wait their turn behind the user's own). Reactive.
+ * @returns {boolean}
+ */
+export function essentialAnalysisOnly() {
+    return appSettings.onlyRunEssentialAnalysis || authState.connection === CONNECTION.SLOW;
+}
+
+// The connection sped up: run the analysis it held back (unless the setting holds it back too)
+let _wasSlow = false;
+onConnectionChange((state) => {
+    if (_wasSlow && !state.isSlow && !state.isOffline && !appSettings.onlyRunEssentialAnalysis) {
+        runNonessentialAnalysisOnAllStores();
+    }
+    _wasSlow = state.isSlow;
+});
 
 export function runNonessentialAnalysisOnAllStores() {
     let triggeredCount = 0;

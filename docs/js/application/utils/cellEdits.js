@@ -2,6 +2,7 @@ import { undoRegistry } from './undoRegistry.js';
 import { escapeHtml } from './views/fieldFormat.js';
 import { isCheckedValue } from '../../data_management/utils/checkbox-values.js';
 import { describeWriteFailure, joinKey } from '../../data_management/utils/instant-write-config.js';
+import { networkState, onConnectionChange } from '../../data_management/utils/networkState.js';
 
 /**
  * Cell edits — how tables edit, in both edit modes (views-and-renderers-plan §4.16).
@@ -196,8 +197,10 @@ export function useBatchEdits(host) {
  * one timer for the whole table restarts on every edit, so nearby edits are written together. A
  * cell returned to its loaded value within the delay is dropped. One batch is in flight at a time;
  * a newer edit to a cell being written is written next. Failures revert the cell, show one error
- * and ask the page to refresh; warnings (another row may have changed) are shown too. Queued
- * writes flush on stop(), and a leave prompt guards closing the tab while writes are queued.
+ * and ask the page to refresh; warnings (another row may have changed) are shown too. While Google
+ * can't be reached (networkState.isOffline), edits are held instead: queued, not written, not
+ * reverted, and written on reconnecting. Queued writes flush on stop(), and a leave prompt guards
+ * closing the tab while writes are queued.
  * @param {Object} host
  * @param {() => boolean} host.enabled           instant editing is on (mode, rowId and commitCells present)
  * @param {() => Array} host.rows                the loaded rows
@@ -222,6 +225,18 @@ export function useInstantEdits(host) {
 
     const cellKey = (id, key) => joinKey(id, key);
     const loadedRow = (id) => host.rows().find(r => host.rowId(r) === id) || null;
+
+    // Edits are held: write them on reconnecting, even if the table has gone (in-app navigation)
+    let stopWaiting = null;
+    function holdForReconnect() {
+        if (stopWaiting) return;
+        stopWaiting = onConnectionChange((state, { reconnected }) => {
+            if (!reconnected) return;
+            stopWaiting();
+            stopWaiting = null;
+            flush();
+        });
+    }
 
     function sameValue(key, a, b) {
         if (host.field(key)?.type === 'checkbox') return isCheckedValue(a) === isCheckedValue(b);
@@ -295,6 +310,8 @@ export function useInstantEdits(host) {
         clearTimeout(flushTimer);
         flushTimer = null;
         if (flushing) { flushAgain = true; return flushing; }
+        // Held until the connection is back
+        if (networkState.isOffline) { holdForReconnect(); return; }
         const keys = Object.keys(pending).filter(k => pending[k].status === 'queued');
         if (!keys.length) return;
         flushing = writeBatch(keys);
@@ -340,6 +357,16 @@ export function useInstantEdits(host) {
             }
             current.status = 'saved';
             setTimeout(() => { if (pending[k]?.status === 'saved') delete pending[k]; }, SAVED_OVERLAY_MS);
+            return false;
+        }
+        // No answer: held for the reconnect (a newer edit made during the write is the one held)
+        if (networkState.isOffline) {
+            if (current.next !== undefined) {
+                current.value = current.next;
+                delete current.next;
+            }
+            current.status = 'queued';
+            holdForReconnect();
             return false;
         }
         delete pending[k];

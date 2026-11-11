@@ -11,6 +11,7 @@ import { Requests, getReactiveStore, appSettings, saveDirtyStoresToUserData, get
 import { BannerNotifications, NotificationBubbleOverlay, notificationBus } from './index.js';
 import { SEVERITY } from './index.js';
 import { isLocalhost } from '../data_management/utils/helpers.js';
+import { CONNECTION, checkConnection } from '../data_management/utils/networkState.js';
 
 const { createApp } = Vue;
 
@@ -79,8 +80,21 @@ const App = {
         permissionsWarning() {
             return authState.permissionsWarning;
         },
-        isOffline() {
-            return authState.isOffline;
+        // The connection to Google (networkState.js): what works, and what is kept
+        connectionBanner() {
+            const banner = { key: 'connection', severity: SEVERITY.warning, dismissible: false, visible: true };
+            switch (authState.connection) {
+                case CONNECTION.OFFLINE:
+                    return { ...banner, message: 'No network connection. Your edits are kept, and saving resumes when the connection is back.' };
+                case CONNECTION.UNREACHABLE:
+                    return authState.reconnecting
+                        ? { ...banner, message: 'Reconnecting to Google…' }
+                        : { ...banner, message: "Can't reach Google. Retrying every few seconds: your edits are kept, and saving resumes when it answers.", action: { label: 'Try again', fn: () => checkConnection() } };
+                case CONNECTION.SLOW:
+                    return { ...banner, severity: SEVERITY.info, message: 'Slow connection: loading and saving take longer. Thumbnails and extra analysis wait until it speeds up.' };
+                default:
+                    return { ...banner, visible: false };
+            }
         },
         // The one place the app asks the user about their sign-in. The button's click is what
         // may open Google's popup; nothing else does.
@@ -98,13 +112,7 @@ const App = {
         },
         appBanners() {
             const staticBanners = [
-                {
-                    key: 'offline',
-                    severity: SEVERITY.warning,
-                    message: 'No network connection. Your data is preserved. Changes cannot be saved until connectivity is restored.',
-                    visible: this.isOffline,
-                    dismissible: false
-                },
+                this.connectionBanner,
                 {
                     key: 'permissions',
                     severity: SEVERITY.critical,

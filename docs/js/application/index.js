@@ -8,9 +8,9 @@ export { THUMBNAIL_FIELD } from '../data_management/utils/thumbnail-values.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';
-export { Auth, authState, getDeviceId, isTemporaryAdmin, isAuthError, AUTH_STATUS } from './utils/auth.js';
+export { Auth, authState, getDeviceId, isTemporaryAdmin, isAuthError, isNetworkError, AUTH_STATUS } from './utils/auth.js';
 export { ParamToggles, paramToggleValue } from './components/interface/paramToggles.js';
-export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey, appSettings, runNonessentialAnalysisOnAllStores, getPreferencesStore, saveDirtyStoresToUserData, getInventoryNoteMaxLength, getInventoryTabList, isMarkedForDeletion } from './utils/reactiveStores.js';
+export { getReactiveStore, createAnalysisConfig, findMatchingStores, clearAllReactiveStores, generateStoreKey, appSettings, essentialAnalysisOnly, runNonessentialAnalysisOnAllStores, getPreferencesStore, saveDirtyStoresToUserData, getInventoryNoteMaxLength, getInventoryTabList, isMarkedForDeletion } from './utils/reactiveStores.js';
 export { Priority } from './utils/priorityQueue.js';
 export { getShortageAlertsStore, getShortageAlertDays, shortageBanner, shortagesByItem, itemShortageCards, categoryShortageCards, shortageTimelinePath } from './utils/shortageAlerts.js';
 export { itemVariantCards } from './utils/itemVariants.js';

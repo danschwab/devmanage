@@ -49,12 +49,14 @@ import { todayISOString, setTestToday, startOfTodayMs, resolveShortageAlertDays,
 import { instantWriteEntry, identityKey, cellKey, joinKey } from '../data_management/utils/instant-write-config.js';
 import { estimateShipDate } from '../data_management/utils/ship-date.js';
 import { parseA1Range, gridNeeded, clipRangeToGrid, isGridLimitError } from '../google_sheets_services/gridRanges.js';
-import { AUTH_STATUS, classifyError, isAuthError } from '../google_sheets_services/authStatus.js';
+import { AUTH_STATUS, classifyError, isAuthError, isNetworkError } from '../google_sheets_services/authStatus.js';
+import { GoogleSheetsService as RealSheetsService } from '../google_sheets_services/GoogleSheetsData.js';
+import { networkState, CONNECTION, trackRequest, checkConnection, onConnectionChange, resetConnection } from '../data_management/utils/networkState.js';
 import { SEVERITY, remainingSeverity } from '../data_management/utils/severity.js';
 import { severityColor, statusColor } from '../application/utils/severity.js';
 import { getAutoColorClass } from '../application/utils/autoColor.js';
 import { getReactiveStore, createAnalysisConfig, itemVariantCards, itemShortageCards, NavigationRegistry, isMarkedForDeletion, paramToggleValue, isTemporaryAdmin } from '../application/index.js';
-import { calculateStoreDiff, applyDiffToData } from '../application/utils/reactiveStores.js';
+import { calculateStoreDiff, applyDiffToData, saveDirtyStoresToUserData } from '../application/utils/reactiveStores.js';
 import { checkSheetHealth } from './sheetHealth.js';
 import { guessColumnType, columnTypesEntry, columnTypeMap, columnTypeOf, isOpaqueType } from '../data_management/utils/column-types.js';
 import { migrateThumbnails } from '../data_management/migrations/thumbnail-column.js';
@@ -224,6 +226,186 @@ test('AUTH', 'signOut ends the session; the group ends signed in for the groups 
     await FakeGoogleSheetsAuth.signIn();
     assertEqual(FakeGoogleSheetsAuth.state.status, AUTH_STATUS.ACTIVE, 'signed in again');
 });
+
+// ── Connection ───────────────────────────────────────────────────────────────
+// The connection monitor (networkState.js) and what waits for it. FakeGoogleSheetsService.network
+// takes Google away (requests fail as the API library's do, code -1); the fake probe answers
+// again once it is back. Expected: two requests in a row without an answer mark Google
+// unreachable (isOffline), any answer marks it reachable again; the fastest of the last five
+// answers over 4 s marks it slow. While unreachable: cache invalidations wait, instant edits are
+// held (not reverted), a failed save keeps its edits and its error clears on reconnecting
+// without a conflict, and autosave backups go to localStorage. FakeGoogle SHELVES holds SHLF-001
+// (notes empty); the tests put it back.
+
+function _dropConnection() {
+    FakeGoogleSheetsService.network.down = true;
+    trackRequest()('no-answer');
+    trackRequest()('no-answer');
+}
+async function _restoreConnection() {
+    FakeGoogleSheetsService.network.down = false;
+    await checkConnection();
+}
+async function _withConnectionReset(fn) {
+    resetConnection();
+    try {
+        return await fn();
+    } finally {
+        FakeGoogleSheetsService.network.down = false;
+        resetConnection();
+    }
+}
+const _noAnswer = () => Object.assign(new Error('A network error occurred, and the request could not be completed.'), { result: { error: { code: -1 } } });
+
+test('CONNECTION', "no answer: fetch's TypeError, the API library's code -1 and a timeout", async () => {
+    const kinds = [new TypeError('Failed to fetch'), _noAnswer(), new DOMException('slow', 'TimeoutError'), { status: 500 }].map(classifyError);
+    assertEqual(kinds, ['network', 'network', 'network', 'other'], 'kinds');
+    assertEqual([isNetworkError(_noAnswer()), isNetworkError({ status: 401 })], [true, false], 'isNetworkError');
+});
+
+test('CONNECTION', 'two requests without an answer mark Google unreachable; an answer reconnects', () => _withConnectionReset(async () => {
+    const heard = [];
+    const stop = onConnectionChange((state, { reconnected }) => heard.push(state.status + (reconnected ? ' (reconnected)' : '')));
+    try {
+        trackRequest()('no-answer');
+        assertEqual([networkState.status, networkState.isOffline], [CONNECTION.ONLINE, false], 'one failure is not an outage');
+        trackRequest()('no-answer');
+        assertEqual([networkState.status, networkState.isOffline], [CONNECTION.UNREACHABLE, true], 'unreachable');
+        trackRequest()('answered');
+        assertEqual(heard, ['unreachable', 'online (reconnected)'], 'heard');
+    } finally {
+        stop();
+    }
+}));
+
+test('CONNECTION', 'five slow answers mark the connection slow; one fast answer clears it', () => _withConnectionReset(async () => {
+    const realNow = Date.now;
+    const finish = Array.from({ length: 5 }, () => trackRequest());
+    try {
+        Date.now = () => realNow() + 5000;
+        finish.forEach(done => done('answered'));
+    } finally {
+        Date.now = realNow;
+    }
+    assertEqual([networkState.status, networkState.isSlow, networkState.isOffline], [CONNECTION.SLOW, true, false], 'slow');
+    trackRequest()('answered');
+    assertEqual([networkState.status, networkState.isSlow], [CONNECTION.ONLINE, false], 'fast again');
+}));
+
+test('CONNECTION', 'the Sheets service retries no answer once, never when once, and times out', () => _withConnectionReset(async () => {
+    let calls = 0;
+    const flaky = async () => { if (++calls === 1) throw _noAnswer(); return 'ok'; };
+    assertEqual([await RealSheetsService.withExponentialBackoff(flaky, { initialDelay: 1 }), calls, networkState.status], ['ok', 2, CONNECTION.ONLINE], 'a dropped request is retried');
+    calls = 0;
+    let error = null;
+    try { await RealSheetsService.withExponentialBackoff(flaky, { once: true, initialDelay: 1 }); } catch (e) { error = e; }
+    assertEqual([isNetworkError(error), calls], [true, 1], 'once: not repeated');
+    resetConnection();
+    calls = 0;
+    error = null;
+    try { await RealSheetsService.withExponentialBackoff(async () => { calls++; throw _noAnswer(); }, { initialDelay: 1 }); } catch (e) { error = e; }
+    assertEqual([isNetworkError(error), calls, networkState.status], [true, 2, CONNECTION.UNREACHABLE], 'two failures: unreachable, then thrown');
+    resetConnection();
+    error = null;
+    try { await RealSheetsService.withExponentialBackoff(() => new Promise(() => {}), { once: true, timeoutMs: 20 }); } catch (e) { error = e; }
+    assertEqual([error?.name, isNetworkError(error)], ['TimeoutError', true], 'timed out');
+}));
+
+test('CONNECTION', 'an invalidation while unreachable waits, and runs on reconnecting', () => _withConnectionReset(async () => {
+    await _panels();
+    await _countSheetReads('INVENTORY', 'PANELS', async (reads) => {
+        _dropConnection();
+        invalidateCache([{ namespace: 'database', methodName: 'getData', args: ['INVENTORY', 'PANELS'] }], true);
+        const rows = await _panels();
+        assertEqual([rows.length > 0, reads()], [true, 0], 'the cached rows are served; nothing is read');
+        await _restoreConnection();
+        await _panels();
+        assertEqual(reads(), 1, 'read once reconnected');
+    });
+}));
+
+test('CONNECTION', 'instant edits wait while unreachable, and are written on reconnecting', () => _withConnectionReset(async () => {
+    const { rows, calls, edits } = instantHarness(allOk);
+    _dropConnection();
+    edits.edit(rows[0], 'Note', 'held');
+    await editWait(80);
+    assertEqual([calls.commits, edits.cellState(rows[0], 'Note'), edits.overlay(rows)[0].Note], [[], 'unsaved', 'held'], 'held, still shown');
+    await _restoreConnection();
+    await editWait(30);
+    assertEqual([calls.commits, calls.errors, edits.cellState(rows[0], 'Note')], [[['a.Note=held']], [], ''], 'written once back');
+}));
+
+test('CONNECTION', 'an instant write that fails as Google drops is held, not reverted', () => _withConnectionReset(async () => {
+    let first = true;
+    const { rows, calls, edits } = instantHarness(async (entries) => {
+        if (!first) return entries.map(() => ({ ok: true }));
+        first = false;
+        _dropConnection();
+        return entries.map(() => ({ ok: false, reason: 'error' }));
+    });
+    edits.edit(rows[0], 'Note', 'kept');
+    await editWait(80);
+    assertEqual([calls.commits.length, calls.errors, calls.refreshes, edits.cellState(rows[0], 'Note')], [1, [], 0, 'unsaved'], 'held: no error, no revert');
+    await _restoreConnection();
+    await editWait(30);
+    assertEqual([calls.commits.length, edits.cellState(rows[0], 'Note')], [2, ''], 'written again once back');
+}));
+
+test('CONNECTION', 'a save with no answer keeps its edits; reconnecting clears the error, with no conflict', () => _withConnectionReset(async () => {
+    const store = await _loadedStore(Requests.getInventoryTabData, Requests.saveInventoryTabData, ['SHELVES', undefined, undefined, undefined]);
+    const row = store.data.find(r => r.itemNumber === 'SHLF-001');
+    try {
+        row.notes = 'offline edit';
+        FakeGoogleSheetsService.network.down = true;
+        const saved = await _asUser(() => store.save('Saving...'));
+        assertEqual([saved, String(store.error).startsWith("Can't reach Google, so nothing was saved"), store.isModified, row.notes], [false, true, true, 'offline edit'], 'not saved, edits kept');
+        await _restoreConnection();
+        await editWait(20);
+        assertEqual([networkState.isOffline, store.error, store.externalConflict, store.isModified], [false, null, false, true], 'error cleared, no conflict');
+    } finally {
+        row.notes = '';
+        await store.load('Reloading...');
+    }
+}));
+
+test('CONNECTION', 'while unreachable, autosave backs up to this browser; once back, to the sheet', () => _withConnectionReset(async () => {
+    const store = await _loadedStore(Requests.getInventoryTabData, Requests.saveInventoryTabData, ['SHELVES', undefined, undefined, undefined]);
+    const row = store.data.find(r => r.itemNumber === 'SHLF-001');
+    const localKeys = () => Object.keys(localStorage).filter(key => key.startsWith('tse_backup:test@example.com:') && key.includes('SHELVES'));
+    // Autosave runs for an active session (tests otherwise run without one)
+    const status = authState.status;
+    authState.status = AUTH_STATUS.ACTIVE;
+    try {
+        row.notes = 'backed up';
+        _dropConnection();
+        await _asUser(() => saveDirtyStoresToUserData());
+        const keys = localKeys();
+        const backup = keys.length === 1 ? JSON.parse(localStorage.getItem(keys[0])) : null;
+        assertEqual([keys.length, JSON.stringify(backup?.diff || '').includes('backed up')], [1, true], 'in this browser');
+        await _restoreConnection();
+        await _asUser(() => saveDirtyStoresToUserData());
+        assertEqual(localKeys(), [], 'moved to the sheet');
+    } finally {
+        row.notes = '';
+        await _asUser(() => saveDirtyStoresToUserData());
+        localKeys().forEach(key => localStorage.removeItem(key));
+        authState.status = status;
+        await store.load('Reloading...');
+    }
+}));
+
+// Regression: a failed read of the Locks tab returned "no locks", which was cached for good, so
+// the session saw nothing locked and saves passed the lock check. FakeGoogle locks
+// PACK_LISTS:ATSC 2025 NAB for locked.user@example.com.
+test('CONNECTION', 'a lock read with no answer fails; it is not cached as nothing locked', () => _withConnectionReset(async () => {
+    invalidateCache([{ namespace: 'app_utils', methodName: 'getLocksData', args: [] }]);
+    FakeGoogleSheetsService.network.down = true;
+    let error = null;
+    try { await Requests.getSheetLock('PACK_LISTS', 'ATSC 2025 NAB'); } catch (e) { error = e; }
+    assertEqual(isNetworkError(error), true, 'the read fails');
+    await _restoreConnection();
+    assertEqual((await Requests.getSheetLock('PACK_LISTS', 'ATSC 2025 NAB'))?.user, 'locked.user@example.com', 'the lock, once back');
+}));
 
 // ── Group 1: Identifier Resolution ───────────────────────────────────────────
 // computeIdentifier fuzzy-matches raw Show/Client/Year values against the Clients

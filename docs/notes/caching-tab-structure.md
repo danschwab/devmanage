@@ -120,6 +120,23 @@ Set up at the bottom of `database.js` (`watchSpreadsheets`) and run by the polle
 - **Blind spots.** `modifiedTime` doesn't move when values change through `IMPORTRANGE`, a Google Form, or volatile formulas such as `NOW()`.
 - **Permissions.** Reading `modifiedTime` uses the `https://www.googleapis.com/auth/drive` scope the app already requests, through Drive API v3 `files.get`.
 
+## Connection
+
+`networkState.js` (no imports, so any layer reads it) says how the connection to Google stands. Every Google request attempt in `withExponentialBackoff` reports how long it took and whether anything answered.
+
+| Status | When | What changes |
+| --- | --- | --- |
+| online | Requests are answered. | Nothing. |
+| slow | The fastest of the last 5 answers took over 4 s, a request has waited over 15 s, or the browser reports 2G. | The banner says so. The poller checks every 3 minutes. Only essential analysis runs, and thumbnails wait (`essentialAnalysisOnly()`). Persisted results aren't written. The request queue keeps its last slot for saves. |
+| unreachable | 2 requests in a row got no answer, though the browser says it is online (Wi-Fi without internet, a sign-in portal, a dropped VPN). | `isOffline`: as offline. A probe (an opaque HEAD to the Sheets API: no sign-in, no quota) asks again every 15 s, when the tab shows, and on the banner's Try again. Any answer reconnects. |
+| offline | The browser says it has no network. | `isOffline`: cached data stays (invalidations wait and run on reconnecting). Background reloads, autosave to the sheet and instant edits wait. Autosave backups go to localStorage (`tse_backup:<email>:<store key>`). |
+
+- **No answer.** Fetch's `TypeError`, the API library's code -1 and a timeout (90 s; none for uploads) are all `classifyError` 'network'. A request with no answer is retried once with backoff, unless Google is already unreachable or the request may have landed and must not run twice. Those pass `{ once: true }`: appends, row deletes, the truncate after a whole-tab write, tab copies, new tabs and uploads.
+- **Not cached.** A cached method's result isn't stored when any request went unanswered while it ran (`networkState.noAnswers`). Code that turns a failed read into an empty answer would otherwise cache that answer, since sheet data never expires. `getLocksData` rethrows instead: an empty answer would read as "nothing is locked".
+- **Edits wait, never revert.** Instant edits stay queued and are written on reconnecting (`cellEdits.js`). A lock request with no answer keeps the edit and asks again once connected (`sheetLockMixin.js`). A save with no answer keeps its edits; its error clears on reconnecting, and the store isn't flagged as changed elsewhere. A reload with no answer keeps the rows already loaded.
+- **Backups in the browser.** Besides the outage, a backup goes to localStorage when the tab closes (`pagehide`) with edits the sheet's backup doesn't hold, and when a backup write fails. Restoring takes the newer of the browser's and the sheet's backup. A backup to the sheet, a save or a discard removes it.
+- **Trying it locally.** `FakeGoogleSheetsService.network` takes the fake Google away (`down: true`) or slows it (`latencyMs`).
+
 # Analytics Tab: Persisted Results
 
 Some cached API results take long enough to compute that a new session should start from the last saved copy. A method opts in through `wrapMethods`' last argument, `persistentMethods` (see the bottom of `api.js`). The persisted methods are `getInventoryShortageAlerts` and `getItemThumbnails` (item thumbnails for report pages; it reads every inventory tab).

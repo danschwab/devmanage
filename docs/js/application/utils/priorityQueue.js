@@ -1,3 +1,5 @@
+import { networkState } from '../../data_management/utils/networkState.js';
+
 /**
  * Priority Queue System for CPU-Optimized API Call Management
  * 
@@ -191,9 +193,11 @@ class PriorityQueueManager {
     async processQueue() {
         if (!this.isProcessing) return;
         
-        // Check if we can process more calls
+        // Check if we can process more calls. On a slow connection the last slot is kept for
+        // saves, so a save never waits for loads stuck in the other slots.
         while (this.activeCount < this.maxConcurrent) {
-            const entry = this.dequeueNext();
+            const lastSlot = networkState.isSlow && this.maxConcurrent > 1 && this.activeCount === this.maxConcurrent - 1;
+            const entry = this.dequeueNext(lastSlot ? (e) => e.metadata?.type === 'save' : null);
             
             if (!entry) {
                 // No more entries, check again after a short delay
@@ -215,14 +219,16 @@ class PriorityQueueManager {
     
     /**
      * Dequeue the next entry to process (highest priority first)
+     * @param {Function|null} [allowed] - Only take an entry this accepts
      * @returns {Object|null} - Next entry or null if queue is empty
      */
-    dequeueNext() {
+    dequeueNext(allowed = null) {
         // Iterate through priorities from highest (0) to lowest (9)
         for (let priority = 0; priority < 10; priority++) {
             const queue = this.queues[priority];
-            if (queue.length > 0) {
-                return queue.shift(); // FIFO within priority level
+            const index = allowed ? queue.findIndex(allowed) : (queue.length ? 0 : -1);
+            if (index >= 0) {
+                return queue.splice(index, 1)[0]; // FIFO within priority level
             }
         }
         

@@ -6,9 +6,9 @@ import { isLocalhost } from '../../data_management/utils/helpers.js';
 import { DashboardRegistry } from './DashboardRegistry.js';
 import { reloadErrorStores } from './reactiveStores.js';
 import { restartCacheTimestampPoller } from '../../data_management/utils/caching.js';
-import { networkState } from '../../data_management/utils/networkState.js';
+import { networkState, onConnectionChange } from '../../data_management/utils/networkState.js';
 
-export { AUTH_STATUS, isAuthError } from '../../data_management/services.js';
+export { AUTH_STATUS, isAuthError, isNetworkError } from '../../data_management/services.js';
 
 /**
  * Reactive authentication state, mirrored from the session.
@@ -26,7 +26,19 @@ export const authState = Vue.reactive({
     error: null,
     isInitialized: false,
     permissionsWarning: null,
-    isOffline: !navigator.onLine
+    // The connection to Google (networkState.js): isOffline while offline or unreachable;
+    // connection is the CONNECTION status; reconnecting while a probe is out
+    isOffline: networkState.isOffline,
+    connection: networkState.status,
+    reconnecting: false
+});
+
+// Mirror the connection for the UI. Back online: stores whose load failed reload.
+onConnectionChange((state, { reconnected }) => {
+    authState.isOffline = state.isOffline;
+    authState.connection = state.status;
+    authState.reconnecting = state.reconnecting;
+    if (reconnected) reloadErrorStores();
 });
 
 // TEMPORARY admin check, until a real admin system with permissions replaces it: a hand-kept
@@ -84,10 +96,6 @@ function syncFromSession(session) {
 export class Auth {
     static async initialize() {
         if (authState.isInitialized) return;
-        Auth._startNetworkMonitoring();
-        // Sync initial state in case page loaded while offline
-        networkState.isOffline = !navigator.onLine;
-        authState.isOffline = !navigator.onLine;
         authState.isLoading = true;
         AuthSession.onChange(syncFromSession);
         try {
@@ -192,21 +200,6 @@ export class Auth {
 
     static get state() {
         return authState;
-    }
-
-    static _startNetworkMonitoring() {
-        window.addEventListener('offline', () => {
-            console.warn('[Auth] Network offline detected');
-            networkState.isOffline = true;
-            authState.isOffline = true;
-        });
-        window.addEventListener('online', () => {
-            console.log('[Auth] Network online — resuming operations');
-            networkState.isOffline = false;
-            authState.isOffline = false;
-            // Reload any stores that errored during the outage
-            reloadErrorStores();
-        });
     }
 }
 
