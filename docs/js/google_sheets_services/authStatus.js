@@ -16,7 +16,8 @@ export const AUTH_STATUS = Object.freeze({
  * - 'auth': the token is missing, expired or revoked. Renewing or signing in again fixes it.
  * - 'permission': the account may not do this (a sheet not shared, a scope not granted).
  * - 'quota': rate limit or quota. Waiting fixes it.
- * - 'network': no response at all.
+ * - 'network': no response at all: fetch's TypeError, Google's API library's code -1 ("A network
+ *   error occurred"), or a request that timed out (TimeoutError).
  * - 'other'
  * @param {*} err
  * @returns {'auth'|'permission'|'quota'|'network'|'other'}
@@ -25,6 +26,8 @@ export function classifyError(err) {
     if (!err) return 'other';
     if (err.code === 'AUTH_REQUIRED') return 'auth';
     if (err instanceof TypeError && !err.status && !err.result) return 'network';
+    if (err.name === 'TimeoutError') return 'network';
+    if (err.status === -1 || err.result?.error?.code === -1) return 'network';
     const status = err.status ?? err.result?.error?.code;
     const apiStatus = err.result?.error?.status;
     const message = String(err.result?.error?.message || '').toLowerCase();
@@ -37,6 +40,11 @@ export function classifyError(err) {
 /** Whether signing in again (or renewing) would fix this failure */
 export function isAuthError(err) {
     return classifyError(err) === 'auth';
+}
+
+/** Whether the request got no answer at all (no connection, or it timed out) */
+export function isNetworkError(err) {
+    return classifyError(err) === 'network';
 }
 
 /** The error a request gets when there is no token and none can be had without the user */

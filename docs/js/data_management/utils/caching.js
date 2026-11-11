@@ -1,4 +1,4 @@
-import { networkState } from './networkState.js';
+import { networkState, onConnectionChange } from './networkState.js';
 import { classifyError } from '../../google_sheets_services/authStatus.js';
 
 /**
@@ -108,6 +108,8 @@ class CacheManager {
     static _persistentStore = null;
     // Keys whose saved row was already tried this session; later misses recompute and re-save
     static _restoreTried = new Set();
+    // Keys invalidated while offline: invalidated on reconnecting
+    static _heldInvalidations = new Set();
 
     /**
      * Gets a value from cache with expiration check
@@ -263,7 +265,8 @@ class CacheManager {
      */
     static async persist(key, value, startedAt) {
         const store = CacheManager._persistentStore;
-        if (!store || networkState.isOffline) return;
+        // On a slow connection the write would compete with the user's own requests
+        if (!store || networkState.isOffline || networkState.isSlow) return;
         // Only sources a Caching tab stamp can name; pure cached leaves never go stale
         const sources = CacheManager.collectSourceKeys(key)
             .filter(source => !store.sourcePrefixes || store.sourcePrefixes.some(prefix => source.startsWith(prefix)));
@@ -345,8 +348,12 @@ class CacheManager {
      * @param {Set} invalidationStack - Set of keys currently being invalidated (to prevent recursion)
      */
     static invalidate(key, invalidationStack = new Set()) {
-        // While offline, preserve cached data — nothing can be re-fetched to replace it.
-        if (networkState.isOffline) return;
+        // While offline, preserve cached data — nothing can be re-fetched to replace it. The
+        // invalidation waits for the connection (a write that landed as the connection dropped)
+        if (networkState.isOffline) {
+            CacheManager._heldInvalidations.add(key);
+            return;
+        }
 
         // Prevent infinite recursion - if this key is already being invalidated, skip it
         if (invalidationStack.has(key)) {
@@ -614,6 +621,7 @@ class CacheManager {
                         }
                     }
                     const startedAt = Date.now();
+                    const noAnswersAtStart = networkState.noAnswers;
 
                     // Create dependency decorator for this function call
                     const deps = CacheManager.createDependencyDecorator(cacheKey);
@@ -636,8 +644,10 @@ class CacheManager {
                         expirationMs = undefined;
                     }
 
-                    // Not kept when the key changed during the computation: it may predate the change
-                    if (!CacheManager._changedSince(cacheKey, pendingPromise.startedGen)) {
+                    // Not kept when the key changed during the computation: it may predate the change.
+                    // Nor when a request went unanswered meanwhile: code that turns a failed read
+                    // into an empty answer would otherwise cache that answer for good
+                    if (!CacheManager._changedSince(cacheKey, pendingPromise.startedGen) && networkState.noAnswers === noAnswersAtStart) {
                         CacheManager.set(cacheKey, result, expirationMs, persistent);
                         if (persistent) CacheManager.persist(cacheKey, result, startedAt);
                     }
@@ -669,6 +679,15 @@ class CacheManager {
 }
 
 export const wrapMethods = CacheManager.wrapMethods;
+
+// Back online: run the invalidations that waited, and the change stamps that couldn't be written
+onConnectionChange((state, { reconnected }) => {
+    if (!reconnected) return;
+    const held = [...CacheManager._heldInvalidations];
+    CacheManager._heldInvalidations.clear();
+    held.forEach(key => CacheManager.invalidate(key));
+    _writeQueuedStamps();
+});
 export const invalidateCache = CacheManager.invalidateCache;
 
 /**
@@ -1197,7 +1216,21 @@ function _applyStamps(entries) {
     }
 }
 
-async function _pollCacheTimestamps() {
+// One poll at a time: on a slow connection a poll can outlast the interval. A call made while
+// one runs shares it; a forced one runs after it.
+let _pollRunning = null;
+// On a slow connection the interval polls this often instead
+const SLOW_POLL_MS = 3 * 60 * 1000;
+
+/** @param {{force?: boolean}} [options] - force: a fresh poll now, even on a slow connection (triggerCachePoll) */
+function _pollCacheTimestamps({ force = false } = {}) {
+    if (_pollRunning) return force ? _pollRunning.then(() => _pollCacheTimestamps({ force })) : _pollRunning;
+    if (!force && networkState.isSlow && Date.now() - _lastPollAt < SLOW_POLL_MS) return Promise.resolve();
+    _pollRunning = _pollOnce().finally(() => { _pollRunning = null; });
+    return _pollRunning;
+}
+
+async function _pollOnce() {
     const readFn = _pollerReadFn;
     _lastPollAt = Date.now();
     _pollCount++;
@@ -1269,5 +1302,5 @@ export async function triggerCachePoll() {
         console.warn('[CachePoll] No poll function configured — call startCacheTimestampPoller first.');
         return;
     }
-    await _pollCacheTimestamps();
+    await _pollCacheTimestamps({ force: true });
 }

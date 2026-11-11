@@ -3,7 +3,22 @@ import { classifyError } from './authStatus.js';
 import { SheetSql } from './sheetSql.js';
 import { normalizeHeaderName } from '../data_management/utils/helpers.js';
 import { ProgressBus } from '../data_management/utils/caching.js';
+import { networkState, trackRequest } from '../data_management/utils/networkState.js';
 import { isGridLimitError, gridNeeded, clipRangeToGrid, parseA1Range } from './gridRanges.js';
+
+// A request with no answer by then counts as a network failure (retried when safe). Generous: on
+// a slow connection a large read is still arriving.
+const REQUEST_TIMEOUT_MS = 90 * 1000;
+
+/** The request, or a TimeoutError after ms (0: no limit). The request itself can't be cancelled. */
+function withTimeout(request, ms) {
+    if (!ms) return request;
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new DOMException('The request took too long.', 'TimeoutError')), ms);
+    });
+    return Promise.race([request, timeout]).finally(() => clearTimeout(timer));
+}
 
 export class GoogleSheetsService {
 
@@ -56,11 +71,24 @@ export class GoogleSheetsService {
         throw error;
     }
 
-    // Exponential backoff helper for Google Sheets API calls
-    static async withExponentialBackoff(fn, maxRetries = 5, initialDelay = 500) {
+    /**
+     * Every Google API request attempt goes through here. Each attempt is timed and reported to
+     * the connection monitor (networkState.js), and gives up after timeoutMs.
+     * - A rejected token: the session renews it once and the call retries.
+     * - No access: thrown at once.
+     * - No answer (network failure or timeout): retried with backoff while Google isn't known to
+     *   be unreachable, unless `once`. A request that may have landed must not run twice (an
+     *   append, a row delete, a copy): those pass `once`.
+     * - Rate limits: waited out with a countdown. Other errors: retried with backoff.
+     * @param {Function} fn - Makes the request
+     * @param {Object} [options]
+     * @param {boolean} [options.once] - Never repeat it after no answer
+     * @param {number} [options.timeoutMs] - 0 for none (an upload, whose time grows with its size)
+     * @param {boolean} [options.sample] - false: leave its duration out of the slow test
+     */
+    static async withExponentialBackoff(fn, { once = false, timeoutMs = REQUEST_TIMEOUT_MS, sample = true, maxRetries = 5, initialDelay = 500 } = {}) {
         let attempt = 0;
         let delay = initialDelay;
-        let lastError = null;
         let consecutiveRateLimits = 0;
         
         // Check if rate limit simulation is enabled
@@ -72,13 +100,17 @@ export class GoogleSheetsService {
         let authRetried = false;
         while (true) {
             const usedToken = GoogleSheetsAuth.currentToken();
+            const done = trackRequest({ sample });
             try {
-                return await fn();
+                const result = await withTimeout(fn(), timeoutMs);
+                done('answered');
+                return result;
             } catch (err) {
+                const kind = classifyError(err);
+                done(kind === 'network' ? 'no-answer' : 'answered');
                 // Immediately throw grid limit errors: the range calls grow or clip to the grid (gridRanges.js)
                 if (isGridLimitError(err)) throw err;
 
-                const kind = classifyError(err);
                 // A rejected token: the session renews it once (through the sign-in service) and the
                 // call retries; otherwise the session asks the user, and the error goes up
                 if (kind === 'auth') {
@@ -88,9 +120,11 @@ export class GoogleSheetsService {
                     }
                     throw err;
                 }
-                // Retrying won't help: the account lacks access, or the device has no connectivity
-                // (the window 'offline' event sets the freeze state)
-                if (kind === 'permission' || kind === 'network') throw err;
+                // Retrying won't help: the account lacks access
+                if (kind === 'permission') throw err;
+                // No answer: once Google is known to be unreachable, waiting callers take over
+                // (held edits, stores reloading on reconnect)
+                if (kind === 'network' && (once || networkState.isOffline)) throw err;
 
                 if (kind === 'quota') {
                     consecutiveRateLimits++;
@@ -151,7 +185,6 @@ export class GoogleSheetsService {
                 await new Promise(res => setTimeout(res, delay));
                 delay *= 2;
                 attempt++;
-                lastError = err;
             }
         }
     }
@@ -231,7 +264,8 @@ export class GoogleSheetsService {
                 valueInputOption: 'RAW',
                 insertDataOption: 'INSERT_ROWS',
                 resource: { values: rows }
-            })
+            }),
+            { once: true }
         );
         return true;
     }
@@ -257,8 +291,10 @@ export class GoogleSheetsService {
         const requests = rows.map(n => ({
             deleteDimension: { range: { sheetId: sheet.properties.sheetId, dimension: 'ROWS', startIndex: n - 1, endIndex: n } }
         }));
+        // Row numbers: a repeat would delete the rows that moved up
         await GoogleSheetsService.withExponentialBackoff(() =>
-            gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId, resource: { requests } })
+            gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId, resource: { requests } }),
+            { once: true }
         );
         return true;
     }
@@ -350,7 +386,8 @@ export class GoogleSheetsService {
                                 }
                             }]
                         }
-                    })
+                    }),
+                    { once: true }
                 );
             }
         }
@@ -619,7 +656,8 @@ export class GoogleSheetsService {
                 spreadsheetId,
                 sheetId: sourceSheetId,
                 resource: { destinationSpreadsheetId: spreadsheetId }
-            })
+            }),
+            { once: true }
         );
         // Rename the new sheet to newTabName
         const newSheetId = copyResponse.result.sheetId;
@@ -668,6 +706,8 @@ export class GoogleSheetsService {
             
             return results;
         } catch (error) {
+            // A failed read keeps its kind (no answer, sign-in), so callers can react to it
+            if (classifyError(error) !== 'other') throw error;
             console.error('Error executing sheet query:', error);
             throw new Error(`Failed to execute query: ${error.message}`);
         }
@@ -700,7 +740,8 @@ export class GoogleSheetsService {
                         }
                     ]
                 }
-            })
+            }),
+            { once: true }
         );
     }
 
@@ -734,6 +775,16 @@ export class GoogleSheetsService {
      * @param {string[]} tableIds
      * @returns {Promise<Object<string, string>|null>} tableId → RFC 3339 time; null without auth
      */
+    /**
+     * The connection probe (networkState.js): resolves when the Sheets API answers at all, rejects
+     * on no answer. No sign-in and no quota: an opaque HEAD request.
+     */
+    static async probeConnection() {
+        await fetch('https://sheets.googleapis.com/$discovery/rest?version=v4', {
+            method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(15000)
+        });
+    }
+
     static async getModifiedTimes(tableIds) {
         if (!GoogleSheetsAuth.isActive()) return null;
         const entries = await Promise.all(tableIds.map(async (tableId) => {
@@ -902,6 +953,7 @@ export class GoogleSheetsService {
      * @returns {Promise<{id: string, name: string}|null>} Uploaded file metadata or null on failure
      */
     static async uploadDriveFile(file, fileName, folderId, appProperties = null) {
+        // Its time grows with the file: no timeout, and not a measure of the connection
         return await this.withExponentialBackoff(async () => {
             try {
                 const token = gapi.client.getToken();
@@ -931,7 +983,7 @@ export class GoogleSheetsService {
                 console.error('Error uploading Drive file:', error);
                 return null;
             }
-        });
+        }, { once: true, timeoutMs: 0, sample: false });
     }
 
     /**

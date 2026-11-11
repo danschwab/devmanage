@@ -1,6 +1,6 @@
 // caching
 export { invalidateCache, fillCache, wrapMethods, clearCache, stampDataChange, ProgressBus, CacheInvalidationBus, triggerCachePoll, watchSpreadsheets, isAppOutdated, checkAppVersion, assertAppCurrent } from './utils/caching.js';
-export { networkState } from './utils/networkState.js';
+export { networkState, CONNECTION, checkConnection, onConnectionChange, whenConnected } from './utils/networkState.js';
 
 // Data management components
 export { Database } from './abstraction/database.js';

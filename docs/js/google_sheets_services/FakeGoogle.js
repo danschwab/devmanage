@@ -7,6 +7,7 @@ import { SheetSql } from './sheetSql.js';
 import { BaseTokenManager } from './GoogleSheetsAuth.js';
 import { AUTH_STATUS, authRequiredError } from './authStatus.js';
 import { normalizeHeaderName, isLocalhost } from '../data_management/utils/helpers.js';
+import { trackRequest } from '../data_management/utils/networkState.js';
 
 // A1 column letters → 0-based index ("A" → 0, "Z" → 25, "AA" → 26)
 function _colToIndex(letters) {
@@ -1253,18 +1254,6 @@ export class FakeGoogleSheetsService {
         ]
     };
 
-    static async withExponentialBackoff(fn, maxRetries = 7, initialDelay = 500) {
-        await this.delay(500 + Math.random() * 500); // Add random delay > 1s
-        //console.log('FakeGoogleSheetsService: Simulating exponential backoff...');
-        await this.delay(Math.random() * 100 + 50); // Random delay between 50-150ms
-        try {
-            return await fn();
-        } catch (error) {
-            //console.log('FakeGoogleSheetsService: Simulated error caught in backoff');
-            throw error;
-        }
-    }
-
     /**
      * Fault injection for tests (null in normal use). Hooks run inside the fake service calls, at
      * the points where a concurrent editor could change the live sheet:
@@ -1768,10 +1757,32 @@ export class FakeGoogleSheetsService {
         }
     }
 
-    // Utility method to simulate async delays
-    static delay(ms) {
-        if (!_delaysEnabled) return Promise.resolve();
-        return new Promise(resolve => setTimeout(resolve, ms));
+    /**
+     * The fake network, for tests and trying the app on localhost. Each delay() is one request,
+     * reported to the connection monitor as the real service's requests are.
+     *   down       requests get no answer, as the real API library reports it (code -1)
+     *   latencyMs  added to every request, even with delays turned off (a slow connection)
+     * From the console: (await import('/docs/js/google_sheets_services/FakeGoogle.js'))
+     *   .FakeGoogleSheetsService.network.down = true
+     */
+    static network = { down: false, latencyMs: 0 };
+
+    // One simulated request: its delay, then no answer when the network is down
+    static async delay(ms) {
+        const done = trackRequest();
+        const wait = (_delaysEnabled ? ms : 0) + this.network.latencyMs;
+        if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+        if (this.network.down) {
+            done('no-answer');
+            const message = 'A network error occurred, and the request could not be completed.';
+            throw Object.assign(new Error(message), { result: { error: { code: -1, message } } });
+        }
+        done('answered');
+    }
+
+    /** The connection probe (networkState.js): one request on the fake network. */
+    static async probeConnection() {
+        await this.delay(50);
     }
 
     // Method to reset mock data to original state (discards locally saved changes)
