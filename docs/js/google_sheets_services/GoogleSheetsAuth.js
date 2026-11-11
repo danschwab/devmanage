@@ -23,12 +23,14 @@ const SESSION_KEY = 'auth_session';   // localStorage: the sign-in service's ses
 const SERVICE_USED_KEY = 'auth_service_used';   // localStorage: this device has signed in through the service
 const PENDING_KEY = 'auth_pending';   // sessionStorage: a redirect sign-in on its way to Google
 const RESULT_KEY = 'auth_result';     // sessionStorage: what auth-callback.html brought back
+const SILENT_KEY = 'auth_silent_tried';   // sessionStorage: this tab already tried signing in without a click
 const RELAY_CHANNEL = 'tse-auth';     // BroadcastChannel: auth-callback.html → the page, for a popup sign-in
 const RENEW_LEAD_S = 600;             // with the service: renew this long before the token ends
 const WARN_LEAD_S = 300;              // without it: "Stay signed in" this long before the token ends
 const MIN_TOKEN_S = 60;               // a token with less left is renewed before it is used
 const RETRY_MS = 60 * 1000;           // the service unreachable: try again after this
-const BROKER_TIMEOUT_MS = 30 * 1000;
+const BROKER_TIMEOUT_MS = 60 * 1000;  // Apps Script can take seconds to wake, and the network can be slow
+const BROKER_RETRY_MS = 2000;         // a call that got no readable answer is sent once more after this
 const POPUP_WAIT_MS = 10 * 60 * 1000;
 
 const POPUP_BLOCKED = 'The browser blocked the sign-in window. Allow pop-ups for this site, then try again.';
@@ -194,8 +196,7 @@ export class GoogleSheetsAuth {
             sessionStorage.removeItem(RESULT_KEY);
             sessionStorage.removeItem(PENDING_KEY);
             try {
-                await this._finishSignIn(result, pending);
-                return;
+                if (await this._finishSignIn(result, pending)) return;
             } catch (error) {
                 this._set({ error: error.message });
             }
@@ -210,7 +211,25 @@ export class GoogleSheetsAuth {
 
         // The service renews in the background: no window
         if (BROKER_URL && localStorage.getItem(SESSION_KEY)) await this._renew();
-        // Otherwise signed out: the page asks the user to sign in, with no unsaved work to lose
+
+        // Still signed out, but someone has signed in on this device before: ask Google without
+        // showing anything (prompt=none). With a live Google session and the app already allowed,
+        // Google sends the user straight back signed in; otherwise the page shows the sign-in card.
+        // There's no unsaved work to lose on a page that is just loading.
+        if (this.state.status === AUTH_STATUS.SIGNED_OUT && this._maySignInSilently(!!result)) {
+            sessionStorage.setItem(SILENT_KEY, '1');
+            await this._redirectToGoogle({ silent: true });   // never returns
+        }
+    }
+
+    /**
+     * Whether a page load may try a sign-in without a click: once per tab (so a "no" from Google
+     * can't loop), with the service reachable, for a device someone signed in on (signing out
+     * forgets the email, so a logout stays a logout), and not right after a sign-in came back.
+     */
+    static _maySignInSilently(justReturned) {
+        return !!BROKER_URL && !justReturned && navigator.onLine && !this.state.error &&
+            !!localStorage.getItem(BaseTokenManager.emailKey) && !sessionStorage.getItem(SILENT_KEY);
     }
 
     // ── Tokens for requests ───────────────────────────────────────────────────
@@ -403,6 +422,7 @@ export class GoogleSheetsAuth {
         localStorage.setItem(SESSION_KEY, answer.session);
         localStorage.setItem(BaseTokenManager.emailKey, answer.email);
         localStorage.setItem(SERVICE_USED_KEY, '1');
+        sessionStorage.removeItem(SILENT_KEY);
         this._needConsent = false;
         const token = { access_token: answer.accessToken, expires_in: answer.expiresIn, scope: answer.scope, token_type: 'Bearer' };
         BaseTokenManager.storeToken(token);
@@ -411,17 +431,37 @@ export class GoogleSheetsAuth {
 
     /**
      * POST to the service. A plain-text body keeps it a simple request: Apps Script can't answer a
-     * CORS preflight. Throws with brokerError set when the service answered with a refusal.
+     * CORS preflight. A call that gets no readable answer (timed out, cut off, or an error page in
+     * place of JSON) is sent once more: renewing twice is safe (the service repeats its answer for
+     * two minutes), and a sign-in code the service already used comes back refused. Throws with
+     * brokerError set when the service answered with a refusal.
      */
-    static async _callBroker(body) {
-        const response = await fetch(BROKER_URL, {
-            method: 'POST',
-            body: JSON.stringify(body),
-            signal: AbortSignal.timeout ? AbortSignal.timeout(BROKER_TIMEOUT_MS) : undefined
-        });
-        if (!response.ok) throw new Error(`Sign-in service answered ${response.status}`);
+    static async _callBroker(body, retried = false) {
         let answer;
-        try { answer = await response.json(); } catch { throw new Error('Sign-in service sent an unreadable answer'); }
+        try {
+            const response = await fetch(BROKER_URL, {
+                method: 'POST',
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout ? AbortSignal.timeout(BROKER_TIMEOUT_MS) : undefined
+            });
+            if (!response.ok) throw new Error(`answered ${response.status}`);
+            const text = await response.text();
+            try {
+                answer = JSON.parse(text);
+            } catch {
+                // Not JSON: an Apps Script or Google error page (never a token), kept for diagnosis
+                console.warn('[GoogleSheetsAuth] The sign-in service answered with something other than JSON:', text.slice(0, 300));
+                throw new Error('sent something other than JSON');
+            }
+        } catch (error) {
+            if (!retried) {
+                console.warn(`[GoogleSheetsAuth] Sign-in service call failed (${error.name}: ${error.message}); trying once more`);
+                await new Promise(resolve => setTimeout(resolve, BROKER_RETRY_MS));
+                return this._callBroker(body, true);
+            }
+            const timedOut = error.name === 'TimeoutError' || error.name === 'AbortError';
+            throw new Error(timedOut ? 'The sign-in service took too long to answer.' : 'Could not reach the sign-in service.');
+        }
         if (!answer.ok) {
             const error = new Error(answer.message || answer.error || 'Sign-in refused');
             if (answer.error === 'SERVER_ERROR') throw error;   // the service failed: treat as unreachable
@@ -433,8 +473,12 @@ export class GoogleSheetsAuth {
 
     // ── Signing in with the service ───────────────────────────────────────────
 
-    /** Google's authorization URL for a code the service exchanges. kind: 'r' redirect, 'p' popup. */
-    static async _authorizationRequest(kind, consent) {
+    /**
+     * Google's authorization URL for a code the service exchanges. kind: 'r' redirect, 'p' popup.
+     * consent: show the permissions page (a refresh token comes only with it). silent: show
+     * nothing (prompt=none); Google answers with an error when it would need the user.
+     */
+    static async _authorizationRequest(kind, consent, silent = false) {
         const state = `${kind}.${_randomString(32)}`;
         const verifier = _randomString(64);
         const challenge = _base64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
@@ -450,15 +494,16 @@ export class GoogleSheetsAuth {
             code_challenge: challenge,
             code_challenge_method: 'S256'
         });
-        if (consent) params.set('prompt', 'consent');
+        if (silent) params.set('prompt', 'none');
+        else if (consent) params.set('prompt', 'consent');
         else if (!email) params.set('prompt', 'select_account');
         if (email) params.set('login_hint', email);
-        return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params}`, pending: { state, verifier, consent: !!consent } };
+        return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params}`, pending: { state, verifier, consent: !!consent && !silent, silent } };
     }
 
     /** One redirect: Google, then auth-callback.html, then back to this page, which finishes in initialize() */
-    static async _redirectToGoogle({ consent = false } = {}) {
-        const { url, pending } = await this._authorizationRequest('r', consent);
+    static async _redirectToGoogle({ consent = false, silent = false } = {}) {
+        const { url, pending } = await this._authorizationRequest('r', consent, silent);
         sessionStorage.setItem(PENDING_KEY, JSON.stringify({ ...pending, returnUrl: location.href }));
         location.assign(url);
         await new Promise(() => {});   // the page is leaving
@@ -477,8 +522,7 @@ export class GoogleSheetsAuth {
             popup.location.href = url;
             const result = await this._waitForPopup(pending.state);
             if (!result) return false;
-            await this._finishSignIn(result, pending);
-            return true;
+            return await this._finishSignIn(result, pending);
         })().catch((error) => {
             this._set({ error: error.message });
             return false;
@@ -502,19 +546,32 @@ export class GoogleSheetsAuth {
         });
     }
 
-    /** Google's answer → the service exchanges the code → a session */
+    /**
+     * Google's answer → the service exchanges the code → a session. Returns whether it signed in;
+     * a silent attempt that Google or the service turned down returns false without an error, and
+     * the page shows the sign-in card.
+     */
     static async _finishSignIn(result, pending) {
         if (!pending || result.state !== pending.state) throw new Error('Sign-in was interrupted. Please sign in again.');
-        if (result.error) throw new Error(result.error === 'access_denied' ? 'Sign-in was cancelled.' : `Google sign-in failed (${result.error}).`);
+        if (result.error) {
+            if (pending.silent) return false;   // Google needs the user (signed out of Google, or a new permission)
+            throw new Error(result.error === 'access_denied' ? 'Sign-in was cancelled.' : `Google sign-in failed (${result.error}).`);
+        }
         try {
             this._acceptSession(await this._callBroker({ action: 'exchange', code: result.code, verifier: pending.verifier, redirectUri: _callbackUrl() }));
+            return true;
         } catch (error) {
-            if (error.brokerError !== 'NO_REFRESH_TOKEN') throw error;
-            // The service has no refresh token for this account yet: Google gives one with consent
-            this._needConsent = true;
-            if (pending.consent) throw new Error('Google did not grant offline access. Please sign in again.');
-            if (pending.state.startsWith('r.')) await this._redirectToGoogle({ consent: true });   // never returns
-            throw new Error('One more step: click Sign in again to let the app stay signed in.');
+            if (error.brokerError === 'NO_REFRESH_TOKEN') {
+                // The service has no refresh token for this account yet: Google gives one with consent
+                this._needConsent = true;
+                if (pending.silent) return false;   // the card's Log in asks for consent
+                if (pending.consent) throw new Error('Google did not grant offline access. Please sign in again.');
+                if (pending.state.startsWith('r.')) await this._redirectToGoogle({ consent: true });   // never returns
+                throw new Error('One more step: click Sign in again to let the app stay signed in.');
+            }
+            if (error.brokerError) throw error;   // refused, with the service's own message
+            // No answer even after a retry; Google's code is single-use, so it takes a new sign-in
+            throw new Error(`Signing in didn't finish: ${error.message} Click Log in to try again.`);
         }
     }
 

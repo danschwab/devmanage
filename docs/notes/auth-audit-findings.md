@@ -17,6 +17,14 @@ How sign-in works, how to set up the sign-in service, and what protects what. Bu
 | The service ends the session (revoked, idle 30 days, reused secret) | The banner says "Your sign-in has ended". Its click opens Google's sign-in in a popup, so the page and unsaved work stay. | (no service) |
 | The service is unreachable | Retries every minute and when the tab shows again. The banner says so and offers "Try again". | (no service) |
 
+**Page load, in order:**
+1. Finish a sign-in that just came back from Google.
+2. Else use a stored token that is still good.
+3. Else renew through the service (a fetch).
+4. Else, with the service and a device someone signed in on (`last_email`), try once per tab to sign in without a click: a redirect with `prompt=none`, and `auth_silent_tried` in sessionStorage. With a live Google session and the app already allowed, Google sends the user straight back signed in. If Google needs the user, or the service has no refresh token for the account, the page quietly shows the sign-in card. Logging out forgets `last_email`, so a logout stays a logout.
+
+**Slow networks:** calls to the service time out after 60 s. A call with no readable answer (timed out, cut off, or an error page in place of JSON, whose first 300 characters go to the console) is sent once more. Repeating a renewal is safe within the two-minute grace. A sign-in exchange that still gets no answer asks the user to log in again, because Google's code is single-use.
+
 **Statuses** (`AUTH_STATUS`, `authStatus.js`): `signed-out`, `active`, `expiring` (no service, token ends within 5 minutes), `needs-user` (signed in, but only the user's click can renew; `reason` is `expired`, `ended` or `unavailable`).
 
 **Rules the code keeps:**
