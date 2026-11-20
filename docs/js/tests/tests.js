@@ -6438,6 +6438,7 @@ test('INVENTORY PROJECTION', 'settings: defaults, preference values, minimums', 
         { id: 'ProjectionMinShortfall', value: 'abc' }
     ]);
     assertEqual([settings.growthFactor, settings.usageMonths, settings.minShortfall], [1.5, 1, 1], 'value kept, raised to its minimum, invalid takes the default');
+    assertEqual(resolveProjectionSettings([{ id: 'ProjectionMinShortfall', value: '-5' }]).minShortfall, -5, 'min shortfall may be negative (items running low)');
 });
 
 test('INVENTORY PROJECTION', 'volume: booked or the past month carried forward, with the trend', () => {
@@ -6533,7 +6534,7 @@ test('INVENTORY PROJECTION', 'shows not booked yet: the past month\'s shows a ye
 // overlapping Jul 20–25. Two shows learned from: A packed in both, 60 and 40 per 1000 sq ft (50),
 // stock 20; B in one, 4 per 1000 (2), stock 3; C in one, 20 per 1000 (10), no stock figures.
 test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and filled shows, out at once against stock', () => {
-    const { months, items, filled } = projectInventory({
+    const input = {
         months: ['2025-06', '2025-07'],
         from: '2025-06-01',
         scheduledShows: [{ month: '2025-06', sqft: 400 }, { month: '2025-06', sqft: 600 }],
@@ -6550,7 +6551,8 @@ test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and fi
             { itemId: 'B', used: [{ qty: 2, sqft: 500 }], packed: [], stock: { '2025-06': 3, '2025-07': 3 } },
             { itemId: 'C', used: [{ qty: 10, sqft: 500 }], packed: [], stock: {} }
         ]
-    }, DEFAULT_PROJECTION_SETTINGS);
+    };
+    const { months, items, filled } = projectInventory(input, DEFAULT_PROJECTION_SETTINGS);
     assertEqual(months.map(m => [m.month, m.projectedSqft, m.shortages]), [
         ['2025-06', 1000, [{ itemId: 'A', peak: 35, stock: 20, short: -15, usedIn: 2, unusual: 0, learned: 2, scale: 1, at1000: 50, multiplier: 1 }]],
         ['2025-07', 2000, [{ itemId: 'A', peak: 100, stock: 20, short: -80, usedIn: 2, unusual: 0, learned: 2, scale: 1, at1000: 50, multiplier: 1 }, { itemId: 'B', peak: 4, stock: 3, short: -1, usedIn: 1, unusual: 0, learned: 2, scale: 1, at1000: 4, multiplier: 1 }]]
@@ -6564,6 +6566,12 @@ test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and fi
     ], 'one row per item: its first short month, its deepest shortage; each short month on its own');
     assertEqual(itemShortages(months, { A: 85, B: 0.5 }).map(r => [r.itemId, r.proposed, r.months.map(m => m.proposed)]), [['A', 5, [70, 5]], ['B', -1, [-1]]],
         'proposed: the shortage after the changes, rounded down, overall and in each month');
+    // Min shortfall -2 lists items within 2 of running out: B in June, 1.2 out of 3 (1.8 left)
+    const low = projectInventory(input, { ...DEFAULT_PROJECTION_SETTINGS, minShortfall: -2 });
+    assertEqual(itemShortages(low.months).map(r => [r.itemId, r.month, r.shortage, r.months.map(m => [m.month, m.shortage])]), [
+        ['A', '2025-06', -80, [['2025-06', -15], ['2025-07', -80]]],
+        ['B', '2025-06', -1, [['2025-06', 1], ['2025-07', -1]]]
+    ], 'B low in June (1 left, rounded down), short in July');
 });
 
 // D packed 2 at each of four sizes (scale 3/7, 1.743 at 1000 sq ft); July's two filled 1000 sq ft

@@ -1129,7 +1129,7 @@ export class FakeGoogleSheetsService {
                 ['ProjectionHistoryYears', 'History Years', "past years whose square feet set the growth trend (a straight line through each year's total); 1 is no trend", 'reports/inventory-projection, reports/expected-work', 'integer', '1', ''],
                 ['ProjectionGrowthFactor', 'Growth Factor', "multiplies last year's square feet for a future month, on top of the trend, once per year ahead", 'reports/inventory-projection, reports/expected-work', 'double', '1', ''],
                 ['ProjectionDefaultSquareFeet', 'Default Square Feet', "square feet for a show whose size can't be read; 0 leaves it out", 'reports/inventory-projection, reports/expected-work', 'integer', '0', ''],
-                ['ProjectionMinShortfall', 'Min Shortfall', 'items out at once must pass stock by this much to list an item', 'reports/inventory-projection', 'double', '1', ''],
+                ['ProjectionMinShortfall', 'Min Shortfall', 'items out at once must pass stock by this much to list an item; a negative value also lists items running low (-5: 5 or fewer left)', 'reports/inventory-projection', 'double', '1', ''],
                 // Expected work (data_management/utils/work-projection.js, WORK_CATEGORIES); the four rows
                 // above that name both reports are shared
                 ['WorkLargeBoothSqft', 'Large Booth From', 'square feet a large booth starts at; smaller booths, and shows without a size, take small-booth hours', 'reports/expected-work', 'integer', '400', ''],

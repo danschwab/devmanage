@@ -48,7 +48,9 @@
  *   feet (scale 1).
  * - Out at once: per item, the most out on any day of each month (peakByMonth).
  * - Shortage: that peak above the month's stock (at its start, scheduled changes applied) by at
- *   least `minShortfall` items. Its size in items is stock less the peak.
+ *   least `minShortfall` items. Its size in items is stock less the peak. A negative
+ *   `minShortfall` also lists items running low: -5 lists an item once 5 or fewer are left, its
+ *   size then the items left (positive).
  * The report lists each item that runs short once (itemShortages): the first month it does, and the
  * most it falls short by from then on.
  */
@@ -60,7 +62,7 @@ export const PROJECTION_SETTINGS = Object.freeze({
     historyYears: { id: 'ProjectionHistoryYears', type: 'integer', default: 1, min: 1 },
     growthFactor: { id: 'ProjectionGrowthFactor', type: 'double', default: 1, min: 0 },
     defaultSquareFeet: { id: 'ProjectionDefaultSquareFeet', type: 'integer', default: 0, min: 0 },
-    minShortfall: { id: 'ProjectionMinShortfall', type: 'double', default: 1, min: 0 }
+    minShortfall: { id: 'ProjectionMinShortfall', type: 'double', default: 1, min: -Infinity }
 });
 
 /** The page whose menu shows the projection's preference rows */
@@ -485,7 +487,8 @@ export function projectInventory({ months, from, scheduledShows, pastShows, pack
 /**
  * One row per item that runs short (projectInventory months): the first month it does, and its
  * shortage, the most it falls short by in that month or a later one, so adding that many covers
- * the whole projection. Rounded down (short by 27.3 is -28). With quantity changes (a proposal's),
+ * the whole projection. Rounded down (short by 27.3 is -28). With a negative minShortfall an item
+ * running low is listed too, its shortage the fewest left (3.6 left is 3). With quantity changes (a proposal's),
  * `proposed` is the shortage after them; null without. `months` lists every month it runs short,
  * each with its own shortage and proposed. Soonest month first, then the largest shortage.
  * @param {Array<{month: string, shortages: Array<{itemId: string, short: number}>}>} months
