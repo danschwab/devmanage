@@ -37,6 +37,7 @@ One row per proposed item change:
 | `Changes` | JSON `[{n, ne}]` — the same shape as scheduled changes. `quantity` ne is a signed delta; other fields are the new value. |
 | `UpdatedBy` / `Updated` | Short user name / deciseconds since epoch |
 | `CommittedBy` / `Committed` | Blank while active; set per row when that row's category was committed |
+| `ArchivedBy` / `Archived` | Blank unless archived; set on every row of an archived proposal (added after launch: a tab without these columns reads them as blank, and the next write adds them) |
 
 A proposal exists while it has at least one row. It is committed when all of its rows are committed (rows are marked per category, so a failed save can be retried without applying committed categories twice).
 
@@ -65,7 +66,7 @@ The inventory overview table and the category cards show a **View Proposals** bu
 
 ### Pages
 
-- `inventory/proposals` — cards grid, one card per proposal (active first, committed gray at the end).
+- `inventory/proposals` — cards grid, one card per proposal (active first, committed gray at the end). An active proposal with unsaved edits (in this session's open store, or in the user's autosave backup) shows **Unsaved changes** and a green **Save** card, as category cards do. Save (`saveProposalEdits`) takes the proposal lock, saves the store and releases the lock (its page, which would release it, isn't open).
 - `inventory/proposals/<slug>` — the proposal page. `<slug>` is the lowercase name with non-alphanumerics as `-`.
 
 `InventoryContent` (which hosts both pages) registers the `proposals` route and one child route per proposal from the shared proposal list, so breadcrumbs and deep links work. A category tab named PROPOSALS would get no route of its own.
@@ -87,23 +88,36 @@ One table: image (read-only, as on the overview table), Category, Item#, Current
 - **Commit** (disabled while dirty or committed) → the standard inventory save dialog, note required and prefilled `proposal: <name>`, date starting at the projected date, then the two-pass commit.
 - Committed proposals are read-only with a banner.
 
+### Proposal page menu
+
+The inventory menu shows four more items on a proposal page (`ProposalMenuComponent` in `InventoryProposals.js`; nothing on other inventory pages). Duplicate and Split create a proposal through `createProposal` (`inventoryProposals.js`): under the new name's lock it reads the list again and refuses a taken name, since a save under an existing name would replace that proposal's items. Rows without changes save nothing, so a new proposal holds only the items with a change.
+
+- **Duplicate Proposal** — a new proposal with this one's saved items and changes. Unsaved edits stay where they are. Works on committed proposals too (it proposes the same changes again).
+- **Split Using Unsaved Changes** (only while the page has unsaved edits) — a new proposal of the unsaved edits, one item per item of the proposal (`ProposalUtils.splitRows`). The modal picks the direction:
+  - *Unsaved changes are additions*: each edit goes in as made (+30 lowered to +20 → −10).
+  - *Unsaved changes are subtractions* (default): what the edit took out goes in (+30 lowered to +20 → +10). An item marked for removal moves its whole change; an added item is reversed.
+  - Text edits: the edited value (additions) or the value it replaced (subtractions).
+  - An item without an unsaved edit gets no change (0), so it isn't stored. The source keeps its edits unsaved, so saving it afterwards commits them; the dialog afterwards offers to open the new proposal.
+- **Merge With Another Proposal** (needs another active proposal) — this proposal's saved items are added to the chosen one as **unsaved** edits there (`mergeIntoProposal`): quantity changes add up, the source's text changes replace the target's, an item the target lacks is added, and an item marked for removal there is unmarked and takes the source's changes. The target's lock is taken first and kept (its page keeps it while it has edits); the target opens, and nothing is saved until the user saves or discards there. The source is unchanged.
+- **Archive Proposal** (not while the page has unsaved edits) — after a confirm, marks every row of the proposal archived (`setInventoryProposalArchived` → `ProposalUtils.setArchived`) and returns to the proposals page. For now archiving only hides: archived proposals are left out of the proposals page, the save dialog's proposal list, merge targets, the projection report's select and the proposal rows under category items. Nothing in the proposal changes, its name stays taken (`validateName` still sees it), and a save to it keeps its rows archived (`replaceActiveEntries` carries the mark to new rows). Its page still opens from a link, with an "Archived" banner, and there the item reads **Unarchive Proposal**, which clears the mark.
+
 ---
 
 ## Code Map
 
 | Area | File |
 |---|---|
-| Constants and all entry logic as pure helpers: names, slugs, diff, merge, replace (page save), mark committed, apply, projection, quantity changes by item | `docs/js/data_management/utils/proposal-utils.js` |
-| Read and write the tab | `docs/js/data_management/api.js`: `getInventoryProposals`, `getInventoryProposalTable`; the three mutations are one-line wrappers over `_updateProposalEntries(transform)` (read → pure helper → write) |
-| Shared proposal store, routes, two-pass commit | `docs/js/application/utils/inventoryProposals.js` |
+| Constants and all entry logic as pure helpers: names, slugs, diff, merge, replace (page save), mark committed, apply, projection, quantity changes by item, split and merge rows (`splitRows`, `mergeTableRow`) | `docs/js/data_management/utils/proposal-utils.js` |
+| Read and write the tab | `docs/js/data_management/api.js`: `getInventoryProposals`, `getInventoryProposalTable`; the three mutations (table save, mark committed, archive) are one-line wrappers over `_updateProposalEntries(transform)` (read → pure helper → write) |
+| Shared proposal store, routes, two-pass commit, create / split / merge, saving from the grid, unsaved checks | `docs/js/application/utils/inventoryProposals.js` |
 | Save dialog, proposal rows | `docs/js/application/components/content/InventoryTable.js` |
 | Menu item | `docs/js/application/components/content/InventoryContent.js` |
-| Cards grid and proposal page | `docs/js/application/components/content/InventoryProposals.js`, routed from `InventoryContent.js` |
+| Cards grid, proposal page and its menu items (with their name and merge modals) | `docs/js/application/components/content/InventoryProposals.js`, routed from `InventoryContent.js` |
 | Note length | `InventoryNoteMaxLength` preference (CACHE/Preferences, integer, default 25): `resolveInventoryNoteMaxLength` in `metadata-utils.js`, `Requests.getInventoryNoteMaxLength` for saves, `getInventoryNoteMaxLength()` (reactive) for the UI |
 
 ---
 
 ## Follow-Ups
 
-- Proposal management (rename, delete, archive committed) if the list grows.
+- Proposal management (rename, delete) if the list grows; a way to list archived proposals (today only a link reaches one).
 - `applyNeValue` treats any `+digit`/`-digit` string as a delta for every field; scheduled description changes starting with a sign have the same issue proposals avoid.

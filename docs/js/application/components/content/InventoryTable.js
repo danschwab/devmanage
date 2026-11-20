@@ -241,7 +241,7 @@ export function openInventorySaveDialog(page, { store, category, initialNote = '
         hasQtyChanges: hasQuantityChanges(store),
         initialNote,
         onProposal: allowProposal ? sendToProposal : null,
-        proposalNames: proposals.filter(p => !p.committed).map(p => p.name),
+        proposalNames: proposals.filter(p => !p.committed && !p.archived).map(p => p.name),
         allProposalNames: proposals.map(p => p.name),
         deletionCount: (store.data || []).filter(isMarkedForDeletion).length,
         onConfirm: async (scheduledDate, note) => {
@@ -687,11 +687,12 @@ export const InventoryTableComponent = {
             }
             return map;
         },
-        // Active proposal entries for this category, by item number (shown under each item)
+        // Active proposal entries for this category, by item number (shown under each item).
+        // Archived proposals are hidden (every row of one is marked).
         proposalEntriesByItem() {
             const map = new Map();
             for (const entry of ProposalUtils.activeEntries(this.proposalsStore?.data || [])) {
-                if (entry.category !== this.tabTitle) continue;
+                if (entry.category !== this.tabTitle || entry.archived) continue;
                 if (!map.has(entry.itemNumber)) map.set(entry.itemNumber, []);
                 map.get(entry.itemNumber).push(entry);
             }

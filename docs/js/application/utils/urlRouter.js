@@ -62,6 +62,21 @@ export class URLRouter {
     }
 
     /**
+     * A path as a hash that survives being pasted into mail and chat: the route keeps its
+     * spaces-as-plus form, and the parameters are fully percent-encoded (a raw `{`, `"` or space
+     * ends or breaks the link in many clients). Reading it back is unchanged: parsePath decodes
+     * the parameters.
+     */
+    static shareableHash(path) {
+        const [route, params] = String(path || '').split('?');
+        const encodedRoute = route.replace(/ /g, '+');
+        if (!params) return encodedRoute;
+        let decodedParams = params;
+        try { decodedParams = decodeURIComponent(params); } catch { /* already raw */ }
+        return `${encodedRoute}?${encodeURIComponent(decodedParams)}`;
+    }
+
+    /**
      * Create a short hash URL from a path (async - calls ApplicationUtils)
      * @param {string} path - The full path to shorten
      * @returns {Promise<string>} The short hash format (e.g., "go:1gx")

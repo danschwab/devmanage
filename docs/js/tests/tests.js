@@ -37,7 +37,7 @@ import { isCheckedValue } from '../data_management/utils/checkbox-values.js';
 import { useBatchEdits, useInstantEdits } from '../application/utils/cellEdits.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, cutoffSettled, wrapMethods, stampDataChange, Database, DEFAULT_INVENTORY_MAPPING, EditHistoryUtils, InventoryUtils, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, resolveInventoryNoteMaxLength, readRowMetadata, writeRowMetadata, checkDateRollover, clearCache, invalidateCache, resolveSheetMapping, parseThumbnails, parseThumbnailEntries, serializeThumbnailEntries, addThumbnails, removeThumbnailAt, setPrimaryThumbnail, setThumbnailNote, setThumbnailCrop, primaryThumbnailValue, thumbnailKey } from '../data_management/index.js';
 import { authState } from '../application/utils/auth.js';
-import { commitInventoryProposal, saveToProposal, proposalTableStore, sendEditsToProposal } from '../application/utils/inventoryProposals.js';
+import { commitInventoryProposal, saveToProposal, proposalTableStore, sendEditsToProposal, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits, setProposalArchived } from '../application/utils/inventoryProposals.js';
 import { hasQuantityChanges } from '../application/components/content/InventoryTable.js';
 import { evaluateArithmetic } from '../application/components/interface/cells.js';
 import { balancedSplit } from '../application/components/interface/buttonBar.js';
@@ -53,7 +53,7 @@ import { containerTier, BREAKPOINTS } from '../application/utils/useContainerSiz
 import { createScrollHider } from '../application/utils/scrollHider.js';
 import { DEFAULT_DASHBOARD } from '../application/utils/dashboardLayout.js';
 import { parseBoothSquareFeet, monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
-import { redirectPath } from '../application/utils/urlRouter.js';
+import { redirectPath, URLRouter } from '../application/utils/urlRouter.js';
 import { todayISOString, setTestToday, startOfTodayMs, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, itemVariantBase, resolveItemVariant, itemVariantFamilies, itemVariantKey, parseItemVariants, searchFilter, textFiltersToSearchParams, parseSearchParameters } from '../data_management/utils/helpers.js';
 import { instantWriteEntry, identityKey, cellKey, joinKey } from '../data_management/utils/instant-write-config.js';
 import { estimateShipDate } from '../data_management/utils/ship-date.js';
@@ -1683,6 +1683,33 @@ test('USER DATA', 'hasUserDataKey returns false for nonexistent key', async () =
 test('USER DATA', 'getUserDataByPrefix returns entry for dashboard prefix', async () => {
     const result = await Requests.getUserDataByPrefix('test@example.com', 'dashboard');
     if (result === null || result === undefined) throw new Error('expected match for prefix "dashboard"');
+});
+
+// ── Group 24-links: Share Links ───────────────────────────────────────────────
+// FakeGoogle's CACHE/Links has one row: the schedule date-filter path, code '1'. A new path gets
+// the next base-36 code ('2'). Regression: the cached Links rows are frozen, and shortening a new
+// path pushed onto them (TypeError). A shared link percent-encodes its parameters and reads back
+// to the same parameters.
+
+test('SHARE LINKS', 'an existing path keeps its code; a new path gets the next code and expands back', async () => {
+    const existing = 'schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}';
+    assertEqual(await URLRouter.createShortHash(existing), 'go:1', 'existing path');
+    const path = 'reports/inventory-projection?{"ctgFilter":"PANELS","proposal":"2026 BX Order"}';
+    assertEqual(await URLRouter.createShortHash(path), 'go:2', 'new path');
+    assertEqual(await URLRouter.createShortHash(path), 'go:2', 'same path again');
+    assertEqual(await URLRouter.decodeShortHash('go:2'), path, 'expanded path');
+});
+
+test('SHARE LINKS', 'a shared hash has no raw braces, quotes or spaces and reads back the same', () => {
+    const path = 'packlist/ATSC 2025 NAB?{"ctgFilter":"PANELS","proposal":"2026 BX+Order"}';
+    const hash = URLRouter.shareableHash(path);
+    assertEqual(/[{}" ]/.test(hash), false, `raw characters in ${hash}`);
+    // As the browser hands it back (URLRouter.decodePath, then parsePath)
+    const read = NavigationRegistry.parsePath(hash.replace(/\+/g, ' '));
+    assertEqual(read.path, 'packlist/ATSC 2025 NAB', 'route');
+    assertEqual(read.parameters, { ctgFilter: 'PANELS', proposal: '2026 BX+Order' }, 'parameters');
+    // A path already carrying the browser's %22 encoding is not encoded twice
+    assertEqual(URLRouter.shareableHash('schedule?{%22a%22:1}'), URLRouter.shareableHash('schedule?{"a":1}'), 'pre-encoded');
 });
 
 // ── Group 24a: Find Scopes ────────────────────────────────────────────────────
@@ -4787,6 +4814,137 @@ test('INVENTORY PROPOSALS', 'a repeated item saves one entry, from the last row'
     assertEqual(saved.map(e => [e.itemNumber, e.changes]), [['CHAIR-002', [{ n: 'quantity', ne: '+1' }]], ['CHAIR-001', [{ n: 'quantity', ne: '+5' }]]], 'one entry per item');
     const cleared = ProposalUtils.replaceActiveEntries([], 'Paste test', [row('CHAIR-001', '2'), row('CHAIR-001', '0')], 'test', 100);
     assertEqual(cleared, [], 'the last row has no change: no entry');
+});
+
+// The proposal page menu: Duplicate and Split make a new proposal (createProposal), Merge adds a
+// proposal's items to another as unsaved edits (mergeIntoProposal), and the proposals page's Save
+// card saves them (saveProposalEdits). The tests make their own proposals and empty them afterwards.
+const _changeText = (entries) => entries.filter(e => !e.committed).map(e => [e.itemNumber, e.changes.map(({ n, ne }) => `${n}=${ne}`).join(',')]);
+const _proposalRow = (itemNumber, quantityChange, notes = '') => ({
+    category: 'FURNITURE', itemNumber, currentQuantity: '10', quantityChange,
+    description: 'Chair', currentDescription: 'Chair', notes, currentNotes: ''
+});
+
+// Saved: CHAIR-001 +30, CHAIR-002 +5 with notes "black", CHAIR-003 +4, CHAIR-004 +2. Unsaved:
+// CHAIR-001 lowered to +20, CHAIR-002's notes to "white", CHAIR-003 marked for removal (so left
+// out of the edited rows), STOOL-001 added at +3; CHAIR-004 not edited.
+test('INVENTORY PROPOSALS', 'splitRows turns unsaved edits into changes, as additions or subtractions', async () => {
+    const saved = [_proposalRow('CHAIR-001', '30'), _proposalRow('CHAIR-002', '5', 'black'), _proposalRow('CHAIR-003', '4'), _proposalRow('CHAIR-004', '2')];
+    const edited = [_proposalRow('CHAIR-001', '20'), _proposalRow('CHAIR-002', '5', 'white'), _proposalRow('CHAIR-004', '2'), _proposalRow('STOOL-001', '3')];
+    const changes = (rows) => rows.map(row => [row.itemNumber, ProposalUtils.changesFromTableRow(row).map(({ n, ne }) => `${n}=${ne}`).join(',')]);
+    assertEqual(changes(ProposalUtils.splitRows(saved, edited, false)), [
+        ['CHAIR-001', 'quantity=-10'], ['CHAIR-002', 'notes=white'], ['CHAIR-004', ''], ['STOOL-001', 'quantity=+3'], ['CHAIR-003', 'quantity=-4']
+    ], 'additions: each edit as made');
+    assertEqual(changes(ProposalUtils.splitRows(saved, edited, true)), [
+        ['CHAIR-001', 'quantity=+10'], ['CHAIR-002', 'notes=black'], ['CHAIR-004', ''], ['STOOL-001', 'quantity=-3'], ['CHAIR-003', 'quantity=+4']
+    ], 'subtractions: what each edit took out');
+});
+
+test('INVENTORY PROPOSALS', 'mergeTableRow adds quantity changes and takes the text the source changes', async () => {
+    const target = _proposalRow('CHAIR-001', '8', 'old');
+    assertEqual([ProposalUtils.mergeTableRow(target, _proposalRow('CHAIR-001', '-3')).quantityChange, ProposalUtils.mergeTableRow(target, _proposalRow('CHAIR-001', '-3')).notes], ['5', 'old'], 'unchanged notes keep the target\'s');
+    assertEqual(ProposalUtils.mergeTableRow(target, _proposalRow('CHAIR-001', '0', 'new')).notes, 'new', 'changed notes replace');
+});
+
+test('INVENTORY PROPOSALS', 'createProposal duplicates a proposal and refuses a taken name', async () => {
+    const name = 'Dup test';
+    try {
+        const rows = await Requests.getInventoryProposalTable('Spring buy');
+        assertEqual(await _asUser(() => createProposal(name, rows)), 3, 'three items');
+        assertEqual(_changeText(await _proposalRows(name)), [
+            ['CHAIR-001', 'quantity=+8'], ['CHAIR-003', 'quantity=+4,notes=order matching legs'], ['HS-001', 'quantity=+2']
+        ], 'the same items and changes as Spring buy');
+        let error = null;
+        try { await _asUser(() => createProposal('spring BUY', rows)); } catch (e) { error = e.message; }
+        assertEqual(error, 'A proposal with this name already exists', 'taken name refused');
+        assertEqual((await _proposalRows('Spring buy')).length, 3, 'Spring buy untouched');
+        assertEqual(await ApplicationUtils.getSheetLock(PROPOSAL_LOCK_NAMESPACE, name), null, 'lock released');
+    } finally {
+        await _asUser(() => Requests.saveInventoryProposalTable([], name));
+    }
+});
+
+// "Split test" saves CHAIR-001 +30 and CHAIR-002 +5; the unsaved edit lowers CHAIR-001 to +20.
+test('INVENTORY PROPOSALS', 'splitting unsaved changes makes a new proposal and leaves them unsaved', async () => {
+    const source = 'Split test';
+    const part = 'Split part';
+    await _asUser(async () => saveToProposal(source, 'FURNITURE', [
+        await _furnitureItem('CHAIR-001', [{ n: 'quantity', ne: '+30' }]),
+        await _furnitureItem('CHAIR-002', [{ n: 'quantity', ne: '+5' }])
+    ]));
+    const store = await _loadedStore(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [source]);
+    try {
+        const chair = store.data.find(row => row.itemNumber === 'CHAIR-001');
+        chair.quantityChange = '20';
+        assertEqual(await _asUser(() => splitProposal(store, part, true)), 1, 'one item has an unsaved change');
+        assertEqual(_changeText(await _proposalRows(part)), [['CHAIR-001', 'quantity=+10']], 'the +10 taken out is split off');
+        assertEqual([store.isModified, chair.quantityChange], [true, '20'], 'the source keeps its unsaved change');
+        assertEqual(_changeText(await _proposalRows(source)), [['CHAIR-001', 'quantity=+30'], ['CHAIR-002', 'quantity=+5']], "the source's saved items unchanged");
+        store.setData(store.originalData);
+        let error = null;
+        try { await _asUser(() => splitProposal(store, 'Split none', false)); } catch (e) { error = e.message; }
+        assertEqual(error, 'No item has a change to put in the new proposal.', 'no unsaved changes: nothing to split');
+    } finally {
+        store.setData(store.originalData);
+        await _asUser(() => Requests.saveInventoryProposalTable([], source));
+        await _asUser(() => Requests.saveInventoryProposalTable([], part));
+    }
+});
+
+// "Merge from" saves CHAIR-001 +3 with notes "merged note" and STOOL-002 +2; "Merge into" saves
+// CHAIR-001 +5. Merged: CHAIR-001 +8 with the note, STOOL-002 +2, unsaved until the Save card.
+test('INVENTORY PROPOSALS', 'merging adds items to another proposal as unsaved changes; its Save card saves them', async () => {
+    const source = 'Merge from';
+    const target = 'Merge into';
+    await _asUser(async () => saveToProposal(source, 'FURNITURE', [
+        await _furnitureItem('CHAIR-001', [{ n: 'quantity', ne: '+3' }, { n: 'notes', ne: 'merged note' }]),
+        await _furnitureItem('STOOL-002', [{ n: 'quantity', ne: '+2' }])
+    ]));
+    await _asUser(async () => saveToProposal(target, 'FURNITURE', [await _furnitureItem('CHAIR-001', [{ n: 'quantity', ne: '+5' }])]));
+    const store = await _loadedStore(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [target]);
+    try {
+        assertEqual(await _asUser(async () => mergeIntoProposal(target, await Requests.getInventoryProposalTable(source))), 2, 'two items merged');
+        assertEqual(store.data.map(row => [row.itemNumber, row.quantityChange]), [['CHAIR-001', '8'], ['STOOL-002', '2']], 'quantities add up; a new item is added');
+        assertEqual([store.data[0].notes, store.isModified], ['merged note', true], 'the note replaces; unsaved');
+        assertEqual(_changeText(await _proposalRows(target)), [['CHAIR-001', 'quantity=+5']], 'nothing saved');
+        assertEqual((await ApplicationUtils.getSheetLock(PROPOSAL_LOCK_NAMESPACE, target))?.user, 'test@example.com', 'the lock is kept for the edits');
+        await _asUser(() => saveProposalEdits(target));
+        assertEqual(_changeText(await _proposalRows(target)), [['CHAIR-001', 'quantity=+8,notes=merged note'], ['STOOL-002', 'quantity=+2']], 'saved from the card');
+        assertEqual([store.isModified, await ApplicationUtils.getSheetLock(PROPOSAL_LOCK_NAMESPACE, target)], [false, null], 'saved and unlocked');
+        assertEqual(_changeText(await _proposalRows(source)).length, 2, 'the source is unchanged');
+    } finally {
+        store.setData(store.originalData);
+        await ApplicationUtils.unlockSheet(PROPOSAL_LOCK_NAMESPACE, target, 'test@example.com').catch(() => {});
+        await _asUser(() => Requests.saveInventoryProposalTable([], source));
+        await _asUser(() => Requests.saveInventoryProposalTable([], target));
+    }
+});
+
+// Archive (the proposal page menu) marks every row of a proposal; lists hide archived proposals.
+// The ArchivedBy/Archived columns came after launch: a row from a tab without them (no such keys,
+// as the FakeGoogle fixture starts) reads as not archived, and the next write adds the columns.
+// "Archive test" saves CHAIR-001 +1, is archived, then gains STOOL-002 +2 (archived with it), and
+// is restored.
+test('INVENTORY PROPOSALS', 'archiving marks every row, survives later saves and keeps the name taken', async () => {
+    const name = 'Archive test';
+    const proposal = async () => ProposalUtils.groupProposals(await Requests.getInventoryProposals()).find(p => p.name === name);
+    const oldRow = ProposalUtils.parseRows([{ proposal: 'Old', category: 'FURNITURE', itemNumber: 'CHAIR-001', changes: '[]' }])[0];
+    assertEqual([oldRow.archived, oldRow.archivedBy, ProposalUtils.groupProposals([oldRow])[0].archived], [0, '', 0], 'a row without the columns: not archived');
+    assertEqual(ProposalUtils.groupProposals(await Requests.getInventoryProposals()).map(p => p.archived), [0, 0, 0], 'fixture proposals: not archived');
+    try {
+        await _asUser(async () => saveToProposal(name, 'FURNITURE', [await _furnitureItem('CHAIR-001', [{ n: 'quantity', ne: '+1' }])]));
+        await _asUser(() => setProposalArchived(name, true));
+        assertEqual([!!(await proposal()).archived, (await proposal()).archivedBy], [true, 'test'], 'archived, by the user');
+        await _asUser(async () => saveToProposal(name, 'FURNITURE', [await _furnitureItem('STOOL-002', [{ n: 'quantity', ne: '+2' }])]));
+        assertEqual((await _proposalRows(name)).map(e => [e.itemNumber, !!e.archived]), [['CHAIR-001', true], ['STOOL-002', true]], 'an item added later is archived too');
+        const names = ProposalUtils.groupProposals(await Requests.getInventoryProposals()).map(p => p.name);
+        assertEqual(ProposalUtils.validateName('archive TEST', names), 'A proposal with this name already exists', 'the name stays taken');
+        assertEqual(ProposalUtils.groupProposals(await Requests.getInventoryProposals()).filter(p => p.archived).map(p => p.name), [name], 'only it is archived');
+        await _asUser(() => setProposalArchived(name, false));
+        assertEqual((await _proposalRows(name)).map(e => [e.archived, e.archivedBy]), [[0, ''], [0, '']], 'unarchived: every row cleared');
+    } finally {
+        await _asUser(() => Requests.saveInventoryProposalTable([], name));
+    }
 });
 
 test('INVENTORY PROPOSALS', 'committed proposals cannot be edited', async () => {

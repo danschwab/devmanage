@@ -2035,6 +2035,17 @@ class Requests_uncached {
             ProposalUtils.markCommitted(entries, name, categories, user, now));
     }
 
+    /**
+     * Archive a proposal (hidden from proposal lists; its name stays taken), or restore it.
+     * MUTATION METHOD — excluded from caching.
+     * @param {string} name - Proposal name
+     * @param {boolean} archived - true to archive, false to restore
+     */
+    static async setInventoryProposalArchived(name, archived) {
+        return await _updateProposalEntries((entries, user, now) =>
+            ProposalUtils.setArchived(entries, name, archived, user, now));
+    }
+
 }
 
 // ── Proposal storage (used by the mutation methods above) ─────────────────────
@@ -2090,7 +2101,7 @@ export const Requests = wrapMethods(
         'removeTransshipLink',
         'savePageNotes',
         'savePreferences',
-        'saveInventoryProposalTable', 'markInventoryProposalCommitted',
+        'saveInventoryProposalTable', 'markInventoryProposalCommitted', 'setInventoryProposalArchived',
         'getDriveFileBlob', // Uncached read: callers own the Blob
         'getDropboxFileUrl', // Uncached read: links expire
         'prefetchShowFolders', // Only starts reads
