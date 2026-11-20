@@ -1,6 +1,6 @@
 import { html, DataView, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, parseDate, todayISOString, getInventoryNoteMaxLength, THUMBNAIL_FIELD, SEVERITY, isMarkedForDeletion } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
-import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal } from '../../utils/inventoryProposals.js';
+import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal, saveProposalEdits, proposalStoreModified, hasProposalBackup } from '../../utils/inventoryProposals.js';
 import { thumbnailStyle } from '../../utils/views/viewStyles.js';
 import { InventorySaveModal } from './InventoryTable.js';
 import { InventorySelectorModal } from './InventorySelectorModal.js';
@@ -40,9 +40,13 @@ const PROPOSAL_GRID_VIEWS = {
     }]
 };
 
-/** inventory/proposals — one card per proposal */
+/**
+ * inventory/proposals — one card per proposal. An active proposal with unsaved edits (in an open
+ * store, or in an autosave backup) says so and has a Save card, as category cards do.
+ */
 export const InventoryProposalsGrid = {
     components: { DataView },
+    inject: ['$modal'],
     props: {
         containerPath: { type: String, default: 'inventory/proposals' },
         navigateToPath: Function
@@ -50,12 +54,59 @@ export const InventoryProposalsGrid = {
     data() {
         return {
             proposalsStore: getProposalsStore(),
+            backedUp: new Set(), // Active proposals with an autosave backup of unsaved edits
+            saving: null, // Name of the proposal being saved from its card
             PROPOSAL_FIELDS,
             PROPOSAL_GRID_VIEWS,
             proposalAction: { to: (row) => proposalPath(row.name) }
         };
     },
+    watch: {
+        activeNames: {
+            async handler(names) {
+                for (const name of names) {
+                    if (this.backedUp.has(name)) continue;
+                    try {
+                        if (await hasProposalBackup(name)) this.backedUp.add(name);
+                    } catch (error) {
+                        console.warn(`[InventoryProposalsGrid] Could not check for unsaved edits to ${name}:`, error);
+                    }
+                }
+            },
+            immediate: true
+        }
+    },
+    methods: {
+        hasUnsaved(name) {
+            return proposalStoreModified(name) ?? this.backedUp.has(name);
+        },
+        // Row-level decorations: footer status and the Save card
+        proposalDecorations(row, key) {
+            if (key !== null || row._committed) return [];
+            if (this.saving === row.name) return [{ status: true, message: 'Saving...' }];
+            if (!this.hasUnsaved(row.name)) return [];
+            return [
+                { status: true, message: 'Unsaved changes' },
+                { message: 'Save', class: 'green', action: () => this.saveProposal(row.name) }
+            ];
+        },
+        async saveProposal(name) {
+            if (this.saving) return;
+            this.saving = name;
+            try {
+                await saveProposalEdits(name);
+                this.backedUp.delete(name);
+            } catch (error) {
+                this.$modal.alert(`Could not save the ${name} proposal: ${error.message}`, 'Save');
+            } finally {
+                this.saving = null;
+            }
+        }
+    },
     computed: {
+        activeNames() {
+            return ProposalUtils.groupProposals(this.proposalsStore.data || []).filter(p => !p.committed).map(p => p.name);
+        },
         // groupProposals orders them: active first, then committed
         proposalRows() {
             return ProposalUtils.groupProposals(this.proposalsStore.data || []).map(proposal => ({
@@ -74,6 +125,7 @@ export const InventoryProposalsGrid = {
             :rows="proposalRows"
             :registry="PROPOSAL_GRID_VIEWS"
             :action="proposalAction"
+            :decorations="proposalDecorations"
             :is-loading="proposalsStore.isLoading"
             :show-header="false"
             empty-message="No proposals yet. Save inventory edits as a proposal from a category's Save dialog."

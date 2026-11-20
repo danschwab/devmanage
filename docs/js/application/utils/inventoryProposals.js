@@ -1,5 +1,5 @@
 import { acquireSheetLock } from './sheetLockMixin.js';
-import { Requests, authState, getReactiveStore, getInventoryNoteMaxLength, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, NavigationRegistry, todayISOString } from '../index.js';
+import { Requests, authState, getReactiveStore, getInventoryNoteMaxLength, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, NavigationRegistry, todayISOString, findMatchingStores, generateStoreKey } from '../index.js';
 
 /**
  * Inventory proposal helpers for the application layer: the shared proposal list store, route
@@ -45,6 +45,40 @@ export function proposalPath(name) {
 /** A proposal page's table store (the proposal's rows; saving replaces its active entries) */
 export function proposalTableStore(name) {
     return getReactiveStore(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [name]);
+}
+
+/**
+ * Whether a proposal has unsaved edits in this session's open store for it. Null when no store
+ * for it is open: then only its autosave backup can tell (hasProposalBackup).
+ */
+export function proposalStoreModified(name) {
+    const open = findMatchingStores(Requests.getInventoryProposalTable, [name]);
+    return open.length > 0 ? open.some(match => match.isModified) : null;
+}
+
+/** Whether this user has an autosave backup of unsaved edits to a proposal */
+export async function hasProposalBackup(name) {
+    const user = authState.user?.email;
+    if (!user) return false;
+    const key = generateStoreKey(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [name], null);
+    return await Requests.hasUserDataKey(user, key);
+}
+
+/**
+ * Save a proposal's unsaved edits away from its page (the Save card on the proposals page). Takes
+ * the proposal's edit lock (refused when someone else, or this user on another device, holds it)
+ * and releases it once saved; a failed save keeps it, as the page keeps it while it has edits.
+ * @throws {Error} When the lock can't be taken or the save fails
+ */
+export async function saveProposalEdits(name) {
+    const store = proposalTableStore(name);
+    await waitForLoad(store);
+    if (!store.isModified) return;
+    const release = await acquireSheetLock(PROPOSAL_LOCK_NAMESPACE, name, `The ${name} proposal`, 'Nothing was saved.');
+    const saved = await store.save('Saving proposal...');
+    if (saved === false || store.isModified) throw new Error(store.error || `Could not save the ${name} proposal`);
+    await release();
+    await reloadProposals();
 }
 
 /**

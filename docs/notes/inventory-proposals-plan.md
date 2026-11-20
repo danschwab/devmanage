@@ -65,7 +65,7 @@ The inventory overview table and the category cards show a **View Proposals** bu
 
 ### Pages
 
-- `inventory/proposals` — cards grid, one card per proposal (active first, committed gray at the end).
+- `inventory/proposals` — cards grid, one card per proposal (active first, committed gray at the end). An active proposal with unsaved edits (in this session's open store, or in the user's autosave backup) shows **Unsaved changes** and a green **Save** card, as category cards do. Save (`saveProposalEdits`) takes the proposal lock, saves the store and releases the lock (its page, which would release it, isn't open).
 - `inventory/proposals/<slug>` — the proposal page. `<slug>` is the lowercase name with non-alphanumerics as `-`.
 
 `InventoryContent` (which hosts both pages) registers the `proposals` route and one child route per proposal from the shared proposal list, so breadcrumbs and deep links work. A category tab named PROPOSALS would get no route of its own.
