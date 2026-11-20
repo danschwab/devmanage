@@ -51,7 +51,7 @@ import { containerTier, BREAKPOINTS } from '../application/utils/useContainerSiz
 import { createScrollHider } from '../application/utils/scrollHider.js';
 import { DEFAULT_DASHBOARD } from '../application/utils/dashboardLayout.js';
 import { parseBoothSquareFeet, monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
-import { redirectPath } from '../application/utils/urlRouter.js';
+import { redirectPath, URLRouter } from '../application/utils/urlRouter.js';
 import { todayISOString, setTestToday, startOfTodayMs, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, itemVariantBase, resolveItemVariant, itemVariantFamilies, itemVariantKey, parseItemVariants, searchFilter, textFiltersToSearchParams, parseSearchParameters } from '../data_management/utils/helpers.js';
 import { instantWriteEntry, identityKey, cellKey, joinKey } from '../data_management/utils/instant-write-config.js';
 import { estimateShipDate } from '../data_management/utils/ship-date.js';
@@ -1681,6 +1681,33 @@ test('USER DATA', 'hasUserDataKey returns false for nonexistent key', async () =
 test('USER DATA', 'getUserDataByPrefix returns entry for dashboard prefix', async () => {
     const result = await Requests.getUserDataByPrefix('test@example.com', 'dashboard');
     if (result === null || result === undefined) throw new Error('expected match for prefix "dashboard"');
+});
+
+// ── Group 24-links: Share Links ───────────────────────────────────────────────
+// FakeGoogle's CACHE/Links has one row: the schedule date-filter path, code '1'. A new path gets
+// the next base-36 code ('2'). Regression: the cached Links rows are frozen, and shortening a new
+// path pushed onto them (TypeError). A shared link percent-encodes its parameters and reads back
+// to the same parameters.
+
+test('SHARE LINKS', 'an existing path keeps its code; a new path gets the next code and expands back', async () => {
+    const existing = 'schedule?{"dateFilters":[{"column":"Date","value":0,"type":"after"}]}';
+    assertEqual(await URLRouter.createShortHash(existing), 'go:1', 'existing path');
+    const path = 'reports/inventory-projection?{"ctgFilter":"PANELS","proposal":"2026 BX Order"}';
+    assertEqual(await URLRouter.createShortHash(path), 'go:2', 'new path');
+    assertEqual(await URLRouter.createShortHash(path), 'go:2', 'same path again');
+    assertEqual(await URLRouter.decodeShortHash('go:2'), path, 'expanded path');
+});
+
+test('SHARE LINKS', 'a shared hash has no raw braces, quotes or spaces and reads back the same', () => {
+    const path = 'packlist/ATSC 2025 NAB?{"ctgFilter":"PANELS","proposal":"2026 BX+Order"}';
+    const hash = URLRouter.shareableHash(path);
+    assertEqual(/[{}" ]/.test(hash), false, `raw characters in ${hash}`);
+    // As the browser hands it back (URLRouter.decodePath, then parsePath)
+    const read = NavigationRegistry.parsePath(hash.replace(/\+/g, ' '));
+    assertEqual(read.path, 'packlist/ATSC 2025 NAB', 'route');
+    assertEqual(read.parameters, { ctgFilter: 'PANELS', proposal: '2026 BX+Order' }, 'parameters');
+    // A path already carrying the browser's %22 encoding is not encoded twice
+    assertEqual(URLRouter.shareableHash('schedule?{%22a%22:1}'), URLRouter.shareableHash('schedule?{"a":1}'), 'pre-encoded');
 });
 
 // ── Group 24a: Find Scopes ────────────────────────────────────────────────────

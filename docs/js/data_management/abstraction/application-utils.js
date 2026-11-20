@@ -875,15 +875,15 @@ class applicationUtils_uncached {
         
         const newShortCode = (maxCode + 1).toString(36);
         
-        // Add new link
-        links.push({
+        // Add new link (the cached rows are frozen: write a new array)
+        const updatedLinks = [...links, {
             Path: path,
             ShortCode: newShortCode,
             Created: new Date().toISOString()
-        });
-        
+        }];
+
         // Save back to sheet
-        await Database.setData('CACHE', 'Links', links, {
+        await Database.setData('CACHE', 'Links', updatedLinks, {
             Path: 'Path',
             ShortCode: 'ShortCode',
             Created: 'Created'

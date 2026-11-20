@@ -99,7 +99,7 @@ export const ContainerComponent = {
         },
         async shareContainer() {
             // Construct the full URL
-            const fullUrl = `${window.location.origin}${window.location.pathname}#${this.containerPath}`;
+            const fullUrl = `${window.location.origin}${window.location.pathname}#${URLRouter.shareableHash(this.containerPath)}`;
             
             // Copy to clipboard
             navigator.clipboard.writeText(fullUrl).then(() => {
