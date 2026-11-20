@@ -114,6 +114,19 @@ export async function createProposal(name, rows) {
 }
 
 /**
+ * Archive a proposal, or restore it. Archived proposals are hidden from proposal lists (the
+ * proposals page, the save dialog, merge targets, the projection report, category tables); their
+ * page still opens from a link, and their names stay taken.
+ * @param {string} name - Proposal name
+ * @param {boolean} archived - true to archive, false to restore
+ */
+export async function setProposalArchived(name, archived) {
+    if (!authState.user?.email) throw new Error('Log in to archive a proposal');
+    await Requests.setInventoryProposalArchived(name, archived);
+    await reloadProposals();
+}
+
+/**
  * A new proposal of a proposal's unsaved edits (Split; see ProposalUtils.splitRows). The source
  * keeps its edits, unsaved, so saving it afterwards takes them out of (or adds them to) it.
  * @param {Object} store - The source proposal's table store

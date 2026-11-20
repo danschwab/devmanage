@@ -37,7 +37,7 @@ import { isCheckedValue } from '../data_management/utils/checkbox-values.js';
 import { useBatchEdits, useInstantEdits } from '../application/utils/cellEdits.js';
 import { CacheInvalidationBus, ApplicationUtils, ProductionUtils, triggerCachePoll, cutoffSettled, wrapMethods, stampDataChange, Database, DEFAULT_INVENTORY_MAPPING, EditHistoryUtils, InventoryUtils, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, resolveInventoryNoteMaxLength, readRowMetadata, writeRowMetadata, checkDateRollover, clearCache, invalidateCache, resolveSheetMapping, parseThumbnails, parseThumbnailEntries, serializeThumbnailEntries, addThumbnails, removeThumbnailAt, setPrimaryThumbnail, setThumbnailNote, setThumbnailCrop, primaryThumbnailValue, thumbnailKey } from '../data_management/index.js';
 import { authState } from '../application/utils/auth.js';
-import { commitInventoryProposal, saveToProposal, proposalTableStore, sendEditsToProposal, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits } from '../application/utils/inventoryProposals.js';
+import { commitInventoryProposal, saveToProposal, proposalTableStore, sendEditsToProposal, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits, setProposalArchived } from '../application/utils/inventoryProposals.js';
 import { hasQuantityChanges } from '../application/components/content/InventoryTable.js';
 import { evaluateArithmetic } from '../application/components/interface/cells.js';
 import { balancedSplit } from '../application/components/interface/buttonBar.js';
@@ -4888,6 +4888,33 @@ test('INVENTORY PROPOSALS', 'merging adds items to another proposal as unsaved c
         await ApplicationUtils.unlockSheet(PROPOSAL_LOCK_NAMESPACE, target, 'test@example.com').catch(() => {});
         await _asUser(() => Requests.saveInventoryProposalTable([], source));
         await _asUser(() => Requests.saveInventoryProposalTable([], target));
+    }
+});
+
+// Archive (the proposal page menu) marks every row of a proposal; lists hide archived proposals.
+// The ArchivedBy/Archived columns came after launch: a row from a tab without them (no such keys,
+// as the FakeGoogle fixture starts) reads as not archived, and the next write adds the columns.
+// "Archive test" saves CHAIR-001 +1, is archived, then gains STOOL-002 +2 (archived with it), and
+// is restored.
+test('INVENTORY PROPOSALS', 'archiving marks every row, survives later saves and keeps the name taken', async () => {
+    const name = 'Archive test';
+    const proposal = async () => ProposalUtils.groupProposals(await Requests.getInventoryProposals()).find(p => p.name === name);
+    const oldRow = ProposalUtils.parseRows([{ proposal: 'Old', category: 'FURNITURE', itemNumber: 'CHAIR-001', changes: '[]' }])[0];
+    assertEqual([oldRow.archived, oldRow.archivedBy, ProposalUtils.groupProposals([oldRow])[0].archived], [0, '', 0], 'a row without the columns: not archived');
+    assertEqual(ProposalUtils.groupProposals(await Requests.getInventoryProposals()).map(p => p.archived), [0, 0, 0], 'fixture proposals: not archived');
+    try {
+        await _asUser(async () => saveToProposal(name, 'FURNITURE', [await _furnitureItem('CHAIR-001', [{ n: 'quantity', ne: '+1' }])]));
+        await _asUser(() => setProposalArchived(name, true));
+        assertEqual([!!(await proposal()).archived, (await proposal()).archivedBy], [true, 'test'], 'archived, by the user');
+        await _asUser(async () => saveToProposal(name, 'FURNITURE', [await _furnitureItem('STOOL-002', [{ n: 'quantity', ne: '+2' }])]));
+        assertEqual((await _proposalRows(name)).map(e => [e.itemNumber, !!e.archived]), [['CHAIR-001', true], ['STOOL-002', true]], 'an item added later is archived too');
+        const names = ProposalUtils.groupProposals(await Requests.getInventoryProposals()).map(p => p.name);
+        assertEqual(ProposalUtils.validateName('archive TEST', names), 'A proposal with this name already exists', 'the name stays taken');
+        assertEqual(ProposalUtils.groupProposals(await Requests.getInventoryProposals()).filter(p => p.archived).map(p => p.name), [name], 'only it is archived');
+        await _asUser(() => setProposalArchived(name, false));
+        assertEqual((await _proposalRows(name)).map(e => [e.archived, e.archivedBy]), [[0, ''], [0, '']], 'unarchived: every row cleared');
+    } finally {
+        await _asUser(() => Requests.saveInventoryProposalTable([], name));
     }
 });
 

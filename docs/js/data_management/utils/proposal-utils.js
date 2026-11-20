@@ -20,7 +20,11 @@ export const PROPOSAL_MAPPING = {
     updatedBy: 'UpdatedBy',
     updated: 'Updated',
     committedBy: 'CommittedBy',
-    committed: 'Committed'
+    committed: 'Committed',
+    // Set on every row of an archived proposal. Added after launch: a tab without these columns
+    // reads them as blank (not archived), and the next write adds them.
+    archivedBy: 'ArchivedBy',
+    archived: 'Archived'
 };
 
 /** Inventory fields a proposal can change. Quantity is stored as a signed delta, others as the new value. */
@@ -43,7 +47,7 @@ const formatDelta = (delta) => (delta > 0 ? `+${delta}` : String(delta));
 const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const itemKey = (entry) => `${entry.category}\u0000${entry.itemNumber}`;
 const newEntry = (proposal, category, itemNumber, changes, user, now) => ({
-    proposal, category, itemNumber, changes: [...changes], updatedBy: user, updated: now, committedBy: '', committed: 0
+    proposal, category, itemNumber, changes: [...changes], updatedBy: user, updated: now, committedBy: '', committed: 0, archivedBy: '', archived: 0
 });
 
 export class ProposalUtils {
@@ -111,7 +115,9 @@ export class ProposalUtils {
                     updatedBy: row.updatedBy || '',
                     updated: Number(row.updated) || 0,
                     committedBy: row.committedBy || '',
-                    committed: Number(row.committed) || 0
+                    committed: Number(row.committed) || 0,
+                    archivedBy: row.archivedBy || '',
+                    archived: Number(row.archived) || 0
                 };
             });
     }
@@ -126,7 +132,9 @@ export class ProposalUtils {
             updatedBy: entry.updatedBy || '',
             updated: entry.updated ? String(entry.updated) : '',
             committedBy: entry.committedBy || '',
-            committed: entry.committed ? String(entry.committed) : ''
+            committed: entry.committed ? String(entry.committed) : '',
+            archivedBy: entry.archivedBy || '',
+            archived: entry.archived ? String(entry.archived) : ''
         }));
     }
 
@@ -140,9 +148,15 @@ export class ProposalUtils {
         return proposalEntries.length > 0 && proposalEntries.every(entry => entry.committed);
     }
 
+    /** A proposal is archived when its rows are (archiving marks every row; see setArchived) */
+    static isArchived(proposalEntries) {
+        return proposalEntries.some(entry => entry.archived);
+    }
+
     /**
      * Group entries into proposals: active first (most recently updated first), then committed.
-     * @returns {Array<{name, slug, entries, categories, itemCount, updatedBy, updated, committed, committedBy}>}
+     * Archived proposals are included (archived set): lists hide them, while their names stay taken.
+     * @returns {Array<{name, slug, entries, categories, itemCount, updatedBy, updated, committed, committedBy, archived, archivedBy}>}
      */
     static groupProposals(entries) {
         const byName = new Map();
@@ -157,6 +171,7 @@ export class ProposalUtils {
                 const lastCommit = this.isCommitted(proposal.entries)
                     ? proposal.entries.reduce((a, b) => (b.committed > a.committed ? b : a))
                     : null;
+                const archive = proposal.entries.find(entry => entry.archived);
                 return {
                     ...proposal,
                     categories: [...new Set(proposal.entries.map(entry => entry.category))],
@@ -164,7 +179,9 @@ export class ProposalUtils {
                     updatedBy: newest.updatedBy,
                     updated: newest.updated,
                     committed: lastCommit ? lastCommit.committed : 0,
-                    committedBy: lastCommit ? lastCommit.committedBy : ''
+                    committedBy: lastCommit ? lastCommit.committedBy : '',
+                    archived: archive ? archive.archived : 0,
+                    archivedBy: archive ? archive.archivedBy : ''
                 };
             })
             .sort((a, b) => (!!a.committed - !!b.committed)
@@ -225,13 +242,15 @@ export class ProposalUtils {
     /**
      * Replace a proposal's active entries with the changes in proposal page rows (save from the
      * proposal page). Rows without changes are dropped; an entry whose changes did not change keeps
-     * its UpdatedBy/Updated. Other proposals and committed rows are kept.
+     * its UpdatedBy/Updated. Other proposals and committed rows are kept. An archived proposal's
+     * new entries are archived with it.
      * @throws {Error} When the proposal is committed
      */
     static replaceActiveEntries(entries, name, rows, user, now) {
         const own = this.entriesOf(entries, name);
         if (this.isCommitted(own)) throw new Error(`Proposal "${name}" is committed and can no longer be edited`);
         const storedName = own[0]?.proposal || String(name).trim();
+        const archive = own.find(entry => entry.archived);
         const previous = new Map(this.activeEntries(own).map(entry => [itemKey(entry), entry]));
         // One entry per item, whatever the rows: the last row for an item wins (two entries would
         // apply its change twice at commit)
@@ -245,6 +264,7 @@ export class ProposalUtils {
             }
             const before = previous.get(key);
             const entry = newEntry(storedName, row.category, row.itemNumber, changes, user, now);
+            if (archive) Object.assign(entry, { archivedBy: archive.archivedBy, archived: archive.archived });
             if (before && JSON.stringify(before.changes) === JSON.stringify(changes)) {
                 entry.updatedBy = before.updatedBy;
                 entry.updated = before.updated;
@@ -253,6 +273,18 @@ export class ProposalUtils {
             replacements.set(key, entry);
         }
         return [...entries.filter(entry => entry.committed || !sameName(entry.proposal, name)), ...replacements.values()];
+    }
+
+    /**
+     * Archive a proposal, or restore it: marks or clears every one of its rows, active and committed.
+     * @param {boolean} archived - true to archive, false to restore
+     */
+    static setArchived(entries, name, archived, user, now) {
+        return entries.map(entry => (
+            sameName(entry.proposal, name)
+                ? { ...entry, archivedBy: archived ? user : '', archived: archived ? now : 0 }
+                : entry
+        ));
     }
 
     /** Mark a proposal's active rows in the given categories as committed */

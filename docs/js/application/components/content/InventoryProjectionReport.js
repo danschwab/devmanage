@@ -194,9 +194,9 @@ export const InventoryProjectionReport = {
         proposal() {
             return NavigationRegistry.getParametersForContainer(this.containerPath, this.appContext?.currentPath)?.proposal || '';
         },
-        // Active proposals, most recently updated first
+        // Active proposals, most recently updated first (archived ones hidden)
         proposalNames() {
-            return ProposalUtils.groupProposals(this.proposalsStore?.data || []).filter(p => !p.committed).map(p => p.name);
+            return ProposalUtils.groupProposals(this.proposalsStore?.data || []).filter(p => !p.committed && !p.archived).map(p => p.name);
         },
         projectionKey() {
             return this.category ? JSON.stringify([this.category, this.proposal]) : '';

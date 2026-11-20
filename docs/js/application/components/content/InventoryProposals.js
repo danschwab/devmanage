@@ -1,6 +1,6 @@
 import { html, DataView, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, parseDate, todayISOString, getInventoryNoteMaxLength, THUMBNAIL_FIELD, SEVERITY, isMarkedForDeletion } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
-import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal, PROPOSALS_ROUTE, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits, proposalStoreModified, hasProposalBackup } from '../../utils/inventoryProposals.js';
+import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal, PROPOSALS_ROUTE, PROPOSALS_PATH, setProposalArchived, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits, proposalStoreModified, hasProposalBackup } from '../../utils/inventoryProposals.js';
 import { thumbnailStyle } from '../../utils/views/viewStyles.js';
 import { InventorySaveModal } from './InventoryTable.js';
 import { InventorySelectorModal } from './InventorySelectorModal.js';
@@ -104,12 +104,16 @@ export const InventoryProposalsGrid = {
         }
     },
     computed: {
+        // Archived proposals are hidden
+        shownProposals() {
+            return ProposalUtils.groupProposals(this.proposalsStore.data || []).filter(p => !p.archived);
+        },
         activeNames() {
-            return ProposalUtils.groupProposals(this.proposalsStore.data || []).filter(p => !p.committed).map(p => p.name);
+            return this.shownProposals.filter(p => !p.committed).map(p => p.name);
         },
         // groupProposals orders them: active first, then committed
         proposalRows() {
-            return ProposalUtils.groupProposals(this.proposalsStore.data || []).map(proposal => ({
+            return this.shownProposals.map(proposal => ({
                 name: proposal.name,
                 _summary: `${proposal.itemCount} item${proposal.itemCount === 1 ? '' : 's'} in ${proposal.categories.map(titleCase).join(', ')}`,
                 _status: proposal.committed
@@ -282,6 +286,12 @@ export const InventoryProposalTable = {
                     key: 'committed',
                     message: `Committed by ${this.proposal?.committedBy} on ${formatDay(this.proposal?.committed)}. Committed proposals are read-only.`,
                     visible: this.isCommitted,
+                    dismissible: false
+                },
+                {
+                    key: 'archived',
+                    message: `Archived by ${this.proposal?.archivedBy} on ${formatDay(this.proposal?.archived)}. Archived proposals are hidden from proposal lists; Unarchive Proposal in the page menu restores it.`,
+                    visible: !!this.proposal?.archived,
                     dismissible: false
                 }
             ];
@@ -612,7 +622,10 @@ export const ProposalMenuComponent = {
             return this.ready && this.store.isModified;
         },
         mergeTargets() {
-            return this.proposals.filter(p => !p.committed && p.slug !== this.proposal?.slug).map(p => p.name);
+            return this.proposals.filter(p => !p.committed && !p.archived && p.slug !== this.proposal?.slug).map(p => p.name);
+        },
+        isArchived() {
+            return !!this.proposal?.archived;
         }
     },
     methods: {
@@ -669,6 +682,34 @@ export const ProposalMenuComponent = {
                     navigateToPath?.(proposalPath(target));
                 }
             }, `Merge ${name}`);
+        },
+        // Archive (after a confirm) goes back to the proposals page; Unarchive stays here
+        toggleArchive() {
+            const { name } = this.proposal;
+            const archive = !this.isArchived;
+            const { navigateToPath } = this;
+            const modal = this.$modal;
+            const run = async () => {
+                try {
+                    await setProposalArchived(name, archive);
+                    if (archive) navigateToPath?.(PROPOSALS_PATH);
+                } catch (error) {
+                    modal.alert(`Could not ${archive ? 'archive' : 'unarchive'} the ${name} proposal: ${error.message}`, 'Archive');
+                }
+            };
+            this.$emit('close-modal');
+            if (!archive) {
+                run();
+                return;
+            }
+            modal.confirm(
+                `Archive the ${name} proposal? It is hidden from proposal lists, and nothing in it changes. Its name stays taken, and its page still opens from a link, where Unarchive Proposal restores it.`,
+                run,
+                null,
+                'Archive Proposal',
+                'Archive',
+                'Cancel'
+            );
         }
     },
     template: html`
@@ -689,6 +730,13 @@ export const ProposalMenuComponent = {
                     :title="mergeTargets.length ? 'Add these items to another proposal as unsaved changes' : 'There is no other active proposal'"
                     @click="openMerge"
                 >Merge With Another Proposal</button>
+            </li>
+            <li>
+                <button
+                    :disabled="!ready || isDirty"
+                    :title="isDirty ? 'Save or discard your changes first' : (isArchived ? 'Show this proposal in proposal lists again' : 'Hide this proposal from proposal lists')"
+                    @click="toggleArchive"
+                >{{ isArchived ? 'Unarchive Proposal' : 'Archive Proposal' }}</button>
             </li>
         </ul>
     `
