@@ -1,6 +1,6 @@
 import { html, DataView, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, parseDate, todayISOString, getInventoryNoteMaxLength, THUMBNAIL_FIELD, SEVERITY, isMarkedForDeletion } from '../../index.js';
 import { sheetLockMixin } from '../../utils/sheetLockMixin.js';
-import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal, saveProposalEdits, proposalStoreModified, hasProposalBackup } from '../../utils/inventoryProposals.js';
+import { getProposalsStore, reloadProposals, proposalPath, proposalTableStore, commitInventoryProposal, PROPOSALS_ROUTE, createProposal, splitProposal, mergeIntoProposal, saveProposalEdits, proposalStoreModified, hasProposalBackup } from '../../utils/inventoryProposals.js';
 import { thumbnailStyle } from '../../utils/views/viewStyles.js';
 import { InventorySaveModal } from './InventoryTable.js';
 import { InventorySelectorModal } from './InventorySelectorModal.js';
@@ -454,5 +454,242 @@ export const InventoryProposalTable = {
                 />
             </template>
         </DataView>
+    `
+};
+
+// What Split does with the unsaved changes, by the direction picked
+const SPLIT_HINTS = {
+    add: 'The new proposal gets each unsaved change as made: lowering +30 to +20 here puts -10 there.',
+    subtract: 'The new proposal gets what the unsaved changes take out: lowering +30 to +20 here puts +10 there.'
+};
+
+/**
+ * Asks for a new proposal's name (Duplicate, Split; Split also asks which way its unsaved changes
+ * go). onConfirm(name, subtract) does the work; the modal stays open while it runs and shows its
+ * error, or closes when it's done.
+ */
+const ProposalNameModal = {
+    inheritAttrs: false,
+    props: {
+        onConfirm: { type: Function, required: true },
+        existingNames: { type: Array, default: () => [] },
+        message: { type: String, default: '' },
+        withDirection: { type: Boolean, default: false },
+        confirmLabel: { type: String, default: 'Create' }
+    },
+    emits: ['close-modal'],
+    data() {
+        return { name: '', subtract: true, error: null, busy: false, SPLIT_HINTS };
+    },
+    computed: {
+        maxLength() {
+            return ProposalUtils.nameMaxLength(getInventoryNoteMaxLength());
+        }
+    },
+    methods: {
+        async confirm() {
+            if (this.busy) return;
+            this.error = ProposalUtils.validateName(this.name, this.existingNames, getInventoryNoteMaxLength());
+            if (this.error) return;
+            this.busy = true;
+            try {
+                await this.onConfirm(this.name.trim(), this.subtract);
+                this.$emit('close-modal');
+            } catch (error) {
+                this.error = error.message;
+            } finally {
+                this.busy = false;
+            }
+        }
+    },
+    template: html`
+        <p v-if="message">{{ message }}</p>
+        <div v-if="withDirection" class="form-group">
+            <label class="proposal-choice"><input type="radio" :value="false" v-model="subtract" :disabled="busy" />Unsaved changes are additions</label>
+            <label class="proposal-choice"><input type="radio" :value="true" v-model="subtract" :disabled="busy" />Unsaved changes are subtractions</label>
+            <span class="font-small gray">{{ subtract ? SPLIT_HINTS.subtract : SPLIT_HINTS.add }}</span>
+        </div>
+        <div class="form-group">
+            <label>New proposal name</label>
+            <input
+                type="text"
+                v-model="name"
+                :maxlength="maxLength"
+                placeholder="Proposal name"
+                :disabled="busy"
+                :class="{ red: !!error }"
+                @input="error = null"
+                @keyup.enter="confirm"
+            />
+            <span v-if="error" class="red font-small">{{ error }}</span>
+        </div>
+        <div class="button-bar">
+            <button class="purple" :disabled="busy" @click="confirm">{{ busy ? 'Working...' : confirmLabel }}</button>
+            <button :disabled="busy" @click="$emit('close-modal')">Cancel</button>
+        </div>
+    `
+};
+
+/** Picks the active proposal to merge into; onConfirm(target) does the work (as ProposalNameModal) */
+const ProposalMergeModal = {
+    inheritAttrs: false,
+    props: {
+        onConfirm: { type: Function, required: true },
+        targets: { type: Array, default: () => [] },
+        message: { type: String, default: '' }
+    },
+    emits: ['close-modal'],
+    data() {
+        return { target: this.targets[0] || '', error: null, busy: false };
+    },
+    methods: {
+        async confirm() {
+            if (this.busy || !this.target) return;
+            this.busy = true;
+            this.error = null;
+            try {
+                await this.onConfirm(this.target);
+                this.$emit('close-modal');
+            } catch (error) {
+                this.error = error.message;
+            } finally {
+                this.busy = false;
+            }
+        }
+    },
+    template: html`
+        <p v-if="message">{{ message }}</p>
+        <div class="form-group">
+            <label>Merge into</label>
+            <label v-for="name in targets" :key="name" class="proposal-choice">
+                <input type="radio" :value="name" v-model="target" :disabled="busy" />{{ name }}
+            </label>
+            <span v-if="error" class="red font-small">{{ error }}</span>
+        </div>
+        <div class="button-bar">
+            <button class="purple" :disabled="busy || !target" @click="confirm">{{ busy ? 'Working...' : 'Merge' }}</button>
+            <button :disabled="busy" @click="$emit('close-modal')">Cancel</button>
+        </div>
+    `
+};
+
+/**
+ * The proposal page's menu items (in the inventory menu; nothing on other inventory pages):
+ * - Duplicate: a new proposal with the saved items of this one.
+ * - Split: a new proposal of this one's unsaved changes (ProposalUtils.splitRows), as additions or
+ *   subtractions. This one keeps them, unsaved.
+ * - Merge: this one's saved items added to another active proposal as unsaved changes there
+ *   (mergeIntoProposal), then that proposal opens for the user to save.
+ */
+export const ProposalMenuComponent = {
+    inheritAttrs: false,
+    props: {
+        containerPath: String,
+        navigateToPath: Function
+    },
+    inject: ['$modal'],
+    emits: ['close-modal'],
+    data() {
+        return { proposalsStore: getProposalsStore() };
+    },
+    computed: {
+        proposals() {
+            return ProposalUtils.groupProposals(this.proposalsStore.data || []);
+        },
+        // The proposal of an inventory/proposals/<slug> page, else null
+        proposal() {
+            const [root, route, slug] = String(this.containerPath || '').split('?')[0].split('/');
+            if (root !== 'inventory' || route !== PROPOSALS_ROUTE || !slug) return null;
+            return this.proposals.find(proposal => proposal.slug === slug) || null;
+        },
+        store() {
+            return this.proposal ? proposalTableStore(this.proposal.name) : null;
+        },
+        ready() {
+            return !!this.store && !this.store.isLoading && !this.store.initialLoad;
+        },
+        isDirty() {
+            return this.ready && this.store.isModified;
+        },
+        mergeTargets() {
+            return this.proposals.filter(p => !p.committed && p.slug !== this.proposal?.slug).map(p => p.name);
+        }
+    },
+    methods: {
+        // Close the menu and open an action's modal (the menu's own instance goes with it)
+        openModal(component, props, title) {
+            this.$emit('close-modal');
+            this.$modal.custom(component, props, title);
+        },
+        openDuplicate() {
+            const { name } = this.proposal;
+            const { store, navigateToPath } = this;
+            this.openModal(ProposalNameModal, {
+                existingNames: this.proposals.map(p => p.name),
+                message: this.isDirty
+                    ? `Copies the saved ${name} proposal. Its unsaved changes stay here.`
+                    : `Copies every item of the ${name} proposal.`,
+                confirmLabel: 'Duplicate',
+                onConfirm: async (newName) => {
+                    await createProposal(newName, store.originalData);
+                    navigateToPath?.(proposalPath(newName));
+                }
+            }, `Duplicate ${name}`);
+        },
+        openSplit() {
+            const { name } = this.proposal;
+            const { store, navigateToPath } = this;
+            const modal = this.$modal;
+            this.openModal(ProposalNameModal, {
+                existingNames: this.proposals.map(p => p.name),
+                message: `Makes a new proposal of the unsaved changes to ${name}, one item per item here (an item with no unsaved change gets none). ${name} keeps its unsaved changes: save it afterwards to apply them here.`,
+                withDirection: true,
+                confirmLabel: 'Split',
+                onConfirm: async (newName, subtract) => {
+                    const count = await splitProposal(store, newName, subtract);
+                    modal.confirm(
+                        `Created the ${newName} proposal with ${count} item${count === 1 ? '' : 's'}. ${name} still has its unsaved changes: save them to apply them here, or discard them.`,
+                        () => navigateToPath?.(proposalPath(newName)),
+                        null,
+                        'Proposal Split',
+                        `Open ${newName}`,
+                        'Stay Here'
+                    );
+                }
+            }, `Split ${name}`);
+        },
+        openMerge() {
+            const { name } = this.proposal;
+            const { store, navigateToPath } = this;
+            this.openModal(ProposalMergeModal, {
+                targets: this.mergeTargets,
+                message: `Adds the saved items of ${name} to the proposal you pick, as unsaved changes there: quantity changes add up, and text changes replace its own. That proposal opens; nothing is saved until you save it.${this.isDirty ? ` The unsaved changes to ${name} aren't included.` : ''}`,
+                onConfirm: async (target) => {
+                    await mergeIntoProposal(target, store.originalData);
+                    navigateToPath?.(proposalPath(target));
+                }
+            }, `Merge ${name}`);
+        }
+    },
+    template: html`
+        <ul v-if="proposal">
+            <li>
+                <button :disabled="!ready" title="Make a new proposal with this one's saved items" @click="openDuplicate">Duplicate Proposal</button>
+            </li>
+            <li>
+                <button
+                    :disabled="!isDirty"
+                    :title="isDirty ? 'Make a new proposal of the unsaved changes' : 'Make some changes first: Split puts the unsaved changes in a new proposal'"
+                    @click="openSplit"
+                >Split Using Unsaved Changes</button>
+            </li>
+            <li>
+                <button
+                    :disabled="!ready || mergeTargets.length === 0"
+                    :title="mergeTargets.length ? 'Add these items to another proposal as unsaved changes' : 'There is no other active proposal'"
+                    @click="openMerge"
+                >Merge With Another Proposal</button>
+            </li>
+        </ul>
     `
 };

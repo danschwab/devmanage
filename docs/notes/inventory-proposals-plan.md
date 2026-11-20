@@ -87,18 +87,30 @@ One table: image (read-only, as on the overview table), Category, Item#, Current
 - **Commit** (disabled while dirty or committed) → the standard inventory save dialog, note required and prefilled `proposal: <name>`, date starting at the projected date, then the two-pass commit.
 - Committed proposals are read-only with a banner.
 
+### Proposal page menu
+
+The inventory menu shows three more items on a proposal page (`ProposalMenuComponent` in `InventoryProposals.js`; nothing on other inventory pages). Duplicate and Split create a proposal through `createProposal` (`inventoryProposals.js`): under the new name's lock it reads the list again and refuses a taken name, since a save under an existing name would replace that proposal's items. Rows without changes save nothing, so a new proposal holds only the items with a change.
+
+- **Duplicate Proposal** — a new proposal with this one's saved items and changes. Unsaved edits stay where they are. Works on committed proposals too (it proposes the same changes again).
+- **Split Using Unsaved Changes** (only while the page has unsaved edits) — a new proposal of the unsaved edits, one item per item of the proposal (`ProposalUtils.splitRows`). The modal picks the direction:
+  - *Unsaved changes are additions*: each edit goes in as made (+30 lowered to +20 → −10).
+  - *Unsaved changes are subtractions* (default): what the edit took out goes in (+30 lowered to +20 → +10). An item marked for removal moves its whole change; an added item is reversed.
+  - Text edits: the edited value (additions) or the value it replaced (subtractions).
+  - An item without an unsaved edit gets no change (0), so it isn't stored. The source keeps its edits unsaved, so saving it afterwards commits them; the dialog afterwards offers to open the new proposal.
+- **Merge With Another Proposal** (needs another active proposal) — this proposal's saved items are added to the chosen one as **unsaved** edits there (`mergeIntoProposal`): quantity changes add up, the source's text changes replace the target's, an item the target lacks is added, and an item marked for removal there is unmarked and takes the source's changes. The target's lock is taken first and kept (its page keeps it while it has edits); the target opens, and nothing is saved until the user saves or discards there. The source is unchanged.
+
 ---
 
 ## Code Map
 
 | Area | File |
 |---|---|
-| Constants and all entry logic as pure helpers: names, slugs, diff, merge, replace (page save), mark committed, apply, projection, quantity changes by item | `docs/js/data_management/utils/proposal-utils.js` |
+| Constants and all entry logic as pure helpers: names, slugs, diff, merge, replace (page save), mark committed, apply, projection, quantity changes by item, split and merge rows (`splitRows`, `mergeTableRow`) | `docs/js/data_management/utils/proposal-utils.js` |
 | Read and write the tab | `docs/js/data_management/api.js`: `getInventoryProposals`, `getInventoryProposalTable`; the three mutations are one-line wrappers over `_updateProposalEntries(transform)` (read → pure helper → write) |
-| Shared proposal store, routes, two-pass commit | `docs/js/application/utils/inventoryProposals.js` |
+| Shared proposal store, routes, two-pass commit, create / split / merge, saving from the grid, unsaved checks | `docs/js/application/utils/inventoryProposals.js` |
 | Save dialog, proposal rows | `docs/js/application/components/content/InventoryTable.js` |
 | Menu item | `docs/js/application/components/content/InventoryContent.js` |
-| Cards grid and proposal page | `docs/js/application/components/content/InventoryProposals.js`, routed from `InventoryContent.js` |
+| Cards grid, proposal page and its menu items (with their name and merge modals) | `docs/js/application/components/content/InventoryProposals.js`, routed from `InventoryContent.js` |
 | Note length | `InventoryNoteMaxLength` preference (CACHE/Preferences, integer, default 25): `resolveInventoryNoteMaxLength` in `metadata-utils.js`, `Requests.getInventoryNoteMaxLength` for saves, `getInventoryNoteMaxLength()` (reactive) for the UI |
 
 ---

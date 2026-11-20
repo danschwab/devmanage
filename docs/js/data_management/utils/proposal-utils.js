@@ -31,6 +31,10 @@ export const PROPOSAL_LOCK_NAMESPACE = 'INVENTORY_PROPOSALS';
 
 const PROPOSAL_NOTE_PREFIX = 'proposal: ';
 
+// Proposal page row text fields → the key of the item's current value (a change when they differ).
+// Thumbnail is present only for items whose tab has a Thumbnail column.
+const TABLE_TEXT_FIELDS = { description: 'currentDescription', notes: 'currentNotes', thumbnail: 'currentThumbnail' };
+
 const toNumber = (value) => {
     const n = parseFloat(value);
     return Number.isFinite(n) ? n : 0;
@@ -307,16 +311,60 @@ export class ProposalUtils {
         const changes = [];
         const delta = toNumber(row.quantityChange);
         if (delta !== 0) changes.push({ n: 'quantity', ne: formatDelta(delta) });
-        if (String(row.description ?? '') !== String(row.currentDescription ?? '')) {
-            changes.push({ n: 'description', ne: String(row.description ?? '') });
-        }
-        if (String(row.notes ?? '') !== String(row.currentNotes ?? '')) {
-            changes.push({ n: 'notes', ne: String(row.notes ?? '') });
-        }
-        if ('thumbnail' in row && String(row.thumbnail ?? '') !== String(row.currentThumbnail ?? '')) {
-            changes.push({ n: 'thumbnail', ne: String(row.thumbnail ?? '') });
+        for (const [field, current] of Object.entries(TABLE_TEXT_FIELDS)) {
+            if (field in row && String(row[field] ?? '') !== String(row[current] ?? '')) {
+                changes.push({ n: field, ne: String(row[field] ?? '') });
+            }
         }
         return changes;
+    }
+
+    /**
+     * Proposal page rows for a new proposal made of another proposal's unsaved edits (Split).
+     * One row per item of either list, paired by category and item number; an item missing from a
+     * list counts as having no change there (an added item, or one marked for removal: leave
+     * marked rows out of editedRows).
+     * - Quantity: the edit's change, `after - before`. Subtractions reverse it: the edits took
+     *   that amount out of this proposal for the new one (+30 lowered to +20 gives +10).
+     * - Text: where the edit changed the value, the edited value; subtractions take the value the
+     *   edit replaced. Unedited text proposes no change. An item with no edit gets no change.
+     * @param {Array<Object>} savedRows - The proposal's saved rows (store.originalData)
+     * @param {Array<Object>} editedRows - Its edited rows, without those marked for removal
+     * @param {boolean} [subtract=false] - The edits are subtractions
+     * @returns {Array<Object>} Rows to save as the new proposal (rows without changes save nothing)
+     */
+    static splitRows(savedRows, editedRows, subtract = false) {
+        const saved = new Map((savedRows || []).map(row => [itemKey(row), row]));
+        const edited = new Map((editedRows || []).map(row => [itemKey(row), row]));
+        return [...new Set([...edited.keys(), ...saved.keys()])].map(key => {
+            const before = saved.get(key);
+            const after = edited.get(key);
+            const base = after || before;
+            const delta = toNumber(after?.quantityChange) - toNumber(before?.quantityChange);
+            const row = { ...base, quantityChange: String(subtract ? -delta : delta) };
+            for (const [field, current] of Object.entries(TABLE_TEXT_FIELDS)) {
+                if (!(field in base)) continue;
+                const was = before ? before[field] : base[current];
+                const is = after ? after[field] : base[current];
+                row[field] = String(was ?? '') === String(is ?? '') ? base[current] : (subtract ? was : is);
+            }
+            return row;
+        });
+    }
+
+    /**
+     * A proposal page row with another proposal's row for the same item merged in (Merge):
+     * quantity changes add up, and the source's text changes replace the target's.
+     * @param {Object} target - The target proposal's row for the item
+     * @param {Object} source - The source proposal's row
+     * @returns {Object} The target row's new values
+     */
+    static mergeTableRow(target, source) {
+        const merged = { ...target, quantityChange: String(toNumber(target.quantityChange) + toNumber(source.quantityChange)) };
+        for (const [field, current] of Object.entries(TABLE_TEXT_FIELDS)) {
+            if (field in source && String(source[field] ?? '') !== String(source[current] ?? '')) merged[field] = source[field];
+        }
+        return merged;
     }
 
     /**

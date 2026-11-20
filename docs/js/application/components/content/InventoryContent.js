@@ -3,7 +3,7 @@ import { ShowInventoryReport } from './ShowInventoryReport.js';
 import { InventoryItemReport } from './InventoryItemReport.js';
 import { InventoryItemTimeline } from './InventoryItemTimeline.js';
 import { getProposalsStore, registerProposalRoutes, PROPOSALS_PATH, PROPOSALS_ROUTE } from '../../utils/inventoryProposals.js';
-import { InventoryProposalsGrid, InventoryProposalTable } from './InventoryProposals.js';
+import { InventoryProposalsGrid, InventoryProposalTable, ProposalMenuComponent } from './InventoryProposals.js';
 import { openInventorySaveDialog, INVENTORY_DETAIL_TOGGLES } from './InventoryTable.js';
 
 /** Route key of the per-category history page: inventory/<category>/edit-history */
@@ -542,7 +542,8 @@ export const InventoryContent = {
 
         // Register hamburger menu for inventory
         hamburgerMenuRegistry.registerMenu('inventory', {
-            components: [InventoryMenuComponent, DashboardToggleComponent],
+            // ProposalMenuComponent draws items only on a proposal page
+            components: [InventoryMenuComponent, ProposalMenuComponent, DashboardToggleComponent],
             props: {
                 refreshCallback: this.handleRefresh,
                 navigateToPath: this.navigateToPath,

@@ -1,5 +1,5 @@
 import { acquireSheetLock } from './sheetLockMixin.js';
-import { Requests, authState, getReactiveStore, getInventoryNoteMaxLength, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, NavigationRegistry, todayISOString, findMatchingStores, generateStoreKey } from '../index.js';
+import { Requests, authState, getReactiveStore, getInventoryNoteMaxLength, ProposalUtils, PROPOSAL_LOCK_NAMESPACE, NavigationRegistry, todayISOString, isMarkedForDeletion, findMatchingStores, generateStoreKey } from '../index.js';
 
 /**
  * Inventory proposal helpers for the application layer: the shared proposal list store, route
@@ -47,6 +47,10 @@ export function proposalTableStore(name) {
     return getReactiveStore(Requests.getInventoryProposalTable, Requests.saveInventoryProposalTable, [name]);
 }
 
+// A store row's values, without its runtime AppData and row metadata (a deletion mark)
+const rowValues = ({ AppData, metadata, ...values }) => values;
+const hasChanges = (row) => ProposalUtils.changesFromTableRow(row).length > 0;
+
 /**
  * Whether a proposal has unsaved edits in this session's open store for it. Null when no store
  * for it is open: then only its autosave backup can tell (hasProposalBackup).
@@ -79,6 +83,78 @@ export async function saveProposalEdits(name) {
     if (saved === false || store.isModified) throw new Error(store.error || `Could not save the ${name} proposal`);
     await release();
     await reloadProposals();
+}
+
+/**
+ * Create a proposal from proposal page rows (Duplicate, Split). The name is checked again under
+ * its lock against a freshly read list, since saving under an existing name would replace that
+ * proposal's items. Rows without changes save nothing.
+ * @param {string} name - New proposal name
+ * @param {Array<Object>} rows - Proposal page rows (see ProposalUtils.toTableRow)
+ * @returns {Promise<number>} How many items the new proposal holds
+ * @throws {Error} When no row has a change, the name is invalid or taken, or the save fails
+ */
+export async function createProposal(name, rows) {
+    if (!authState.user?.email) throw new Error('Log in to create a proposal');
+    const trimmed = String(name || '').trim();
+    const items = (rows || []).filter(hasChanges).map(rowValues);
+    if (items.length === 0) throw new Error('No item has a change to put in the new proposal.');
+    const release = await acquireSheetLock(PROPOSAL_LOCK_NAMESPACE, trimmed, `The ${trimmed} proposal`, 'Nothing was created.');
+    try {
+        await reloadProposals();
+        const names = ProposalUtils.groupProposals(getProposalsStore().data || []).map(proposal => proposal.name);
+        const error = ProposalUtils.validateName(trimmed, names, getInventoryNoteMaxLength());
+        if (error) throw new Error(error);
+        await Requests.saveInventoryProposalTable(items, trimmed);
+    } finally {
+        await release();
+    }
+    await reloadProposals();
+    return items.length;
+}
+
+/**
+ * A new proposal of a proposal's unsaved edits (Split; see ProposalUtils.splitRows). The source
+ * keeps its edits, unsaved, so saving it afterwards takes them out of (or adds them to) it.
+ * @param {Object} store - The source proposal's table store
+ * @param {string} name - New proposal name
+ * @param {boolean} subtract - The edits are subtractions (the new proposal gets them reversed)
+ * @returns {Promise<number>} How many items the new proposal holds
+ */
+export async function splitProposal(store, name, subtract) {
+    const edited = (store.data || []).filter(row => !isMarkedForDeletion(row));
+    return await createProposal(name, ProposalUtils.splitRows(store.originalData, edited, subtract));
+}
+
+/**
+ * Add a proposal's items to another proposal as unsaved edits there (Merge). Each item merges into
+ * the target's row for it (ProposalUtils.mergeTableRow: quantities add up) or adds a row; a row
+ * marked for removal is unmarked and takes the item's changes. Nothing is saved: the user saves or
+ * discards on the target's page. The target's edit lock is taken first and kept, as its page keeps
+ * it while it has edits.
+ * @param {string} target - Target proposal name
+ * @param {Array<Object>} sourceRows - The source proposal's saved rows
+ * @returns {Promise<number>} How many items were merged
+ * @throws {Error} When the source has no changes or the target's lock can't be taken
+ */
+export async function mergeIntoProposal(target, sourceRows) {
+    const items = (sourceRows || []).filter(hasChanges).map(rowValues);
+    if (items.length === 0) throw new Error('This proposal has no changes to merge.');
+    const store = proposalTableStore(target);
+    await waitForLoad(store);
+    await acquireSheetLock(PROPOSAL_LOCK_NAMESPACE, target, `The ${target} proposal`, 'Nothing was merged.');
+    for (const item of items) {
+        const row = store.data.find(other => other.category === item.category && other.itemNumber === item.itemNumber);
+        if (!row) {
+            store.addRow({ ...item });
+        } else if (isMarkedForDeletion(row)) {
+            store.toggleRowDeletion(row);
+            Object.assign(row, item);
+        } else {
+            Object.assign(row, ProposalUtils.mergeTableRow(rowValues(row), item));
+        }
+    }
+    return items.length;
 }
 
 /**
