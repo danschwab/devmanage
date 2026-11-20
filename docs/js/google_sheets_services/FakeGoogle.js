@@ -1124,12 +1124,25 @@ export class FakeGoogleSheetsService {
                 ['InventoryNoteMaxLength', 'Inventory Note Length', 'maximum characters in an inventory save note (edit history, scheduled changes, proposal commits)', 'inventory*', 'integer', '25', ''],
                 ['InventoryShortageAlertDays', 'Shortage Alert Days', 'days ahead the inventory shortage alerts look; 0 turns them off', 'inventory*', 'integer', '120', ''],
                 // Inventory projection (data_management/utils/inventory-projection.js, PROJECTION_SETTINGS)
-                ['ProjectionFutureYears', 'Future Years', 'years ahead to project, from this month', 'reports/inventory-projection', 'integer', '1', ''],
+                ['ProjectionFutureYears', 'Future Years', 'years ahead to project, from this month', 'reports/inventory-projection, reports/expected-work', 'integer', '1', ''],
                 ['ProjectionUsageMonths', 'Usage Months', 'full months of pack list use that item use per square foot is learned from', 'reports/inventory-projection', 'integer', '3', ''],
-                ['ProjectionHistoryYears', 'History Years', "past years whose square feet set the growth trend (a straight line through each year's total); 1 is no trend", 'reports/inventory-projection', 'integer', '1', ''],
-                ['ProjectionGrowthFactor', 'Growth Factor', "multiplies last year's square feet for a future month, on top of the trend, once per year ahead", 'reports/inventory-projection', 'double', '1', ''],
-                ['ProjectionDefaultSquareFeet', 'Default Square Feet', "square feet for a show whose size can't be read; 0 leaves it out", 'reports/inventory-projection', 'integer', '0', ''],
-                ['ProjectionMinShortfall', 'Min Shortfall', 'items out at once must pass stock by this much to list an item', 'reports/inventory-projection', 'double', '1', '']
+                ['ProjectionHistoryYears', 'History Years', "past years whose square feet set the growth trend (a straight line through each year's total); 1 is no trend", 'reports/inventory-projection, reports/expected-work', 'integer', '1', ''],
+                ['ProjectionGrowthFactor', 'Growth Factor', "multiplies last year's square feet for a future month, on top of the trend, once per year ahead", 'reports/inventory-projection, reports/expected-work', 'double', '1', ''],
+                ['ProjectionDefaultSquareFeet', 'Default Square Feet', "square feet for a show whose size can't be read; 0 leaves it out", 'reports/inventory-projection, reports/expected-work', 'integer', '0', ''],
+                ['ProjectionMinShortfall', 'Min Shortfall', 'items out at once must pass stock by this much to list an item', 'reports/inventory-projection', 'double', '1', ''],
+                // Expected work (data_management/utils/work-projection.js, WORK_CATEGORIES); the four rows
+                // above that name both reports are shared
+                ['WorkLargeBoothSqft', 'Large Booth From', 'square feet a large booth starts at; smaller booths, and shows without a size, take small-booth hours', 'reports/expected-work', 'integer', '400', ''],
+                ['WorkBoothDesignSmallHours', 'Booth Design: Small', 'hours of booth design for a small booth', 'reports/expected-work', 'double', '4', ''],
+                ['WorkBoothDesignLargeHours', 'Booth Design: Large', 'hours of booth design for a large booth', 'reports/expected-work', 'double', '16', ''],
+                ['WorkBoothEngineeringSmallHours', 'Booth Engineering: Small', 'hours of booth engineering for a small booth', 'reports/expected-work', 'double', '2', ''],
+                ['WorkBoothEngineeringLargeHours', 'Booth Engineering: Large', 'hours of booth engineering for a large booth', 'reports/expected-work', 'double', '12', ''],
+                ['WorkElevationsSmallHours', 'Elevations: Small', 'hours of elevations for a small booth', 'reports/expected-work', 'double', '2', ''],
+                ['WorkElevationsLargeHours', 'Elevations: Large', 'hours of elevations for a large booth', 'reports/expected-work', 'double', '8', ''],
+                ['WorkPanelsSmallHours', 'Panels: Small', 'hours of panels for a small booth', 'reports/expected-work', 'double', '4', ''],
+                ['WorkPanelsLargeHours', 'Panels: Large', 'hours of panels for a large booth', 'reports/expected-work', 'double', '24', ''],
+                ['WorkSetupSmallHours', 'Setup: Small', 'hours of setup for a small booth', 'reports/expected-work', 'double', '4', ''],
+                ['WorkSetupLargeHours', 'Setup: Large', 'hours of setup for a large booth', 'reports/expected-work', 'double', '16', '']
             ]
         }
     };

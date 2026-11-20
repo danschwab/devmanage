@@ -35,7 +35,7 @@ const PROJECTION_VIEWS = {
 };
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const monthLabel = (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+export const monthLabel = (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 
 // What each month row key is (Requests.getInventoryProjectionMonths), as readable text; derived on
 // a computed copy. short is drawn by the modal (#cell).

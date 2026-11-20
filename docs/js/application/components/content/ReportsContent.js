@@ -3,13 +3,15 @@ import { ShowInventoryReport } from './ShowInventoryReport.js';
 import { InventoryItemReport } from './InventoryItemReport.js';
 import { IndexMismatchReport } from './IndexMismatchReport.js';
 import { InventoryProjectionReport } from './InventoryProjectionReport.js';
+import { ExpectedWorkReport } from './ExpectedWorkReport.js';
 
 export const ReportsContent = {
     components: {
         'show-inventory-report': ShowInventoryReport,
         'inventory-item-report': InventoryItemReport,
         'index-mismatch-report': IndexMismatchReport,
-        'inventory-projection-report': InventoryProjectionReport
+        'inventory-projection-report': InventoryProjectionReport,
+        'expected-work-report': ExpectedWorkReport
     },
     props: {
         containerPath: {
@@ -24,7 +26,8 @@ export const ReportsContent = {
                 { id: 'show-usage', title: 'Show Usage', content: 'View inventory quantities across shows in a matrix.', cardClass: 'blue' },
                 { id: 'item-shortages', title: 'Item Shortages', content: 'View items with quantities that drop below a set threshold.', cardClass: 'blue' },
                 { id: 'index-mismatches', title: 'Index Mismatches', content: 'View and resolve all unmatched client and show names from the production schedule and pack lists.', cardClass: 'blue' },
-                { id: 'inventory-projection', title: 'Inventory Projection', content: 'Items of a category likely to run short over the coming year or years, from expected shows and recent use.', cardClass: 'blue' }
+                { id: 'inventory-projection', title: 'Inventory Projection', content: 'Items of a category likely to run short over the coming year or years, from expected shows and recent use.', cardClass: 'blue' },
+                { id: 'expected-work', title: 'Expected Work', content: 'Hours of booth design, engineering, elevations, panels and setup expected each month, from booked and expected shows.', cardClass: 'blue' }
             ]
         };
     },
@@ -63,6 +66,10 @@ export const ReportsContent = {
                 'inventory-projection': {
                     displayName: 'Inventory Projection',
                     dashboardTitle: 'Inventory Projection'
+                },
+                'expected-work': {
+                    displayName: 'Expected Work',
+                    dashboardTitle: 'Expected Work'
                 }
             }
         });
@@ -125,6 +132,13 @@ export const ReportsContent = {
             <!-- Inventory Projection View -->
             <inventory-projection-report
                 v-else-if="cleanContainerPath === 'reports/inventory-projection'"
+                :container-path="containerPath"
+                :navigate-to-path="navigateToPath"
+            />
+
+            <!-- Expected Work View -->
+            <expected-work-report
+                v-else-if="cleanContainerPath === 'reports/expected-work'"
                 :container-path="containerPath"
                 :navigate-to-path="navigateToPath"
             />

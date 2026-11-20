@@ -5,6 +5,7 @@ export { CacheInvalidationBus, invalidateCache, ProgressBus, reportIntegrityErro
 export { EditHistoryUtils, DEFAULT_INVENTORY_NOTE_MAX_LENGTH, resolveInventoryNoteMaxLength, readRowMetadata, writeRowMetadata } from '../data_management/utils/metadata-utils.js';
 export { ProposalUtils, PROPOSAL_LOCK_NAMESPACE } from '../data_management/utils/proposal-utils.js';
 export { THUMBNAIL_FIELD } from '../data_management/utils/thumbnail-values.js';
+export { WORK_CATEGORIES, resolveWorkSettings } from '../data_management/utils/work-projection.js';
 
 // Utils
 export { html } from './utils/template-helpers.js';
