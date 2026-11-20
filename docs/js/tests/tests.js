@@ -47,6 +47,7 @@ import { resolveView, resolveAction, pickView, mergeView, matchesKeyPattern, set
 import { SEARCH_LIMITS, searchWords, matchRow, matchRows, makeHighlighter } from '../application/utils/views/searchMatch.js';
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
 import { rowsToCards, bucketRowsToCards } from '../application/utils/views/cardsAdapter.js';
+import { rowsToChart } from '../application/utils/views/chartAdapter.js';
 import { applyColorRule, colorFor, rowColorFor } from '../application/utils/views/viewColor.js';
 import { containerTier, BREAKPOINTS } from '../application/utils/useContainerSize.js';
 import { createScrollHider } from '../application/utils/scrollHider.js';
@@ -5248,6 +5249,27 @@ test('VIEWS CARDS', 'bucketRowsToCards: buckets by key, empty buckets seeded, no
     assertEqual(cards.map(c => c.rows.length), [0, 2, 1], 'members');
     assertEqual(cards[1].contentFooter, '2 items', 'bucket decorations');
     assertEqual([cards[1].row.tab, cards[1].hasDetails, cards[1].cardClass], ['FURNITURE', false, 'purple'], 'synthetic row, no details');
+});
+
+// Chart layout: x and series keys are the shown tier; rowsToChart makes one point per row and one
+// series per key. Colours: b2 names blue, so a and b1 take the first two others (green, orange)
+test('VIEWS CHART', 'resolveView and rowsToChart: points by row, series by key, colours, gaps', async () => {
+    const fields = [{ key: 'month', label: 'Month' }, { key: 'a' }, { key: 'b1', label: 'First' }, { key: 'b2' }, { key: 'note' }];
+    const view = { id: 'chart', layout: 'chart', chart: { x: 'month', series: ['a', 'b*'], dashed: ['b2'], yLabel: 'Hours' }, style: { b2: { color: 'blue', label: 'Second' } } };
+    const r = withViewWarnings(() => resolveView(fields, view)).result;
+    assertEqual([r.shown, r.details.map(f => f.key), r.chart.type, r.invalid], [['month', 'a', 'b1', 'b2'], ['note'], 'line', null], 'x and series shown, the rest in details');
+    const chart = rowsToChart([{ month: 'Jan', a: 3, b1: '', b2: '4' }, { month: 'Feb', a: 'x', b1: 2, b2: 5 }], r);
+    assertEqual([chart.labels, chart.yLabel], [['Jan', 'Feb'], 'Hours'], 'labels from x');
+    assertEqual(chart.series.map(s => [s.key, s.label, s.values, s.color, s.dashed]), [
+        ['a', 'a', [3, null], 'green', false],
+        ['b1', 'First', [null, 2], 'orange', false],
+        ['b2', 'Second', [4, 5], 'blue', true]
+    ], 'blank and non-numbers are gaps; style label and colour win');
+});
+
+test('VIEWS CHART', 'a chart without series is invalid (DataView falls back to the default view)', async () => {
+    const { result: r, warnings } = withViewWarnings(() => resolveView([{ key: 'month' }], { id: 'c', layout: 'chart', chart: { x: 'month', series: ['nope'] } }));
+    assertEqual([r.invalid, warnings.length], ['chart-fields', 2], 'unknown series key, then no series');
 });
 
 // ── Instant write (views-and-renderers-plan §4.16) ───────────────────────────

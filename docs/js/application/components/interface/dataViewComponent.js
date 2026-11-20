@@ -1,4 +1,4 @@
-import { html, NavigationRegistry, TableComponent, CalendarComponent, CardsComponent } from '../../index.js';
+import { html, NavigationRegistry, TableComponent, CalendarComponent, CardsComponent, ChartComponent } from '../../index.js';
 import { resolveView, resolveAction, pickView, withRegistryDefaults, devWarn } from '../../utils/views/resolveView.js';
 import { searchWords, makeHighlighter } from '../../utils/views/searchMatch.js';
 import { formatText } from '../../utils/views/fieldFormat.js';
@@ -47,7 +47,7 @@ const REMOVED_PRESENTATION_PROPS = [
 export const DataView = {
     name: 'DataView',
     inheritAttrs: false,
-    components: { TableComponent, CalendarComponent, CardsComponent },
+    components: { TableComponent, CalendarComponent, CardsComponent, ChartComponent },
     inject: {
         $modal: { from: '$modal', default: null },
         appContext: { from: 'appContext', default: null }
@@ -121,7 +121,7 @@ export const DataView = {
             const opts = { size: this.size, print: this.printing, patches: this.patches, editMode: this.editMode, theme: this.registry?.theme || '' };
             const r = resolveView(this.fields, withRegistryDefaults(this.registry, this.activeView), opts);
             if (r.invalid) {
-                // A view whose calendar fields are missing falls back to the default view
+                // A view whose calendar or chart fields are missing falls back to the default view
                 const fallback = pickView(this.registry, {});
                 if (fallback && fallback !== this.activeView) return resolveView(this.fields, withRegistryDefaults(this.registry, fallback), opts);
             }
@@ -276,6 +276,17 @@ export const DataView = {
         >
             <template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}"></slot></template>
         </CardsComponent>
+        <ChartComponent
+            v-else-if="layout === 'chart'"
+            key="dataview-chart"
+            v-bind="$attrs"
+            :class="rendererClass"
+            :resolved="resolved"
+            :data="rowsView"
+            :view-select="viewSelect"
+        >
+            <template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}"></slot></template>
+        </ChartComponent>
         <div v-else class="empty-message">This view's layout ({{ layout }}) is not available yet.</div>
     `
 };

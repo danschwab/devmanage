@@ -341,7 +341,7 @@ The inventory calendar button is no longer a column: it is the inventory table's
  * @property {string}  id                 stable, never renamed
  * @property {string}  name
  * @property {string}  [icon]
- * @property {'table'|'calendar'|'cards'} layout
+ * @property {'table'|'calendar'|'cards'|'chart'} layout
  * @property {string}  [theme]            header/footer/button colour; defaults to registry.theme
  * @property {string}  [className]        structural CSS hook (e.g. 'packlist-table'); never colour
  * @property {boolean} [fullWidth]        full-width container mode: the page container drops its max-width
@@ -371,6 +371,9 @@ The inventory calendar button is no longer a column: it is the inventory table's
  *           actions = keys whose cells draw in the chip's end button bar (before the decoration cards
  *           and the action button), like a card footer
  * @property {{ bucketBy?:string, card:Line[], footer?:Line[], hideOnSearch?:boolean }} [cards]
+ * @property {{ x:string, series:string[], type?:'line'|'bar', dashed?:string[], yLabel?:string }} [chart]
+ *           one point per row along x, one series per key (patterns allowed); style[key].color (a
+ *           theme colour name) and style[key].label colour and name a series
  *
  * // Variants: partial ViewDefs by condition
  * @property {{ medium?: Partial<ViewDef>, narrow?: Partial<ViewDef>, print?: Partial<ViewDef> }} [variants]
@@ -387,7 +390,7 @@ The inventory calendar button is no longer a column: it is the inventory table's
   - Unknown keys are ignored.
   - The first tier wins on duplicates. At most one of `details` and `hidden` may be `'rest'`.
   - Editable fields inside a stack child render read-only.
-  - A view with a missing calendar start or end field falls back to the default view.
+  - A view with a missing calendar start or end field, or a chart without its x field or any series, falls back to the default view.
   - `action: 'row'` with an `editMode` other than `'none'` falls back to `'button'` (§4.8).
 
 ### 4.3 Page view registry
@@ -526,6 +529,7 @@ bucketRowsToCards(rows, resolved, { bucketKeys, bucketDecorations }); // one per
   - `bucketDecorations` supplies autosave/lock/Save.
   - They have **no details** (R2.7); their primary action is the page's navigation.
 - **No items mode (R3.7).** `CardsComponent` takes only adapter output from `DataView`. ReportsContent builds its own three-card menu with the shared card CSS and drops `CardsComponent`.
+- **Chart renderer** (`chartComponent.js`, layout `chart`). `rowsToChart(rows, resolved)` (`views/chartAdapter.js`, pure) gives the labels (the x field as text) and the series (numbers; a blank is a gap; colour names, unnamed series taking the next unused of `CHART_COLORS`). The component draws them with Chart.js (`js/vendor/chart.umd.min.js`, v4.5.1, loaded on the first chart, not with the page), turning colour names into the theme's colours and redrawing on a theme change. It has the shared header but no search, sort or row action. First use: the expected work report (a line per work category, the total dashed; a table view beside it).
 - **`bucketBy`** is unrelated to packlist row groups (`hideGroupMembers`, `MetaData`). Code comments must say so.
 
 ### 4.7 Calendar mapping

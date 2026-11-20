@@ -223,6 +223,7 @@ export function resolveView(fields, view, opts = {}) {
     let chip = [];                  // calendar: string[][]
     let chipActions = [];           // calendar: string[] (cells in the chip's end button bar)
     let card = [], footer = [];     // cards: string[][]
+    let chartX = null, chartSeries = []; // chart: the x key, the series keys
     const claimShown = (key, where) => {
         if (!known(key)) { warnUnknown(where, key); return false; }
         if (tier.has(key)) {
@@ -249,6 +250,9 @@ export function resolveView(fields, view, opts = {}) {
     } else if (layout === 'cards') {
         card = claimLines(normalizeLines(v.cards?.card, fieldKeys), 'cards.card');
         footer = claimLines(normalizeLines(v.cards?.footer, fieldKeys), 'cards.footer');
+    } else if (layout === 'chart') {
+        if (v.chart?.x && claimShown(v.chart.x, 'chart.x')) chartX = v.chart.x;
+        chartSeries = normalizeLine(v.chart?.series || [], fieldKeys).filter(k => claimShown(k, 'chart.series'));
     }
 
     // 3b. Details and hidden lists
@@ -355,6 +359,17 @@ export function resolveView(fields, view, opts = {}) {
         if (c.bucketBy && !known(c.bucketBy)) warnUnknown('cards.bucketBy', c.bucketBy);
     }
 
+    // Chart section
+    let chart = null;
+    if (layout === 'chart') {
+        const c = v.chart || {};
+        chart = { type: c.type === 'bar' ? 'bar' : 'line', x: chartX, series: chartSeries, dashed: c.dashed || [], yLabel: c.yLabel || '' };
+        if (!chartX || !chartSeries.length) {
+            invalid = 'chart-fields';
+            devWarn(`view "${viewId}": chart x field or series missing (${c.x}; ${(c.series || []).join(', ')})`);
+        }
+    }
+
     // 5. Trigger (edit-mode rule: a table being edited can't use the whole row as its trigger)
     let trigger = v.action === 'row' ? 'row' : 'button';
     if (trigger === 'row' && editMode !== 'none') {
@@ -365,7 +380,8 @@ export function resolveView(fields, view, opts = {}) {
     // 6. Output
     const shown = layout === 'table'
         ? slots.flatMap(s => s.lines.flat())
-        : layout === 'calendar' ? [...chip.flat(), ...chipActions] : [...card.flat(), ...footer.flat()];
+        : layout === 'calendar' ? [...chip.flat(), ...chipActions]
+            : layout === 'chart' ? [chartX, ...chartSeries].filter(Boolean) : [...card.flat(), ...footer.flat()];
     const details = detailsOrder.map(k => fieldMap.get(k));
     const hidden = new Set(fieldKeys.filter(k => tier.get(k) === 'hidden'));
     for (const k of ALWAYS_HIDDEN) hidden.add(k);
@@ -391,6 +407,7 @@ export function resolveView(fields, view, opts = {}) {
         table,
         calendar,
         cards,
+        chart,
         trigger,
         editMode,
         size,

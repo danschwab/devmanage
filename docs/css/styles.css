@@ -774,6 +774,19 @@ button.card {
 }
 
 /* Cards Grid Component */
+/* Chart renderer (chartComponent.js): the header, then the chart at a height that fits a
+   dashboard card or a page */
+.chart-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-md);
+    width: 100%;
+}
+.chart-container {
+    position: relative;
+    height: clamp(240px, 55vh, 440px);
+}
+
 .cards-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

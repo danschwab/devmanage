@@ -19,6 +19,29 @@ const MONTH_VIEWS = {
     views: [{ id: 'table', name: 'Months', layout: 'table', columns: MONTH_FIELDS.map(field => field.key), style: { monthLabel: { width: 90 } } }]
 };
 
+// The page's rows are months: what each key is
+const WORK_FIELDS = [
+    { key: 'monthLabel', label: 'Month' },
+    ...WORK_CATEGORIES.map(category => ({ key: category.key, label: category.label, format: 'number', type: 'number' })),
+    { key: 'total', label: 'Total', format: 'number', type: 'number' }
+];
+const WORK_KEYS = [...WORK_CATEGORIES.map(category => category.key), 'total'];
+
+// A line per category and a dashed total, by month; or the same as a table
+const WORK_VIEWS = {
+    id: 'expected-work',
+    default: 'chart',
+    theme: 'blue',
+    views: [
+        {
+            id: 'chart', name: 'Chart', icon: 'timeline', layout: 'chart',
+            chart: { x: 'monthLabel', series: WORK_KEYS, dashed: ['total'], yLabel: 'Hours' },
+            style: { total: { color: 'text' } }
+        },
+        { id: 'table', name: 'Table', icon: 'table', layout: 'table', columns: ['monthLabel', ...WORK_KEYS], style: { monthLabel: { width: 90 } } }
+    ]
+};
+
 /**
  * The expected work's details: how the hours are reached (the work preference rows), then month
  * by month the shows booked and the hours booked and expected. A modal component: open it with
@@ -79,7 +102,8 @@ const ExpectedWorkDetails = {
 
 /**
  * Expected work report (reports/expected-work): the hours of each work category expected each
- * month, from the booked shows and those expected but not booked yet. The model:
+ * month, from the booked shows and those expected but not booked yet, as a line chart (or a
+ * table: the view switch). The model:
  * data_management/utils/work-projection.js; its hours are preference rows (Work*), shown in the
  * page menu (View Parameters), with the inventory projection's shared ones.
  */
@@ -92,35 +116,19 @@ export const ExpectedWorkReport = {
     },
     data() {
         return {
-            workStore: getReactiveStore(Requests.getExpectedWork, null, [])
+            workStore: getReactiveStore(Requests.getExpectedWork, null, []),
+            WORK_FIELDS,
+            WORK_VIEWS
         };
     },
     computed: {
-        months() {
-            return (this.workStore.data || []).map(month => month.month);
-        },
-        // One row per category and a total; one column per month, its expected hours
-        fields() {
-            return [
-                { key: 'label', label: 'Work' },
-                ...this.months.map((month, i) => ({ key: `m${i}`, label: monthLabel(month), format: 'number', type: 'number' }))
-            ];
-        },
-        registry() {
-            return {
-                id: 'expected-work',
-                default: 'table',
-                theme: 'blue',
-                views: [{ id: 'table', name: 'Expected Work', layout: 'table', columns: this.fields.map(field => field.key), style: { label: { width: 150 } } }]
-            };
-        },
+        // One row per month: each category's expected hours and the total
         rows() {
-            const data = this.workStore.data || [];
-            const row = (label, hours) => Object.fromEntries([['label', label], ...data.map((month, i) => [`m${i}`, Math.round(hours(month))])]);
-            return [
-                ...WORK_CATEGORIES.map(category => row(category.label, month => month.hours[category.key]?.expected || 0)),
-                row('Total', month => month.total.expected)
-            ];
+            return (this.workStore.data || []).map(month => ({
+                monthLabel: monthLabel(month.month),
+                ...Object.fromEntries(WORK_CATEGORIES.map(category => [category.key, Math.round(month.hours[category.key]?.expected || 0)])),
+                total: Math.round(month.total.expected)
+            }));
         }
     },
     methods: {
@@ -136,9 +144,9 @@ export const ExpectedWorkReport = {
     },
     template: html`
         <DataView
-            :fields="fields"
+            :fields="WORK_FIELDS"
             :rows="rows"
-            :registry="registry"
+            :registry="WORK_VIEWS"
             :container-path="containerPath"
             :navigate-to-path="navigateToPath"
             title="Expected Work"

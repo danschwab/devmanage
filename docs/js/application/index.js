@@ -38,6 +38,7 @@ export { cleanPath } from './utils/dashboardLayout.js';
 export { TableComponent, tableRowSelectionState } from './components/interface/tableComponent.js';
 export { CardsComponent } from './components/interface/cardsComponent.js';
 export { CalendarComponent } from './components/interface/calendarComponent.js';
+export { ChartComponent } from './components/interface/chartComponent.js';
 // Views system (see docs/notes/views-and-renderers-plan.md)
 export { DataView } from './components/interface/dataViewComponent.js';
 export { ViewSelectComponent } from './components/interface/viewSelectComponent.js';
