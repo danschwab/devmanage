@@ -1149,6 +1149,19 @@ function computeDisplayDates(dateFilters) {
     };
 }
 
+/**
+ * The dates a ScheduleFilterSelect choice covers, as ISO dates (null for an open end): its
+ * startDate and endDate, else its 'after' and 'before' date filters (day offsets from today
+ * resolved). For pages that filter by date rather than by schedule rows (the item timeline, the
+ * expected work).
+ * @param {Object|null} searchData - The search-selected event's value
+ * @returns {{ startDate: string|null, endDate: string|null }}
+ */
+export function searchDateRange(searchData) {
+    const filters = computeDisplayDates(searchData?.dateFilters);
+    return { startDate: searchData?.startDate ?? filters.startDate, endDate: searchData?.endDate ?? filters.endDate };
+}
+
 // Async-resolves overlap-mode saved searches (Return/Ship column with identifier value).
 async function resolveOverlapDisplayDates(dateFilters) {
     const returnFilter = dateFilters?.find(f => f.column === 'Return' && f.type === 'after');

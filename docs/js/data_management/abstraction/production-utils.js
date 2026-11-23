@@ -1,6 +1,6 @@
 import { Database, ApplicationUtils, offsetToISO, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName, normalizeText, normalizeMatchKey, SEVERITY } from '../index.js';
 import { estimateShipDate as _calculateShipDate } from '../utils/ship-date.js'; // ship date with fallbacks
-import { parseBoothSquareFeet } from '../utils/inventory-projection.js';
+import { parseBoothSquareFeet } from '../utils/helpers.js';
 
 /**
  * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).

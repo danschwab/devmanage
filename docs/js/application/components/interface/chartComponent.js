@@ -102,7 +102,11 @@ export const ChartComponent = {
             if (this._unmounted || !canvas || !this.hasPoints) return;
             const hidden = new Set((this._chart?.data.datasets || []).filter((_, i) => !this._chart.isDatasetVisible(i)).map(set => set.label));
             this._chart?.destroy();
-            const { type, labels, series, yLabel } = this.chartData;
+            const { type, labels, series, yLabel, y2Label, stepped } = this.chartData;
+            const hasRight = series.some(s => s.axis === 'right');
+            // Many points (a day per point over months) draw as a line without dots or x grid lines
+            const dense = labels.length > 60;
+            const pointRadius = dense ? 0 : 3;
             const text = themeColor('text');
             const grid = themeColor('border');
             const font = { family: getComputedStyle(document.body).fontFamily };
@@ -117,8 +121,10 @@ export const ChartComponent = {
                         backgroundColor: themeColor(s.color),
                         borderDash: s.dashed ? [6, 4] : [],
                         borderWidth: 2,
-                        pointRadius: 3,
-                        cubicInterpolationMode: 'monotone',
+                        pointRadius,
+                        // A level (stepped) holds its value until the next point
+                        ...(stepped ? { stepped: 'after' } : { cubicInterpolationMode: 'monotone' }),
+                        yAxisID: s.axis === 'right' ? 'y2' : 'y',
                         hidden: hidden.has(s.label)
                     }))
                 },
@@ -136,13 +142,24 @@ export const ChartComponent = {
                         }
                     },
                     scales: {
-                        x: { ticks: { color: text, font }, grid: { color: grid } },
+                        x: { ticks: { color: text, font }, grid: { color: grid, display: !dense } },
                         y: {
                             beginAtZero: true,
                             ticks: { color: text, font },
                             grid: { color: grid },
                             title: { display: !!yLabel, text: yLabel, color: text, font }
-                        }
+                        },
+                        // The second scale, for series on the right axis; its grid lines would
+                        // cross the first's
+                        ...(hasRight ? {
+                            y2: {
+                                position: 'right',
+                                beginAtZero: true,
+                                ticks: { color: text, font },
+                                grid: { drawOnChartArea: false },
+                                title: { display: !!y2Label, text: y2Label, color: text, font }
+                            }
+                        } : {})
                     }
                 }
             });

@@ -17,6 +17,7 @@
 import { formatText, escapeHtml } from './fieldFormat.js';
 import { colorFor, rowColorFor } from './viewColor.js';
 import { placeDecorations } from './decorations.js';
+import { bucketRows } from './buckets.js';
 
 function lineText(row, keys, resolved) {
     return keys
@@ -101,18 +102,9 @@ export function rowsToCards(rows, resolved, hooks = {}) {
 export function bucketRowsToCards(rows, resolved, opts = {}) {
     const { bucketKeys = [], bucketDecorations = null, bucketLabel = null, bucketAppData = null } = opts;
     const by = resolved.cards?.bucketBy;
-    const groups = new Map();
-    for (const key of bucketKeys) if (!groups.has(key)) groups.set(key, []);
-    if (by) {
-        for (const row of rows || []) {
-            const key = row?.[by];
-            if (key === undefined || key === null || key === '') continue;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push(row);
-        }
-    }
+    const groups = by ? bucketRows(rows, by, { keys: bucketKeys }) : bucketKeys.map(key => ({ key, rows: [] }));
     const cards = [];
-    for (const [key, members] of groups) {
+    for (const { key, rows: members } of groups) {
         const decos = bucketDecorations ? (bucketDecorations(key, members) || []) : [];
         const { status, actions } = decorationsToFooter(decos);
         const title = bucketLabel ? bucketLabel(key) : String(key);

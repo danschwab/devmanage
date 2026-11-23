@@ -48,11 +48,13 @@ import { SEARCH_LIMITS, searchWords, matchRow, matchRows, makeHighlighter } from
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
 import { rowsToCards, bucketRowsToCards } from '../application/utils/views/cardsAdapter.js';
 import { rowsToChart } from '../application/utils/views/chartAdapter.js';
+import { bucketKey, bucketRows, bucketLabel, aggregate } from '../application/utils/views/buckets.js';
 import { applyColorRule, colorFor, rowColorFor } from '../application/utils/views/viewColor.js';
 import { containerTier, BREAKPOINTS } from '../application/utils/useContainerSize.js';
 import { createScrollHider } from '../application/utils/scrollHider.js';
 import { DEFAULT_DASHBOARD } from '../application/utils/dashboardLayout.js';
-import { parseBoothSquareFeet, monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
+import { parseBoothSquareFeet } from '../data_management/utils/helpers.js';
+import { monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
 import { redirectPath, URLRouter } from '../application/utils/urlRouter.js';
 import { todayISOString, setTestToday, startOfTodayMs, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, itemVariantBase, resolveItemVariant, itemVariantFamilies, itemVariantKey, parseItemVariants, searchFilter, textFiltersToSearchParams, parseSearchParameters } from '../data_management/utils/helpers.js';
 import { instantWriteEntry, identityKey, cellKey, joinKey } from '../data_management/utils/instant-write-config.js';
@@ -5428,6 +5430,47 @@ test('VIEWS CHART', 'resolveView and rowsToChart: points by row, series by key, 
 test('VIEWS CHART', 'a chart without series is invalid (DataView falls back to the default view)', async () => {
     const { result: r, warnings } = withViewWarnings(() => resolveView([{ key: 'month' }], { id: 'c', layout: 'chart', chart: { x: 'month', series: ['nope'] } }));
     assertEqual([r.invalid, warnings.length], ['chart-fields', 2], 'unknown series key, then no series');
+});
+
+// Shows by ship month: July 400 and 100 sq ft, September one without a size; August has none
+test('VIEWS CHART', 'a bucketed chart: count and sum by month on two axes, a level held', async () => {
+    const fields = [{ key: 'ship' }, { key: 'sqft', label: 'Sq ft' }, { key: 'name' }];
+    const view = {
+        id: 'c', layout: 'chart',
+        chart: { bucket: { by: 'ship', unit: 'month' }, series: [{ count: true, label: 'Shows' }, { sum: 'sqft', axis: 'right' }, { last: 'sqft', label: 'Last', dashed: true }], y2Label: 'Square feet' }
+    };
+    const r = withViewWarnings(() => resolveView(fields, view)).result;
+    assertEqual([r.shown, r.details.map(f => f.key), r.invalid], [['ship', 'sqft'], ['name'], null], 'the bucket field and the read key shown');
+    const chart = rowsToChart([{ ship: '2025-07-10', sqft: 400 }, { ship: '2025-07-20', sqft: 100 }, { ship: '2025-09-01', sqft: '' }], r);
+    assertEqual([chart.labels, chart.y2Label], [['Jul 2025', 'Aug 2025', 'Sep 2025'], 'Square feet'], 'a point per month, August filled');
+    assertEqual(chart.series.map(s => [s.label, s.values, s.axis, s.color, s.dashed]), [
+        ['Shows', [2, 0, 1], 'left', 'blue', false],
+        ['Sq ft', [500, 0, 0], 'right', 'green', false],
+        ['Last', [100, 100, 100], 'left', 'orange', true]
+    ], 'count; sum, labelled by its field; last held through the empty month and the blank');
+    const { result: unbucketed, warnings } = withViewWarnings(() => resolveView(fields, { id: 'd', layout: 'chart', chart: { x: 'ship', series: [{ sum: 'sqft' }] } }));
+    assertEqual([unbucketed.invalid, warnings.length], ['chart-fields', 2], 'sum without a bucket is ignored, leaving no series');
+});
+
+// Rows by a field: by value in the order first seen (seeded keys first, kept empty), or by a
+// date's month, sorted, with the empty months between filled in
+test('VIEWS BUCKETS', 'bucketRows, bucketKey, bucketLabel and aggregate', async () => {
+    const rows = [{ c: 'B', d: '2025-03-15', n: 2 }, { c: 'A', d: '01/20/2025', n: '3' }, { c: 'B', d: '2025-01-02', n: 'x' }, { c: '', d: 'TBD', n: 4 }];
+    assertEqual(bucketRows(rows, 'c', { keys: ['Z'] }).map(b => [b.key, b.rows.length]), [['Z', 0], ['B', 2], ['A', 1]], 'seeded first, then first seen; blank in none');
+    const months = bucketRows(rows, 'd', { unit: 'month' });
+    assertEqual(months.map(b => [b.key, b.rows.length]), [['2025-01', 2], ['2025-02', 0], ['2025-03', 1]], 'sorted, February filled, TBD in none');
+    assertEqual([bucketKey('2025-03-15', 'year'), bucketKey('3/15/2025', 'day'), bucketLabel('2025-02', 'month'), bucketLabel('2025-03-05', 'day'), bucketLabel('B')],
+        ['2025', '2025-03-15', 'Feb 2025', '3/5/2025', 'B'], 'keys and labels');
+    assertEqual([aggregate(months, { count: true }), aggregate(months, { sum: 'n' }), aggregate(months, { last: 'n' })], [[2, 0, 1], [3, 0, 2], [3, 3, 2]],
+        'count; sum (non-numbers left out); last held through the empty month');
+});
+
+// A level 5 from Jan 30 to Feb 2, then 3 on Feb 3 (to Feb 3); a show out Jan 20 to Mar 2
+test('VIEWS BUCKETS', 'until: a row falls in every bucket from its date to its end', async () => {
+    const days = bucketRows([{ s: '2025-01-30', e: '2025-02-02', q: 5 }, { s: '2025-02-03', e: '2025-02-03', q: 3 }], 's', { unit: 'day', until: 'e' });
+    assertEqual([days.map(b => b.key), aggregate(days, { last: 'q' })], [['2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03'], [5, 5, 5, 5, 3]], 'each day its level');
+    const months = bucketRows([{ s: '2025-01-20', e: '2025-03-02' }, { s: '2025-02-10', e: '' }], 's', { unit: 'month', until: 'e' });
+    assertEqual(aggregate(months, { count: true }), [1, 2, 1], 'out in January, February (with a show without an end) and March');
 });
 
 // ── Instant write (views-and-renderers-plan §4.16) ───────────────────────────

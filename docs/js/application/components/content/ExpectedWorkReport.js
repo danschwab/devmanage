@@ -1,4 +1,4 @@
-import { html, DataView, ButtonBar, Requests, getReactiveStore, getPreferencesStore, invalidateCache, resolveWorkSettings, WORK_CATEGORIES } from '../../index.js';
+import { html, DataView, ButtonBar, ScheduleFilterSelect, searchDateRange, Requests, getReactiveStore, getPreferencesStore, invalidateCache, resolveWorkSettings, WORK_CATEGORIES } from '../../index.js';
 import { monthLabel } from './InventoryProjectionReport.js';
 
 const showsText = (n) => `${n} show${n === 1 ? '' : 's'}`;
@@ -106,12 +106,13 @@ const ExpectedWorkDetails = {
 /**
  * Expected work report (reports/expected-work): the hours of each work category expected each
  * month, from the booked shows and those expected but not booked yet, as a line chart (or a
- * table: the view switch). The model:
+ * table: the view switch). The schedule's date filter (ScheduleFilterSelect, in the URL) narrows
+ * the months shown to those it covers, within the projection's months. The model:
  * data_management/utils/work-projection.js; its hours are preference rows (Work*), shown in the
  * page menu (View Parameters), with the inventory projection's shared ones.
  */
 export const ExpectedWorkReport = {
-    components: { DataView, ButtonBar },
+    components: { DataView, ButtonBar, ScheduleFilterSelect },
     inject: ['$modal'],
     props: {
         containerPath: { type: String, default: 'reports/expected-work' },
@@ -120,14 +121,29 @@ export const ExpectedWorkReport = {
     data() {
         return {
             workStore: getReactiveStore(Requests.getExpectedWork, null, []),
+            // The date filter's range (ISO dates; null for an open end)
+            filterStartDate: null,
+            filterEndDate: null,
+            thisYear: new Date().getFullYear(),
             WORK_FIELDS,
             WORK_VIEWS
         };
     },
     computed: {
+        // The projected months the date filter covers (every one without a filter)
+        months() {
+            const from = this.filterStartDate?.slice(0, 7);
+            const to = this.filterEndDate?.slice(0, 7);
+            return (this.workStore.data || []).filter(month => (!from || month.month >= from) && (!to || month.month <= to));
+        },
+        emptyMessage() {
+            return (this.workStore.data || []).length && (this.filterStartDate || this.filterEndDate)
+                ? 'No projected months in this date range. The projection runs from this month for its Future Years.'
+                : 'No months to show.';
+        },
         // One row per month: each category's expected hours and the total control
         rows() {
-            return (this.workStore.data || []).map(month => ({
+            return this.months.map(month => ({
                 monthLabel: monthLabel(month.month),
                 ...Object.fromEntries(WORK_CATEGORIES.map(category => [category.key, Math.round(month.hours[category.key]?.expected || 0)])),
                 control: Math.round(month.control.expected)
@@ -135,6 +151,11 @@ export const ExpectedWorkReport = {
         }
     },
     methods: {
+        handleScheduleSearch(searchData) {
+            const { startDate, endDate } = searchDateRange(searchData);
+            this.filterStartDate = startDate;
+            this.filterEndDate = endDate;
+        },
         openDetails() {
             this.$modal.custom(ExpectedWorkDetails, { size: 'page' }, 'Expected work details');
         },
@@ -157,11 +178,20 @@ export const ExpectedWorkReport = {
             :loading-message="workStore.loadingMessage || 'Projecting work...'"
             :loading-progress="workStore.loadingProgress ?? -1"
             :show-refresh="true"
-            empty-message="No months to show."
+            :empty-message="emptyMessage"
             @refresh="handleRefresh"
         >
             <template #header-area>
                 <ButtonBar>
+                    <ScheduleFilterSelect
+                        :container-path="containerPath"
+                        :navigate-to-path="navigateToPath"
+                        :include-years="true"
+                        :start-year="thisYear"
+                        default-search=""
+                        :show-advanced-button="true"
+                        @search-selected="handleScheduleSearch"
+                    />
                     <button class="button-symbol" title="Expected work details" @click="openDetails">☷</button>
                 </ButtonBar>
             </template>

@@ -15,6 +15,7 @@
  * Pure: no Vue, no DOM. Safe to import from tests.
  */
 import { isOpaqueType } from '../../../data_management/utils/column-types.js';
+import { BUCKET_UNITS } from './buckets.js';
 
 // ── Dev warnings ─────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ export function resolveView(fields, view, opts = {}) {
     let chip = [];                  // calendar: string[][]
     let chipActions = [];           // calendar: string[] (cells in the chip's end button bar)
     let card = [], footer = [];     // cards: string[][]
-    let chartX = null, chartSeries = []; // chart: the x key, the series keys
+    let chartX = null, chartBy = null, chartUntil = null, chartSeries = []; // chart: the x key or bucket fields, the series
     const claimShown = (key, where) => {
         if (!known(key)) { warnUnknown(where, key); return false; }
         if (tier.has(key)) {
@@ -251,8 +252,47 @@ export function resolveView(fields, view, opts = {}) {
         card = claimLines(normalizeLines(v.cards?.card, fieldKeys), 'cards.card');
         footer = claimLines(normalizeLines(v.cards?.footer, fieldKeys), 'cards.footer');
     } else if (layout === 'chart') {
-        if (v.chart?.x && claimShown(v.chart.x, 'chart.x')) chartX = v.chart.x;
-        chartSeries = normalizeLine(v.chart?.series || [], fieldKeys).filter(k => claimShown(k, 'chart.series'));
+        const c = v.chart || {};
+        // A key two parts of the chart read is claimed once
+        const useKey = (key, where) => {
+            if (!known(key)) { warnUnknown(where, key); return false; }
+            if (!tier.has(key)) tier.set(key, 'shown');
+            return true;
+        };
+        if (c.bucket) {
+            if (c.bucket.by && claimShown(c.bucket.by, 'chart.bucket.by')) chartBy = c.bucket.by;
+            if (c.bucket.until && useKey(c.bucket.until, 'chart.bucket.until')) chartUntil = c.bucket.until;
+        } else if (c.x && claimShown(c.x, 'chart.x')) {
+            chartX = c.x;
+        }
+        // A series: a key (its row values; added up per bucket in a bucketed chart), or
+        // { count: true } | { sum: key } | { last: key } | { value: key } with its own label,
+        // color, dashed and axis
+        const dashed = c.dashed || [];
+        for (const entry of c.series || []) {
+            if (typeof entry === 'string') {
+                for (const key of normalizeLine(entry, fieldKeys)) {
+                    if (claimShown(key, 'chart.series')) chartSeries.push({ id: key, agg: c.bucket ? 'sum' : 'value', key, dashed: dashed.includes(key), axis: 'left' });
+                }
+                continue;
+            }
+            if (!entry || typeof entry !== 'object') continue;
+            const agg = entry.count ? 'count' : ['sum', 'last', 'value'].find(a => typeof entry[a] === 'string');
+            if (!agg) { devWarn(`view "${viewId}": chart series without count, sum, last or value (ignored)`); continue; }
+            if (agg === 'value' && c.bucket) { devWarn(`view "${viewId}": chart series value in a bucketed chart (ignored; use sum or last)`); continue; }
+            if (agg !== 'value' && agg !== 'count' && !c.bucket) { devWarn(`view "${viewId}": chart series ${agg} needs chart.bucket (ignored)`); continue; }
+            const key = agg === 'count' ? null : entry[agg];
+            if (key !== null && !useKey(key, `chart.series ${agg}`)) continue;
+            chartSeries.push({
+                id: key === null ? 'count' : `${agg}:${key}`,
+                agg,
+                key,
+                label: entry.label,
+                color: entry.color,
+                dashed: !!entry.dashed || (key !== null && dashed.includes(key)),
+                axis: entry.axis === 'right' ? 'right' : 'left'
+            });
+        }
     }
 
     // 3b. Details and hidden lists
@@ -363,10 +403,23 @@ export function resolveView(fields, view, opts = {}) {
     let chart = null;
     if (layout === 'chart') {
         const c = v.chart || {};
-        chart = { type: c.type === 'bar' ? 'bar' : 'line', x: chartX, series: chartSeries, dashed: c.dashed || [], yLabel: c.yLabel || '' };
-        if (!chartX || !chartSeries.length) {
+        let unit = c.bucket?.unit || null;
+        if (unit && !BUCKET_UNITS.includes(unit)) {
+            devWarn(`view "${viewId}": unknown chart.bucket.unit "${unit}" (grouping by the value)`);
+            unit = null;
+        }
+        chart = {
+            type: c.type === 'bar' ? 'bar' : 'line',
+            x: chartX,
+            bucket: c.bucket ? { by: chartBy, until: unit ? chartUntil : null, unit } : null,
+            series: chartSeries,
+            yLabel: c.yLabel || '',
+            y2Label: c.y2Label || '',
+            stepped: !!c.stepped
+        };
+        if (!(c.bucket ? chartBy : chartX) || !chartSeries.length) {
             invalid = 'chart-fields';
-            devWarn(`view "${viewId}": chart x field or series missing (${c.x}; ${(c.series || []).join(', ')})`);
+            devWarn(`view "${viewId}": chart ${c.bucket ? 'bucket field' : 'x field'} or series missing`);
         }
     }
 
@@ -381,7 +434,7 @@ export function resolveView(fields, view, opts = {}) {
     const shown = layout === 'table'
         ? slots.flatMap(s => s.lines.flat())
         : layout === 'calendar' ? [...chip.flat(), ...chipActions]
-            : layout === 'chart' ? [chartX, ...chartSeries].filter(Boolean) : [...card.flat(), ...footer.flat()];
+            : layout === 'chart' ? [...new Set([chartX || chartBy, chartUntil, ...chartSeries.map(s => s.key)].filter(Boolean))] : [...card.flat(), ...footer.flat()];
     const details = detailsOrder.map(k => fieldMap.get(k));
     const hidden = new Set(fieldKeys.filter(k => tier.get(k) === 'hidden'));
     for (const k of ALWAYS_HIDDEN) hidden.add(k);

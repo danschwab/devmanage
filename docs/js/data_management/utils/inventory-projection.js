@@ -85,23 +85,6 @@ export function resolveProjectionSettings(preferences) {
     return settings;
 }
 
-/**
- * Square feet of a schedule Size: every "W x D" in it, summed ("10x40 & 10x10" is 500). Feet
- * marks and spaces are allowed ("20' x 20'"). Null when it holds none ("TBD", "x18'").
- * @param {*} size
- * @returns {number|null}
- */
-export function parseBoothSquareFeet(size) {
-    const pattern = /(\d+(?:\.\d+)?)\s*'?\s*[x×]\s*(\d+(?:\.\d+)?)/gi;
-    let total = 0;
-    let found = false;
-    for (const [, width, depth] of String(size ?? '').matchAll(pattern)) {
-        total += Number(width) * Number(depth);
-        found = true;
-    }
-    return found ? total : null;
-}
-
 /** 'YYYY-MM' of an ISO date */
 export function monthOf(isoDate) {
     return typeof isoDate === 'string' && /^\d{4}-\d{2}/.test(isoDate) ? isoDate.slice(0, 7) : null;

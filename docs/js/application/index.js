@@ -1,6 +1,6 @@
 // API
 export { Requests } from '../data_management/api.js';
-export { parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, parseItemVariants, itemVariantFamilies, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
+export { parseBoothSquareFeet, parseDate, toISODateString, toUSDateString, todayISOString, offsetToISO, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, parseItemVariants, itemVariantFamilies, parseDateFilterParameters, buildDateFilterParameters, parseTextFilterParameters, buildTextFilterParameters, parseSearchParameters } from '../data_management/utils/helpers.js';
 export { CacheInvalidationBus, invalidateCache, ProgressBus, reportIntegrityError, areWritesHeld } from '../data_management/utils/caching.js';
 export { EditHistoryUtils, DEFAULT_INVENTORY_NOTE_MAX_LENGTH, resolveInventoryNoteMaxLength, readRowMetadata, writeRowMetadata } from '../data_management/utils/metadata-utils.js';
 export { ProposalUtils, PROPOSAL_LOCK_NAMESPACE } from '../data_management/utils/proposal-utils.js';
@@ -46,7 +46,7 @@ export { ButtonBar } from './components/interface/buttonBar.js';
 export { ContentHeaderComponent } from './components/interface/contentHeaderComponent.js';
 export { RowDetailsComponent, RowDetailsModal } from './components/interface/rowDetailsComponent.js';
 export { DashboardToggleComponent } from './components/interface/navigationComponents.js';
-export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter } from './components/interface/filterComponents.js';
+export { ScheduleFilterSelect, ScheduleDateRangeCard, InventoryCategoryFilter, searchDateRange } from './components/interface/filterComponents.js';
 
 // hamburger menus
 export { hamburgerMenuRegistry } from './utils/HamburgerMenuRegistry.js';
