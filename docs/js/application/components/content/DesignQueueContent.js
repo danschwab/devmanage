@@ -3,6 +3,7 @@ import { buildScheduleFields } from '../../../data_management/abstraction/schedu
 import { isInstantColumn, identityKey, columnText } from '../../../data_management/utils/instant-write-config.js';
 import { textFiltersToSearchParams } from '../../../data_management/utils/helpers.js';
 import { shipReturnAnalysis, withShipDate, shipReturnCards, SHIP_RETURN_DECORATION_KEYS } from '../../utils/scheduleShipping.js';
+import { ShowOutputFiles } from './ShowOutputFiles.js';
 
 /**
  * Design queue (views-and-renderers-plan §4.16).
@@ -27,6 +28,7 @@ import { shipReturnAnalysis, withShipDate, shipReturnCards, SHIP_RETURN_DECORATI
  *    (rowColor 'checked:gray') on the shown row, so the row grays as soon as the box is clicked.
  *  - Ship shows the estimated ship date (sorted ascending); the initial filter is the
  *    "Upcoming" schedule search.
+ *  - A row's details end with the show's Dropbox output PDFs (ShowOutputFiles), as on the Schedule.
  * The Schedule page itself stays read-only.
  */
 
@@ -100,7 +102,7 @@ function showNoteAnalysis() {
 
 export const DesignQueueContent = {
     name: 'DesignQueueContent',
-    components: { DataView, ScheduleFilterSelect },
+    components: { DataView, ScheduleFilterSelect, ShowOutputFiles },
     inject: ['$modal'],
     props: {
         containerPath: { type: String, default: 'schedule/design-queue' },
@@ -233,6 +235,8 @@ export const DesignQueueContent = {
     },
     mounted() {
         this.setupStore = getReactiveStore(Requests.getDesignQueueSetup, null, [DQ_DATABASE, DQ_TAB]);
+        // A show's details look in Dropbox: its client folders are read ahead
+        Requests.prefetchShowFolders();
     },
     methods: {
         // Row identity: the preference's identity columns (Client + Year + Show by default)
@@ -347,6 +351,9 @@ export const DesignQueueContent = {
                             @search-selected="handleSearchSelected"
                         />
                     </div>
+                </template>
+                <template #row-details="{ row }">
+                    <ShowOutputFiles :show="row.Show" :client="row.Client" :year="row.Year" style="margin-top: var(--padding-sm)" />
                 </template>
             </DataView>
         </div>

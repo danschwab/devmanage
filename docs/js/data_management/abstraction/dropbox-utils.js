@@ -16,23 +16,31 @@ const UNCONFIRMED_MS = 5 * 60 * 1000;
 
 const _subfolders = (listing) => (listing?.entries || []).filter(entry => entry.folder);
 
+// A folder of superseded documents: "OLD", or a name starting with the word ("OLD R1")
+const OLD_FOLDER = /^old\b/i;
+
 /**
  * The PDFs of a recursive OUTPUT listing, grouped by the OUTPUT subfolder they sit in ('' for
  * OUTPUT itself, listed first). Deeper files keep their path below the group in their name.
+ * A file inside an old folder (OLD_FOLDER, at any depth) is old: it goes in an old group named by
+ * the path down to that folder ('OLD', 'SETUP/OLD'), after every current group.
  */
 function _groupOutputPdfs(listing, outputPath) {
     const groups = new Map();
     for (const entry of listing?.entries || []) {
         if (entry.folder || !/\.pdf$/i.test(entry.name)) continue;
         const below = entry.path.slice(outputPath.length + 1).split('/');
-        const group = below.length > 1 ? below[0] : '';
-        if (!groups.has(group)) groups.set(group, []);
-        groups.get(group).push({ name: below.slice(group ? 1 : 0).join('/'), path: entry.path, size: entry.size, modified: entry.modified });
+        const oldAt = below.slice(0, -1).findIndex(part => OLD_FOLDER.test(part));
+        const depth = oldAt >= 0 ? oldAt + 1 : (below.length > 1 ? 1 : 0);
+        const name = below.slice(0, depth).join('/');
+        const key = `${oldAt >= 0 ? 'old' : 'current'}:${name}`;
+        if (!groups.has(key)) groups.set(key, { name, old: oldAt >= 0, files: [] });
+        groups.get(key).files.push({ name: below.slice(depth).join('/'), path: entry.path, size: entry.size, modified: entry.modified });
     }
     const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-    return [...groups.entries()]
-        .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : byName(a, b)))
-        .map(([name, files]) => ({ name, files: files.sort((a, b) => byName(a.name, b.name)) }));
+    return [...groups.values()]
+        .sort((a, b) => (a.old !== b.old ? (a.old ? 1 : -1) : a.name === '' ? -1 : b.name === '' ? 1 : byName(a.name, b.name)))
+        .map(group => ({ ...group, files: group.files.sort((a, b) => byName(a.name, b.name)) }));
 }
 
 class dropboxUtils_uncached {
@@ -90,9 +98,10 @@ class dropboxUtils_uncached {
     }
 
     /**
-     * A show's output PDFs, per project folder, grouped by OUTPUT subfolder. Throws
-     * DROPBOX_NOT_CONNECTED when the sign-in service has no Dropbox connected.
-     * @returns {Promise<Array<{ client, year, show, path, groups: Array<{ name: string, files: Array<{ name, path, size, modified }> }> }>>}
+     * A show's output PDFs, per project folder, grouped by OUTPUT subfolder; files in OLD folders in
+     * old groups at the end (_groupOutputPdfs). Throws DROPBOX_NOT_CONNECTED when the sign-in
+     * service has no Dropbox connected.
+     * @returns {Promise<Array<{ client, year, show, path, groups: Array<{ name: string, old: boolean, files: Array<{ name, path, size, modified }> }> }>>}
      */
     static async getShowOutputFiles(deps, show, client, year) {
         const projects = await deps.call(DropboxUtils.findProjectFolders, show, client, year);

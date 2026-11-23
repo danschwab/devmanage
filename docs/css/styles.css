@@ -1781,6 +1781,20 @@ td.col-sticky-start, td.col-sticky-end {
     gap: var(--padding-sm);
 }
 
+/* A show's Dropbox PDFs (ShowOutputFiles): wide columns for long file names, read from the left;
+   the Show old button sits alone on the last row */
+.details-grid.show-output-files {
+    --details-grid-min-column-width: 300px;
+}
+.show-output-files .cell-button-list > button {
+    text-align: left;
+}
+.show-output-files > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: auto;   /* button.small is a fixed 60px */
+}
+
 /* The value under a detail's label (not spans inside its cards) */
 .detail-item > span {
     color: var(--color-text);

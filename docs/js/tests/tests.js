@@ -631,7 +631,8 @@ test('DATA INTEGRITY', 'the app banner offers Refresh Now; while Google is unrea
 // is named exactly the year. Expected, from FAKE_DROPBOX_FILES:
 //   Allen Arms 2025 SHOT Show → /Allen Arms/2025/SHOT Show; OUTPUT groups '' (Cover Sheet.PDF),
 //     CONCEPT A, CONCEPT B R2 (its .jpg left out), CONTROL, ELEVATIONS (Back Wall, Counter Graphics),
-//     SETUP. The 2024 folder is another show. Not "Allen Armz", "SHOT Shaw" or "2025 old".
+//     SETUP, then the old groups OLD (CONCEPT A R1/…) and SETUP/OLD. The 2024 folder is another
+//     show. Not "Allen Armz", "SHOT Shaw" or "2025 old".
 //   BestBuy Health 2025 TANDEM → /Best Buy/2025/TANDEM (client folder named by the abbreviation)
 //   Gearfire 2025 SHOT Show → /Gearfire/2025/SHOT
 //   MOJO 2025 SHOT Show → a project folder with no OUTPUT: no groups
@@ -654,9 +655,20 @@ test('DROPBOX', "a show's output PDFs, grouped by OUTPUT subfolder", async () =>
         ['CONCEPT B R2', ['Allen Arms SHOT Concept B R2.pdf']],
         ['CONTROL', ['Counter Build.pdf']],
         ['ELEVATIONS', ['Back Wall.pdf', 'Counter Graphics.pdf']],
-        ['SETUP', ['Setup Guide.pdf']]
+        ['SETUP', ['Setup Guide.pdf']],
+        ['OLD', ['CONCEPT A R1/Allen Arms SHOT Concept A R1.pdf']],
+        ['SETUP/OLD', ['Setup Guide R1.pdf']]
     ]]], 'groups and files; no decoy folder');
     assertEqual(projects[0].groups[5].files[0].path, `${ALLEN_ARMS_SHOT}/OUTPUT/SETUP/Setup Guide.pdf`, 'a file keeps its full path');
+});
+
+test('DROPBOX', 'files in an OLD folder, at any depth, are in old groups after the current ones', async () => {
+    const [project] = await Requests.getShowOutputFiles('SHOT Show', 'Allen Arms', '2025');
+    assertEqual(project.groups.map(group => [group.name, group.old]), [
+        ['', false], ['CONCEPT A', false], ['CONCEPT B R2', false], ['CONTROL', false], ['ELEVATIONS', false], ['SETUP', false],
+        ['OLD', true], ['SETUP/OLD', true]
+    ], 'old flags');
+    assertEqual(project.groups[7].files[0].path, `${ALLEN_ARMS_SHOT}/OUTPUT/SETUP/OLD/Setup Guide R1.pdf`, 'an old file keeps its full path');
 });
 
 test('DROPBOX', 'client and show folders match through the index: an abbreviation, a short show name', async () => {
