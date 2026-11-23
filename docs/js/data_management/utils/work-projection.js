@@ -18,16 +18,19 @@
  *   over ProjectionHistoryYears), times the trend through each past year's hours and
  *   ProjectionGrowthFactor. A category's trend follows its own hours, so more small booths raise
  *   work that small booths take most more than work that large booths take most.
+ * - Total control: the control categories' hours (every one but booth design) added up month by
+ *   month, each category's in the month its own days before shipping put them in.
  */
 import { projectMeasure, monthOf } from './inventory-projection.js';
 
-/** The work categories, with the preference ID part and default hours (small, large booth) */
+/** The work categories, with the preference ID part, default hours (small, large booth) and
+ *  whether the category counts in the total control */
 export const WORK_CATEGORIES = Object.freeze([
-    { key: 'boothDesign', label: 'Booth Design', id: 'BoothDesign', small: 4, large: 16 },
-    { key: 'boothEngineering', label: 'Booth Engineering', id: 'BoothEngineering', small: 2, large: 12 },
-    { key: 'elevations', label: 'Elevations', id: 'Elevations', small: 2, large: 8 },
-    { key: 'panels', label: 'Panels', id: 'Panels', small: 4, large: 24 },
-    { key: 'setup', label: 'Setup', id: 'Setup', small: 4, large: 16 }
+    { key: 'boothDesign', label: 'Booth Design', id: 'BoothDesign', small: 4, large: 16, control: false },
+    { key: 'boothEngineering', label: 'Booth Engineering', id: 'BoothEngineering', small: 2, large: 12, control: true },
+    { key: 'elevations', label: 'Elevations', id: 'Elevations', small: 2, large: 8, control: true },
+    { key: 'panels', label: 'Panels', id: 'Panels', small: 4, large: 24, control: true },
+    { key: 'setup', label: 'Setup', id: 'Setup', small: 4, large: 16, control: true }
 ]);
 
 /** Preference rows (CACHE/Preferences, page reports/expected-work): per category Work<id>SmallHours,
@@ -48,7 +51,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
  * default, hours and sizes below 0 are 0, and days are whole (negative: after shipping).
  * @param {Array<{id: string, value: string}>} preferences
  * @returns {{ smallSqft: number, largeSqft: number,
- *            categories: Array<{key, label, small: number, large: number, offsetDays: number}> }}
+ *            categories: Array<{key, label, control: boolean, small: number, large: number, offsetDays: number}> }}
  */
 export function resolveWorkSettings(preferences) {
     const rows = Array.isArray(preferences) ? preferences : [];
@@ -59,9 +62,10 @@ export function resolveWorkSettings(preferences) {
     return {
         smallSqft: read(WORK_BOOTH_SIZES.small.id, WORK_BOOTH_SIZES.small.default),
         largeSqft: read(WORK_BOOTH_SIZES.large.id, WORK_BOOTH_SIZES.large.default),
-        categories: WORK_CATEGORIES.map(({ key, label, id, small, large }) => ({
+        categories: WORK_CATEGORIES.map(({ key, label, id, small, large, control }) => ({
             key,
             label,
+            control,
             small: read(`Work${id}SmallHours`, small),
             large: read(`Work${id}LargeHours`, large),
             offsetDays: Math.round(read(`Work${id}OffsetDays`, 0, -Infinity))
@@ -106,10 +110,11 @@ export function workMonth(show, offsetDays) {
  * @param {Object} work - resolveWorkSettings
  * @param {Object} settings - resolveProjectionSettings
  * @returns {Array<{month: string, bookedShows: number, bookedLarge: number,
- *          hours: Object<string, {booked: number, expected: number}>, total: {booked: number, expected: number}}>}
+ *          hours: Object<string, {booked: number, expected: number}>, control: {booked: number, expected: number}}>}
  *          bookedShows and bookedLarge (from the large size up): the booked shows shipping that
  *          month. hours by category key: booked, the work falling that month for the shows on the
- *          schedule; expected, with the shows not booked yet
+ *          schedule; expected, with the shows not booked yet. control: the control categories'
+ *          hours added up
  */
 export function projectWork({ months, scheduledShows, pastShows }, work, settings) {
     const thisMonth = months[0];
@@ -130,19 +135,20 @@ export function projectWork({ months, scheduledShows, pastShows }, work, setting
     return months.map((month, i) => {
         const booked = scheduledShows.filter(show => show.month === month);
         const hours = {};
-        const total = { booked: 0, expected: 0 };
+        const control = { booked: 0, expected: 0 };
         for (const { category, rows } of perCategory) {
             const row = rows[i];
             hours[category.key] = { booked: round1(row.scheduledSqft), expected: round1(row.projectedSqft) };
-            total.booked += row.scheduledSqft;
-            total.expected += row.projectedSqft;
+            if (!category.control) continue;
+            control.booked += row.scheduledSqft;
+            control.expected += row.projectedSqft;
         }
         return {
             month,
             bookedShows: booked.length,
             bookedLarge: booked.filter(show => show.sqft >= work.largeSqft).length,
             hours,
-            total: { booked: round1(total.booked), expected: round1(total.expected) }
+            control: { booked: round1(control.booked), expected: round1(control.expected) }
         };
     });
 }

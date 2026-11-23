@@ -6935,7 +6935,8 @@ test('INVENTORY PROJECTION', 'preference rows tune the projection', () => _withP
 
 // ── Expected work: hours of each work category by month ─────────────────────
 // Default hours (small, large booth): Booth Design 4/16, Booth Engineering 2/12, Elevations 2/8,
-// Panels 4/24, Setup 4/16: a small booth 16 h in all, a large one 76; the hours at 400 sq ft (a
+// Panels 4/24, Setup 4/16: a small booth 16 h in all (12 control: all but design), a large one 76
+// (60); the hours at 400 sq ft (a
 // 20x20) and 1600 (a 40x40), in proportion between: design 4 + 12 × (sqft - 400) / 1200, all
 // categories 16 + 60 × (sqft - 400) / 1200. No days before shipping. With today 2025-04-01 (the
 // projection tests' date), booked shows by month (sq ft): Aug 2025 1200 (design 12, all 56), 900
@@ -6985,19 +6986,21 @@ test('EXPECTED WORK', 'days before shipping move each category\'s work to its ow
     assertEqual([booked(june, 'boothDesign'), booked(july, 'boothDesign'), booked(june, 'boothEngineering'), booked(july, 'boothEngineering'), booked(june, 'panels'), booked(july, 'panels')],
         [4, 16, 12, 0, 0, 28], 'design June 4, July 16; engineering June 12 (May is past); panels July 28');
     assertEqual([june.bookedShows, july.bookedShows, july.bookedLarge], [0, 2, 1], 'shows counted in the month they ship');
+    assertEqual([june.control.booked, july.control.booked], [12, 58], 'control, each category in its own month, design left out: June engineering 12; July elevations 2 + 8, panels 28, setup 4 + 16');
 });
 
 // July 2025 booked 100, 900 and one without a size; last July 100, 400, 1000. Design booked 4 + 9
 // + 4 = 17 against 4 + 4 + 10 = 18; panels (4 + 20 × (sqft - 400) / 1200) 4 + 12.3 + 4 = 20.3
-// against 4 + 4 + 14 = 22; in all 73 against 18 + 11 + 9 + 22 + 18 = 78
+// against 4 + 4 + 14 = 22; control (all but design) 10.2 + 8.5 + 20.3 + 17 = 56 against
+// 11 + 9 + 22 + 18 = 60
 test('EXPECTED WORK', 'a month: hours booked, and the larger of booked and last year', () => {
     const [july] = projectWork({
         months: ['2025-07'],
         scheduledShows: [{ month: '2025-07', sqft: 100 }, { month: '2025-07', sqft: 900 }, { month: '2025-07', sqft: 0 }],
         pastShows: [100, 400, 1000].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
     }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
-    assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.total], [3, 0,
-        { booked: 17, expected: 18 }, { booked: 20.3, expected: 22 }, { booked: 73, expected: 78 }], 'each category the larger of the two');
+    assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.control], [3, 0,
+        { booked: 17, expected: 18 }, { booked: 20.3, expected: 22 }, { booked: 56, expected: 60 }], 'each category the larger of the two');
 });
 
 // July 2023 two 1600 sq ft booths; July 2024 the two and four 100 sq ft ones. Design (small 1/4 of
@@ -7016,11 +7019,11 @@ test('EXPECTED WORK', 'booth mix: more small booths raise work by each category\
 
 test('EXPECTED WORK', 'fixture months: booked and expected hours', () => _withProjectionToday(async () => {
     const months = await Requests.getExpectedWork();
-    const brief = (month) => { const m = months.find(row => row.month === month); return [m.bookedShows, m.bookedLarge, m.hours.boothDesign, m.total]; };
+    const brief = (month) => { const m = months.find(row => row.month === month); return [m.bookedShows, m.bookedLarge, m.hours.boothDesign, m.control]; };
     assertEqual(months.map(m => m.month), monthRange('2025-04', 12), 'the projection\'s 12 months');
-    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37 }, { booked: 161, expected: 161 }], 'August: design 12 + 9 + 4 × 4; 56 + 41 + 4 × 16 in all');
-    assertEqual(brief('2026-01'), [2, 0, { booked: 8, expected: 52 }, { booked: 32, expected: 232 }], 'January: last January\'s');
-    assertEqual(brief('2026-03'), [2, 0, { booked: 8, expected: 20 }, { booked: 32, expected: 80 }], 'March: last March\'s, all small');
+    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37 }, { booked: 124, expected: 124 }], 'August: design 12 + 9 + 4 × 4; control 44 + 32 + 4 × 12');
+    assertEqual(brief('2026-01'), [2, 0, { booked: 8, expected: 52 }, { booked: 24, expected: 180 }], 'January: last January\'s');
+    assertEqual(brief('2026-03'), [2, 0, { booked: 8, expected: 20 }, { booked: 24, expected: 60 }], 'March: last March\'s, all small');
 }));
 
 test('EXPECTED WORK', 'preference rows tune the hours', () => _withProjectionToday(async () => {

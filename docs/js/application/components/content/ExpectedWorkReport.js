@@ -8,8 +8,8 @@ const showsText = (n) => `${n} show${n === 1 ? '' : 's'}`;
 const MONTH_FIELDS = [
     { key: 'monthLabel', label: 'Month' },
     { key: 'bookedText', label: 'Booked shows shipping' },
-    { key: 'bookedHours', label: 'Booked hours', format: 'number', type: 'number' },
-    { key: 'expectedHours', label: 'Expected hours', format: 'number', type: 'number' }
+    { key: 'bookedHours', label: 'Booked control hours', format: 'number', type: 'number' },
+    { key: 'expectedHours', label: 'Expected control hours', format: 'number', type: 'number' }
 ];
 
 const MONTH_VIEWS = {
@@ -23,11 +23,11 @@ const MONTH_VIEWS = {
 const WORK_FIELDS = [
     { key: 'monthLabel', label: 'Month' },
     ...WORK_CATEGORIES.map(category => ({ key: category.key, label: category.label, format: 'number', type: 'number' })),
-    { key: 'total', label: 'Total', format: 'number', type: 'number' }
+    { key: 'control', label: 'Total Control', format: 'number', type: 'number' }
 ];
-const WORK_KEYS = [...WORK_CATEGORIES.map(category => category.key), 'total'];
+const WORK_KEYS = [...WORK_CATEGORIES.map(category => category.key), 'control'];
 
-// A line per category and a dashed total, by month; or the same as a table
+// A line per category and a dashed total control, by month; or the same as a table
 const WORK_VIEWS = {
     id: 'expected-work',
     default: 'chart',
@@ -35,8 +35,8 @@ const WORK_VIEWS = {
     views: [
         {
             id: 'chart', name: 'Chart', icon: 'timeline', layout: 'chart',
-            chart: { x: 'monthLabel', series: WORK_KEYS, dashed: ['total'], yLabel: 'Hours' },
-            style: { total: { color: 'text' } }
+            chart: { x: 'monthLabel', series: WORK_KEYS, dashed: ['control'], yLabel: 'Hours' },
+            style: { control: { color: 'text' } }
         },
         { id: 'table', name: 'Table', icon: 'table', layout: 'table', columns: ['monthLabel', ...WORK_KEYS], style: { monthLabel: { width: 90 } } }
     ]
@@ -69,6 +69,7 @@ const ExpectedWorkDetails = {
                 })),
                 { label: 'Booth size', value: `a booth between ${sqft(work.smallSqft)} and ${sqft(work.largeSqft)} takes hours in proportion to its size; a smaller booth, or a show without a size, the small hours; a larger one the large hours` },
                 { label: 'Months', value: 'each category\'s work for a show counts in the month its days before shipping fall in; work falling before this month is past' },
+                { label: 'Total control', value: `${work.categories.filter(c => c.control).map(c => c.label).join(', ')} added up, each in its own month` },
                 { label: 'Not booked yet', value: 'each month is the larger of the hours booked and the same month last year\'s hours, carried forward by the inventory projection\'s History Years and Growth Factor; each category on its own hours, so more small booths raise the work small booths take most' }
             ];
         },
@@ -76,8 +77,8 @@ const ExpectedWorkDetails = {
             return (this.workStore.data || []).map(month => ({
                 monthLabel: monthLabel(month.month),
                 bookedText: month.bookedShows ? `${showsText(month.bookedShows)}, ${month.bookedLarge} large` : 'none',
-                bookedHours: Math.round(month.total.booked),
-                expectedHours: Math.round(month.total.expected)
+                bookedHours: Math.round(month.control.booked),
+                expectedHours: Math.round(month.control.expected)
             }));
         }
     },
@@ -124,12 +125,12 @@ export const ExpectedWorkReport = {
         };
     },
     computed: {
-        // One row per month: each category's expected hours and the total
+        // One row per month: each category's expected hours and the total control
         rows() {
             return (this.workStore.data || []).map(month => ({
                 monthLabel: monthLabel(month.month),
                 ...Object.fromEntries(WORK_CATEGORIES.map(category => [category.key, Math.round(month.hours[category.key]?.expected || 0)])),
-                total: Math.round(month.total.expected)
+                control: Math.round(month.control.expected)
             }));
         }
     },
