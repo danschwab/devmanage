@@ -956,6 +956,7 @@ Depends only on Phases 0–1.
    - **Assignee** is a `select` whose options come from `DesignQueueAssignees`.
    - **Note** is an editable text field saved to `CACHE/ShowNotes` (§4.16).
    - **Routing writes:** `commitCells` routes by field: `Note` → `saveShowNote`; every other column → `writeCellsVerified`.
+   - **Row details** list the schedule fields the view doesn't show, then the show's Dropbox output PDFs (`ShowOutputFiles` in the `row-details` slot), as on the Schedule page. PDFs in an `OLD` folder at any depth are old groups (`getShowOutputFiles`), hidden behind one Show old button at the bottom.
    - **Order and filter:** `view.sort = { key: 'Ship', dir: 'asc' }`, so the most urgent work is first. The initial filter is upcoming shows (Ship on or after today), set through the existing Schedule filter parameters. Filters stay a page concern (R1.16).
 5. Verify the instant-write and design queue items in §9.
 

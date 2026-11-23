@@ -2126,6 +2126,7 @@ if (isLocalhost() && FakeGoogleState.isPersistent()) {
  * The company Dropbox folder (DropboxFiles.js), as files. Folders exist because files sit in them.
  * Matches the schedule fixtures: Allen Arms and Gearfire 2025 SHOT, BestBuy Health 2025 TANDEM
  * (its client folder named by the abbreviation "Best Buy"), MOJO 2025 SHOT (no OUTPUT folder).
+ * Allen Arms 2025 SHOT has old documents in OUTPUT/OLD and OUTPUT/SETUP/OLD.
  * Decoys that only a fuzzy or loose match would take: the client folder "Allen Armz", the show
  * folder "SHOT Shaw" and the year folder "2025 old".
  */
@@ -2140,6 +2141,8 @@ const FAKE_DROPBOX_FILES = [
     '/Allen Arms/2025/SHOT Show/OUTPUT/ELEVATIONS/Counter Graphics.pdf',
     '/Allen Arms/2025/SHOT Show/OUTPUT/CONTROL/Counter Build.pdf',
     '/Allen Arms/2025/SHOT Show/OUTPUT/SETUP/Setup Guide.pdf',
+    '/Allen Arms/2025/SHOT Show/OUTPUT/SETUP/OLD/Setup Guide R1.pdf',
+    '/Allen Arms/2025/SHOT Show/OUTPUT/OLD/CONCEPT A R1/Allen Arms SHOT Concept A R1.pdf',
     '/Allen Arms/2024/SHOT Show/OUTPUT/SETUP/Setup Guide 2024.pdf',
     '/Allen Arms/2025 old/SHOT Show/OUTPUT/Old Cover.pdf',
     '/Allen Arms/2025/SHOT Shaw/OUTPUT/Shaw Cover.pdf',
