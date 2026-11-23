@@ -864,6 +864,16 @@ button.card {
 .button-bar > :last-child:not(:first-child), .button-bar > :last-child:not(:first-child) > input {
     border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
+/* A bar inside a bar (the view switch's icons) is one child of it: its own outer corners follow
+   its place in the outer bar */
+.button-bar > .button-bar:not(:first-child) > :first-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+.button-bar > .button-bar:not(:last-child) > :last-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
 .button-symbol {
     box-sizing: border-box;
     /*font-size: 14pt;*/
