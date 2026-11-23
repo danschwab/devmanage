@@ -21,8 +21,10 @@ function loadChartLibrary() {
     return chartLibrary;
 }
 
-// A theme colour name (theme.css --color-<name>) as the colour it is now (light or dark)
-const themeColor = (name) => getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim() || name;
+// A theme property (theme.css) as the colour it is now (light or dark)
+const cssColor = (property) => getComputedStyle(document.documentElement).getPropertyValue(property).trim();
+// A theme colour name (--color-<name>)
+const themeColor = (name) => cssColor(`--color-${name}`) || name;
 
 /**
  * ChartComponent — the chart renderer (views-and-renderers-plan §4.6). Same contract as the other
@@ -131,11 +133,19 @@ export const ChartComponent = {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: { duration: 300 },
+                    // Drawn at once: no animated change
+                    animation: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { position: 'bottom', labels: { color: text, font, usePointStyle: true } },
+                        // The hover bubble: the page's opaque background (white in light mode), a
+                        // border-colour border and text-colour text
                         tooltip: {
+                            backgroundColor: cssColor('--background-color') || '#fff',
+                            borderColor: grid,
+                            borderWidth: 1,
+                            titleColor: text,
+                            bodyColor: text,
                             titleFont: font,
                             bodyFont: font,
                             callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : ctx.parsed.y.toLocaleString()}` }
