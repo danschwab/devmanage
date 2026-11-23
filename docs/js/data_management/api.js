@@ -1573,14 +1573,18 @@ class Requests_uncached {
     /**
      * The expected work, month by month (utils/work-projection.js, projectWork): each work
      * category's hours booked and expected (with the shows not booked yet), from the shows
-     * (getProjectionShows) and the work preference rows. Persisted.
+     * (getProjectionShows), their finished work (ProductionUtils.getShowWorkDone: the schedule's
+     * work checkboxes) and the work preference rows. Persisted.
      * @param {Object} deps
      * @returns {Promise<Array<{month, bookedShows, bookedLarge, hours, total}>>}
      */
     static async getExpectedWork(deps) {
         const work = resolveWorkSettings(await deps.call(Requests.getPreferences));
-        const { settings, thisMonth, futureMonths, shows } = await relayProgress('api:getProjectionShows', 'api:getExpectedWork',
-            () => deps.call(Requests.getProjectionShows));
+        const [{ settings, thisMonth, futureMonths, shows: read }, doneById] = await Promise.all([
+            relayProgress('api:getProjectionShows', 'api:getExpectedWork', () => deps.call(Requests.getProjectionShows)),
+            deps.call(ProductionUtils.getShowWorkDone)
+        ]);
+        const shows = read.map(show => (doneById[show.id] ? { ...show, done: doneById[show.id] } : show));
         return projectWork({
             months: futureMonths,
             scheduledShows: shows.filter(show => show.month >= thisMonth),

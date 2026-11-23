@@ -1,4 +1,4 @@
-import { html, DataView, ButtonBar, ScheduleFilterSelect, searchDateRange, Requests, getReactiveStore, getPreferencesStore, invalidateCache, resolveWorkSettings, WORK_CATEGORIES } from '../../index.js';
+import { html, DataView, ButtonBar, ScheduleFilterSelect, searchDateRange, WORK_ALL_DONE_COLUMN, Requests, getReactiveStore, getPreferencesStore, invalidateCache, resolveWorkSettings, WORK_CATEGORIES } from '../../index.js';
 import { monthLabel } from './InventoryProjectionReport.js';
 
 const showsText = (n) => `${n} show${n === 1 ? '' : 's'}`;
@@ -9,7 +9,8 @@ const MONTH_FIELDS = [
     { key: 'monthLabel', label: 'Month' },
     { key: 'bookedText', label: 'Booked shows shipping' },
     { key: 'bookedHours', label: 'Booked control hours', format: 'number', type: 'number' },
-    { key: 'expectedHours', label: 'Expected control hours', format: 'number', type: 'number' }
+    { key: 'expectedHours', label: 'Expected control hours', format: 'number', type: 'number' },
+    { key: 'doneHours', label: 'Done control hours', format: 'number', type: 'number' }
 ];
 
 const MONTH_VIEWS = {
@@ -70,6 +71,10 @@ const ExpectedWorkDetails = {
                 { label: 'Booth size', value: `a booth between ${sqft(work.smallSqft)} and ${sqft(work.largeSqft)} takes hours in proportion to its size; a smaller booth, or a show without a size, the small hours; a larger one the large hours` },
                 { label: 'Months', value: 'each category\'s work for a show counts in the month its days before shipping fall in; work falling before this month is past' },
                 { label: 'Total control', value: `${work.categories.filter(c => c.control).map(c => c.label).join(', ')} added up, each in its own month` },
+                {
+                    label: 'Done',
+                    value: `a booked show's ${work.categories.filter(c => c.doneColumn).map(c => `${c.label.toLowerCase()} (${c.doneColumn})`).join(', ')} work is left out once its schedule box is checked; with ${WORK_ALL_DONE_COLUMN} checked the whole show is left out. ${work.categories.filter(c => !c.doneColumn).map(c => c.label).join(' and ')} count until then`
+                },
                 { label: 'Not booked yet', value: 'each month is the larger of the hours booked and the same month last year\'s hours, carried forward by the inventory projection\'s History Years and Growth Factor; each category on its own hours, so more small booths raise the work small booths take most' }
             ];
         },
@@ -78,7 +83,8 @@ const ExpectedWorkDetails = {
                 monthLabel: monthLabel(month.month),
                 bookedText: month.bookedShows ? `${showsText(month.bookedShows)}, ${month.bookedLarge} large` : 'none',
                 bookedHours: Math.round(month.control.booked),
-                expectedHours: Math.round(month.control.expected)
+                expectedHours: Math.round(month.control.expected),
+                doneHours: Math.round(month.control.done)
             }));
         }
     },

@@ -42,7 +42,7 @@ import { hasQuantityChanges } from '../application/components/content/InventoryT
 import { evaluateArithmetic } from '../application/components/interface/cells.js';
 import { balancedSplit } from '../application/components/interface/buttonBar.js';
 import { sortKeyFor, compareSortKeys } from '../application/components/interface/tableComponent.js';
-import { resolveWorkSettings, workHours, workMonth, projectWork } from '../data_management/utils/work-projection.js';
+import { resolveWorkSettings, workHours, workMonth, workDone, projectWork } from '../data_management/utils/work-projection.js';
 import { resolveView, resolveAction, pickView, mergeView, matchesKeyPattern, setViewWarningHandler, withRegistryDefaults, searchTiers } from '../application/utils/views/resolveView.js';
 import { SEARCH_LIMITS, searchWords, matchRow, matchRows, makeHighlighter } from '../application/utils/views/searchMatch.js';
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
@@ -7016,6 +7016,36 @@ test('EXPECTED WORK', 'workMonth: the month a category\'s work falls in', () => 
         ['2025-07', '2025-07', '2025-06', '2025-05', '2025-08', '2025-07'], 'days before (after when negative); a show without a ship date keeps its month');
 });
 
+// Booked in July: a 1600 sq ft booth with Panels checked, a 100 with Setups checked (all done), and
+// a 400. Panels 24 + 4 + 4 = 32, done 24 + 4; design 16 + 4 + 4 = 24, done 4 (only with Setups);
+// control (engineering 16, elevations 12, panels 32, setup 24) 84, done 2 + 2 + 28 + 4 = 36
+test('EXPECTED WORK', 'done: checked work leaves a show\'s category; Setups leaves the whole show', () => {
+    const elevations = resolveWorkSettings([]).categories.find(c => c.key === 'elevations');
+    assertEqual([workDone(elevations, ['Elev']), workDone(elevations, ['Panels']), workDone(elevations, ['Setups']), workDone(elevations)], [true, false, true, false], 'its own box or Setups');
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [
+            { ship: '2025-07-10', month: '2025-07', sqft: 1600, done: ['Panels'] },
+            { ship: '2025-07-12', month: '2025-07', sqft: 100, done: ['Setups'] },
+            { ship: '2025-07-14', month: '2025-07', sqft: 400 }
+        ],
+        pastShows: []
+    }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
+    assertEqual([july.hours.panels, july.hours.boothDesign], [{ booked: 4, expected: 4, done: 28 }, { booked: 20, expected: 20, done: 4 }], 'panels and design: done hours off booked and expected');
+    assertEqual([july.control, july.bookedShows], [{ booked: 48, expected: 48, done: 36 }, 2], 'control 84 - 36; the show with Setups not counted');
+});
+
+// July: a booked 100 sq ft show with Setups checked; last July a 1600 with Setups checked. Design
+// expected is last July's 16 (history counts done shows), less the 4 done: 12
+test('EXPECTED WORK', 'done work comes off last year\'s figures too; past shows count in full', () => {
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [{ ship: '2025-07-12', month: '2025-07', sqft: 100, done: ['Setups'] }],
+        pastShows: [{ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft: 1600, done: ['Setups'] }]
+    }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
+    assertEqual(july.hours.boothDesign, { booked: 0, expected: 12, done: 4 }, 'the month still expects last July\'s work, less what is done');
+});
+
 // Booked July 10 a 100 sq ft booth and July 20 a 1600. Booth design 15 days before: June 25 (4 h)
 // and July 5 (16). Engineering 45 days before: May 26 (past: not counted) and June 5 (12). Panels
 // on the day: July, 4 + 24
@@ -7043,7 +7073,7 @@ test('EXPECTED WORK', 'a month: hours booked, and the larger of booked and last 
         pastShows: [100, 400, 1000].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
     }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
     assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.control], [3, 0,
-        { booked: 17, expected: 18 }, { booked: 20.3, expected: 22 }, { booked: 56, expected: 60 }], 'each category the larger of the two');
+        { booked: 17, expected: 18, done: 0 }, { booked: 20.3, expected: 22, done: 0 }, { booked: 56, expected: 60, done: 0 }], 'each category the larger of the two');
 });
 
 // July 2023 two 1600 sq ft booths; July 2024 the two and four 100 sq ft ones. Design (small 1/4 of
@@ -7064,26 +7094,48 @@ test('EXPECTED WORK', 'fixture months: booked and expected hours', () => _withPr
     const months = await Requests.getExpectedWork();
     const brief = (month) => { const m = months.find(row => row.month === month); return [m.bookedShows, m.bookedLarge, m.hours.boothDesign, m.control]; };
     assertEqual(months.map(m => m.month), monthRange('2025-04', 12), 'the projection\'s 12 months');
-    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37 }, { booked: 124, expected: 124 }], 'August: design 12 + 9 + 4 × 4; control 44 + 32 + 4 × 12');
-    assertEqual(brief('2026-01'), [2, 0, { booked: 8, expected: 52 }, { booked: 24, expected: 180 }], 'January: last January\'s');
-    assertEqual(brief('2026-03'), [2, 0, { booked: 8, expected: 20 }, { booked: 24, expected: 60 }], 'March: last March\'s, all small');
+    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37, done: 0 }, { booked: 120, expected: 120, done: 4 }], 'August: design 12 + 9 + 4 × 4; control 44 + 32 + 4 × 12, less Steno CAALA\'s panels (checked) 4');
+    assertEqual(brief('2026-01'), [0, 0, { booked: 0, expected: 44, done: 8 }, { booked: 0, expected: 156, done: 24 }], 'January: last January\'s, less both booked shows (Setups checked)');
+    assertEqual(brief('2026-03'), [0, 0, { booked: 0, expected: 12, done: 8 }, { booked: 0, expected: 36, done: 24 }], 'March: last March\'s, all small, less both booked shows (Setups checked)');
+}));
+
+// NGAUS (Lockheed Martin, 30x40: 1200 sq ft) ships Aug 20 2025. Its panels 4 + 20 × 800 / 1200 =
+// 17.3 of August's 45.7 (4 already done: Steno CAALA's); all its work: design 12 of 37, control 44
+// of 120. A write's recompute is awaited (cutoffSettled) before reading
+test('EXPECTED WORK', 'schedule checkboxes: checked work leaves the projection', () => _withProjectionToday(async () => {
+    const row = { Client: 'Lockheed Martin', Year: '2025', Show: 'NGAUS' };
+    const august = async () => (await Requests.getExpectedWork()).find(m => m.month === '2025-08');
+    try {
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Panels', 'X');
+        await cutoffSettled();
+        const panelsDone = await august();
+        assertEqual([panelsDone.hours.panels, panelsDone.hours.boothDesign.booked], [{ booked: 24.3, expected: 24.3, done: 21.3 }, 37], 'Panels checked: its panels out (with Steno CAALA\'s 4), its design still in');
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Setups', 'X');
+        await cutoffSettled();
+        const allDone = await august();
+        assertEqual([allDone.hours.boothDesign.booked, allDone.control.booked, allDone.bookedShows], [25, 76, 5], 'Setups checked: the whole show out (control 120 - 44)');
+    } finally {
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Panels', '');
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Setups', '');
+        await cutoffSettled();
+    }
 }));
 
 test('EXPECTED WORK', 'preference rows tune the hours', () => _withProjectionToday(async () => {
     const month = async (key) => (await Requests.getExpectedWork()).find(m => m.month === key);
     try {
         await setPreference('WorkLargeBoothSqft', '1000');
-        assertEqual((await month('2026-01')).hours.boothDesign, { booked: 8, expected: 64 }, 'large at 1000: last January 6 + 14 + 3 × 8 + 16 + 4');
+        assertEqual((await month('2026-01')).hours.boothDesign, { booked: 0, expected: 56, done: 8 }, 'large at 1000: last January 6 + 14 + 3 × 8 + 16 + 4, less the 8 done');
         await setPreference('WorkLargeBoothSqft', '1600');
         await setPreference('WorkPanelsLargeHours', '30');
-        assertEqual((await month('2025-08')).hours.panels.booked, 52.2, 'panels 30 h at 1600: 21.3 + 14.8 + 4 × 4');
+        assertEqual((await month('2025-08')).hours.panels.booked, 48.2, 'panels 30 h at 1600: 21.3 + 14.8 + 3 × 4 (Steno CAALA\'s done)');
         await setPreference('WorkPanelsLargeHours', '24');
         // Panels 20 days before shipping: Aug 12, 12, 18 (100 each) and 20 (1200) fall in July; Aug
         // 23 (200), 24 (900) stay, and Sep 2 (800, 100, 200, 600, 200), 5 (400, 400), 9 (100) join
         await setPreference('WorkPanelsOffsetDays', '20');
         const months = await Requests.getExpectedWork();
         const panels = (key) => months.find(m => m.month === key).hours.panels.booked;
-        assertEqual([panels('2025-07'), panels('2025-08')], [29.3, 58.3], 'July 3 × 4 + 17.3; August 4 + 12.3 + 42 from September');
+        assertEqual([panels('2025-07'), panels('2025-08')], [29.3, 46.3], 'July 3 × 4 + 17.3; August 12.3 + 42 from September, less done: Steno CAALA, Test Client HIMSS, Marmon Burger King (4 each)');
     } finally {
         await setPreference('WorkLargeBoothSqft', '1600');
         await setPreference('WorkPanelsLargeHours', '24');

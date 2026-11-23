@@ -20,18 +20,39 @@
  *   work that small booths take most more than work that large booths take most.
  * - Total control: the control categories' hours (every one but booth design) added up month by
  *   month, each category's in the month its own days before shipping put them in.
+ * - Done: a booked show's work in a category is done once its schedule checkbox is checked (Elev,
+ *   Panels, Setups; `done` lists a show's checked ones). Setups checked means all its work is done.
+ *   Done hours come off the month's booked and expected hours (the month's volume still holds
+ *   them, so last year's figures don't add them back); past shows count in full as history.
  */
 import { projectMeasure, monthOf } from './inventory-projection.js';
 
-/** The work categories, with the preference ID part, default hours (small, large booth) and
- *  whether the category counts in the total control */
+/** The work categories, with the preference ID part, default hours (small, large booth), whether
+ *  the category counts in the total control, and the schedule checkbox marking it done (none yet
+ *  for design and engineering: done with Setups) */
 export const WORK_CATEGORIES = Object.freeze([
-    { key: 'boothDesign', label: 'Booth Design', id: 'BoothDesign', small: 4, large: 16, control: false },
-    { key: 'boothEngineering', label: 'Booth Engineering', id: 'BoothEngineering', small: 2, large: 12, control: true },
-    { key: 'elevations', label: 'Elevations', id: 'Elevations', small: 2, large: 8, control: true },
-    { key: 'panels', label: 'Panels', id: 'Panels', small: 4, large: 24, control: true },
-    { key: 'setup', label: 'Setup', id: 'Setup', small: 4, large: 16, control: true }
+    { key: 'boothDesign', label: 'Booth Design', id: 'BoothDesign', small: 4, large: 16, control: false, doneColumn: null },
+    { key: 'boothEngineering', label: 'Booth Engineering', id: 'BoothEngineering', small: 2, large: 12, control: true, doneColumn: null },
+    { key: 'elevations', label: 'Elevations', id: 'Elevations', small: 2, large: 8, control: true, doneColumn: 'Elev' },
+    { key: 'panels', label: 'Panels', id: 'Panels', small: 4, large: 24, control: true, doneColumn: 'Panels' },
+    { key: 'setup', label: 'Setup', id: 'Setup', small: 4, large: 16, control: true, doneColumn: 'Setups' }
 ]);
+
+/** The schedule checkbox that marks all of a show's work done */
+export const WORK_ALL_DONE_COLUMN = 'Setups';
+
+/** The schedule checkbox columns finished work reads (ProductionUtils.getShowWorkDone) */
+export const WORK_DONE_COLUMNS = Object.freeze([...new Set([...WORK_CATEGORIES.map(c => c.doneColumn).filter(Boolean), WORK_ALL_DONE_COLUMN])]);
+
+/**
+ * Whether a show's work in a category is done: its checkbox, or the all-done one, is checked.
+ * @param {{doneColumn: string|null}} category
+ * @param {string[]} [checked] - The show's checked work columns
+ * @returns {boolean}
+ */
+export function workDone(category, checked = []) {
+    return checked.includes(WORK_ALL_DONE_COLUMN) || (!!category.doneColumn && checked.includes(category.doneColumn));
+}
 
 /** Preference rows (CACHE/Preferences, page reports/expected-work): per category Work<id>SmallHours,
  *  Work<id>LargeHours and Work<id>OffsetDays (days before shipping, default 0), and the two booth
@@ -51,7 +72,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
  * default, hours and sizes below 0 are 0, and days are whole (negative: after shipping).
  * @param {Array<{id: string, value: string}>} preferences
  * @returns {{ smallSqft: number, largeSqft: number,
- *            categories: Array<{key, label, control: boolean, small: number, large: number, offsetDays: number}> }}
+ *            categories: Array<{key, label, control: boolean, doneColumn: string|null, small: number, large: number, offsetDays: number}> }}
  */
 export function resolveWorkSettings(preferences) {
     const rows = Array.isArray(preferences) ? preferences : [];
@@ -62,10 +83,11 @@ export function resolveWorkSettings(preferences) {
     return {
         smallSqft: read(WORK_BOOTH_SIZES.small.id, WORK_BOOTH_SIZES.small.default),
         largeSqft: read(WORK_BOOTH_SIZES.large.id, WORK_BOOTH_SIZES.large.default),
-        categories: WORK_CATEGORIES.map(({ key, label, id, small, large, control }) => ({
+        categories: WORK_CATEGORIES.map(({ key, label, id, small, large, control, doneColumn }) => ({
             key,
             label,
             control,
+            doneColumn,
             small: read(`Work${id}SmallHours`, small),
             large: read(`Work${id}LargeHours`, large),
             offsetDays: Math.round(read(`Work${id}OffsetDays`, 0, -Infinity))
@@ -105,16 +127,18 @@ export function workMonth(show, offsetDays) {
  * The expected work, month by month (see the model above).
  * @param {Object} input
  * @param {string[]} input.months - The future months, in order, from this month
- * @param {Array<{ship, month, sqft}>} input.scheduledShows - Booked shows shipping in the projected months
- * @param {Array<{ship, end, month, sqft}>} input.pastShows - Past shows, by the month they shipped
+ * @param {Array<{ship, month, sqft, done?: string[]}>} input.scheduledShows - Booked shows shipping in
+ *        the projected months, with their checked work columns
+ * @param {Array<{ship, end, month, sqft, done?: string[]}>} input.pastShows - Past shows, by the month they shipped
  * @param {Object} work - resolveWorkSettings
  * @param {Object} settings - resolveProjectionSettings
  * @returns {Array<{month: string, bookedShows: number, bookedLarge: number,
- *          hours: Object<string, {booked: number, expected: number}>, control: {booked: number, expected: number}}>}
+ *          hours: Object<string, {booked, expected, done}>, control: {booked, expected, done}}>}
  *          bookedShows and bookedLarge (from the large size up): the booked shows shipping that
- *          month. hours by category key: booked, the work falling that month for the shows on the
- *          schedule; expected, with the shows not booked yet. control: the control categories'
- *          hours added up
+ *          month, but those with all their work done. hours by category key: booked, the work still
+ *          to do falling that month for the shows on the schedule; expected, with the shows not
+ *          booked yet; done, the booked work already done. control: the control categories' hours
+ *          added up
  */
 export function projectWork({ months, scheduledShows, pastShows }, work, settings) {
     const thisMonth = months[0];
@@ -122,33 +146,43 @@ export function projectWork({ months, scheduledShows, pastShows }, work, setting
     const perCategory = work.categories.map(category => {
         // The shows by the month this category's work falls in: from this month booked, before it past
         const shifted = shows.map(show => ({ ...show, month: workMonth(show, category.offsetDays) }));
+        const booked = shifted.filter(show => show.month >= thisMonth);
+        const done = {};
+        for (const show of booked) {
+            if (workDone(category, show.done)) done[show.month] = (done[show.month] || 0) + workHours(category, show.sqft, work);
+        }
         return {
             category,
+            done,
             rows: projectMeasure({
                 months,
-                scheduledShows: shifted.filter(show => show.month >= thisMonth),
+                scheduledShows: booked,
                 pastShows: shifted.filter(show => show.month < thisMonth),
                 measure: sqft => workHours(category, sqft, work)
             }, settings).rows
         };
     });
+    const allDone = (show) => (show.done || []).includes(WORK_ALL_DONE_COLUMN);
     return months.map((month, i) => {
-        const booked = scheduledShows.filter(show => show.month === month);
+        const booked = scheduledShows.filter(show => show.month === month && !allDone(show));
         const hours = {};
-        const control = { booked: 0, expected: 0 };
-        for (const { category, rows } of perCategory) {
+        const control = { booked: 0, expected: 0, done: 0 };
+        for (const { category, rows, done } of perCategory) {
             const row = rows[i];
-            hours[category.key] = { booked: round1(row.scheduledSqft), expected: round1(row.projectedSqft) };
+            const finished = done[month] || 0;
+            const value = { booked: Math.max(0, row.scheduledSqft - finished), expected: Math.max(0, row.projectedSqft - finished), done: finished };
+            hours[category.key] = { booked: round1(value.booked), expected: round1(value.expected), done: round1(value.done) };
             if (!category.control) continue;
-            control.booked += row.scheduledSqft;
-            control.expected += row.projectedSqft;
+            control.booked += value.booked;
+            control.expected += value.expected;
+            control.done += value.done;
         }
         return {
             month,
             bookedShows: booked.length,
             bookedLarge: booked.filter(show => show.sqft >= work.largeSqft).length,
             hours,
-            control: { booked: round1(control.booked), expected: round1(control.expected) }
+            control: { booked: round1(control.booked), expected: round1(control.expected), done: round1(control.done) }
         };
     });
 }
