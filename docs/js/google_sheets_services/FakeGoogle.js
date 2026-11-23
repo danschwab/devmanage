@@ -1132,7 +1132,8 @@ export class FakeGoogleSheetsService {
                 ['ProjectionMinShortfall', 'Min Shortfall', 'items out at once must pass stock by this much to list an item; a negative value also lists items running low (-5: 5 or fewer left)', 'reports/inventory-projection', 'double', '1', ''],
                 // Expected work (data_management/utils/work-projection.js, WORK_CATEGORIES); the four rows
                 // above that name both reports are shared
-                ['WorkLargeBoothSqft', 'Large Booth From', 'square feet a large booth starts at; smaller booths, and shows without a size, take small-booth hours', 'reports/expected-work', 'integer', '400', ''],
+                ['WorkSmallBoothSqft', 'Small Booth Size', 'square feet of the small booth the small-booth hours are for (a 20x20 is 400); smaller booths, and shows without a size, take the small hours', 'reports/expected-work', 'integer', '400', ''],
+                ['WorkLargeBoothSqft', 'Large Booth Size', 'square feet of the large booth the large-booth hours are for (a 40x40 is 1600); booths in between take hours in proportion to their size, larger ones the large hours', 'reports/expected-work', 'integer', '1600', ''],
                 ['WorkBoothDesignSmallHours', 'Booth Design: Small', 'hours of booth design for a small booth', 'reports/expected-work', 'double', '4', ''],
                 ['WorkBoothDesignLargeHours', 'Booth Design: Large', 'hours of booth design for a large booth', 'reports/expected-work', 'double', '16', ''],
                 ['WorkBoothEngineeringSmallHours', 'Booth Engineering: Small', 'hours of booth engineering for a small booth', 'reports/expected-work', 'double', '2', ''],
@@ -1142,7 +1143,12 @@ export class FakeGoogleSheetsService {
                 ['WorkPanelsSmallHours', 'Panels: Small', 'hours of panels for a small booth', 'reports/expected-work', 'double', '4', ''],
                 ['WorkPanelsLargeHours', 'Panels: Large', 'hours of panels for a large booth', 'reports/expected-work', 'double', '24', ''],
                 ['WorkSetupSmallHours', 'Setup: Small', 'hours of setup for a small booth', 'reports/expected-work', 'double', '4', ''],
-                ['WorkSetupLargeHours', 'Setup: Large', 'hours of setup for a large booth', 'reports/expected-work', 'double', '16', '']
+                ['WorkSetupLargeHours', 'Setup: Large', 'hours of setup for a large booth', 'reports/expected-work', 'double', '16', ''],
+                ['WorkBoothDesignOffsetDays', 'Booth Design: Days Before Ship', 'days before a show ships that its booth design falls, which sets the month it counts in; negative is after shipping', 'reports/expected-work', 'integer', '0', ''],
+                ['WorkBoothEngineeringOffsetDays', 'Booth Engineering: Days Before Ship', 'days before a show ships that its booth engineering falls, which sets the month it counts in; negative is after shipping', 'reports/expected-work', 'integer', '0', ''],
+                ['WorkElevationsOffsetDays', 'Elevations: Days Before Ship', 'days before a show ships that its elevations work falls, which sets the month it counts in; negative is after shipping', 'reports/expected-work', 'integer', '0', ''],
+                ['WorkPanelsOffsetDays', 'Panels: Days Before Ship', 'days before a show ships that its panel work falls, which sets the month it counts in; negative is after shipping', 'reports/expected-work', 'integer', '0', ''],
+                ['WorkSetupOffsetDays', 'Setup: Days Before Ship', 'days before a show ships that its setup falls, which sets the month it counts in; negative is after shipping', 'reports/expected-work', 'integer', '0', '']
             ]
         }
     };

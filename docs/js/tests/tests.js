@@ -42,7 +42,7 @@ import { hasQuantityChanges } from '../application/components/content/InventoryT
 import { evaluateArithmetic } from '../application/components/interface/cells.js';
 import { balancedSplit } from '../application/components/interface/buttonBar.js';
 import { sortKeyFor, compareSortKeys } from '../application/components/interface/tableComponent.js';
-import { resolveWorkSettings, workHours, projectWork } from '../data_management/utils/work-projection.js';
+import { resolveWorkSettings, workHours, workMonth, projectWork } from '../data_management/utils/work-projection.js';
 import { resolveView, resolveAction, pickView, mergeView, matchesKeyPattern, setViewWarningHandler, withRegistryDefaults, searchTiers } from '../application/utils/views/resolveView.js';
 import { SEARCH_LIMITS, searchWords, matchRow, matchRows, makeHighlighter } from '../application/utils/views/searchMatch.js';
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
@@ -4110,7 +4110,7 @@ test('PREFERENCES', 'getPreferences returns an array', async () => {
 
 test('PREFERENCES', 'getPreferences returns every fixture row', async () => {
     const result = await Requests.getPreferences();
-    assertEqual(result.length, 30, 'getPreferences row count');
+    assertEqual(result.length, 36, 'getPreferences row count');
 });
 
 test('PREFERENCES', 'all rows have required fields', async () => {
@@ -6935,49 +6935,80 @@ test('INVENTORY PROJECTION', 'preference rows tune the projection', () => _withP
 
 // ── Expected work: hours of each work category by month ─────────────────────
 // Default hours (small, large booth): Booth Design 4/16, Booth Engineering 2/12, Elevations 2/8,
-// Panels 4/24, Setup 4/16: a small booth 16 h in all, a large one 76; large from 400 sq ft. With
-// today 2025-04-01 (the projection tests' date), booked shows by month (sq ft): Aug 2025 1200, 100,
-// 100, 900, 200, 100 (2 large); Jan 2026 200, 100 (0 large), and Jan 2025's 500, 900, 600, 600,
-// 2400, 600, 100 (6 large); Mar 2026 400, 100 (1 large), and Mar 2025's 100, 100, 400, 100, 200 (1).
+// Panels 4/24, Setup 4/16: a small booth 16 h in all, a large one 76; the hours at 400 sq ft (a
+// 20x20) and 1600 (a 40x40), in proportion between: design 4 + 12 × (sqft - 400) / 1200, all
+// categories 16 + 60 × (sqft - 400) / 1200. No days before shipping. With today 2025-04-01 (the
+// projection tests' date), booked shows by month (sq ft): Aug 2025 1200 (design 12, all 56), 900
+// (9, 41), 100, 100, 200, 100; Jan 2026 200, 100, and Jan 2025's 500 (5, 21), 900 (9, 41), 600,
+// 600, 600 (6, 26 each), 2400 (16, 76), 100: design 52, all 232; Mar 2026 400, 100, and Mar 2025's
+// 100, 100, 400, 100, 200 (all small: design 20, all 80).
 
-test('EXPECTED WORK', 'settings: hours per category, where a large booth starts', () => {
+test('EXPECTED WORK', 'settings: hours per category at two booth sizes, days before shipping', () => {
     const defaults = resolveWorkSettings([]);
-    assertEqual([defaults.largeSqft, defaults.categories.map(c => [c.key, c.small, c.large])], [400, [
-        ['boothDesign', 4, 16], ['boothEngineering', 2, 12], ['elevations', 2, 8], ['panels', 4, 24], ['setup', 4, 16]
+    assertEqual([defaults.smallSqft, defaults.largeSqft, defaults.categories.map(c => [c.key, c.small, c.large, c.offsetDays])], [400, 1600, [
+        ['boothDesign', 4, 16, 0], ['boothEngineering', 2, 12, 0], ['elevations', 2, 8, 0], ['panels', 4, 24, 0], ['setup', 4, 16, 0]
     ]], 'defaults');
     const tuned = resolveWorkSettings([
+        { id: 'WorkSmallBoothSqft', value: '200' },
         { id: 'WorkLargeBoothSqft', value: '1000' },
         { id: 'WorkPanelsLargeHours', value: '30' },
         { id: 'WorkSetupSmallHours', value: '-2' },
-        { id: 'WorkElevationsSmallHours', value: 'abc' }
+        { id: 'WorkElevationsSmallHours', value: 'abc' },
+        { id: 'WorkBoothDesignOffsetDays', value: '30' },
+        { id: 'WorkPanelsOffsetDays', value: '2.6' },
+        { id: 'WorkSetupOffsetDays', value: '-5' }
     ]);
-    assertEqual([tuned.largeSqft, tuned.categories[3].large, tuned.categories[4].small, tuned.categories[2].small], [1000, 30, 0, 2],
+    assertEqual([tuned.smallSqft, tuned.largeSqft, tuned.categories[3].large, tuned.categories[4].small, tuned.categories[2].small], [200, 1000, 30, 0, 2],
         'a value kept; below 0 is 0; invalid takes the default');
-    assertEqual([workHours(tuned.categories[0], 999, 1000), workHours(tuned.categories[0], 1000, 1000), workHours(tuned.categories[0], 0, 1000)], [4, 16, 4],
-        'large from the threshold; no size is a small booth');
+    assertEqual(tuned.categories.map(c => c.offsetDays), [30, 0, 0, 3, -5], 'days whole; negative is after shipping');
+    const design = tuned.categories[0];
+    assertEqual([0, 200, 600, 1000, 1500].map(sqft => workHours(design, sqft, tuned)), [4, 4, 10, 16, 16],
+        'small hours up to 200 and without a size, large from 1000, halfway at 600');
 });
 
-// July 2025 booked 100, 900 and one without a size (two small, one large); last July 100, 400,
-// 1000 (one small, two large): each category the larger of the two
+test('EXPECTED WORK', 'workMonth: the month a category\'s work falls in', () => {
+    const show = { ship: '2025-07-10', month: '2025-07' };
+    assertEqual([workMonth(show, 0), workMonth(show, 9), workMonth(show, 10), workMonth(show, 40), workMonth(show, -22), workMonth({ month: '2025-07' }, 30)],
+        ['2025-07', '2025-07', '2025-06', '2025-05', '2025-08', '2025-07'], 'days before (after when negative); a show without a ship date keeps its month');
+});
+
+// Booked July 10 a 100 sq ft booth and July 20 a 1600. Booth design 15 days before: June 25 (4 h)
+// and July 5 (16). Engineering 45 days before: May 26 (past: not counted) and June 5 (12). Panels
+// on the day: July, 4 + 24
+test('EXPECTED WORK', 'days before shipping move each category\'s work to its own month', () => {
+    const [june, july] = projectWork({
+        months: ['2025-06', '2025-07'],
+        scheduledShows: [{ ship: '2025-07-10', month: '2025-07', sqft: 100 }, { ship: '2025-07-20', month: '2025-07', sqft: 1600 }],
+        pastShows: []
+    }, resolveWorkSettings([{ id: 'WorkBoothDesignOffsetDays', value: '15' }, { id: 'WorkBoothEngineeringOffsetDays', value: '45' }]), DEFAULT_PROJECTION_SETTINGS);
+    const booked = (month, key) => month.hours[key].booked;
+    assertEqual([booked(june, 'boothDesign'), booked(july, 'boothDesign'), booked(june, 'boothEngineering'), booked(july, 'boothEngineering'), booked(june, 'panels'), booked(july, 'panels')],
+        [4, 16, 12, 0, 0, 28], 'design June 4, July 16; engineering June 12 (May is past); panels July 28');
+    assertEqual([june.bookedShows, july.bookedShows, july.bookedLarge], [0, 2, 1], 'shows counted in the month they ship');
+});
+
+// July 2025 booked 100, 900 and one without a size; last July 100, 400, 1000. Design booked 4 + 9
+// + 4 = 17 against 4 + 4 + 10 = 18; panels (4 + 20 × (sqft - 400) / 1200) 4 + 12.3 + 4 = 20.3
+// against 4 + 4 + 14 = 22; in all 73 against 18 + 11 + 9 + 22 + 18 = 78
 test('EXPECTED WORK', 'a month: hours booked, and the larger of booked and last year', () => {
     const [july] = projectWork({
         months: ['2025-07'],
         scheduledShows: [{ month: '2025-07', sqft: 100 }, { month: '2025-07', sqft: 900 }, { month: '2025-07', sqft: 0 }],
         pastShows: [100, 400, 1000].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
     }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
-    assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.total], [3, 1,
-        { booked: 24, expected: 36 }, { booked: 32, expected: 52 }, { booked: 108, expected: 168 }], 'design 4+16+4 against 4+16+16; panels 4+24+4 against 4+24+24');
+    assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.total], [3, 0,
+        { booked: 17, expected: 18 }, { booked: 20.3, expected: 22 }, { booked: 73, expected: 78 }], 'each category the larger of the two');
 });
 
-// July 2023 two 1000 sq ft booths; July 2024 the two and four 100 sq ft ones. Design (small 1/4 of
+// July 2023 two 1600 sq ft booths; July 2024 the two and four 100 sq ft ones. Design (small 1/4 of
 // large): 32 then 48 h, a line × 4/3 a year on: 64. Panels (1/6): 48 then 64, × 5/4: 80
 test('EXPECTED WORK', 'booth mix: more small booths raise work by each category\'s own hours', () => {
     const [july] = projectWork({
         months: ['2025-07'],
         scheduledShows: [],
         pastShows: [
-            ...[1000, 1000].map(sqft => ({ ship: '2023-07-10', end: '2023-07-20', month: '2023-07', sqft })),
-            ...[1000, 1000, 100, 100, 100, 100].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
+            ...[1600, 1600].map(sqft => ({ ship: '2023-07-10', end: '2023-07-20', month: '2023-07', sqft })),
+            ...[1600, 1600, 100, 100, 100, 100].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
         ]
     }, resolveWorkSettings([]), { ...DEFAULT_PROJECTION_SETTINGS, historyYears: 2 });
     assertEqual([july.hours.boothDesign.expected, july.hours.panels.expected], [64, 80], 'design × 1.333, panels × 1.25');
@@ -6987,22 +7018,30 @@ test('EXPECTED WORK', 'fixture months: booked and expected hours', () => _withPr
     const months = await Requests.getExpectedWork();
     const brief = (month) => { const m = months.find(row => row.month === month); return [m.bookedShows, m.bookedLarge, m.hours.boothDesign, m.total]; };
     assertEqual(months.map(m => m.month), monthRange('2025-04', 12), 'the projection\'s 12 months');
-    assertEqual(brief('2025-08'), [6, 2, { booked: 48, expected: 48 }, { booked: 216, expected: 216 }], 'August: 2 × 16 + 4 × 4 design; 2 × 76 + 4 × 16 in all');
-    assertEqual(brief('2026-01'), [2, 0, { booked: 8, expected: 100 }, { booked: 32, expected: 472 }], 'January: last January\'s 6 large and 1 small');
-    assertEqual(brief('2026-03'), [2, 1, { booked: 20, expected: 32 }, { booked: 92, expected: 140 }], 'March: last March\'s 1 large and 4 small');
+    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37 }, { booked: 161, expected: 161 }], 'August: design 12 + 9 + 4 × 4; 56 + 41 + 4 × 16 in all');
+    assertEqual(brief('2026-01'), [2, 0, { booked: 8, expected: 52 }, { booked: 32, expected: 232 }], 'January: last January\'s');
+    assertEqual(brief('2026-03'), [2, 0, { booked: 8, expected: 20 }, { booked: 32, expected: 80 }], 'March: last March\'s, all small');
 }));
 
 test('EXPECTED WORK', 'preference rows tune the hours', () => _withProjectionToday(async () => {
     const month = async (key) => (await Requests.getExpectedWork()).find(m => m.month === key);
     try {
         await setPreference('WorkLargeBoothSqft', '1000');
-        assertEqual((await month('2026-01')).hours.boothDesign, { booked: 8, expected: 40 }, 'large from 1000: last January 1 large (2400), 6 small');
-        await setPreference('WorkLargeBoothSqft', '400');
+        assertEqual((await month('2026-01')).hours.boothDesign, { booked: 8, expected: 64 }, 'large at 1000: last January 6 + 14 + 3 × 8 + 16 + 4');
+        await setPreference('WorkLargeBoothSqft', '1600');
         await setPreference('WorkPanelsLargeHours', '30');
-        assertEqual((await month('2025-08')).hours.panels, { booked: 76, expected: 76 }, 'panels 30 h a large booth: 2 × 30 + 4 × 4');
-    } finally {
-        await setPreference('WorkLargeBoothSqft', '400');
+        assertEqual((await month('2025-08')).hours.panels.booked, 52.2, 'panels 30 h at 1600: 21.3 + 14.8 + 4 × 4');
         await setPreference('WorkPanelsLargeHours', '24');
+        // Panels 20 days before shipping: Aug 12, 12, 18 (100 each) and 20 (1200) fall in July; Aug
+        // 23 (200), 24 (900) stay, and Sep 2 (800, 100, 200, 600, 200), 5 (400, 400), 9 (100) join
+        await setPreference('WorkPanelsOffsetDays', '20');
+        const months = await Requests.getExpectedWork();
+        const panels = (key) => months.find(m => m.month === key).hours.panels.booked;
+        assertEqual([panels('2025-07'), panels('2025-08')], [29.3, 58.3], 'July 3 × 4 + 17.3; August 4 + 12.3 + 42 from September');
+    } finally {
+        await setPreference('WorkLargeBoothSqft', '1600');
+        await setPreference('WorkPanelsLargeHours', '24');
+        await setPreference('WorkPanelsOffsetDays', '0');
     }
 }));
 

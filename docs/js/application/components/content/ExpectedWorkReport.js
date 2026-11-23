@@ -7,7 +7,7 @@ const showsText = (n) => `${n} show${n === 1 ? '' : 's'}`;
 // computed copy
 const MONTH_FIELDS = [
     { key: 'monthLabel', label: 'Month' },
-    { key: 'bookedText', label: 'Booked shows' },
+    { key: 'bookedText', label: 'Booked shows shipping' },
     { key: 'bookedHours', label: 'Booked hours', format: 'number', type: 'number' },
     { key: 'expectedHours', label: 'Expected hours', format: 'number', type: 'number' }
 ];
@@ -60,14 +60,16 @@ const ExpectedWorkDetails = {
     computed: {
         detailItems() {
             const work = resolveWorkSettings(this.prefsStore?.data);
+            const sqft = (n) => `${n.toLocaleString()} sq ft`;
+            const when = (days) => days > 0 ? `${days} days before shipping` : (days < 0 ? `${-days} days after shipping` : 'when it ships');
             return [
                 ...work.categories.map(category => ({
                     label: category.label,
-                    value: `${category.small} h a small booth, ${category.large} h a large booth (from ${work.largeSqft.toLocaleString()} sq ft)`
+                    value: `${category.small} h at ${sqft(work.smallSqft)}, ${category.large} h at ${sqft(work.largeSqft)}; ${when(category.offsetDays)}`
                 })),
-                { label: 'Booked', value: 'the shows on the schedule, at their booth sizes; a show without a size is a small booth' },
-                { label: 'Not booked yet', value: 'each month is the larger of the hours booked and the same month last year\'s hours, carried forward by the inventory projection\'s History Years and Growth Factor; each category on its own hours, so more small booths raise the work small booths take most' },
-                { label: 'Months', value: 'a show\'s work counts in the month it ships' }
+                { label: 'Booth size', value: `a booth between ${sqft(work.smallSqft)} and ${sqft(work.largeSqft)} takes hours in proportion to its size; a smaller booth, or a show without a size, the small hours; a larger one the large hours` },
+                { label: 'Months', value: 'each category\'s work for a show counts in the month its days before shipping fall in; work falling before this month is past' },
+                { label: 'Not booked yet', value: 'each month is the larger of the hours booked and the same month last year\'s hours, carried forward by the inventory projection\'s History Years and Growth Factor; each category on its own hours, so more small booths raise the work small booths take most' }
             ];
         },
         rows() {
