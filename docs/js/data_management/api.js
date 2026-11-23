@@ -1,4 +1,4 @@
-import { wrapMethods, normalizeHeaderName, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, InstantWriteUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, offsetToISO, resolveShortageAlertDays, shortageAlertDateFilters, PREFERENCES_MAPPING, INVENTORY_TAB_PREFERENCES, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote, DEFAULT_INVENTORY_MAPPING, ProposalUtils, DropboxUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING, resolveInventoryNoteMaxLength, primaryThumbnailValue, SEVERITY, remainingSeverity, resolveProjectionSettings, monthOf, addMonths, monthRange, projectInventory, itemShortages } from './index.js';
+import { wrapMethods, normalizeHeaderName, Database, InventoryUtils, PackListUtils, ProductionUtils, ApplicationUtils, EditHistoryUtils, InstantWriteUtils, ARCHIVE_TAB_NAME, ARCHIVE_HEADERS, offsetToISO, resolveShortageAlertDays, shortageAlertDateFilters, PREFERENCES_MAPPING, INVENTORY_TAB_PREFERENCES, sanitizeTabName, mapWithConcurrency, ProgressBus, getRandomLoadingQuote, DEFAULT_INVENTORY_MAPPING, ProposalUtils, DropboxUtils, PROPOSALS_TAB_NAME, PROPOSAL_MAPPING, resolveInventoryNoteMaxLength, primaryThumbnailValue, SEVERITY, remainingSeverity, resolveProjectionSettings, monthOf, addMonths, monthRange, projectInventory, itemShortages, resolveWorkSettings, projectWork } from './index.js';
 import { AuthSession } from './services.js';
 import { instantWriteEntry, identityText, parseColoredName } from './utils/instant-write-config.js';
 import { columnTypesEntry } from './utils/column-types.js';
@@ -1369,24 +1369,18 @@ class Requests_uncached {
     }
 
     /**
-     * The inventory projection of one inventory category (the model: utils/inventory-projection.js).
-     * Reads the shows shipping from the start of the usage window or the past years to the last
-     * projected month (one per transship chain, at its root) with their ship and return dates,
-     * square feet and whether they have a pack list; the usage window's pack list quantities; the
-     * pack list quantities of the booked shows out in the projected months; stock at each month's
-     * start; then projectInventory. getInventoryProjection and getInventoryProjectionBasis serve its
-     * parts. The schedule is read only through cutoff methods (show ids, dates, square feet).
-     * Reports its four steps on its ProgressBus topic; the methods serving it relay them.
+     * The shows the projections read (the inventory projection, the expected work): one per
+     * transship chain, at its root (its window runs to the chain's last return), shipping from the
+     * start of the history or usage window (ProjectionHistoryYears, ProjectionUsageMonths) to the
+     * last projected month (ProjectionFutureYears). Each with its ship month, return, square feet
+     * (ProjectionDefaultSquareFeet without a readable size; sized says which) and whether it has a
+     * pack list. The schedule is read only through cutoff methods (show ids, dates, square feet).
+     * Reports its progress on its ProgressBus topic.
      * @param {Object} deps
-     * @param {string} category - Inventory tab name
-     * @returns {Promise<{months: Array<Object>, items: Array<Object>, settings: Object, basis: Object}|null>}
+     * @returns {Promise<{settings: Object, today: string, thisMonth: string, futureMonths: string[],
+     *          usageMonths: string[], shows: Array<{id, ship, month, end, sized, sqft, hasPackList}>}>}
      */
-    static async getInventoryProjectionModel(deps, category) {
-        if (!category) return null;
-        // Step n of 4, `done` of `total` through it
-        const progress = (step, message, done = 0, total = 1) =>
-            ProgressBus.emit('api:getInventoryProjectionModel', { current: step - 1 + done / total, total: 4, message: `Step ${step}/4: ${message}` });
-        progress(1, 'Reading the schedule...');
+    static async getProjectionShows(deps) {
         const settings = resolveProjectionSettings(await deps.call(Requests.getPreferences));
         const today = await deps.call(ApplicationUtils.getToday);
         const thisMonth = monthOf(today);
@@ -1423,7 +1417,32 @@ class Requests_uncached {
                 sqft: size ?? (settings.defaultSquareFeet || 0),
                 hasPackList: tabs.length > 0
             };
-        }, 8, ({ processed, total }) => progress(1, `Reading the schedule: ${processed} of ${total} shows...`, processed, total))).filter(Boolean);
+        }, 8, ({ processed, total }) => ProgressBus.emit('api:getProjectionShows', { current: processed, total, message: `Reading the schedule: ${processed} of ${total} shows...` }))).filter(Boolean);
+        return { settings, today, thisMonth, futureMonths, usageMonths, shows };
+    }
+
+    /**
+     * The inventory projection of one inventory category (the model: utils/inventory-projection.js).
+     * Reads the shows shipping from the start of the usage window or the past years to the last
+     * projected month (one per transship chain, at its root) with their ship and return dates,
+     * square feet and whether they have a pack list; the usage window's pack list quantities; the
+     * pack list quantities of the booked shows out in the projected months; stock at each month's
+     * start; then projectInventory. getInventoryProjection and getInventoryProjectionBasis serve its
+     * parts. The shows come from getProjectionShows, shared with the expected work.
+     * Reports its four steps on its ProgressBus topic; the methods serving it relay them.
+     * @param {Object} deps
+     * @param {string} category - Inventory tab name
+     * @returns {Promise<{months: Array<Object>, items: Array<Object>, settings: Object, basis: Object}|null>}
+     */
+    static async getInventoryProjectionModel(deps, category) {
+        if (!category) return null;
+        // Step n of 4, `done` of `total` through it
+        const progress = (step, message, done = 0, total = 1) =>
+            ProgressBus.emit('api:getInventoryProjectionModel', { current: step - 1 + done / total, total: 4, message: `Step ${step}/4: ${message}` });
+        progress(1, 'Reading the schedule...');
+        const { settings, today, thisMonth, futureMonths, usageMonths, shows } = await relayProgress('api:getProjectionShows',
+            ({ current, total }) => progress(1, `Reading the schedule: ${current} of ${total} shows...`, current, total),
+            () => deps.call(Requests.getProjectionShows));
         const showById = new Map(shows.map(show => [show.id, show]));
 
         // Learned from: the usage window's shows with a pack list and square feet
@@ -1549,6 +1568,28 @@ class Requests_uncached {
         const model = await relayProgress('api:getInventoryProjectionModel', 'api:getInventoryProjectionBasis',
             () => deps.call(Requests.getInventoryProjectionModel, category));
         return model ? [{ ...model.basis, settings: model.settings, items: model.items }] : [];
+    }
+
+    /**
+     * The expected work, month by month (utils/work-projection.js, projectWork): each work
+     * category's hours booked and expected (with the shows not booked yet), from the shows
+     * (getProjectionShows), their finished work (ProductionUtils.getShowWorkDone: the schedule's
+     * work checkboxes) and the work preference rows. Persisted.
+     * @param {Object} deps
+     * @returns {Promise<Array<{month, bookedShows, bookedLarge, hours, total}>>}
+     */
+    static async getExpectedWork(deps) {
+        const work = resolveWorkSettings(await deps.call(Requests.getPreferences));
+        const [{ settings, thisMonth, futureMonths, shows: read }, doneById] = await Promise.all([
+            relayProgress('api:getProjectionShows', 'api:getExpectedWork', () => deps.call(Requests.getProjectionShows)),
+            deps.call(ProductionUtils.getShowWorkDone)
+        ]);
+        const shows = read.map(show => (doneById[show.id] ? { ...show, done: doneById[show.id] } : show));
+        return projectWork({
+            months: futureMonths,
+            scheduledShows: shows.filter(show => show.month >= thisMonth),
+            pastShows: shows.filter(show => show.month < thisMonth)
+        }, work, settings);
     }
 
     /**
@@ -2073,5 +2114,5 @@ export const Requests = wrapMethods(
     ], // Mutation methods (and fresh reads that must not be cached)
     ['computeIdentifier'], // Infinite cache methods
     {}, // No custom cache durations needed - lock methods delegate to ApplicationUtils caching
-    ['getInventoryShortageAlerts', 'getItemThumbnails', 'getInventoryProjection', 'getInventoryProjectionBasis', 'getInventoryProjectionMonths'] // Persisted methods (CACHE/Analytics)
+    ['getInventoryShortageAlerts', 'getItemThumbnails', 'getInventoryProjection', 'getInventoryProjectionBasis', 'getInventoryProjectionMonths', 'getExpectedWork'] // Persisted methods (CACHE/Analytics)
 );

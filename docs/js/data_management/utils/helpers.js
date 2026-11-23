@@ -1,5 +1,23 @@
 import { isCheckedValue } from './checkbox-values.js';
 
+/**
+ * Square feet of a schedule Size, the one reading of booth sizes (show square feet, the
+ * projections, the schedule chart): every "W x D" in it, summed ("10x40 & 10x10" is 500). Feet
+ * marks and spaces are allowed ("20' x 20'"). Null when it holds none ("TBD", "x18'").
+ * @param {*} size
+ * @returns {number|null}
+ */
+export function parseBoothSquareFeet(size) {
+    const pattern = /(\d+(?:\.\d+)?)\s*'?\s*[x×]\s*(\d+(?:\.\d+)?)/gi;
+    let total = 0;
+    let found = false;
+    for (const [, width, depth] of String(size ?? '').matchAll(pattern)) {
+        total += Number(width) * Number(depth);
+        found = true;
+    }
+    return found ? total : null;
+}
+
 export function parseDate(val, forceLocal = true, defaultYear = null) {
     if (!val) return null;
     

@@ -1,4 +1,4 @@
-import { html, Requests, parseDate, toUSDateString, DataView, getReactiveStore, createAnalysisConfig, invalidateCache, Priority, runNonessentialAnalysisOnAllStores, SEVERITY } from '../../index.js';
+import { html, Requests, parseDate, toUSDateString, parseBoothSquareFeet, DataView, getReactiveStore, createAnalysisConfig, invalidateCache, Priority, runNonessentialAnalysisOnAllStores, SEVERITY } from '../../index.js';
 import { IndexResolutionComponent } from '../interface/IndexResolutionModal.js';
 import { TransshipmentModal } from '../interface/ScheduleModals.js';
 import { ShowOutputFiles } from './ShowOutputFiles.js';
@@ -9,6 +9,7 @@ import { shipReturnAnalysis, withShipDate, estimatedShipText, shipReturnCards } 
  * Schedule page view registry (views-and-renderers-plan §4.3). Presentation only: which fields
  * show where, widths, colours and the action trigger. Fields come from scheduleFields.js.
  * The table reproduces the original columns; narrow containers stack Client under Show (Phase 6).
+ * The chart counts the shows and adds up their square feet (the derived sqft field) by ship month.
  */
 const SCHEDULE_VIEWS = {
     id: 'schedule',
@@ -34,6 +35,7 @@ const SCHEDULE_VIEWS = {
             },
             // Search highlights and navigates; it doesn't hide non-matching rows by default
             table: { hideRowsOnSearch: false },
+            hidden: ['sqft'],
             variants: {
                 // Narrow containers (phone, 360px dashboard card): stack Client under Show; City and Size move to details
                 narrow: {
@@ -54,7 +56,23 @@ const SCHEDULE_VIEWS = {
                 yearColumn: 'Year',
                 chip: [['Show', 'Client'], ['City', 'Size']]
             },
+            hidden: ['sqft'],
             action: 'button'
+        },
+        {
+            id: 'chart',
+            name: 'Chart',
+            icon: 'timeline',
+            layout: 'chart',
+            chart: {
+                bucket: { by: 'Ship', unit: 'month' },
+                series: [
+                    { count: true, label: 'Shows' },
+                    { sum: 'sqft', label: 'Square feet', axis: 'right' }
+                ],
+                yLabel: 'Shows',
+                y2Label: 'Square feet'
+            }
         }
     ]
 };
@@ -119,14 +137,19 @@ export const ScheduleTableComponent = {
     },
 
     computed: {
-        // FieldDefs built from the sheet headers (shared with other Schedule pages), typed by ColumnTypes
+        // FieldDefs built from the sheet headers (shared with other Schedule pages), typed by ColumnTypes,
+        // and the derived square feet
         fields() {
-            return buildScheduleFields(this.scheduleTableStore ? this.scheduleTableStore.data : [], { types: this.columnTypesStore?.data });
+            return [
+                ...buildScheduleFields(this.scheduleTableStore ? this.scheduleTableStore.data : [], { types: this.columnTypesStore?.data }),
+                { key: 'sqft', label: 'Square Feet', format: 'number', type: 'number' }
+            ];
         },
         tableData() {
             const rawData = this.scheduleTableStore ? this.scheduleTableStore.data : [];
-            // Use source show's end date as the sort/display ship date for transship rows
-            return rawData.map(withShipDate);
+            // Use source show's end date as the sort/display ship date for transship rows; sqft is the
+            // Size's square feet (parseBoothSquareFeet, as show square feet read it; blank when unreadable)
+            return rawData.map(withShipDate).map(row => ({ ...row, sqft: parseBoothSquareFeet(row.Size) }));
         },
         originalData() {
             return this.scheduleTableStore && Array.isArray(this.scheduleTableStore.originalData)

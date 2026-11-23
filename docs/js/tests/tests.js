@@ -42,15 +42,19 @@ import { hasQuantityChanges } from '../application/components/content/InventoryT
 import { evaluateArithmetic } from '../application/components/interface/cells.js';
 import { balancedSplit } from '../application/components/interface/buttonBar.js';
 import { sortKeyFor, compareSortKeys } from '../application/components/interface/tableComponent.js';
+import { resolveWorkSettings, workHours, workMonth, workDone, projectWork } from '../data_management/utils/work-projection.js';
 import { resolveView, resolveAction, pickView, mergeView, matchesKeyPattern, setViewWarningHandler, withRegistryDefaults, searchTiers } from '../application/utils/views/resolveView.js';
 import { SEARCH_LIMITS, searchWords, matchRow, matchRows, makeHighlighter } from '../application/utils/views/searchMatch.js';
 import { formatValue, formatText } from '../application/utils/views/fieldFormat.js';
 import { rowsToCards, bucketRowsToCards } from '../application/utils/views/cardsAdapter.js';
+import { rowsToChart } from '../application/utils/views/chartAdapter.js';
+import { bucketKey, bucketRows, bucketLabel, aggregate } from '../application/utils/views/buckets.js';
 import { applyColorRule, colorFor, rowColorFor } from '../application/utils/views/viewColor.js';
 import { containerTier, BREAKPOINTS } from '../application/utils/useContainerSize.js';
 import { createScrollHider } from '../application/utils/scrollHider.js';
 import { DEFAULT_DASHBOARD } from '../application/utils/dashboardLayout.js';
-import { parseBoothSquareFeet, monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
+import { parseBoothSquareFeet } from '../data_management/utils/helpers.js';
+import { monthOf, addMonths, monthRange, shiftYears, peakByMonth, itemUse, itemQuantity, resolveProjectionSettings, growthMultiplier, projectVolume, fillShows, projectInventory, itemShortages } from '../data_management/utils/inventory-projection.js';
 import { redirectPath, URLRouter } from '../application/utils/urlRouter.js';
 import { todayISOString, setTestToday, startOfTodayMs, resolveShortageAlertDays, shortageAlertDateFilters, INVENTORY_TAB_PREFERENCES, resolveInventoryTabList, itemVariantBase, resolveItemVariant, itemVariantFamilies, itemVariantKey, parseItemVariants, searchFilter, textFiltersToSearchParams, parseSearchParameters } from '../data_management/utils/helpers.js';
 import { instantWriteEntry, identityKey, cellKey, joinKey } from '../data_management/utils/instant-write-config.js';
@@ -4108,7 +4112,7 @@ test('PREFERENCES', 'getPreferences returns an array', async () => {
 
 test('PREFERENCES', 'getPreferences returns every fixture row', async () => {
     const result = await Requests.getPreferences();
-    assertEqual(result.length, 19, 'getPreferences row count');
+    assertEqual(result.length, 36, 'getPreferences row count');
 });
 
 test('PREFERENCES', 'all rows have required fields', async () => {
@@ -5407,6 +5411,68 @@ test('VIEWS CARDS', 'bucketRowsToCards: buckets by key, empty buckets seeded, no
     assertEqual([cards[1].row.tab, cards[1].hasDetails, cards[1].cardClass], ['FURNITURE', false, 'purple'], 'synthetic row, no details');
 });
 
+// Chart layout: x and series keys are the shown tier; rowsToChart makes one point per row and one
+// series per key. Colours: b2 names blue, so a and b1 take the first two others (green, orange)
+test('VIEWS CHART', 'resolveView and rowsToChart: points by row, series by key, colours, gaps', async () => {
+    const fields = [{ key: 'month', label: 'Month' }, { key: 'a' }, { key: 'b1', label: 'First' }, { key: 'b2' }, { key: 'note' }];
+    const view = { id: 'chart', layout: 'chart', chart: { x: 'month', series: ['a', 'b*'], dashed: ['b2'], yLabel: 'Hours' }, style: { b2: { color: 'blue', label: 'Second' } } };
+    const r = withViewWarnings(() => resolveView(fields, view)).result;
+    assertEqual([r.shown, r.details.map(f => f.key), r.chart.type, r.invalid], [['month', 'a', 'b1', 'b2'], ['note'], 'line', null], 'x and series shown, the rest in details');
+    const chart = rowsToChart([{ month: 'Jan', a: 3, b1: '', b2: '4' }, { month: 'Feb', a: 'x', b1: 2, b2: 5 }], r);
+    assertEqual([chart.labels, chart.yLabel], [['Jan', 'Feb'], 'Hours'], 'labels from x');
+    assertEqual(chart.series.map(s => [s.key, s.label, s.values, s.color, s.dashed]), [
+        ['a', 'a', [3, null], 'green', false],
+        ['b1', 'First', [null, 2], 'orange', false],
+        ['b2', 'Second', [4, 5], 'blue', true]
+    ], 'blank and non-numbers are gaps; style label and colour win');
+});
+
+test('VIEWS CHART', 'a chart without series is invalid (DataView falls back to the default view)', async () => {
+    const { result: r, warnings } = withViewWarnings(() => resolveView([{ key: 'month' }], { id: 'c', layout: 'chart', chart: { x: 'month', series: ['nope'] } }));
+    assertEqual([r.invalid, warnings.length], ['chart-fields', 2], 'unknown series key, then no series');
+});
+
+// Shows by ship month: July 400 and 100 sq ft, September one without a size; August has none
+test('VIEWS CHART', 'a bucketed chart: count and sum by month on two axes, a level held', async () => {
+    const fields = [{ key: 'ship' }, { key: 'sqft', label: 'Sq ft' }, { key: 'name' }];
+    const view = {
+        id: 'c', layout: 'chart',
+        chart: { bucket: { by: 'ship', unit: 'month' }, series: [{ count: true, label: 'Shows' }, { sum: 'sqft', axis: 'right' }, { last: 'sqft', label: 'Last', dashed: true }], y2Label: 'Square feet' }
+    };
+    const r = withViewWarnings(() => resolveView(fields, view)).result;
+    assertEqual([r.shown, r.details.map(f => f.key), r.invalid], [['ship', 'sqft'], ['name'], null], 'the bucket field and the read key shown');
+    const chart = rowsToChart([{ ship: '2025-07-10', sqft: 400 }, { ship: '2025-07-20', sqft: 100 }, { ship: '2025-09-01', sqft: '' }], r);
+    assertEqual([chart.labels, chart.y2Label], [['Jul 2025', 'Aug 2025', 'Sep 2025'], 'Square feet'], 'a point per month, August filled');
+    assertEqual(chart.series.map(s => [s.label, s.values, s.axis, s.color, s.dashed]), [
+        ['Shows', [2, 0, 1], 'left', 'blue', false],
+        ['Sq ft', [500, 0, 0], 'right', 'green', false],
+        ['Last', [100, 100, 100], 'left', 'orange', true]
+    ], 'count; sum, labelled by its field; last held through the empty month and the blank');
+    const { result: unbucketed, warnings } = withViewWarnings(() => resolveView(fields, { id: 'd', layout: 'chart', chart: { x: 'ship', series: [{ sum: 'sqft' }] } }));
+    assertEqual([unbucketed.invalid, warnings.length], ['chart-fields', 2], 'sum without a bucket is ignored, leaving no series');
+});
+
+// Rows by a field: by value in the order first seen (seeded keys first, kept empty), or by a
+// date's month, sorted, with the empty months between filled in
+test('VIEWS BUCKETS', 'bucketRows, bucketKey, bucketLabel and aggregate', async () => {
+    const rows = [{ c: 'B', d: '2025-03-15', n: 2 }, { c: 'A', d: '01/20/2025', n: '3' }, { c: 'B', d: '2025-01-02', n: 'x' }, { c: '', d: 'TBD', n: 4 }];
+    assertEqual(bucketRows(rows, 'c', { keys: ['Z'] }).map(b => [b.key, b.rows.length]), [['Z', 0], ['B', 2], ['A', 1]], 'seeded first, then first seen; blank in none');
+    const months = bucketRows(rows, 'd', { unit: 'month' });
+    assertEqual(months.map(b => [b.key, b.rows.length]), [['2025-01', 2], ['2025-02', 0], ['2025-03', 1]], 'sorted, February filled, TBD in none');
+    assertEqual([bucketKey('2025-03-15', 'year'), bucketKey('3/15/2025', 'day'), bucketLabel('2025-02', 'month'), bucketLabel('2025-03-05', 'day'), bucketLabel('B')],
+        ['2025', '2025-03-15', 'Feb 2025', '3/5/2025', 'B'], 'keys and labels');
+    assertEqual([aggregate(months, { count: true }), aggregate(months, { sum: 'n' }), aggregate(months, { last: 'n' })], [[2, 0, 1], [3, 0, 2], [3, 3, 2]],
+        'count; sum (non-numbers left out); last held through the empty month');
+});
+
+// A level 5 from Jan 30 to Feb 2, then 3 on Feb 3 (to Feb 3); a show out Jan 20 to Mar 2
+test('VIEWS BUCKETS', 'until: a row falls in every bucket from its date to its end', async () => {
+    const days = bucketRows([{ s: '2025-01-30', e: '2025-02-02', q: 5 }, { s: '2025-02-03', e: '2025-02-03', q: 3 }], 's', { unit: 'day', until: 'e' });
+    assertEqual([days.map(b => b.key), aggregate(days, { last: 'q' })], [['2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03'], [5, 5, 5, 5, 3]], 'each day its level');
+    const months = bucketRows([{ s: '2025-01-20', e: '2025-03-02' }, { s: '2025-02-10', e: '' }], 's', { unit: 'month', until: 'e' });
+    assertEqual(aggregate(months, { count: true }), [1, 2, 1], 'out in January, February (with a show without an end) and March');
+});
+
 // ── Instant write (views-and-renderers-plan §4.16) ───────────────────────────
 // writeCellsVerified locates rows by identity (Client + Year + Show) and columns by header name,
 // reads, writes, re-reads, and retries once if rows moved. These tests run against FakeGoogle's
@@ -6595,6 +6661,7 @@ test('INVENTORY PROJECTION', 'settings: defaults, preference values, minimums', 
         { id: 'ProjectionMinShortfall', value: 'abc' }
     ]);
     assertEqual([settings.growthFactor, settings.usageMonths, settings.minShortfall], [1.5, 1, 1], 'value kept, raised to its minimum, invalid takes the default');
+    assertEqual(resolveProjectionSettings([{ id: 'ProjectionMinShortfall', value: '-5' }]).minShortfall, -5, 'min shortfall may be negative (items running low)');
 });
 
 test('INVENTORY PROJECTION', 'volume: booked or the past month carried forward, with the trend', () => {
@@ -6681,7 +6748,7 @@ test('INVENTORY PROJECTION', 'shows not booked yet: the past month\'s shows a ye
         { month: '2025-07', from: '2024-07', start: '2025-07-25', end: '2025-08-10', sqft: 500, weight: 2 },
         { month: '2025-08', from: '2023-08', start: '2025-08-05', end: '2025-08-15', sqft: 400, weight: 2 }
     ], 'July: a 3000 sq ft gap over 1500 sq ft of past shows, each counted twice; June is booked above its past; August 2024 had no shows: August 2023\'s, two years on');
-    assertEqual(fillShows([{ month: '2025-07', pastMonth: '2024-07', scheduledSqft: 1, projectedSqft: 4 }], pastShows, 0).map(show => [show.sqft, show.weight]), [[1000, 1.5], [500, 1.5]],
+    assertEqual(fillShows([{ month: '2025-07', pastMonth: '2024-07', scheduledSqft: 1, projectedSqft: 4 }], pastShows, sqft => (sqft > 0 ? 1 : 0)).map(show => [show.sqft, show.weight]), [[1000, 1.5], [500, 1.5]],
         'scale 0 counts booths: a gap of 3 over last July\'s 2 sized shows');
 });
 
@@ -6690,7 +6757,7 @@ test('INVENTORY PROJECTION', 'shows not booked yet: the past month\'s shows a ye
 // overlapping Jul 20–25. Two shows learned from: A packed in both, 60 and 40 per 1000 sq ft (50),
 // stock 20; B in one, 4 per 1000 (2), stock 3; C in one, 20 per 1000 (10), no stock figures.
 test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and filled shows, out at once against stock', () => {
-    const { months, items, filled } = projectInventory({
+    const input = {
         months: ['2025-06', '2025-07'],
         from: '2025-06-01',
         scheduledShows: [{ month: '2025-06', sqft: 400 }, { month: '2025-06', sqft: 600 }],
@@ -6707,7 +6774,8 @@ test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and fi
             { itemId: 'B', used: [{ qty: 2, sqft: 500 }], packed: [], stock: { '2025-06': 3, '2025-07': 3 } },
             { itemId: 'C', used: [{ qty: 10, sqft: 500 }], packed: [], stock: {} }
         ]
-    }, DEFAULT_PROJECTION_SETTINGS);
+    };
+    const { months, items, filled } = projectInventory(input, DEFAULT_PROJECTION_SETTINGS);
     assertEqual(months.map(m => [m.month, m.projectedSqft, m.shortages]), [
         ['2025-06', 1000, [{ itemId: 'A', peak: 35, stock: 20, short: -15, usedIn: 2, unusual: 0, learned: 2, scale: 1, at1000: 50, multiplier: 1 }]],
         ['2025-07', 2000, [{ itemId: 'A', peak: 100, stock: 20, short: -80, usedIn: 2, unusual: 0, learned: 2, scale: 1, at1000: 50, multiplier: 1 }, { itemId: 'B', peak: 4, stock: 3, short: -1, usedIn: 1, unusual: 0, learned: 2, scale: 1, at1000: 4, multiplier: 1 }]]
@@ -6721,6 +6789,12 @@ test('INVENTORY PROJECTION', 'projectInventory: pack lists, use per sq ft and fi
     ], 'one row per item: its first short month, its deepest shortage; each short month on its own');
     assertEqual(itemShortages(months, { A: 85, B: 0.5 }).map(r => [r.itemId, r.proposed, r.months.map(m => m.proposed)]), [['A', 5, [70, 5]], ['B', -1, [-1]]],
         'proposed: the shortage after the changes, rounded down, overall and in each month');
+    // Min shortfall -2 lists items within 2 of running out: B in June, 1.2 out of 3 (1.8 left)
+    const low = projectInventory(input, { ...DEFAULT_PROJECTION_SETTINGS, minShortfall: -2 });
+    assertEqual(itemShortages(low.months).map(r => [r.itemId, r.month, r.shortage, r.months.map(m => [m.month, m.shortage])]), [
+        ['A', '2025-06', -80, [['2025-06', -15], ['2025-07', -80]]],
+        ['B', '2025-06', -1, [['2025-06', 1], ['2025-07', -1]]]
+    ], 'B low in June (1 left, rounded down), short in July');
 });
 
 // D packed 2 at each of four sizes (scale 3/7, 1.743 at 1000 sq ft); July's two filled 1000 sq ft
@@ -6899,6 +6973,173 @@ test('INVENTORY PROJECTION', 'preference rows tune the projection', () => _withP
         await setPreference('ProjectionMinShortfall', '1');
         await setPreference('ProjectionHistoryYears', '1');
         await setPreference('ProjectionFutureYears', '1');
+    }
+}));
+
+// ── Expected work: hours of each work category by month ─────────────────────
+// Default hours (small, large booth): Booth Design 4/16, Booth Engineering 2/12, Elevations 2/8,
+// Panels 4/24, Setup 4/16: a small booth 16 h in all (12 control: all but design), a large one 76
+// (60); the hours at 400 sq ft (a
+// 20x20) and 1600 (a 40x40), in proportion between: design 4 + 12 × (sqft - 400) / 1200, all
+// categories 16 + 60 × (sqft - 400) / 1200. No days before shipping. With today 2025-04-01 (the
+// projection tests' date), booked shows by month (sq ft): Aug 2025 1200 (design 12, all 56), 900
+// (9, 41), 100, 100, 200, 100; Jan 2026 200, 100, and Jan 2025's 500 (5, 21), 900 (9, 41), 600,
+// 600, 600 (6, 26 each), 2400 (16, 76), 100: design 52, all 232; Mar 2026 400, 100, and Mar 2025's
+// 100, 100, 400, 100, 200 (all small: design 20, all 80).
+
+test('EXPECTED WORK', 'settings: hours per category at two booth sizes, days before shipping', () => {
+    const defaults = resolveWorkSettings([]);
+    assertEqual([defaults.smallSqft, defaults.largeSqft, defaults.categories.map(c => [c.key, c.small, c.large, c.offsetDays])], [400, 1600, [
+        ['boothDesign', 4, 16, 0], ['boothEngineering', 2, 12, 0], ['elevations', 2, 8, 0], ['panels', 4, 24, 0], ['setup', 4, 16, 0]
+    ]], 'defaults');
+    const tuned = resolveWorkSettings([
+        { id: 'WorkSmallBoothSqft', value: '200' },
+        { id: 'WorkLargeBoothSqft', value: '1000' },
+        { id: 'WorkPanelsLargeHours', value: '30' },
+        { id: 'WorkSetupSmallHours', value: '-2' },
+        { id: 'WorkElevationsSmallHours', value: 'abc' },
+        { id: 'WorkBoothDesignOffsetDays', value: '30' },
+        { id: 'WorkPanelsOffsetDays', value: '2.6' },
+        { id: 'WorkSetupOffsetDays', value: '-5' }
+    ]);
+    assertEqual([tuned.smallSqft, tuned.largeSqft, tuned.categories[3].large, tuned.categories[4].small, tuned.categories[2].small], [200, 1000, 30, 0, 2],
+        'a value kept; below 0 is 0; invalid takes the default');
+    assertEqual(tuned.categories.map(c => c.offsetDays), [30, 0, 0, 3, -5], 'days whole; negative is after shipping');
+    const design = tuned.categories[0];
+    assertEqual([0, 200, 600, 1000, 1500].map(sqft => workHours(design, sqft, tuned)), [4, 4, 10, 16, 16],
+        'small hours up to 200 and without a size, large from 1000, halfway at 600');
+});
+
+test('EXPECTED WORK', 'workMonth: the month a category\'s work falls in', () => {
+    const show = { ship: '2025-07-10', month: '2025-07' };
+    assertEqual([workMonth(show, 0), workMonth(show, 9), workMonth(show, 10), workMonth(show, 40), workMonth(show, -22), workMonth({ month: '2025-07' }, 30)],
+        ['2025-07', '2025-07', '2025-06', '2025-05', '2025-08', '2025-07'], 'days before (after when negative); a show without a ship date keeps its month');
+});
+
+// Booked in July: a 1600 sq ft booth with Panels checked, a 100 with Setups checked (all done), and
+// a 400. Panels 24 + 4 + 4 = 32, done 24 + 4; design 16 + 4 + 4 = 24, done 4 (only with Setups);
+// control (engineering 16, elevations 12, panels 32, setup 24) 84, done 2 + 2 + 28 + 4 = 36
+test('EXPECTED WORK', 'done: checked work leaves a show\'s category; Setups leaves the whole show', () => {
+    const elevations = resolveWorkSettings([]).categories.find(c => c.key === 'elevations');
+    assertEqual([workDone(elevations, ['Elev']), workDone(elevations, ['Panels']), workDone(elevations, ['Setups']), workDone(elevations)], [true, false, true, false], 'its own box or Setups');
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [
+            { ship: '2025-07-10', month: '2025-07', sqft: 1600, done: ['Panels'] },
+            { ship: '2025-07-12', month: '2025-07', sqft: 100, done: ['Setups'] },
+            { ship: '2025-07-14', month: '2025-07', sqft: 400 }
+        ],
+        pastShows: []
+    }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
+    assertEqual([july.hours.panels, july.hours.boothDesign], [{ booked: 4, expected: 4, done: 28 }, { booked: 20, expected: 20, done: 4 }], 'panels and design: done hours off booked and expected');
+    assertEqual([july.control, july.bookedShows], [{ booked: 48, expected: 48, done: 36 }, 2], 'control 84 - 36; the show with Setups not counted');
+});
+
+// July: a booked 100 sq ft show with Setups checked; last July a 1600 with Setups checked. Design
+// expected is last July's 16 (history counts done shows), less the 4 done: 12
+test('EXPECTED WORK', 'done work comes off last year\'s figures too; past shows count in full', () => {
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [{ ship: '2025-07-12', month: '2025-07', sqft: 100, done: ['Setups'] }],
+        pastShows: [{ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft: 1600, done: ['Setups'] }]
+    }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
+    assertEqual(july.hours.boothDesign, { booked: 0, expected: 12, done: 4 }, 'the month still expects last July\'s work, less what is done');
+});
+
+// Booked July 10 a 100 sq ft booth and July 20 a 1600. Booth design 15 days before: June 25 (4 h)
+// and July 5 (16). Engineering 45 days before: May 26 (past: not counted) and June 5 (12). Panels
+// on the day: July, 4 + 24
+test('EXPECTED WORK', 'days before shipping move each category\'s work to its own month', () => {
+    const [june, july] = projectWork({
+        months: ['2025-06', '2025-07'],
+        scheduledShows: [{ ship: '2025-07-10', month: '2025-07', sqft: 100 }, { ship: '2025-07-20', month: '2025-07', sqft: 1600 }],
+        pastShows: []
+    }, resolveWorkSettings([{ id: 'WorkBoothDesignOffsetDays', value: '15' }, { id: 'WorkBoothEngineeringOffsetDays', value: '45' }]), DEFAULT_PROJECTION_SETTINGS);
+    const booked = (month, key) => month.hours[key].booked;
+    assertEqual([booked(june, 'boothDesign'), booked(july, 'boothDesign'), booked(june, 'boothEngineering'), booked(july, 'boothEngineering'), booked(june, 'panels'), booked(july, 'panels')],
+        [4, 16, 12, 0, 0, 28], 'design June 4, July 16; engineering June 12 (May is past); panels July 28');
+    assertEqual([june.bookedShows, july.bookedShows, july.bookedLarge], [0, 2, 1], 'shows counted in the month they ship');
+    assertEqual([june.control.booked, july.control.booked], [12, 58], 'control, each category in its own month, design left out: June engineering 12; July elevations 2 + 8, panels 28, setup 4 + 16');
+});
+
+// July 2025 booked 100, 900 and one without a size; last July 100, 400, 1000. Design booked 4 + 9
+// + 4 = 17 against 4 + 4 + 10 = 18; panels (4 + 20 × (sqft - 400) / 1200) 4 + 12.3 + 4 = 20.3
+// against 4 + 4 + 14 = 22; control (all but design) 10.2 + 8.5 + 20.3 + 17 = 56 against
+// 11 + 9 + 22 + 18 = 60
+test('EXPECTED WORK', 'a month: hours booked, and the larger of booked and last year', () => {
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [{ month: '2025-07', sqft: 100 }, { month: '2025-07', sqft: 900 }, { month: '2025-07', sqft: 0 }],
+        pastShows: [100, 400, 1000].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
+    }, resolveWorkSettings([]), DEFAULT_PROJECTION_SETTINGS);
+    assertEqual([july.bookedShows, july.bookedLarge, july.hours.boothDesign, july.hours.panels, july.control], [3, 0,
+        { booked: 17, expected: 18, done: 0 }, { booked: 20.3, expected: 22, done: 0 }, { booked: 56, expected: 60, done: 0 }], 'each category the larger of the two');
+});
+
+// July 2023 two 1600 sq ft booths; July 2024 the two and four 100 sq ft ones. Design (small 1/4 of
+// large): 32 then 48 h, a line × 4/3 a year on: 64. Panels (1/6): 48 then 64, × 5/4: 80
+test('EXPECTED WORK', 'booth mix: more small booths raise work by each category\'s own hours', () => {
+    const [july] = projectWork({
+        months: ['2025-07'],
+        scheduledShows: [],
+        pastShows: [
+            ...[1600, 1600].map(sqft => ({ ship: '2023-07-10', end: '2023-07-20', month: '2023-07', sqft })),
+            ...[1600, 1600, 100, 100, 100, 100].map(sqft => ({ ship: '2024-07-10', end: '2024-07-20', month: '2024-07', sqft }))
+        ]
+    }, resolveWorkSettings([]), { ...DEFAULT_PROJECTION_SETTINGS, historyYears: 2 });
+    assertEqual([july.hours.boothDesign.expected, july.hours.panels.expected], [64, 80], 'design × 1.333, panels × 1.25');
+});
+
+test('EXPECTED WORK', 'fixture months: booked and expected hours', () => _withProjectionToday(async () => {
+    const months = await Requests.getExpectedWork();
+    const brief = (month) => { const m = months.find(row => row.month === month); return [m.bookedShows, m.bookedLarge, m.hours.boothDesign, m.control]; };
+    assertEqual(months.map(m => m.month), monthRange('2025-04', 12), 'the projection\'s 12 months');
+    assertEqual(brief('2025-08'), [6, 0, { booked: 37, expected: 37, done: 0 }, { booked: 120, expected: 120, done: 4 }], 'August: design 12 + 9 + 4 × 4; control 44 + 32 + 4 × 12, less Steno CAALA\'s panels (checked) 4');
+    assertEqual(brief('2026-01'), [0, 0, { booked: 0, expected: 44, done: 8 }, { booked: 0, expected: 156, done: 24 }], 'January: last January\'s, less both booked shows (Setups checked)');
+    assertEqual(brief('2026-03'), [0, 0, { booked: 0, expected: 12, done: 8 }, { booked: 0, expected: 36, done: 24 }], 'March: last March\'s, all small, less both booked shows (Setups checked)');
+}));
+
+// NGAUS (Lockheed Martin, 30x40: 1200 sq ft) ships Aug 20 2025. Its panels 4 + 20 × 800 / 1200 =
+// 17.3 of August's 45.7 (4 already done: Steno CAALA's); all its work: design 12 of 37, control 44
+// of 120. A write's recompute is awaited (cutoffSettled) before reading
+test('EXPECTED WORK', 'schedule checkboxes: checked work leaves the projection', () => _withProjectionToday(async () => {
+    const row = { Client: 'Lockheed Martin', Year: '2025', Show: 'NGAUS' };
+    const august = async () => (await Requests.getExpectedWork()).find(m => m.month === '2025-08');
+    try {
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Panels', 'X');
+        await cutoffSettled();
+        const panelsDone = await august();
+        assertEqual([panelsDone.hours.panels, panelsDone.hours.boothDesign.booked], [{ booked: 24.3, expected: 24.3, done: 21.3 }, 37], 'Panels checked: its panels out (with Steno CAALA\'s 4), its design still in');
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Setups', 'X');
+        await cutoffSettled();
+        const allDone = await august();
+        assertEqual([allDone.hours.boothDesign.booked, allDone.control.booked, allDone.bookedShows], [25, 76, 5], 'Setups checked: the whole show out (control 120 - 44)');
+    } finally {
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Panels', '');
+        await writeOneVerified(IW_DB, IW_TAB, row, 'Setups', '');
+        await cutoffSettled();
+    }
+}));
+
+test('EXPECTED WORK', 'preference rows tune the hours', () => _withProjectionToday(async () => {
+    const month = async (key) => (await Requests.getExpectedWork()).find(m => m.month === key);
+    try {
+        await setPreference('WorkLargeBoothSqft', '1000');
+        assertEqual((await month('2026-01')).hours.boothDesign, { booked: 0, expected: 56, done: 8 }, 'large at 1000: last January 6 + 14 + 3 × 8 + 16 + 4, less the 8 done');
+        await setPreference('WorkLargeBoothSqft', '1600');
+        await setPreference('WorkPanelsLargeHours', '30');
+        assertEqual((await month('2025-08')).hours.panels.booked, 48.2, 'panels 30 h at 1600: 21.3 + 14.8 + 3 × 4 (Steno CAALA\'s done)');
+        await setPreference('WorkPanelsLargeHours', '24');
+        // Panels 20 days before shipping: Aug 12, 12, 18 (100 each) and 20 (1200) fall in July; Aug
+        // 23 (200), 24 (900) stay, and Sep 2 (800, 100, 200, 600, 200), 5 (400, 400), 9 (100) join
+        await setPreference('WorkPanelsOffsetDays', '20');
+        const months = await Requests.getExpectedWork();
+        const panels = (key) => months.find(m => m.month === key).hours.panels.booked;
+        assertEqual([panels('2025-07'), panels('2025-08')], [29.3, 46.3], 'July 3 × 4 + 17.3; August 12.3 + 42 from September, less done: Steno CAALA, Test Client HIMSS, Marmon Burger King (4 each)');
+    } finally {
+        await setPreference('WorkLargeBoothSqft', '1600');
+        await setPreference('WorkPanelsLargeHours', '24');
+        await setPreference('WorkPanelsOffsetDays', '0');
     }
 }));
 

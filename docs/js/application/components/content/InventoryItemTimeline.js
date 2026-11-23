@@ -1,4 +1,4 @@
-import { html, Requests, NavigationRegistry, DataView, ScheduleFilterSelect, getReactiveStore, toISODateString, todayISOString, offsetToISO, THUMBNAIL_FIELD, getItemThumbnailsStore, itemThumbnailMap } from '../../index.js';
+import { html, Requests, NavigationRegistry, DataView, ScheduleFilterSelect, searchDateRange, getReactiveStore, toISODateString, todayISOString, THUMBNAIL_FIELD, getItemThumbnailsStore, itemThumbnailMap } from '../../index.js';
 import { CellRenderer } from '../interface/cells.js';
 import { valueMatchesAny, searchWords } from '../../utils/views/searchMatch.js';
 
@@ -48,6 +48,20 @@ const TIMELINE_VIEWS = {
             hidden: ['calendarStart', 'calendarEnd'],
             rowColor: { field: 'quantity', rule: 'auto', fallback: 'green' },
             action: 'row'
+        },
+        {
+            // The quantity over the window: a day per point; each quantity lasts until the next
+            // change (calendarStart to calendarEnd, the last to the window's end)
+            id: 'chart',
+            name: 'Chart',
+            icon: 'timeline',
+            layout: 'chart',
+            chart: {
+                bucket: { by: 'calendarStart', until: 'calendarEnd', unit: 'day' },
+                series: [{ last: 'quantity', label: 'Quantity' }],
+                stepped: true,
+                yLabel: 'Quantity'
+            }
         }
     ]
 };
@@ -181,24 +195,11 @@ export const InventoryItemTimeline = {
             }
         },
         handleScheduleSearch(searchData) {
-            // searchData.startDate/endDate are ISO strings when available (ISO date picker,
-            // year preset, or async-resolved overlap mode). They are null when the filter
-            // uses a numeric day-offset preset (e.g. "month ago" = -30, "in a year" = 365).
-            // Resolve offsets to real dates here so the timeline store always gets ISO strings.
-            let startDate = searchData?.startDate ?? null;
-            let endDate   = searchData?.endDate   ?? null;
-
-            if ((!startDate || !endDate) && searchData?.dateFilters?.length) {
-                // Find any 'after' and 'before' filters regardless of column (inventory timeline doesn't care about columns)
-                const afterFilter  = searchData.dateFilters.find(f => f.type === 'after');
-                const beforeFilter = searchData.dateFilters.find(f => f.type === 'before');
-                if (!startDate && afterFilter)  startDate = offsetToISO(afterFilter.value);
-                if (!endDate   && beforeFilter) endDate   = offsetToISO(beforeFilter.value);
-            }
-
+            // ISO dates either way (a day-offset preset resolved), so the timeline store always gets
+            // ISO strings; the timelineStore computed reacts to the change
+            const { startDate, endDate } = searchDateRange(searchData);
             this.filterStartDate = startDate;
-            this.filterEndDate   = endDate;
-            // timelineStore computed reacts automatically to the filter change
+            this.filterEndDate = endDate;
         },
         hasSearchMatch(value) {
             return valueMatchesAny(value, this.searchWords);

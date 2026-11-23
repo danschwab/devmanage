@@ -48,7 +48,9 @@
  *   feet (scale 1).
  * - Out at once: per item, the most out on any day of each month (peakByMonth).
  * - Shortage: that peak above the month's stock (at its start, scheduled changes applied) by at
- *   least `minShortfall` items. Its size in items is stock less the peak.
+ *   least `minShortfall` items. Its size in items is stock less the peak. A negative
+ *   `minShortfall` also lists items running low: -5 lists an item once 5 or fewer are left, its
+ *   size then the items left (positive).
  * The report lists each item that runs short once (itemShortages): the first month it does, and the
  * most it falls short by from then on.
  */
@@ -60,7 +62,7 @@ export const PROJECTION_SETTINGS = Object.freeze({
     historyYears: { id: 'ProjectionHistoryYears', type: 'integer', default: 1, min: 1 },
     growthFactor: { id: 'ProjectionGrowthFactor', type: 'double', default: 1, min: 0 },
     defaultSquareFeet: { id: 'ProjectionDefaultSquareFeet', type: 'integer', default: 0, min: 0 },
-    minShortfall: { id: 'ProjectionMinShortfall', type: 'double', default: 1, min: 0 }
+    minShortfall: { id: 'ProjectionMinShortfall', type: 'double', default: 1, min: -Infinity }
 });
 
 /** The page whose menu shows the projection's preference rows */
@@ -81,23 +83,6 @@ export function resolveProjectionSettings(preferences) {
         settings[key] = Number.isFinite(value) ? Math.max(spec.min, value) : spec.default;
     }
     return settings;
-}
-
-/**
- * Square feet of a schedule Size: every "W x D" in it, summed ("10x40 & 10x10" is 500). Feet
- * marks and spaces are allowed ("20' x 20'"). Null when it holds none ("TBD", "x18'").
- * @param {*} size
- * @returns {number|null}
- */
-export function parseBoothSquareFeet(size) {
-    const pattern = /(\d+(?:\.\d+)?)\s*'?\s*[x×]\s*(\d+(?:\.\d+)?)/gi;
-    let total = 0;
-    let found = false;
-    for (const [, width, depth] of String(size ?? '').matchAll(pattern)) {
-        total += Number(width) * Number(depth);
-        found = true;
-    }
-    return found ? total : null;
 }
 
 /** 'YYYY-MM' of an ISO date */
@@ -336,16 +321,17 @@ export function projectVolume({ months, scheduled, pastSqft }, settings, { exact
  * The shows expected but not booked yet: for each month projected above its booked volume, the
  * shows of the past month it carries forward (or, if it had none, of the same month in the latest
  * earlier year that had some), moved forward the years between, at their own sizes, each counted
- * `weight` times so their volume (the sum of sqft^scale) fills the gap.
+ * `weight` times so their volume (the sum of the measure over them) fills the gap.
  * @param {Array<{month, pastMonth, scheduledSqft, projectedSqft}>} rows - projectVolume rows, in the
  *        same volume
  * @param {Array<{ship: string, end: string, month: string, sqft: number}>} pastShows
- * @param {number} [scale] - The volume's scale: 1 square feet, 0 booths
+ * @param {(sqft: number) => number} [measure] - A show's volume from its square feet (square feet
+ *        themselves by default); shows it gives 0 take no part
  * @returns {Array<{month: string, from: string, start: string, end: string, sqft: number, weight: number}>}
  *          month: the month it fills; from: the past month it was moved from
  */
-export function fillShows(rows, pastShows, scale = 1) {
-    const sized = pastShows.filter(show => show.sqft > 0);
+export function fillShows(rows, pastShows, measure = sqft => sqft) {
+    const sized = pastShows.filter(show => measure(show.sqft) > 0);
     const earliest = sized.reduce((min, show) => (show.month < min ? show.month : min), '9999-99');
     const filled = [];
     for (const { month, pastMonth, scheduledSqft, projectedSqft } of rows) {
@@ -358,13 +344,44 @@ export function fillShows(rows, pastShows, scale = 1) {
             models = sized.filter(show => show.month === from);
         }
         if (!models.length) continue;
-        const weight = gap / models.reduce((sum, show) => sum + show.sqft ** scale, 0);
+        const weight = gap / models.reduce((sum, show) => sum + measure(show.sqft), 0);
         const years = Number(month.slice(0, 4)) - Number(from.slice(0, 4));
         for (const show of models) {
             filled.push({ month, from, start: shiftYears(show.ship, years), end: shiftYears(show.end, years), sqft: show.sqft, weight });
         }
     }
     return filled;
+}
+
+/**
+ * The volume steps for one measure of the shows (projectVolume, then fillShows): a month's volume
+ * is the sum of the measure over its shows. The inventory projection measures square feet (an
+ * item: size^scale); the expected work, a category's hours (utils/work-projection.js).
+ * @param {Object} input
+ * @param {string[]} input.months - The future months, in order
+ * @param {Array<{month, sqft}>} input.scheduledShows - Booked shows shipping in the projected months
+ * @param {Array<{ship, end, month, sqft}>} input.pastShows - Past shows, by the month they shipped
+ * @param {(sqft: number) => number} input.measure - A show's volume from its square feet
+ * @param {boolean} [input.exact] - Leave the volumes unrounded (projectVolume)
+ * @param {Object} settings - resolveProjectionSettings
+ * @returns {{ rows: Array<Object>, trend: Object, filled: Array<Object> }} projectVolume's rows and
+ *          trend, in the measure; fillShows' shows
+ */
+export function projectMeasure({ months, scheduledShows, pastShows, measure, exact = true }, settings) {
+    const volume = (shows) => {
+        const byMonth = {};
+        for (const show of shows) {
+            const value = measure(show.sqft);
+            if (value > 0) byMonth[show.month] = (byMonth[show.month] || 0) + value;
+        }
+        return byMonth;
+    };
+    const bookedCount = {};
+    for (const show of scheduledShows) bookedCount[show.month] = (bookedCount[show.month] || 0) + 1;
+    const booked = volume(scheduledShows);
+    const scheduled = Object.fromEntries(months.map(month => [month, { sqft: booked[month] || 0, shows: bookedCount[month] || 0 }]));
+    const { rows, trend } = projectVolume({ months, scheduled, pastSqft: volume(pastShows) }, settings, { exact });
+    return { rows, trend, filled: fillShows(rows, pastShows, measure) };
 }
 
 /**
@@ -390,22 +407,13 @@ export function fillShows(rows, pastShows, scale = 1) {
  *          month }). Each item's multipliers: its own trend 1, 2, … years ahead.
  */
 export function projectInventory({ months, from, scheduledShows, pastShows, packedShows = [], unpackedShows, learned, items }, settings) {
-    const bookedCount = {};
-    for (const show of scheduledShows) bookedCount[show.month] = (bookedCount[show.month] || 0) + 1;
-    // A volume by month: the sum of sqft^scale over the shows with a size
-    const volume = (shows, scale) => {
-        const byMonth = {};
-        for (const show of shows) if (show.sqft > 0) byMonth[show.month] = (byMonth[show.month] || 0) + show.sqft ** scale;
-        return byMonth;
-    };
-    // The volume steps at one scale, once per scale; square feet (1) as before, rounded
+    // The volume steps on sqft^scale over the shows with a size, once per scale; square feet (1)
+    // rounded, as the month rows show them
     const byScale = new Map();
     const projectAt = (scale) => {
         if (!byScale.has(scale)) {
-            const booked = volume(scheduledShows, scale);
-            const scheduled = Object.fromEntries(months.map(month => [month, { sqft: booked[month] || 0, shows: bookedCount[month] || 0 }]));
-            const { rows, trend } = projectVolume({ months, scheduled, pastSqft: volume(pastShows, scale) }, settings, { exact: scale !== 1 });
-            byScale.set(scale, { rows, trend, filled: fillShows(rows, pastShows, scale) });
+            const measure = sqft => (sqft > 0 ? sqft ** scale : 0);
+            byScale.set(scale, projectMeasure({ months, scheduledShows, pastShows, measure, exact: scale !== 1 }, settings));
         }
         return byScale.get(scale);
     };
@@ -462,7 +470,8 @@ export function projectInventory({ months, from, scheduledShows, pastShows, pack
 /**
  * One row per item that runs short (projectInventory months): the first month it does, and its
  * shortage, the most it falls short by in that month or a later one, so adding that many covers
- * the whole projection. Rounded down (short by 27.3 is -28). With quantity changes (a proposal's),
+ * the whole projection. Rounded down (short by 27.3 is -28). With a negative minShortfall an item
+ * running low is listed too, its shortage the fewest left (3.6 left is 3). With quantity changes (a proposal's),
  * `proposed` is the shortage after them; null without. `months` lists every month it runs short,
  * each with its own shortage and proposed. Soonest month first, then the largest shortage.
  * @param {Array<{month: string, shortages: Array<{itemId: string, short: number}>}>} months

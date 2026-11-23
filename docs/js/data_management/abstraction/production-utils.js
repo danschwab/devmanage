@@ -1,6 +1,8 @@
 import { Database, ApplicationUtils, offsetToISO, parseDate, toISODateString, toUSDateString, wrapMethods, searchFilter, GetTopFuzzyMatch, normalizeHeaderName, normalizeText, normalizeMatchKey, SEVERITY } from '../index.js';
 import { estimateShipDate as _calculateShipDate } from '../utils/ship-date.js'; // ship date with fallbacks
-import { parseBoothSquareFeet } from '../utils/inventory-projection.js';
+import { parseBoothSquareFeet } from '../utils/helpers.js';
+import { isCheckedValue } from '../utils/checkbox-values.js';
+import { WORK_DONE_COLUMNS } from '../utils/work-projection.js';
 
 /**
  * Keyword used in NameOverrides table to indicate "ignore forever" (permanently suppress alerts).
@@ -19,6 +21,11 @@ const SCHEDULE_TAB = 'Production Schedule';
 // The identity columns and Size: what show square feet read (getShowSquareFeet)
 const SCHEDULE_SIZE_MAPPING = Object.fromEntries(
     ['Show', 'Client', 'Year', 'Identifier', 'Size'].map(header => [header, header])
+);
+
+// The identity columns and the work checkboxes: what finished work reads (getShowWorkDone)
+const SCHEDULE_WORK_MAPPING = Object.fromEntries(
+    ['Show', 'Client', 'Year', 'Identifier', ...WORK_DONE_COLUMNS].map(header => [header, header])
 );
 
 const SCHEDULE_DATE_MAPPING = Object.fromEntries(
@@ -96,6 +103,25 @@ class productionUtils_uncached {
             byId[identifier] = sqft === null ? (byId[identifier] ?? null) : (byId[identifier] || 0) + sqft;
         }
         return byId;
+    }
+
+    /**
+     * The checked work columns (WORK_DONE_COLUMNS: Elev, Panels, Setups) by canonical show
+     * identifier, for shows with any checked. A show on several rows (booths) has a column checked
+     * only when every row has it. Early cutoff: an edit to another column leaves this equal.
+     * @param {Object} deps
+     * @returns {Promise<Object<string, string[]>>}
+     */
+    static async getShowWorkDone(deps) {
+        const rows = await deps.call(Database.getData, 'PROD_SCHED', SCHEDULE_TAB, SCHEDULE_WORK_MAPPING);
+        const byId = {};
+        for (const row of rows) {
+            const identifier = await deps.call(ProductionUtils.getCanonicalIdentifierForScheduleRow, row);
+            if (!identifier) continue;
+            const checked = WORK_DONE_COLUMNS.filter(column => isCheckedValue(row[column]));
+            byId[identifier] = identifier in byId ? byId[identifier].filter(column => checked.includes(column)) : checked;
+        }
+        return Object.fromEntries(Object.entries(byId).filter(([, checked]) => checked.length));
     }
 
     /**
@@ -1294,6 +1320,7 @@ export const ProductionUtils = wrapMethods(
     [
         'getScheduleDateRows',
         'getShowSquareFeet',
+        'getShowWorkDone',
         'getShowDates',
         'getOverlappingShowIds',
         'getProjectShipDate',

@@ -1,12 +1,15 @@
 import { html, Requests, getPreferencesStore, modalManager, authState } from '../../index.js';
 
 // Returns true if containerPath satisfies a Page pattern (supports * wildcard suffix)
+// A preference row's Page: a page, a prefix ending in *, * for every page, or several of these
+// separated by commas (a setting two pages share)
 function matchesPagePattern(containerPath, pattern) {
     const clean = (containerPath || '').split('?')[0];
-    if (!pattern) return false;
-    if (pattern === '*') return true;
-    if (pattern.endsWith('*')) return clean.startsWith(pattern.slice(0, -1));
-    return clean === pattern;
+    return String(pattern || '').split(',').map(part => part.trim()).filter(Boolean).some(part => {
+        if (part === '*') return true;
+        if (part.endsWith('*')) return clean.startsWith(part.slice(0, -1));
+        return clean === part;
+    });
 }
 
 function parseValue(value, type) {
